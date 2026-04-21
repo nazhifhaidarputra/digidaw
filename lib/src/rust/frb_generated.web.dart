@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
@@ -22,1527 +23,770 @@ import 'dart:convert';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
 
-abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
-  RustLibApiImplPlatform({
-    required super.handler,
-    required super.wire,
-    required super.generalizedFrbRustBinding,
-    required super.portManager,
-  });
 
-  @protected
-  AnyhowException dco_decode_AnyhowException(dynamic raw);
 
-  @protected
-  int dco_decode_CastedPrimitive_i_64(dynamic raw);
 
-  @protected
-  int dco_decode_CastedPrimitive_u_64(dynamic raw);
+                abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
+                  RustLibApiImplPlatform({
+                    required super.handler,
+                    required super.wire,
+                    required super.generalizedFrbRustBinding,
+                    required super.portManager,
+                  });
 
-  @protected
-  int dco_decode_CastedPrimitive_usize(dynamic raw);
+                  
 
-  @protected
-  Map<int, AudioWaveformUiForClip>
-  dco_decode_Map_u_32_audio_waveform_ui_for_clip_None(dynamic raw);
+                  @protected AnyhowException dco_decode_AnyhowException(dynamic raw);
 
-  @protected
-  Map<int, AudioWaveformUiForSourceList>
-  dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
+@protected int dco_decode_CastedPrimitive_i_64(dynamic raw);
 
-  @protected
-  Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw);
+@protected int dco_decode_CastedPrimitive_u_64(dynamic raw);
 
-  @protected
-  Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw);
+@protected int dco_decode_CastedPrimitive_usize(dynamic raw);
 
-  @protected
-  Map<int, UiGeneratorInstance> dco_decode_Map_u_32_ui_generator_instance_None(
-    dynamic raw,
-  );
+@protected Map<int, AudioWaveformUiForClip> dco_decode_Map_u_32_audio_waveform_ui_for_clip_None(dynamic raw);
 
-  @protected
-  Map<int, UiMixerChannel> dco_decode_Map_u_32_ui_mixer_channel_None(
-    dynamic raw,
-  );
+@protected Map<int, AudioWaveformUiForSourceList> dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
 
-  @protected
-  Map<int, UiPattern> dco_decode_Map_u_32_ui_pattern_None(dynamic raw);
+@protected Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw);
 
-  @protected
-  Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
+@protected Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw);
 
-  @protected
-  RustStreamSink<UiMixerParamEvent>
-  dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw);
+@protected Map<int, UiGeneratorInstance> dco_decode_Map_u_32_ui_generator_instance_None(dynamic raw);
 
-  @protected
-  RustStreamSink<UiTransportFeedback>
-  dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
+@protected Map<int, UiMixerChannel> dco_decode_Map_u_32_ui_mixer_channel_None(dynamic raw);
 
-  @protected
-  String dco_decode_String(dynamic raw);
+@protected Map<int, UiPattern> dco_decode_Map_u_32_ui_pattern_None(dynamic raw);
 
-  @protected
-  AudioWaveformUiForAudioProperties
-  dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw);
+@protected Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
 
-  @protected
-  AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw);
+@protected RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw);
 
-  @protected
-  AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
-    dynamic raw,
-  );
+@protected RustStreamSink<UiMixerParamEvent> dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw);
 
-  @protected
-  bool dco_decode_bool(dynamic raw);
+@protected RustStreamSink<UiTransportFeedback> dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
-  @protected
-  AudioWaveformUiForAudioProperties
-  dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw);
+@protected String dco_decode_String(dynamic raw);
 
-  @protected
-  bool dco_decode_box_autoadd_bool(dynamic raw);
+@protected AudioWaveformUiForAudioProperties dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw);
 
-  @protected
-  double dco_decode_box_autoadd_f_32(dynamic raw);
+@protected AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw);
 
-  @protected
-  (int, int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw);
+@protected AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(dynamic raw);
 
-  @protected
-  int dco_decode_box_autoadd_u_32(dynamic raw);
+@protected bool dco_decode_bool(dynamic raw);
 
-  @protected
-  UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw);
+@protected AudioWaveformUiForAudioProperties dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw);
 
-  @protected
-  UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
+@protected bool dco_decode_box_autoadd_bool(dynamic raw);
 
-  @protected
-  UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw);
+@protected double dco_decode_box_autoadd_f_32(dynamic raw);
 
-  @protected
-  UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
+@protected (int,int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw);
 
-  @protected
-  double dco_decode_f_32(dynamic raw);
+@protected int dco_decode_box_autoadd_u_32(dynamic raw);
 
-  @protected
-  double dco_decode_f_64(dynamic raw);
+@protected UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw);
 
-  @protected
-  int dco_decode_i_16(dynamic raw);
+@protected UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
-  @protected
-  int dco_decode_i_32(dynamic raw);
+@protected UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw);
 
-  @protected
-  PlatformInt64 dco_decode_i_64(dynamic raw);
+@protected UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
 
-  @protected
-  int dco_decode_i_8(dynamic raw);
+@protected double dco_decode_f_32(dynamic raw);
 
-  @protected
-  KarbeatPluginType dco_decode_karbeat_plugin_type(dynamic raw);
+@protected double dco_decode_f_64(dynamic raw);
 
-  @protected
-  List<String> dco_decode_list_String(dynamic raw);
+@protected int dco_decode_i_16(dynamic raw);
 
-  @protected
-  List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
+@protected int dco_decode_i_32(dynamic raw);
 
-  @protected
-  Int8List dco_decode_list_prim_i_8_strict(dynamic raw);
+@protected PlatformInt64 dco_decode_i_64(dynamic raw);
 
-  @protected
-  List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
+@protected int dco_decode_i_8(dynamic raw);
 
-  @protected
-  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+@protected KarbeatPluginType dco_decode_karbeat_plugin_type(dynamic raw);
 
-  @protected
-  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+@protected List<String> dco_decode_list_String(dynamic raw);
 
-  @protected
-  List<(int, AudioWaveformUiForClip)>
-  dco_decode_list_record_u_32_audio_waveform_ui_for_clip(dynamic raw);
+@protected List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
 
-  @protected
-  List<(int, AudioWaveformUiForSourceList)>
-  dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+@protected Int8List dco_decode_list_prim_i_8_strict(dynamic raw);
 
-  @protected
-  List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw);
+@protected List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
-  @protected
-  List<(int, UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw);
+@protected Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
 
-  @protected
-  List<(int, UiGeneratorInstance)>
-  dco_decode_list_record_u_32_ui_generator_instance(dynamic raw);
+@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
-  @protected
-  List<(int, UiMixerChannel)> dco_decode_list_record_u_32_ui_mixer_channel(
-    dynamic raw,
-  );
+@protected List<(int,AudioWaveformUiForClip)> dco_decode_list_record_u_32_audio_waveform_ui_for_clip(dynamic raw);
 
-  @protected
-  List<(int, UiPattern)> dco_decode_list_record_u_32_ui_pattern(dynamic raw);
+@protected List<(int,AudioWaveformUiForSourceList)> dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
 
-  @protected
-  List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
+@protected List<(int,double)> dco_decode_list_record_u_32_f_32(dynamic raw);
 
-  @protected
-  List<UiClip> dco_decode_list_ui_clip(dynamic raw);
+@protected List<(int,UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw);
 
-  @protected
-  List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
+@protected List<(int,UiGeneratorInstance)> dco_decode_list_record_u_32_ui_generator_instance(dynamic raw);
 
-  @protected
-  List<UiEffectParameterSnapshot> dco_decode_list_ui_effect_parameter_snapshot(
-    dynamic raw,
-  );
+@protected List<(int,UiMixerChannel)> dco_decode_list_record_u_32_ui_mixer_channel(dynamic raw);
 
-  @protected
-  List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw);
+@protected List<(int,UiPattern)> dco_decode_list_record_u_32_ui_pattern(dynamic raw);
 
-  @protected
-  List<UiGeneratorParameterSnapshot>
-  dco_decode_list_ui_generator_parameter_snapshot(dynamic raw);
+@protected List<(int,UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
 
-  @protected
-  List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(
-    dynamic raw,
-  );
+@protected List<UiClip> dco_decode_list_ui_clip(dynamic raw);
 
-  @protected
-  List<UiNote> dco_decode_list_ui_note(dynamic raw);
+@protected List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
 
-  @protected
-  List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw);
+@protected List<UiEffectParameterSnapshot> dco_decode_list_ui_effect_parameter_snapshot(dynamic raw);
 
-  @protected
-  List<UiPluginInfo> dco_decode_list_ui_plugin_info(dynamic raw);
+@protected List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw);
 
-  @protected
-  List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
+@protected List<UiGeneratorParameterSnapshot> dco_decode_list_ui_generator_parameter_snapshot(dynamic raw);
 
-  @protected
-  List<UiResponseCurvePoint> dco_decode_list_ui_response_curve_point(
-    dynamic raw,
-  );
+@protected List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(dynamic raw);
 
-  @protected
-  List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
+@protected List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
-  @protected
-  int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
+@protected List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw);
 
-  @protected
-  int? dco_decode_opt_CastedPrimitive_u_64(dynamic raw);
+@protected List<UiPluginInfo> dco_decode_list_ui_plugin_info(dynamic raw);
 
-  @protected
-  Map<int, AudioWaveformUiForSourceList>?
-  dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
+@protected List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
 
-  @protected
-  String? dco_decode_opt_String(dynamic raw);
+@protected List<UiResponseCurvePoint> dco_decode_list_ui_response_curve_point(dynamic raw);
 
-  @protected
-  AudioWaveformUiForAudioProperties?
-  dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
-    dynamic raw,
-  );
+@protected List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
 
-  @protected
-  bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+@protected int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
 
-  @protected
-  double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
+@protected int? dco_decode_opt_CastedPrimitive_u_64(dynamic raw);
 
-  @protected
-  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+@protected Map<int, AudioWaveformUiForSourceList>? dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
 
-  @protected
-  List<ParameterSpecDTO>? dco_decode_opt_list_parameter_spec_dto(dynamic raw);
+@protected String? dco_decode_opt_String(dynamic raw);
 
-  @protected
-  ParameterSpecDTO dco_decode_parameter_spec_dto(dynamic raw);
+@protected AudioWaveformUiForAudioProperties? dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw);
 
-  @protected
-  ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw);
+@protected bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
 
-  @protected
-  (int, AudioWaveformUiForClip)
-  dco_decode_record_u_32_audio_waveform_ui_for_clip(dynamic raw);
+@protected double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
 
-  @protected
-  (int, AudioWaveformUiForSourceList)
-  dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+@protected int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
-  @protected
-  (int, double) dco_decode_record_u_32_f_32(dynamic raw);
+@protected List<ParameterSpecDTO>? dco_decode_opt_list_parameter_spec_dto(dynamic raw);
 
-  @protected
-  (int, UiBus) dco_decode_record_u_32_ui_bus(dynamic raw);
+@protected ParameterSpecDTO dco_decode_parameter_spec_dto(dynamic raw);
 
-  @protected
-  (int, UiGeneratorInstance) dco_decode_record_u_32_ui_generator_instance(
-    dynamic raw,
-  );
+@protected ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw);
 
-  @protected
-  (int, UiMixerChannel) dco_decode_record_u_32_ui_mixer_channel(dynamic raw);
+@protected (int,AudioWaveformUiForClip) dco_decode_record_u_32_audio_waveform_ui_for_clip(dynamic raw);
 
-  @protected
-  (int, UiPattern) dco_decode_record_u_32_ui_pattern(dynamic raw);
+@protected (int,AudioWaveformUiForSourceList) dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
 
-  @protected
-  (int, UiTrack) dco_decode_record_u_32_ui_track(dynamic raw);
+@protected (int,double) dco_decode_record_u_32_f_32(dynamic raw);
 
-  @protected
-  (int, int) dco_decode_record_u_8_u_8(dynamic raw);
+@protected (int,UiBus) dco_decode_record_u_32_ui_bus(dynamic raw);
 
-  @protected
-  (UiMixerChannel, List<UiEffectInstance>)
-  dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw);
+@protected (int,UiGeneratorInstance) dco_decode_record_u_32_ui_generator_instance(dynamic raw);
 
-  @protected
-  int dco_decode_u_16(dynamic raw);
+@protected (int,UiMixerChannel) dco_decode_record_u_32_ui_mixer_channel(dynamic raw);
 
-  @protected
-  int dco_decode_u_32(dynamic raw);
+@protected (int,UiPattern) dco_decode_record_u_32_ui_pattern(dynamic raw);
 
-  @protected
-  BigInt dco_decode_u_64(dynamic raw);
+@protected (int,UiTrack) dco_decode_record_u_32_ui_track(dynamic raw);
 
-  @protected
-  int dco_decode_u_8(dynamic raw);
+@protected (int,int) dco_decode_record_u_8_u_8(dynamic raw);
 
-  @protected
-  UiApplicationState dco_decode_ui_application_state(dynamic raw);
+@protected (UiMixerChannel,List<UiEffectInstance>) dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw);
 
-  @protected
-  UiAudioHardwareConfig dco_decode_ui_audio_hardware_config(dynamic raw);
+@protected int dco_decode_u_16(dynamic raw);
 
-  @protected
-  UiBus dco_decode_ui_bus(dynamic raw);
+@protected int dco_decode_u_32(dynamic raw);
 
-  @protected
-  UiClip dco_decode_ui_clip(dynamic raw);
+@protected BigInt dco_decode_u_64(dynamic raw);
 
-  @protected
-  UiClipSource dco_decode_ui_clip_source(dynamic raw);
+@protected int dco_decode_u_8(dynamic raw);
 
-  @protected
-  UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw);
+@protected UiApplicationState dco_decode_ui_application_state(dynamic raw);
 
-  @protected
-  UiEffectInstance dco_decode_ui_effect_instance(dynamic raw);
+@protected UiAudioHardwareConfig dco_decode_ui_audio_hardware_config(dynamic raw);
 
-  @protected
-  UiEffectParameterSnapshot dco_decode_ui_effect_parameter_snapshot(
-    dynamic raw,
-  );
+@protected UiBus dco_decode_ui_bus(dynamic raw);
 
-  @protected
-  UiEffectSummary dco_decode_ui_effect_summary(dynamic raw);
+@protected UiClip dco_decode_ui_clip(dynamic raw);
 
-  @protected
-  UiEffectTarget dco_decode_ui_effect_target(dynamic raw);
+@protected UiClipSource dco_decode_ui_clip_source(dynamic raw);
 
-  @protected
-  UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
+@protected UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw);
 
-  @protected
-  UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw);
+@protected UiEffectInstance dco_decode_ui_effect_instance(dynamic raw);
 
-  @protected
-  UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(
-    dynamic raw,
-  );
+@protected UiEffectParameterSnapshot dco_decode_ui_effect_parameter_snapshot(dynamic raw);
 
-  @protected
-  UiMixerChannel dco_decode_ui_mixer_channel(dynamic raw);
+@protected UiEffectSummary dco_decode_ui_effect_summary(dynamic raw);
 
-  @protected
-  UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw);
+@protected UiEffectTarget dco_decode_ui_effect_target(dynamic raw);
 
-  @protected
-  UiMixerParamEvent dco_decode_ui_mixer_param_event(dynamic raw);
+@protected UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
-  @protected
-  UiMixerState dco_decode_ui_mixer_state(dynamic raw);
+@protected UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw);
 
-  @protected
-  UiNote dco_decode_ui_note(dynamic raw);
+@protected UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(dynamic raw);
 
-  @protected
-  UiParameterType dco_decode_ui_parameter_type(dynamic raw);
+@protected UiMixerChannel dco_decode_ui_mixer_channel(dynamic raw);
 
-  @protected
-  UiParameterValue dco_decode_ui_parameter_value(dynamic raw);
+@protected UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw);
 
-  @protected
-  UiPattern dco_decode_ui_pattern(dynamic raw);
+@protected UiMixerParamEvent dco_decode_ui_mixer_param_event(dynamic raw);
 
-  @protected
-  UiPluginInfo dco_decode_ui_plugin_info(dynamic raw);
+@protected UiMixerState dco_decode_ui_mixer_state(dynamic raw);
 
-  @protected
-  UiPluginInstance dco_decode_ui_plugin_instance(dynamic raw);
+@protected UiNote dco_decode_ui_note(dynamic raw);
 
-  @protected
-  UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
+@protected UiParameterType dco_decode_ui_parameter_type(dynamic raw);
 
-  @protected
-  UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw);
+@protected UiParameterValue dco_decode_ui_parameter_value(dynamic raw);
 
-  @protected
-  UiResizeEdge dco_decode_ui_resize_edge(dynamic raw);
+@protected UiPattern dco_decode_ui_pattern(dynamic raw);
 
-  @protected
-  UiResponseCurvePoint dco_decode_ui_response_curve_point(dynamic raw);
+@protected UiPluginInfo dco_decode_ui_plugin_info(dynamic raw);
 
-  @protected
-  UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
+@protected UiPluginInstance dco_decode_ui_plugin_instance(dynamic raw);
 
-  @protected
-  UiRoutingNode dco_decode_ui_routing_node(dynamic raw);
+@protected UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
 
-  @protected
-  UiSourceType dco_decode_ui_source_type(dynamic raw);
+@protected UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw);
 
-  @protected
-  UiTrack dco_decode_ui_track(dynamic raw);
+@protected UiResizeEdge dco_decode_ui_resize_edge(dynamic raw);
 
-  @protected
-  UiTrackType dco_decode_ui_track_type(dynamic raw);
+@protected UiResponseCurvePoint dco_decode_ui_response_curve_point(dynamic raw);
 
-  @protected
-  UiTransportFeedback dco_decode_ui_transport_feedback(dynamic raw);
+@protected UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
 
-  @protected
-  UiTransportState dco_decode_ui_transport_state(dynamic raw);
+@protected UiRoutingNode dco_decode_ui_routing_node(dynamic raw);
 
-  @protected
-  void dco_decode_unit(dynamic raw);
+@protected UiSourceType dco_decode_ui_source_type(dynamic raw);
 
-  @protected
-  BigInt dco_decode_usize(dynamic raw);
+@protected UiTrack dco_decode_ui_track(dynamic raw);
 
-  @protected
-  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+@protected UiTrackType dco_decode_ui_track_type(dynamic raw);
 
-  @protected
-  int sse_decode_CastedPrimitive_i_64(SseDeserializer deserializer);
+@protected UiTransportFeedback dco_decode_ui_transport_feedback(dynamic raw);
 
-  @protected
-  int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
+@protected UiTransportState dco_decode_ui_transport_state(dynamic raw);
 
-  @protected
-  int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer);
+@protected void dco_decode_unit(dynamic raw);
 
-  @protected
-  Map<int, AudioWaveformUiForClip>
-  sse_decode_Map_u_32_audio_waveform_ui_for_clip_None(
-    SseDeserializer deserializer,
-  );
+@protected BigInt dco_decode_usize(dynamic raw);
 
-  @protected
-  Map<int, AudioWaveformUiForSourceList>
-  sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
-    SseDeserializer deserializer,
-  );
+@protected AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
-  @protected
-  Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer);
+@protected int sse_decode_CastedPrimitive_i_64(SseDeserializer deserializer);
 
-  @protected
-  Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(SseDeserializer deserializer);
+@protected int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
 
-  @protected
-  Map<int, UiGeneratorInstance> sse_decode_Map_u_32_ui_generator_instance_None(
-    SseDeserializer deserializer,
-  );
+@protected int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer);
 
-  @protected
-  Map<int, UiMixerChannel> sse_decode_Map_u_32_ui_mixer_channel_None(
-    SseDeserializer deserializer,
-  );
+@protected Map<int, AudioWaveformUiForClip> sse_decode_Map_u_32_audio_waveform_ui_for_clip_None(SseDeserializer deserializer);
 
-  @protected
-  Map<int, UiPattern> sse_decode_Map_u_32_ui_pattern_None(
-    SseDeserializer deserializer,
-  );
+@protected Map<int, AudioWaveformUiForSourceList> sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(SseDeserializer deserializer);
 
-  @protected
-  Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(
-    SseDeserializer deserializer,
-  );
+@protected Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer);
 
-  @protected
-  RustStreamSink<UiMixerParamEvent>
-  sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer);
+@protected Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(SseDeserializer deserializer);
 
-  @protected
-  RustStreamSink<UiTransportFeedback>
-  sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
+@protected Map<int, UiGeneratorInstance> sse_decode_Map_u_32_ui_generator_instance_None(SseDeserializer deserializer);
 
-  @protected
-  String sse_decode_String(SseDeserializer deserializer);
+@protected Map<int, UiMixerChannel> sse_decode_Map_u_32_ui_mixer_channel_None(SseDeserializer deserializer);
 
-  @protected
-  AudioWaveformUiForAudioProperties
-  sse_decode_audio_waveform_ui_for_audio_properties(
-    SseDeserializer deserializer,
-  );
+@protected Map<int, UiPattern> sse_decode_Map_u_32_ui_pattern_None(SseDeserializer deserializer);
 
-  @protected
-  AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  );
+@protected Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(SseDeserializer deserializer);
 
-  @protected
-  AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
-    SseDeserializer deserializer,
-  );
+@protected RustStreamSink<double> sse_decode_StreamSink_f_32_Sse(SseDeserializer deserializer);
 
-  @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
+@protected RustStreamSink<UiMixerParamEvent> sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer);
 
-  @protected
-  AudioWaveformUiForAudioProperties
-  sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
-    SseDeserializer deserializer,
-  );
+@protected RustStreamSink<UiTransportFeedback> sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
-  @protected
-  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
+@protected String sse_decode_String(SseDeserializer deserializer);
 
-  @protected
-  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
+@protected AudioWaveformUiForAudioProperties sse_decode_audio_waveform_ui_for_audio_properties(SseDeserializer deserializer);
 
-  @protected
-  (int, int) sse_decode_box_autoadd_record_u_8_u_8(
-    SseDeserializer deserializer,
-  );
+@protected AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+@protected AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(SseDeserializer deserializer);
 
-  @protected
-  UiEffectTarget sse_decode_box_autoadd_ui_effect_target(
-    SseDeserializer deserializer,
-  );
+@protected bool sse_decode_bool(SseDeserializer deserializer);
 
-  @protected
-  UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
-    SseDeserializer deserializer,
-  );
+@protected AudioWaveformUiForAudioProperties sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(SseDeserializer deserializer);
 
-  @protected
-  UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(
-    SseDeserializer deserializer,
-  );
+@protected bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
-  @protected
-  UiRoutingNode sse_decode_box_autoadd_ui_routing_node(
-    SseDeserializer deserializer,
-  );
+@protected double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
-  @protected
-  double sse_decode_f_32(SseDeserializer deserializer);
+@protected (int,int) sse_decode_box_autoadd_record_u_8_u_8(SseDeserializer deserializer);
 
-  @protected
-  double sse_decode_f_64(SseDeserializer deserializer);
+@protected int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_i_16(SseDeserializer deserializer);
+@protected UiEffectTarget sse_decode_box_autoadd_ui_effect_target(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+@protected UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(SseDeserializer deserializer);
 
-  @protected
-  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+@protected UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_i_8(SseDeserializer deserializer);
+@protected UiRoutingNode sse_decode_box_autoadd_ui_routing_node(SseDeserializer deserializer);
 
-  @protected
-  KarbeatPluginType sse_decode_karbeat_plugin_type(
-    SseDeserializer deserializer,
-  );
+@protected double sse_decode_f_32(SseDeserializer deserializer);
 
-  @protected
-  List<String> sse_decode_list_String(SseDeserializer deserializer);
+@protected double sse_decode_f_64(SseDeserializer deserializer);
 
-  @protected
-  List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(
-    SseDeserializer deserializer,
-  );
+@protected int sse_decode_i_16(SseDeserializer deserializer);
 
-  @protected
-  Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer);
+@protected int sse_decode_i_32(SseDeserializer deserializer);
 
-  @protected
-  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
+@protected PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
-  @protected
-  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+@protected int sse_decode_i_8(SseDeserializer deserializer);
 
-  @protected
-  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+@protected KarbeatPluginType sse_decode_karbeat_plugin_type(SseDeserializer deserializer);
 
-  @protected
-  List<(int, AudioWaveformUiForClip)>
-  sse_decode_list_record_u_32_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  );
+@protected List<String> sse_decode_list_String(SseDeserializer deserializer);
 
-  @protected
-  List<(int, AudioWaveformUiForSourceList)>
-  sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
-    SseDeserializer deserializer,
-  );
+@protected List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(SseDeserializer deserializer);
 
-  @protected
-  List<(int, double)> sse_decode_list_record_u_32_f_32(
-    SseDeserializer deserializer,
-  );
+@protected Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer);
 
-  @protected
-  List<(int, UiBus)> sse_decode_list_record_u_32_ui_bus(
-    SseDeserializer deserializer,
-  );
+@protected List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
-  @protected
-  List<(int, UiGeneratorInstance)>
-  sse_decode_list_record_u_32_ui_generator_instance(
-    SseDeserializer deserializer,
-  );
+@protected Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
 
-  @protected
-  List<(int, UiMixerChannel)> sse_decode_list_record_u_32_ui_mixer_channel(
-    SseDeserializer deserializer,
-  );
+@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
-  @protected
-  List<(int, UiPattern)> sse_decode_list_record_u_32_ui_pattern(
-    SseDeserializer deserializer,
-  );
+@protected List<(int,AudioWaveformUiForClip)> sse_decode_list_record_u_32_audio_waveform_ui_for_clip(SseDeserializer deserializer);
 
-  @protected
-  List<(int, UiTrack)> sse_decode_list_record_u_32_ui_track(
-    SseDeserializer deserializer,
-  );
+@protected List<(int,AudioWaveformUiForSourceList)> sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(SseDeserializer deserializer);
 
-  @protected
-  List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
+@protected List<(int,double)> sse_decode_list_record_u_32_f_32(SseDeserializer deserializer);
 
-  @protected
-  List<UiEffectInstance> sse_decode_list_ui_effect_instance(
-    SseDeserializer deserializer,
-  );
+@protected List<(int,UiBus)> sse_decode_list_record_u_32_ui_bus(SseDeserializer deserializer);
 
-  @protected
-  List<UiEffectParameterSnapshot> sse_decode_list_ui_effect_parameter_snapshot(
-    SseDeserializer deserializer,
-  );
+@protected List<(int,UiGeneratorInstance)> sse_decode_list_record_u_32_ui_generator_instance(SseDeserializer deserializer);
 
-  @protected
-  List<UiEffectSummary> sse_decode_list_ui_effect_summary(
-    SseDeserializer deserializer,
-  );
+@protected List<(int,UiMixerChannel)> sse_decode_list_record_u_32_ui_mixer_channel(SseDeserializer deserializer);
 
-  @protected
-  List<UiGeneratorParameterSnapshot>
-  sse_decode_list_ui_generator_parameter_snapshot(SseDeserializer deserializer);
+@protected List<(int,UiPattern)> sse_decode_list_record_u_32_ui_pattern(SseDeserializer deserializer);
 
-  @protected
-  List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(
-    SseDeserializer deserializer,
-  );
+@protected List<(int,UiTrack)> sse_decode_list_record_u_32_ui_track(SseDeserializer deserializer);
 
-  @protected
-  List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
+@protected List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
 
-  @protected
-  List<UiParameterValue> sse_decode_list_ui_parameter_value(
-    SseDeserializer deserializer,
-  );
+@protected List<UiEffectInstance> sse_decode_list_ui_effect_instance(SseDeserializer deserializer);
 
-  @protected
-  List<UiPluginInfo> sse_decode_list_ui_plugin_info(
-    SseDeserializer deserializer,
-  );
+@protected List<UiEffectParameterSnapshot> sse_decode_list_ui_effect_parameter_snapshot(SseDeserializer deserializer);
 
-  @protected
-  List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
-    SseDeserializer deserializer,
-  );
+@protected List<UiEffectSummary> sse_decode_list_ui_effect_summary(SseDeserializer deserializer);
 
-  @protected
-  List<UiResponseCurvePoint> sse_decode_list_ui_response_curve_point(
-    SseDeserializer deserializer,
-  );
+@protected List<UiGeneratorParameterSnapshot> sse_decode_list_ui_generator_parameter_snapshot(SseDeserializer deserializer);
 
-  @protected
-  List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
-    SseDeserializer deserializer,
-  );
+@protected List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(SseDeserializer deserializer);
 
-  @protected
-  int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer);
+@protected List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
-  @protected
-  int? sse_decode_opt_CastedPrimitive_u_64(SseDeserializer deserializer);
+@protected List<UiParameterValue> sse_decode_list_ui_parameter_value(SseDeserializer deserializer);
 
-  @protected
-  Map<int, AudioWaveformUiForSourceList>?
-  sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
-    SseDeserializer deserializer,
-  );
+@protected List<UiPluginInfo> sse_decode_list_ui_plugin_info(SseDeserializer deserializer);
 
-  @protected
-  String? sse_decode_opt_String(SseDeserializer deserializer);
+@protected List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(SseDeserializer deserializer);
 
-  @protected
-  AudioWaveformUiForAudioProperties?
-  sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
-    SseDeserializer deserializer,
-  );
+@protected List<UiResponseCurvePoint> sse_decode_list_ui_response_curve_point(SseDeserializer deserializer);
 
-  @protected
-  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+@protected List<UiRoutingConnection> sse_decode_list_ui_routing_connection(SseDeserializer deserializer);
 
-  @protected
-  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
+@protected int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer);
 
-  @protected
-  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+@protected int? sse_decode_opt_CastedPrimitive_u_64(SseDeserializer deserializer);
 
-  @protected
-  List<ParameterSpecDTO>? sse_decode_opt_list_parameter_spec_dto(
-    SseDeserializer deserializer,
-  );
+@protected Map<int, AudioWaveformUiForSourceList>? sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(SseDeserializer deserializer);
 
-  @protected
-  ParameterSpecDTO sse_decode_parameter_spec_dto(SseDeserializer deserializer);
+@protected String? sse_decode_opt_String(SseDeserializer deserializer);
 
-  @protected
-  ParameterValueTypeDTO sse_decode_parameter_value_type_dto(
-    SseDeserializer deserializer,
-  );
+@protected AudioWaveformUiForAudioProperties? sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(SseDeserializer deserializer);
 
-  @protected
-  (int, AudioWaveformUiForClip)
-  sse_decode_record_u_32_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  );
+@protected bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
-  @protected
-  (int, AudioWaveformUiForSourceList)
-  sse_decode_record_u_32_audio_waveform_ui_for_source_list(
-    SseDeserializer deserializer,
-  );
+@protected double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
 
-  @protected
-  (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
+@protected int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
-  @protected
-  (int, UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer);
+@protected List<ParameterSpecDTO>? sse_decode_opt_list_parameter_spec_dto(SseDeserializer deserializer);
 
-  @protected
-  (int, UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(
-    SseDeserializer deserializer,
-  );
+@protected ParameterSpecDTO sse_decode_parameter_spec_dto(SseDeserializer deserializer);
 
-  @protected
-  (int, UiMixerChannel) sse_decode_record_u_32_ui_mixer_channel(
-    SseDeserializer deserializer,
-  );
+@protected ParameterValueTypeDTO sse_decode_parameter_value_type_dto(SseDeserializer deserializer);
 
-  @protected
-  (int, UiPattern) sse_decode_record_u_32_ui_pattern(
-    SseDeserializer deserializer,
-  );
+@protected (int,AudioWaveformUiForClip) sse_decode_record_u_32_audio_waveform_ui_for_clip(SseDeserializer deserializer);
 
-  @protected
-  (int, UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer);
+@protected (int,AudioWaveformUiForSourceList) sse_decode_record_u_32_audio_waveform_ui_for_source_list(SseDeserializer deserializer);
 
-  @protected
-  (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
+@protected (int,double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
 
-  @protected
-  (UiMixerChannel, List<UiEffectInstance>)
-  sse_decode_record_ui_mixer_channel_list_ui_effect_instance(
-    SseDeserializer deserializer,
-  );
+@protected (int,UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_u_16(SseDeserializer deserializer);
+@protected (int,UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_u_32(SseDeserializer deserializer);
+@protected (int,UiMixerChannel) sse_decode_record_u_32_ui_mixer_channel(SseDeserializer deserializer);
 
-  @protected
-  BigInt sse_decode_u_64(SseDeserializer deserializer);
+@protected (int,UiPattern) sse_decode_record_u_32_ui_pattern(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_u_8(SseDeserializer deserializer);
+@protected (int,UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer);
 
-  @protected
-  UiApplicationState sse_decode_ui_application_state(
-    SseDeserializer deserializer,
-  );
+@protected (int,int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
 
-  @protected
-  UiAudioHardwareConfig sse_decode_ui_audio_hardware_config(
-    SseDeserializer deserializer,
-  );
+@protected (UiMixerChannel,List<UiEffectInstance>) sse_decode_record_ui_mixer_channel_list_ui_effect_instance(SseDeserializer deserializer);
 
-  @protected
-  UiBus sse_decode_ui_bus(SseDeserializer deserializer);
+@protected int sse_decode_u_16(SseDeserializer deserializer);
 
-  @protected
-  UiClip sse_decode_ui_clip(SseDeserializer deserializer);
+@protected int sse_decode_u_32(SseDeserializer deserializer);
 
-  @protected
-  UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer);
+@protected BigInt sse_decode_u_64(SseDeserializer deserializer);
 
-  @protected
-  UiClipboardContent sse_decode_ui_clipboard_content(
-    SseDeserializer deserializer,
-  );
+@protected int sse_decode_u_8(SseDeserializer deserializer);
 
-  @protected
-  UiEffectInstance sse_decode_ui_effect_instance(SseDeserializer deserializer);
+@protected UiApplicationState sse_decode_ui_application_state(SseDeserializer deserializer);
 
-  @protected
-  UiEffectParameterSnapshot sse_decode_ui_effect_parameter_snapshot(
-    SseDeserializer deserializer,
-  );
+@protected UiAudioHardwareConfig sse_decode_ui_audio_hardware_config(SseDeserializer deserializer);
 
-  @protected
-  UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer);
+@protected UiBus sse_decode_ui_bus(SseDeserializer deserializer);
 
-  @protected
-  UiEffectTarget sse_decode_ui_effect_target(SseDeserializer deserializer);
+@protected UiClip sse_decode_ui_clip(SseDeserializer deserializer);
 
-  @protected
-  UiGeneratorInstance sse_decode_ui_generator_instance(
-    SseDeserializer deserializer,
-  );
+@protected UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer);
 
-  @protected
-  UiGeneratorInstanceType sse_decode_ui_generator_instance_type(
-    SseDeserializer deserializer,
-  );
+@protected UiClipboardContent sse_decode_ui_clipboard_content(SseDeserializer deserializer);
 
-  @protected
-  UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(
-    SseDeserializer deserializer,
-  );
+@protected UiEffectInstance sse_decode_ui_effect_instance(SseDeserializer deserializer);
 
-  @protected
-  UiMixerChannel sse_decode_ui_mixer_channel(SseDeserializer deserializer);
+@protected UiEffectParameterSnapshot sse_decode_ui_effect_parameter_snapshot(SseDeserializer deserializer);
 
-  @protected
-  UiMixerChannelParams sse_decode_ui_mixer_channel_params(
-    SseDeserializer deserializer,
-  );
+@protected UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer);
 
-  @protected
-  UiMixerParamEvent sse_decode_ui_mixer_param_event(
-    SseDeserializer deserializer,
-  );
+@protected UiEffectTarget sse_decode_ui_effect_target(SseDeserializer deserializer);
 
-  @protected
-  UiMixerState sse_decode_ui_mixer_state(SseDeserializer deserializer);
+@protected UiGeneratorInstance sse_decode_ui_generator_instance(SseDeserializer deserializer);
 
-  @protected
-  UiNote sse_decode_ui_note(SseDeserializer deserializer);
+@protected UiGeneratorInstanceType sse_decode_ui_generator_instance_type(SseDeserializer deserializer);
 
-  @protected
-  UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
+@protected UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(SseDeserializer deserializer);
 
-  @protected
-  UiParameterValue sse_decode_ui_parameter_value(SseDeserializer deserializer);
+@protected UiMixerChannel sse_decode_ui_mixer_channel(SseDeserializer deserializer);
 
-  @protected
-  UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
+@protected UiMixerChannelParams sse_decode_ui_mixer_channel_params(SseDeserializer deserializer);
 
-  @protected
-  UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer);
+@protected UiMixerParamEvent sse_decode_ui_mixer_param_event(SseDeserializer deserializer);
 
-  @protected
-  UiPluginInstance sse_decode_ui_plugin_instance(SseDeserializer deserializer);
+@protected UiMixerState sse_decode_ui_mixer_state(SseDeserializer deserializer);
 
-  @protected
-  UiPluginParameter sse_decode_ui_plugin_parameter(
-    SseDeserializer deserializer,
-  );
+@protected UiNote sse_decode_ui_note(SseDeserializer deserializer);
 
-  @protected
-  UiProjectMetadata sse_decode_ui_project_metadata(
-    SseDeserializer deserializer,
-  );
+@protected UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
 
-  @protected
-  UiResizeEdge sse_decode_ui_resize_edge(SseDeserializer deserializer);
+@protected UiParameterValue sse_decode_ui_parameter_value(SseDeserializer deserializer);
 
-  @protected
-  UiResponseCurvePoint sse_decode_ui_response_curve_point(
-    SseDeserializer deserializer,
-  );
+@protected UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
 
-  @protected
-  UiRoutingConnection sse_decode_ui_routing_connection(
-    SseDeserializer deserializer,
-  );
+@protected UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer);
 
-  @protected
-  UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer);
+@protected UiPluginInstance sse_decode_ui_plugin_instance(SseDeserializer deserializer);
 
-  @protected
-  UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
+@protected UiPluginParameter sse_decode_ui_plugin_parameter(SseDeserializer deserializer);
 
-  @protected
-  UiTrack sse_decode_ui_track(SseDeserializer deserializer);
+@protected UiProjectMetadata sse_decode_ui_project_metadata(SseDeserializer deserializer);
 
-  @protected
-  UiTrackType sse_decode_ui_track_type(SseDeserializer deserializer);
+@protected UiResizeEdge sse_decode_ui_resize_edge(SseDeserializer deserializer);
 
-  @protected
-  UiTransportFeedback sse_decode_ui_transport_feedback(
-    SseDeserializer deserializer,
-  );
+@protected UiResponseCurvePoint sse_decode_ui_response_curve_point(SseDeserializer deserializer);
 
-  @protected
-  UiTransportState sse_decode_ui_transport_state(SseDeserializer deserializer);
+@protected UiRoutingConnection sse_decode_ui_routing_connection(SseDeserializer deserializer);
 
-  @protected
-  void sse_decode_unit(SseDeserializer deserializer);
+@protected UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer);
 
-  @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer);
+@protected UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_AnyhowException(
-    AnyhowException self,
-    SseSerializer serializer,
-  );
+@protected UiTrack sse_decode_ui_track(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_CastedPrimitive_i_64(int self, SseSerializer serializer);
+@protected UiTrackType sse_decode_ui_track_type(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
+@protected UiTransportFeedback sse_decode_ui_transport_feedback(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer);
+@protected UiTransportState sse_decode_ui_transport_state(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_Map_u_32_audio_waveform_ui_for_clip_None(
-    Map<int, AudioWaveformUiForClip> self,
-    SseSerializer serializer,
-  );
+@protected void sse_decode_unit(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
-    Map<int, AudioWaveformUiForSourceList> self,
-    SseSerializer serializer,
-  );
+@protected BigInt sse_decode_usize(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_Map_u_32_f_32_None(
-    Map<int, double> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_AnyhowException(AnyhowException self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_Map_u_32_ui_bus_None(
-    Map<int, UiBus> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_CastedPrimitive_i_64(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_Map_u_32_ui_generator_instance_None(
-    Map<int, UiGeneratorInstance> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_Map_u_32_ui_mixer_channel_None(
-    Map<int, UiMixerChannel> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_Map_u_32_ui_pattern_None(
-    Map<int, UiPattern> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_Map_u_32_audio_waveform_ui_for_clip_None(Map<int, AudioWaveformUiForClip> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_Map_u_32_ui_track_None(
-    Map<int, UiTrack> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(Map<int, AudioWaveformUiForSourceList> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_StreamSink_ui_mixer_param_event_Sse(
-    RustStreamSink<UiMixerParamEvent> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_Map_u_32_f_32_None(Map<int, double> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_StreamSink_ui_transport_feedback_Sse(
-    RustStreamSink<UiTransportFeedback> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_Map_u_32_ui_bus_None(Map<int, UiBus> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_String(String self, SseSerializer serializer);
+@protected void sse_encode_Map_u_32_ui_generator_instance_None(Map<int, UiGeneratorInstance> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_audio_waveform_ui_for_audio_properties(
-    AudioWaveformUiForAudioProperties self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_Map_u_32_ui_mixer_channel_None(Map<int, UiMixerChannel> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_audio_waveform_ui_for_clip(
-    AudioWaveformUiForClip self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_Map_u_32_ui_pattern_None(Map<int, UiPattern> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_audio_waveform_ui_for_source_list(
-    AudioWaveformUiForSourceList self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_Map_u_32_ui_track_None(Map<int, UiTrack> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
+@protected void sse_encode_StreamSink_f_32_Sse(RustStreamSink<double> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
-    AudioWaveformUiForAudioProperties self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_StreamSink_ui_mixer_param_event_Sse(RustStreamSink<UiMixerParamEvent> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
+@protected void sse_encode_StreamSink_ui_transport_feedback_Sse(RustStreamSink<UiTransportFeedback> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
+@protected void sse_encode_String(String self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_record_u_8_u_8(
-    (int, int) self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_audio_waveform_ui_for_audio_properties(AudioWaveformUiForAudioProperties self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+@protected void sse_encode_audio_waveform_ui_for_clip(AudioWaveformUiForClip self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_ui_effect_target(
-    UiEffectTarget self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_audio_waveform_ui_for_source_list(AudioWaveformUiForSourceList self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_ui_mixer_channel(
-    UiMixerChannel self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_bool(bool self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_ui_plugin_instance(
-    UiPluginInstance self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(AudioWaveformUiForAudioProperties self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_ui_routing_node(
-    UiRoutingNode self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_f_32(double self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_f_64(double self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_record_u_8_u_8((int,int) self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_i_16(int self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_ui_effect_target(UiEffectTarget self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_ui_mixer_channel(UiMixerChannel self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_i_8(int self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_ui_plugin_instance(UiPluginInstance self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_karbeat_plugin_type(
-    KarbeatPluginType self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_ui_routing_node(UiRoutingNode self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+@protected void sse_encode_f_32(double self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_parameter_spec_dto(
-    List<ParameterSpecDTO> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_f_64(double self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_prim_i_8_strict(Int8List self, SseSerializer serializer);
+@protected void sse_encode_i_16(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_prim_u_32_loose(
-    List<int> self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_i_32(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_prim_u_32_strict(
-    Uint32List self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_prim_u_8_strict(
-    Uint8List self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_audio_waveform_ui_for_clip(
-    List<(int, AudioWaveformUiForClip)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
-    List<(int, AudioWaveformUiForSourceList)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_f_32(
-    List<(int, double)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_ui_bus(
-    List<(int, UiBus)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_ui_generator_instance(
-    List<(int, UiGeneratorInstance)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_ui_mixer_channel(
-    List<(int, UiMixerChannel)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_ui_pattern(
-    List<(int, UiPattern)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_ui_track(
-    List<(int, UiTrack)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_ui_effect_instance(
-    List<UiEffectInstance> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_effect_parameter_snapshot(
-    List<UiEffectParameterSnapshot> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_effect_summary(
-    List<UiEffectSummary> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_generator_parameter_snapshot(
-    List<UiGeneratorParameterSnapshot> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_mixer_channel_params(
-    List<UiMixerChannelParams> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_ui_parameter_value(
-    List<UiParameterValue> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_plugin_info(
-    List<UiPluginInfo> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_plugin_parameter(
-    List<UiPluginParameter> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_response_curve_point(
-    List<UiResponseCurvePoint> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_routing_connection(
-    List<UiRoutingConnection> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_CastedPrimitive_i_64(int? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_CastedPrimitive_u_64(int? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
-    Map<int, AudioWaveformUiForSourceList>? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_String(String? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
-    AudioWaveformUiForAudioProperties? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_list_parameter_spec_dto(
-    List<ParameterSpecDTO>? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_parameter_spec_dto(
-    ParameterSpecDTO self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_parameter_value_type_dto(
-    ParameterValueTypeDTO self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_audio_waveform_ui_for_clip(
-    (int, AudioWaveformUiForClip) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
-    (int, AudioWaveformUiForSourceList) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_f_32(
-    (int, double) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_ui_bus(
-    (int, UiBus) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_ui_generator_instance(
-    (int, UiGeneratorInstance) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_ui_mixer_channel(
-    (int, UiMixerChannel) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_ui_pattern(
-    (int, UiPattern) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_ui_track(
-    (int, UiTrack) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_8_u_8((int, int) self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_record_ui_mixer_channel_list_ui_effect_instance(
-    (UiMixerChannel, List<UiEffectInstance>) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_u_16(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_u_32(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_u_64(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_u_8(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_application_state(
-    UiApplicationState self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_audio_hardware_config(
-    UiAudioHardwareConfig self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_bus(UiBus self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_clip(UiClip self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_clipboard_content(
-    UiClipboardContent self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_effect_instance(
-    UiEffectInstance self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_effect_parameter_snapshot(
-    UiEffectParameterSnapshot self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_effect_summary(
-    UiEffectSummary self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_effect_target(
-    UiEffectTarget self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_generator_instance(
-    UiGeneratorInstance self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_generator_instance_type(
-    UiGeneratorInstanceType self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_generator_parameter_snapshot(
-    UiGeneratorParameterSnapshot self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_mixer_channel(
-    UiMixerChannel self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_mixer_channel_params(
-    UiMixerChannelParams self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_mixer_param_event(
-    UiMixerParamEvent self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_mixer_state(UiMixerState self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_note(UiNote self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_parameter_type(
-    UiParameterType self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_parameter_value(
-    UiParameterValue self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_plugin_instance(
-    UiPluginInstance self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_plugin_parameter(
-    UiPluginParameter self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_project_metadata(
-    UiProjectMetadata self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_resize_edge(UiResizeEdge self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_response_curve_point(
-    UiResponseCurvePoint self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_routing_connection(
-    UiRoutingConnection self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_routing_node(UiRoutingNode self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_track(UiTrack self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_track_type(UiTrackType self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_transport_feedback(
-    UiTransportFeedback self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_transport_state(
-    UiTransportState self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_unit(void self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer);
-}
+@protected void sse_encode_i_8(int self, SseSerializer serializer);
+
+@protected void sse_encode_karbeat_plugin_type(KarbeatPluginType self, SseSerializer serializer);
+
+@protected void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+@protected void sse_encode_list_parameter_spec_dto(List<ParameterSpecDTO> self, SseSerializer serializer);
+
+@protected void sse_encode_list_prim_i_8_strict(Int8List self, SseSerializer serializer);
+
+@protected void sse_encode_list_prim_u_32_loose(List<int> self, SseSerializer serializer);
+
+@protected void sse_encode_list_prim_u_32_strict(Uint32List self, SseSerializer serializer);
+
+@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_audio_waveform_ui_for_clip(List<(int,AudioWaveformUiForClip)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(List<(int,AudioWaveformUiForSourceList)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_f_32(List<(int,double)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_ui_bus(List<(int,UiBus)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_ui_generator_instance(List<(int,UiGeneratorInstance)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_ui_mixer_channel(List<(int,UiMixerChannel)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_ui_pattern(List<(int,UiPattern)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_record_u_32_ui_track(List<(int,UiTrack)> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_effect_instance(List<UiEffectInstance> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_effect_parameter_snapshot(List<UiEffectParameterSnapshot> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_effect_summary(List<UiEffectSummary> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_generator_parameter_snapshot(List<UiGeneratorParameterSnapshot> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_mixer_channel_params(List<UiMixerChannelParams> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_parameter_value(List<UiParameterValue> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_plugin_info(List<UiPluginInfo> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_plugin_parameter(List<UiPluginParameter> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_response_curve_point(List<UiResponseCurvePoint> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ui_routing_connection(List<UiRoutingConnection> self, SseSerializer serializer);
+
+@protected void sse_encode_opt_CastedPrimitive_i_64(int? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_CastedPrimitive_u_64(int? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(Map<int, AudioWaveformUiForSourceList>? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(AudioWaveformUiForAudioProperties? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_list_parameter_spec_dto(List<ParameterSpecDTO>? self, SseSerializer serializer);
+
+@protected void sse_encode_parameter_spec_dto(ParameterSpecDTO self, SseSerializer serializer);
+
+@protected void sse_encode_parameter_value_type_dto(ParameterValueTypeDTO self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_audio_waveform_ui_for_clip((int,AudioWaveformUiForClip) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_audio_waveform_ui_for_source_list((int,AudioWaveformUiForSourceList) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_f_32((int,double) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_ui_bus((int,UiBus) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_ui_generator_instance((int,UiGeneratorInstance) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_ui_mixer_channel((int,UiMixerChannel) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_ui_pattern((int,UiPattern) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_32_ui_track((int,UiTrack) self, SseSerializer serializer);
+
+@protected void sse_encode_record_u_8_u_8((int,int) self, SseSerializer serializer);
+
+@protected void sse_encode_record_ui_mixer_channel_list_ui_effect_instance((UiMixerChannel,List<UiEffectInstance>) self, SseSerializer serializer);
+
+@protected void sse_encode_u_16(int self, SseSerializer serializer);
+
+@protected void sse_encode_u_32(int self, SseSerializer serializer);
+
+@protected void sse_encode_u_64(BigInt self, SseSerializer serializer);
+
+@protected void sse_encode_u_8(int self, SseSerializer serializer);
+
+@protected void sse_encode_ui_application_state(UiApplicationState self, SseSerializer serializer);
+
+@protected void sse_encode_ui_audio_hardware_config(UiAudioHardwareConfig self, SseSerializer serializer);
+
+@protected void sse_encode_ui_bus(UiBus self, SseSerializer serializer);
+
+@protected void sse_encode_ui_clip(UiClip self, SseSerializer serializer);
+
+@protected void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer);
+
+@protected void sse_encode_ui_clipboard_content(UiClipboardContent self, SseSerializer serializer);
+
+@protected void sse_encode_ui_effect_instance(UiEffectInstance self, SseSerializer serializer);
+
+@protected void sse_encode_ui_effect_parameter_snapshot(UiEffectParameterSnapshot self, SseSerializer serializer);
+
+@protected void sse_encode_ui_effect_summary(UiEffectSummary self, SseSerializer serializer);
+
+@protected void sse_encode_ui_effect_target(UiEffectTarget self, SseSerializer serializer);
+
+@protected void sse_encode_ui_generator_instance(UiGeneratorInstance self, SseSerializer serializer);
+
+@protected void sse_encode_ui_generator_instance_type(UiGeneratorInstanceType self, SseSerializer serializer);
+
+@protected void sse_encode_ui_generator_parameter_snapshot(UiGeneratorParameterSnapshot self, SseSerializer serializer);
+
+@protected void sse_encode_ui_mixer_channel(UiMixerChannel self, SseSerializer serializer);
+
+@protected void sse_encode_ui_mixer_channel_params(UiMixerChannelParams self, SseSerializer serializer);
+
+@protected void sse_encode_ui_mixer_param_event(UiMixerParamEvent self, SseSerializer serializer);
+
+@protected void sse_encode_ui_mixer_state(UiMixerState self, SseSerializer serializer);
+
+@protected void sse_encode_ui_note(UiNote self, SseSerializer serializer);
+
+@protected void sse_encode_ui_parameter_type(UiParameterType self, SseSerializer serializer);
+
+@protected void sse_encode_ui_parameter_value(UiParameterValue self, SseSerializer serializer);
+
+@protected void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
+
+@protected void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer);
+
+@protected void sse_encode_ui_plugin_instance(UiPluginInstance self, SseSerializer serializer);
+
+@protected void sse_encode_ui_plugin_parameter(UiPluginParameter self, SseSerializer serializer);
+
+@protected void sse_encode_ui_project_metadata(UiProjectMetadata self, SseSerializer serializer);
+
+@protected void sse_encode_ui_resize_edge(UiResizeEdge self, SseSerializer serializer);
+
+@protected void sse_encode_ui_response_curve_point(UiResponseCurvePoint self, SseSerializer serializer);
+
+@protected void sse_encode_ui_routing_connection(UiRoutingConnection self, SseSerializer serializer);
+
+@protected void sse_encode_ui_routing_node(UiRoutingNode self, SseSerializer serializer);
+
+@protected void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);
+
+@protected void sse_encode_ui_track(UiTrack self, SseSerializer serializer);
+
+@protected void sse_encode_ui_track_type(UiTrackType self, SseSerializer serializer);
+
+@protected void sse_encode_ui_transport_feedback(UiTransportFeedback self, SseSerializer serializer);
+
+@protected void sse_encode_ui_transport_state(UiTransportState self, SseSerializer serializer);
+
+@protected void sse_encode_unit(void self, SseSerializer serializer);
+
+@protected void sse_encode_usize(BigInt self, SseSerializer serializer);
+                }
+                
+
 
 // Section: wire_class
 
 class RustLibWire implements BaseWire {
-  RustLibWire.fromExternalLibrary(ExternalLibrary lib);
-}
+            RustLibWire.fromExternalLibrary(ExternalLibrary lib);
 
-@JS('wasm_bindgen')
-external RustLibWasmModule get wasmModule;
+            
+        }
+        @JS('wasm_bindgen') external RustLibWasmModule get wasmModule;
 
-@JS()
-@anonymous
-extension type RustLibWasmModule._(JSObject _) implements JSObject {}
+        @JS() @anonymous extension type RustLibWasmModule._(JSObject _) implements JSObject {
+            
+        }
+        

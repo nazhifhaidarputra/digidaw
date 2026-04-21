@@ -379,7 +379,7 @@ impl StandardSynthBase {
 
     pub fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         vec![
-            ParameterSpec::new_float(0, "Master Gain", "Output", self.gain, 0.0, 1.0, 0.5),
+            ParameterSpec::new_float(0, "Master Gain", "Output", self.gain, -60.0, 6.0, 0.0, 0.1),
             // Filter
             ParameterSpec::new_float(
                 1,
@@ -389,6 +389,7 @@ impl StandardSynthBase {
                 20.0,
                 20000.0,
                 2000.0,
+                10.0,
             ),
             ParameterSpec::new_float(
                 2,
@@ -398,6 +399,7 @@ impl StandardSynthBase {
                 0.0,
                 0.95,
                 0.2,
+                0.01
             ),
             ParameterSpec::new_choice(
                 3,
@@ -421,6 +423,7 @@ impl StandardSynthBase {
                 0.001,
                 5.0,
                 0.01,
+                0.001
             ),
             ParameterSpec::new_float(
                 5,
@@ -430,6 +433,7 @@ impl StandardSynthBase {
                 0.001,
                 5.0,
                 0.2,
+                0.001,
             ),
             ParameterSpec::new_float(
                 6,
@@ -439,6 +443,7 @@ impl StandardSynthBase {
                 0.0,
                 1.0,
                 0.7,
+                0.001,
             ),
             ParameterSpec::new_float(
                 7,
@@ -448,6 +453,7 @@ impl StandardSynthBase {
                 0.001,
                 10.0,
                 0.5,
+                0.001
             ),
         ]
     }

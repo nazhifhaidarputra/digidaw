@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.dependencies]
-karbeat-core = { path = "karbeat-core" }
+karbeat-core = { path = "karbeat-core"}
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat_flutter_ffi = { path = "karbeat-flutter-ffi" }
 karbeat-host = { path = "karbeat-host" }
@@ -23,12 +23,12 @@ karbeat-macros = { path = "karbeat-macros"}
 karbeat-plugin-types = {path = "karbeat-plugin-types"}
 anyhow = "1.0.100"
 cpal = { version = "0.17.3", features = ["jack", "asio"] }
-env_logger = "0.11.8"
-fastrand = "2.3.0"
+env_logger = "0.11"
+fastrand = "2.4"
 flutter_rust_bridge = "=2.11.1"
 log = "0.4.28"
 minimp3 = "0.6.1"
-once_cell = "1.21.3"
+once_cell = "1.21"
 rodio = "0.22.1"
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
@@ -42,7 +42,7 @@ symphonia = { version = "0.5.5", default-features = false, features = [
 ] }
 triple_buffer = "9.0.0"
 rustfft = "6.4.1"
-thiserror = "2.0.17"
+thiserror = "2.0"
 dasp = { version = "0.11.0", features = ["all"] }
 smallvec = {version = "1.15.1", features = ["serde"]}
 hashbrown = { version = "0.17.0", features = ["serde"] }
@@ -53,7 +53,7 @@ uuid = { version = "1.22.0", features = ["v4", "serde"] }
 memmap2 = "0.9.10"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
-zip = "8.5.0"
+zip = "8.5"
 toml = "1.1.2+spec-1.1.0"
 chrono = { version = "0.4.44", features = ["serde"] }
 rmp-serde = "1.3.1"
@@ -61,7 +61,8 @@ derive_builder = "0.20.2"
 hound = "3.5.1"
 strum = { version = "0.28.0", features = ["derive"] }
 num-traits = "0.2"
-wide = "1.3"
+wide = "1.3.0"
+heck = "0.5.0"
 
 [profile.dev]
 opt-level = 3

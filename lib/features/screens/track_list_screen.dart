@@ -14,6 +14,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/state/clip_placement_state.dart';
+import 'package:karbeat/utils/clip_time_utils.dart';
 import 'package:karbeat/utils/color.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/result_type.dart';
@@ -205,14 +206,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       currentScroll = _trackContentController.offset;
     }
 
-    // 1. Calculate the exact time (in samples) located at the current cursor point
-    final double samplesAtFocalPoint = (currentScroll + focalPointX) * oldZoom;
+    // 1. Calculate the exact time (in ticks) located at the current cursor point
+    final double ticksAtFocalPoint = (currentScroll + focalPointX) * oldZoom;
 
     // 2. Set the new zoom level
     state.horizontalZoomLevel = clampedZoom;
 
-    // 3. Calculate what the new scroll position MUST be to keep that specific sample at the focal point
-    double newScroll = (samplesAtFocalPoint / clampedZoom) - focalPointX;
+    // 3. Calculate what the new scroll position MUST be to keep that specific tick at the focal point
+    double newScroll = (ticksAtFocalPoint / clampedZoom) - focalPointX;
     if (newScroll < 0) newScroll = 0;
 
     // 4. Proactively expand the timeline boundary if we zoom in so deep that we pass it
@@ -323,14 +324,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     final zoomLevel = state.horizontalZoomLevel;
 
-    // Get time range in samples
+    // Get time range in ticks
     final startX = _rangeSelectStart!.dx;
     final endX = _rangeSelectEnd!.dx;
     final minX = startX < endX ? startX : endX;
     final maxX = startX > endX ? startX : endX;
 
-    final startTimeSamples = (minX * zoomLevel).toInt();
-    final endTimeSamples = (maxX * zoomLevel).toInt();
+    final startTimeTicks = (minX * zoomLevel).toInt();
+    final endTimeTicks = (maxX * zoomLevel).toInt();
+
+    final bpm = state.tempo;
+    final sr = state.hardwareConfig.sampleRate;
 
     // Find clips in the target track that overlap with the selection range
     final track = state.tracks[_rangeSelectTrackId!];
@@ -341,11 +345,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     final selectedClipIds = <int>[];
     for (final clip in track.clips) {
-      final clipStart = clip.startTime.toInt();
-      final clipEnd = clipStart + clip.loopLength.toInt();
+      final clipStart = clip.startTimeInTicks(bpm, sr);
+      final clipEnd = clipStart + clip.loopLengthInTicks(bpm, sr);
 
       // Check if clip overlaps with selection range
-      if (clipEnd > startTimeSamples && clipStart < endTimeSamples) {
+      if (clipEnd > startTimeTicks && clipStart < endTimeTicks) {
         selectedClipIds.add(clip.id);
       }
     }
@@ -388,14 +392,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     if (absoluteX < 0) absoluteX = 0;
 
     final zoomLevel = state.horizontalZoomLevel;
-    double samples = absoluteX * zoomLevel;
+    double ticks = absoluteX * zoomLevel;
 
     // Apply Snapping
     if (state.snapToGrid) {
-      samples = _snapTime(samples.toInt(), state).toDouble();
+      ticks = _snapTick(ticks.toInt(), state).toDouble();
     }
 
-    double snappedAbsoluteX = samples / zoomLevel;
+    double snappedAbsoluteX = ticks / zoomLevel;
     double left = widget.headerWidth + (snappedAbsoluteX - scrollX);
 
     // Hide if scrolled out of view to the left
@@ -580,9 +584,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                 : 0;
                             double absoluteX =
                                 details.localPosition.dx + scrollX;
+                            final ticks = absoluteX * state.horizontalZoomLevel;
+                            final sampleRate = _activeSampleRate > 0
+                                ? _activeSampleRate
+                                : 48000;
                             final samples =
-                                absoluteX * state.horizontalZoomLevel;
-                            state.seekTo(samples.toInt());
+                                (ticks *
+                                        (60.0 / state.tempo) *
+                                        (sampleRate / 960.0))
+                                    .round();
+                            state.seekTo(samples);
                           },
                           onPanUpdate: (details) {
                             double scrollX = _rulerController.hasClients
@@ -590,9 +601,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                 : 0;
                             double absoluteX =
                                 details.localPosition.dx + scrollX;
+                            final ticks = absoluteX * state.horizontalZoomLevel;
+                            final sampleRate = _activeSampleRate > 0
+                                ? _activeSampleRate
+                                : 48000;
                             final samples =
-                                absoluteX * state.horizontalZoomLevel;
-                            state.seekTo(samples.toInt());
+                                (ticks *
+                                        (60.0 / state.tempo) *
+                                        (sampleRate / 960.0))
+                                    .round();
+                            state.seekTo(samples);
                           },
                           child: Container(
                             height: 30,
@@ -714,12 +732,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               offsetAdjustment: widget.headerWidth,
               scrollController: _trackContentController,
               zoomLevel: horizontalZoom,
-              sampleSelector: (pos) => pos.samples,
-              onSeek: (int newSamples) {
-                final safeSamples = newSamples < 0 ? 0 : newSamples;
-                ref.read(karbeatStateProvider).seekTo(safeSamples);
+              sampleSelector: (pos) => pos.ticks,
+              onSeek: (int newTicks) {
+                final state = ref.read(karbeatStateProvider);
+                final tempo = state.tempo;
+                final safeTicks = newTicks < 0 ? 0 : newTicks;
+                final sampleRate = state.hardwareConfig.sampleRate > 0
+                    ? state.hardwareConfig.sampleRate
+                    : 48000;
+                final samples =
+                    (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
+                state.seekTo(samples);
 
-                KarbeatLogger.info("Seeking to: $safeSamples samples");
+                KarbeatLogger.info("Seeking to: $samples samples");
               },
             ),
           ),
@@ -796,17 +821,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
     double absoluteX = (_mousePos!.dx + scrollX).clamp(0, double.infinity);
 
-    // Convert X Pixels -> Samples
+    // Convert X Pixels -> Ticks
     final state = ref.read(karbeatStateProvider);
     final zoomLevel = state.horizontalZoomLevel;
-    double samples = absoluteX * zoomLevel;
+    double ticks = absoluteX * zoomLevel;
 
     if (state.snapToGrid) {
-      samples = _snapTime(samples.toInt(), state).toDouble();
+      ticks = _snapTick(ticks.toInt(), state).toDouble();
     }
     ref
         .read(clipPlacementProvider.notifier)
-        .updatePlacementTarget(targetTrack, samples);
+        .updatePlacementTarget(targetTrack, ticks);
   }
 
   Widget _buildGhostClip(BuildContext context) {
@@ -837,13 +862,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     double absoluteX = _mousePos!.dx + scrollX;
     if (absoluteX < 0) absoluteX = 0;
 
-    double samples = absoluteX * state.horizontalZoomLevel;
+    double ticks = absoluteX * state.horizontalZoomLevel;
     if (state.snapToGrid) {
-      samples = _snapTime(samples.toInt(), state).toDouble();
+      ticks = _snapTick(ticks.toInt(), state).toDouble();
     }
 
-    // Convert the snapped sample position back into a screen pixel coordinate
-    double snappedAbsoluteX = samples / state.horizontalZoomLevel;
+    // Convert the snapped position back into a screen pixel coordinate
+    double snappedAbsoluteX = ticks / state.horizontalZoomLevel;
     double left = widget.headerWidth + (snappedAbsoluteX - scrollX);
 
     // Safety check to keep it in timeline area
@@ -1348,8 +1373,9 @@ class _TimelineRulerPainter extends CustomPainter {
     if (zoomLevel <= 0 || tempo <= 0 || sampleRate <= 0) return;
 
     // Calculate Intervals
-    final double samplesPerBeat = (60.0 / tempo) * sampleRate;
-    final double pixelsPerBeat = samplesPerBeat / zoomLevel;
+    // In Karbeat, 1 beat is always 960 ticks. zoomLevel is in ticks/pixel.
+    const double ticksPerBeat = 960.0;
+    final double pixelsPerBeat = ticksPerBeat / zoomLevel;
 
     if (pixelsPerBeat < 1.0) return;
 
@@ -1475,7 +1501,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
     int startTime = (localDx * zoomLevel).round();
 
     if (state.snapToGrid) {
-      startTime = _snapTime(startTime, state);
+      startTime = _snapTick(startTime, state);
     }
 
     state.createEmptyPatternClip(trackId: widget.trackId, startTime: startTime);
@@ -1660,7 +1686,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   _DragAction _currentAction = _DragAction.none;
 
   // Drag Math Tracking
-  double _accumulatedDeltaSamples = 0.0;
+  double _accumulatedDeltaTicks = 0.0;
   double _verticalDragDy = 0.0;
   int _previousSnappedDelta = 0;
   int _leaderBaseStartTime = 0;
@@ -1670,8 +1696,6 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
   /// Track dynamic cursor override
   MouseCursor? _cursorOverride;
-
-  // double _accumulatedDeltaSamples = 0.0;
 
   @override
   void initState() {
@@ -1699,10 +1723,13 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   }
 
   void _syncModel() {
-    _visualStartTime = widget.clip.startTime.toInt();
-    _visualLoopLength = widget.clip.loopLength.toInt();
-    _visualOffset = widget.clip.offsetStart.toInt();
-    // Store base values for follower calculations
+    final state = ref.read(karbeatStateProvider);
+    final bpm = state.tempo;
+    final sr = state.hardwareConfig.sampleRate;
+    // Convert to tick-equivalent for rendering on the tick-based timeline
+    _visualStartTime = widget.clip.startTimeInTicks(bpm, sr);
+    _visualLoopLength = widget.clip.loopLengthInTicks(bpm, sr);
+    _visualOffset = widget.clip.offsetStartInTicks(bpm, sr);
   }
 
   @override
@@ -1832,22 +1859,33 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                         clipId: widget.clip.id,
                       );
                 } else if (widget.selectedTool == ToolSelection.cut) {
+                  // Calculate absolute position on the timeline (in native clip units)
                   final state = ref.read(karbeatStateProvider);
-
-                  // Calculate absolute sample position on the timeline
-                  int cutSample =
-                      widget.clip.startTime +
-                      (details.localPosition.dx * widget.zoomLevel).round();
-
-                  // Force the cut to match the snapped grid!
-                  if (state.snapToGrid) {
-                    cutSample = _snapTime(cutSample, state);
+                  int cutPoint;
+                  if (widget.clip.isSampleBased) {
+                    // For audio clips: convert pixel→tick→sample
+                    final bpm = state.tempo;
+                    final sr = state.hardwareConfig.sampleRate;
+                    int cutTick = widget.clip.startTimeInTicks(bpm, sr) +
+                        (details.localPosition.dx * widget.zoomLevel).round();
+                    if (state.snapToGrid) {
+                      cutTick = _snapTick(cutTick, state);
+                    }
+                    // Convert back to samples for the backend
+                    cutPoint = ticksToSamples(cutTick, bpm, sr);
+                  } else {
+                    int cutTick = widget.clip.startTime +
+                        (details.localPosition.dx * widget.zoomLevel).round();
+                    if (state.snapToGrid) {
+                      cutTick = _snapTick(cutTick, state);
+                    }
+                    cutPoint = cutTick;
                   }
 
                   final result = await state.cutClip(
                     widget.trackId,
                     widget.clip.id,
-                    cutSample,
+                    cutPoint,
                   );
 
                   if (result.isErr()) {
@@ -1862,7 +1900,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   return;
                 }
 
-                _accumulatedDeltaSamples = 0.0;
+                _accumulatedDeltaTicks = 0.0;
                 _verticalDragDy = 0.0;
                 _previousSnappedDelta = 0;
 
@@ -1897,9 +1935,27 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 if (track != null && currentSelectedIds.isNotEmpty) {
                   final leaderClip = track.clips
                       .where((c) => currentSelectedIds.contains(c.id))
-                      .reduce((a, b) => a.startTime < b.startTime ? a : b);
-                  _leaderBaseStartTime = leaderClip.startTime.toInt();
-                  _leaderBaseLoopLength = leaderClip.loopLength.toInt();
+                      .reduce(
+                        (a, b) =>
+                            a.startTimeInTicks(
+                                  state.tempo,
+                                  state.hardwareConfig.sampleRate,
+                                ) <
+                                b.startTimeInTicks(
+                                  state.tempo,
+                                  state.hardwareConfig.sampleRate,
+                                )
+                            ? a
+                            : b,
+                      );
+                  _leaderBaseStartTime = leaderClip.startTimeInTicks(
+                    state.tempo,
+                    state.hardwareConfig.sampleRate,
+                  );
+                  _leaderBaseLoopLength = leaderClip.loopLengthInTicks(
+                    state.tempo,
+                    state.hardwareConfig.sampleRate,
+                  );
                 }
 
                 final batchAction = _currentAction == _DragAction.move
@@ -1921,23 +1977,23 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 final track = state.tracks[widget.trackId];
                 if (track == null) return;
 
-                _accumulatedDeltaSamples += details.delta.dx * widget.zoomLevel;
+                _accumulatedDeltaTicks += details.delta.dx * widget.zoomLevel;
                 _verticalDragDy += details.delta.dy;
 
-                int rawTotalDelta = _accumulatedDeltaSamples.round();
+                int rawTotalDelta = _accumulatedDeltaTicks.round();
 
-                // Safety Clamp: Prevent shrinking past 100 samples
-                final minSamples = 100;
+                // Safety Clamp: Prevent shrinking past 10 ticks
+                final minTicks = 10;
                 final shortestClip = track.clips
                     .where((c) => currentSelectedIds.contains(c.id))
                     .reduce((a, b) => a.loopLength < b.loopLength ? a : b);
 
                 if (_currentAction == _DragAction.resizeRight) {
-                  final maxShrink = -(shortestClip.loopLength - minSamples);
+                  final maxShrink = -(shortestClip.loopLength - minTicks);
                   if (rawTotalDelta < maxShrink)
                     rawTotalDelta = maxShrink.toInt();
                 } else if (_currentAction == _DragAction.resizeLeft) {
-                  final maxShrink = shortestClip.loopLength - minSamples;
+                  final maxShrink = shortestClip.loopLength - minTicks;
                   if (rawTotalDelta > maxShrink)
                     rawTotalDelta = maxShrink.toInt();
                 }
@@ -1950,14 +2006,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       _currentAction == _DragAction.resizeLeft) {
                     int rawStart = _leaderBaseStartTime + rawTotalDelta;
                     snappedTotalDelta =
-                        _snapTime(rawStart, state) - _leaderBaseStartTime;
+                        _snapTick(rawStart, state) - _leaderBaseStartTime;
                   } else if (_currentAction == _DragAction.resizeRight) {
                     int rawEnd =
                         _leaderBaseStartTime +
                         _leaderBaseLoopLength +
                         rawTotalDelta;
                     snappedTotalDelta =
-                        _snapTime(rawEnd, state) -
+                        _snapTick(rawEnd, state) -
                         (_leaderBaseStartTime + _leaderBaseLoopLength);
                   }
                 }
@@ -2207,9 +2263,8 @@ class _GridPainter extends CustomPainter {
       return;
     }
 
-    final double samplesPerBeat = (60.0 / tempo) * sampleRate;
-    final double samplesPerGridLine = samplesPerBeat * (4.0 / gridSize);
-    double pixelsPerGridLine = samplesPerGridLine / zoomLevel;
+    final double ticksPerGridLine = (960.0 * 4.0) / gridSize;
+    double pixelsPerGridLine = ticksPerGridLine / zoomLevel;
 
     if (pixelsPerGridLine < 0.0001) return;
 
@@ -2310,26 +2365,21 @@ int computeTargetBin(double zoomLevel) {
   return levels.last; // fallback (max zoomed out)
 }
 
-/// Snaps a sample value to the nearest grid line based on the global state
-int _snapTime(int samples, KarbeatState state) {
-  if (!state.snapToGrid) return samples;
+/// Snaps a tick value to the nearest grid line based on the global state
+int _snapTick(int ticks, KarbeatState state) {
+  if (!state.snapToGrid) return ticks;
 
-  final tempo = state.tempo;
-  final sampleRate = state.hardwareConfig.sampleRate > 0
-      ? state.hardwareConfig.sampleRate
-      : 48000;
   final gridSize = state.gridSize;
 
-  if (tempo <= 0 || sampleRate <= 0 || gridSize <= 0) return samples;
+  if (gridSize <= 0) return ticks;
 
-  // Calculate the exact sample width of one grid line
-  final double samplesPerBeat = (60.0 / tempo) * sampleRate;
-  final double samplesPerGridLine = samplesPerBeat * (4.0 / gridSize);
+  // Calculate the exact tick width of one grid line (4 * 960 = whole note)
+  final double ticksPerGridLine = (960.0 * 4.0) / gridSize;
 
-  if (samplesPerGridLine <= 0) return samples;
+  if (ticksPerGridLine <= 0) return ticks;
 
   // Round to the nearest grid interval
-  return ((samples / samplesPerGridLine).round() * samplesPerGridLine).toInt();
+  return ((ticks / ticksPerGridLine).round() * ticksPerGridLine).toInt();
 }
 
 class _GroupedBatchOverlay extends ConsumerWidget {
@@ -2388,10 +2438,12 @@ class _GroupedBatchOverlay extends ConsumerWidget {
             final clip = track.clips.where((c) => c.id == clipId).firstOrNull;
             if (clip == null) return const SizedBox();
 
+            final bpm = state.tempo;
+            final sr = state.hardwareConfig.sampleRate;
             final screenLeft =
-                (clip.startTime / zoomLevel) - scrollX + headerWidth;
+                (clip.startTimeInTicks(bpm, sr) / zoomLevel) - scrollX + headerWidth;
             final screenTop = (trackIndex * itemHeight) - scrollY + 30 + 2;
-            final clipWidth = clip.loopLength / zoomLevel;
+            final clipWidth = clip.loopLengthInTicks(bpm, sr) / zoomLevel;
 
             double activeWidth = clipWidth;
             double activeLeft = screenLeft;
@@ -2438,11 +2490,7 @@ class _GroupedBatchOverlay extends ConsumerWidget {
           );
         }
 
-        return Positioned.fill(
-          child: IgnorePointer(
-            child: groupedClips,
-          ),
-        );
+        return Positioned.fill(child: IgnorePointer(child: groupedClips));
       },
     );
   }

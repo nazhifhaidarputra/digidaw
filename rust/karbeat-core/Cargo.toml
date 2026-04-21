@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-core"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "Core logic implementation of Karbeat, including audio engine and main business logic"
 
@@ -25,7 +25,7 @@ thiserror.workspace = true
 smallvec.workspace = true
 hashbrown.workspace = true
 rodio.workspace = true
-flutter_rust_bridge.workspace = true
+flutter_rust_bridge = { version = "2.0", optional = true }
 dasp.workspace = true
 parking_lot.workspace = true
 uuid.workspace = true

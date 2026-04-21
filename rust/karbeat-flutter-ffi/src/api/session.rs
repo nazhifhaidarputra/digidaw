@@ -155,7 +155,7 @@ pub fn move_clip(
     old_track_id: u32,
     new_track_id: u32,
     clip_id: u32,
-    new_start_time: u32
+    new_start_time: u64
 ) -> Result<(), String> {
     clip_api
         ::move_clip(
@@ -175,7 +175,7 @@ pub fn resize_clip(
     track_id: u32,
     clip_id: u32,
     edge: UiResizeEdge,
-    new_time_val: u32
+    new_time_val: u64
 ) -> Result<(), String> {
     clip_api
         ::resize_clip(TrackId::from(track_id), ClipId::from(clip_id), edge.into(), new_time_val)

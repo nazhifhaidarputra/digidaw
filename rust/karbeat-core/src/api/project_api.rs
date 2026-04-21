@@ -1,6 +1,9 @@
 use std::path::Path;
 
+use crate::audio::exporter::{AudioExportError, export_project as export_project_internal};
 use crate::audio::render_state::broadcast_plugin_state_loading;
+use crate::audio::writer::{AudioFormat, BitPerSample};
+use crate::audio::writer::wav::WavAudioWriter;
 use crate::commands::AudioCommand;
 use crate::context::utils::{broadcast_state_change, send_audio_command};
 use crate::core::file_manager::project_loader::{load_karbeat_project, save_karbeat_project};
@@ -66,4 +69,26 @@ where
     broadcast_plugin_state_loading();
 
     Ok(mapped_ui_state)
+}
+
+pub fn export_project<F>(
+    output_path: &String,
+    sample_rate: u32,
+    bit_per_sample: BitPerSample,
+    progress_callback: F,
+) -> anyhow::Result<()> where F:FnMut(f32) -> bool {
+    let mut app_state = get_app_write();
+    let path = Path::new(output_path);
+    let writer = WavAudioWriter::new(path, AudioFormat {
+        bit_per_sample,
+        sample_rate,
+        channels: 2,
+    }).map_err(|e|
+        AudioExportError::new("WriterInit", format!("Failed to create writer: {}", e)).to_string()
+    ).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    export_project_internal(&mut *app_state, output_path, sample_rate, bit_per_sample, writer, progress_callback
+    ).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    Ok(())
 }

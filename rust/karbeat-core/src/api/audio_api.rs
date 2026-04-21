@@ -1,7 +1,7 @@
 use crate::{
     audio::event::TransportFeedback,
     commands::AudioCommand,
-    context::{ctx, utils::send_audio_command},
+    context::{ ctx, utils::send_audio_command },
     core::{
         file_manager::audio_loader::AudioLoader,
         project::{ AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId },
@@ -29,6 +29,12 @@ pub fn play_source_preview(id: AudioSourceId) -> anyhow::Result<()> {
 
 pub fn stop_all_previews() {
     send_audio_command(AudioCommand::StopAllPreviews);
+}
+
+/// Set the metronome to be active or not. The active state is managed by frontend. Backend does not hold
+/// The truth state. Since the state lives on audio thread
+pub fn set_metronome_active(active: bool) {
+    send_audio_command(AudioCommand::SetMetronomeActive(active));
 }
 
 pub fn get_audio_config<T, F>(mapper: F) -> T where F: FnOnce(&AudioHardwareConfig) -> T {

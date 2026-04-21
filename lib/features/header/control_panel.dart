@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -283,11 +284,20 @@ class DefaultControlPanel extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
+            name: "Metronome",
+            icon: MdiIcons.metronome,
+            color: Colors.blueAccent,
+            isActive: state.isMetronomeActive,
+            onTap: () => ref.read(karbeatStateProvider).toggleMetronomeActive(),
+          ),
+          const SizedBox(width: 8),
+          ControlPanelToolbarItem(
             name: "MIDI KB",
             icon: Icons.piano,
             color: Colors.deepPurpleAccent,
             isActive: state.showFloatingMidiKeyboard,
-            onTap: () => ref.read(karbeatStateProvider).toggleFloatingMidiKeyboard(),
+            onTap: () =>
+                ref.read(karbeatStateProvider).toggleFloatingMidiKeyboard(),
           ),
         ],
       ),
@@ -363,7 +373,7 @@ class DefaultControlPanel extends ConsumerWidget {
           PopupMenuItem(
             value: ToolSelection.resize,
             child: ListTile(
-              leading: Icon(Icons.zoom_out_map, color: Colors.blueAccent),
+              leading: Icon(MdiIcons.arrowLeftRight, color: Colors.blueAccent),
               title: Text("Resize", style: TextStyle(color: Colors.white)),
               contentPadding: EdgeInsets.zero,
             ),

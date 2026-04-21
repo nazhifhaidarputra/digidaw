@@ -19,10 +19,10 @@ impl EnvelopeSettings {
     pub fn new(id_start: u32, group: &str) -> Self {
         Self {
             // ID, Name, Group, Default, Min, Max, Step
-            attack: Param::new_float(id_start, "Attack", group, 0.01, 0.001, 10.0, 0.001),
-            decay: Param::new_float(id_start + 1, "Decay", group, 0.2, 0.001, 10.0, 0.001),
-            sustain: Param::new_float(id_start + 2, "Sustain", group, 0.7, 0.0, 1.0, 0.01),
-            release: Param::new_float(id_start + 3, "Release", group, 0.5, 0.001, 10.0, 0.001),
+            attack: Param::new_f32(id_start, "Attack", group, 0.01, 0.001, 10.0, 0.001),
+            decay: Param::new_f32(id_start + 1, "Decay", group, 0.2, 0.001, 10.0, 0.001),
+            sustain: Param::new_f32(id_start + 2, "Sustain", group, 0.7, 0.0, 1.0, 0.01),
+            release: Param::new_f32(id_start + 3, "Release", group, 0.5, 0.001, 10.0, 0.001),
         }
     }
 }
@@ -64,18 +64,18 @@ impl AdvancedEnvelopeSettings {
     /// Create a new advanced DAHDSR envelope building block.
     pub fn new(id_start: u32, group: &str) -> Self {
         Self {
-            delay: Param::new_float(id_start, "Delay", group, 0.0, 0.0, 5.0, 0.01),
-            attack: Param::new_float(id_start + 1, "Attack", group, 0.01, 0.001, 10.0, 0.001),
-            hold: Param::new_float(id_start + 2, "Hold", group, 0.0, 0.0, 5.0, 0.01),
-            decay: Param::new_float(id_start + 3, "Decay", group, 0.2, 0.001, 10.0, 0.001),
-            release: Param::new_float(id_start + 4, "Release", group, 0.5, 0.001, 10.0, 0.001),
+            delay: Param::new_f32(id_start, "Delay", group, 0.0, 0.0, 5.0, 0.01),
+            attack: Param::new_f32(id_start + 1, "Attack", group, 0.01, 0.001, 10.0, 0.001),
+            hold: Param::new_f32(id_start + 2, "Hold", group, 0.0, 0.0, 5.0, 0.01),
+            decay: Param::new_f32(id_start + 3, "Decay", group, 0.2, 0.001, 10.0, 0.001),
+            release: Param::new_f32(id_start + 4, "Release", group, 0.5, 0.001, 10.0, 0.001),
             
-            peak_level: Param::new_float(id_start + 5, "Peak Level", group, 1.0, 0.0, 1.0, 0.01),
-            sustain: Param::new_float(id_start + 6, "Sustain", group, 0.7, 0.0, 1.0, 0.01),
+            peak_level: Param::new_f32(id_start + 5, "Peak Level", group, 1.0, 0.0, 1.0, 0.01),
+            sustain: Param::new_f32(id_start + 6, "Sustain", group, 0.7, 0.0, 1.0, 0.01),
             
-            attack_tension: Param::new_float(id_start + 7, "Attack Tension", group, 0.0, -1.0, 1.0, 0.01),
-            decay_tension: Param::new_float(id_start + 8, "Decay Tension", group, 0.5, -1.0, 1.0, 0.01),
-            release_tension: Param::new_float(id_start + 9, "Release Tension", group, 0.5, -1.0, 1.0, 0.01),
+            attack_tension: Param::new_f32(id_start + 7, "Attack Tension", group, 0.0, -1.0, 1.0, 0.01),
+            decay_tension: Param::new_f32(id_start + 8, "Decay Tension", group, 0.5, -1.0, 1.0, 0.01),
+            release_tension: Param::new_f32(id_start + 9, "Release Tension", group, 0.5, -1.0, 1.0, 0.01),
         }
     }
 

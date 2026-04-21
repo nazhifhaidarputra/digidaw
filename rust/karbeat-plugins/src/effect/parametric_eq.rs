@@ -1,6 +1,5 @@
-
-use karbeat_macros::{inject_plugin_routing, karbeat_plugin};
-use karbeat_plugin_api::prelude::*;
+use karbeat_macros::{ inject_plugin_routing, karbeat_plugin };
+use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*};
 use karbeat_plugin_types::*;
 use serde_json::{ json, Value };
 
@@ -70,9 +69,9 @@ impl KarbeatParametricEQFilterNode {
         };
 
         let mut node = Self {
-            freq: Param::new_float(base_id, "Frequency", &group, default_freq, 20.0, 20000.0, 1.0),
-            gain: Param::new_float(base_id + 1, "Gain", &group, 0.0, -24.0, 24.0, 0.1),
-            q: Param::new_float(base_id + 2, "Q", &group, 0.707, 0.1, 20.0, 0.1),
+            freq: Param::new_f32(base_id, "Frequency", &group, default_freq, 20.0, 20000.0, 1.0),
+            gain: Param::new_f32(base_id + 1, "Gain", &group, 0.0, -24.0, 24.0, 0.1),
+            q: Param::new_f32(base_id + 2, "Q", &group, 0.707, 0.1, 20.0, 0.1),
             active: Param::new_bool(base_id + 3, "Active", &group, true),
             filter_type: Param::new_enum(base_id + 4, "Type", &group, default_type),
             order: Param::new_choice(
@@ -340,7 +339,15 @@ pub struct KarbeatParametricEQEngine {
     #[nested]
     pub nodes: Vec<KarbeatParametricEQFilterNode>,
 
-    #[param(id = 2, name = "Base Gain", group = "Master", min = -60.0, max = 24.0, default = 0.0, step = 0.1)]
+    #[param(
+        id = 2,
+        name = "Base Gain",
+        group = "Master",
+        min = -60.0,
+        max = 24.0,
+        default = 0.0,
+        step = 0.1
+    )]
     pub base_gain: f32,
 
     // Ignored natively by macro
@@ -497,6 +504,18 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
                 Some(json!(json_response))
             }
             _ => None,
+        }
+    }
+}
+
+impl Manifestable for KarbeatParametricEQEngine {
+    fn build_manifest() -> karbeat_plugin_api::manifest::PluginManifest {
+        PluginManifest {
+            id: 0,
+            name: "Karbeat Parametric EQ".into(),
+            internal_type: "KarbeatParametricEQ".into(),
+            is_synth: false,
+            parameters: Self::default().get_parameter_specs(),
         }
     }
 }

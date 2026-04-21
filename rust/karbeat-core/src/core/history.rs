@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use crate::{core::project::{
-     ApplicationState, Clip, ClipId, Note, NoteId, TrackId,
-}, shared::id::*};
+use crate::{
+    core::project::{ApplicationState, Clip, ClipId, Note, NoteId, TrackId},
+    shared::id::*,
+};
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
@@ -41,8 +42,8 @@ pub enum ProjectAction {
         old_track_id: TrackId,
         new_track_id: TrackId,
         clip_id: ClipId,
-        old_start_time: u32,
-        new_start_time: u32,
+        old_start_time: u64,
+        new_start_time: u64,
     },
     ResizeClip {
         track_id: TrackId,
@@ -51,7 +52,6 @@ pub enum ProjectAction {
     },
     /// Groups multiple actions into one Undo/Redo step (e.g. Paste)
     Batch(Vec<ProjectAction>),
-
     // TODO: Add history for creating or removing track
     // TODO: Add history for adding automation
 }
@@ -178,7 +178,8 @@ impl HistoryManager {
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Inverse of DeleteClip: Restore the clip to the track
-                app.add_clip_to_track(*track_id, clip.clone(), true).map_err(|e| format!("{}", e))?;
+                app.add_clip_to_track(*track_id, clip.clone(), true)
+                    .map_err(|e| format!("{}", e))?;
             }
             ProjectAction::MoveClip {
                 old_track_id,

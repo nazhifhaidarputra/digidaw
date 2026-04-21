@@ -10,316 +10,223 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
+            // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
-/// Get all available generators with their registry IDs (preferred for UI)
-Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds() =>
-    RustLib.instance.api.crateApiPluginGetAvailableGeneratorsWithIds();
+
+            /// Get all available generators with their registry IDs (preferred for UI)
+Future<List<UiPluginInfo>>  getAvailableGeneratorsWithIds() => RustLib.instance.api.crateApiPluginGetAvailableGeneratorsWithIds();
 
 /// Get all available effects with their registry IDs (preferred for UI)
-Future<List<UiPluginInfo>> getAvailableEffectsWithIds() =>
-    RustLib.instance.api.crateApiPluginGetAvailableEffectsWithIds();
+Future<List<UiPluginInfo>>  getAvailableEffectsWithIds() => RustLib.instance.api.crateApiPluginGetAvailableEffectsWithIds();
 
 /// Get a single generator state from the Generator Pool
-Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
-    RustLib.instance.api.crateApiPluginGetGenerator(generatorId: generatorId);
+Future<UiGeneratorInstance>  getGenerator({required int generatorId }) => RustLib.instance.api.crateApiPluginGetGenerator(generatorId: generatorId);
 
-Future<UiEffectInstance> getEffect({
-  required int trackId,
-  required int effectId,
-}) => RustLib.instance.api.crateApiPluginGetEffect(
-  trackId: trackId,
-  effectId: effectId,
-);
+Future<UiEffectInstance>  getEffect({required int trackId , required int effectId }) => RustLib.instance.api.crateApiPluginGetEffect(trackId: trackId, effectId: effectId);
 
-Future<UiEffectInstance> getEffectFromMaster({required int effectId}) =>
-    RustLib.instance.api.crateApiPluginGetEffectFromMaster(effectId: effectId);
+Future<UiEffectInstance>  getEffectFromMaster({required int effectId }) => RustLib.instance.api.crateApiPluginGetEffectFromMaster(effectId: effectId);
 
-Future<List<UiEffectInstance>> getEffectsFromTrack({required int trackId}) =>
-    RustLib.instance.api.crateApiPluginGetEffectsFromTrack(trackId: trackId);
+Future<List<UiEffectInstance>>  getEffectsFromTrack({required int trackId }) => RustLib.instance.api.crateApiPluginGetEffectsFromTrack(trackId: trackId);
 
-Future<List<UiEffectInstance>> getMasterEffects() =>
-    RustLib.instance.api.crateApiPluginGetMasterEffects();
+Future<List<UiEffectInstance>>  getMasterEffects() => RustLib.instance.api.crateApiPluginGetMasterEffects();
 
 /// Get parameter specifications for a generator plugin.
-Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
-  required int generatorId,
-}) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(
-  generatorId: generatorId,
-);
+Future<List<UiPluginParameter>>  getGeneratorParameterSpecs({required int generatorId }) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(generatorId: generatorId);
 
 /// Set a parameter on a generator plugin.
-Future<void> setGeneratorParameter({
-  required int generatorId,
-  required int paramId,
-  required double value,
-}) => RustLib.instance.api.crateApiPluginSetGeneratorParameter(
-  generatorId: generatorId,
-  paramId: paramId,
-  value: value,
-);
+Future<void>  setGeneratorParameter({required int generatorId , required int paramId , required double value }) => RustLib.instance.api.crateApiPluginSetGeneratorParameter(generatorId: generatorId, paramId: paramId, value: value);
 
 /// Get a parameter value from a generator plugin.
-Future<double> getGeneratorParameter({
-  required int generatorId,
-  required int paramId,
-}) => RustLib.instance.api.crateApiPluginGetGeneratorParameter(
-  generatorId: generatorId,
-  paramId: paramId,
-);
+Future<double>  getGeneratorParameter({required int generatorId , required int paramId }) => RustLib.instance.api.crateApiPluginGetGeneratorParameter(generatorId: generatorId, paramId: paramId);
 
 /// Request a parameter snapshot from the audio thread.
-Future<void> queryGeneratorParameters({required int generatorId}) => RustLib
-    .instance
-    .api
-    .crateApiPluginQueryGeneratorParameters(generatorId: generatorId);
+Future<void>  queryGeneratorParameters({required int generatorId }) => RustLib.instance.api.crateApiPluginQueryGeneratorParameters(generatorId: generatorId);
 
 /// Poll for parameter feedback from the audio thread.
-Future<List<UiGeneratorParameterSnapshot>> pollGeneratorParameterFeedback() =>
-    RustLib.instance.api.crateApiPluginPollGeneratorParameterFeedback();
+Future<List<UiGeneratorParameterSnapshot>>  pollGeneratorParameterFeedback() => RustLib.instance.api.crateApiPluginPollGeneratorParameterFeedback();
 
 /// Sync parameter values from audio thread to stored parameters.
-Future<void> syncGeneratorParametersFromAudio({
-  required List<UiGeneratorParameterSnapshot> snapshots,
-}) => RustLib.instance.api.crateApiPluginSyncGeneratorParametersFromAudio(
-  snapshots: snapshots,
-);
+Future<void>  syncGeneratorParametersFromAudio({required List<UiGeneratorParameterSnapshot> snapshots }) => RustLib.instance.api.crateApiPluginSyncGeneratorParametersFromAudio(snapshots: snapshots);
 
-Future<List<UiEffectParameterSnapshot>> pollEffectParameterFeedback() =>
-    RustLib.instance.api.crateApiPluginPollEffectParameterFeedback();
+Future<List<UiEffectParameterSnapshot>>  pollEffectParameterFeedback() => RustLib.instance.api.crateApiPluginPollEffectParameterFeedback();
 
-Future<void> syncEffectParametersFromAudio({
-  required List<UiEffectParameterSnapshot> snapshots,
-}) => RustLib.instance.api.crateApiPluginSyncEffectParametersFromAudio(
-  snapshots: snapshots,
-);
+Future<void>  syncEffectParametersFromAudio({required List<UiEffectParameterSnapshot> snapshots }) => RustLib.instance.api.crateApiPluginSyncEffectParametersFromAudio(snapshots: snapshots);
 
-Future<List<UiPluginParameter>> getEffectParameterSpecs({
-  required UiEffectTarget target,
-  required int effectId,
-}) => RustLib.instance.api.crateApiPluginGetEffectParameterSpecs(
-  target: target,
-  effectId: effectId,
-);
+Future<List<UiPluginParameter>>  getEffectParameterSpecs({required UiEffectTarget target , required int effectId }) => RustLib.instance.api.crateApiPluginGetEffectParameterSpecs(target: target, effectId: effectId);
 
-Future<void> setEffectParameter({
-  required UiEffectTarget target,
-  required int effectId,
-  required int paramId,
-  required double value,
-}) => RustLib.instance.api.crateApiPluginSetEffectParameter(
-  target: target,
-  effectId: effectId,
-  paramId: paramId,
-  value: value,
-);
+Future<void>  setEffectParameter({required UiEffectTarget target , required int effectId , required int paramId , required double value }) => RustLib.instance.api.crateApiPluginSetEffectParameter(target: target, effectId: effectId, paramId: paramId, value: value);
 
-Future<void> queryEffectParameters({
-  required UiEffectTarget target,
-  required int effectId,
-}) => RustLib.instance.api.crateApiPluginQueryEffectParameters(
-  target: target,
-  effectId: effectId,
-);
+Future<void>  queryEffectParameters({required UiEffectTarget target , required int effectId }) => RustLib.instance.api.crateApiPluginQueryEffectParameters(target: target, effectId: effectId);
 
-Future<String?> executePluginCommandGenerator({
-  required int genRegistryId,
-  required String command,
-  required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecutePluginCommandGenerator(
-  genRegistryId: genRegistryId,
-  command: command,
-  payloadJson: payloadJson,
-);
+Future<String?>  executePluginCommandGenerator({required int genRegistryId , required String command , required String payloadJson }) => RustLib.instance.api.crateApiPluginExecutePluginCommandGenerator(genRegistryId: genRegistryId, command: command, payloadJson: payloadJson);
 
-Future<String?> executePluginCommandEffect({
-  required int effectRegistryId,
-  required String command,
-  required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecutePluginCommandEffect(
-  effectRegistryId: effectRegistryId,
-  command: command,
-  payloadJson: payloadJson,
-);
+Future<String?>  executePluginCommandEffect({required int effectRegistryId , required String command , required String payloadJson }) => RustLib.instance.api.crateApiPluginExecutePluginCommandEffect(effectRegistryId: effectRegistryId, command: command, payloadJson: payloadJson);
 
-Future<String> executeEffectInstanceCommand({
-  required UiEffectTarget target,
-  required int effectId,
-  required String command,
-  required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecuteEffectInstanceCommand(
-  target: target,
-  effectId: effectId,
-  command: command,
-  payloadJson: payloadJson,
-);
+Future<String>  executeEffectInstanceCommand({required UiEffectTarget target , required int effectId , required String command , required String payloadJson }) => RustLib.instance.api.crateApiPluginExecuteEffectInstanceCommand(target: target, effectId: effectId, command: command, payloadJson: payloadJson);
 
-Future<String> executeGeneratorInstanceCommand({
-  required int generatorId,
-  required String command,
-  required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecuteGeneratorInstanceCommand(
-  generatorId: generatorId,
-  command: command,
-  payloadJson: payloadJson,
-);
+Future<String>  executeGeneratorInstanceCommand({required int generatorId , required String command , required String payloadJson }) => RustLib.instance.api.crateApiPluginExecuteGeneratorInstanceCommand(generatorId: generatorId, command: command, payloadJson: payloadJson);
 
-enum KarbeatPluginType { generator, effect }
+            enum KarbeatPluginType {
+                    generator,
+effect,
+                    ;
+                    
+                }
 
-class UiEffectParameterSnapshot {
-  final UiEffectTarget target;
-  final int effectId;
-  final List<UiParameterValue> parameters;
+class UiEffectParameterSnapshot  {
+                final UiEffectTarget target;
+final int effectId;
+final List<UiParameterValue> parameters;
 
-  const UiEffectParameterSnapshot({
-    required this.target,
-    required this.effectId,
-    required this.parameters,
-  });
+                const UiEffectParameterSnapshot({required this.target ,required this.effectId ,required this.parameters ,});
 
-  @override
-  int get hashCode => target.hashCode ^ effectId.hashCode ^ parameters.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiEffectParameterSnapshot &&
-          runtimeType == other.runtimeType &&
-          target == other.target &&
-          effectId == other.effectId &&
-          parameters == other.parameters;
-}
+                
+        @override
+        int get hashCode => target.hashCode^effectId.hashCode^parameters.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is UiEffectParameterSnapshot &&
+                runtimeType == other.runtimeType
+                && target == other.target&& effectId == other.effectId&& parameters == other.parameters;
+        
+            }
 
 @freezed
-sealed class UiEffectTarget with _$UiEffectTarget {
-  const UiEffectTarget._();
+                sealed class UiEffectTarget with _$UiEffectTarget  {
+                    const UiEffectTarget._();
 
-  const factory UiEffectTarget.track(int field0) = UiEffectTarget_Track;
-  const factory UiEffectTarget.master() = UiEffectTarget_Master;
-  const factory UiEffectTarget.bus(int field0) = UiEffectTarget_Bus;
-}
+                     const factory UiEffectTarget.track(  int field0,) = UiEffectTarget_Track;
+ const factory UiEffectTarget.master() = UiEffectTarget_Master;
+ const factory UiEffectTarget.bus(  int field0,) = UiEffectTarget_Bus;
+
+                    
+
+                    
+                }
 
 /// Parameter snapshot from the audio thread (DTO)
-class UiGeneratorParameterSnapshot {
-  final int generatorId;
-  final List<UiParameterValue> parameters;
+class UiGeneratorParameterSnapshot  {
+                final int generatorId;
+final List<UiParameterValue> parameters;
 
-  const UiGeneratorParameterSnapshot({
-    required this.generatorId,
-    required this.parameters,
-  });
+                const UiGeneratorParameterSnapshot({required this.generatorId ,required this.parameters ,});
 
-  @override
-  int get hashCode => generatorId.hashCode ^ parameters.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiGeneratorParameterSnapshot &&
-          runtimeType == other.runtimeType &&
-          generatorId == other.generatorId &&
-          parameters == other.parameters;
-}
+                
+        @override
+        int get hashCode => generatorId.hashCode^parameters.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is UiGeneratorParameterSnapshot &&
+                runtimeType == other.runtimeType
+                && generatorId == other.generatorId&& parameters == other.parameters;
+        
+            }
 
 /// Parameter type enum for FRB
-enum UiParameterType { float, int, bool, choice }
+enum UiParameterType {
+                    float,
+int,
+bool,
+choice,
+                    ;
+                    
+                }
 
 /// Single parameter value from the audio thread
-class UiParameterValue {
-  final int paramId;
-  final double value;
+class UiParameterValue  {
+                final int paramId;
+final double value;
 
-  const UiParameterValue({required this.paramId, required this.value});
+                const UiParameterValue({required this.paramId ,required this.value ,});
 
-  @override
-  int get hashCode => paramId.hashCode ^ value.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiParameterValue &&
-          runtimeType == other.runtimeType &&
-          paramId == other.paramId &&
-          value == other.value;
-}
+                
+        @override
+        int get hashCode => paramId.hashCode^value.hashCode;
+        
 
-class UiPluginInfo {
-  final int id;
-  final String name;
-  final KarbeatPluginType pluginType;
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is UiParameterValue &&
+                runtimeType == other.runtimeType
+                && paramId == other.paramId&& value == other.value;
+        
+            }
 
-  const UiPluginInfo({
-    required this.id,
-    required this.name,
-    required this.pluginType,
-  });
+class UiPluginInfo  {
+                final int id;
+final String name;
+final KarbeatPluginType pluginType;
 
-  @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ pluginType.hashCode;
+                const UiPluginInfo({required this.id ,required this.name ,required this.pluginType ,});
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiPluginInfo &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          name == other.name &&
-          pluginType == other.pluginType;
-}
+                
+                
+
+                
+        @override
+        int get hashCode => id.hashCode^name.hashCode^pluginType.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is UiPluginInfo &&
+                runtimeType == other.runtimeType
+                && id == other.id&& name == other.name&& pluginType == other.pluginType;
+        
+            }
 
 /// Plugin parameter description for UI generation
-class UiPluginParameter {
-  final int id;
-  final String name;
-  final String group;
-  final double value;
-  final double min;
-  final double max;
-  final double defaultValue;
-  final double step;
-  final UiParameterType paramType;
-  final List<String> choices;
+class UiPluginParameter  {
+                final int id;
+final String name;
+final String group;
+final double value;
+final double min;
+final double max;
+final double defaultValue;
+final double step;
+final UiParameterType paramType;
+final List<String> choices;
 
-  const UiPluginParameter({
-    required this.id,
-    required this.name,
-    required this.group,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.defaultValue,
-    required this.step,
-    required this.paramType,
-    required this.choices,
-  });
+                const UiPluginParameter({required this.id ,required this.name ,required this.group ,required this.value ,required this.min ,required this.max ,required this.defaultValue ,required this.step ,required this.paramType ,required this.choices ,});
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      name.hashCode ^
-      group.hashCode ^
-      value.hashCode ^
-      min.hashCode ^
-      max.hashCode ^
-      defaultValue.hashCode ^
-      step.hashCode ^
-      paramType.hashCode ^
-      choices.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiPluginParameter &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          name == other.name &&
-          group == other.group &&
-          value == other.value &&
-          min == other.min &&
-          max == other.max &&
-          defaultValue == other.defaultValue &&
-          step == other.step &&
-          paramType == other.paramType &&
-          choices == other.choices;
-}
+                
+        @override
+        int get hashCode => id.hashCode^name.hashCode^group.hashCode^value.hashCode^min.hashCode^max.hashCode^defaultValue.hashCode^step.hashCode^paramType.hashCode^choices.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is UiPluginParameter &&
+                runtimeType == other.runtimeType
+                && id == other.id&& name == other.name&& group == other.group&& value == other.value&& min == other.min&& max == other.max&& defaultValue == other.defaultValue&& step == other.step&& paramType == other.paramType&& choices == other.choices;
+        
+            }
+            

@@ -1,22 +1,22 @@
-use std::{ collections::BTreeSet, sync::Arc };
+use std::{collections::BTreeSet, sync::Arc};
 
 use karbeat_plugin_types::ParamBounds;
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     commands::AudioCommand,
     context::ctx,
     core::project::{
-        ApplicationState,
-        Clip,
-        GeneratorInstance,
-        GeneratorInstanceType,
-        KarbeatSource,
-        PluginInstance,
-        automation::{ AutomationLane, AutomationTarget },
+        automation::{AutomationLane, AutomationTarget},
+        clip::ClipTimeUnit,
         mixer::MixerChannel,
+        ApplicationState, Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource,
+        PluginInstance,
     },
-    shared::{ BusId, GeneratorId, id::{ ClipId, TrackId } },
+    shared::{
+        id::{ClipId, TrackId},
+        BusId, GeneratorId,
+    },
 };
 use karbeat_utils::color::Color;
 
@@ -91,10 +91,7 @@ impl KarbeatTrack {
     }
 
     pub fn get_clip(&self, clip_id: &ClipId) -> Option<Arc<Clip>> {
-        self.clips
-            .iter()
-            .find(|c| c.id == *clip_id)
-            .cloned()
+        self.clips.iter().find(|c| c.id == *clip_id).cloned()
     }
 
     /// Add a new clip to the track. it will return Err if
@@ -109,8 +106,8 @@ impl KarbeatTrack {
         };
 
         if is_valid {
-            // Calculate potential new max index BEFORE moving clip
-            let clip_end_sample = clip.start_time + clip.loop_length;
+            // Calculate potential new max index BEFORE moving clip (in native units)
+            let clip_end = clip.time.start_time_raw() + clip.time.loop_length_raw();
 
             // 1. Wrap in Arc immediately
             let clip_arc = Arc::new(clip);
@@ -121,14 +118,16 @@ impl KarbeatTrack {
             clips_set.insert(clip_arc);
 
             // update the max sample index
-            if clip_end_sample > self.max_sample_index {
-                self.max_sample_index = clip_end_sample;
+            if clip_end > self.max_sample_index as u64 {
+                self.max_sample_index = clip_end as u32;
             }
 
             // Return the end sample of this new clip
-            return Ok(clip_end_sample);
+            return Ok(clip_end as u32);
         } else {
-            return Err(anyhow::anyhow!("Warning: Mismatched Clip Source for Track Type"));
+            return Err(anyhow::anyhow!(
+                "Warning: Mismatched Clip Source for Track Type"
+            ));
         }
     }
 
@@ -148,7 +147,7 @@ impl KarbeatTrack {
             // Recalculate max sample index if something was removed
             self.max_sample_index = clips_set
                 .iter()
-                .map(|c| c.start_time + c.loop_length)
+                .map(|c| (c.time.start_time_raw() + c.time.loop_length_raw()) as u32)
                 .max()
                 .unwrap_or(0);
 
@@ -164,14 +163,16 @@ impl KarbeatTrack {
         let source_id_u32: u32 = source_id.into();
         let clips_set = &mut self.clips;
 
-        clips_set.retain(|clip_arc| {
-            match &clip_arc.source {
-                KarbeatSource::Audio(source_id) => {
-                    if !is_generator { source_id != &source_id_u32 } else { true }
+        clips_set.retain(|clip_arc| match &clip_arc.source {
+            KarbeatSource::Audio(source_id) => {
+                if !is_generator {
+                    source_id != &source_id_u32
+                } else {
+                    true
                 }
-                KarbeatSource::Midi { .. } => true,
-                KarbeatSource::Automation(_) => true,
             }
+            KarbeatSource::Midi { .. } => true,
+            KarbeatSource::Automation(_) => true,
         });
     }
 
@@ -182,15 +183,16 @@ impl KarbeatTrack {
 
         self.max_sample_index = clips_vec
             .iter()
-            .map(|c| c.start_time + c.loop_length)
+            .map(|c| (c.time.start_time_raw() + c.time.loop_length_raw()) as u32)
             .max()
             .unwrap_or(0);
     }
 
     pub fn update_max_sample_index(&mut self) {
-        self.max_sample_index = self.clips
+        self.max_sample_index = self
+            .clips
             .iter()
-            .map(|c| c.start_time + c.loop_length)
+            .map(|c| (c.time.start_time_raw() + c.time.loop_length_raw()) as u32)
             .max()
             .unwrap_or(0);
     }
@@ -198,36 +200,58 @@ impl KarbeatTrack {
     pub fn cut_clip(
         &mut self,
         clip_id: &ClipId,
-        cut_point_sample: u32,
-        clip_counter: &mut u32
+        cut_point: u64,
+        clip_counter: &mut u32,
     ) -> anyhow::Result<(Clip, Clip)> {
-        let clip_arc = self
-            .get_clip(clip_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Clip ID {:?} not found in track {:?}", clip_id, self.id)
-            })?;
+        let clip_arc = self.get_clip(clip_id).ok_or_else(|| {
+            anyhow::anyhow!("Clip ID {:?} not found in track {:?}", clip_id, self.id)
+        })?;
 
-        if
-            cut_point_sample > clip_arc.start_time &&
-            cut_point_sample < clip_arc.start_time + clip_arc.loop_length
-        {
-            // Remove using the exact Arc reference, not the inner data reference
+        let clip_start = clip_arc.time.start_time_raw();
+        let clip_length = clip_arc.time.loop_length_raw();
+        let clip_offset = clip_arc.time.offset_start_raw();
+
+        if cut_point > clip_start && cut_point < clip_start + clip_length {
+            // Remove using the exact Arc reference
             self.clips.remove(&clip_arc);
 
             let clip = clip_arc.as_ref();
+            let first_length = cut_point - clip_start;
+            let second_length = clip_length - first_length;
+            let second_offset = clip_offset + first_length;
 
             // Create left clip
             let mut left_clip = clip.clone();
-            left_clip.loop_length = cut_point_sample - left_clip.start_time;
-            left_clip.id = *clip_id; // Retain original ID for the first half
+            left_clip.id = *clip_id; // Retain original ID
+            match &mut left_clip.time {
+                ClipTimeUnit::Samples { loop_length, .. } => *loop_length = first_length,
+                ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = first_length as u32,
+            }
             self.clips.insert(Arc::new(left_clip.clone()));
 
             // Create right clip
             let mut right_clip = clip.clone();
-            right_clip.id = ClipId::next(clip_counter); // Consume counter for new ID
-            right_clip.start_time = cut_point_sample;
-            right_clip.offset_start += cut_point_sample - clip.start_time;
-            right_clip.loop_length = clip.start_time + clip.loop_length - cut_point_sample;
+            right_clip.id = ClipId::next(clip_counter);
+            match &mut right_clip.time {
+                ClipTimeUnit::Samples {
+                    start_time,
+                    loop_length,
+                    offset_start,
+                } => {
+                    *start_time = cut_point;
+                    *loop_length = second_length;
+                    *offset_start = second_offset;
+                }
+                ClipTimeUnit::Ticks {
+                    start_time,
+                    loop_length,
+                    offset_start,
+                } => {
+                    *start_time = cut_point as u32;
+                    *loop_length = second_length as u32;
+                    *offset_start = second_offset as u32;
+                }
+            }
             self.clips.insert(Arc::new(right_clip.clone()));
 
             self.update_max_sample_index();
@@ -253,7 +277,9 @@ impl ApplicationState {
         self.tracks.insert(new_track_id, track_arc.clone());
 
         // Create a corresponding mixer channel and default routing
-        self.mixer.channels.insert(new_track_id, Arc::new(MixerChannel::default()));
+        self.mixer
+            .channels
+            .insert(new_track_id, Arc::new(MixerChannel::default()));
         self.mixer.add_track_default_routing(new_track_id);
         track_arc
     }
@@ -261,7 +287,7 @@ impl ApplicationState {
     /// Add a new MIDI track with a generator by its registry ID (preferred method).
     pub fn add_new_midi_track_with_generator_id(
         &mut self,
-        registry_id: u32
+        registry_id: u32,
     ) -> anyhow::Result<Arc<KarbeatTrack>> {
         let gen_id = GeneratorId::next(&mut self.generator_counter);
         let track_id = TrackId::next(&mut self.track_counter);
@@ -294,17 +320,15 @@ impl ApplicationState {
         }
 
         // Create plugin instance descriptor with registry ID and default parameters
-        let plugin_instance = PluginInstance::new_with_params(
-            registry_id,
-            &generator_name,
-            default_params
-        );
+        let plugin_instance =
+            PluginInstance::new_with_params(registry_id, &generator_name, default_params);
 
         let generator = GeneratorInstance {
             id: gen_id,
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
         };
-        self.generator_pool.insert(gen_id, Arc::new(generator.clone()));
+        self.generator_pool
+            .insert(gen_id, Arc::new(generator.clone()));
 
         let new_track = KarbeatTrack {
             track_type: TrackType::Midi,
@@ -320,7 +344,9 @@ impl ApplicationState {
         self.tracks.insert(track_id, track_arc.clone());
 
         // Create a corresponding mixer channel and default routing
-        self.mixer.channels.insert(track_id, Arc::new(MixerChannel::default()));
+        self.mixer
+            .channels
+            .insert(track_id, Arc::new(MixerChannel::default()));
         self.mixer.add_track_default_routing(track_id);
 
         log::info!(
@@ -334,14 +360,15 @@ impl ApplicationState {
     pub fn add_new_automation_track_from_bus(
         &mut self,
         bus_id: BusId,
-        automation_target: AutomationTarget
+        automation_target: AutomationTarget,
     ) -> anyhow::Result<Arc<AutomationLane>> {
         let track_id = TrackId::next(&mut self.track_counter);
 
         // Find the Bus
         let bus = self
             .get_mixer_state()
-            .buses.get(&bus_id)
+            .buses
+            .get(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Cannot find the mixer bus"))?;
 
         let (current_value, min, max) = match &automation_target {
@@ -366,7 +393,7 @@ impl ApplicationState {
                     }
                 };
                 (curr_value, min_val, max_val)
-            },
+            }
             AutomationTarget::BusPluginParam { .. } => (0.5, 0.0, 1.0), // Standard fallback for plugins
             _ => {
                 return Err(anyhow::anyhow!("Not an Bus Target"));
@@ -384,7 +411,7 @@ impl ApplicationState {
         // Initiate the points in the first and last max sample index with the current value
         // Fallback to ~4 seconds if the project is completely empty
         let end_sample = self.max_sample_index.max(
-            (self.audio_config.sample_rate * 4) / ((self.transport.bpm * 60.0).floor() as u32)
+            (self.audio_config.sample_rate * 4) / ((self.transport.bpm * 60.0).floor() as u32),
         );
 
         let new_automation_lane = self.add_automation_lane_return_lane(
@@ -392,7 +419,7 @@ impl ApplicationState {
             label.clone(),
             min,
             max,
-            current_value
+            current_value,
         )?;
 
         // 3. Create an automation track explicitly for the timeline (because it is a Bus target)
@@ -408,10 +435,12 @@ impl ApplicationState {
         let automation_clip = Clip {
             id: ClipId::next(&mut self.clip_counter),
             name: label,
-            start_time: 0,
-            loop_length: end_sample,
-            offset_start: 0,
             source: KarbeatSource::Automation(new_automation_lane.id.clone()),
+            time: ClipTimeUnit::Ticks {
+                start_time: 0,
+                loop_length: end_sample,
+                offset_start: 0,
+            },
         };
 
         // Add the clip using your existing validation (which correctly allows Automation clips on Automation tracks)
@@ -426,7 +455,8 @@ impl ApplicationState {
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
     pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<()> {
         // Get the generator ID before removing the track
-        let generator_id = self.tracks
+        let generator_id = self
+            .tracks
             .get(&track_id)
             .and_then(|t| t.generator.as_ref().map(|g| g.id));
 
@@ -452,24 +482,5 @@ impl ApplicationState {
         self.update_max_sample_index();
 
         Ok(())
-    }
-
-    pub fn cut_clip(
-        &mut self,
-        track_id: &TrackId,
-        clip_id: &ClipId,
-        cut_point_sample: u32
-    ) -> anyhow::Result<(Clip, Clip)> {
-        let track_arc = self.tracks
-            .get_mut(track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
-
-        let track_mut: &mut KarbeatTrack = Arc::make_mut(track_arc);
-
-        let clip_counter = &mut self.clip_counter;
-
-        let res = track_mut.cut_clip(clip_id, cut_point_sample, clip_counter)?;
-
-        Ok(res)
     }
 }

@@ -1,11 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fs, path::PathBuf};
 
+use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use quote::{ format_ident, quote };
-use syn::{ Data, DeriveInput, Fields, Lit, Type, parse_macro_input, ItemImpl };
+use syn::{ Data, DeriveInput, Fields, ItemImpl, Lit, LitStr, Type, parse_macro_input };
 
 #[proc_macro_derive(EnumParam)]
 pub fn derive_enum_param(input: TokenStream) -> TokenStream {
@@ -401,7 +402,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     let param_init = if ty_str == "f32" {
                         quote! {
-                            karbeat_plugin_types::parameter::Param::new_float(#id, #name, #group, #default_val, #min, #max, #step)
+                            karbeat_plugin_types::parameter::Param::new_f32(#id, #name, #group, #default_val, #min, #max, #step)
                         }
                     } else if ty_str == "bool" {
                         quote! {
@@ -728,6 +729,143 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                 }
             }
         };
+    };
+
+    TokenStream::from(expanded)
+}
+
+#[proc_macro]
+pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
+    let dir_lit = parse_macro_input!(input as LitStr);
+    let rel_dir = dir_lit.value();
+
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    let base_path = PathBuf::from(manifest_dir).join(&rel_dir);
+
+    let synths_path = base_path.join("synths");
+    let effects_path = base_path.join("effects");
+
+    let mut generator_inserts = Vec::new();
+    let mut effect_inserts = Vec::new();
+    let mut file_trackers = Vec::new();
+    let mut associated_constants = Vec::new(); // <-- NEW: Store the generated constants
+
+    let mut process_directory = |dir_path: &PathBuf, is_synth: bool| {
+        if let Ok(entries) = fs::read_dir(dir_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
+
+                let json_data = fs::read_to_string(&path).unwrap();
+                let manifest: serde_json::Value = serde_json::from_str(&json_data)
+                    .unwrap_or_else(|_| panic!("Invalid JSON in {:?}", path));
+
+                let id = manifest["id"].as_u64().expect("Missing id") as u32;
+                let name = manifest["name"].as_str().expect("Missing name");
+                
+                let internal_type_str = manifest["internal_type"]
+                .as_str()
+                    .expect("Missing 'internal_type' in manifest!");
+                let internal_ident = format_ident!("{}", internal_type_str);
+
+                let shouty_name = internal_type_str.to_owned().to_shouty_snake_case();
+                let const_prefix = if is_synth { "GEN_" } else { "EFF_" };
+                let const_ident = format_ident!("{}{}", const_prefix, shouty_name);
+
+                associated_constants.push(quote! {
+                    pub const #const_ident: u32 = #id;
+                });
+
+                let mut param_tokens = Vec::new();
+                if let Some(params) = manifest["parameters"].as_array() {
+                    for p in params {
+                        let p_id = p["id"].as_u64().unwrap() as u32;
+                        let p_name = p["name"].as_str().unwrap();
+                        let p_group = p["group"].as_str().unwrap();
+                        let default_val = p["default_value"].as_f64().unwrap() as f32;
+                        let min = p["min"].as_f64().unwrap() as f32;
+                        let max = p["max"].as_f64().unwrap() as f32;
+                        let step = p["step"].as_f64().unwrap() as f32;
+                        
+                        let val_type_str = p["value_type"].as_str().unwrap();
+                        let val_type_ident = format_ident!("{}", val_type_str);
+
+                        let choices_tokens = if let Some(choices) = p["choices"].as_array() {
+                            let c_strs = choices.iter().map(|c| c.as_str().unwrap());
+                            quote! { vec![ #(#c_strs.to_string()),* ] }
+                        } else {
+                            quote! { vec![] }
+                        };
+
+                        param_tokens.push(quote! {
+                            karbeat_plugin_types::ParameterSpec {
+                                id: #p_id,
+                                name: #p_name.to_string(),
+                                group: #p_group.to_string(),
+                                default_value: #default_val,
+                                min: #min,
+                                max: #max,
+                                step: #step,
+                                value_type: karbeat_plugin_types::ParamType::#val_type_ident,
+                                choices: #choices_tokens,
+                            }
+                        });
+                    }
+                }
+
+                let abs_path_str = path.to_str().unwrap();
+                file_trackers.push(quote! {
+                    const _: &[u8] = include_bytes!(#abs_path_str);
+                });
+
+                let insert_stmt = quote! {
+                    let specs = vec![ #(#param_tokens),* ];
+                    let factory: Box<dyn Fn() -> Box<_> + Send + Sync> = Box::new(|| Box::new( <#internal_ident>::build() ));
+                    
+                    let registered = RegisteredPlugin {
+                        name: #name.to_string(),
+                        factory,
+                        parameter_specs: specs,
+                    };
+                };
+
+                if is_synth {
+                    generator_inserts.push(quote! {
+                        #insert_stmt
+                        registry.generators.insert(#id, registered);
+                    });
+                } else {
+                    effect_inserts.push(quote! {
+                        #insert_stmt
+                        registry.effects.insert(#id, registered);
+                    });
+                }
+            }
+        }
+    };
+
+    process_directory(&synths_path, true);
+    process_directory(&effects_path, false);
+
+    // 2. Assemble the final output, now including the constants!
+    let expanded = quote! {
+        // Automatically inject the compiled constants
+        #(#associated_constants)*
+
+        pub fn new_with_defaults() -> Self {
+            let mut registry = Self::new();
+            
+            // Inject file trackers to ensure macro hygiene and hot-reloading
+            #(#file_trackers)*
+
+            // Inject the dynamic bindings
+            #(#generator_inserts)*
+            #(#effect_inserts)*
+
+            registry
+        }
     };
 
     TokenStream::from(expanded)

@@ -18,6 +18,10 @@ pub fn set_bpm(val: f32) {
     {
         let mut app = get_app_write();
         app.transport.bpm = val;
+        // Audio clips (ClipTimeUnit::Samples) are BPM-independent — no rescaling needed.
+        // MIDI clips (ClipTimeUnit::Ticks) are converted at playback time, so max_sample_index
+        // must be recalculated when BPM changes.
+        app.update_max_sample_index();
     }
     send_audio_command(AudioCommand::SetBPM(val));
     broadcast_state_change();

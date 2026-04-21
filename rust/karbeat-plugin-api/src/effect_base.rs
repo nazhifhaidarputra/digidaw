@@ -135,7 +135,7 @@ impl StandardEffectBase {
     pub fn get_parameter_specs() -> Vec<ParameterSpec> {
         vec![
             ParameterSpec::new_bool(0, "Bypass", "General", false, false),
-            ParameterSpec::new_float(1, "Mix", "General", 1.0, 0.0, 1.0, 1.0),
+            ParameterSpec::new_float(1, "Mix", "General", 1.0, 0.0, 1.0, 1.0, 0.01),
         ]
     }
 
