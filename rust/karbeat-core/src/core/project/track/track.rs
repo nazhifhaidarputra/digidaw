@@ -188,11 +188,11 @@ impl KarbeatTrack {
             .unwrap_or(0);
     }
 
-    pub fn update_max_sample_index(&mut self) {
+    pub fn update_max_sample_index(&mut self, bpm: f32, sample_rate: u32) {
         self.max_sample_index = self
             .clips
             .iter()
-            .map(|c| (c.time.start_time_raw() + c.time.loop_length_raw()) as u32)
+            .map(|c| c.time.end_samples(bpm, sample_rate) as u32) // Perfectly accurate!
             .max()
             .unwrap_or(0);
     }
@@ -254,8 +254,6 @@ impl KarbeatTrack {
             }
             self.clips.insert(Arc::new(right_clip.clone()));
 
-            self.update_max_sample_index();
-
             log::info!("Successfully cut the clip");
             Ok((left_clip, right_clip))
         } else {
@@ -284,7 +282,7 @@ impl ApplicationState {
         track_arc
     }
 
-    /// Add a new MIDI track with a generator by its registry ID (preferred method).
+    /// Add a new MIDI track with a generator by its registry ID.
     pub fn add_new_midi_track_with_generator_id(
         &mut self,
         registry_id: u32,
@@ -334,8 +332,7 @@ impl ApplicationState {
             track_type: TrackType::Midi,
             id: track_id,
             name: generator_name.clone(),
-            #[allow(clippy::unwrap_used)]
-            color: Color::new_from_string("#FF8A65").unwrap(),
+            color: Color::new_from_string("#FF8A65").unwrap_or(Color::default()),
             generator: Some(generator),
             ..Default::default()
         };
@@ -422,7 +419,7 @@ impl ApplicationState {
             current_value,
         )?;
 
-        // 3. Create an automation track explicitly for the timeline (because it is a Bus target)
+        // Create an automation track explicitly for the timeline (because it is a Bus target)
         let mut new_track = KarbeatTrack {
             track_type: TrackType::Automation,
             id: track_id,

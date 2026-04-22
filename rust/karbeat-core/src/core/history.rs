@@ -173,12 +173,12 @@ impl HistoryManager {
             }
             ProjectAction::AddClip { track_id, clip } => {
                 // Inverse of AddClip: Delete the clip
-                app.delete_clip_from_track(*track_id, clip.id, true)
+                app.delete_clip_from_track(*track_id, clip.id)
                     .map_err(|e| e.to_string())?;
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Inverse of DeleteClip: Restore the clip to the track
-                app.add_clip_to_track(*track_id, clip.clone(), true)
+                app.add_clip_to_track(*track_id, clip.clone())
                     .map_err(|e| format!("{}", e))?;
             }
             ProjectAction::MoveClip {
@@ -201,7 +201,6 @@ impl HistoryManager {
                 // Remove current clip and insert old clip
                 track.clips.retain(|c| c.id != old_clip.id);
                 track.clips.insert(Arc::new(old_clip.clone()));
-                track.update_max_sample_index();
                 app.update_max_sample_index();
             }
         }
@@ -288,7 +287,7 @@ impl HistoryManager {
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Forward: Delete the clip from the track
-                app.delete_clip_from_track(*track_id, clip.id, true)
+                app.delete_clip_from_track(*track_id, clip.id)
                     .map_err(|e| e.to_string())?;
             }
             ProjectAction::MoveClip {
@@ -311,7 +310,6 @@ impl HistoryManager {
                 // Remove old clip and insert new clip
                 track.clips.retain(|c| c.id != new_clip.id);
                 track.clips.insert(Arc::new(new_clip.clone()));
-                track.update_max_sample_index();
                 app.update_max_sample_index();
             }
         }

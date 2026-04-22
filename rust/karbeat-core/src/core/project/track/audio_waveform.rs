@@ -90,7 +90,7 @@ impl Default for AudioWaveform {
             sample_rate: 44100,
             channels: 2,
             duration: 0.0,
-            root_note: 60, // C5
+            root_note: 60, // C4
             fine_tune: 0,
             trim_start: 0,
             trim_end: 0,

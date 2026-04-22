@@ -44,11 +44,9 @@ class MidiClipPainter extends CustomPainter {
     final double vRight = (scrollOffset - clipLeftOffset + viewportWidth + pad)
         .clamp(0, size.width);
 
-    const ticksPerBeat = 960.0;
-
     // Calculate pixels per tick based on global zoom
-    final samplesPerTick = (sampleRate * 60.0 / bpm) / ticksPerBeat;
-    final pixelsPerTick = samplesPerTick / zoomLevel;
+    // zoomLevel is ticks per pixel, so pixelsPerTick is exactly 1.0 / zoomLevel
+    final pixelsPerTick = 1.0 / zoomLevel;
 
     // Pitch mapping
     int minKey = 127;

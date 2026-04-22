@@ -2270,70 +2270,61 @@ impl AudioEngine {
         let clip_offset = clip.time.offset_start_raw() as u32;
         let clip_end = clip_start + clip_length;
 
-        // Ensure pattern loops if the clip is dragged out longer than the pattern length
-        let max_iters = clip_length / pattern_len_samples + 1;
+        let pattern_offset = 0;
 
-        for i in 0..=max_iters {
-            let pattern_offset = i * pattern_len_samples;
+        for note in &pattern.notes {
+            let note_start =
+                (((note.start_tick as f64) / 960.0) * (samples_per_beat as f64)) as u32;
+            let note_dur =
+                (((note.duration as f64) / 960.0) * (samples_per_beat as f64)) as u32;
 
-            // Stop processing if this repetition is beyond the clip's end
-            if clip_start + pattern_offset >= clip_end {
-                break;
+            // Note position within the pattern (in samples from pattern start)
+            let note_pos_in_pattern = pattern_offset + note_start;
+
+            // Skip notes that start before the clip's trim offset
+            if note_pos_in_pattern < clip_offset {
+                continue;
             }
 
-            for note in &pattern.notes {
-                let note_start =
-                    (((note.start_tick as f64) / 960.0) * (samples_per_beat as f64)) as u32;
-                let note_dur =
-                    (((note.duration as f64) / 960.0) * (samples_per_beat as f64)) as u32;
+            // Calculate absolute timeline position: clip start + (note position - trim offset)
+            let abs_start = clip_start + note_pos_in_pattern - clip_offset;
+            let abs_end = abs_start + note_dur;
 
-                // Note position within the pattern (in samples from pattern start)
-                let note_pos_in_pattern = pattern_offset + note_start;
+            // Skip notes that start at or after the clip end (outside trimmed region)
+            // Because we no longer loop, if the clip is dragged out longer than the 
+            // pattern, abs_start will naturally just stop being evaluated when the notes run out!
+            if abs_start >= clip_end {
+                continue;
+            }
 
-                // Skip notes that start before the clip's trim offset
-                if note_pos_in_pattern < clip_offset {
-                    continue;
-                }
+            // Clamp note-off to clip boundary if it would extend past the clip end
+            let effective_end = abs_end.min(clip_end);
 
-                // Calculate absolute timeline position: clip start + (note position - trim offset)
-                let abs_start = clip_start + note_pos_in_pattern - clip_offset;
-                let abs_end = abs_start + note_dur;
+            // Track the expected note for hang prevention during moving of active voice
+            if abs_start <= buffer_start && effective_end > buffer_start {
+                expected_at_start.push(note.key);
+            }
+            if abs_start <= buffer_end && effective_end > buffer_end {
+                expected_at_end.push(note.key);
+            }
 
-                // Skip notes that start at or after the clip end (outside trimmed region)
-                if abs_start >= clip_end {
-                    continue;
-                }
+            // Schedule NoteOn if it falls within the buffer
+            if abs_start >= buffer_start && abs_start < buffer_end {
+                events.push(MidiEvent {
+                    sample_offset: (abs_start - buffer_start) as usize,
+                    data: MidiMessage::NoteOn {
+                        key: note.key,
+                        velocity: note.velocity,
+                    },
+                });
+            }
 
-                // Clamp note-off to clip boundary if it would extend past the clip end
-                // This prevents hanging notes when clips are trimmed
-                let effective_end = abs_end.min(clip_end);
-
-                // Track the expected note for hang prevention during moving of active voice
-                if abs_start <= buffer_start && effective_end > buffer_start {
-                    expected_at_start.push(note.key);
-                }
-                if abs_start <= buffer_end && effective_end > buffer_end {
-                    expected_at_end.push(note.key);
-                }
-
-                // Schedule NoteOn if it falls within the buffer
-                if abs_start >= buffer_start && abs_start < buffer_end {
-                    events.push(MidiEvent {
-                        sample_offset: (abs_start - buffer_start) as usize,
-                        data: MidiMessage::NoteOn {
-                            key: note.key,
-                            velocity: note.velocity,
-                        },
-                    });
-                }
-
-                // Schedule NoteOff if it falls within the buffer
-                if effective_end >= buffer_start && effective_end < buffer_end {
-                    events.push(MidiEvent {
-                        sample_offset: (effective_end - buffer_start) as usize,
-                        data: MidiMessage::NoteOff { key: note.key },
-                    });
-                }
+            // Schedule NoteOff if it falls within the buffer
+            if effective_end >= buffer_start && effective_end < buffer_end {
+                events.push(MidiEvent {
+                    sample_offset: (effective_end - buffer_start) as usize,
+                    data: MidiMessage::NoteOff { key: note.key },
+                });
             }
         }
         events.sort_by_key(|e| e.sample_offset);

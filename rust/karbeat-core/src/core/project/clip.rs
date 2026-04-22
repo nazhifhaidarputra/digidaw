@@ -156,12 +156,7 @@ impl Ord for Clip {
 }
 
 impl ApplicationState {
-    pub fn add_clip_to_track(
-        &mut self,
-        track_id: TrackId,
-        clip: Clip,
-        update_max_sample_index: bool,
-    ) -> anyhow::Result<()> {
+    pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) -> anyhow::Result<()> {
         // Get the track
         match self.tracks.get_mut(&track_id) {
             Some(track_arc) => {
@@ -171,9 +166,6 @@ impl ApplicationState {
                 // Add Clip & Check bounds
                 // We pass the Clip by value. The track takes ownership and wraps it in Arc.
                 let _ = track.add_clip(clip)?;
-                if update_max_sample_index {
-                    self.update_max_sample_index();
-                }
             }
             _ => return Err(anyhow::anyhow!("Track not found")),
         }
@@ -184,17 +176,11 @@ impl ApplicationState {
         &mut self,
         track_id: TrackId,
         clip_id: ClipId,
-        update_max_sample_index: bool,
     ) -> anyhow::Result<Arc<Clip>> {
         let deleted_clip = if let Some(track_arc) = self.tracks.get_mut(&track_id) {
             let track = Arc::make_mut(track_arc);
             match track.remove_clip(&clip_id) {
-                Ok(clip) => {
-                    if update_max_sample_index {
-                        self.update_max_sample_index();
-                    }
-                    Ok(clip)
-                }
+                Ok(clip) => Ok(clip),
                 Err(e) => Err(e),
             }
         } else {
@@ -239,7 +225,6 @@ impl ApplicationState {
                 .ok_or("Clip not found in source track")?;
 
             track.clips.remove(&clip_arc);
-            track.update_max_sample_index();
 
             (*clip_arc).clone()
         };
@@ -264,7 +249,6 @@ impl ApplicationState {
                 .map_err(|e| e.to_string())?;
         }
 
-        self.update_max_sample_index();
         Ok(modified_clip)
     }
 
@@ -337,7 +321,6 @@ impl ApplicationState {
         track.clips.insert(Arc::new(first_clip.clone()));
         track.clips.insert(Arc::new(second_clip.clone()));
 
-        track.update_max_sample_index();
         self.update_max_sample_index();
 
         Ok((first_clip, second_clip))
@@ -421,7 +404,6 @@ impl ApplicationState {
 
         // Re-insert the clip
         track.clips.insert(Arc::new(modified_clip.clone()));
-        track.update_max_sample_index();
 
         self.update_max_sample_index();
         Ok(modified_clip)
@@ -488,7 +470,7 @@ impl ApplicationState {
                         offset_start: 0,
                     },
                 };
-                self.add_clip_to_track(track_id, clip.clone(), true)?;
+                self.add_clip_to_track(track_id, clip.clone())?;
 
                 clip
             }
@@ -539,7 +521,7 @@ impl ApplicationState {
                     },
                 };
 
-                self.add_clip_to_track(track_id, clip.clone(), true)?;
+                self.add_clip_to_track(track_id, clip.clone())?;
                 clip
             }
         };
@@ -585,7 +567,6 @@ impl ApplicationState {
                     result_clips.push(modified_clip);
                 }
             }
-            track.update_max_sample_index();
         } else {
             // Cross-track move
             let mut clips_to_move = Vec::new();
@@ -616,7 +597,6 @@ impl ApplicationState {
                         clips_to_move.push(clip);
                     }
                 }
-                source_track.update_max_sample_index();
             }
 
             // Add to target track
@@ -711,7 +691,6 @@ impl ApplicationState {
                 result_clips.push(modified_clip);
             }
         }
-        track.update_max_sample_index();
         self.update_max_sample_index();
         Ok(result_clips)
     }

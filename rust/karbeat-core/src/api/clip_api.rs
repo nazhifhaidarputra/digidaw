@@ -54,7 +54,7 @@ pub fn delete_clip(track_id: TrackId, clip_id: ClipId) -> anyhow::Result<Arc<Cli
     // 1. Mutate state
     let deleted_clip = {
         let mut app = get_app_write();
-        app.delete_clip_from_track(track_id, clip_id, true)?
+        app.delete_clip_from_track(track_id, clip_id)?
     };
 
     // 2. Update history
@@ -189,7 +189,7 @@ pub fn batch_delete_clips(track_id: TrackId, clip_ids: Vec<ClipId>) -> anyhow::R
     {
         let mut app = get_app_write();
         for clip_id in clip_ids {
-            if let Ok(deleted_clip_arc) = app.delete_clip_from_track(track_id, clip_id, true) {
+            if let Ok(deleted_clip_arc) = app.delete_clip_from_track(track_id, clip_id) {
                 deleted_actions.push(ProjectAction::DeleteClip {
                     track_id,
                     clip: (*deleted_clip_arc).clone(),
