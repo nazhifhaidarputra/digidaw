@@ -221,6 +221,11 @@ impl ApplicationState {
         Ok(source_id)
     }
 
+    /// reset current application state to default
+    pub fn new_blank_project(&mut self) {
+        *self = ApplicationState::default()
+    }
+
     // =========================================================================
     // Automation Pool Management
     // =========================================================================

@@ -9,14 +9,13 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pattern.dart';
 import 'project.dart';
 
-
-            
-
-            /// Save the currrent project to path_name
-Future<void>  saveProject({required String pathName }) => RustLib.instance.api.crateApiSerializationSaveProject(pathName: pathName);
+/// Save the currrent project to path_name
+Future<void> saveProject({required String pathName}) =>
+    RustLib.instance.api.crateApiSerializationSaveProject(pathName: pathName);
 
 /// Load the `.karbeat` project.
-Future<UiApplicationState>  loadProject({required String pathName }) => RustLib.instance.api.crateApiSerializationLoadProject(pathName: pathName);
+Future<UiApplicationState> loadProject({required String pathName}) =>
+    RustLib.instance.api.crateApiSerializationLoadProject(pathName: pathName);
 
-            
-            
+Future<UiApplicationState> newBlankProject() =>
+    RustLib.instance.api.crateApiSerializationNewBlankProject();

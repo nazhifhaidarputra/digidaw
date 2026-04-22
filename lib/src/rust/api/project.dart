@@ -10,396 +10,518 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 part 'project.freezed.dart';
 
-            // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin`
 
+UiProjectMetadata projectMetadataNew() =>
+    RustLib.instance.api.crateApiProjectProjectMetadataNew();
 
-            UiProjectMetadata  projectMetadataNew() => RustLib.instance.api.crateApiProjectProjectMetadataNew();
+UiAudioHardwareConfig audioHardwareConfigNew() =>
+    RustLib.instance.api.crateApiProjectAudioHardwareConfigNew();
 
-UiAudioHardwareConfig  audioHardwareConfigNew() => RustLib.instance.api.crateApiProjectAudioHardwareConfigNew();
+UiAudioHardwareConfig audioHardwareConfigNewWithParam({
+  required String selectedInputDevice,
+  required String selectedOutputDevice,
+  required int sampleRate,
+  required int bufferSize,
+  required double cpuLoad,
+}) => RustLib.instance.api.crateApiProjectAudioHardwareConfigNewWithParam(
+  selectedInputDevice: selectedInputDevice,
+  selectedOutputDevice: selectedOutputDevice,
+  sampleRate: sampleRate,
+  bufferSize: bufferSize,
+  cpuLoad: cpuLoad,
+);
 
-UiAudioHardwareConfig  audioHardwareConfigNewWithParam({required String selectedInputDevice , required String selectedOutputDevice , required int sampleRate , required int bufferSize , required double cpuLoad }) => RustLib.instance.api.crateApiProjectAudioHardwareConfigNewWithParam(selectedInputDevice: selectedInputDevice, selectedOutputDevice: selectedOutputDevice, sampleRate: sampleRate, bufferSize: bufferSize, cpuLoad: cpuLoad);
+UiTransportState transportStateNew() =>
+    RustLib.instance.api.crateApiProjectTransportStateNew();
 
-UiTransportState  transportStateNew() => RustLib.instance.api.crateApiProjectTransportStateNew();
-
-UiTransportState  transportStateNewWithParam({required double bpm , required (int,int) timeSignature }) => RustLib.instance.api.crateApiProjectTransportStateNewWithParam(bpm: bpm, timeSignature: timeSignature);
+UiTransportState transportStateNewWithParam({
+  required double bpm,
+  required (int, int) timeSignature,
+}) => RustLib.instance.api.crateApiProjectTransportStateNewWithParam(
+  bpm: bpm,
+  timeSignature: timeSignature,
+);
 
 /// Get the current project metadata state from the backend
-Future<UiProjectMetadata>  getProjectMetadata() => RustLib.instance.api.crateApiProjectGetProjectMetadata();
+Future<UiProjectMetadata> getProjectMetadata() =>
+    RustLib.instance.api.crateApiProjectGetProjectMetadata();
 
 /// Get the transport state from the backend
-Future<UiTransportState>  getTransportState() => RustLib.instance.api.crateApiProjectGetTransportState();
+Future<UiTransportState> getTransportState() =>
+    RustLib.instance.api.crateApiProjectGetTransportState();
 
 /// Get all audio waveform source list from the backend
-Future<Map<int, AudioWaveformUiForSourceList>?>  getAudioSourceList() => RustLib.instance.api.crateApiProjectGetAudioSourceList();
+Future<Map<int, AudioWaveformUiForSourceList>?> getAudioSourceList() =>
+    RustLib.instance.api.crateApiProjectGetAudioSourceList();
 
 /// Get generator list used in the project
-Future<Map<int, UiGeneratorInstance>>  getGeneratorList() => RustLib.instance.api.crateApiProjectGetGeneratorList();
+Future<Map<int, UiGeneratorInstance>> getGeneratorList() =>
+    RustLib.instance.api.crateApiProjectGetGeneratorList();
 
 /// Add a new audio source to the project
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-Future<int>  addAudioSource({required String filePath }) => RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
+Future<int> addAudioSource({required String filePath}) =>
+    RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-Future<UiTrack>  addNewAudioTrack() => RustLib.instance.api.crateApiProjectAddNewAudioTrack();
+Future<UiTrack> addNewAudioTrack() =>
+    RustLib.instance.api.crateApiProjectAddNewAudioTrack();
 
 /// Get all tracks on the session/project.
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
-Future<Map<int, UiTrack>>  getTracks() => RustLib.instance.api.crateApiProjectGetTracks();
+Future<Map<int, UiTrack>> getTracks() =>
+    RustLib.instance.api.crateApiProjectGetTracks();
 
 /// Get the newest max sample index of the project
-Future<int>  getMaxSampleIndex() => RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
+Future<int> getMaxSampleIndex() =>
+    RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
 
 /// Export project to flutter. also report progress via StreamSink
-Stream<double>  exportProjectFlutter({required String outputPath , required int sampleRate , required int bitPerSample }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(outputPath: outputPath, sampleRate: sampleRate, bitPerSample: bitPerSample);
+Stream<double> exportProjectFlutter({
+  required String outputPath,
+  required int sampleRate,
+  required int bitPerSample,
+}) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
+  outputPath: outputPath,
+  sampleRate: sampleRate,
+  bitPerSample: bitPerSample,
+);
 
-            class AudioWaveformUiForAudioProperties  {
-                final Int8List previewBuffer;
-final String filePath;
-final String name;
-final int sampleRate;
-final int channels;
-final double duration;
-final int rootNote;
-final int fineTune;
-final int trimStart;
-final int trimEnd;
-final bool isLooping;
-final bool normalized;
-final bool muted;
+class AudioWaveformUiForAudioProperties {
+  final Int8List previewBuffer;
+  final String filePath;
+  final String name;
+  final int sampleRate;
+  final int channels;
+  final double duration;
+  final int rootNote;
+  final int fineTune;
+  final int trimStart;
+  final int trimEnd;
+  final bool isLooping;
+  final bool normalized;
+  final bool muted;
 
-                const AudioWaveformUiForAudioProperties({required this.previewBuffer ,required this.filePath ,required this.name ,required this.sampleRate ,required this.channels ,required this.duration ,required this.rootNote ,required this.fineTune ,required this.trimStart ,required this.trimEnd ,required this.isLooping ,required this.normalized ,required this.muted ,});
+  const AudioWaveformUiForAudioProperties({
+    required this.previewBuffer,
+    required this.filePath,
+    required this.name,
+    required this.sampleRate,
+    required this.channels,
+    required this.duration,
+    required this.rootNote,
+    required this.fineTune,
+    required this.trimStart,
+    required this.trimEnd,
+    required this.isLooping,
+    required this.normalized,
+    required this.muted,
+  });
 
-                
-                
+  @override
+  int get hashCode =>
+      previewBuffer.hashCode ^
+      filePath.hashCode ^
+      name.hashCode ^
+      sampleRate.hashCode ^
+      channels.hashCode ^
+      duration.hashCode ^
+      rootNote.hashCode ^
+      fineTune.hashCode ^
+      trimStart.hashCode ^
+      trimEnd.hashCode ^
+      isLooping.hashCode ^
+      normalized.hashCode ^
+      muted.hashCode;
 
-                
-        @override
-        int get hashCode => previewBuffer.hashCode^filePath.hashCode^name.hashCode^sampleRate.hashCode^channels.hashCode^duration.hashCode^rootNote.hashCode^fineTune.hashCode^trimStart.hashCode^trimEnd.hashCode^isLooping.hashCode^normalized.hashCode^muted.hashCode;
-        
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioWaveformUiForAudioProperties &&
+          runtimeType == other.runtimeType &&
+          previewBuffer == other.previewBuffer &&
+          filePath == other.filePath &&
+          name == other.name &&
+          sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          duration == other.duration &&
+          rootNote == other.rootNote &&
+          fineTune == other.fineTune &&
+          trimStart == other.trimStart &&
+          trimEnd == other.trimEnd &&
+          isLooping == other.isLooping &&
+          normalized == other.normalized &&
+          muted == other.muted;
+}
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AudioWaveformUiForAudioProperties &&
-                runtimeType == other.runtimeType
-                && previewBuffer == other.previewBuffer&& filePath == other.filePath&& name == other.name&& sampleRate == other.sampleRate&& channels == other.channels&& duration == other.duration&& rootNote == other.rootNote&& fineTune == other.fineTune&& trimStart == other.trimStart&& trimEnd == other.trimEnd&& isLooping == other.isLooping&& normalized == other.normalized&& muted == other.muted;
-        
-            }
+class AudioWaveformUiForClip {
+  final String name;
+  final Int8List previewBuffer;
+  final int sampleRate;
+  final int channels;
+  final double duration;
 
-class AudioWaveformUiForClip  {
-                final String name;
-final Int8List previewBuffer;
-final int sampleRate;
-final int channels;
-final double duration;
+  const AudioWaveformUiForClip({
+    required this.name,
+    required this.previewBuffer,
+    required this.sampleRate,
+    required this.channels,
+    required this.duration,
+  });
 
-                const AudioWaveformUiForClip({required this.name ,required this.previewBuffer ,required this.sampleRate ,required this.channels ,required this.duration ,});
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      previewBuffer.hashCode ^
+      sampleRate.hashCode ^
+      channels.hashCode ^
+      duration.hashCode;
 
-                
-                
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioWaveformUiForClip &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          previewBuffer == other.previewBuffer &&
+          sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          duration == other.duration;
+}
 
-                
-        @override
-        int get hashCode => name.hashCode^previewBuffer.hashCode^sampleRate.hashCode^channels.hashCode^duration.hashCode;
-        
+class AudioWaveformUiForSourceList {
+  final String name;
+  final bool muted;
+  final int sampleRate;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AudioWaveformUiForClip &&
-                runtimeType == other.runtimeType
-                && name == other.name&& previewBuffer == other.previewBuffer&& sampleRate == other.sampleRate&& channels == other.channels&& duration == other.duration;
-        
-            }
+  const AudioWaveformUiForSourceList({
+    required this.name,
+    required this.muted,
+    required this.sampleRate,
+  });
 
-class AudioWaveformUiForSourceList  {
-                final String name;
-final bool muted;
-final int sampleRate;
+  @override
+  int get hashCode => name.hashCode ^ muted.hashCode ^ sampleRate.hashCode;
 
-                const AudioWaveformUiForSourceList({required this.name ,required this.muted ,required this.sampleRate ,});
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioWaveformUiForSourceList &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          muted == other.muted &&
+          sampleRate == other.sampleRate;
+}
 
-                
-                
+class UiApplicationState {
+  final UiProjectMetadata metadata;
+  final UiTransportState transport;
+  final UiAudioHardwareConfig hardwareConfig;
+  final Map<int, UiTrack> tracks;
+  final Map<int, UiGeneratorInstance> generators;
+  final Map<int, UiPattern> patterns;
+  final UiMixerState mixer;
+  final int maxSampleIndex;
+  final Map<int, AudioWaveformUiForSourceList> audioSources;
 
-                
-        @override
-        int get hashCode => name.hashCode^muted.hashCode^sampleRate.hashCode;
-        
+  const UiApplicationState({
+    required this.metadata,
+    required this.transport,
+    required this.hardwareConfig,
+    required this.tracks,
+    required this.generators,
+    required this.patterns,
+    required this.mixer,
+    required this.maxSampleIndex,
+    required this.audioSources,
+  });
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AudioWaveformUiForSourceList &&
-                runtimeType == other.runtimeType
-                && name == other.name&& muted == other.muted&& sampleRate == other.sampleRate;
-        
-            }
+  @override
+  int get hashCode =>
+      metadata.hashCode ^
+      transport.hashCode ^
+      hardwareConfig.hashCode ^
+      tracks.hashCode ^
+      generators.hashCode ^
+      patterns.hashCode ^
+      mixer.hashCode ^
+      maxSampleIndex.hashCode ^
+      audioSources.hashCode;
 
-class UiApplicationState  {
-                final UiProjectMetadata metadata;
-final UiTransportState transport;
-final UiAudioHardwareConfig hardwareConfig;
-final Map<int, UiTrack> tracks;
-final Map<int, UiGeneratorInstance> generators;
-final Map<int, UiPattern> patterns;
-final UiMixerState mixer;
-final int maxSampleIndex;
-final Map<int, AudioWaveformUiForSourceList> audioSources;
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiApplicationState &&
+          runtimeType == other.runtimeType &&
+          metadata == other.metadata &&
+          transport == other.transport &&
+          hardwareConfig == other.hardwareConfig &&
+          tracks == other.tracks &&
+          generators == other.generators &&
+          patterns == other.patterns &&
+          mixer == other.mixer &&
+          maxSampleIndex == other.maxSampleIndex &&
+          audioSources == other.audioSources;
+}
 
-                const UiApplicationState({required this.metadata ,required this.transport ,required this.hardwareConfig ,required this.tracks ,required this.generators ,required this.patterns ,required this.mixer ,required this.maxSampleIndex ,required this.audioSources ,});
+class UiAudioHardwareConfig {
+  final String selectedInputDevice;
+  final String selectedOutputDevice;
+  final int sampleRate;
+  final int bufferSize;
+  final double cpuLoad;
 
-                
-                
+  const UiAudioHardwareConfig({
+    required this.selectedInputDevice,
+    required this.selectedOutputDevice,
+    required this.sampleRate,
+    required this.bufferSize,
+    required this.cpuLoad,
+  });
 
-                
-        @override
-        int get hashCode => metadata.hashCode^transport.hashCode^hardwareConfig.hashCode^tracks.hashCode^generators.hashCode^patterns.hashCode^mixer.hashCode^maxSampleIndex.hashCode^audioSources.hashCode;
-        
+  @override
+  int get hashCode =>
+      selectedInputDevice.hashCode ^
+      selectedOutputDevice.hashCode ^
+      sampleRate.hashCode ^
+      bufferSize.hashCode ^
+      cpuLoad.hashCode;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiApplicationState &&
-                runtimeType == other.runtimeType
-                && metadata == other.metadata&& transport == other.transport&& hardwareConfig == other.hardwareConfig&& tracks == other.tracks&& generators == other.generators&& patterns == other.patterns&& mixer == other.mixer&& maxSampleIndex == other.maxSampleIndex&& audioSources == other.audioSources;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiAudioHardwareConfig &&
+          runtimeType == other.runtimeType &&
+          selectedInputDevice == other.selectedInputDevice &&
+          selectedOutputDevice == other.selectedOutputDevice &&
+          sampleRate == other.sampleRate &&
+          bufferSize == other.bufferSize &&
+          cpuLoad == other.cpuLoad;
+}
 
-class UiAudioHardwareConfig  {
-                final String selectedInputDevice;
-final String selectedOutputDevice;
-final int sampleRate;
-final int bufferSize;
-final double cpuLoad;
+class UiClip {
+  final String name;
+  final int id;
 
-                const UiAudioHardwareConfig({required this.selectedInputDevice ,required this.selectedOutputDevice ,required this.sampleRate ,required this.bufferSize ,required this.cpuLoad ,});
+  /// Start time in native units (samples if is_sample_based, ticks otherwise)
+  final int startTime;
+  final UiClipSource source;
 
-                
-                
+  /// Offset from start of source content in native units
+  final int offsetStart;
 
-                
-        @override
-        int get hashCode => selectedInputDevice.hashCode^selectedOutputDevice.hashCode^sampleRate.hashCode^bufferSize.hashCode^cpuLoad.hashCode;
-        
+  /// Loop length in native units
+  final int loopLength;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiAudioHardwareConfig &&
-                runtimeType == other.runtimeType
-                && selectedInputDevice == other.selectedInputDevice&& selectedOutputDevice == other.selectedOutputDevice&& sampleRate == other.sampleRate&& bufferSize == other.bufferSize&& cpuLoad == other.cpuLoad;
-        
-            }
+  /// True if units are raw samples (audio clips), false if ticks (MIDI/automation)
+  final bool isSampleBased;
 
-class UiClip  {
-                final String name;
-final int id;
-/// Start time in native units (samples if is_sample_based, ticks otherwise)
-final int startTime;
-final UiClipSource source;
-/// Offset from start of source content in native units
-final int offsetStart;
-/// Loop length in native units
-final int loopLength;
-/// True if units are raw samples (audio clips), false if ticks (MIDI/automation)
-final bool isSampleBased;
+  const UiClip({
+    required this.name,
+    required this.id,
+    required this.startTime,
+    required this.source,
+    required this.offsetStart,
+    required this.loopLength,
+    required this.isSampleBased,
+  });
 
-                const UiClip({required this.name ,required this.id ,required this.startTime ,required this.source ,required this.offsetStart ,required this.loopLength ,required this.isSampleBased ,});
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      id.hashCode ^
+      startTime.hashCode ^
+      source.hashCode ^
+      offsetStart.hashCode ^
+      loopLength.hashCode ^
+      isSampleBased.hashCode;
 
-                
-                
-
-                
-        @override
-        int get hashCode => name.hashCode^id.hashCode^startTime.hashCode^source.hashCode^offsetStart.hashCode^loopLength.hashCode^isSampleBased.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiClip &&
-                runtimeType == other.runtimeType
-                && name == other.name&& id == other.id&& startTime == other.startTime&& source == other.source&& offsetStart == other.offsetStart&& loopLength == other.loopLength&& isSampleBased == other.isSampleBased;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiClip &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          id == other.id &&
+          startTime == other.startTime &&
+          source == other.source &&
+          offsetStart == other.offsetStart &&
+          loopLength == other.loopLength &&
+          isSampleBased == other.isSampleBased;
+}
 
 @freezed
-                sealed class UiClipSource with _$UiClipSource  {
-                    const UiClipSource._();
+sealed class UiClipSource with _$UiClipSource {
+  const UiClipSource._();
 
-                     const factory UiClipSource.audio({   required int sourceId , }) = UiClipSource_Audio;
- const factory UiClipSource.midi({   required int patternId , }) = UiClipSource_Midi;
- const factory UiClipSource.none() = UiClipSource_None;
+  const factory UiClipSource.audio({required int sourceId}) =
+      UiClipSource_Audio;
+  const factory UiClipSource.midi({required int patternId}) = UiClipSource_Midi;
+  const factory UiClipSource.none() = UiClipSource_None;
+}
 
-                    
+class UiGeneratorInstance {
+  final int id;
+  final UiGeneratorInstanceType instanceType;
 
-                    
-                }
+  const UiGeneratorInstance({required this.id, required this.instanceType});
 
-class UiGeneratorInstance  {
-                final int id;
-final UiGeneratorInstanceType instanceType;
+  @override
+  int get hashCode => id.hashCode ^ instanceType.hashCode;
 
-                const UiGeneratorInstance({required this.id ,required this.instanceType ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^instanceType.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiGeneratorInstance &&
-                runtimeType == other.runtimeType
-                && id == other.id&& instanceType == other.instanceType;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiGeneratorInstance &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          instanceType == other.instanceType;
+}
 
 @freezed
-                sealed class UiGeneratorInstanceType with _$UiGeneratorInstanceType  {
-                    const UiGeneratorInstanceType._();
+sealed class UiGeneratorInstanceType with _$UiGeneratorInstanceType {
+  const UiGeneratorInstanceType._();
 
-                     const factory UiGeneratorInstanceType.plugin(  UiPluginInstance field0,) = UiGeneratorInstanceType_Plugin;
- const factory UiGeneratorInstanceType.sampler({   required int assetId ,  required int rootNote , }) = UiGeneratorInstanceType_Sampler;
+  const factory UiGeneratorInstanceType.plugin(UiPluginInstance field0) =
+      UiGeneratorInstanceType_Plugin;
+  const factory UiGeneratorInstanceType.sampler({
+    required int assetId,
+    required int rootNote,
+  }) = UiGeneratorInstanceType_Sampler;
+}
 
-                    
+class UiPluginInstance {
+  /// Registry ID for plugin lookup (stable identifier)
+  final int registryId;
 
-                    
-                }
+  /// Name of the plugin (for display purposes)
+  final String name;
 
-class UiPluginInstance  {
-                /// Registry ID for plugin lookup (stable identifier)
-final int registryId;
-/// Name of the plugin (for display purposes)
-final String name;
-/// Whether this plugin is bypassed
-final bool bypass;
-/// Plugin parameters for persistence (Param ID -> Value)
-final Map<int, double> parameters;
+  /// Whether this plugin is bypassed
+  final bool bypass;
 
-                const UiPluginInstance({required this.registryId ,required this.name ,required this.bypass ,required this.parameters ,});
+  /// Plugin parameters for persistence (Param ID -> Value)
+  final Map<int, double> parameters;
 
-                
-                
+  const UiPluginInstance({
+    required this.registryId,
+    required this.name,
+    required this.bypass,
+    required this.parameters,
+  });
 
-                
-        @override
-        int get hashCode => registryId.hashCode^name.hashCode^bypass.hashCode^parameters.hashCode;
-        
+  @override
+  int get hashCode =>
+      registryId.hashCode ^
+      name.hashCode ^
+      bypass.hashCode ^
+      parameters.hashCode;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiPluginInstance &&
-                runtimeType == other.runtimeType
-                && registryId == other.registryId&& name == other.name&& bypass == other.bypass&& parameters == other.parameters;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiPluginInstance &&
+          runtimeType == other.runtimeType &&
+          registryId == other.registryId &&
+          name == other.name &&
+          bypass == other.bypass &&
+          parameters == other.parameters;
+}
 
-class UiProjectMetadata  {
-                final String name;
-final String author;
-final String version;
-final String createdAt;
+class UiProjectMetadata {
+  final String name;
+  final String author;
+  final String version;
+  final String createdAt;
 
-                const UiProjectMetadata({required this.name ,required this.author ,required this.version ,required this.createdAt ,});
+  const UiProjectMetadata({
+    required this.name,
+    required this.author,
+    required this.version,
+    required this.createdAt,
+  });
 
-                static Future<UiProjectMetadata>  default_()=>RustLib.instance.api.crateApiProjectUiProjectMetadataDefault();
+  static Future<UiProjectMetadata> default_() =>
+      RustLib.instance.api.crateApiProjectUiProjectMetadataDefault();
 
+  @override
+  int get hashCode =>
+      name.hashCode ^ author.hashCode ^ version.hashCode ^ createdAt.hashCode;
 
-                
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiProjectMetadata &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          author == other.author &&
+          version == other.version &&
+          createdAt == other.createdAt;
+}
 
-                
-        @override
-        int get hashCode => name.hashCode^author.hashCode^version.hashCode^createdAt.hashCode;
-        
+class UiTrack {
+  final int id;
+  final String name;
+  final String color;
+  final UiTrackType trackType;
+  final List<UiClip> clips;
+  final int? generatorId;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiProjectMetadata &&
-                runtimeType == other.runtimeType
-                && name == other.name&& author == other.author&& version == other.version&& createdAt == other.createdAt;
-        
-            }
+  const UiTrack({
+    required this.id,
+    required this.name,
+    required this.color,
+    required this.trackType,
+    required this.clips,
+    this.generatorId,
+  });
 
-class UiTrack  {
-                final int id;
-final String name;
-final String color;
-final UiTrackType trackType;
-final List<UiClip> clips;
-final int? generatorId;
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      color.hashCode ^
+      trackType.hashCode ^
+      clips.hashCode ^
+      generatorId.hashCode;
 
-                const UiTrack({required this.id ,required this.name ,required this.color ,required this.trackType ,required this.clips ,this.generatorId ,});
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiTrack &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          color == other.color &&
+          trackType == other.trackType &&
+          clips == other.clips &&
+          generatorId == other.generatorId;
+}
 
-                
-                
+enum UiTrackType { audio, midi, automation }
 
-                
-        @override
-        int get hashCode => id.hashCode^name.hashCode^color.hashCode^trackType.hashCode^clips.hashCode^generatorId.hashCode;
-        
+class UiTransportState {
+  final double bpm;
+  final (int, int) timeSignature;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiTrack &&
-                runtimeType == other.runtimeType
-                && id == other.id&& name == other.name&& color == other.color&& trackType == other.trackType&& clips == other.clips&& generatorId == other.generatorId;
-        
-            }
+  const UiTransportState({required this.bpm, required this.timeSignature});
 
-enum UiTrackType {
-                    audio,
-midi,
-automation,
-                    ;
-                    
-                }
+  static Future<UiTransportState> default_() =>
+      RustLib.instance.api.crateApiProjectUiTransportStateDefault();
 
-class UiTransportState  {
-                final double bpm;
-final (int,int) timeSignature;
+  @override
+  int get hashCode => bpm.hashCode ^ timeSignature.hashCode;
 
-                const UiTransportState({required this.bpm ,required this.timeSignature ,});
-
-                static Future<UiTransportState>  default_()=>RustLib.instance.api.crateApiProjectUiTransportStateDefault();
-
-
-                
-
-                
-        @override
-        int get hashCode => bpm.hashCode^timeSignature.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiTransportState &&
-                runtimeType == other.runtimeType
-                && bpm == other.bpm&& timeSignature == other.timeSignature;
-        
-            }
-            
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiTransportState &&
+          runtimeType == other.runtimeType &&
+          bpm == other.bpm &&
+          timeSignature == other.timeSignature;
+}

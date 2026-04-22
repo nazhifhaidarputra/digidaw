@@ -114,7 +114,7 @@ class KarbeatState extends ChangeNotifier {
   ToolSelection _selectedTool = ToolSelection.pointer;
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
-  int _piannoRollGridDenom = 4;
+  GridSize _piannoRollGridDenom = GridSize.quarter;
   int? _editingPatternId;
 
   // =========== SESSION STATE (frontend-only) ====================
@@ -134,7 +134,7 @@ class KarbeatState extends ChangeNotifier {
   InteractionTarget? _interactionTarget;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
-  int gridSize = 4;
+  GridSize gridSize = GridSize.quarter;
   bool snapToGrid = false;
 
   // ================== OTHER STATES ====================
@@ -160,6 +160,11 @@ class KarbeatState extends ChangeNotifier {
 
       if (pos.isLooping != _isLooping) {
         _isLooping = pos.isLooping;
+        changed = true;
+      }
+
+      if (pos.isPatternMode != _isPatternMode) {
+        _isPatternMode = pos.isPatternMode;
         changed = true;
       }
 
@@ -308,6 +313,18 @@ class KarbeatState extends ChangeNotifier {
   UiProjectMetadata get metadata => _metadata;
   bool get isPlaying => _isPlaying;
   bool get isPatternPlaying => _isPatternPlaying;
+  bool _isPatternMode = false;
+  bool get isPatternMode => _isPatternMode;
+
+  MusicalBeatSize _horizontalClipShiftSizeDenom = MusicalBeatSize.none;
+  
+
+  MusicalBeatSize get horizontalClipShiftSizeDenom => _horizontalClipShiftSizeDenom;
+
+  set horizontalClipShiftSizeDenom(MusicalBeatSize value) {
+    _horizontalClipShiftSizeDenom = value;
+    notifyListeners();
+  }
   bool get isSongPlaying => _isPlaying && !_isPatternPlaying;
   bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
@@ -320,7 +337,7 @@ class KarbeatState extends ChangeNotifier {
   UiAudioHardwareConfig get hardwareConfig => _hardwareConfig;
   Stream<UiTransportFeedback> get positionStream => _positionBroadcastStream;
   Map<int, UiPattern> get patterns => _patterns;
-  int get pianoRollGridDenom => _piannoRollGridDenom;
+  GridSize get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
   mixer_api.UiMixerState get mixerState => _mixerState;
@@ -337,8 +354,9 @@ class KarbeatState extends ChangeNotifier {
   int? get previewGeneratorId => _previewGeneratorId;
 
   // ================ SETTERS ===================
-  set pianoRollGridDenom(GridValue val) {
-    _piannoRollGridDenom = val.value;
+  set pianoRollGridDenom(GridSize val) {
+    _piannoRollGridDenom = val;
+    notifyListeners();
   }
 
   // =============== GLOBAL UI STATE ==========================
@@ -869,7 +887,7 @@ class KarbeatState extends ChangeNotifier {
     navigateTo(WorkspaceView.pianoRoll);
   }
 
-  void setGridSize(int newSize) {
+  void setGridSize(GridSize newSize) {
     if (gridSize != newSize) {
       gridSize = newSize;
       notifyListeners();

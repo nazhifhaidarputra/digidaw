@@ -20,3 +20,8 @@ pub fn load_project(path_name: &str) -> Result<crate::api::project::UiApplicatio
     log::info!("Successfully loaded the project {}", path_name);
     Ok(ui_state)
 }
+
+pub fn new_blank_project() -> crate::api::project::UiApplicationState {
+    let app = project_api::new_blank_project();
+    UiApplicationState::from(app)
+}

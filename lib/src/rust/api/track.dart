@@ -7,27 +7,69 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
-            // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
+Future<Map<int, AudioWaveformUiForClip>> getAudioWaveformClipsData() =>
+    RustLib.instance.api.crateApiTrackGetAudioWaveformClipsData();
 
-
-            Future<Map<int, AudioWaveformUiForClip>>  getAudioWaveformClipsData() => RustLib.instance.api.crateApiTrackGetAudioWaveformClipsData();
-
-Future<AudioWaveformUiForClip>  getAudioWaveformForClip({required int audioSourceId }) => RustLib.instance.api.crateApiTrackGetAudioWaveformForClip(audioSourceId: audioSourceId);
+Future<AudioWaveformUiForClip> getAudioWaveformForClip({
+  required int audioSourceId,
+}) => RustLib.instance.api.crateApiTrackGetAudioWaveformForClip(
+  audioSourceId: audioSourceId,
+);
 
 /// Getter for all audio waveform data for audio only for this specific track
-Future<Map<int, AudioWaveformUiForClip>>  getAudioWaveformForClipOnlyInSpecificTrack({required int trackId }) => RustLib.instance.api.crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack(trackId: trackId);
+Future<Map<int, AudioWaveformUiForClip>>
+getAudioWaveformForClipOnlyInSpecificTrack({required int trackId}) => RustLib
+    .instance
+    .api
+    .crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack(trackId: trackId);
 
 /// Getter for all audio waveform data for audio in all audio tracks
-Future<Map<int, AudioWaveformUiForClip>>  getAudioWaveformForClipAllAvailableInTracks() => RustLib.instance.api.crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
+Future<Map<int, AudioWaveformUiForClip>>
+getAudioWaveformForClipAllAvailableInTracks() => RustLib.instance.api
+    .crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
 
-Future<UiClip>  createClip({int? sourceId , required UiSourceType sourceType , required int trackId , required int startTime }) => RustLib.instance.api.crateApiTrackCreateClip(sourceId: sourceId, sourceType: sourceType, trackId: trackId, startTime: startTime);
+Future<UiClip> createClip({
+  int? sourceId,
+  required UiSourceType sourceType,
+  required int trackId,
+  required int startTime,
+}) => RustLib.instance.api.crateApiTrackCreateClip(
+  sourceId: sourceId,
+  sourceType: sourceType,
+  trackId: trackId,
+  startTime: startTime,
+);
 
-Future<void>  deleteClip({required int trackId , required int clipId }) => RustLib.instance.api.crateApiTrackDeleteClip(trackId: trackId, clipId: clipId);
+Future<void> deleteClip({required int trackId, required int clipId}) => RustLib
+    .instance
+    .api
+    .crateApiTrackDeleteClip(trackId: trackId, clipId: clipId);
 
-Future<UiClip>  resizeClip({required int trackId , required int clipId , required UiResizeEdge edge , required int newTimeVal }) => RustLib.instance.api.crateApiTrackResizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTimeVal);
+Future<UiClip> resizeClip({
+  required int trackId,
+  required int clipId,
+  required UiResizeEdge edge,
+  required int newTimeVal,
+}) => RustLib.instance.api.crateApiTrackResizeClip(
+  trackId: trackId,
+  clipId: clipId,
+  edge: edge,
+  newTimeVal: newTimeVal,
+);
 
-Future<UiClip>  moveClip({required int sourceTrackId , required int clipId , required int newStartTime , int? newTrackId }) => RustLib.instance.api.crateApiTrackMoveClip(sourceTrackId: sourceTrackId, clipId: clipId, newStartTime: newStartTime, newTrackId: newTrackId);
+Future<UiClip> moveClip({
+  required int sourceTrackId,
+  required int clipId,
+  required int newStartTime,
+  int? newTrackId,
+}) => RustLib.instance.api.crateApiTrackMoveClip(
+  sourceTrackId: sourceTrackId,
+  clipId: clipId,
+  newStartTime: newStartTime,
+  newTrackId: newTrackId,
+);
 
 /// Cut a clip in half.
 /// This will retain the original clip at the left cut region,
@@ -39,40 +81,78 @@ Future<UiClip>  moveClip({required int sourceTrackId , required int clipId , req
 /// - source_track_id: Track where clip resides
 /// - clip_id: The cut clip id inside the track
 /// - cut_point_sample: Absolute sample point of cut location
-Future<List<UiClip>>  cutClip({required int sourceTrackId , required int clipId , required int cutPoint }) => RustLib.instance.api.crateApiTrackCutClip(sourceTrackId: sourceTrackId, clipId: clipId, cutPoint: cutPoint);
+Future<List<UiClip>> cutClip({
+  required int sourceTrackId,
+  required int clipId,
+  required int cutPoint,
+}) => RustLib.instance.api.crateApiTrackCutClip(
+  sourceTrackId: sourceTrackId,
+  clipId: clipId,
+  cutPoint: cutPoint,
+);
 
 /// Add a MIDI track with a generator by its registry ID (preferred method).
-Future<UiTrack>  addMidiTrackWithGeneratorId({required int registryId }) => RustLib.instance.api.crateApiTrackAddMidiTrackWithGeneratorId(registryId: registryId);
+Future<UiTrack> addMidiTrackWithGeneratorId({required int registryId}) =>
+    RustLib.instance.api.crateApiTrackAddMidiTrackWithGeneratorId(
+      registryId: registryId,
+    );
 
-Future<UiClip>  getClip({required int trackId , required int clipId }) => RustLib.instance.api.crateApiTrackGetClip(trackId: trackId, clipId: clipId);
+Future<UiClip> getClip({required int trackId, required int clipId}) =>
+    RustLib.instance.api.crateApiTrackGetClip(trackId: trackId, clipId: clipId);
 
-Future<UiTrack>  getTrack({required int trackId }) => RustLib.instance.api.crateApiTrackGetTrack(trackId: trackId);
+Future<UiTrack> getTrack({required int trackId}) =>
+    RustLib.instance.api.crateApiTrackGetTrack(trackId: trackId);
 
 /// move clips in batch
-Future<List<UiClip>>  moveClipBatch({required int sourceTrackId , required List<int> clipIds , required int deltaTicks , int? newTrackId }) => RustLib.instance.api.crateApiTrackMoveClipBatch(sourceTrackId: sourceTrackId, clipIds: clipIds, deltaTicks: deltaTicks, newTrackId: newTrackId);
+Future<List<UiClip>> moveClipBatch({
+  required int sourceTrackId,
+  required List<int> clipIds,
+  required int deltaTicks,
+  int? newTrackId,
+}) => RustLib.instance.api.crateApiTrackMoveClipBatch(
+  sourceTrackId: sourceTrackId,
+  clipIds: clipIds,
+  deltaTicks: deltaTicks,
+  newTrackId: newTrackId,
+);
 
 /// Resize clips in batch by a delta amount
-Future<List<UiClip>>  resizeClipBatch({required int trackId , required List<int> clipIds , required UiResizeEdge edge , required int deltaTicks }) => RustLib.instance.api.crateApiTrackResizeClipBatch(trackId: trackId, clipIds: clipIds, edge: edge, deltaTicks: deltaTicks);
+Future<List<UiClip>> resizeClipBatch({
+  required int trackId,
+  required List<int> clipIds,
+  required UiResizeEdge edge,
+  required int deltaTicks,
+}) => RustLib.instance.api.crateApiTrackResizeClipBatch(
+  trackId: trackId,
+  clipIds: clipIds,
+  edge: edge,
+  deltaTicks: deltaTicks,
+);
 
 /// Delete clips in batch
-Future<void>  deleteClipBatch({required int trackId , required List<int> clipIds }) => RustLib.instance.api.crateApiTrackDeleteClipBatch(trackId: trackId, clipIds: clipIds);
+Future<void> deleteClipBatch({
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiTrackDeleteClipBatch(
+  trackId: trackId,
+  clipIds: clipIds,
+);
 
-Future<void>  changeTrackName({required int trackId , required String newName }) => RustLib.instance.api.crateApiTrackChangeTrackName(trackId: trackId, newName: newName);
+Future<void> changeTrackName({required int trackId, required String newName}) =>
+    RustLib.instance.api.crateApiTrackChangeTrackName(
+      trackId: trackId,
+      newName: newName,
+    );
 
 /// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
-Future<void>  changeTrackColor({required int trackId , required String newColor }) => RustLib.instance.api.crateApiTrackChangeTrackColor(trackId: trackId, newColor: newColor);
+Future<void> changeTrackColor({
+  required int trackId,
+  required String newColor,
+}) => RustLib.instance.api.crateApiTrackChangeTrackColor(
+  trackId: trackId,
+  newColor: newColor,
+);
 
-            enum UiResizeEdge {
-                    left,
-right,
-                    ;
-                    
-                }
+enum UiResizeEdge { left, right }
 
-enum UiSourceType {
-                    audio,
-midi,
-                    ;
-                    
-                }
-            
+enum UiSourceType { audio, midi }

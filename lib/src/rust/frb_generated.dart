@@ -17,5526 +17,8695 @@ import 'api/transport.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
-import 'frb_generated.io.dart' if (dart.library.js_interop) 'frb_generated.web.dart';
+import 'frb_generated.io.dart'
+    if (dart.library.js_interop) 'frb_generated.web.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// Main entrypoint of the Rust API
+class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
+  @internal
+  static final instance = RustLib._();
+
+  RustLib._();
+
+  /// Initialize flutter_rust_bridge
+  static Future<void> init({
+    RustLibApi? api,
+    BaseHandler? handler,
+    ExternalLibrary? externalLibrary,
+    bool forceSameCodegenVersion = true,
+  }) async {
+    await instance.initImpl(
+      api: api,
+      handler: handler,
+      externalLibrary: externalLibrary,
+      forceSameCodegenVersion: forceSameCodegenVersion,
+    );
+  }
+
+  /// Initialize flutter_rust_bridge in mock mode.
+  /// No libraries for FFI are loaded.
+  static void initMock({required RustLibApi api}) {
+    instance.initMockImpl(api: api);
+  }
+
+  /// Dispose flutter_rust_bridge
+  ///
+  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
+  /// is automatically disposed when the app stops.
+  static void dispose() => instance.disposeImpl();
+
+  @override
+  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor =>
+      RustLibApiImpl.new;
+
+  @override
+  WireConstructor<RustLibWire> get wireConstructor =>
+      RustLibWire.fromExternalLibrary;
+
+  @override
+  Future<void> executeRustInitializers() async {
+    await api.crateApiSimpleInitApp();
+  }
+
+  @override
+  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig =>
+      kDefaultExternalLibraryLoaderConfig;
+
+  @override
+  String get codegenVersion => '2.11.1';
+
+  @override
+  int get rustContentHash => 1893798904;
+
+  static const kDefaultExternalLibraryLoaderConfig =
+      ExternalLibraryLoaderConfig(
+        stem: 'karbeat_flutter_ffi',
+        ioDirectory: 'rust/karbeat-flutter-ffi/target/release/',
+        webPrefix: 'pkg/',
+      );
+}
+
+abstract class RustLibApi extends BaseApi {
+  Future<int> crateApiProjectAddAudioSource({required String filePath});
+
+  Future<void> crateApiMixerAddEffectToBus({
+    required int busId,
+    required int registryId,
+  });
+
+  Future<void> crateApiMixerAddEffectToMasterBus({required int registryId});
+
+  Future<void> crateApiMixerAddEffectToMixerChannelById({
+    required int trackId,
+    required int registryId,
+  });
+
+  Future<UiTrack> crateApiTrackAddMidiTrackWithGeneratorId({
+    required int registryId,
+  });
+
+  Future<UiTrack> crateApiProjectAddNewAudioTrack();
+
+  Future<UiNote> crateApiPatternAddNote({
+    required int patternId,
+    required int key,
+    required int startTick,
+    int? duration,
+  });
+
+  UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNew();
+
+  UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNewWithParam({
+    required String selectedInputDevice,
+    required String selectedOutputDevice,
+    required int sampleRate,
+    required int bufferSize,
+    required double cpuLoad,
+  });
+
+  Future<UiNote> crateApiPatternChangeNoteParams({
+    required int patternId,
+    required int noteId,
+    int? velocity,
+    double? probability,
+    int? microOffset,
+    bool? mute,
+  });
+
+  Future<void> crateApiTrackChangeTrackColor({
+    required int trackId,
+    required String newColor,
+  });
+
+  Future<void> crateApiTrackChangeTrackName({
+    required int trackId,
+    required String newName,
+  });
+
+  Future<UiClipboardContent> crateApiSessionCopyClips({
+    required int trackId,
+    required List<int> clipIds,
+  });
+
+  Future<UiClipboardContent> crateApiSessionCopyPatternNotes({
+    required int patternId,
+    required List<int> noteIds,
+  });
+
+  Future<int> crateApiMixerCreateBus({required String name});
+
+  Future<UiClip> crateApiTrackCreateClip({
+    int? sourceId,
+    required UiSourceType sourceType,
+    required int trackId,
+    required int startTime,
+  });
+
+  Stream<UiMixerParamEvent> crateApiMixerCreateMixerEventStream();
+
+  Stream<UiTransportFeedback> crateApiAudioCreatePositionStream();
+
+  Future<List<UiClip>> crateApiTrackCutClip({
+    required int sourceTrackId,
+    required int clipId,
+    required int cutPoint,
+  });
+
+  Future<void> crateApiSessionCutClips({
+    required int trackId,
+    required List<int> clipIds,
+  });
+
+  Future<void> crateApiSessionCutPatternNotes({
+    required int patternId,
+    required List<int> noteIds,
+  });
+
+  Future<void> crateApiMixerDeleteBus({required int busId});
+
+  Future<void> crateApiTrackDeleteClip({
+    required int trackId,
+    required int clipId,
+  });
+
+  Future<void> crateApiTrackDeleteClipBatch({
+    required int trackId,
+    required List<int> clipIds,
+  });
+
+  Future<void> crateApiSessionDeleteClips({
+    required int trackId,
+    required List<int> clipIds,
+  });
+
+  Future<UiNote> crateApiPatternDeleteNote({
+    required int patternId,
+    required int noteId,
+  });
+
+  Future<void> crateApiSessionDeletePatternNotes({
+    required int patternId,
+    required List<int> noteIds,
+  });
+
+  Future<String> crateApiPluginExecuteEffectInstanceCommand({
+    required UiEffectTarget target,
+    required int effectId,
+    required String command,
+    required String payloadJson,
+  });
+
+  Future<String> crateApiPluginExecuteGeneratorInstanceCommand({
+    required int generatorId,
+    required String command,
+    required String payloadJson,
+  });
+
+  Future<String?> crateApiPluginExecutePluginCommandEffect({
+    required int effectRegistryId,
+    required String command,
+    required String payloadJson,
+  });
+
+  Future<String?> crateApiPluginExecutePluginCommandGenerator({
+    required int genRegistryId,
+    required String command,
+    required String payloadJson,
+  });
+
+  Stream<double> crateApiProjectExportProjectFlutter({
+    required String outputPath,
+    required int sampleRate,
+    required int bitPerSample,
+  });
 
-                /// Main entrypoint of the Rust API
-                class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
-                  @internal
-                  static final instance = RustLib._();
+  Future<UiAudioHardwareConfig> crateApiAudioGetAudioConfig();
 
-                  RustLib._();
+  Future<AudioWaveformUiForAudioProperties?> crateApiAudioGetAudioProperties({
+    required int id,
+  });
 
-                  /// Initialize flutter_rust_bridge
-                  static Future<void> init({
-                    RustLibApi? api,
-                    BaseHandler? handler,
-                    ExternalLibrary? externalLibrary,
-                    bool forceSameCodegenVersion = true,
-                  }) async {
-                    await instance.initImpl(
-                      api: api,
-                      handler: handler,
-                      externalLibrary: externalLibrary,
-                      forceSameCodegenVersion: forceSameCodegenVersion,
-                    );
-                  }
+  Future<Map<int, AudioWaveformUiForSourceList>?>
+  crateApiProjectGetAudioSourceList();
 
-                  /// Initialize flutter_rust_bridge in mock mode.
-                  /// No libraries for FFI are loaded.
-                  static void initMock({
-                    required RustLibApi api,
-                  }) {
-                    instance.initMockImpl(
-                      api: api,
-                    );
-                  }
+  Future<Map<int, AudioWaveformUiForClip>>
+  crateApiTrackGetAudioWaveformClipsData();
 
-                  /// Dispose flutter_rust_bridge
-                  ///
-                  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
-                  /// is automatically disposed when the app stops.
-                  static void dispose() => instance.disposeImpl();
+  Future<AudioWaveformUiForClip> crateApiTrackGetAudioWaveformForClip({
+    required int audioSourceId,
+  });
 
-                  @override
-                  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor => RustLibApiImpl.new;
+  Future<Map<int, AudioWaveformUiForClip>>
+  crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
 
-                  @override
-                  WireConstructor<RustLibWire> get wireConstructor => RustLibWire.fromExternalLibrary;
+  Future<Map<int, AudioWaveformUiForClip>>
+  crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack({
+    required int trackId,
+  });
 
-                  @override
-                  Future<void> executeRustInitializers() async {
-                    await api.crateApiSimpleInitApp();
+  Future<List<UiPluginInfo>> crateApiPluginGetAvailableEffectsWithIds();
 
-                  }
+  Future<List<UiPluginInfo>> crateApiPluginGetAvailableGeneratorsWithIds();
 
-                  @override
-                  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig => kDefaultExternalLibraryLoaderConfig;
+  Future<List<ParameterSpecDTO>?> crateApiMixerGetBusMixerChannelSpecs({
+    required int busId,
+  });
 
-                  @override
-                  String get codegenVersion => '2.11.1';
+  Future<Map<int, UiBus>> crateApiMixerGetBuses();
 
-                  @override
-                  int get rustContentHash => 542410554;
+  Future<UiClip> crateApiTrackGetClip({
+    required int trackId,
+    required int clipId,
+  });
 
-                  static const kDefaultExternalLibraryLoaderConfig = ExternalLibraryLoaderConfig(
-                    stem: 'karbeat_flutter_ffi',
-                    ioDirectory: 'rust/karbeat-flutter-ffi/target/release/',
-                    webPrefix: 'pkg/',
-                  );
-                }
-                
+  Future<UiClipboardContent> crateApiSessionGetClipboardContents();
 
-                abstract class RustLibApi extends BaseApi {
-                  Future<int> crateApiProjectAddAudioSource({required String filePath });
+  Future<UiEffectInstance> crateApiPluginGetEffect({
+    required int trackId,
+    required int effectId,
+  });
 
-Future<void> crateApiMixerAddEffectToBus({required int busId , required int registryId });
+  Future<UiEffectInstance> crateApiPluginGetEffectFromMaster({
+    required int effectId,
+  });
 
-Future<void> crateApiMixerAddEffectToMasterBus({required int registryId });
+  Future<List<UiPluginParameter>> crateApiPluginGetEffectParameterSpecs({
+    required UiEffectTarget target,
+    required int effectId,
+  });
 
-Future<void> crateApiMixerAddEffectToMixerChannelById({required int trackId , required int registryId });
+  Future<List<UiEffectInstance>> crateApiPluginGetEffectsFromTrack({
+    required int trackId,
+  });
 
-Future<UiTrack> crateApiTrackAddMidiTrackWithGeneratorId({required int registryId });
+  Future<List<UiResponseCurvePoint>> crateApiPluginsEqGetEqResponseCurve({
+    required UiEffectTarget target,
+    required int effectId,
+    required int numPoints,
+  });
 
-Future<UiTrack> crateApiProjectAddNewAudioTrack();
+  Future<UiGeneratorInstance> crateApiPluginGetGenerator({
+    required int generatorId,
+  });
 
-Future<UiNote> crateApiPatternAddNote({required int patternId , required int key , required int startTick , int? duration });
+  Future<Map<int, UiGeneratorInstance>> crateApiProjectGetGeneratorList();
 
-UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNew();
+  Future<double> crateApiPluginGetGeneratorParameter({
+    required int generatorId,
+    required int paramId,
+  });
 
-UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNewWithParam({required String selectedInputDevice , required String selectedOutputDevice , required int sampleRate , required int bufferSize , required double cpuLoad });
+  Future<List<UiPluginParameter>> crateApiPluginGetGeneratorParameterSpecs({
+    required int generatorId,
+  });
 
-Future<UiNote> crateApiPatternChangeNoteParams({required int patternId , required int noteId , int? velocity , double? probability , int? microOffset , bool? mute });
+  Future<UiMixerChannel> crateApiMixerGetMasterBus();
 
-Future<void> crateApiTrackChangeTrackColor({required int trackId , required String newColor });
+  Future<List<UiEffectInstance>> crateApiMixerGetMasterBusPopulated();
+
+  Future<List<ParameterSpecDTO>> crateApiMixerGetMasterChannelSpecs();
+
+  Future<List<UiEffectInstance>> crateApiPluginGetMasterEffects();
+
+  Future<int> crateApiProjectGetMaxSampleIndex();
 
-Future<void> crateApiTrackChangeTrackName({required int trackId , required String newName });
+  Future<UiMixerChannel> crateApiMixerGetMixerChannel({required int trackId});
 
-Future<UiClipboardContent> crateApiSessionCopyClips({required int trackId , required List<int> clipIds });
+  Future<(UiMixerChannel, List<UiEffectInstance>)>
+  crateApiMixerGetMixerChannelPopulated({required int trackId});
 
-Future<UiClipboardContent> crateApiSessionCopyPatternNotes({required int patternId , required List<int> noteIds });
+  Future<UiMixerState> crateApiMixerGetMixerState();
 
-Future<int> crateApiMixerCreateBus({required String name });
+  Future<UiPattern> crateApiPatternGetPattern({required int patternId});
 
-Future<UiClip> crateApiTrackCreateClip({int? sourceId , required UiSourceType sourceType , required int trackId , required int startTime });
+  Future<Map<int, UiPattern>> crateApiPatternGetPatterns();
 
-Stream<UiMixerParamEvent> crateApiMixerCreateMixerEventStream();
+  Future<UiProjectMetadata> crateApiProjectGetProjectMetadata();
 
-Stream<UiTransportFeedback> crateApiAudioCreatePositionStream();
+  Future<List<UiRoutingConnection>> crateApiMixerGetRoutingMatrix();
 
-Future<List<UiClip>> crateApiTrackCutClip({required int sourceTrackId , required int clipId , required int cutPoint });
+  Future<UiTrack> crateApiTrackGetTrack({required int trackId});
 
-Future<void> crateApiSessionCutClips({required int trackId , required List<int> clipIds });
+  Future<List<ParameterSpecDTO>?> crateApiMixerGetTrackMixerChannelSpecs({
+    required int trackId,
+  });
 
-Future<void> crateApiSessionCutPatternNotes({required int patternId , required List<int> noteIds });
+  Future<Map<int, UiTrack>> crateApiProjectGetTracks();
 
-Future<void> crateApiMixerDeleteBus({required int busId });
+  Future<UiTransportState> crateApiProjectGetTransportState();
 
-Future<void> crateApiTrackDeleteClip({required int trackId , required int clipId });
+  String crateApiSimpleGreet({required String name});
 
-Future<void> crateApiTrackDeleteClipBatch({required int trackId , required List<int> clipIds });
+  Future<void> crateApiSimpleInitApp();
 
-Future<void> crateApiSessionDeleteClips({required int trackId , required List<int> clipIds });
+  Future<UiApplicationState> crateApiSerializationLoadProject({
+    required String pathName,
+  });
 
-Future<UiNote> crateApiPatternDeleteNote({required int patternId , required int noteId });
+  Future<void> crateApiSessionMoveClip({
+    required int oldTrackId,
+    required int newTrackId,
+    required int clipId,
+    required int newStartTime,
+  });
 
-Future<void> crateApiSessionDeletePatternNotes({required int patternId , required List<int> noteIds });
+  Future<UiClip> crateApiTrackMoveClip({
+    required int sourceTrackId,
+    required int clipId,
+    required int newStartTime,
+    int? newTrackId,
+  });
+
+  Future<List<UiClip>> crateApiTrackMoveClipBatch({
+    required int sourceTrackId,
+    required List<int> clipIds,
+    required int deltaTicks,
+    int? newTrackId,
+  });
+
+  Future<UiNote> crateApiPatternMoveNote({
+    required int patternId,
+    required int noteId,
+    required int newStartTick,
+    required int newKey,
+  });
+
+  Future<UiApplicationState> crateApiSerializationNewBlankProject();
+
+  List<UiResponseCurvePoint> crateApiPluginsEqParseEqCurveResponse({
+    required String jsonStr,
+  });
+
+  Future<void> crateApiSessionPasteClips({
+    required int targetTrackId,
+    required int pasteStartTime,
+  });
+
+  Future<void> crateApiSessionPastePatternNotes({
+    required int targetPatternId,
+    required int playheadTick,
+  });
+
+  Future<void> crateApiPatternPlayPatternPreview({
+    required int patternId,
+    required int generatorId,
+  });
+
+  Future<void> crateApiAudioPlayPreviewNote({
+    required int trackId,
+    required int noteKey,
+    required int velocity,
+    required bool isOn,
+  });
+
+  Future<void> crateApiAudioPlayPreviewNoteGenerator({
+    required int generatorId,
+    required int noteKey,
+    required int velocity,
+    required bool isOn,
+  });
+
+  Future<void> crateApiAudioPlaySourcePreview({required int id});
+
+  Future<List<UiEffectParameterSnapshot>>
+  crateApiPluginPollEffectParameterFeedback();
+
+  Future<List<UiGeneratorParameterSnapshot>>
+  crateApiPluginPollGeneratorParameterFeedback();
+
+  UiProjectMetadata crateApiProjectProjectMetadataNew();
+
+  Future<void> crateApiPluginQueryEffectParameters({
+    required UiEffectTarget target,
+    required int effectId,
+  });
+
+  Future<void> crateApiPluginQueryGeneratorParameters({
+    required int generatorId,
+  });
+
+  Future<void> crateApiSessionRedo();
+
+  Future<void> crateApiMixerRemoveEffectFromMasterBus({
+    required int effectInstanceId,
+  });
+
+  Future<void> crateApiMixerRemoveEffectFromMixerChannel({
+    required int trackId,
+    required int effectInstanceId,
+  });
+
+  Future<void> crateApiMixerRemoveRouting({
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
+    required bool isSend,
+  });
 
-Future<String> crateApiPluginExecuteEffectInstanceCommand({required UiEffectTarget target , required int effectId , required String command , required String payloadJson });
+  Future<void> crateApiMixerRenameBus({
+    required int busId,
+    required String newName,
+  });
+
+  Future<void> crateApiSessionResizeClip({
+    required int trackId,
+    required int clipId,
+    required UiResizeEdge edge,
+    required int newTimeVal,
+  });
 
-Future<String> crateApiPluginExecuteGeneratorInstanceCommand({required int generatorId , required String command , required String payloadJson });
+  Future<UiClip> crateApiTrackResizeClip({
+    required int trackId,
+    required int clipId,
+    required UiResizeEdge edge,
+    required int newTimeVal,
+  });
 
-Future<String?> crateApiPluginExecutePluginCommandEffect({required int effectRegistryId , required String command , required String payloadJson });
+  Future<List<UiClip>> crateApiTrackResizeClipBatch({
+    required int trackId,
+    required List<int> clipIds,
+    required UiResizeEdge edge,
+    required int deltaTicks,
+  });
 
-Future<String?> crateApiPluginExecutePluginCommandGenerator({required int genRegistryId , required String command , required String payloadJson });
+  Future<UiNote> crateApiPatternResizeNote({
+    required int patternId,
+    required int noteId,
+    required int newDuration,
+  });
 
-Stream<double> crateApiProjectExportProjectFlutter({required String outputPath , required int sampleRate , required int bitPerSample });
-
-Future<UiAudioHardwareConfig> crateApiAudioGetAudioConfig();
-
-Future<AudioWaveformUiForAudioProperties?> crateApiAudioGetAudioProperties({required int id });
-
-Future<Map<int, AudioWaveformUiForSourceList>?> crateApiProjectGetAudioSourceList();
-
-Future<Map<int, AudioWaveformUiForClip>> crateApiTrackGetAudioWaveformClipsData();
-
-Future<AudioWaveformUiForClip> crateApiTrackGetAudioWaveformForClip({required int audioSourceId });
-
-Future<Map<int, AudioWaveformUiForClip>> crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
-
-Future<Map<int, AudioWaveformUiForClip>> crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack({required int trackId });
-
-Future<List<UiPluginInfo>> crateApiPluginGetAvailableEffectsWithIds();
-
-Future<List<UiPluginInfo>> crateApiPluginGetAvailableGeneratorsWithIds();
-
-Future<List<ParameterSpecDTO>?> crateApiMixerGetBusMixerChannelSpecs({required int busId });
-
-Future<Map<int, UiBus>> crateApiMixerGetBuses();
-
-Future<UiClip> crateApiTrackGetClip({required int trackId , required int clipId });
-
-Future<UiClipboardContent> crateApiSessionGetClipboardContents();
-
-Future<UiEffectInstance> crateApiPluginGetEffect({required int trackId , required int effectId });
-
-Future<UiEffectInstance> crateApiPluginGetEffectFromMaster({required int effectId });
-
-Future<List<UiPluginParameter>> crateApiPluginGetEffectParameterSpecs({required UiEffectTarget target , required int effectId });
-
-Future<List<UiEffectInstance>> crateApiPluginGetEffectsFromTrack({required int trackId });
-
-Future<List<UiResponseCurvePoint>> crateApiPluginsEqGetEqResponseCurve({required UiEffectTarget target , required int effectId , required int numPoints });
-
-Future<UiGeneratorInstance> crateApiPluginGetGenerator({required int generatorId });
-
-Future<Map<int, UiGeneratorInstance>> crateApiProjectGetGeneratorList();
-
-Future<double> crateApiPluginGetGeneratorParameter({required int generatorId , required int paramId });
-
-Future<List<UiPluginParameter>> crateApiPluginGetGeneratorParameterSpecs({required int generatorId });
-
-Future<UiMixerChannel> crateApiMixerGetMasterBus();
-
-Future<List<UiEffectInstance>> crateApiMixerGetMasterBusPopulated();
-
-Future<List<ParameterSpecDTO>> crateApiMixerGetMasterChannelSpecs();
-
-Future<List<UiEffectInstance>> crateApiPluginGetMasterEffects();
-
-Future<int> crateApiProjectGetMaxSampleIndex();
-
-Future<UiMixerChannel> crateApiMixerGetMixerChannel({required int trackId });
-
-Future<(UiMixerChannel,List<UiEffectInstance>)> crateApiMixerGetMixerChannelPopulated({required int trackId });
-
-Future<UiMixerState> crateApiMixerGetMixerState();
-
-Future<UiPattern> crateApiPatternGetPattern({required int patternId });
-
-Future<Map<int, UiPattern>> crateApiPatternGetPatterns();
-
-Future<UiProjectMetadata> crateApiProjectGetProjectMetadata();
-
-Future<List<UiRoutingConnection>> crateApiMixerGetRoutingMatrix();
-
-Future<UiTrack> crateApiTrackGetTrack({required int trackId });
-
-Future<List<ParameterSpecDTO>?> crateApiMixerGetTrackMixerChannelSpecs({required int trackId });
-
-Future<Map<int, UiTrack>> crateApiProjectGetTracks();
-
-Future<UiTransportState> crateApiProjectGetTransportState();
-
-String crateApiSimpleGreet({required String name });
-
-Future<void> crateApiSimpleInitApp();
-
-Future<UiApplicationState> crateApiSerializationLoadProject({required String pathName });
-
-Future<void> crateApiSessionMoveClip({required int oldTrackId , required int newTrackId , required int clipId , required int newStartTime });
-
-Future<UiClip> crateApiTrackMoveClip({required int sourceTrackId , required int clipId , required int newStartTime , int? newTrackId });
-
-Future<List<UiClip>> crateApiTrackMoveClipBatch({required int sourceTrackId , required List<int> clipIds , required int deltaTicks , int? newTrackId });
-
-Future<UiNote> crateApiPatternMoveNote({required int patternId , required int noteId , required int newStartTick , required int newKey });
-
-List<UiResponseCurvePoint> crateApiPluginsEqParseEqCurveResponse({required String jsonStr });
-
-Future<void> crateApiSessionPasteClips({required int targetTrackId , required int pasteStartTime });
-
-Future<void> crateApiSessionPastePatternNotes({required int targetPatternId , required int playheadTick });
-
-Future<void> crateApiPatternPlayPatternPreview({required int patternId , required int generatorId });
-
-Future<void> crateApiAudioPlayPreviewNote({required int trackId , required int noteKey , required int velocity , required bool isOn });
-
-Future<void> crateApiAudioPlayPreviewNoteGenerator({required int generatorId , required int noteKey , required int velocity , required bool isOn });
-
-Future<void> crateApiAudioPlaySourcePreview({required int id });
-
-Future<List<UiEffectParameterSnapshot>> crateApiPluginPollEffectParameterFeedback();
-
-Future<List<UiGeneratorParameterSnapshot>> crateApiPluginPollGeneratorParameterFeedback();
-
-UiProjectMetadata crateApiProjectProjectMetadataNew();
-
-Future<void> crateApiPluginQueryEffectParameters({required UiEffectTarget target , required int effectId });
-
-Future<void> crateApiPluginQueryGeneratorParameters({required int generatorId });
-
-Future<void> crateApiSessionRedo();
-
-Future<void> crateApiMixerRemoveEffectFromMasterBus({required int effectInstanceId });
-
-Future<void> crateApiMixerRemoveEffectFromMixerChannel({required int trackId , required int effectInstanceId });
-
-Future<void> crateApiMixerRemoveRouting({required UiRoutingNode source , required UiRoutingNode destination , required bool isSend });
-
-Future<void> crateApiMixerRenameBus({required int busId , required String newName });
-
-Future<void> crateApiSessionResizeClip({required int trackId , required int clipId , required UiResizeEdge edge , required int newTimeVal });
-
-Future<UiClip> crateApiTrackResizeClip({required int trackId , required int clipId , required UiResizeEdge edge , required int newTimeVal });
-
-Future<List<UiClip>> crateApiTrackResizeClipBatch({required int trackId , required List<int> clipIds , required UiResizeEdge edge , required int deltaTicks });
-
-Future<UiNote> crateApiPatternResizeNote({required int patternId , required int noteId , required int newDuration });
-
-Future<void> crateApiSerializationSaveProject({required String pathName });
-
-Future<void> crateApiTransportSetBpm({required double val });
-
-Future<void> crateApiMixerSetBusParams({required int busId , required List<UiMixerChannelParams> params });
-
-Future<void> crateApiPluginSetEffectParameter({required UiEffectTarget target , required int effectId , required int paramId , required double value });
-
-Future<void> crateApiPluginSetGeneratorParameter({required int generatorId , required int paramId , required double value });
-
-Future<void> crateApiTransportSetLooping({required bool val });
-
-Future<void> crateApiMixerSetMasterBusParams({required List<UiMixerChannelParams> params });
-
-void crateApiAudioSetMetronomeActive({required bool active });
-
-Future<void> crateApiMixerSetMixerChannelParams({required int trackId , required List<UiMixerChannelParams> params });
-
-Future<void> crateApiTransportSetPlayhead({required int val });
-
-Future<void> crateApiTransportSetPlaying({required bool val });
-
-Future<void> crateApiMixerSetRouting({required UiRoutingNode source , required UiRoutingNode destination , required double sendLevel , required bool isSend });
-
-Future<void> crateApiAudioStopAllPreviews();
-
-Future<void> crateApiPatternStopPatternPreview();
-
-Future<void> crateApiTransportStopSongPlayback();
-
-Future<void> crateApiPluginSyncEffectParametersFromAudio({required List<UiEffectParameterSnapshot> snapshots });
-
-Future<void> crateApiPluginSyncGeneratorParametersFromAudio({required List<UiGeneratorParameterSnapshot> snapshots });
-
-UiTransportState crateApiProjectTransportStateNew();
-
-UiTransportState crateApiProjectTransportStateNewWithParam({required double bpm , required (int,int) timeSignature });
-
-Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault();
-
-UiMixerState crateApiMixerUiMixerStateNew();
-
-UiMixerState crateApiMixerUiMixerStateNewWithParam({required Map<int, UiMixerChannel> channels , required UiMixerChannel masterBus , required Map<int, UiBus> buses , required List<UiRoutingConnection> routing });
-
-Future<UiProjectMetadata> crateApiProjectUiProjectMetadataDefault();
-
-Future<UiTransportState> crateApiProjectUiTransportStateDefault();
-
-Future<void> crateApiSessionUndo();
-
-
-                }
-                
-
-                class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
-                  RustLibApiImpl({
-                    required super.handler,
-                    required super.wire,
-                    required super.generalizedFrbRustBinding,
-                    required super.portManager,
-                  });
-
-                  @override Future<int> crateApiProjectAddAudioSource({required String filePath })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(filePath, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  Future<void> crateApiSerializationSaveProject({required String pathName});
+
+  Future<void> crateApiTransportSetBpm({required double val});
+
+  Future<void> crateApiMixerSetBusParams({
+    required int busId,
+    required List<UiMixerChannelParams> params,
+  });
+
+  Future<void> crateApiPluginSetEffectParameter({
+    required UiEffectTarget target,
+    required int effectId,
+    required int paramId,
+    required double value,
+  });
+
+  Future<void> crateApiPluginSetGeneratorParameter({
+    required int generatorId,
+    required int paramId,
+    required double value,
+  });
+
+  Future<void> crateApiTransportSetLooping({required bool val});
+
+  Future<void> crateApiMixerSetMasterBusParams({
+    required List<UiMixerChannelParams> params,
+  });
+
+  void crateApiAudioSetMetronomeActive({required bool active});
+
+  Future<void> crateApiMixerSetMixerChannelParams({
+    required int trackId,
+    required List<UiMixerChannelParams> params,
+  });
+
+  Future<void> crateApiTransportSetPlayhead({required int val});
+
+  Future<void> crateApiTransportSetPlaying({required bool val});
+
+  Future<void> crateApiMixerSetRouting({
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
+    required double sendLevel,
+    required bool isSend,
+  });
+
+  Future<void> crateApiAudioStopAllPreviews();
+
+  Future<void> crateApiPatternStopPatternPreview();
+
+  Future<void> crateApiPatternStopPatternPreviewLocal({
+    required int patternId,
+    required int generatorId,
+  });
+
+  Future<void> crateApiTransportStopSongPlayback();
+
+  Future<void> crateApiPluginSyncEffectParametersFromAudio({
+    required List<UiEffectParameterSnapshot> snapshots,
+  });
+
+  Future<void> crateApiPluginSyncGeneratorParametersFromAudio({
+    required List<UiGeneratorParameterSnapshot> snapshots,
+  });
+
+  UiTransportState crateApiProjectTransportStateNew();
+
+  UiTransportState crateApiProjectTransportStateNewWithParam({
+    required double bpm,
+    required (int, int) timeSignature,
+  });
+
+  Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault();
+
+  UiMixerState crateApiMixerUiMixerStateNew();
+
+  UiMixerState crateApiMixerUiMixerStateNewWithParam({
+    required Map<int, UiMixerChannel> channels,
+    required UiMixerChannel masterBus,
+    required Map<int, UiBus> buses,
+    required List<UiRoutingConnection> routing,
+  });
+
+  Future<UiProjectMetadata> crateApiProjectUiProjectMetadataDefault();
+
+  Future<UiTransportState> crateApiProjectUiTransportStateDefault();
+
+  Future<void> crateApiSessionUndo();
+}
+
+class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
+  RustLibApiImpl({
+    required super.handler,
+    required super.wire,
+    required super.generalizedFrbRustBinding,
+    required super.portManager,
+  });
+
+  @override
+  Future<int> crateApiProjectAddAudioSource({required String filePath}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(filePath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiProjectAddAudioSourceConstMeta,
-            argValues: [filePath],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectAddAudioSourceConstMeta,
+        argValues: [filePath],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectAddAudioSourceConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_audio_source",
+        argNames: ["filePath"],
+      );
 
-        TaskConstMeta get kCrateApiProjectAddAudioSourceConstMeta => const TaskConstMeta(
-            debugName: "add_audio_source",
-            argNames: ["filePath"],
-        );
-        
-
-@override Future<void> crateApiMixerAddEffectToBus({required int busId , required int registryId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(busId, serializer);
-sse_encode_u_32(registryId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerAddEffectToBus({
+    required int busId,
+    required int registryId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(busId, serializer);
+          sse_encode_u_32(registryId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerAddEffectToBusConstMeta,
-            argValues: [busId, registryId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerAddEffectToBusConstMeta,
+        argValues: [busId, registryId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerAddEffectToBusConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_effect_to_bus",
+        argNames: ["busId", "registryId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerAddEffectToBusConstMeta => const TaskConstMeta(
-            debugName: "add_effect_to_bus",
-            argNames: ["busId", "registryId"],
-        );
-        
-
-@override Future<void> crateApiMixerAddEffectToMasterBus({required int registryId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(registryId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerAddEffectToMasterBus({required int registryId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(registryId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerAddEffectToMasterBusConstMeta,
-            argValues: [registryId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerAddEffectToMasterBusConstMeta,
+        argValues: [registryId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerAddEffectToMasterBusConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_effect_to_master_bus",
+        argNames: ["registryId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerAddEffectToMasterBusConstMeta => const TaskConstMeta(
-            debugName: "add_effect_to_master_bus",
-            argNames: ["registryId"],
-        );
-        
-
-@override Future<void> crateApiMixerAddEffectToMixerChannelById({required int trackId , required int registryId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(registryId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerAddEffectToMixerChannelById({
+    required int trackId,
+    required int registryId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(registryId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerAddEffectToMixerChannelByIdConstMeta,
-            argValues: [trackId, registryId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerAddEffectToMixerChannelByIdConstMeta,
+        argValues: [trackId, registryId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerAddEffectToMixerChannelByIdConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_effect_to_mixer_channel_by_id",
+        argNames: ["trackId", "registryId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerAddEffectToMixerChannelByIdConstMeta => const TaskConstMeta(
-            debugName: "add_effect_to_mixer_channel_by_id",
-            argNames: ["trackId", "registryId"],
-        );
-        
-
-@override Future<UiTrack> crateApiTrackAddMidiTrackWithGeneratorId({required int registryId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(registryId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiTrack> crateApiTrackAddMidiTrackWithGeneratorId({
+    required int registryId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(registryId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_track,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackAddMidiTrackWithGeneratorIdConstMeta,
-            argValues: [registryId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackAddMidiTrackWithGeneratorIdConstMeta,
+        argValues: [registryId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackAddMidiTrackWithGeneratorIdConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_midi_track_with_generator_id",
+        argNames: ["registryId"],
+      );
 
-        TaskConstMeta get kCrateApiTrackAddMidiTrackWithGeneratorIdConstMeta => const TaskConstMeta(
-            debugName: "add_midi_track_with_generator_id",
-            argNames: ["registryId"],
-        );
-        
-
-@override Future<UiTrack> crateApiProjectAddNewAudioTrack()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiTrack> crateApiProjectAddNewAudioTrack() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_track,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectAddNewAudioTrackConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectAddNewAudioTrackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectAddNewAudioTrackConstMeta =>
+      const TaskConstMeta(debugName: "add_new_audio_track", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectAddNewAudioTrackConstMeta => const TaskConstMeta(
-            debugName: "add_new_audio_track",
-            argNames: [],
-        );
-        
-
-@override Future<UiNote> crateApiPatternAddNote({required int patternId , required int key , required int startTick , int? duration })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_u_32(key, serializer);
-sse_encode_CastedPrimitive_u_64(startTick, serializer);
-sse_encode_opt_CastedPrimitive_u_64(duration, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiNote> crateApiPatternAddNote({
+    required int patternId,
+    required int key,
+    required int startTick,
+    int? duration,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(key, serializer);
+          sse_encode_CastedPrimitive_u_64(startTick, serializer);
+          sse_encode_opt_CastedPrimitive_u_64(duration, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_note,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternAddNoteConstMeta,
-            argValues: [patternId, key, startTick, duration],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternAddNoteConstMeta,
+        argValues: [patternId, key, startTick, duration],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternAddNoteConstMeta => const TaskConstMeta(
+    debugName: "add_note",
+    argNames: ["patternId", "key", "startTick", "duration"],
+  );
 
-        TaskConstMeta get kCrateApiPatternAddNoteConstMeta => const TaskConstMeta(
-            debugName: "add_note",
-            argNames: ["patternId", "key", "startTick", "duration"],
-        );
-        
-
-@override UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNew()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNew() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_audio_hardware_config,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectAudioHardwareConfigNewConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectAudioHardwareConfigNewConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectAudioHardwareConfigNewConstMeta =>
+      const TaskConstMeta(debugName: "audio_hardware_config_new", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectAudioHardwareConfigNewConstMeta => const TaskConstMeta(
-            debugName: "audio_hardware_config_new",
-            argNames: [],
-        );
-        
-
-@override UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNewWithParam({required String selectedInputDevice , required String selectedOutputDevice , required int sampleRate , required int bufferSize , required double cpuLoad })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(selectedInputDevice, serializer);
-sse_encode_String(selectedOutputDevice, serializer);
-sse_encode_u_32(sampleRate, serializer);
-sse_encode_u_32(bufferSize, serializer);
-sse_encode_f_32(cpuLoad, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  UiAudioHardwareConfig crateApiProjectAudioHardwareConfigNewWithParam({
+    required String selectedInputDevice,
+    required String selectedOutputDevice,
+    required int sampleRate,
+    required int bufferSize,
+    required double cpuLoad,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(selectedInputDevice, serializer);
+          sse_encode_String(selectedOutputDevice, serializer);
+          sse_encode_u_32(sampleRate, serializer);
+          sse_encode_u_32(bufferSize, serializer);
+          sse_encode_f_32(cpuLoad, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_audio_hardware_config,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectAudioHardwareConfigNewWithParamConstMeta,
-            argValues: [selectedInputDevice, selectedOutputDevice, sampleRate, bufferSize, cpuLoad],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectAudioHardwareConfigNewWithParamConstMeta,
+        argValues: [
+          selectedInputDevice,
+          selectedOutputDevice,
+          sampleRate,
+          bufferSize,
+          cpuLoad,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectAudioHardwareConfigNewWithParamConstMeta =>
+      const TaskConstMeta(
+        debugName: "audio_hardware_config_new_with_param",
+        argNames: [
+          "selectedInputDevice",
+          "selectedOutputDevice",
+          "sampleRate",
+          "bufferSize",
+          "cpuLoad",
+        ],
+      );
 
-        TaskConstMeta get kCrateApiProjectAudioHardwareConfigNewWithParamConstMeta => const TaskConstMeta(
-            debugName: "audio_hardware_config_new_with_param",
-            argNames: ["selectedInputDevice", "selectedOutputDevice", "sampleRate", "bufferSize", "cpuLoad"],
-        );
-        
-
-@override Future<UiNote> crateApiPatternChangeNoteParams({required int patternId , required int noteId , int? velocity , double? probability , int? microOffset , bool? mute })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_u_32(noteId, serializer);
-sse_encode_opt_CastedPrimitive_i_64(velocity, serializer);
-sse_encode_opt_box_autoadd_f_32(probability, serializer);
-sse_encode_opt_CastedPrimitive_i_64(microOffset, serializer);
-sse_encode_opt_box_autoadd_bool(mute, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiNote> crateApiPatternChangeNoteParams({
+    required int patternId,
+    required int noteId,
+    int? velocity,
+    double? probability,
+    int? microOffset,
+    bool? mute,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(noteId, serializer);
+          sse_encode_opt_CastedPrimitive_i_64(velocity, serializer);
+          sse_encode_opt_box_autoadd_f_32(probability, serializer);
+          sse_encode_opt_CastedPrimitive_i_64(microOffset, serializer);
+          sse_encode_opt_box_autoadd_bool(mute, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_note,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternChangeNoteParamsConstMeta,
-            argValues: [patternId, noteId, velocity, probability, microOffset, mute],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternChangeNoteParamsConstMeta,
+        argValues: [
+          patternId,
+          noteId,
+          velocity,
+          probability,
+          microOffset,
+          mute,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternChangeNoteParamsConstMeta =>
+      const TaskConstMeta(
+        debugName: "change_note_params",
+        argNames: [
+          "patternId",
+          "noteId",
+          "velocity",
+          "probability",
+          "microOffset",
+          "mute",
+        ],
+      );
 
-        TaskConstMeta get kCrateApiPatternChangeNoteParamsConstMeta => const TaskConstMeta(
-            debugName: "change_note_params",
-            argNames: ["patternId", "noteId", "velocity", "probability", "microOffset", "mute"],
-        );
-        
-
-@override Future<void> crateApiTrackChangeTrackColor({required int trackId , required String newColor })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_String(newColor, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTrackChangeTrackColor({
+    required int trackId,
+    required String newColor,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_String(newColor, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackChangeTrackColorConstMeta,
-            argValues: [trackId, newColor],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackChangeTrackColorConstMeta,
+        argValues: [trackId, newColor],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackChangeTrackColorConstMeta =>
+      const TaskConstMeta(
+        debugName: "change_track_color",
+        argNames: ["trackId", "newColor"],
+      );
 
-        TaskConstMeta get kCrateApiTrackChangeTrackColorConstMeta => const TaskConstMeta(
-            debugName: "change_track_color",
-            argNames: ["trackId", "newColor"],
-        );
-        
-
-@override Future<void> crateApiTrackChangeTrackName({required int trackId , required String newName })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_String(newName, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTrackChangeTrackName({
+    required int trackId,
+    required String newName,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_String(newName, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackChangeTrackNameConstMeta,
-            argValues: [trackId, newName],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackChangeTrackNameConstMeta,
+        argValues: [trackId, newName],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackChangeTrackNameConstMeta =>
+      const TaskConstMeta(
+        debugName: "change_track_name",
+        argNames: ["trackId", "newName"],
+      );
 
-        TaskConstMeta get kCrateApiTrackChangeTrackNameConstMeta => const TaskConstMeta(
-            debugName: "change_track_name",
-            argNames: ["trackId", "newName"],
-        );
-        
-
-@override Future<UiClipboardContent> crateApiSessionCopyClips({required int trackId , required List<int> clipIds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_list_prim_u_32_loose(clipIds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClipboardContent> crateApiSessionCopyClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_list_prim_u_32_loose(clipIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clipboard_content,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionCopyClipsConstMeta,
-            argValues: [trackId, clipIds],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionCopyClipsConstMeta,
+        argValues: [trackId, clipIds],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionCopyClipsConstMeta => const TaskConstMeta(
+    debugName: "copy_clips",
+    argNames: ["trackId", "clipIds"],
+  );
 
-        TaskConstMeta get kCrateApiSessionCopyClipsConstMeta => const TaskConstMeta(
-            debugName: "copy_clips",
-            argNames: ["trackId", "clipIds"],
-        );
-        
-
-@override Future<UiClipboardContent> crateApiSessionCopyPatternNotes({required int patternId , required List<int> noteIds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_list_prim_u_32_loose(noteIds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClipboardContent> crateApiSessionCopyPatternNotes({
+    required int patternId,
+    required List<int> noteIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_list_prim_u_32_loose(noteIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clipboard_content,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionCopyPatternNotesConstMeta,
-            argValues: [patternId, noteIds],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionCopyPatternNotesConstMeta,
+        argValues: [patternId, noteIds],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionCopyPatternNotesConstMeta =>
+      const TaskConstMeta(
+        debugName: "copy_pattern_notes",
+        argNames: ["patternId", "noteIds"],
+      );
 
-        TaskConstMeta get kCrateApiSessionCopyPatternNotesConstMeta => const TaskConstMeta(
-            debugName: "copy_pattern_notes",
-            argNames: ["patternId", "noteIds"],
-        );
-        
-
-@override Future<int> crateApiMixerCreateBus({required String name })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(name, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<int> crateApiMixerCreateBus({required String name}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerCreateBusConstMeta,
-            argValues: [name],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerCreateBusConstMeta,
+        argValues: [name],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerCreateBusConstMeta =>
+      const TaskConstMeta(debugName: "create_bus", argNames: ["name"]);
 
-        TaskConstMeta get kCrateApiMixerCreateBusConstMeta => const TaskConstMeta(
-            debugName: "create_bus",
-            argNames: ["name"],
-        );
-        
-
-@override Future<UiClip> crateApiTrackCreateClip({int? sourceId , required UiSourceType sourceType , required int trackId , required int startTime })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_box_autoadd_u_32(sourceId, serializer);
-sse_encode_ui_source_type(sourceType, serializer);
-sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(startTime, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClip> crateApiTrackCreateClip({
+    int? sourceId,
+    required UiSourceType sourceType,
+    required int trackId,
+    required int startTime,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_box_autoadd_u_32(sourceId, serializer);
+          sse_encode_ui_source_type(sourceType, serializer);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(startTime, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackCreateClipConstMeta,
-            argValues: [sourceId, sourceType, trackId, startTime],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackCreateClipConstMeta,
+        argValues: [sourceId, sourceType, trackId, startTime],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackCreateClipConstMeta => const TaskConstMeta(
+    debugName: "create_clip",
+    argNames: ["sourceId", "sourceType", "trackId", "startTime"],
+  );
 
-        TaskConstMeta get kCrateApiTrackCreateClipConstMeta => const TaskConstMeta(
-            debugName: "create_clip",
-            argNames: ["sourceId", "sourceType", "trackId", "startTime"],
-        );
-        
+  @override
+  Stream<UiMixerParamEvent> crateApiMixerCreateMixerEventStream() {
+    final sink = RustStreamSink<UiMixerParamEvent>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_StreamSink_ui_mixer_param_event_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 17,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_String,
+          ),
+          constMeta: kCrateApiMixerCreateMixerEventStreamConstMeta,
+          argValues: [sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
 
-@override Stream<UiMixerParamEvent> crateApiMixerCreateMixerEventStream()  { 
-            final sink = RustStreamSink<UiMixerParamEvent>();
-            unawaited(handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_StreamSink_ui_mixer_param_event_Sse(sink, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerCreateMixerEventStreamConstMeta,
-            argValues: [sink],
-            apiImpl: this,
-        )));
-            return sink.stream;
-             }
+  TaskConstMeta get kCrateApiMixerCreateMixerEventStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_mixer_event_stream",
+        argNames: ["sink"],
+      );
 
+  @override
+  Stream<UiTransportFeedback> crateApiAudioCreatePositionStream() {
+    final sink = RustStreamSink<UiTransportFeedback>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_StreamSink_ui_transport_feedback_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 18,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_String,
+          ),
+          constMeta: kCrateApiAudioCreatePositionStreamConstMeta,
+          argValues: [sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
 
-        TaskConstMeta get kCrateApiMixerCreateMixerEventStreamConstMeta => const TaskConstMeta(
-            debugName: "create_mixer_event_stream",
-            argNames: ["sink"],
-        );
-        
+  TaskConstMeta get kCrateApiAudioCreatePositionStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_position_stream",
+        argNames: ["sink"],
+      );
 
-@override Stream<UiTransportFeedback> crateApiAudioCreatePositionStream()  { 
-            final sink = RustStreamSink<UiTransportFeedback>();
-            unawaited(handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_StreamSink_ui_transport_feedback_Sse(sink, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiAudioCreatePositionStreamConstMeta,
-            argValues: [sink],
-            apiImpl: this,
-        )));
-            return sink.stream;
-             }
-
-
-        TaskConstMeta get kCrateApiAudioCreatePositionStreamConstMeta => const TaskConstMeta(
-            debugName: "create_position_stream",
-            argNames: ["sink"],
-        );
-        
-
-@override Future<List<UiClip>> crateApiTrackCutClip({required int sourceTrackId , required int clipId , required int cutPoint })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(sourceTrackId, serializer);
-sse_encode_u_32(clipId, serializer);
-sse_encode_CastedPrimitive_u_64(cutPoint, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiClip>> crateApiTrackCutClip({
+    required int sourceTrackId,
+    required int clipId,
+    required int cutPoint,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(sourceTrackId, serializer);
+          sse_encode_u_32(clipId, serializer);
+          sse_encode_CastedPrimitive_u_64(cutPoint, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackCutClipConstMeta,
-            argValues: [sourceTrackId, clipId, cutPoint],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackCutClipConstMeta,
+        argValues: [sourceTrackId, clipId, cutPoint],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackCutClipConstMeta => const TaskConstMeta(
+    debugName: "cut_clip",
+    argNames: ["sourceTrackId", "clipId", "cutPoint"],
+  );
 
-        TaskConstMeta get kCrateApiTrackCutClipConstMeta => const TaskConstMeta(
-            debugName: "cut_clip",
-            argNames: ["sourceTrackId", "clipId", "cutPoint"],
-        );
-        
-
-@override Future<void> crateApiSessionCutClips({required int trackId , required List<int> clipIds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_list_prim_u_32_loose(clipIds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionCutClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_list_prim_u_32_loose(clipIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionCutClipsConstMeta,
-            argValues: [trackId, clipIds],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionCutClipsConstMeta,
+        argValues: [trackId, clipIds],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionCutClipsConstMeta => const TaskConstMeta(
+    debugName: "cut_clips",
+    argNames: ["trackId", "clipIds"],
+  );
 
-        TaskConstMeta get kCrateApiSessionCutClipsConstMeta => const TaskConstMeta(
-            debugName: "cut_clips",
-            argNames: ["trackId", "clipIds"],
-        );
-        
-
-@override Future<void> crateApiSessionCutPatternNotes({required int patternId , required List<int> noteIds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_list_prim_u_32_loose(noteIds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionCutPatternNotes({
+    required int patternId,
+    required List<int> noteIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_list_prim_u_32_loose(noteIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 21,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionCutPatternNotesConstMeta,
-            argValues: [patternId, noteIds],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionCutPatternNotesConstMeta,
+        argValues: [patternId, noteIds],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionCutPatternNotesConstMeta =>
+      const TaskConstMeta(
+        debugName: "cut_pattern_notes",
+        argNames: ["patternId", "noteIds"],
+      );
 
-        TaskConstMeta get kCrateApiSessionCutPatternNotesConstMeta => const TaskConstMeta(
-            debugName: "cut_pattern_notes",
-            argNames: ["patternId", "noteIds"],
-        );
-        
-
-@override Future<void> crateApiMixerDeleteBus({required int busId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(busId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerDeleteBus({required int busId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(busId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 22,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerDeleteBusConstMeta,
-            argValues: [busId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerDeleteBusConstMeta,
+        argValues: [busId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerDeleteBusConstMeta =>
+      const TaskConstMeta(debugName: "delete_bus", argNames: ["busId"]);
 
-        TaskConstMeta get kCrateApiMixerDeleteBusConstMeta => const TaskConstMeta(
-            debugName: "delete_bus",
-            argNames: ["busId"],
-        );
-        
-
-@override Future<void> crateApiTrackDeleteClip({required int trackId , required int clipId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(clipId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTrackDeleteClip({
+    required int trackId,
+    required int clipId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(clipId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackDeleteClipConstMeta,
-            argValues: [trackId, clipId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackDeleteClipConstMeta,
+        argValues: [trackId, clipId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackDeleteClipConstMeta => const TaskConstMeta(
+    debugName: "delete_clip",
+    argNames: ["trackId", "clipId"],
+  );
 
-        TaskConstMeta get kCrateApiTrackDeleteClipConstMeta => const TaskConstMeta(
-            debugName: "delete_clip",
-            argNames: ["trackId", "clipId"],
-        );
-        
-
-@override Future<void> crateApiTrackDeleteClipBatch({required int trackId , required List<int> clipIds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_list_prim_u_32_loose(clipIds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTrackDeleteClipBatch({
+    required int trackId,
+    required List<int> clipIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_list_prim_u_32_loose(clipIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackDeleteClipBatchConstMeta,
-            argValues: [trackId, clipIds],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackDeleteClipBatchConstMeta,
+        argValues: [trackId, clipIds],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackDeleteClipBatchConstMeta =>
+      const TaskConstMeta(
+        debugName: "delete_clip_batch",
+        argNames: ["trackId", "clipIds"],
+      );
 
-        TaskConstMeta get kCrateApiTrackDeleteClipBatchConstMeta => const TaskConstMeta(
-            debugName: "delete_clip_batch",
-            argNames: ["trackId", "clipIds"],
-        );
-        
-
-@override Future<void> crateApiSessionDeleteClips({required int trackId , required List<int> clipIds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_list_prim_u_32_loose(clipIds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionDeleteClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_list_prim_u_32_loose(clipIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 25,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionDeleteClipsConstMeta,
-            argValues: [trackId, clipIds],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionDeleteClipsConstMeta,
+        argValues: [trackId, clipIds],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionDeleteClipsConstMeta => const TaskConstMeta(
+    debugName: "delete_clips",
+    argNames: ["trackId", "clipIds"],
+  );
 
-        TaskConstMeta get kCrateApiSessionDeleteClipsConstMeta => const TaskConstMeta(
-            debugName: "delete_clips",
-            argNames: ["trackId", "clipIds"],
-        );
-        
-
-@override Future<UiNote> crateApiPatternDeleteNote({required int patternId , required int noteId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_u_32(noteId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiNote> crateApiPatternDeleteNote({
+    required int patternId,
+    required int noteId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(noteId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 26,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_note,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternDeleteNoteConstMeta,
-            argValues: [patternId, noteId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternDeleteNoteConstMeta,
+        argValues: [patternId, noteId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternDeleteNoteConstMeta => const TaskConstMeta(
+    debugName: "delete_note",
+    argNames: ["patternId", "noteId"],
+  );
 
-        TaskConstMeta get kCrateApiPatternDeleteNoteConstMeta => const TaskConstMeta(
-            debugName: "delete_note",
-            argNames: ["patternId", "noteId"],
-        );
-        
-
-@override Future<void> crateApiSessionDeletePatternNotes({required int patternId , required List<int> noteIds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_list_prim_u_32_loose(noteIds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionDeletePatternNotes({
+    required int patternId,
+    required List<int> noteIds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_list_prim_u_32_loose(noteIds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 27,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionDeletePatternNotesConstMeta,
-            argValues: [patternId, noteIds],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionDeletePatternNotesConstMeta,
+        argValues: [patternId, noteIds],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionDeletePatternNotesConstMeta =>
+      const TaskConstMeta(
+        debugName: "delete_pattern_notes",
+        argNames: ["patternId", "noteIds"],
+      );
 
-        TaskConstMeta get kCrateApiSessionDeletePatternNotesConstMeta => const TaskConstMeta(
-            debugName: "delete_pattern_notes",
-            argNames: ["patternId", "noteIds"],
-        );
-        
-
-@override Future<String> crateApiPluginExecuteEffectInstanceCommand({required UiEffectTarget target , required int effectId , required String command , required String payloadJson })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_ui_effect_target(target, serializer);
-sse_encode_u_32(effectId, serializer);
-sse_encode_String(command, serializer);
-sse_encode_String(payloadJson, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<String> crateApiPluginExecuteEffectInstanceCommand({
+    required UiEffectTarget target,
+    required int effectId,
+    required String command,
+    required String payloadJson,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_effect_target(target, serializer);
+          sse_encode_u_32(effectId, serializer);
+          sse_encode_String(command, serializer);
+          sse_encode_String(payloadJson, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginExecuteEffectInstanceCommandConstMeta,
-            argValues: [target, effectId, command, payloadJson],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginExecuteEffectInstanceCommandConstMeta,
+        argValues: [target, effectId, command, payloadJson],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginExecuteEffectInstanceCommandConstMeta =>
+      const TaskConstMeta(
+        debugName: "execute_effect_instance_command",
+        argNames: ["target", "effectId", "command", "payloadJson"],
+      );
 
-        TaskConstMeta get kCrateApiPluginExecuteEffectInstanceCommandConstMeta => const TaskConstMeta(
-            debugName: "execute_effect_instance_command",
-            argNames: ["target", "effectId", "command", "payloadJson"],
-        );
-        
-
-@override Future<String> crateApiPluginExecuteGeneratorInstanceCommand({required int generatorId , required String command , required String payloadJson })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(generatorId, serializer);
-sse_encode_String(command, serializer);
-sse_encode_String(payloadJson, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<String> crateApiPluginExecuteGeneratorInstanceCommand({
+    required int generatorId,
+    required String command,
+    required String payloadJson,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          sse_encode_String(command, serializer);
+          sse_encode_String(payloadJson, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginExecuteGeneratorInstanceCommandConstMeta,
-            argValues: [generatorId, command, payloadJson],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginExecuteGeneratorInstanceCommandConstMeta,
+        argValues: [generatorId, command, payloadJson],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginExecuteGeneratorInstanceCommandConstMeta =>
+      const TaskConstMeta(
+        debugName: "execute_generator_instance_command",
+        argNames: ["generatorId", "command", "payloadJson"],
+      );
 
-        TaskConstMeta get kCrateApiPluginExecuteGeneratorInstanceCommandConstMeta => const TaskConstMeta(
-            debugName: "execute_generator_instance_command",
-            argNames: ["generatorId", "command", "payloadJson"],
-        );
-        
-
-@override Future<String?> crateApiPluginExecutePluginCommandEffect({required int effectRegistryId , required String command , required String payloadJson })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(effectRegistryId, serializer);
-sse_encode_String(command, serializer);
-sse_encode_String(payloadJson, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<String?> crateApiPluginExecutePluginCommandEffect({
+    required int effectRegistryId,
+    required String command,
+    required String payloadJson,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(effectRegistryId, serializer);
+          sse_encode_String(command, serializer);
+          sse_encode_String(payloadJson, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 30,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiPluginExecutePluginCommandEffectConstMeta,
-            argValues: [effectRegistryId, command, payloadJson],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginExecutePluginCommandEffectConstMeta,
+        argValues: [effectRegistryId, command, payloadJson],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginExecutePluginCommandEffectConstMeta =>
+      const TaskConstMeta(
+        debugName: "execute_plugin_command_effect",
+        argNames: ["effectRegistryId", "command", "payloadJson"],
+      );
 
-        TaskConstMeta get kCrateApiPluginExecutePluginCommandEffectConstMeta => const TaskConstMeta(
-            debugName: "execute_plugin_command_effect",
-            argNames: ["effectRegistryId", "command", "payloadJson"],
-        );
-        
-
-@override Future<String?> crateApiPluginExecutePluginCommandGenerator({required int genRegistryId , required String command , required String payloadJson })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(genRegistryId, serializer);
-sse_encode_String(command, serializer);
-sse_encode_String(payloadJson, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<String?> crateApiPluginExecutePluginCommandGenerator({
+    required int genRegistryId,
+    required String command,
+    required String payloadJson,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(genRegistryId, serializer);
+          sse_encode_String(command, serializer);
+          sse_encode_String(payloadJson, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 31,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiPluginExecutePluginCommandGeneratorConstMeta,
-            argValues: [genRegistryId, command, payloadJson],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginExecutePluginCommandGeneratorConstMeta,
+        argValues: [genRegistryId, command, payloadJson],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginExecutePluginCommandGeneratorConstMeta =>
+      const TaskConstMeta(
+        debugName: "execute_plugin_command_generator",
+        argNames: ["genRegistryId", "command", "payloadJson"],
+      );
 
-        TaskConstMeta get kCrateApiPluginExecutePluginCommandGeneratorConstMeta => const TaskConstMeta(
-            debugName: "execute_plugin_command_generator",
-            argNames: ["genRegistryId", "command", "payloadJson"],
-        );
-        
-
-@override Stream<double> crateApiProjectExportProjectFlutter({required String outputPath , required int sampleRate , required int bitPerSample })  { 
-            final progressSink = RustStreamSink<double>();
-            unawaited(handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(outputPath, serializer);
-sse_encode_u_32(sampleRate, serializer);
-sse_encode_u_16(bitPerSample, serializer);
-sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiProjectExportProjectFlutterConstMeta,
-            argValues: [outputPath, sampleRate, bitPerSample, progressSink],
-            apiImpl: this,
-        )));
-            return progressSink.stream;
-             }
-
-
-        TaskConstMeta get kCrateApiProjectExportProjectFlutterConstMeta => const TaskConstMeta(
-            debugName: "export_project_flutter",
-            argNames: ["outputPath", "sampleRate", "bitPerSample", "progressSink"],
-        );
-        
-
-@override Future<UiAudioHardwareConfig> crateApiAudioGetAudioConfig()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
+  @override
+  Stream<double> crateApiProjectExportProjectFlutter({
+    required String outputPath,
+    required int sampleRate,
+    required int bitPerSample,
+  }) {
+    final progressSink = RustStreamSink<double>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
             final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+            sse_encode_String(outputPath, serializer);
+            sse_encode_u_32(sampleRate, serializer);
+            sse_encode_u_16(bitPerSample, serializer);
+            sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 32,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_String,
+          ),
+          constMeta: kCrateApiProjectExportProjectFlutterConstMeta,
+          argValues: [outputPath, sampleRate, bitPerSample, progressSink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return progressSink.stream;
+  }
+
+  TaskConstMeta get kCrateApiProjectExportProjectFlutterConstMeta =>
+      const TaskConstMeta(
+        debugName: "export_project_flutter",
+        argNames: ["outputPath", "sampleRate", "bitPerSample", "progressSink"],
+      );
+
+  @override
+  Future<UiAudioHardwareConfig> crateApiAudioGetAudioConfig() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 33,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_audio_hardware_config,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiAudioGetAudioConfigConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiAudioGetAudioConfigConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiAudioGetAudioConfigConstMeta =>
+      const TaskConstMeta(debugName: "get_audio_config", argNames: []);
 
-        TaskConstMeta get kCrateApiAudioGetAudioConfigConstMeta => const TaskConstMeta(
-            debugName: "get_audio_config",
-            argNames: [],
-        );
-        
-
-@override Future<AudioWaveformUiForAudioProperties?> crateApiAudioGetAudioProperties({required int id })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(id, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties,
+  @override
+  Future<AudioWaveformUiForAudioProperties?> crateApiAudioGetAudioProperties({
+    required int id,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 34,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiAudioGetAudioPropertiesConstMeta,
-            argValues: [id],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiAudioGetAudioPropertiesConstMeta,
+        argValues: [id],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiAudioGetAudioPropertiesConstMeta =>
+      const TaskConstMeta(debugName: "get_audio_properties", argNames: ["id"]);
 
-        TaskConstMeta get kCrateApiAudioGetAudioPropertiesConstMeta => const TaskConstMeta(
-            debugName: "get_audio_properties",
-            argNames: ["id"],
-        );
-        
-
-@override Future<Map<int, AudioWaveformUiForSourceList>?> crateApiProjectGetAudioSourceList()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None,
+  @override
+  Future<Map<int, AudioWaveformUiForSourceList>?>
+  crateApiProjectGetAudioSourceList() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 35,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectGetAudioSourceListConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectGetAudioSourceListConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectGetAudioSourceListConstMeta =>
+      const TaskConstMeta(debugName: "get_audio_source_list", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectGetAudioSourceListConstMeta => const TaskConstMeta(
-            debugName: "get_audio_source_list",
-            argNames: [],
-        );
-        
-
-@override Future<Map<int, AudioWaveformUiForClip>> crateApiTrackGetAudioWaveformClipsData()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
+  @override
+  Future<Map<int, AudioWaveformUiForClip>>
+  crateApiTrackGetAudioWaveformClipsData() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 36,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackGetAudioWaveformClipsDataConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackGetAudioWaveformClipsDataConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackGetAudioWaveformClipsDataConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_audio_waveform_clips_data",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiTrackGetAudioWaveformClipsDataConstMeta => const TaskConstMeta(
-            debugName: "get_audio_waveform_clips_data",
-            argNames: [],
-        );
-        
-
-@override Future<AudioWaveformUiForClip> crateApiTrackGetAudioWaveformForClip({required int audioSourceId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(audioSourceId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<AudioWaveformUiForClip> crateApiTrackGetAudioWaveformForClip({
+    required int audioSourceId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(audioSourceId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 37,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_audio_waveform_ui_for_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackGetAudioWaveformForClipConstMeta,
-            argValues: [audioSourceId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackGetAudioWaveformForClipConstMeta,
+        argValues: [audioSourceId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackGetAudioWaveformForClipConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_audio_waveform_for_clip",
+        argNames: ["audioSourceId"],
+      );
 
-        TaskConstMeta get kCrateApiTrackGetAudioWaveformForClipConstMeta => const TaskConstMeta(
-            debugName: "get_audio_waveform_for_clip",
-            argNames: ["audioSourceId"],
-        );
-        
-
-@override Future<Map<int, AudioWaveformUiForClip>> crateApiTrackGetAudioWaveformForClipAllAvailableInTracks()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
+  @override
+  Future<Map<int, AudioWaveformUiForClip>>
+  crateApiTrackGetAudioWaveformForClipAllAvailableInTracks() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 38,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackGetAudioWaveformForClipAllAvailableInTracksConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta:
+            kCrateApiTrackGetAudioWaveformForClipAllAvailableInTracksConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta
+  get kCrateApiTrackGetAudioWaveformForClipAllAvailableInTracksConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_audio_waveform_for_clip_all_available_in_tracks",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiTrackGetAudioWaveformForClipAllAvailableInTracksConstMeta => const TaskConstMeta(
-            debugName: "get_audio_waveform_for_clip_all_available_in_tracks",
-            argNames: [],
-        );
-        
-
-@override Future<Map<int, AudioWaveformUiForClip>> crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack({required int trackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
+  @override
+  Future<Map<int, AudioWaveformUiForClip>>
+  crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack({
+    required int trackId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 39,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackGetAudioWaveformForClipOnlyInSpecificTrackConstMeta,
-            argValues: [trackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta:
+            kCrateApiTrackGetAudioWaveformForClipOnlyInSpecificTrackConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta
+  get kCrateApiTrackGetAudioWaveformForClipOnlyInSpecificTrackConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_audio_waveform_for_clip_only_in_specific_track",
+        argNames: ["trackId"],
+      );
 
-        TaskConstMeta get kCrateApiTrackGetAudioWaveformForClipOnlyInSpecificTrackConstMeta => const TaskConstMeta(
-            debugName: "get_audio_waveform_for_clip_only_in_specific_track",
-            argNames: ["trackId"],
-        );
-        
-
-@override Future<List<UiPluginInfo>> crateApiPluginGetAvailableEffectsWithIds()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiPluginInfo>> crateApiPluginGetAvailableEffectsWithIds() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 40,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_plugin_info,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetAvailableEffectsWithIdsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetAvailableEffectsWithIdsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetAvailableEffectsWithIdsConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_available_effects_with_ids",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiPluginGetAvailableEffectsWithIdsConstMeta => const TaskConstMeta(
-            debugName: "get_available_effects_with_ids",
-            argNames: [],
-        );
-        
-
-@override Future<List<UiPluginInfo>> crateApiPluginGetAvailableGeneratorsWithIds()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiPluginInfo>> crateApiPluginGetAvailableGeneratorsWithIds() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 41,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_plugin_info,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetAvailableGeneratorsWithIdsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetAvailableGeneratorsWithIdsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetAvailableGeneratorsWithIdsConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_available_generators_with_ids",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiPluginGetAvailableGeneratorsWithIdsConstMeta => const TaskConstMeta(
-            debugName: "get_available_generators_with_ids",
-            argNames: [],
-        );
-        
-
-@override Future<List<ParameterSpecDTO>?> crateApiMixerGetBusMixerChannelSpecs({required int busId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(busId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<ParameterSpecDTO>?> crateApiMixerGetBusMixerChannelSpecs({
+    required int busId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(busId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 42,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_opt_list_parameter_spec_dto,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetBusMixerChannelSpecsConstMeta,
-            argValues: [busId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetBusMixerChannelSpecsConstMeta,
+        argValues: [busId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetBusMixerChannelSpecsConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_bus_mixer_channel_specs",
+        argNames: ["busId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerGetBusMixerChannelSpecsConstMeta => const TaskConstMeta(
-            debugName: "get_bus_mixer_channel_specs",
-            argNames: ["busId"],
-        );
-        
-
-@override Future<Map<int, UiBus>> crateApiMixerGetBuses()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<Map<int, UiBus>> crateApiMixerGetBuses() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 43,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_Map_u_32_ui_bus_None,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetBusesConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetBusesConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetBusesConstMeta =>
+      const TaskConstMeta(debugName: "get_buses", argNames: []);
 
-        TaskConstMeta get kCrateApiMixerGetBusesConstMeta => const TaskConstMeta(
-            debugName: "get_buses",
-            argNames: [],
-        );
-        
-
-@override Future<UiClip> crateApiTrackGetClip({required int trackId , required int clipId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(clipId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClip> crateApiTrackGetClip({
+    required int trackId,
+    required int clipId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(clipId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 44,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackGetClipConstMeta,
-            argValues: [trackId, clipId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackGetClipConstMeta,
+        argValues: [trackId, clipId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackGetClipConstMeta => const TaskConstMeta(
+    debugName: "get_clip",
+    argNames: ["trackId", "clipId"],
+  );
 
-        TaskConstMeta get kCrateApiTrackGetClipConstMeta => const TaskConstMeta(
-            debugName: "get_clip",
-            argNames: ["trackId", "clipId"],
-        );
-        
-
-@override Future<UiClipboardContent> crateApiSessionGetClipboardContents()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 45, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClipboardContent> crateApiSessionGetClipboardContents() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 45,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clipboard_content,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSessionGetClipboardContentsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionGetClipboardContentsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionGetClipboardContentsConstMeta =>
+      const TaskConstMeta(debugName: "get_clipboard_contents", argNames: []);
 
-        TaskConstMeta get kCrateApiSessionGetClipboardContentsConstMeta => const TaskConstMeta(
-            debugName: "get_clipboard_contents",
-            argNames: [],
-        );
-        
-
-@override Future<UiEffectInstance> crateApiPluginGetEffect({required int trackId , required int effectId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(effectId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiEffectInstance> crateApiPluginGetEffect({
+    required int trackId,
+    required int effectId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(effectId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 46,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_effect_instance,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetEffectConstMeta,
-            argValues: [trackId, effectId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetEffectConstMeta,
+        argValues: [trackId, effectId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetEffectConstMeta => const TaskConstMeta(
+    debugName: "get_effect",
+    argNames: ["trackId", "effectId"],
+  );
 
-        TaskConstMeta get kCrateApiPluginGetEffectConstMeta => const TaskConstMeta(
-            debugName: "get_effect",
-            argNames: ["trackId", "effectId"],
-        );
-        
-
-@override Future<UiEffectInstance> crateApiPluginGetEffectFromMaster({required int effectId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(effectId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiEffectInstance> crateApiPluginGetEffectFromMaster({
+    required int effectId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(effectId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 47,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_effect_instance,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetEffectFromMasterConstMeta,
-            argValues: [effectId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetEffectFromMasterConstMeta,
+        argValues: [effectId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetEffectFromMasterConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_effect_from_master",
+        argNames: ["effectId"],
+      );
 
-        TaskConstMeta get kCrateApiPluginGetEffectFromMasterConstMeta => const TaskConstMeta(
-            debugName: "get_effect_from_master",
-            argNames: ["effectId"],
-        );
-        
-
-@override Future<List<UiPluginParameter>> crateApiPluginGetEffectParameterSpecs({required UiEffectTarget target , required int effectId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_ui_effect_target(target, serializer);
-sse_encode_u_32(effectId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiPluginParameter>> crateApiPluginGetEffectParameterSpecs({
+    required UiEffectTarget target,
+    required int effectId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_effect_target(target, serializer);
+          sse_encode_u_32(effectId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 48,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_plugin_parameter,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetEffectParameterSpecsConstMeta,
-            argValues: [target, effectId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetEffectParameterSpecsConstMeta,
+        argValues: [target, effectId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetEffectParameterSpecsConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_effect_parameter_specs",
+        argNames: ["target", "effectId"],
+      );
 
-        TaskConstMeta get kCrateApiPluginGetEffectParameterSpecsConstMeta => const TaskConstMeta(
-            debugName: "get_effect_parameter_specs",
-            argNames: ["target", "effectId"],
-        );
-        
-
-@override Future<List<UiEffectInstance>> crateApiPluginGetEffectsFromTrack({required int trackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiEffectInstance>> crateApiPluginGetEffectsFromTrack({
+    required int trackId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 49,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_effect_instance,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetEffectsFromTrackConstMeta,
-            argValues: [trackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetEffectsFromTrackConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetEffectsFromTrackConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_effects_from_track",
+        argNames: ["trackId"],
+      );
 
-        TaskConstMeta get kCrateApiPluginGetEffectsFromTrackConstMeta => const TaskConstMeta(
-            debugName: "get_effects_from_track",
-            argNames: ["trackId"],
-        );
-        
-
-@override Future<List<UiResponseCurvePoint>> crateApiPluginsEqGetEqResponseCurve({required UiEffectTarget target , required int effectId , required int numPoints })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_ui_effect_target(target, serializer);
-sse_encode_u_32(effectId, serializer);
-sse_encode_u_32(numPoints, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiResponseCurvePoint>> crateApiPluginsEqGetEqResponseCurve({
+    required UiEffectTarget target,
+    required int effectId,
+    required int numPoints,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_effect_target(target, serializer);
+          sse_encode_u_32(effectId, serializer);
+          sse_encode_u_32(numPoints, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 50,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_response_curve_point,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginsEqGetEqResponseCurveConstMeta,
-            argValues: [target, effectId, numPoints],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginsEqGetEqResponseCurveConstMeta,
+        argValues: [target, effectId, numPoints],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginsEqGetEqResponseCurveConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_eq_response_curve",
+        argNames: ["target", "effectId", "numPoints"],
+      );
 
-        TaskConstMeta get kCrateApiPluginsEqGetEqResponseCurveConstMeta => const TaskConstMeta(
-            debugName: "get_eq_response_curve",
-            argNames: ["target", "effectId", "numPoints"],
-        );
-        
-
-@override Future<UiGeneratorInstance> crateApiPluginGetGenerator({required int generatorId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(generatorId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiGeneratorInstance> crateApiPluginGetGenerator({
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 51,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_generator_instance,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetGeneratorConstMeta,
-            argValues: [generatorId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetGeneratorConstMeta,
+        argValues: [generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetGeneratorConstMeta => const TaskConstMeta(
+    debugName: "get_generator",
+    argNames: ["generatorId"],
+  );
 
-        TaskConstMeta get kCrateApiPluginGetGeneratorConstMeta => const TaskConstMeta(
-            debugName: "get_generator",
-            argNames: ["generatorId"],
-        );
-        
-
-@override Future<Map<int, UiGeneratorInstance>> crateApiProjectGetGeneratorList()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<Map<int, UiGeneratorInstance>> crateApiProjectGetGeneratorList() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 52,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_Map_u_32_ui_generator_instance_None,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiProjectGetGeneratorListConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectGetGeneratorListConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectGetGeneratorListConstMeta =>
+      const TaskConstMeta(debugName: "get_generator_list", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectGetGeneratorListConstMeta => const TaskConstMeta(
-            debugName: "get_generator_list",
-            argNames: [],
-        );
-        
-
-@override Future<double> crateApiPluginGetGeneratorParameter({required int generatorId , required int paramId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(generatorId, serializer);
-sse_encode_u_32(paramId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<double> crateApiPluginGetGeneratorParameter({
+    required int generatorId,
+    required int paramId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          sse_encode_u_32(paramId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 53,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_f_32,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetGeneratorParameterConstMeta,
-            argValues: [generatorId, paramId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetGeneratorParameterConstMeta,
+        argValues: [generatorId, paramId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetGeneratorParameterConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_generator_parameter",
+        argNames: ["generatorId", "paramId"],
+      );
 
-        TaskConstMeta get kCrateApiPluginGetGeneratorParameterConstMeta => const TaskConstMeta(
-            debugName: "get_generator_parameter",
-            argNames: ["generatorId", "paramId"],
-        );
-        
-
-@override Future<List<UiPluginParameter>> crateApiPluginGetGeneratorParameterSpecs({required int generatorId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(generatorId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiPluginParameter>> crateApiPluginGetGeneratorParameterSpecs({
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 54,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_plugin_parameter,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginGetGeneratorParameterSpecsConstMeta,
-            argValues: [generatorId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetGeneratorParameterSpecsConstMeta,
+        argValues: [generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetGeneratorParameterSpecsConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_generator_parameter_specs",
+        argNames: ["generatorId"],
+      );
 
-        TaskConstMeta get kCrateApiPluginGetGeneratorParameterSpecsConstMeta => const TaskConstMeta(
-            debugName: "get_generator_parameter_specs",
-            argNames: ["generatorId"],
-        );
-        
-
-@override Future<UiMixerChannel> crateApiMixerGetMasterBus()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiMixerChannel> crateApiMixerGetMasterBus() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 55,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_mixer_channel,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetMasterBusConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetMasterBusConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetMasterBusConstMeta =>
+      const TaskConstMeta(debugName: "get_master_bus", argNames: []);
 
-        TaskConstMeta get kCrateApiMixerGetMasterBusConstMeta => const TaskConstMeta(
-            debugName: "get_master_bus",
-            argNames: [],
-        );
-        
-
-@override Future<List<UiEffectInstance>> crateApiMixerGetMasterBusPopulated()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 56, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiEffectInstance>> crateApiMixerGetMasterBusPopulated() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 56,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_effect_instance,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetMasterBusPopulatedConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetMasterBusPopulatedConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetMasterBusPopulatedConstMeta =>
+      const TaskConstMeta(debugName: "get_master_bus_populated", argNames: []);
 
-        TaskConstMeta get kCrateApiMixerGetMasterBusPopulatedConstMeta => const TaskConstMeta(
-            debugName: "get_master_bus_populated",
-            argNames: [],
-        );
-        
-
-@override Future<List<ParameterSpecDTO>> crateApiMixerGetMasterChannelSpecs()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 57, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<ParameterSpecDTO>> crateApiMixerGetMasterChannelSpecs() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 57,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_parameter_spec_dto,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetMasterChannelSpecsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetMasterChannelSpecsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetMasterChannelSpecsConstMeta =>
+      const TaskConstMeta(debugName: "get_master_channel_specs", argNames: []);
 
-        TaskConstMeta get kCrateApiMixerGetMasterChannelSpecsConstMeta => const TaskConstMeta(
-            debugName: "get_master_channel_specs",
-            argNames: [],
-        );
-        
-
-@override Future<List<UiEffectInstance>> crateApiPluginGetMasterEffects()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiEffectInstance>> crateApiPluginGetMasterEffects() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 58,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_effect_instance,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiPluginGetMasterEffectsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginGetMasterEffectsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginGetMasterEffectsConstMeta =>
+      const TaskConstMeta(debugName: "get_master_effects", argNames: []);
 
-        TaskConstMeta get kCrateApiPluginGetMasterEffectsConstMeta => const TaskConstMeta(
-            debugName: "get_master_effects",
-            argNames: [],
-        );
-        
-
-@override Future<int> crateApiProjectGetMaxSampleIndex()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<int> crateApiProjectGetMaxSampleIndex() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 59,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiProjectGetMaxSampleIndexConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectGetMaxSampleIndexConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectGetMaxSampleIndexConstMeta =>
+      const TaskConstMeta(debugName: "get_max_sample_index", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectGetMaxSampleIndexConstMeta => const TaskConstMeta(
-            debugName: "get_max_sample_index",
-            argNames: [],
-        );
-        
-
-@override Future<UiMixerChannel> crateApiMixerGetMixerChannel({required int trackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 60, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiMixerChannel> crateApiMixerGetMixerChannel({required int trackId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 60,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_mixer_channel,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerGetMixerChannelConstMeta,
-            argValues: [trackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetMixerChannelConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetMixerChannelConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_mixer_channel",
+        argNames: ["trackId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerGetMixerChannelConstMeta => const TaskConstMeta(
-            debugName: "get_mixer_channel",
-            argNames: ["trackId"],
-        );
-        
-
-@override Future<(UiMixerChannel,List<UiEffectInstance>)> crateApiMixerGetMixerChannelPopulated({required int trackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_record_ui_mixer_channel_list_ui_effect_instance,
+  @override
+  Future<(UiMixerChannel, List<UiEffectInstance>)>
+  crateApiMixerGetMixerChannelPopulated({required int trackId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 61,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_record_ui_mixer_channel_list_ui_effect_instance,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerGetMixerChannelPopulatedConstMeta,
-            argValues: [trackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetMixerChannelPopulatedConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetMixerChannelPopulatedConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_mixer_channel_populated",
+        argNames: ["trackId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerGetMixerChannelPopulatedConstMeta => const TaskConstMeta(
-            debugName: "get_mixer_channel_populated",
-            argNames: ["trackId"],
-        );
-        
-
-@override Future<UiMixerState> crateApiMixerGetMixerState()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 62, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiMixerState> crateApiMixerGetMixerState() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 62,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_mixer_state,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetMixerStateConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetMixerStateConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetMixerStateConstMeta =>
+      const TaskConstMeta(debugName: "get_mixer_state", argNames: []);
 
-        TaskConstMeta get kCrateApiMixerGetMixerStateConstMeta => const TaskConstMeta(
-            debugName: "get_mixer_state",
-            argNames: [],
-        );
-        
-
-@override Future<UiPattern> crateApiPatternGetPattern({required int patternId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 63, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiPattern> crateApiPatternGetPattern({required int patternId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 63,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_pattern,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternGetPatternConstMeta,
-            argValues: [patternId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternGetPatternConstMeta,
+        argValues: [patternId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternGetPatternConstMeta =>
+      const TaskConstMeta(debugName: "get_pattern", argNames: ["patternId"]);
 
-        TaskConstMeta get kCrateApiPatternGetPatternConstMeta => const TaskConstMeta(
-            debugName: "get_pattern",
-            argNames: ["patternId"],
-        );
-        
-
-@override Future<Map<int, UiPattern>> crateApiPatternGetPatterns()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<Map<int, UiPattern>> crateApiPatternGetPatterns() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 64,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_Map_u_32_ui_pattern_None,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternGetPatternsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternGetPatternsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternGetPatternsConstMeta =>
+      const TaskConstMeta(debugName: "get_patterns", argNames: []);
 
-        TaskConstMeta get kCrateApiPatternGetPatternsConstMeta => const TaskConstMeta(
-            debugName: "get_patterns",
-            argNames: [],
-        );
-        
-
-@override Future<UiProjectMetadata> crateApiProjectGetProjectMetadata()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 65, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiProjectMetadata> crateApiProjectGetProjectMetadata() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 65,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_project_metadata,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiProjectGetProjectMetadataConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectGetProjectMetadataConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectGetProjectMetadataConstMeta =>
+      const TaskConstMeta(debugName: "get_project_metadata", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectGetProjectMetadataConstMeta => const TaskConstMeta(
-            debugName: "get_project_metadata",
-            argNames: [],
-        );
-        
-
-@override Future<List<UiRoutingConnection>> crateApiMixerGetRoutingMatrix()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 66, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiRoutingConnection>> crateApiMixerGetRoutingMatrix() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 66,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_routing_connection,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetRoutingMatrixConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetRoutingMatrixConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetRoutingMatrixConstMeta =>
+      const TaskConstMeta(debugName: "get_routing_matrix", argNames: []);
 
-        TaskConstMeta get kCrateApiMixerGetRoutingMatrixConstMeta => const TaskConstMeta(
-            debugName: "get_routing_matrix",
-            argNames: [],
-        );
-        
-
-@override Future<UiTrack> crateApiTrackGetTrack({required int trackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 67, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiTrack> crateApiTrackGetTrack({required int trackId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 67,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_track,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackGetTrackConstMeta,
-            argValues: [trackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackGetTrackConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackGetTrackConstMeta =>
+      const TaskConstMeta(debugName: "get_track", argNames: ["trackId"]);
 
-        TaskConstMeta get kCrateApiTrackGetTrackConstMeta => const TaskConstMeta(
-            debugName: "get_track",
-            argNames: ["trackId"],
-        );
-        
-
-@override Future<List<ParameterSpecDTO>?> crateApiMixerGetTrackMixerChannelSpecs({required int trackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 68, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<ParameterSpecDTO>?> crateApiMixerGetTrackMixerChannelSpecs({
+    required int trackId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 68,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_opt_list_parameter_spec_dto,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerGetTrackMixerChannelSpecsConstMeta,
-            argValues: [trackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerGetTrackMixerChannelSpecsConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerGetTrackMixerChannelSpecsConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_track_mixer_channel_specs",
+        argNames: ["trackId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerGetTrackMixerChannelSpecsConstMeta => const TaskConstMeta(
-            debugName: "get_track_mixer_channel_specs",
-            argNames: ["trackId"],
-        );
-        
-
-@override Future<Map<int, UiTrack>> crateApiProjectGetTracks()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 69, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<Map<int, UiTrack>> crateApiProjectGetTracks() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 69,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_Map_u_32_ui_track_None,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiProjectGetTracksConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectGetTracksConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectGetTracksConstMeta =>
+      const TaskConstMeta(debugName: "get_tracks", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectGetTracksConstMeta => const TaskConstMeta(
-            debugName: "get_tracks",
-            argNames: [],
-        );
-        
-
-@override Future<UiTransportState> crateApiProjectGetTransportState()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 70, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiTransportState> crateApiProjectGetTransportState() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 70,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_transport_state,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiProjectGetTransportStateConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectGetTransportStateConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectGetTransportStateConstMeta =>
+      const TaskConstMeta(debugName: "get_transport_state", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectGetTransportStateConstMeta => const TaskConstMeta(
-            debugName: "get_transport_state",
-            argNames: [],
-        );
-        
-
-@override String crateApiSimpleGreet({required String name })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(name, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 71)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  String crateApiSimpleGreet({required String name}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(name, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 71)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleGreetConstMeta,
-            argValues: [name],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleGreetConstMeta,
+        argValues: [name],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleGreetConstMeta =>
+      const TaskConstMeta(debugName: "greet", argNames: ["name"]);
 
-        TaskConstMeta get kCrateApiSimpleGreetConstMeta => const TaskConstMeta(
-            debugName: "greet",
-            argNames: ["name"],
-        );
-        
-
-@override Future<void> crateApiSimpleInitApp()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 72, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSimpleInitApp() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 72,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleInitAppConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleInitAppConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleInitAppConstMeta =>
+      const TaskConstMeta(debugName: "init_app", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleInitAppConstMeta => const TaskConstMeta(
-            debugName: "init_app",
-            argNames: [],
-        );
-        
-
-@override Future<UiApplicationState> crateApiSerializationLoadProject({required String pathName })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(pathName, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 73, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiApplicationState> crateApiSerializationLoadProject({
+    required String pathName,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(pathName, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 73,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_application_state,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSerializationLoadProjectConstMeta,
-            argValues: [pathName],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSerializationLoadProjectConstMeta,
+        argValues: [pathName],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSerializationLoadProjectConstMeta =>
+      const TaskConstMeta(debugName: "load_project", argNames: ["pathName"]);
 
-        TaskConstMeta get kCrateApiSerializationLoadProjectConstMeta => const TaskConstMeta(
-            debugName: "load_project",
-            argNames: ["pathName"],
-        );
-        
-
-@override Future<void> crateApiSessionMoveClip({required int oldTrackId , required int newTrackId , required int clipId , required int newStartTime })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(oldTrackId, serializer);
-sse_encode_u_32(newTrackId, serializer);
-sse_encode_u_32(clipId, serializer);
-sse_encode_CastedPrimitive_u_64(newStartTime, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 74, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionMoveClip({
+    required int oldTrackId,
+    required int newTrackId,
+    required int clipId,
+    required int newStartTime,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(oldTrackId, serializer);
+          sse_encode_u_32(newTrackId, serializer);
+          sse_encode_u_32(clipId, serializer);
+          sse_encode_CastedPrimitive_u_64(newStartTime, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 74,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionMoveClipConstMeta,
-            argValues: [oldTrackId, newTrackId, clipId, newStartTime],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionMoveClipConstMeta,
+        argValues: [oldTrackId, newTrackId, clipId, newStartTime],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionMoveClipConstMeta => const TaskConstMeta(
+    debugName: "move_clip",
+    argNames: ["oldTrackId", "newTrackId", "clipId", "newStartTime"],
+  );
 
-        TaskConstMeta get kCrateApiSessionMoveClipConstMeta => const TaskConstMeta(
-            debugName: "move_clip",
-            argNames: ["oldTrackId", "newTrackId", "clipId", "newStartTime"],
-        );
-        
-
-@override Future<UiClip> crateApiTrackMoveClip({required int sourceTrackId , required int clipId , required int newStartTime , int? newTrackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(sourceTrackId, serializer);
-sse_encode_u_32(clipId, serializer);
-sse_encode_CastedPrimitive_u_64(newStartTime, serializer);
-sse_encode_opt_box_autoadd_u_32(newTrackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 75, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClip> crateApiTrackMoveClip({
+    required int sourceTrackId,
+    required int clipId,
+    required int newStartTime,
+    int? newTrackId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(sourceTrackId, serializer);
+          sse_encode_u_32(clipId, serializer);
+          sse_encode_CastedPrimitive_u_64(newStartTime, serializer);
+          sse_encode_opt_box_autoadd_u_32(newTrackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 75,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackMoveClipConstMeta,
-            argValues: [sourceTrackId, clipId, newStartTime, newTrackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackMoveClipConstMeta,
+        argValues: [sourceTrackId, clipId, newStartTime, newTrackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackMoveClipConstMeta => const TaskConstMeta(
+    debugName: "move_clip",
+    argNames: ["sourceTrackId", "clipId", "newStartTime", "newTrackId"],
+  );
 
-        TaskConstMeta get kCrateApiTrackMoveClipConstMeta => const TaskConstMeta(
-            debugName: "move_clip",
-            argNames: ["sourceTrackId", "clipId", "newStartTime", "newTrackId"],
-        );
-        
-
-@override Future<List<UiClip>> crateApiTrackMoveClipBatch({required int sourceTrackId , required List<int> clipIds , required int deltaTicks , int? newTrackId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(sourceTrackId, serializer);
-sse_encode_list_prim_u_32_loose(clipIds, serializer);
-sse_encode_CastedPrimitive_i_64(deltaTicks, serializer);
-sse_encode_opt_box_autoadd_u_32(newTrackId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 76, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiClip>> crateApiTrackMoveClipBatch({
+    required int sourceTrackId,
+    required List<int> clipIds,
+    required int deltaTicks,
+    int? newTrackId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(sourceTrackId, serializer);
+          sse_encode_list_prim_u_32_loose(clipIds, serializer);
+          sse_encode_CastedPrimitive_i_64(deltaTicks, serializer);
+          sse_encode_opt_box_autoadd_u_32(newTrackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 76,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackMoveClipBatchConstMeta,
-            argValues: [sourceTrackId, clipIds, deltaTicks, newTrackId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackMoveClipBatchConstMeta,
+        argValues: [sourceTrackId, clipIds, deltaTicks, newTrackId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackMoveClipBatchConstMeta => const TaskConstMeta(
+    debugName: "move_clip_batch",
+    argNames: ["sourceTrackId", "clipIds", "deltaTicks", "newTrackId"],
+  );
 
-        TaskConstMeta get kCrateApiTrackMoveClipBatchConstMeta => const TaskConstMeta(
-            debugName: "move_clip_batch",
-            argNames: ["sourceTrackId", "clipIds", "deltaTicks", "newTrackId"],
-        );
-        
-
-@override Future<UiNote> crateApiPatternMoveNote({required int patternId , required int noteId , required int newStartTick , required int newKey })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_u_32(noteId, serializer);
-sse_encode_CastedPrimitive_u_64(newStartTick, serializer);
-sse_encode_u_32(newKey, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 77, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiNote> crateApiPatternMoveNote({
+    required int patternId,
+    required int noteId,
+    required int newStartTick,
+    required int newKey,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(noteId, serializer);
+          sse_encode_CastedPrimitive_u_64(newStartTick, serializer);
+          sse_encode_u_32(newKey, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 77,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_note,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternMoveNoteConstMeta,
-            argValues: [patternId, noteId, newStartTick, newKey],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternMoveNoteConstMeta,
+        argValues: [patternId, noteId, newStartTick, newKey],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternMoveNoteConstMeta => const TaskConstMeta(
+    debugName: "move_note",
+    argNames: ["patternId", "noteId", "newStartTick", "newKey"],
+  );
 
-        TaskConstMeta get kCrateApiPatternMoveNoteConstMeta => const TaskConstMeta(
-            debugName: "move_note",
-            argNames: ["patternId", "noteId", "newStartTick", "newKey"],
-        );
-        
+  @override
+  Future<UiApplicationState> crateApiSerializationNewBlankProject() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 78,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_ui_application_state,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSerializationNewBlankProjectConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
-@override List<UiResponseCurvePoint> crateApiPluginsEqParseEqCurveResponse({required String jsonStr })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(jsonStr, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 78)!;
-            
-            },
-            codec: 
-        SseCodec(
+  TaskConstMeta get kCrateApiSerializationNewBlankProjectConstMeta =>
+      const TaskConstMeta(debugName: "new_blank_project", argNames: []);
+
+  @override
+  List<UiResponseCurvePoint> crateApiPluginsEqParseEqCurveResponse({
+    required String jsonStr,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(jsonStr, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 79)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_response_curve_point,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginsEqParseEqCurveResponseConstMeta,
-            argValues: [jsonStr],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginsEqParseEqCurveResponseConstMeta,
+        argValues: [jsonStr],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginsEqParseEqCurveResponseConstMeta =>
+      const TaskConstMeta(
+        debugName: "parse_eq_curve_response",
+        argNames: ["jsonStr"],
+      );
 
-        TaskConstMeta get kCrateApiPluginsEqParseEqCurveResponseConstMeta => const TaskConstMeta(
-            debugName: "parse_eq_curve_response",
-            argNames: ["jsonStr"],
-        );
-        
-
-@override Future<void> crateApiSessionPasteClips({required int targetTrackId , required int pasteStartTime })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(targetTrackId, serializer);
-sse_encode_u_32(pasteStartTime, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 79, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionPasteClips({
+    required int targetTrackId,
+    required int pasteStartTime,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(targetTrackId, serializer);
+          sse_encode_u_32(pasteStartTime, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 80,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionPasteClipsConstMeta,
-            argValues: [targetTrackId, pasteStartTime],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionPasteClipsConstMeta,
+        argValues: [targetTrackId, pasteStartTime],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionPasteClipsConstMeta => const TaskConstMeta(
+    debugName: "paste_clips",
+    argNames: ["targetTrackId", "pasteStartTime"],
+  );
 
-        TaskConstMeta get kCrateApiSessionPasteClipsConstMeta => const TaskConstMeta(
-            debugName: "paste_clips",
-            argNames: ["targetTrackId", "pasteStartTime"],
-        );
-        
-
-@override Future<void> crateApiSessionPastePatternNotes({required int targetPatternId , required int playheadTick })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(targetPatternId, serializer);
-sse_encode_CastedPrimitive_u_64(playheadTick, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 80, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionPastePatternNotes({
+    required int targetPatternId,
+    required int playheadTick,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(targetPatternId, serializer);
+          sse_encode_CastedPrimitive_u_64(playheadTick, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 81,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionPastePatternNotesConstMeta,
-            argValues: [targetPatternId, playheadTick],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionPastePatternNotesConstMeta,
+        argValues: [targetPatternId, playheadTick],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionPastePatternNotesConstMeta =>
+      const TaskConstMeta(
+        debugName: "paste_pattern_notes",
+        argNames: ["targetPatternId", "playheadTick"],
+      );
 
-        TaskConstMeta get kCrateApiSessionPastePatternNotesConstMeta => const TaskConstMeta(
-            debugName: "paste_pattern_notes",
-            argNames: ["targetPatternId", "playheadTick"],
-        );
-        
-
-@override Future<void> crateApiPatternPlayPatternPreview({required int patternId , required int generatorId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_u_32(generatorId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 81, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPatternPlayPatternPreview({
+    required int patternId,
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 82,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternPlayPatternPreviewConstMeta,
-            argValues: [patternId, generatorId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternPlayPatternPreviewConstMeta,
+        argValues: [patternId, generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternPlayPatternPreviewConstMeta =>
+      const TaskConstMeta(
+        debugName: "play_pattern_preview",
+        argNames: ["patternId", "generatorId"],
+      );
 
-        TaskConstMeta get kCrateApiPatternPlayPatternPreviewConstMeta => const TaskConstMeta(
-            debugName: "play_pattern_preview",
-            argNames: ["patternId", "generatorId"],
-        );
-        
-
-@override Future<void> crateApiAudioPlayPreviewNote({required int trackId , required int noteKey , required int velocity , required bool isOn })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_i_32(noteKey, serializer);
-sse_encode_i_32(velocity, serializer);
-sse_encode_bool(isOn, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 82, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiAudioPlayPreviewNote({
+    required int trackId,
+    required int noteKey,
+    required int velocity,
+    required bool isOn,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_i_32(noteKey, serializer);
+          sse_encode_i_32(velocity, serializer);
+          sse_encode_bool(isOn, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 83,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiAudioPlayPreviewNoteConstMeta,
-            argValues: [trackId, noteKey, velocity, isOn],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiAudioPlayPreviewNoteConstMeta,
+        argValues: [trackId, noteKey, velocity, isOn],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiAudioPlayPreviewNoteConstMeta =>
+      const TaskConstMeta(
+        debugName: "play_preview_note",
+        argNames: ["trackId", "noteKey", "velocity", "isOn"],
+      );
 
-        TaskConstMeta get kCrateApiAudioPlayPreviewNoteConstMeta => const TaskConstMeta(
-            debugName: "play_preview_note",
-            argNames: ["trackId", "noteKey", "velocity", "isOn"],
-        );
-        
-
-@override Future<void> crateApiAudioPlayPreviewNoteGenerator({required int generatorId , required int noteKey , required int velocity , required bool isOn })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(generatorId, serializer);
-sse_encode_i_32(noteKey, serializer);
-sse_encode_i_32(velocity, serializer);
-sse_encode_bool(isOn, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 83, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiAudioPlayPreviewNoteGenerator({
+    required int generatorId,
+    required int noteKey,
+    required int velocity,
+    required bool isOn,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          sse_encode_i_32(noteKey, serializer);
+          sse_encode_i_32(velocity, serializer);
+          sse_encode_bool(isOn, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 84,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiAudioPlayPreviewNoteGeneratorConstMeta,
-            argValues: [generatorId, noteKey, velocity, isOn],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiAudioPlayPreviewNoteGeneratorConstMeta,
+        argValues: [generatorId, noteKey, velocity, isOn],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiAudioPlayPreviewNoteGeneratorConstMeta =>
+      const TaskConstMeta(
+        debugName: "play_preview_note_generator",
+        argNames: ["generatorId", "noteKey", "velocity", "isOn"],
+      );
 
-        TaskConstMeta get kCrateApiAudioPlayPreviewNoteGeneratorConstMeta => const TaskConstMeta(
-            debugName: "play_preview_note_generator",
-            argNames: ["generatorId", "noteKey", "velocity", "isOn"],
-        );
-        
-
-@override Future<void> crateApiAudioPlaySourcePreview({required int id })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(id, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 84, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiAudioPlaySourcePreview({required int id}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 85,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiAudioPlaySourcePreviewConstMeta,
-            argValues: [id],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiAudioPlaySourcePreviewConstMeta,
+        argValues: [id],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiAudioPlaySourcePreviewConstMeta =>
+      const TaskConstMeta(debugName: "play_source_preview", argNames: ["id"]);
 
-        TaskConstMeta get kCrateApiAudioPlaySourcePreviewConstMeta => const TaskConstMeta(
-            debugName: "play_source_preview",
-            argNames: ["id"],
-        );
-        
-
-@override Future<List<UiEffectParameterSnapshot>> crateApiPluginPollEffectParameterFeedback()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 85, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiEffectParameterSnapshot>>
+  crateApiPluginPollEffectParameterFeedback() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 86,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_effect_parameter_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiPluginPollEffectParameterFeedbackConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginPollEffectParameterFeedbackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginPollEffectParameterFeedbackConstMeta =>
+      const TaskConstMeta(
+        debugName: "poll_effect_parameter_feedback",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiPluginPollEffectParameterFeedbackConstMeta => const TaskConstMeta(
-            debugName: "poll_effect_parameter_feedback",
-            argNames: [],
-        );
-        
-
-@override Future<List<UiGeneratorParameterSnapshot>> crateApiPluginPollGeneratorParameterFeedback()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiGeneratorParameterSnapshot>>
+  crateApiPluginPollGeneratorParameterFeedback() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 87,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_generator_parameter_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiPluginPollGeneratorParameterFeedbackConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginPollGeneratorParameterFeedbackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginPollGeneratorParameterFeedbackConstMeta =>
+      const TaskConstMeta(
+        debugName: "poll_generator_parameter_feedback",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiPluginPollGeneratorParameterFeedbackConstMeta => const TaskConstMeta(
-            debugName: "poll_generator_parameter_feedback",
-            argNames: [],
-        );
-        
-
-@override UiProjectMetadata crateApiProjectProjectMetadataNew()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 87)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  UiProjectMetadata crateApiProjectProjectMetadataNew() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_project_metadata,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectProjectMetadataNewConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectProjectMetadataNewConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectProjectMetadataNewConstMeta =>
+      const TaskConstMeta(debugName: "project_metadata_new", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectProjectMetadataNewConstMeta => const TaskConstMeta(
-            debugName: "project_metadata_new",
-            argNames: [],
-        );
-        
-
-@override Future<void> crateApiPluginQueryEffectParameters({required UiEffectTarget target , required int effectId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_ui_effect_target(target, serializer);
-sse_encode_u_32(effectId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPluginQueryEffectParameters({
+    required UiEffectTarget target,
+    required int effectId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_effect_target(target, serializer);
+          sse_encode_u_32(effectId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 89,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginQueryEffectParametersConstMeta,
-            argValues: [target, effectId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginQueryEffectParametersConstMeta,
+        argValues: [target, effectId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginQueryEffectParametersConstMeta =>
+      const TaskConstMeta(
+        debugName: "query_effect_parameters",
+        argNames: ["target", "effectId"],
+      );
 
-        TaskConstMeta get kCrateApiPluginQueryEffectParametersConstMeta => const TaskConstMeta(
-            debugName: "query_effect_parameters",
-            argNames: ["target", "effectId"],
-        );
-        
-
-@override Future<void> crateApiPluginQueryGeneratorParameters({required int generatorId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(generatorId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPluginQueryGeneratorParameters({
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 90,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginQueryGeneratorParametersConstMeta,
-            argValues: [generatorId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginQueryGeneratorParametersConstMeta,
+        argValues: [generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginQueryGeneratorParametersConstMeta =>
+      const TaskConstMeta(
+        debugName: "query_generator_parameters",
+        argNames: ["generatorId"],
+      );
 
-        TaskConstMeta get kCrateApiPluginQueryGeneratorParametersConstMeta => const TaskConstMeta(
-            debugName: "query_generator_parameters",
-            argNames: ["generatorId"],
-        );
-        
-
-@override Future<void> crateApiSessionRedo()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 90, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionRedo() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 91,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionRedoConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionRedoConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionRedoConstMeta =>
+      const TaskConstMeta(debugName: "redo", argNames: []);
 
-        TaskConstMeta get kCrateApiSessionRedoConstMeta => const TaskConstMeta(
-            debugName: "redo",
-            argNames: [],
-        );
-        
-
-@override Future<void> crateApiMixerRemoveEffectFromMasterBus({required int effectInstanceId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(effectInstanceId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 91, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerRemoveEffectFromMasterBus({
+    required int effectInstanceId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(effectInstanceId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 92,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerRemoveEffectFromMasterBusConstMeta,
-            argValues: [effectInstanceId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerRemoveEffectFromMasterBusConstMeta,
+        argValues: [effectInstanceId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerRemoveEffectFromMasterBusConstMeta =>
+      const TaskConstMeta(
+        debugName: "remove_effect_from_master_bus",
+        argNames: ["effectInstanceId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerRemoveEffectFromMasterBusConstMeta => const TaskConstMeta(
-            debugName: "remove_effect_from_master_bus",
-            argNames: ["effectInstanceId"],
-        );
-        
-
-@override Future<void> crateApiMixerRemoveEffectFromMixerChannel({required int trackId , required int effectInstanceId })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(effectInstanceId, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 92, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerRemoveEffectFromMixerChannel({
+    required int trackId,
+    required int effectInstanceId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(effectInstanceId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 93,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerRemoveEffectFromMixerChannelConstMeta,
-            argValues: [trackId, effectInstanceId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerRemoveEffectFromMixerChannelConstMeta,
+        argValues: [trackId, effectInstanceId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerRemoveEffectFromMixerChannelConstMeta =>
+      const TaskConstMeta(
+        debugName: "remove_effect_from_mixer_channel",
+        argNames: ["trackId", "effectInstanceId"],
+      );
 
-        TaskConstMeta get kCrateApiMixerRemoveEffectFromMixerChannelConstMeta => const TaskConstMeta(
-            debugName: "remove_effect_from_mixer_channel",
-            argNames: ["trackId", "effectInstanceId"],
-        );
-        
-
-@override Future<void> crateApiMixerRemoveRouting({required UiRoutingNode source , required UiRoutingNode destination , required bool isSend })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_ui_routing_node(source, serializer);
-sse_encode_box_autoadd_ui_routing_node(destination, serializer);
-sse_encode_bool(isSend, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 93, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerRemoveRouting({
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
+    required bool isSend,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_routing_node(source, serializer);
+          sse_encode_box_autoadd_ui_routing_node(destination, serializer);
+          sse_encode_bool(isSend, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 94,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerRemoveRoutingConstMeta,
-            argValues: [source, destination, isSend],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerRemoveRoutingConstMeta,
+        argValues: [source, destination, isSend],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerRemoveRoutingConstMeta => const TaskConstMeta(
+    debugName: "remove_routing",
+    argNames: ["source", "destination", "isSend"],
+  );
 
-        TaskConstMeta get kCrateApiMixerRemoveRoutingConstMeta => const TaskConstMeta(
-            debugName: "remove_routing",
-            argNames: ["source", "destination", "isSend"],
-        );
-        
-
-@override Future<void> crateApiMixerRenameBus({required int busId , required String newName })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(busId, serializer);
-sse_encode_String(newName, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 94, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerRenameBus({
+    required int busId,
+    required String newName,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(busId, serializer);
+          sse_encode_String(newName, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 95,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerRenameBusConstMeta,
-            argValues: [busId, newName],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerRenameBusConstMeta,
+        argValues: [busId, newName],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerRenameBusConstMeta => const TaskConstMeta(
+    debugName: "rename_bus",
+    argNames: ["busId", "newName"],
+  );
 
-        TaskConstMeta get kCrateApiMixerRenameBusConstMeta => const TaskConstMeta(
-            debugName: "rename_bus",
-            argNames: ["busId", "newName"],
-        );
-        
-
-@override Future<void> crateApiSessionResizeClip({required int trackId , required int clipId , required UiResizeEdge edge , required int newTimeVal })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(clipId, serializer);
-sse_encode_ui_resize_edge(edge, serializer);
-sse_encode_CastedPrimitive_u_64(newTimeVal, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 95, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionResizeClip({
+    required int trackId,
+    required int clipId,
+    required UiResizeEdge edge,
+    required int newTimeVal,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(clipId, serializer);
+          sse_encode_ui_resize_edge(edge, serializer);
+          sse_encode_CastedPrimitive_u_64(newTimeVal, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 96,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionResizeClipConstMeta,
-            argValues: [trackId, clipId, edge, newTimeVal],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionResizeClipConstMeta,
+        argValues: [trackId, clipId, edge, newTimeVal],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionResizeClipConstMeta => const TaskConstMeta(
+    debugName: "resize_clip",
+    argNames: ["trackId", "clipId", "edge", "newTimeVal"],
+  );
 
-        TaskConstMeta get kCrateApiSessionResizeClipConstMeta => const TaskConstMeta(
-            debugName: "resize_clip",
-            argNames: ["trackId", "clipId", "edge", "newTimeVal"],
-        );
-        
-
-@override Future<UiClip> crateApiTrackResizeClip({required int trackId , required int clipId , required UiResizeEdge edge , required int newTimeVal })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_u_32(clipId, serializer);
-sse_encode_ui_resize_edge(edge, serializer);
-sse_encode_CastedPrimitive_u_64(newTimeVal, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 96, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClip> crateApiTrackResizeClip({
+    required int trackId,
+    required int clipId,
+    required UiResizeEdge edge,
+    required int newTimeVal,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_u_32(clipId, serializer);
+          sse_encode_ui_resize_edge(edge, serializer);
+          sse_encode_CastedPrimitive_u_64(newTimeVal, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 97,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackResizeClipConstMeta,
-            argValues: [trackId, clipId, edge, newTimeVal],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackResizeClipConstMeta,
+        argValues: [trackId, clipId, edge, newTimeVal],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackResizeClipConstMeta => const TaskConstMeta(
+    debugName: "resize_clip",
+    argNames: ["trackId", "clipId", "edge", "newTimeVal"],
+  );
 
-        TaskConstMeta get kCrateApiTrackResizeClipConstMeta => const TaskConstMeta(
-            debugName: "resize_clip",
-            argNames: ["trackId", "clipId", "edge", "newTimeVal"],
-        );
-        
-
-@override Future<List<UiClip>> crateApiTrackResizeClipBatch({required int trackId , required List<int> clipIds , required UiResizeEdge edge , required int deltaTicks })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_list_prim_u_32_loose(clipIds, serializer);
-sse_encode_ui_resize_edge(edge, serializer);
-sse_encode_CastedPrimitive_i_64(deltaTicks, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 97, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<List<UiClip>> crateApiTrackResizeClipBatch({
+    required int trackId,
+    required List<int> clipIds,
+    required UiResizeEdge edge,
+    required int deltaTicks,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_list_prim_u_32_loose(clipIds, serializer);
+          sse_encode_ui_resize_edge(edge, serializer);
+          sse_encode_CastedPrimitive_i_64(deltaTicks, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 98,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_clip,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTrackResizeClipBatchConstMeta,
-            argValues: [trackId, clipIds, edge, deltaTicks],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTrackResizeClipBatchConstMeta,
+        argValues: [trackId, clipIds, edge, deltaTicks],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTrackResizeClipBatchConstMeta =>
+      const TaskConstMeta(
+        debugName: "resize_clip_batch",
+        argNames: ["trackId", "clipIds", "edge", "deltaTicks"],
+      );
 
-        TaskConstMeta get kCrateApiTrackResizeClipBatchConstMeta => const TaskConstMeta(
-            debugName: "resize_clip_batch",
-            argNames: ["trackId", "clipIds", "edge", "deltaTicks"],
-        );
-        
-
-@override Future<UiNote> crateApiPatternResizeNote({required int patternId , required int noteId , required int newDuration })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(patternId, serializer);
-sse_encode_u_32(noteId, serializer);
-sse_encode_CastedPrimitive_u_64(newDuration, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 98, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiNote> crateApiPatternResizeNote({
+    required int patternId,
+    required int noteId,
+    required int newDuration,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(noteId, serializer);
+          sse_encode_CastedPrimitive_u_64(newDuration, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 99,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_note,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternResizeNoteConstMeta,
-            argValues: [patternId, noteId, newDuration],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternResizeNoteConstMeta,
+        argValues: [patternId, noteId, newDuration],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternResizeNoteConstMeta => const TaskConstMeta(
+    debugName: "resize_note",
+    argNames: ["patternId", "noteId", "newDuration"],
+  );
 
-        TaskConstMeta get kCrateApiPatternResizeNoteConstMeta => const TaskConstMeta(
-            debugName: "resize_note",
-            argNames: ["patternId", "noteId", "newDuration"],
-        );
-        
-
-@override Future<void> crateApiSerializationSaveProject({required String pathName })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(pathName, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 99, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSerializationSaveProject({required String pathName}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(pathName, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 100,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSerializationSaveProjectConstMeta,
-            argValues: [pathName],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSerializationSaveProjectConstMeta,
+        argValues: [pathName],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSerializationSaveProjectConstMeta =>
+      const TaskConstMeta(debugName: "save_project", argNames: ["pathName"]);
 
-        TaskConstMeta get kCrateApiSerializationSaveProjectConstMeta => const TaskConstMeta(
-            debugName: "save_project",
-            argNames: ["pathName"],
-        );
-        
-
-@override Future<void> crateApiTransportSetBpm({required double val })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(val, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 100, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTransportSetBpm({required double val}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(val, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 101,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTransportSetBpmConstMeta,
-            argValues: [val],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTransportSetBpmConstMeta,
+        argValues: [val],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTransportSetBpmConstMeta =>
+      const TaskConstMeta(debugName: "set_bpm", argNames: ["val"]);
 
-        TaskConstMeta get kCrateApiTransportSetBpmConstMeta => const TaskConstMeta(
-            debugName: "set_bpm",
-            argNames: ["val"],
-        );
-        
-
-@override Future<void> crateApiMixerSetBusParams({required int busId , required List<UiMixerChannelParams> params })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(busId, serializer);
-sse_encode_list_ui_mixer_channel_params(params, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 101, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerSetBusParams({
+    required int busId,
+    required List<UiMixerChannelParams> params,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(busId, serializer);
+          sse_encode_list_ui_mixer_channel_params(params, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 102,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerSetBusParamsConstMeta,
-            argValues: [busId, params],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerSetBusParamsConstMeta,
+        argValues: [busId, params],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerSetBusParamsConstMeta => const TaskConstMeta(
+    debugName: "set_bus_params",
+    argNames: ["busId", "params"],
+  );
 
-        TaskConstMeta get kCrateApiMixerSetBusParamsConstMeta => const TaskConstMeta(
-            debugName: "set_bus_params",
-            argNames: ["busId", "params"],
-        );
-        
-
-@override Future<void> crateApiPluginSetEffectParameter({required UiEffectTarget target , required int effectId , required int paramId , required double value })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_ui_effect_target(target, serializer);
-sse_encode_u_32(effectId, serializer);
-sse_encode_u_32(paramId, serializer);
-sse_encode_f_32(value, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 102, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPluginSetEffectParameter({
+    required UiEffectTarget target,
+    required int effectId,
+    required int paramId,
+    required double value,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_effect_target(target, serializer);
+          sse_encode_u_32(effectId, serializer);
+          sse_encode_u_32(paramId, serializer);
+          sse_encode_f_32(value, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 103,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginSetEffectParameterConstMeta,
-            argValues: [target, effectId, paramId, value],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginSetEffectParameterConstMeta,
+        argValues: [target, effectId, paramId, value],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginSetEffectParameterConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_effect_parameter",
+        argNames: ["target", "effectId", "paramId", "value"],
+      );
 
-        TaskConstMeta get kCrateApiPluginSetEffectParameterConstMeta => const TaskConstMeta(
-            debugName: "set_effect_parameter",
-            argNames: ["target", "effectId", "paramId", "value"],
-        );
-        
-
-@override Future<void> crateApiPluginSetGeneratorParameter({required int generatorId , required int paramId , required double value })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(generatorId, serializer);
-sse_encode_u_32(paramId, serializer);
-sse_encode_f_32(value, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 103, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPluginSetGeneratorParameter({
+    required int generatorId,
+    required int paramId,
+    required double value,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          sse_encode_u_32(paramId, serializer);
+          sse_encode_f_32(value, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 104,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPluginSetGeneratorParameterConstMeta,
-            argValues: [generatorId, paramId, value],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginSetGeneratorParameterConstMeta,
+        argValues: [generatorId, paramId, value],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginSetGeneratorParameterConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_generator_parameter",
+        argNames: ["generatorId", "paramId", "value"],
+      );
 
-        TaskConstMeta get kCrateApiPluginSetGeneratorParameterConstMeta => const TaskConstMeta(
-            debugName: "set_generator_parameter",
-            argNames: ["generatorId", "paramId", "value"],
-        );
-        
-
-@override Future<void> crateApiTransportSetLooping({required bool val })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(val, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 104, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTransportSetLooping({required bool val}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(val, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 105,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTransportSetLoopingConstMeta,
-            argValues: [val],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTransportSetLoopingConstMeta,
+        argValues: [val],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTransportSetLoopingConstMeta =>
+      const TaskConstMeta(debugName: "set_looping", argNames: ["val"]);
 
-        TaskConstMeta get kCrateApiTransportSetLoopingConstMeta => const TaskConstMeta(
-            debugName: "set_looping",
-            argNames: ["val"],
-        );
-        
-
-@override Future<void> crateApiMixerSetMasterBusParams({required List<UiMixerChannelParams> params })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_list_ui_mixer_channel_params(params, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 105, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerSetMasterBusParams({
+    required List<UiMixerChannelParams> params,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_ui_mixer_channel_params(params, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 106,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerSetMasterBusParamsConstMeta,
-            argValues: [params],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerSetMasterBusParamsConstMeta,
+        argValues: [params],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerSetMasterBusParamsConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_master_bus_params",
+        argNames: ["params"],
+      );
 
-        TaskConstMeta get kCrateApiMixerSetMasterBusParamsConstMeta => const TaskConstMeta(
-            debugName: "set_master_bus_params",
-            argNames: ["params"],
-        );
-        
-
-@override void crateApiAudioSetMetronomeActive({required bool active })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(active, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 106)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiAudioSetMetronomeActive({required bool active}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(active, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 107,
+          )!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiAudioSetMetronomeActiveConstMeta,
-            argValues: [active],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiAudioSetMetronomeActiveConstMeta,
+        argValues: [active],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiAudioSetMetronomeActiveConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_metronome_active",
+        argNames: ["active"],
+      );
 
-        TaskConstMeta get kCrateApiAudioSetMetronomeActiveConstMeta => const TaskConstMeta(
-            debugName: "set_metronome_active",
-            argNames: ["active"],
-        );
-        
-
-@override Future<void> crateApiMixerSetMixerChannelParams({required int trackId , required List<UiMixerChannelParams> params })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(trackId, serializer);
-sse_encode_list_ui_mixer_channel_params(params, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 107, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerSetMixerChannelParams({
+    required int trackId,
+    required List<UiMixerChannelParams> params,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_list_ui_mixer_channel_params(params, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 108,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerSetMixerChannelParamsConstMeta,
-            argValues: [trackId, params],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerSetMixerChannelParamsConstMeta,
+        argValues: [trackId, params],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerSetMixerChannelParamsConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_mixer_channel_params",
+        argNames: ["trackId", "params"],
+      );
 
-        TaskConstMeta get kCrateApiMixerSetMixerChannelParamsConstMeta => const TaskConstMeta(
-            debugName: "set_mixer_channel_params",
-            argNames: ["trackId", "params"],
-        );
-        
-
-@override Future<void> crateApiTransportSetPlayhead({required int val })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(val, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 108, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTransportSetPlayhead({required int val}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(val, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 109,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTransportSetPlayheadConstMeta,
-            argValues: [val],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTransportSetPlayheadConstMeta,
+        argValues: [val],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTransportSetPlayheadConstMeta =>
+      const TaskConstMeta(debugName: "set_playhead", argNames: ["val"]);
 
-        TaskConstMeta get kCrateApiTransportSetPlayheadConstMeta => const TaskConstMeta(
-            debugName: "set_playhead",
-            argNames: ["val"],
-        );
-        
-
-@override Future<void> crateApiTransportSetPlaying({required bool val })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(val, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 109, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiTransportSetPlaying({required bool val}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(val, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 110,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTransportSetPlayingConstMeta,
-            argValues: [val],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiTransportSetPlayingConstMeta,
+        argValues: [val],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiTransportSetPlayingConstMeta =>
+      const TaskConstMeta(debugName: "set_playing", argNames: ["val"]);
 
-        TaskConstMeta get kCrateApiTransportSetPlayingConstMeta => const TaskConstMeta(
-            debugName: "set_playing",
-            argNames: ["val"],
-        );
-        
-
-@override Future<void> crateApiMixerSetRouting({required UiRoutingNode source , required UiRoutingNode destination , required double sendLevel , required bool isSend })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_ui_routing_node(source, serializer);
-sse_encode_box_autoadd_ui_routing_node(destination, serializer);
-sse_encode_f_32(sendLevel, serializer);
-sse_encode_bool(isSend, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 110, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiMixerSetRouting({
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
+    required double sendLevel,
+    required bool isSend,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_routing_node(source, serializer);
+          sse_encode_box_autoadd_ui_routing_node(destination, serializer);
+          sse_encode_f_32(sendLevel, serializer);
+          sse_encode_bool(isSend, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 111,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiMixerSetRoutingConstMeta,
-            argValues: [source, destination, sendLevel, isSend],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerSetRoutingConstMeta,
+        argValues: [source, destination, sendLevel, isSend],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerSetRoutingConstMeta => const TaskConstMeta(
+    debugName: "set_routing",
+    argNames: ["source", "destination", "sendLevel", "isSend"],
+  );
 
-        TaskConstMeta get kCrateApiMixerSetRoutingConstMeta => const TaskConstMeta(
-            debugName: "set_routing",
-            argNames: ["source", "destination", "sendLevel", "isSend"],
-        );
-        
-
-@override Future<void> crateApiAudioStopAllPreviews()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 111, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiAudioStopAllPreviews() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 112,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiAudioStopAllPreviewsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiAudioStopAllPreviewsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiAudioStopAllPreviewsConstMeta =>
+      const TaskConstMeta(debugName: "stop_all_previews", argNames: []);
 
-        TaskConstMeta get kCrateApiAudioStopAllPreviewsConstMeta => const TaskConstMeta(
-            debugName: "stop_all_previews",
-            argNames: [],
-        );
-        
-
-@override Future<void> crateApiPatternStopPatternPreview()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 112, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPatternStopPatternPreview() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 113,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiPatternStopPatternPreviewConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternStopPatternPreviewConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternStopPatternPreviewConstMeta =>
+      const TaskConstMeta(debugName: "stop_pattern_preview", argNames: []);
 
-        TaskConstMeta get kCrateApiPatternStopPatternPreviewConstMeta => const TaskConstMeta(
-            debugName: "stop_pattern_preview",
-            argNames: [],
-        );
-        
-
-@override Future<void> crateApiTransportStopSongPlayback()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 113, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPatternStopPatternPreviewLocal({
+    required int patternId,
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 114,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiTransportStopSongPlaybackConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPatternStopPatternPreviewLocalConstMeta,
+        argValues: [patternId, generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPatternStopPatternPreviewLocalConstMeta =>
+      const TaskConstMeta(
+        debugName: "stop_pattern_preview_local",
+        argNames: ["patternId", "generatorId"],
+      );
 
-        TaskConstMeta get kCrateApiTransportStopSongPlaybackConstMeta => const TaskConstMeta(
-            debugName: "stop_song_playback",
-            argNames: [],
-        );
-        
+  @override
+  Future<void> crateApiTransportStopSongPlayback() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 115,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTransportStopSongPlaybackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
-@override Future<void> crateApiPluginSyncEffectParametersFromAudio({required List<UiEffectParameterSnapshot> snapshots })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_list_ui_effect_parameter_snapshot(snapshots, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 114, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  TaskConstMeta get kCrateApiTransportStopSongPlaybackConstMeta =>
+      const TaskConstMeta(debugName: "stop_song_playback", argNames: []);
+
+  @override
+  Future<void> crateApiPluginSyncEffectParametersFromAudio({
+    required List<UiEffectParameterSnapshot> snapshots,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_ui_effect_parameter_snapshot(snapshots, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 116,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiPluginSyncEffectParametersFromAudioConstMeta,
-            argValues: [snapshots],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginSyncEffectParametersFromAudioConstMeta,
+        argValues: [snapshots],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginSyncEffectParametersFromAudioConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_effect_parameters_from_audio",
+        argNames: ["snapshots"],
+      );
 
-        TaskConstMeta get kCrateApiPluginSyncEffectParametersFromAudioConstMeta => const TaskConstMeta(
-            debugName: "sync_effect_parameters_from_audio",
-            argNames: ["snapshots"],
-        );
-        
-
-@override Future<void> crateApiPluginSyncGeneratorParametersFromAudio({required List<UiGeneratorParameterSnapshot> snapshots })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_list_ui_generator_parameter_snapshot(snapshots, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 115, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiPluginSyncGeneratorParametersFromAudio({
+    required List<UiGeneratorParameterSnapshot> snapshots,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_ui_generator_parameter_snapshot(
+            snapshots,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 117,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiPluginSyncGeneratorParametersFromAudioConstMeta,
-            argValues: [snapshots],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiPluginSyncGeneratorParametersFromAudioConstMeta,
+        argValues: [snapshots],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiPluginSyncGeneratorParametersFromAudioConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_generator_parameters_from_audio",
+        argNames: ["snapshots"],
+      );
 
-        TaskConstMeta get kCrateApiPluginSyncGeneratorParametersFromAudioConstMeta => const TaskConstMeta(
-            debugName: "sync_generator_parameters_from_audio",
-            argNames: ["snapshots"],
-        );
-        
-
-@override UiTransportState crateApiProjectTransportStateNew()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 116)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  UiTransportState crateApiProjectTransportStateNew() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 118,
+          )!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_transport_state,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectTransportStateNewConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectTransportStateNewConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectTransportStateNewConstMeta =>
+      const TaskConstMeta(debugName: "transport_state_new", argNames: []);
 
-        TaskConstMeta get kCrateApiProjectTransportStateNewConstMeta => const TaskConstMeta(
-            debugName: "transport_state_new",
-            argNames: [],
-        );
-        
-
-@override UiTransportState crateApiProjectTransportStateNewWithParam({required double bpm , required (int,int) timeSignature })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(bpm, serializer);
-sse_encode_box_autoadd_record_u_8_u_8(timeSignature, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 117)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  UiTransportState crateApiProjectTransportStateNewWithParam({
+    required double bpm,
+    required (int, int) timeSignature,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(bpm, serializer);
+          sse_encode_box_autoadd_record_u_8_u_8(timeSignature, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 119,
+          )!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_transport_state,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectTransportStateNewWithParamConstMeta,
-            argValues: [bpm, timeSignature],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectTransportStateNewWithParamConstMeta,
+        argValues: [bpm, timeSignature],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectTransportStateNewWithParamConstMeta =>
+      const TaskConstMeta(
+        debugName: "transport_state_new_with_param",
+        argNames: ["bpm", "timeSignature"],
+      );
 
-        TaskConstMeta get kCrateApiProjectTransportStateNewWithParamConstMeta => const TaskConstMeta(
-            debugName: "transport_state_new_with_param",
-            argNames: ["bpm", "timeSignature"],
-        );
-        
-
-@override Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 118, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 120,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_clipboard_content,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSessionUiClipboardContentDefaultConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionUiClipboardContentDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionUiClipboardContentDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "ui_clipboard_content_default",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiSessionUiClipboardContentDefaultConstMeta => const TaskConstMeta(
-            debugName: "ui_clipboard_content_default",
-            argNames: [],
-        );
-        
-
-@override UiMixerState crateApiMixerUiMixerStateNew()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 119)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  UiMixerState crateApiMixerUiMixerStateNew() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 121,
+          )!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_mixer_state,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerUiMixerStateNewConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerUiMixerStateNewConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerUiMixerStateNewConstMeta =>
+      const TaskConstMeta(debugName: "ui_mixer_state_new", argNames: []);
 
-        TaskConstMeta get kCrateApiMixerUiMixerStateNewConstMeta => const TaskConstMeta(
-            debugName: "ui_mixer_state_new",
-            argNames: [],
-        );
-        
-
-@override UiMixerState crateApiMixerUiMixerStateNewWithParam({required Map<int, UiMixerChannel> channels , required UiMixerChannel masterBus , required Map<int, UiBus> buses , required List<UiRoutingConnection> routing })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_Map_u_32_ui_mixer_channel_None(channels, serializer);
-sse_encode_box_autoadd_ui_mixer_channel(masterBus, serializer);
-sse_encode_Map_u_32_ui_bus_None(buses, serializer);
-sse_encode_list_ui_routing_connection(routing, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 120)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  UiMixerState crateApiMixerUiMixerStateNewWithParam({
+    required Map<int, UiMixerChannel> channels,
+    required UiMixerChannel masterBus,
+    required Map<int, UiBus> buses,
+    required List<UiRoutingConnection> routing,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Map_u_32_ui_mixer_channel_None(channels, serializer);
+          sse_encode_box_autoadd_ui_mixer_channel(masterBus, serializer);
+          sse_encode_Map_u_32_ui_bus_None(buses, serializer);
+          sse_encode_list_ui_routing_connection(routing, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 122,
+          )!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_mixer_state,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiMixerUiMixerStateNewWithParamConstMeta,
-            argValues: [channels, masterBus, buses, routing],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiMixerUiMixerStateNewWithParamConstMeta,
+        argValues: [channels, masterBus, buses, routing],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiMixerUiMixerStateNewWithParamConstMeta =>
+      const TaskConstMeta(
+        debugName: "ui_mixer_state_new_with_param",
+        argNames: ["channels", "masterBus", "buses", "routing"],
+      );
 
-        TaskConstMeta get kCrateApiMixerUiMixerStateNewWithParamConstMeta => const TaskConstMeta(
-            debugName: "ui_mixer_state_new_with_param",
-            argNames: ["channels", "masterBus", "buses", "routing"],
-        );
-        
-
-@override Future<UiProjectMetadata> crateApiProjectUiProjectMetadataDefault()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 121, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiProjectMetadata> crateApiProjectUiProjectMetadataDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 123,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_project_metadata,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectUiProjectMetadataDefaultConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectUiProjectMetadataDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectUiProjectMetadataDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "ui_project_metadata_default",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiProjectUiProjectMetadataDefaultConstMeta => const TaskConstMeta(
-            debugName: "ui_project_metadata_default",
-            argNames: [],
-        );
-        
-
-@override Future<UiTransportState> crateApiProjectUiTransportStateDefault()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 122, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<UiTransportState> crateApiProjectUiTransportStateDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 124,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_ui_transport_state,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiProjectUiTransportStateDefaultConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiProjectUiTransportStateDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiProjectUiTransportStateDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "ui_transport_state_default",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiProjectUiTransportStateDefaultConstMeta => const TaskConstMeta(
-            debugName: "ui_transport_state_default",
-            argNames: [],
-        );
-        
-
-@override Future<void> crateApiSessionUndo()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 123, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSessionUndo() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 125,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        )
-        ,
-            constMeta: kCrateApiSessionUndoConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSessionUndoConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSessionUndoConstMeta =>
+      const TaskConstMeta(debugName: "undo", argNames: []);
 
-        TaskConstMeta get kCrateApiSessionUndoConstMeta => const TaskConstMeta(
-            debugName: "undo",
-            argNames: [],
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AnyhowException(raw as String);
+  }
+
+  @protected
+  int dco_decode_CastedPrimitive_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError(
+      'Not implemented in this codec, please use the other one',
+    );
+  }
+
+  @protected
+  int dco_decode_CastedPrimitive_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError(
+      'Not implemented in this codec, please use the other one',
+    );
+  }
+
+  @protected
+  int dco_decode_CastedPrimitive_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError(
+      'Not implemented in this codec, please use the other one',
+    );
+  }
+
+  @protected
+  Map<int, AudioWaveformUiForClip>
+  dco_decode_Map_u_32_audio_waveform_ui_for_clip_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_audio_waveform_ui_for_clip(
+        raw,
+      ).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>
+  dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+        raw,
+      ).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_f_32(raw).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_ui_bus(raw).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, UiGeneratorInstance> dco_decode_Map_u_32_ui_generator_instance_None(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_ui_generator_instance(
+        raw,
+      ).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, UiMixerChannel> dco_decode_Map_u_32_ui_mixer_channel_None(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_ui_mixer_channel(
+        raw,
+      ).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, UiPattern> dco_decode_Map_u_32_ui_pattern_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_ui_pattern(
+        raw,
+      ).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_ui_track(
+        raw,
+      ).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
+  RustStreamSink<UiMixerParamEvent>
+  dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
+  RustStreamSink<UiTransportFeedback>
+  dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
+  String dco_decode_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as String;
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    return AudioWaveformUiForAudioProperties(
+      previewBuffer: dco_decode_list_prim_i_8_strict(arr[0]),
+      filePath: dco_decode_String(arr[1]),
+      name: dco_decode_String(arr[2]),
+      sampleRate: dco_decode_u_32(arr[3]),
+      channels: dco_decode_u_16(arr[4]),
+      duration: dco_decode_f_64(arr[5]),
+      rootNote: dco_decode_u_8(arr[6]),
+      fineTune: dco_decode_i_16(arr[7]),
+      trimStart: dco_decode_u_32(arr[8]),
+      trimEnd: dco_decode_u_32(arr[9]),
+      isLooping: dco_decode_bool(arr[10]),
+      normalized: dco_decode_bool(arr[11]),
+      muted: dco_decode_bool(arr[12]),
+    );
+  }
+
+  @protected
+  AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return AudioWaveformUiForClip(
+      name: dco_decode_String(arr[0]),
+      previewBuffer: dco_decode_list_prim_i_8_strict(arr[1]),
+      sampleRate: dco_decode_u_32(arr[2]),
+      channels: dco_decode_u_16(arr[3]),
+      duration: dco_decode_f_64(arr[4]),
+    );
+  }
+
+  @protected
+  AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AudioWaveformUiForSourceList(
+      name: dco_decode_String(arr[0]),
+      muted: dco_decode_bool(arr[1]),
+      sampleRate: dco_decode_u_32(arr[2]),
+    );
+  }
+
+  @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_audio_waveform_ui_for_audio_properties(raw);
+  }
+
+  @protected
+  bool dco_decode_box_autoadd_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  double dco_decode_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  (int, int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as (int, int);
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ui_effect_target(raw);
+  }
+
+  @protected
+  UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ui_mixer_channel(raw);
+  }
+
+  @protected
+  UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ui_plugin_instance(raw);
+  }
+
+  @protected
+  UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ui_routing_node(raw);
+  }
+
+  @protected
+  double dco_decode_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  double dco_decode_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  int dco_decode_i_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeI64(raw);
+  }
+
+  @protected
+  int dco_decode_i_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  KarbeatPluginType dco_decode_karbeat_plugin_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KarbeatPluginType.values[raw as int];
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_parameter_spec_dto).toList();
+  }
+
+  @protected
+  Int8List dco_decode_list_prim_i_8_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Int8List;
+  }
+
+  @protected
+  List<int> dco_decode_list_prim_u_32_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<int>;
+  }
+
+  @protected
+  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Uint32List;
+  }
+
+  @protected
+  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Uint8List;
+  }
+
+  @protected
+  List<(int, AudioWaveformUiForClip)>
+  dco_decode_list_record_u_32_audio_waveform_ui_for_clip(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_record_u_32_audio_waveform_ui_for_clip)
+        .toList();
+  }
+
+  @protected
+  List<(int, AudioWaveformUiForSourceList)>
+  dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_record_u_32_audio_waveform_ui_for_source_list)
+        .toList();
+  }
+
+  @protected
+  List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_record_u_32_f_32).toList();
+  }
+
+  @protected
+  List<(int, UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_bus).toList();
+  }
+
+  @protected
+  List<(int, UiGeneratorInstance)>
+  dco_decode_list_record_u_32_ui_generator_instance(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_record_u_32_ui_generator_instance)
+        .toList();
+  }
+
+  @protected
+  List<(int, UiMixerChannel)> dco_decode_list_record_u_32_ui_mixer_channel(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_record_u_32_ui_mixer_channel)
+        .toList();
+  }
+
+  @protected
+  List<(int, UiPattern)> dco_decode_list_record_u_32_ui_pattern(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_record_u_32_ui_pattern)
+        .toList();
+  }
+
+  @protected
+  List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_track).toList();
+  }
+
+  @protected
+  List<UiClip> dco_decode_list_ui_clip(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_clip).toList();
+  }
+
+  @protected
+  List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_effect_instance).toList();
+  }
+
+  @protected
+  List<UiEffectParameterSnapshot> dco_decode_list_ui_effect_parameter_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_effect_parameter_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_effect_summary).toList();
+  }
+
+  @protected
+  List<UiGeneratorParameterSnapshot>
+  dco_decode_list_ui_generator_parameter_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_generator_parameter_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_mixer_channel_params)
+        .toList();
+  }
+
+  @protected
+  List<UiNote> dco_decode_list_ui_note(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_note).toList();
+  }
+
+  @protected
+  List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_parameter_value).toList();
+  }
+
+  @protected
+  List<UiPluginInfo> dco_decode_list_ui_plugin_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_plugin_info).toList();
+  }
+
+  @protected
+  List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_plugin_parameter).toList();
+  }
+
+  @protected
+  List<UiResponseCurvePoint> dco_decode_list_ui_response_curve_point(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_response_curve_point)
+        .toList();
+  }
+
+  @protected
+  List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_routing_connection)
+        .toList();
+  }
+
+  @protected
+  int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_CastedPrimitive_i_64(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_CastedPrimitive_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_CastedPrimitive_u_64(raw);
+  }
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>?
+  dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(raw);
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties?
+  dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(raw);
+  }
+
+  @protected
+  bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_bool(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_32(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
+  List<ParameterSpecDTO>? dco_decode_opt_list_parameter_spec_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_parameter_spec_dto(raw);
+  }
+
+  @protected
+  ParameterSpecDTO dco_decode_parameter_spec_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return ParameterSpecDTO(
+      id: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      group: dco_decode_String(arr[2]),
+      value: dco_decode_f_32(arr[3]),
+      min: dco_decode_f_32(arr[4]),
+      max: dco_decode_f_32(arr[5]),
+      defaultValue: dco_decode_f_32(arr[6]),
+      step: dco_decode_f_32(arr[7]),
+      valueType: dco_decode_parameter_value_type_dto(arr[8]),
+      choices: dco_decode_list_String(arr[9]),
+    );
+  }
+
+  @protected
+  ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ParameterValueTypeDTO.values[raw as int];
+  }
+
+  @protected
+  (int, AudioWaveformUiForClip)
+  dco_decode_record_u_32_audio_waveform_ui_for_clip(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (
+      dco_decode_u_32(arr[0]),
+      dco_decode_audio_waveform_ui_for_clip(arr[1]),
+    );
+  }
+
+  @protected
+  (int, AudioWaveformUiForSourceList)
+  dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (
+      dco_decode_u_32(arr[0]),
+      dco_decode_audio_waveform_ui_for_source_list(arr[1]),
+    );
+  }
+
+  @protected
+  (int, double) dco_decode_record_u_32_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_32(arr[0]), dco_decode_f_32(arr[1]));
+  }
+
+  @protected
+  (int, UiBus) dco_decode_record_u_32_ui_bus(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_32(arr[0]), dco_decode_ui_bus(arr[1]));
+  }
+
+  @protected
+  (int, UiGeneratorInstance) dco_decode_record_u_32_ui_generator_instance(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_32(arr[0]), dco_decode_ui_generator_instance(arr[1]));
+  }
+
+  @protected
+  (int, UiMixerChannel) dco_decode_record_u_32_ui_mixer_channel(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_32(arr[0]), dco_decode_ui_mixer_channel(arr[1]));
+  }
+
+  @protected
+  (int, UiPattern) dco_decode_record_u_32_ui_pattern(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_32(arr[0]), dco_decode_ui_pattern(arr[1]));
+  }
+
+  @protected
+  (int, UiTrack) dco_decode_record_u_32_ui_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_32(arr[0]), dco_decode_ui_track(arr[1]));
+  }
+
+  @protected
+  (int, int) dco_decode_record_u_8_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_8(arr[0]), dco_decode_u_8(arr[1]));
+  }
+
+  @protected
+  (UiMixerChannel, List<UiEffectInstance>)
+  dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (
+      dco_decode_ui_mixer_channel(arr[0]),
+      dco_decode_list_ui_effect_instance(arr[1]),
+    );
+  }
+
+  @protected
+  int dco_decode_u_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  int dco_decode_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  UiApplicationState dco_decode_ui_application_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return UiApplicationState(
+      metadata: dco_decode_ui_project_metadata(arr[0]),
+      transport: dco_decode_ui_transport_state(arr[1]),
+      hardwareConfig: dco_decode_ui_audio_hardware_config(arr[2]),
+      tracks: dco_decode_Map_u_32_ui_track_None(arr[3]),
+      generators: dco_decode_Map_u_32_ui_generator_instance_None(arr[4]),
+      patterns: dco_decode_Map_u_32_ui_pattern_None(arr[5]),
+      mixer: dco_decode_ui_mixer_state(arr[6]),
+      maxSampleIndex: dco_decode_u_32(arr[7]),
+      audioSources: dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+        arr[8],
+      ),
+    );
+  }
+
+  @protected
+  UiAudioHardwareConfig dco_decode_ui_audio_hardware_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return UiAudioHardwareConfig(
+      selectedInputDevice: dco_decode_String(arr[0]),
+      selectedOutputDevice: dco_decode_String(arr[1]),
+      sampleRate: dco_decode_u_32(arr[2]),
+      bufferSize: dco_decode_u_32(arr[3]),
+      cpuLoad: dco_decode_f_32(arr[4]),
+    );
+  }
+
+  @protected
+  UiBus dco_decode_ui_bus(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return UiBus(
+      id: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      channel: dco_decode_ui_mixer_channel(arr[2]),
+    );
+  }
+
+  @protected
+  UiClip dco_decode_ui_clip(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return UiClip(
+      name: dco_decode_String(arr[0]),
+      id: dco_decode_u_32(arr[1]),
+      startTime: dco_decode_CastedPrimitive_u_64(arr[2]),
+      source: dco_decode_ui_clip_source(arr[3]),
+      offsetStart: dco_decode_CastedPrimitive_u_64(arr[4]),
+      loopLength: dco_decode_CastedPrimitive_u_64(arr[5]),
+      isSampleBased: dco_decode_bool(arr[6]),
+    );
+  }
+
+  @protected
+  UiClipSource dco_decode_ui_clip_source(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiClipSource_Audio(sourceId: dco_decode_u_32(raw[1]));
+      case 1:
+        return UiClipSource_Midi(patternId: dco_decode_u_32(raw[1]));
+      case 2:
+        return UiClipSource_None();
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiClipboardContent_Empty();
+      case 1:
+        return UiClipboardContent_Notes(dco_decode_list_ui_note(raw[1]));
+      case 2:
+        return UiClipboardContent_Clips(dco_decode_list_ui_clip(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  UiEffectInstance dco_decode_ui_effect_instance(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return UiEffectInstance(
+      id: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      parameters: dco_decode_Map_u_32_f_32_None(arr[2]),
+    );
+  }
+
+  @protected
+  UiEffectParameterSnapshot dco_decode_ui_effect_parameter_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return UiEffectParameterSnapshot(
+      target: dco_decode_ui_effect_target(arr[0]),
+      effectId: dco_decode_u_32(arr[1]),
+      parameters: dco_decode_list_ui_parameter_value(arr[2]),
+    );
+  }
+
+  @protected
+  UiEffectSummary dco_decode_ui_effect_summary(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return UiEffectSummary(
+      id: dco_decode_u_32(arr[0]),
+      registryId: dco_decode_u_32(arr[1]),
+      name: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  UiEffectTarget dco_decode_ui_effect_target(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiEffectTarget_Track(dco_decode_u_32(raw[1]));
+      case 1:
+        return UiEffectTarget_Master();
+      case 2:
+        return UiEffectTarget_Bus(dco_decode_u_32(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiGeneratorInstance(
+      id: dco_decode_u_32(arr[0]),
+      instanceType: dco_decode_ui_generator_instance_type(arr[1]),
+    );
+  }
+
+  @protected
+  UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiGeneratorInstanceType_Plugin(
+          dco_decode_box_autoadd_ui_plugin_instance(raw[1]),
         );
-        
-
-
-
-                  @protected AnyhowException dco_decode_AnyhowException(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return AnyhowException(raw as String); }
-
-@protected int dco_decode_CastedPrimitive_i_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-throw UnimplementedError('Not implemented in this codec, please use the other one'); }
-
-@protected int dco_decode_CastedPrimitive_u_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-throw UnimplementedError('Not implemented in this codec, please use the other one'); }
-
-@protected int dco_decode_CastedPrimitive_usize(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-throw UnimplementedError('Not implemented in this codec, please use the other one'); }
-
-@protected Map<int, AudioWaveformUiForClip> dco_decode_Map_u_32_audio_waveform_ui_for_clip_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_audio_waveform_ui_for_clip(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, AudioWaveformUiForSourceList> dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_f_32(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_ui_bus(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiGeneratorInstance> dco_decode_Map_u_32_ui_generator_instance_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_ui_generator_instance(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiMixerChannel> dco_decode_Map_u_32_ui_mixer_channel_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_ui_mixer_channel(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiPattern> dco_decode_Map_u_32_ui_pattern_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_ui_pattern(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return Map.fromEntries(dco_decode_list_record_u_32_ui_track(raw).map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-throw UnimplementedError(); }
-
-@protected RustStreamSink<UiMixerParamEvent> dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-throw UnimplementedError(); }
-
-@protected RustStreamSink<UiTransportFeedback> dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-throw UnimplementedError(); }
-
-@protected String dco_decode_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as String; }
-
-@protected AudioWaveformUiForAudioProperties dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 13) throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
-                return AudioWaveformUiForAudioProperties(previewBuffer: dco_decode_list_prim_i_8_strict(arr[0]),
-filePath: dco_decode_String(arr[1]),
-name: dco_decode_String(arr[2]),
-sampleRate: dco_decode_u_32(arr[3]),
-channels: dco_decode_u_16(arr[4]),
-duration: dco_decode_f_64(arr[5]),
-rootNote: dco_decode_u_8(arr[6]),
-fineTune: dco_decode_i_16(arr[7]),
-trimStart: dco_decode_u_32(arr[8]),
-trimEnd: dco_decode_u_32(arr[9]),
-isLooping: dco_decode_bool(arr[10]),
-normalized: dco_decode_bool(arr[11]),
-muted: dco_decode_bool(arr[12]),); }
-
-@protected AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-                return AudioWaveformUiForClip(name: dco_decode_String(arr[0]),
-previewBuffer: dco_decode_list_prim_i_8_strict(arr[1]),
-sampleRate: dco_decode_u_32(arr[2]),
-channels: dco_decode_u_16(arr[3]),
-duration: dco_decode_f_64(arr[4]),); }
-
-@protected AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return AudioWaveformUiForSourceList(name: dco_decode_String(arr[0]),
-muted: dco_decode_bool(arr[1]),
-sampleRate: dco_decode_u_32(arr[2]),); }
-
-@protected bool dco_decode_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as bool; }
-
-@protected AudioWaveformUiForAudioProperties dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_audio_waveform_ui_for_audio_properties(raw); }
-
-@protected bool dco_decode_box_autoadd_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as bool; }
-
-@protected double dco_decode_box_autoadd_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as double; }
-
-@protected (int,int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as (int,int); }
-
-@protected int dco_decode_box_autoadd_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_ui_effect_target(raw); }
-
-@protected UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_ui_mixer_channel(raw); }
-
-@protected UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_ui_plugin_instance(raw); }
-
-@protected UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_ui_routing_node(raw); }
-
-@protected double dco_decode_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as double; }
-
-@protected double dco_decode_f_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as double; }
-
-@protected int dco_decode_i_16(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected int dco_decode_i_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected PlatformInt64 dco_decode_i_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dcoDecodeI64(raw); }
-
-@protected int dco_decode_i_8(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected KarbeatPluginType dco_decode_karbeat_plugin_type(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return KarbeatPluginType.values[raw as int]; }
-
-@protected List<String> dco_decode_list_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_String).toList(); }
-
-@protected List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_parameter_spec_dto).toList(); }
-
-@protected Int8List dco_decode_list_prim_i_8_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as Int8List; }
-
-@protected List<int> dco_decode_list_prim_u_32_loose(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as List<int>; }
-
-@protected Uint32List dco_decode_list_prim_u_32_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as Uint32List; }
-
-@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as Uint8List; }
-
-@protected List<(int,AudioWaveformUiForClip)> dco_decode_list_record_u_32_audio_waveform_ui_for_clip(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_audio_waveform_ui_for_clip).toList(); }
-
-@protected List<(int,AudioWaveformUiForSourceList)> dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_audio_waveform_ui_for_source_list).toList(); }
-
-@protected List<(int,double)> dco_decode_list_record_u_32_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_f_32).toList(); }
-
-@protected List<(int,UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_bus).toList(); }
-
-@protected List<(int,UiGeneratorInstance)> dco_decode_list_record_u_32_ui_generator_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_generator_instance).toList(); }
-
-@protected List<(int,UiMixerChannel)> dco_decode_list_record_u_32_ui_mixer_channel(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_mixer_channel).toList(); }
-
-@protected List<(int,UiPattern)> dco_decode_list_record_u_32_ui_pattern(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_pattern).toList(); }
-
-@protected List<(int,UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_track).toList(); }
-
-@protected List<UiClip> dco_decode_list_ui_clip(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_clip).toList(); }
-
-@protected List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_effect_instance).toList(); }
-
-@protected List<UiEffectParameterSnapshot> dco_decode_list_ui_effect_parameter_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_effect_parameter_snapshot).toList(); }
-
-@protected List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_effect_summary).toList(); }
-
-@protected List<UiGeneratorParameterSnapshot> dco_decode_list_ui_generator_parameter_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_generator_parameter_snapshot).toList(); }
-
-@protected List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_mixer_channel_params).toList(); }
-
-@protected List<UiNote> dco_decode_list_ui_note(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_note).toList(); }
-
-@protected List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_parameter_value).toList(); }
-
-@protected List<UiPluginInfo> dco_decode_list_ui_plugin_info(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_plugin_info).toList(); }
-
-@protected List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_plugin_parameter).toList(); }
-
-@protected List<UiResponseCurvePoint> dco_decode_list_ui_response_curve_point(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_response_curve_point).toList(); }
-
-@protected List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_ui_routing_connection).toList(); }
-
-@protected int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_CastedPrimitive_i_64(raw); }
-
-@protected int? dco_decode_opt_CastedPrimitive_u_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_CastedPrimitive_u_64(raw); }
-
-@protected Map<int, AudioWaveformUiForSourceList>? dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(raw); }
-
-@protected String? dco_decode_opt_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_String(raw); }
-
-@protected AudioWaveformUiForAudioProperties? dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(raw); }
-
-@protected bool? dco_decode_opt_box_autoadd_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_bool(raw); }
-
-@protected double? dco_decode_opt_box_autoadd_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_f_32(raw); }
-
-@protected int? dco_decode_opt_box_autoadd_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_u_32(raw); }
-
-@protected List<ParameterSpecDTO>? dco_decode_opt_list_parameter_spec_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_list_parameter_spec_dto(raw); }
-
-@protected ParameterSpecDTO dco_decode_parameter_spec_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-                return ParameterSpecDTO(id: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-group: dco_decode_String(arr[2]),
-value: dco_decode_f_32(arr[3]),
-min: dco_decode_f_32(arr[4]),
-max: dco_decode_f_32(arr[5]),
-defaultValue: dco_decode_f_32(arr[6]),
-step: dco_decode_f_32(arr[7]),
-valueType: dco_decode_parameter_value_type_dto(arr[8]),
-choices: dco_decode_list_String(arr[9]),); }
-
-@protected ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return ParameterValueTypeDTO.values[raw as int]; }
-
-@protected (int,AudioWaveformUiForClip) dco_decode_record_u_32_audio_waveform_ui_for_clip(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_audio_waveform_ui_for_clip(arr[1]),); }
-
-@protected (int,AudioWaveformUiForSourceList) dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_audio_waveform_ui_for_source_list(arr[1]),); }
-
-@protected (int,double) dco_decode_record_u_32_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_f_32(arr[1]),); }
-
-@protected (int,UiBus) dco_decode_record_u_32_ui_bus(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_ui_bus(arr[1]),); }
-
-@protected (int,UiGeneratorInstance) dco_decode_record_u_32_ui_generator_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_ui_generator_instance(arr[1]),); }
-
-@protected (int,UiMixerChannel) dco_decode_record_u_32_ui_mixer_channel(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_ui_mixer_channel(arr[1]),); }
-
-@protected (int,UiPattern) dco_decode_record_u_32_ui_pattern(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_ui_pattern(arr[1]),); }
-
-@protected (int,UiTrack) dco_decode_record_u_32_ui_track(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_32(arr[0]),dco_decode_ui_track(arr[1]),); }
-
-@protected (int,int) dco_decode_record_u_8_u_8(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_u_8(arr[0]),dco_decode_u_8(arr[1]),); }
-
-@protected (UiMixerChannel,List<UiEffectInstance>) dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-            if (arr.length != 2) {
-                throw Exception('Expected 2 elements, got ${arr.length}');
-            }
-            return (dco_decode_ui_mixer_channel(arr[0]),dco_decode_list_ui_effect_instance(arr[1]),); }
-
-@protected int dco_decode_u_16(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected int dco_decode_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected BigInt dco_decode_u_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dcoDecodeU64(raw); }
-
-@protected int dco_decode_u_8(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected UiApplicationState dco_decode_ui_application_state(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-                return UiApplicationState(metadata: dco_decode_ui_project_metadata(arr[0]),
-transport: dco_decode_ui_transport_state(arr[1]),
-hardwareConfig: dco_decode_ui_audio_hardware_config(arr[2]),
-tracks: dco_decode_Map_u_32_ui_track_None(arr[3]),
-generators: dco_decode_Map_u_32_ui_generator_instance_None(arr[4]),
-patterns: dco_decode_Map_u_32_ui_pattern_None(arr[5]),
-mixer: dco_decode_ui_mixer_state(arr[6]),
-maxSampleIndex: dco_decode_u_32(arr[7]),
-audioSources: dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(arr[8]),); }
-
-@protected UiAudioHardwareConfig dco_decode_ui_audio_hardware_config(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-                return UiAudioHardwareConfig(selectedInputDevice: dco_decode_String(arr[0]),
-selectedOutputDevice: dco_decode_String(arr[1]),
-sampleRate: dco_decode_u_32(arr[2]),
-bufferSize: dco_decode_u_32(arr[3]),
-cpuLoad: dco_decode_f_32(arr[4]),); }
-
-@protected UiBus dco_decode_ui_bus(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return UiBus(id: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-channel: dco_decode_ui_mixer_channel(arr[2]),); }
-
-@protected UiClip dco_decode_ui_clip(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-                return UiClip(name: dco_decode_String(arr[0]),
-id: dco_decode_u_32(arr[1]),
-startTime: dco_decode_CastedPrimitive_u_64(arr[2]),
-source: dco_decode_ui_clip_source(arr[3]),
-offsetStart: dco_decode_CastedPrimitive_u_64(arr[4]),
-loopLength: dco_decode_CastedPrimitive_u_64(arr[5]),
-isSampleBased: dco_decode_bool(arr[6]),); }
-
-@protected UiClipSource dco_decode_ui_clip_source(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-switch (raw[0]) {
-                case 0: return UiClipSource_Audio(sourceId: dco_decode_u_32(raw[1]),);
-case 1: return UiClipSource_Midi(patternId: dco_decode_u_32(raw[1]),);
-case 2: return UiClipSource_None();
-                default: throw Exception("unreachable");
-            } }
-
-@protected UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-switch (raw[0]) {
-                case 0: return UiClipboardContent_Empty();
-case 1: return UiClipboardContent_Notes(dco_decode_list_ui_note(raw[1]),);
-case 2: return UiClipboardContent_Clips(dco_decode_list_ui_clip(raw[1]),);
-                default: throw Exception("unreachable");
-            } }
-
-@protected UiEffectInstance dco_decode_ui_effect_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return UiEffectInstance(id: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-parameters: dco_decode_Map_u_32_f_32_None(arr[2]),); }
-
-@protected UiEffectParameterSnapshot dco_decode_ui_effect_parameter_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return UiEffectParameterSnapshot(target: dco_decode_ui_effect_target(arr[0]),
-effectId: dco_decode_u_32(arr[1]),
-parameters: dco_decode_list_ui_parameter_value(arr[2]),); }
-
-@protected UiEffectSummary dco_decode_ui_effect_summary(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return UiEffectSummary(id: dco_decode_u_32(arr[0]),
-registryId: dco_decode_u_32(arr[1]),
-name: dco_decode_String(arr[2]),); }
-
-@protected UiEffectTarget dco_decode_ui_effect_target(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-switch (raw[0]) {
-                case 0: return UiEffectTarget_Track(dco_decode_u_32(raw[1]),);
-case 1: return UiEffectTarget_Master();
-case 2: return UiEffectTarget_Bus(dco_decode_u_32(raw[1]),);
-                default: throw Exception("unreachable");
-            } }
-
-@protected UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return UiGeneratorInstance(id: dco_decode_u_32(arr[0]),
-instanceType: dco_decode_ui_generator_instance_type(arr[1]),); }
-
-@protected UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-switch (raw[0]) {
-                case 0: return UiGeneratorInstanceType_Plugin(dco_decode_box_autoadd_ui_plugin_instance(raw[1]),);
-case 1: return UiGeneratorInstanceType_Sampler(assetId: dco_decode_u_32(raw[1]),rootNote: dco_decode_u_8(raw[2]),);
-                default: throw Exception("unreachable");
-            } }
-
-@protected UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return UiGeneratorParameterSnapshot(generatorId: dco_decode_u_32(arr[0]),
-parameters: dco_decode_list_ui_parameter_value(arr[1]),); }
-
-@protected UiMixerChannel dco_decode_ui_mixer_channel(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return UiMixerChannel(volume: dco_decode_f_32(arr[0]),
-pan: dco_decode_f_32(arr[1]),
-mute: dco_decode_bool(arr[2]),
-solo: dco_decode_bool(arr[3]),
-invertedPhase: dco_decode_bool(arr[4]),
-effects: dco_decode_list_ui_effect_summary(arr[5]),); }
-
-@protected UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-switch (raw[0]) {
-                case 0: return UiMixerChannelParams_Volume(dco_decode_f_32(raw[1]),);
-case 1: return UiMixerChannelParams_Pan(dco_decode_f_32(raw[1]),);
-case 2: return UiMixerChannelParams_Mute(dco_decode_bool(raw[1]),);
-case 3: return UiMixerChannelParams_InvertedPhase(dco_decode_bool(raw[1]),);
-case 4: return UiMixerChannelParams_Solo(dco_decode_bool(raw[1]),);
-                default: throw Exception("unreachable");
-            } }
-
-@protected UiMixerParamEvent dco_decode_ui_mixer_param_event(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-                return UiMixerParamEvent(trackId: dco_decode_u_32(arr[0]),
-volume: dco_decode_opt_box_autoadd_f_32(arr[1]),
-pan: dco_decode_opt_box_autoadd_f_32(arr[2]),
-mute: dco_decode_opt_box_autoadd_bool(arr[3]),
-solo: dco_decode_opt_box_autoadd_bool(arr[4]),); }
-
-@protected UiMixerState dco_decode_ui_mixer_state(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return UiMixerState.raw(channels: dco_decode_Map_u_32_ui_mixer_channel_None(arr[0]),
-masterBus: dco_decode_ui_mixer_channel(arr[1]),
-buses: dco_decode_Map_u_32_ui_bus_None(arr[2]),
-routing: dco_decode_list_ui_routing_connection(arr[3]),); }
-
-@protected UiNote dco_decode_ui_note(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 8) throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-                return UiNote(id: dco_decode_u_32(arr[0]),
-startTick: dco_decode_CastedPrimitive_u_64(arr[1]),
-duration: dco_decode_CastedPrimitive_u_64(arr[2]),
-key: dco_decode_u_8(arr[3]),
-velocity: dco_decode_u_8(arr[4]),
-probability: dco_decode_f_32(arr[5]),
-microOffset: dco_decode_i_8(arr[6]),
-mute: dco_decode_bool(arr[7]),); }
-
-@protected UiParameterType dco_decode_ui_parameter_type(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return UiParameterType.values[raw as int]; }
-
-@protected UiParameterValue dco_decode_ui_parameter_value(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return UiParameterValue(paramId: dco_decode_u_32(arr[0]),
-value: dco_decode_f_32(arr[1]),); }
-
-@protected UiPattern dco_decode_ui_pattern(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return UiPattern(id: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-lengthTicks: dco_decode_CastedPrimitive_u_64(arr[2]),
-notes: dco_decode_list_ui_note(arr[3]),); }
-
-@protected UiPluginInfo dco_decode_ui_plugin_info(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return UiPluginInfo(id: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-pluginType: dco_decode_karbeat_plugin_type(arr[2]),); }
-
-@protected UiPluginInstance dco_decode_ui_plugin_instance(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return UiPluginInstance(registryId: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-bypass: dco_decode_bool(arr[2]),
-parameters: dco_decode_Map_u_32_f_32_None(arr[3]),); }
-
-@protected UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-                return UiPluginParameter(id: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-group: dco_decode_String(arr[2]),
-value: dco_decode_f_32(arr[3]),
-min: dco_decode_f_32(arr[4]),
-max: dco_decode_f_32(arr[5]),
-defaultValue: dco_decode_f_32(arr[6]),
-step: dco_decode_f_32(arr[7]),
-paramType: dco_decode_ui_parameter_type(arr[8]),
-choices: dco_decode_list_String(arr[9]),); }
-
-@protected UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return UiProjectMetadata(name: dco_decode_String(arr[0]),
-author: dco_decode_String(arr[1]),
-version: dco_decode_String(arr[2]),
-createdAt: dco_decode_String(arr[3]),); }
-
-@protected UiResizeEdge dco_decode_ui_resize_edge(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return UiResizeEdge.values[raw as int]; }
-
-@protected UiResponseCurvePoint dco_decode_ui_response_curve_point(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return UiResponseCurvePoint(frequency: dco_decode_f_32(arr[0]),
-magnitudeDb: dco_decode_f_32(arr[1]),); }
-
-@protected UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return UiRoutingConnection(source: dco_decode_ui_routing_node(arr[0]),
-destination: dco_decode_ui_routing_node(arr[1]),
-sendLevel: dco_decode_f_32(arr[2]),
-isSend: dco_decode_bool(arr[3]),); }
-
-@protected UiRoutingNode dco_decode_ui_routing_node(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-switch (raw[0]) {
-                case 0: return UiRoutingNode_Track(dco_decode_u_32(raw[1]),);
-case 1: return UiRoutingNode_Bus(dco_decode_u_32(raw[1]),);
-case 2: return UiRoutingNode_Master();
-                default: throw Exception("unreachable");
-            } }
-
-@protected UiSourceType dco_decode_ui_source_type(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return UiSourceType.values[raw as int]; }
-
-@protected UiTrack dco_decode_ui_track(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return UiTrack(id: dco_decode_u_32(arr[0]),
-name: dco_decode_String(arr[1]),
-color: dco_decode_String(arr[2]),
-trackType: dco_decode_ui_track_type(arr[3]),
-clips: dco_decode_list_ui_clip(arr[4]),
-generatorId: dco_decode_opt_box_autoadd_u_32(arr[5]),); }
-
-@protected UiTrackType dco_decode_ui_track_type(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return UiTrackType.values[raw as int]; }
-
-@protected UiTransportFeedback dco_decode_ui_transport_feedback(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 15) throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
-                return UiTransportFeedback(samples: dco_decode_u_32(arr[0]),
-ticks: dco_decode_u_32(arr[1]),
-beat: dco_decode_CastedPrimitive_usize(arr[2]),
-bar: dco_decode_CastedPrimitive_usize(arr[3]),
-tempo: dco_decode_f_32(arr[4]),
-sampleRate: dco_decode_u_32(arr[5]),
-isPlaying: dco_decode_bool(arr[6]),
-isLooping: dco_decode_bool(arr[7]),
-isRecording: dco_decode_bool(arr[8]),
-isPatternPlaying: dco_decode_bool(arr[9]),
-isPatternMode: dco_decode_bool(arr[10]),
-patternSamples: dco_decode_u_32(arr[11]),
-patternTicks: dco_decode_u_32(arr[12]),
-patternBeat: dco_decode_CastedPrimitive_usize(arr[13]),
-patternBar: dco_decode_CastedPrimitive_usize(arr[14]),); }
-
-@protected UiTransportState dco_decode_ui_transport_state(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return UiTransportState(bpm: dco_decode_f_32(arr[0]),
-timeSignature: dco_decode_record_u_8_u_8(arr[1]),); }
-
-@protected void dco_decode_unit(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return; }
-
-@protected BigInt dco_decode_usize(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dcoDecodeU64(raw); }
-
-@protected AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_String(deserializer);
-        return AnyhowException(inner); }
-
-@protected int sse_decode_CastedPrimitive_i_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_i_64(deserializer);
-        return inner.toInt(); }
-
-@protected int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_u_64(deserializer);
-        return inner.toInt(); }
-
-@protected int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_usize(deserializer);
-        return inner.toInt(); }
-
-@protected Map<int, AudioWaveformUiForClip> sse_decode_Map_u_32_audio_waveform_ui_for_clip_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_audio_waveform_ui_for_clip(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, AudioWaveformUiForSourceList> sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_f_32(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_ui_bus(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiGeneratorInstance> sse_decode_Map_u_32_ui_generator_instance_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_ui_generator_instance(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiMixerChannel> sse_decode_Map_u_32_ui_mixer_channel_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_ui_mixer_channel(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiPattern> sse_decode_Map_u_32_ui_pattern_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_ui_pattern(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_record_u_32_ui_track(deserializer);
-        return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2))); }
-
-@protected RustStreamSink<double> sse_decode_StreamSink_f_32_Sse(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-throw UnimplementedError('Unreachable ()'); }
-
-@protected RustStreamSink<UiMixerParamEvent> sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-throw UnimplementedError('Unreachable ()'); }
-
-@protected RustStreamSink<UiTransportFeedback> sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-throw UnimplementedError('Unreachable ()'); }
-
-@protected String sse_decode_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_prim_u_8_strict(deserializer);
-        return utf8.decoder.convert(inner); }
-
-@protected AudioWaveformUiForAudioProperties sse_decode_audio_waveform_ui_for_audio_properties(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_previewBuffer = sse_decode_list_prim_i_8_strict(deserializer);
-var var_filePath = sse_decode_String(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_sampleRate = sse_decode_u_32(deserializer);
-var var_channels = sse_decode_u_16(deserializer);
-var var_duration = sse_decode_f_64(deserializer);
-var var_rootNote = sse_decode_u_8(deserializer);
-var var_fineTune = sse_decode_i_16(deserializer);
-var var_trimStart = sse_decode_u_32(deserializer);
-var var_trimEnd = sse_decode_u_32(deserializer);
-var var_isLooping = sse_decode_bool(deserializer);
-var var_normalized = sse_decode_bool(deserializer);
-var var_muted = sse_decode_bool(deserializer);
-return AudioWaveformUiForAudioProperties(previewBuffer: var_previewBuffer, filePath: var_filePath, name: var_name, sampleRate: var_sampleRate, channels: var_channels, duration: var_duration, rootNote: var_rootNote, fineTune: var_fineTune, trimStart: var_trimStart, trimEnd: var_trimEnd, isLooping: var_isLooping, normalized: var_normalized, muted: var_muted); }
-
-@protected AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_name = sse_decode_String(deserializer);
-var var_previewBuffer = sse_decode_list_prim_i_8_strict(deserializer);
-var var_sampleRate = sse_decode_u_32(deserializer);
-var var_channels = sse_decode_u_16(deserializer);
-var var_duration = sse_decode_f_64(deserializer);
-return AudioWaveformUiForClip(name: var_name, previewBuffer: var_previewBuffer, sampleRate: var_sampleRate, channels: var_channels, duration: var_duration); }
-
-@protected AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_name = sse_decode_String(deserializer);
-var var_muted = sse_decode_bool(deserializer);
-var var_sampleRate = sse_decode_u_32(deserializer);
-return AudioWaveformUiForSourceList(name: var_name, muted: var_muted, sampleRate: var_sampleRate); }
-
-@protected bool sse_decode_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getUint8() != 0; }
-
-@protected AudioWaveformUiForAudioProperties sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_audio_waveform_ui_for_audio_properties(deserializer)); }
-
-@protected bool sse_decode_box_autoadd_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_bool(deserializer)); }
-
-@protected double sse_decode_box_autoadd_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_f_32(deserializer)); }
-
-@protected (int,int) sse_decode_box_autoadd_record_u_8_u_8(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_record_u_8_u_8(deserializer)); }
-
-@protected int sse_decode_box_autoadd_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_u_32(deserializer)); }
-
-@protected UiEffectTarget sse_decode_box_autoadd_ui_effect_target(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_ui_effect_target(deserializer)); }
-
-@protected UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_ui_mixer_channel(deserializer)); }
-
-@protected UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_ui_plugin_instance(deserializer)); }
-
-@protected UiRoutingNode sse_decode_box_autoadd_ui_routing_node(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_ui_routing_node(deserializer)); }
-
-@protected double sse_decode_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getFloat32(); }
-
-@protected double sse_decode_f_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getFloat64(); }
-
-@protected int sse_decode_i_16(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getInt16(); }
-
-@protected int sse_decode_i_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getInt32(); }
-
-@protected PlatformInt64 sse_decode_i_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getPlatformInt64(); }
-
-@protected int sse_decode_i_8(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getInt8(); }
-
-@protected KarbeatPluginType sse_decode_karbeat_plugin_type(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_i_32(deserializer);
-        return KarbeatPluginType.values[inner]; }
-
-@protected List<String> sse_decode_list_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <String>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_String(deserializer)); }
-        return ans_;
-         }
-
-@protected List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <ParameterSpecDTO>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_parameter_spec_dto(deserializer)); }
-        return ans_;
-         }
-
-@protected Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var len_ = sse_decode_i_32(deserializer);
-                return deserializer.buffer.getInt8List(len_); }
-
-@protected List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var len_ = sse_decode_i_32(deserializer);
-                return deserializer.buffer.getUint32List(len_); }
-
-@protected Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var len_ = sse_decode_i_32(deserializer);
-                return deserializer.buffer.getUint32List(len_); }
-
-@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var len_ = sse_decode_i_32(deserializer);
-                return deserializer.buffer.getUint8List(len_); }
-
-@protected List<(int,AudioWaveformUiForClip)> sse_decode_list_record_u_32_audio_waveform_ui_for_clip(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,AudioWaveformUiForClip)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_audio_waveform_ui_for_clip(deserializer)); }
-        return ans_;
-         }
-
-@protected List<(int,AudioWaveformUiForSourceList)> sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,AudioWaveformUiForSourceList)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_audio_waveform_ui_for_source_list(deserializer)); }
-        return ans_;
-         }
-
-@protected List<(int,double)> sse_decode_list_record_u_32_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,double)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_f_32(deserializer)); }
-        return ans_;
-         }
-
-@protected List<(int,UiBus)> sse_decode_list_record_u_32_ui_bus(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,UiBus)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_ui_bus(deserializer)); }
-        return ans_;
-         }
-
-@protected List<(int,UiGeneratorInstance)> sse_decode_list_record_u_32_ui_generator_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,UiGeneratorInstance)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_ui_generator_instance(deserializer)); }
-        return ans_;
-         }
-
-@protected List<(int,UiMixerChannel)> sse_decode_list_record_u_32_ui_mixer_channel(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,UiMixerChannel)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_ui_mixer_channel(deserializer)); }
-        return ans_;
-         }
-
-@protected List<(int,UiPattern)> sse_decode_list_record_u_32_ui_pattern(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,UiPattern)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_ui_pattern(deserializer)); }
-        return ans_;
-         }
-
-@protected List<(int,UiTrack)> sse_decode_list_record_u_32_ui_track(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <(int,UiTrack)>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_record_u_32_ui_track(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiClip>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_clip(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiEffectInstance> sse_decode_list_ui_effect_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiEffectInstance>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_effect_instance(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiEffectParameterSnapshot> sse_decode_list_ui_effect_parameter_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiEffectParameterSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_effect_parameter_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiEffectSummary> sse_decode_list_ui_effect_summary(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiEffectSummary>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_effect_summary(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiGeneratorParameterSnapshot> sse_decode_list_ui_generator_parameter_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiGeneratorParameterSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_generator_parameter_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiMixerChannelParams>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_mixer_channel_params(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiNote>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_note(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiParameterValue> sse_decode_list_ui_parameter_value(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiParameterValue>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_parameter_value(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiPluginInfo> sse_decode_list_ui_plugin_info(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiPluginInfo>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_plugin_info(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiPluginParameter>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_plugin_parameter(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiResponseCurvePoint> sse_decode_list_ui_response_curve_point(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiResponseCurvePoint>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_response_curve_point(deserializer)); }
-        return ans_;
-         }
-
-@protected List<UiRoutingConnection> sse_decode_list_ui_routing_connection(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <UiRoutingConnection>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ui_routing_connection(deserializer)); }
-        return ans_;
-         }
-
-@protected int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_CastedPrimitive_i_64(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected int? sse_decode_opt_CastedPrimitive_u_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_CastedPrimitive_u_64(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected Map<int, AudioWaveformUiForSourceList>? sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected String? sse_decode_opt_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_String(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AudioWaveformUiForAudioProperties? sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_bool(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_f_32(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_u_32(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected List<ParameterSpecDTO>? sse_decode_opt_list_parameter_spec_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_list_parameter_spec_dto(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected ParameterSpecDTO sse_decode_parameter_spec_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_group = sse_decode_String(deserializer);
-var var_value = sse_decode_f_32(deserializer);
-var var_min = sse_decode_f_32(deserializer);
-var var_max = sse_decode_f_32(deserializer);
-var var_defaultValue = sse_decode_f_32(deserializer);
-var var_step = sse_decode_f_32(deserializer);
-var var_valueType = sse_decode_parameter_value_type_dto(deserializer);
-var var_choices = sse_decode_list_String(deserializer);
-return ParameterSpecDTO(id: var_id, name: var_name, group: var_group, value: var_value, min: var_min, max: var_max, defaultValue: var_defaultValue, step: var_step, valueType: var_valueType, choices: var_choices); }
-
-@protected ParameterValueTypeDTO sse_decode_parameter_value_type_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_i_32(deserializer);
-        return ParameterValueTypeDTO.values[inner]; }
-
-@protected (int,AudioWaveformUiForClip) sse_decode_record_u_32_audio_waveform_ui_for_clip(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_audio_waveform_ui_for_clip(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,AudioWaveformUiForSourceList) sse_decode_record_u_32_audio_waveform_ui_for_source_list(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_audio_waveform_ui_for_source_list(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,double) sse_decode_record_u_32_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_f_32(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_ui_bus(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_ui_generator_instance(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,UiMixerChannel) sse_decode_record_u_32_ui_mixer_channel(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_ui_mixer_channel(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,UiPattern) sse_decode_record_u_32_ui_pattern(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_ui_pattern(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_32(deserializer);
-var var_field1 = sse_decode_ui_track(deserializer);
-return (var_field0, var_field1); }
-
-@protected (int,int) sse_decode_record_u_8_u_8(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_u_8(deserializer);
-var var_field1 = sse_decode_u_8(deserializer);
-return (var_field0, var_field1); }
-
-@protected (UiMixerChannel,List<UiEffectInstance>) sse_decode_record_ui_mixer_channel_list_ui_effect_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_field0 = sse_decode_ui_mixer_channel(deserializer);
-var var_field1 = sse_decode_list_ui_effect_instance(deserializer);
-return (var_field0, var_field1); }
-
-@protected int sse_decode_u_16(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getUint16(); }
-
-@protected int sse_decode_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getUint32(); }
-
-@protected BigInt sse_decode_u_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getBigUint64(); }
-
-@protected int sse_decode_u_8(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getUint8(); }
-
-@protected UiApplicationState sse_decode_ui_application_state(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_metadata = sse_decode_ui_project_metadata(deserializer);
-var var_transport = sse_decode_ui_transport_state(deserializer);
-var var_hardwareConfig = sse_decode_ui_audio_hardware_config(deserializer);
-var var_tracks = sse_decode_Map_u_32_ui_track_None(deserializer);
-var var_generators = sse_decode_Map_u_32_ui_generator_instance_None(deserializer);
-var var_patterns = sse_decode_Map_u_32_ui_pattern_None(deserializer);
-var var_mixer = sse_decode_ui_mixer_state(deserializer);
-var var_maxSampleIndex = sse_decode_u_32(deserializer);
-var var_audioSources = sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(deserializer);
-return UiApplicationState(metadata: var_metadata, transport: var_transport, hardwareConfig: var_hardwareConfig, tracks: var_tracks, generators: var_generators, patterns: var_patterns, mixer: var_mixer, maxSampleIndex: var_maxSampleIndex, audioSources: var_audioSources); }
-
-@protected UiAudioHardwareConfig sse_decode_ui_audio_hardware_config(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_selectedInputDevice = sse_decode_String(deserializer);
-var var_selectedOutputDevice = sse_decode_String(deserializer);
-var var_sampleRate = sse_decode_u_32(deserializer);
-var var_bufferSize = sse_decode_u_32(deserializer);
-var var_cpuLoad = sse_decode_f_32(deserializer);
-return UiAudioHardwareConfig(selectedInputDevice: var_selectedInputDevice, selectedOutputDevice: var_selectedOutputDevice, sampleRate: var_sampleRate, bufferSize: var_bufferSize, cpuLoad: var_cpuLoad); }
-
-@protected UiBus sse_decode_ui_bus(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_channel = sse_decode_ui_mixer_channel(deserializer);
-return UiBus(id: var_id, name: var_name, channel: var_channel); }
-
-@protected UiClip sse_decode_ui_clip(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_name = sse_decode_String(deserializer);
-var var_id = sse_decode_u_32(deserializer);
-var var_startTime = sse_decode_CastedPrimitive_u_64(deserializer);
-var var_source = sse_decode_ui_clip_source(deserializer);
-var var_offsetStart = sse_decode_CastedPrimitive_u_64(deserializer);
-var var_loopLength = sse_decode_CastedPrimitive_u_64(deserializer);
-var var_isSampleBased = sse_decode_bool(deserializer);
-return UiClip(name: var_name, id: var_id, startTime: var_startTime, source: var_source, offsetStart: var_offsetStart, loopLength: var_loopLength, isSampleBased: var_isSampleBased); }
-
-@protected UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            var tag_ = sse_decode_i_32(deserializer);
-            switch (tag_) { case 0: var var_sourceId = sse_decode_u_32(deserializer);
-return UiClipSource_Audio(sourceId: var_sourceId);case 1: var var_patternId = sse_decode_u_32(deserializer);
-return UiClipSource_Midi(patternId: var_patternId);case 2: return UiClipSource_None(); default: throw UnimplementedError(''); }
-             }
-
-@protected UiClipboardContent sse_decode_ui_clipboard_content(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            var tag_ = sse_decode_i_32(deserializer);
-            switch (tag_) { case 0: return UiClipboardContent_Empty();case 1: var var_field0 = sse_decode_list_ui_note(deserializer);
-return UiClipboardContent_Notes(var_field0);case 2: var var_field0 = sse_decode_list_ui_clip(deserializer);
-return UiClipboardContent_Clips(var_field0); default: throw UnimplementedError(''); }
-             }
-
-@protected UiEffectInstance sse_decode_ui_effect_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_parameters = sse_decode_Map_u_32_f_32_None(deserializer);
-return UiEffectInstance(id: var_id, name: var_name, parameters: var_parameters); }
-
-@protected UiEffectParameterSnapshot sse_decode_ui_effect_parameter_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_target = sse_decode_ui_effect_target(deserializer);
-var var_effectId = sse_decode_u_32(deserializer);
-var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
-return UiEffectParameterSnapshot(target: var_target, effectId: var_effectId, parameters: var_parameters); }
-
-@protected UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_registryId = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-return UiEffectSummary(id: var_id, registryId: var_registryId, name: var_name); }
-
-@protected UiEffectTarget sse_decode_ui_effect_target(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            var tag_ = sse_decode_i_32(deserializer);
-            switch (tag_) { case 0: var var_field0 = sse_decode_u_32(deserializer);
-return UiEffectTarget_Track(var_field0);case 1: return UiEffectTarget_Master();case 2: var var_field0 = sse_decode_u_32(deserializer);
-return UiEffectTarget_Bus(var_field0); default: throw UnimplementedError(''); }
-             }
-
-@protected UiGeneratorInstance sse_decode_ui_generator_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_instanceType = sse_decode_ui_generator_instance_type(deserializer);
-return UiGeneratorInstance(id: var_id, instanceType: var_instanceType); }
-
-@protected UiGeneratorInstanceType sse_decode_ui_generator_instance_type(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            var tag_ = sse_decode_i_32(deserializer);
-            switch (tag_) { case 0: var var_field0 = sse_decode_box_autoadd_ui_plugin_instance(deserializer);
-return UiGeneratorInstanceType_Plugin(var_field0);case 1: var var_assetId = sse_decode_u_32(deserializer);
-var var_rootNote = sse_decode_u_8(deserializer);
-return UiGeneratorInstanceType_Sampler(assetId: var_assetId, rootNote: var_rootNote); default: throw UnimplementedError(''); }
-             }
-
-@protected UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_generatorId = sse_decode_u_32(deserializer);
-var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
-return UiGeneratorParameterSnapshot(generatorId: var_generatorId, parameters: var_parameters); }
-
-@protected UiMixerChannel sse_decode_ui_mixer_channel(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_volume = sse_decode_f_32(deserializer);
-var var_pan = sse_decode_f_32(deserializer);
-var var_mute = sse_decode_bool(deserializer);
-var var_solo = sse_decode_bool(deserializer);
-var var_invertedPhase = sse_decode_bool(deserializer);
-var var_effects = sse_decode_list_ui_effect_summary(deserializer);
-return UiMixerChannel(volume: var_volume, pan: var_pan, mute: var_mute, solo: var_solo, invertedPhase: var_invertedPhase, effects: var_effects); }
-
-@protected UiMixerChannelParams sse_decode_ui_mixer_channel_params(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            var tag_ = sse_decode_i_32(deserializer);
-            switch (tag_) { case 0: var var_field0 = sse_decode_f_32(deserializer);
-return UiMixerChannelParams_Volume(var_field0);case 1: var var_field0 = sse_decode_f_32(deserializer);
-return UiMixerChannelParams_Pan(var_field0);case 2: var var_field0 = sse_decode_bool(deserializer);
-return UiMixerChannelParams_Mute(var_field0);case 3: var var_field0 = sse_decode_bool(deserializer);
-return UiMixerChannelParams_InvertedPhase(var_field0);case 4: var var_field0 = sse_decode_bool(deserializer);
-return UiMixerChannelParams_Solo(var_field0); default: throw UnimplementedError(''); }
-             }
-
-@protected UiMixerParamEvent sse_decode_ui_mixer_param_event(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_trackId = sse_decode_u_32(deserializer);
-var var_volume = sse_decode_opt_box_autoadd_f_32(deserializer);
-var var_pan = sse_decode_opt_box_autoadd_f_32(deserializer);
-var var_mute = sse_decode_opt_box_autoadd_bool(deserializer);
-var var_solo = sse_decode_opt_box_autoadd_bool(deserializer);
-return UiMixerParamEvent(trackId: var_trackId, volume: var_volume, pan: var_pan, mute: var_mute, solo: var_solo); }
-
-@protected UiMixerState sse_decode_ui_mixer_state(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_channels = sse_decode_Map_u_32_ui_mixer_channel_None(deserializer);
-var var_masterBus = sse_decode_ui_mixer_channel(deserializer);
-var var_buses = sse_decode_Map_u_32_ui_bus_None(deserializer);
-var var_routing = sse_decode_list_ui_routing_connection(deserializer);
-return UiMixerState.raw(channels: var_channels, masterBus: var_masterBus, buses: var_buses, routing: var_routing); }
-
-@protected UiNote sse_decode_ui_note(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_startTick = sse_decode_CastedPrimitive_u_64(deserializer);
-var var_duration = sse_decode_CastedPrimitive_u_64(deserializer);
-var var_key = sse_decode_u_8(deserializer);
-var var_velocity = sse_decode_u_8(deserializer);
-var var_probability = sse_decode_f_32(deserializer);
-var var_microOffset = sse_decode_i_8(deserializer);
-var var_mute = sse_decode_bool(deserializer);
-return UiNote(id: var_id, startTick: var_startTick, duration: var_duration, key: var_key, velocity: var_velocity, probability: var_probability, microOffset: var_microOffset, mute: var_mute); }
-
-@protected UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_i_32(deserializer);
-        return UiParameterType.values[inner]; }
-
-@protected UiParameterValue sse_decode_ui_parameter_value(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_paramId = sse_decode_u_32(deserializer);
-var var_value = sse_decode_f_32(deserializer);
-return UiParameterValue(paramId: var_paramId, value: var_value); }
-
-@protected UiPattern sse_decode_ui_pattern(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_lengthTicks = sse_decode_CastedPrimitive_u_64(deserializer);
-var var_notes = sse_decode_list_ui_note(deserializer);
-return UiPattern(id: var_id, name: var_name, lengthTicks: var_lengthTicks, notes: var_notes); }
-
-@protected UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_pluginType = sse_decode_karbeat_plugin_type(deserializer);
-return UiPluginInfo(id: var_id, name: var_name, pluginType: var_pluginType); }
-
-@protected UiPluginInstance sse_decode_ui_plugin_instance(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_registryId = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_bypass = sse_decode_bool(deserializer);
-var var_parameters = sse_decode_Map_u_32_f_32_None(deserializer);
-return UiPluginInstance(registryId: var_registryId, name: var_name, bypass: var_bypass, parameters: var_parameters); }
-
-@protected UiPluginParameter sse_decode_ui_plugin_parameter(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_group = sse_decode_String(deserializer);
-var var_value = sse_decode_f_32(deserializer);
-var var_min = sse_decode_f_32(deserializer);
-var var_max = sse_decode_f_32(deserializer);
-var var_defaultValue = sse_decode_f_32(deserializer);
-var var_step = sse_decode_f_32(deserializer);
-var var_paramType = sse_decode_ui_parameter_type(deserializer);
-var var_choices = sse_decode_list_String(deserializer);
-return UiPluginParameter(id: var_id, name: var_name, group: var_group, value: var_value, min: var_min, max: var_max, defaultValue: var_defaultValue, step: var_step, paramType: var_paramType, choices: var_choices); }
-
-@protected UiProjectMetadata sse_decode_ui_project_metadata(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_name = sse_decode_String(deserializer);
-var var_author = sse_decode_String(deserializer);
-var var_version = sse_decode_String(deserializer);
-var var_createdAt = sse_decode_String(deserializer);
-return UiProjectMetadata(name: var_name, author: var_author, version: var_version, createdAt: var_createdAt); }
-
-@protected UiResizeEdge sse_decode_ui_resize_edge(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_i_32(deserializer);
-        return UiResizeEdge.values[inner]; }
-
-@protected UiResponseCurvePoint sse_decode_ui_response_curve_point(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_frequency = sse_decode_f_32(deserializer);
-var var_magnitudeDb = sse_decode_f_32(deserializer);
-return UiResponseCurvePoint(frequency: var_frequency, magnitudeDb: var_magnitudeDb); }
-
-@protected UiRoutingConnection sse_decode_ui_routing_connection(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_source = sse_decode_ui_routing_node(deserializer);
-var var_destination = sse_decode_ui_routing_node(deserializer);
-var var_sendLevel = sse_decode_f_32(deserializer);
-var var_isSend = sse_decode_bool(deserializer);
-return UiRoutingConnection(source: var_source, destination: var_destination, sendLevel: var_sendLevel, isSend: var_isSend); }
-
-@protected UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            var tag_ = sse_decode_i_32(deserializer);
-            switch (tag_) { case 0: var var_field0 = sse_decode_u_32(deserializer);
-return UiRoutingNode_Track(var_field0);case 1: var var_field0 = sse_decode_u_32(deserializer);
-return UiRoutingNode_Bus(var_field0);case 2: return UiRoutingNode_Master(); default: throw UnimplementedError(''); }
-             }
-
-@protected UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_i_32(deserializer);
-        return UiSourceType.values[inner]; }
-
-@protected UiTrack sse_decode_ui_track(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_32(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_color = sse_decode_String(deserializer);
-var var_trackType = sse_decode_ui_track_type(deserializer);
-var var_clips = sse_decode_list_ui_clip(deserializer);
-var var_generatorId = sse_decode_opt_box_autoadd_u_32(deserializer);
-return UiTrack(id: var_id, name: var_name, color: var_color, trackType: var_trackType, clips: var_clips, generatorId: var_generatorId); }
-
-@protected UiTrackType sse_decode_ui_track_type(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_i_32(deserializer);
-        return UiTrackType.values[inner]; }
-
-@protected UiTransportFeedback sse_decode_ui_transport_feedback(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_samples = sse_decode_u_32(deserializer);
-var var_ticks = sse_decode_u_32(deserializer);
-var var_beat = sse_decode_CastedPrimitive_usize(deserializer);
-var var_bar = sse_decode_CastedPrimitive_usize(deserializer);
-var var_tempo = sse_decode_f_32(deserializer);
-var var_sampleRate = sse_decode_u_32(deserializer);
-var var_isPlaying = sse_decode_bool(deserializer);
-var var_isLooping = sse_decode_bool(deserializer);
-var var_isRecording = sse_decode_bool(deserializer);
-var var_isPatternPlaying = sse_decode_bool(deserializer);
-var var_isPatternMode = sse_decode_bool(deserializer);
-var var_patternSamples = sse_decode_u_32(deserializer);
-var var_patternTicks = sse_decode_u_32(deserializer);
-var var_patternBeat = sse_decode_CastedPrimitive_usize(deserializer);
-var var_patternBar = sse_decode_CastedPrimitive_usize(deserializer);
-return UiTransportFeedback(samples: var_samples, ticks: var_ticks, beat: var_beat, bar: var_bar, tempo: var_tempo, sampleRate: var_sampleRate, isPlaying: var_isPlaying, isLooping: var_isLooping, isRecording: var_isRecording, isPatternPlaying: var_isPatternPlaying, isPatternMode: var_isPatternMode, patternSamples: var_patternSamples, patternTicks: var_patternTicks, patternBeat: var_patternBeat, patternBar: var_patternBar); }
-
-@protected UiTransportState sse_decode_ui_transport_state(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_bpm = sse_decode_f_32(deserializer);
-var var_timeSignature = sse_decode_record_u_8_u_8(deserializer);
-return UiTransportState(bpm: var_bpm, timeSignature: var_timeSignature); }
-
-@protected void sse_decode_unit(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
- }
-
-@protected BigInt sse_decode_usize(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getBigUint64(); }
-
-@protected void sse_encode_AnyhowException(AnyhowException self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.message, serializer); }
-
-@protected void sse_encode_CastedPrimitive_i_64(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_64(sseEncodeCastedPrimitiveI64(self), serializer); }
-
-@protected void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(sseEncodeCastedPrimitiveU64(self), serializer); }
-
-@protected void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_usize(sseEncodeCastedPrimitiveU64(self), serializer); }
-
-@protected void sse_encode_Map_u_32_audio_waveform_ui_for_clip_None(Map<int, AudioWaveformUiForClip> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_audio_waveform_ui_for_clip(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(Map<int, AudioWaveformUiForSourceList> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_Map_u_32_f_32_None(Map<int, double> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_f_32(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_Map_u_32_ui_bus_None(Map<int, UiBus> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_ui_bus(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_Map_u_32_ui_generator_instance_None(Map<int, UiGeneratorInstance> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_ui_generator_instance(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_Map_u_32_ui_mixer_channel_None(Map<int, UiMixerChannel> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_ui_mixer_channel(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_Map_u_32_ui_pattern_None(Map<int, UiPattern> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_ui_pattern(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_Map_u_32_ui_track_None(Map<int, UiTrack> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_record_u_32_ui_track(self.entries.map((e) => (e.key, e.value)).toList(), serializer); }
-
-@protected void sse_encode_StreamSink_f_32_Sse(RustStreamSink<double> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.setupAndSerialize(codec: SseCodec(
-            decodeSuccessData: sse_decode_f_32,
-            decodeErrorData: sse_decode_AnyhowException,
-        )), serializer); }
-
-@protected void sse_encode_StreamSink_ui_mixer_param_event_Sse(RustStreamSink<UiMixerParamEvent> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.setupAndSerialize(codec: SseCodec(
-            decodeSuccessData: sse_decode_ui_mixer_param_event,
-            decodeErrorData: sse_decode_AnyhowException,
-        )), serializer); }
-
-@protected void sse_encode_StreamSink_ui_transport_feedback_Sse(RustStreamSink<UiTransportFeedback> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.setupAndSerialize(codec: SseCodec(
-            decodeSuccessData: sse_decode_ui_transport_feedback,
-            decodeErrorData: sse_decode_AnyhowException,
-        )), serializer); }
-
-@protected void sse_encode_String(String self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer); }
-
-@protected void sse_encode_audio_waveform_ui_for_audio_properties(AudioWaveformUiForAudioProperties self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_prim_i_8_strict(self.previewBuffer, serializer);
-sse_encode_String(self.filePath, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_u_32(self.sampleRate, serializer);
-sse_encode_u_16(self.channels, serializer);
-sse_encode_f_64(self.duration, serializer);
-sse_encode_u_8(self.rootNote, serializer);
-sse_encode_i_16(self.fineTune, serializer);
-sse_encode_u_32(self.trimStart, serializer);
-sse_encode_u_32(self.trimEnd, serializer);
-sse_encode_bool(self.isLooping, serializer);
-sse_encode_bool(self.normalized, serializer);
-sse_encode_bool(self.muted, serializer);
- }
-
-@protected void sse_encode_audio_waveform_ui_for_clip(AudioWaveformUiForClip self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.name, serializer);
-sse_encode_list_prim_i_8_strict(self.previewBuffer, serializer);
-sse_encode_u_32(self.sampleRate, serializer);
-sse_encode_u_16(self.channels, serializer);
-sse_encode_f_64(self.duration, serializer);
- }
-
-@protected void sse_encode_audio_waveform_ui_for_source_list(AudioWaveformUiForSourceList self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.name, serializer);
-sse_encode_bool(self.muted, serializer);
-sse_encode_u_32(self.sampleRate, serializer);
- }
-
-@protected void sse_encode_bool(bool self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putUint8(self ? 1 : 0); }
-
-@protected void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(AudioWaveformUiForAudioProperties self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_audio_waveform_ui_for_audio_properties(self, serializer); }
-
-@protected void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_bool(self, serializer); }
-
-@protected void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_f_32(self, serializer); }
-
-@protected void sse_encode_box_autoadd_record_u_8_u_8((int,int) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_record_u_8_u_8(self, serializer); }
-
-@protected void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self, serializer); }
-
-@protected void sse_encode_box_autoadd_ui_effect_target(UiEffectTarget self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_effect_target(self, serializer); }
-
-@protected void sse_encode_box_autoadd_ui_mixer_channel(UiMixerChannel self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_mixer_channel(self, serializer); }
-
-@protected void sse_encode_box_autoadd_ui_plugin_instance(UiPluginInstance self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_plugin_instance(self, serializer); }
-
-@protected void sse_encode_box_autoadd_ui_routing_node(UiRoutingNode self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_routing_node(self, serializer); }
-
-@protected void sse_encode_f_32(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putFloat32(self); }
-
-@protected void sse_encode_f_64(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putFloat64(self); }
-
-@protected void sse_encode_i_16(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putInt16(self); }
-
-@protected void sse_encode_i_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putInt32(self); }
-
-@protected void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putPlatformInt64(self); }
-
-@protected void sse_encode_i_8(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putInt8(self); }
-
-@protected void sse_encode_karbeat_plugin_type(KarbeatPluginType self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.index, serializer); }
-
-@protected void sse_encode_list_String(List<String> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_String(item, serializer); } }
-
-@protected void sse_encode_list_parameter_spec_dto(List<ParameterSpecDTO> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_parameter_spec_dto(item, serializer); } }
-
-@protected void sse_encode_list_prim_i_8_strict(Int8List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-                    serializer.buffer.putInt8List(self); }
-
-@protected void sse_encode_list_prim_u_32_loose(List<int> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-                    serializer.buffer.putUint32List(self is Uint32List ? self : Uint32List.fromList(self)); }
-
-@protected void sse_encode_list_prim_u_32_strict(Uint32List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-                    serializer.buffer.putUint32List(self); }
-
-@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-                    serializer.buffer.putUint8List(self); }
-
-@protected void sse_encode_list_record_u_32_audio_waveform_ui_for_clip(List<(int,AudioWaveformUiForClip)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_audio_waveform_ui_for_clip(item, serializer); } }
-
-@protected void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(List<(int,AudioWaveformUiForSourceList)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_audio_waveform_ui_for_source_list(item, serializer); } }
-
-@protected void sse_encode_list_record_u_32_f_32(List<(int,double)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_f_32(item, serializer); } }
-
-@protected void sse_encode_list_record_u_32_ui_bus(List<(int,UiBus)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_ui_bus(item, serializer); } }
-
-@protected void sse_encode_list_record_u_32_ui_generator_instance(List<(int,UiGeneratorInstance)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_ui_generator_instance(item, serializer); } }
-
-@protected void sse_encode_list_record_u_32_ui_mixer_channel(List<(int,UiMixerChannel)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_ui_mixer_channel(item, serializer); } }
-
-@protected void sse_encode_list_record_u_32_ui_pattern(List<(int,UiPattern)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_ui_pattern(item, serializer); } }
-
-@protected void sse_encode_list_record_u_32_ui_track(List<(int,UiTrack)> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_record_u_32_ui_track(item, serializer); } }
-
-@protected void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_clip(item, serializer); } }
-
-@protected void sse_encode_list_ui_effect_instance(List<UiEffectInstance> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_effect_instance(item, serializer); } }
-
-@protected void sse_encode_list_ui_effect_parameter_snapshot(List<UiEffectParameterSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_effect_parameter_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_ui_effect_summary(List<UiEffectSummary> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_effect_summary(item, serializer); } }
-
-@protected void sse_encode_list_ui_generator_parameter_snapshot(List<UiGeneratorParameterSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_generator_parameter_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_ui_mixer_channel_params(List<UiMixerChannelParams> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_mixer_channel_params(item, serializer); } }
-
-@protected void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_note(item, serializer); } }
-
-@protected void sse_encode_list_ui_parameter_value(List<UiParameterValue> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_parameter_value(item, serializer); } }
-
-@protected void sse_encode_list_ui_plugin_info(List<UiPluginInfo> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_plugin_info(item, serializer); } }
-
-@protected void sse_encode_list_ui_plugin_parameter(List<UiPluginParameter> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_plugin_parameter(item, serializer); } }
-
-@protected void sse_encode_list_ui_response_curve_point(List<UiResponseCurvePoint> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_response_curve_point(item, serializer); } }
-
-@protected void sse_encode_list_ui_routing_connection(List<UiRoutingConnection> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_ui_routing_connection(item, serializer); } }
-
-@protected void sse_encode_opt_CastedPrimitive_i_64(int? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_CastedPrimitive_i_64(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_CastedPrimitive_u_64(int? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_CastedPrimitive_u_64(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(Map<int, AudioWaveformUiForSourceList>? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_String(String? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_String(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(AudioWaveformUiForAudioProperties? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_bool(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_f_32(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_u_32(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_list_parameter_spec_dto(List<ParameterSpecDTO>? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_list_parameter_spec_dto(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_parameter_spec_dto(ParameterSpecDTO self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.group, serializer);
-sse_encode_f_32(self.value, serializer);
-sse_encode_f_32(self.min, serializer);
-sse_encode_f_32(self.max, serializer);
-sse_encode_f_32(self.defaultValue, serializer);
-sse_encode_f_32(self.step, serializer);
-sse_encode_parameter_value_type_dto(self.valueType, serializer);
-sse_encode_list_String(self.choices, serializer);
- }
-
-@protected void sse_encode_parameter_value_type_dto(ParameterValueTypeDTO self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.index, serializer); }
-
-@protected void sse_encode_record_u_32_audio_waveform_ui_for_clip((int,AudioWaveformUiForClip) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_audio_waveform_ui_for_clip(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_32_audio_waveform_ui_for_source_list((int,AudioWaveformUiForSourceList) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_audio_waveform_ui_for_source_list(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_32_f_32((int,double) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_f_32(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_32_ui_bus((int,UiBus) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_ui_bus(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_32_ui_generator_instance((int,UiGeneratorInstance) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_ui_generator_instance(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_32_ui_mixer_channel((int,UiMixerChannel) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_ui_mixer_channel(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_32_ui_pattern((int,UiPattern) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_ui_pattern(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_32_ui_track((int,UiTrack) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.$1, serializer);
-sse_encode_ui_track(self.$2, serializer);
- }
-
-@protected void sse_encode_record_u_8_u_8((int,int) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_8(self.$1, serializer);
-sse_encode_u_8(self.$2, serializer);
- }
-
-@protected void sse_encode_record_ui_mixer_channel_list_ui_effect_instance((UiMixerChannel,List<UiEffectInstance>) self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_mixer_channel(self.$1, serializer);
-sse_encode_list_ui_effect_instance(self.$2, serializer);
- }
-
-@protected void sse_encode_u_16(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putUint16(self); }
-
-@protected void sse_encode_u_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putUint32(self); }
-
-@protected void sse_encode_u_64(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putBigUint64(self); }
-
-@protected void sse_encode_u_8(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putUint8(self); }
-
-@protected void sse_encode_ui_application_state(UiApplicationState self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_project_metadata(self.metadata, serializer);
-sse_encode_ui_transport_state(self.transport, serializer);
-sse_encode_ui_audio_hardware_config(self.hardwareConfig, serializer);
-sse_encode_Map_u_32_ui_track_None(self.tracks, serializer);
-sse_encode_Map_u_32_ui_generator_instance_None(self.generators, serializer);
-sse_encode_Map_u_32_ui_pattern_None(self.patterns, serializer);
-sse_encode_ui_mixer_state(self.mixer, serializer);
-sse_encode_u_32(self.maxSampleIndex, serializer);
-sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(self.audioSources, serializer);
- }
-
-@protected void sse_encode_ui_audio_hardware_config(UiAudioHardwareConfig self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.selectedInputDevice, serializer);
-sse_encode_String(self.selectedOutputDevice, serializer);
-sse_encode_u_32(self.sampleRate, serializer);
-sse_encode_u_32(self.bufferSize, serializer);
-sse_encode_f_32(self.cpuLoad, serializer);
- }
-
-@protected void sse_encode_ui_bus(UiBus self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_ui_mixer_channel(self.channel, serializer);
- }
-
-@protected void sse_encode_ui_clip(UiClip self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.name, serializer);
-sse_encode_u_32(self.id, serializer);
-sse_encode_CastedPrimitive_u_64(self.startTime, serializer);
-sse_encode_ui_clip_source(self.source, serializer);
-sse_encode_CastedPrimitive_u_64(self.offsetStart, serializer);
-sse_encode_CastedPrimitive_u_64(self.loopLength, serializer);
-sse_encode_bool(self.isSampleBased, serializer);
- }
-
-@protected void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-switch (self) { case UiClipSource_Audio(sourceId: final sourceId): sse_encode_i_32(0, serializer); sse_encode_u_32(sourceId, serializer);
-case UiClipSource_Midi(patternId: final patternId): sse_encode_i_32(1, serializer); sse_encode_u_32(patternId, serializer);
-case UiClipSource_None(): sse_encode_i_32(2, serializer);   } }
-
-@protected void sse_encode_ui_clipboard_content(UiClipboardContent self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-switch (self) { case UiClipboardContent_Empty(): sse_encode_i_32(0, serializer); case UiClipboardContent_Notes(field0: final field0): sse_encode_i_32(1, serializer); sse_encode_list_ui_note(field0, serializer);
-case UiClipboardContent_Clips(field0: final field0): sse_encode_i_32(2, serializer); sse_encode_list_ui_clip(field0, serializer);
-  } }
-
-@protected void sse_encode_ui_effect_instance(UiEffectInstance self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_Map_u_32_f_32_None(self.parameters, serializer);
- }
-
-@protected void sse_encode_ui_effect_parameter_snapshot(UiEffectParameterSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_effect_target(self.target, serializer);
-sse_encode_u_32(self.effectId, serializer);
-sse_encode_list_ui_parameter_value(self.parameters, serializer);
- }
-
-@protected void sse_encode_ui_effect_summary(UiEffectSummary self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_u_32(self.registryId, serializer);
-sse_encode_String(self.name, serializer);
- }
-
-@protected void sse_encode_ui_effect_target(UiEffectTarget self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-switch (self) { case UiEffectTarget_Track(field0: final field0): sse_encode_i_32(0, serializer); sse_encode_u_32(field0, serializer);
-case UiEffectTarget_Master(): sse_encode_i_32(1, serializer); case UiEffectTarget_Bus(field0: final field0): sse_encode_i_32(2, serializer); sse_encode_u_32(field0, serializer);
-  } }
-
-@protected void sse_encode_ui_generator_instance(UiGeneratorInstance self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_ui_generator_instance_type(self.instanceType, serializer);
- }
-
-@protected void sse_encode_ui_generator_instance_type(UiGeneratorInstanceType self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-switch (self) { case UiGeneratorInstanceType_Plugin(field0: final field0): sse_encode_i_32(0, serializer); sse_encode_box_autoadd_ui_plugin_instance(field0, serializer);
-case UiGeneratorInstanceType_Sampler(assetId: final assetId,rootNote: final rootNote): sse_encode_i_32(1, serializer); sse_encode_u_32(assetId, serializer);
-sse_encode_u_8(rootNote, serializer);
-  } }
-
-@protected void sse_encode_ui_generator_parameter_snapshot(UiGeneratorParameterSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.generatorId, serializer);
-sse_encode_list_ui_parameter_value(self.parameters, serializer);
- }
-
-@protected void sse_encode_ui_mixer_channel(UiMixerChannel self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_f_32(self.volume, serializer);
-sse_encode_f_32(self.pan, serializer);
-sse_encode_bool(self.mute, serializer);
-sse_encode_bool(self.solo, serializer);
-sse_encode_bool(self.invertedPhase, serializer);
-sse_encode_list_ui_effect_summary(self.effects, serializer);
- }
-
-@protected void sse_encode_ui_mixer_channel_params(UiMixerChannelParams self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-switch (self) { case UiMixerChannelParams_Volume(field0: final field0): sse_encode_i_32(0, serializer); sse_encode_f_32(field0, serializer);
-case UiMixerChannelParams_Pan(field0: final field0): sse_encode_i_32(1, serializer); sse_encode_f_32(field0, serializer);
-case UiMixerChannelParams_Mute(field0: final field0): sse_encode_i_32(2, serializer); sse_encode_bool(field0, serializer);
-case UiMixerChannelParams_InvertedPhase(field0: final field0): sse_encode_i_32(3, serializer); sse_encode_bool(field0, serializer);
-case UiMixerChannelParams_Solo(field0: final field0): sse_encode_i_32(4, serializer); sse_encode_bool(field0, serializer);
-  } }
-
-@protected void sse_encode_ui_mixer_param_event(UiMixerParamEvent self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.trackId, serializer);
-sse_encode_opt_box_autoadd_f_32(self.volume, serializer);
-sse_encode_opt_box_autoadd_f_32(self.pan, serializer);
-sse_encode_opt_box_autoadd_bool(self.mute, serializer);
-sse_encode_opt_box_autoadd_bool(self.solo, serializer);
- }
-
-@protected void sse_encode_ui_mixer_state(UiMixerState self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_Map_u_32_ui_mixer_channel_None(self.channels, serializer);
-sse_encode_ui_mixer_channel(self.masterBus, serializer);
-sse_encode_Map_u_32_ui_bus_None(self.buses, serializer);
-sse_encode_list_ui_routing_connection(self.routing, serializer);
- }
-
-@protected void sse_encode_ui_note(UiNote self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_CastedPrimitive_u_64(self.startTick, serializer);
-sse_encode_CastedPrimitive_u_64(self.duration, serializer);
-sse_encode_u_8(self.key, serializer);
-sse_encode_u_8(self.velocity, serializer);
-sse_encode_f_32(self.probability, serializer);
-sse_encode_i_8(self.microOffset, serializer);
-sse_encode_bool(self.mute, serializer);
- }
-
-@protected void sse_encode_ui_parameter_type(UiParameterType self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.index, serializer); }
-
-@protected void sse_encode_ui_parameter_value(UiParameterValue self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.paramId, serializer);
-sse_encode_f_32(self.value, serializer);
- }
-
-@protected void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_CastedPrimitive_u_64(self.lengthTicks, serializer);
-sse_encode_list_ui_note(self.notes, serializer);
- }
-
-@protected void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_karbeat_plugin_type(self.pluginType, serializer);
- }
-
-@protected void sse_encode_ui_plugin_instance(UiPluginInstance self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.registryId, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_bool(self.bypass, serializer);
-sse_encode_Map_u_32_f_32_None(self.parameters, serializer);
- }
-
-@protected void sse_encode_ui_plugin_parameter(UiPluginParameter self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.group, serializer);
-sse_encode_f_32(self.value, serializer);
-sse_encode_f_32(self.min, serializer);
-sse_encode_f_32(self.max, serializer);
-sse_encode_f_32(self.defaultValue, serializer);
-sse_encode_f_32(self.step, serializer);
-sse_encode_ui_parameter_type(self.paramType, serializer);
-sse_encode_list_String(self.choices, serializer);
- }
-
-@protected void sse_encode_ui_project_metadata(UiProjectMetadata self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.author, serializer);
-sse_encode_String(self.version, serializer);
-sse_encode_String(self.createdAt, serializer);
- }
-
-@protected void sse_encode_ui_resize_edge(UiResizeEdge self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.index, serializer); }
-
-@protected void sse_encode_ui_response_curve_point(UiResponseCurvePoint self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_f_32(self.frequency, serializer);
-sse_encode_f_32(self.magnitudeDb, serializer);
- }
-
-@protected void sse_encode_ui_routing_connection(UiRoutingConnection self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_ui_routing_node(self.source, serializer);
-sse_encode_ui_routing_node(self.destination, serializer);
-sse_encode_f_32(self.sendLevel, serializer);
-sse_encode_bool(self.isSend, serializer);
- }
-
-@protected void sse_encode_ui_routing_node(UiRoutingNode self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-switch (self) { case UiRoutingNode_Track(field0: final field0): sse_encode_i_32(0, serializer); sse_encode_u_32(field0, serializer);
-case UiRoutingNode_Bus(field0: final field0): sse_encode_i_32(1, serializer); sse_encode_u_32(field0, serializer);
-case UiRoutingNode_Master(): sse_encode_i_32(2, serializer);   } }
-
-@protected void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.index, serializer); }
-
-@protected void sse_encode_ui_track(UiTrack self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.color, serializer);
-sse_encode_ui_track_type(self.trackType, serializer);
-sse_encode_list_ui_clip(self.clips, serializer);
-sse_encode_opt_box_autoadd_u_32(self.generatorId, serializer);
- }
-
-@protected void sse_encode_ui_track_type(UiTrackType self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.index, serializer); }
-
-@protected void sse_encode_ui_transport_feedback(UiTransportFeedback self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.samples, serializer);
-sse_encode_u_32(self.ticks, serializer);
-sse_encode_CastedPrimitive_usize(self.beat, serializer);
-sse_encode_CastedPrimitive_usize(self.bar, serializer);
-sse_encode_f_32(self.tempo, serializer);
-sse_encode_u_32(self.sampleRate, serializer);
-sse_encode_bool(self.isPlaying, serializer);
-sse_encode_bool(self.isLooping, serializer);
-sse_encode_bool(self.isRecording, serializer);
-sse_encode_bool(self.isPatternPlaying, serializer);
-sse_encode_bool(self.isPatternMode, serializer);
-sse_encode_u_32(self.patternSamples, serializer);
-sse_encode_u_32(self.patternTicks, serializer);
-sse_encode_CastedPrimitive_usize(self.patternBeat, serializer);
-sse_encode_CastedPrimitive_usize(self.patternBar, serializer);
- }
-
-@protected void sse_encode_ui_transport_state(UiTransportState self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_f_32(self.bpm, serializer);
-sse_encode_record_u_8_u_8(self.timeSignature, serializer);
- }
-
-@protected void sse_encode_unit(void self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
- }
-
-@protected void sse_encode_usize(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putBigUint64(self); }
-                }
-                
+      case 1:
+        return UiGeneratorInstanceType_Sampler(
+          assetId: dco_decode_u_32(raw[1]),
+          rootNote: dco_decode_u_8(raw[2]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiGeneratorParameterSnapshot(
+      generatorId: dco_decode_u_32(arr[0]),
+      parameters: dco_decode_list_ui_parameter_value(arr[1]),
+    );
+  }
+
+  @protected
+  UiMixerChannel dco_decode_ui_mixer_channel(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return UiMixerChannel(
+      volume: dco_decode_f_32(arr[0]),
+      pan: dco_decode_f_32(arr[1]),
+      mute: dco_decode_bool(arr[2]),
+      solo: dco_decode_bool(arr[3]),
+      invertedPhase: dco_decode_bool(arr[4]),
+      effects: dco_decode_list_ui_effect_summary(arr[5]),
+    );
+  }
+
+  @protected
+  UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiMixerChannelParams_Volume(dco_decode_f_32(raw[1]));
+      case 1:
+        return UiMixerChannelParams_Pan(dco_decode_f_32(raw[1]));
+      case 2:
+        return UiMixerChannelParams_Mute(dco_decode_bool(raw[1]));
+      case 3:
+        return UiMixerChannelParams_InvertedPhase(dco_decode_bool(raw[1]));
+      case 4:
+        return UiMixerChannelParams_Solo(dco_decode_bool(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  UiMixerParamEvent dco_decode_ui_mixer_param_event(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return UiMixerParamEvent(
+      trackId: dco_decode_u_32(arr[0]),
+      volume: dco_decode_opt_box_autoadd_f_32(arr[1]),
+      pan: dco_decode_opt_box_autoadd_f_32(arr[2]),
+      mute: dco_decode_opt_box_autoadd_bool(arr[3]),
+      solo: dco_decode_opt_box_autoadd_bool(arr[4]),
+    );
+  }
+
+  @protected
+  UiMixerState dco_decode_ui_mixer_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return UiMixerState.raw(
+      channels: dco_decode_Map_u_32_ui_mixer_channel_None(arr[0]),
+      masterBus: dco_decode_ui_mixer_channel(arr[1]),
+      buses: dco_decode_Map_u_32_ui_bus_None(arr[2]),
+      routing: dco_decode_list_ui_routing_connection(arr[3]),
+    );
+  }
+
+  @protected
+  UiNote dco_decode_ui_note(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return UiNote(
+      id: dco_decode_u_32(arr[0]),
+      startTick: dco_decode_CastedPrimitive_u_64(arr[1]),
+      duration: dco_decode_CastedPrimitive_u_64(arr[2]),
+      key: dco_decode_u_8(arr[3]),
+      velocity: dco_decode_u_8(arr[4]),
+      probability: dco_decode_f_32(arr[5]),
+      microOffset: dco_decode_i_8(arr[6]),
+      mute: dco_decode_bool(arr[7]),
+    );
+  }
+
+  @protected
+  UiParameterType dco_decode_ui_parameter_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return UiParameterType.values[raw as int];
+  }
+
+  @protected
+  UiParameterValue dco_decode_ui_parameter_value(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiParameterValue(
+      paramId: dco_decode_u_32(arr[0]),
+      value: dco_decode_f_32(arr[1]),
+    );
+  }
+
+  @protected
+  UiPattern dco_decode_ui_pattern(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return UiPattern(
+      id: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      lengthTicks: dco_decode_CastedPrimitive_u_64(arr[2]),
+      notes: dco_decode_list_ui_note(arr[3]),
+    );
+  }
+
+  @protected
+  UiPluginInfo dco_decode_ui_plugin_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return UiPluginInfo(
+      id: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      pluginType: dco_decode_karbeat_plugin_type(arr[2]),
+    );
+  }
+
+  @protected
+  UiPluginInstance dco_decode_ui_plugin_instance(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return UiPluginInstance(
+      registryId: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      bypass: dco_decode_bool(arr[2]),
+      parameters: dco_decode_Map_u_32_f_32_None(arr[3]),
+    );
+  }
+
+  @protected
+  UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return UiPluginParameter(
+      id: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      group: dco_decode_String(arr[2]),
+      value: dco_decode_f_32(arr[3]),
+      min: dco_decode_f_32(arr[4]),
+      max: dco_decode_f_32(arr[5]),
+      defaultValue: dco_decode_f_32(arr[6]),
+      step: dco_decode_f_32(arr[7]),
+      paramType: dco_decode_ui_parameter_type(arr[8]),
+      choices: dco_decode_list_String(arr[9]),
+    );
+  }
+
+  @protected
+  UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return UiProjectMetadata(
+      name: dco_decode_String(arr[0]),
+      author: dco_decode_String(arr[1]),
+      version: dco_decode_String(arr[2]),
+      createdAt: dco_decode_String(arr[3]),
+    );
+  }
+
+  @protected
+  UiResizeEdge dco_decode_ui_resize_edge(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return UiResizeEdge.values[raw as int];
+  }
+
+  @protected
+  UiResponseCurvePoint dco_decode_ui_response_curve_point(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiResponseCurvePoint(
+      frequency: dco_decode_f_32(arr[0]),
+      magnitudeDb: dco_decode_f_32(arr[1]),
+    );
+  }
+
+  @protected
+  UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return UiRoutingConnection(
+      source: dco_decode_ui_routing_node(arr[0]),
+      destination: dco_decode_ui_routing_node(arr[1]),
+      sendLevel: dco_decode_f_32(arr[2]),
+      isSend: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  UiRoutingNode dco_decode_ui_routing_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiRoutingNode_Track(dco_decode_u_32(raw[1]));
+      case 1:
+        return UiRoutingNode_Bus(dco_decode_u_32(raw[1]));
+      case 2:
+        return UiRoutingNode_Master();
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  UiSourceType dco_decode_ui_source_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return UiSourceType.values[raw as int];
+  }
+
+  @protected
+  UiTrack dco_decode_ui_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return UiTrack(
+      id: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      color: dco_decode_String(arr[2]),
+      trackType: dco_decode_ui_track_type(arr[3]),
+      clips: dco_decode_list_ui_clip(arr[4]),
+      generatorId: dco_decode_opt_box_autoadd_u_32(arr[5]),
+    );
+  }
+
+  @protected
+  UiTrackType dco_decode_ui_track_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return UiTrackType.values[raw as int];
+  }
+
+  @protected
+  UiTransportFeedback dco_decode_ui_transport_feedback(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return UiTransportFeedback(
+      samples: dco_decode_u_32(arr[0]),
+      ticks: dco_decode_u_32(arr[1]),
+      beat: dco_decode_CastedPrimitive_usize(arr[2]),
+      bar: dco_decode_CastedPrimitive_usize(arr[3]),
+      tempo: dco_decode_f_32(arr[4]),
+      sampleRate: dco_decode_u_32(arr[5]),
+      isPlaying: dco_decode_bool(arr[6]),
+      isLooping: dco_decode_bool(arr[7]),
+      isRecording: dco_decode_bool(arr[8]),
+      isPatternPlaying: dco_decode_bool(arr[9]),
+      isPatternMode: dco_decode_bool(arr[10]),
+      patternSamples: dco_decode_u_32(arr[11]),
+      patternTicks: dco_decode_u_32(arr[12]),
+      patternBeat: dco_decode_CastedPrimitive_usize(arr[13]),
+      patternBar: dco_decode_CastedPrimitive_usize(arr[14]),
+    );
+  }
+
+  @protected
+  UiTransportState dco_decode_ui_transport_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiTransportState(
+      bpm: dco_decode_f_32(arr[0]),
+      timeSignature: dco_decode_record_u_8_u_8(arr[1]),
+    );
+  }
+
+  @protected
+  void dco_decode_unit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return;
+  }
+
+  @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_String(deserializer);
+    return AnyhowException(inner);
+  }
+
+  @protected
+  int sse_decode_CastedPrimitive_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_64(deserializer);
+    return inner.toInt();
+  }
+
+  @protected
+  int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_u_64(deserializer);
+    return inner.toInt();
+  }
+
+  @protected
+  int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_usize(deserializer);
+    return inner.toInt();
+  }
+
+  @protected
+  Map<int, AudioWaveformUiForClip>
+  sse_decode_Map_u_32_audio_waveform_ui_for_clip_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_audio_waveform_ui_for_clip(
+      deserializer,
+    );
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>
+  sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+      deserializer,
+    );
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_f_32(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_ui_bus(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, UiGeneratorInstance> sse_decode_Map_u_32_ui_generator_instance_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_ui_generator_instance(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, UiMixerChannel> sse_decode_Map_u_32_ui_mixer_channel_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_ui_mixer_channel(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, UiPattern> sse_decode_Map_u_32_ui_pattern_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_ui_pattern(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_ui_track(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  RustStreamSink<double> sse_decode_StreamSink_f_32_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
+  RustStreamSink<UiMixerParamEvent>
+  sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
+  RustStreamSink<UiTransportFeedback>
+  sse_decode_StreamSink_ui_transport_feedback_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
+  String sse_decode_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_prim_u_8_strict(deserializer);
+    return utf8.decoder.convert(inner);
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  sse_decode_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_previewBuffer = sse_decode_list_prim_i_8_strict(deserializer);
+    var var_filePath = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_channels = sse_decode_u_16(deserializer);
+    var var_duration = sse_decode_f_64(deserializer);
+    var var_rootNote = sse_decode_u_8(deserializer);
+    var var_fineTune = sse_decode_i_16(deserializer);
+    var var_trimStart = sse_decode_u_32(deserializer);
+    var var_trimEnd = sse_decode_u_32(deserializer);
+    var var_isLooping = sse_decode_bool(deserializer);
+    var var_normalized = sse_decode_bool(deserializer);
+    var var_muted = sse_decode_bool(deserializer);
+    return AudioWaveformUiForAudioProperties(
+      previewBuffer: var_previewBuffer,
+      filePath: var_filePath,
+      name: var_name,
+      sampleRate: var_sampleRate,
+      channels: var_channels,
+      duration: var_duration,
+      rootNote: var_rootNote,
+      fineTune: var_fineTune,
+      trimStart: var_trimStart,
+      trimEnd: var_trimEnd,
+      isLooping: var_isLooping,
+      normalized: var_normalized,
+      muted: var_muted,
+    );
+  }
+
+  @protected
+  AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_previewBuffer = sse_decode_list_prim_i_8_strict(deserializer);
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_channels = sse_decode_u_16(deserializer);
+    var var_duration = sse_decode_f_64(deserializer);
+    return AudioWaveformUiForClip(
+      name: var_name,
+      previewBuffer: var_previewBuffer,
+      sampleRate: var_sampleRate,
+      channels: var_channels,
+      duration: var_duration,
+    );
+  }
+
+  @protected
+  AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_muted = sse_decode_bool(deserializer);
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    return AudioWaveformUiForSourceList(
+      name: var_name,
+      muted: var_muted,
+      sampleRate: var_sampleRate,
+    );
+  }
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_audio_waveform_ui_for_audio_properties(deserializer));
+  }
+
+  @protected
+  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_bool(deserializer));
+  }
+
+  @protected
+  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_32(deserializer));
+  }
+
+  @protected
+  (int, int) sse_decode_box_autoadd_record_u_8_u_8(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_record_u_8_u_8(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
+  UiEffectTarget sse_decode_box_autoadd_ui_effect_target(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ui_effect_target(deserializer));
+  }
+
+  @protected
+  UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ui_mixer_channel(deserializer));
+  }
+
+  @protected
+  UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ui_plugin_instance(deserializer));
+  }
+
+  @protected
+  UiRoutingNode sse_decode_box_autoadd_ui_routing_node(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ui_routing_node(deserializer));
+  }
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat32();
+  }
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  int sse_decode_i_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt16();
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getPlatformInt64();
+  }
+
+  @protected
+  int sse_decode_i_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt8();
+  }
+
+  @protected
+  KarbeatPluginType sse_decode_karbeat_plugin_type(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KarbeatPluginType.values[inner];
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ParameterSpecDTO>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_parameter_spec_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getInt8List(len_);
+  }
+
+  @protected
+  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint32List(len_);
+  }
+
+  @protected
+  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint32List(len_);
+  }
+
+  @protected
+  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  List<(int, AudioWaveformUiForClip)>
+  sse_decode_list_record_u_32_audio_waveform_ui_for_clip(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, AudioWaveformUiForClip)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_audio_waveform_ui_for_clip(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, AudioWaveformUiForSourceList)>
+  sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, AudioWaveformUiForSourceList)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(
+        sse_decode_record_u_32_audio_waveform_ui_for_source_list(deserializer),
+      );
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, double)> sse_decode_list_record_u_32_f_32(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, double)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_f_32(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, UiBus)> sse_decode_list_record_u_32_ui_bus(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, UiBus)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_ui_bus(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, UiGeneratorInstance)>
+  sse_decode_list_record_u_32_ui_generator_instance(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, UiGeneratorInstance)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_ui_generator_instance(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, UiMixerChannel)> sse_decode_list_record_u_32_ui_mixer_channel(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, UiMixerChannel)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_ui_mixer_channel(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, UiPattern)> sse_decode_list_record_u_32_ui_pattern(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, UiPattern)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_ui_pattern(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, UiTrack)> sse_decode_list_record_u_32_ui_track(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, UiTrack)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_ui_track(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiClip>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_clip(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiEffectInstance> sse_decode_list_ui_effect_instance(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiEffectInstance>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_effect_instance(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiEffectParameterSnapshot> sse_decode_list_ui_effect_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiEffectParameterSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_effect_parameter_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiEffectSummary> sse_decode_list_ui_effect_summary(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiEffectSummary>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_effect_summary(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiGeneratorParameterSnapshot>
+  sse_decode_list_ui_generator_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiGeneratorParameterSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_generator_parameter_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiMixerChannelParams>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_mixer_channel_params(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiNote>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_note(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiParameterValue> sse_decode_list_ui_parameter_value(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiParameterValue>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_parameter_value(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiPluginInfo> sse_decode_list_ui_plugin_info(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiPluginInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_plugin_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiPluginParameter>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_plugin_parameter(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiResponseCurvePoint> sse_decode_list_ui_response_curve_point(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiResponseCurvePoint>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_response_curve_point(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiRoutingConnection>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_routing_connection(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_CastedPrimitive_i_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_CastedPrimitive_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_CastedPrimitive_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>?
+  sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties?
+  sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_bool(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  List<ParameterSpecDTO>? sse_decode_opt_list_parameter_spec_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_parameter_spec_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  ParameterSpecDTO sse_decode_parameter_spec_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_group = sse_decode_String(deserializer);
+    var var_value = sse_decode_f_32(deserializer);
+    var var_min = sse_decode_f_32(deserializer);
+    var var_max = sse_decode_f_32(deserializer);
+    var var_defaultValue = sse_decode_f_32(deserializer);
+    var var_step = sse_decode_f_32(deserializer);
+    var var_valueType = sse_decode_parameter_value_type_dto(deserializer);
+    var var_choices = sse_decode_list_String(deserializer);
+    return ParameterSpecDTO(
+      id: var_id,
+      name: var_name,
+      group: var_group,
+      value: var_value,
+      min: var_min,
+      max: var_max,
+      defaultValue: var_defaultValue,
+      step: var_step,
+      valueType: var_valueType,
+      choices: var_choices,
+    );
+  }
+
+  @protected
+  ParameterValueTypeDTO sse_decode_parameter_value_type_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return ParameterValueTypeDTO.values[inner];
+  }
+
+  @protected
+  (int, AudioWaveformUiForClip)
+  sse_decode_record_u_32_audio_waveform_ui_for_clip(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_audio_waveform_ui_for_clip(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, AudioWaveformUiForSourceList)
+  sse_decode_record_u_32_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_audio_waveform_ui_for_source_list(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_f_32(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_ui_bus(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_ui_generator_instance(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, UiMixerChannel) sse_decode_record_u_32_ui_mixer_channel(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_ui_mixer_channel(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, UiPattern) sse_decode_record_u_32_ui_pattern(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_ui_pattern(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_ui_track(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_8(deserializer);
+    var var_field1 = sse_decode_u_8(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (UiMixerChannel, List<UiEffectInstance>)
+  sse_decode_record_ui_mixer_channel_list_ui_effect_instance(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_ui_mixer_channel(deserializer);
+    var var_field1 = sse_decode_list_ui_effect_instance(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint16();
+  }
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
+  int sse_decode_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8();
+  }
+
+  @protected
+  UiApplicationState sse_decode_ui_application_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_metadata = sse_decode_ui_project_metadata(deserializer);
+    var var_transport = sse_decode_ui_transport_state(deserializer);
+    var var_hardwareConfig = sse_decode_ui_audio_hardware_config(deserializer);
+    var var_tracks = sse_decode_Map_u_32_ui_track_None(deserializer);
+    var var_generators = sse_decode_Map_u_32_ui_generator_instance_None(
+      deserializer,
+    );
+    var var_patterns = sse_decode_Map_u_32_ui_pattern_None(deserializer);
+    var var_mixer = sse_decode_ui_mixer_state(deserializer);
+    var var_maxSampleIndex = sse_decode_u_32(deserializer);
+    var var_audioSources =
+        sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+          deserializer,
+        );
+    return UiApplicationState(
+      metadata: var_metadata,
+      transport: var_transport,
+      hardwareConfig: var_hardwareConfig,
+      tracks: var_tracks,
+      generators: var_generators,
+      patterns: var_patterns,
+      mixer: var_mixer,
+      maxSampleIndex: var_maxSampleIndex,
+      audioSources: var_audioSources,
+    );
+  }
+
+  @protected
+  UiAudioHardwareConfig sse_decode_ui_audio_hardware_config(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_selectedInputDevice = sse_decode_String(deserializer);
+    var var_selectedOutputDevice = sse_decode_String(deserializer);
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_bufferSize = sse_decode_u_32(deserializer);
+    var var_cpuLoad = sse_decode_f_32(deserializer);
+    return UiAudioHardwareConfig(
+      selectedInputDevice: var_selectedInputDevice,
+      selectedOutputDevice: var_selectedOutputDevice,
+      sampleRate: var_sampleRate,
+      bufferSize: var_bufferSize,
+      cpuLoad: var_cpuLoad,
+    );
+  }
+
+  @protected
+  UiBus sse_decode_ui_bus(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_channel = sse_decode_ui_mixer_channel(deserializer);
+    return UiBus(id: var_id, name: var_name, channel: var_channel);
+  }
+
+  @protected
+  UiClip sse_decode_ui_clip(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_id = sse_decode_u_32(deserializer);
+    var var_startTime = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_source = sse_decode_ui_clip_source(deserializer);
+    var var_offsetStart = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_loopLength = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_isSampleBased = sse_decode_bool(deserializer);
+    return UiClip(
+      name: var_name,
+      id: var_id,
+      startTime: var_startTime,
+      source: var_source,
+      offsetStart: var_offsetStart,
+      loopLength: var_loopLength,
+      isSampleBased: var_isSampleBased,
+    );
+  }
+
+  @protected
+  UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_sourceId = sse_decode_u_32(deserializer);
+        return UiClipSource_Audio(sourceId: var_sourceId);
+      case 1:
+        var var_patternId = sse_decode_u_32(deserializer);
+        return UiClipSource_Midi(patternId: var_patternId);
+      case 2:
+        return UiClipSource_None();
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  UiClipboardContent sse_decode_ui_clipboard_content(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return UiClipboardContent_Empty();
+      case 1:
+        var var_field0 = sse_decode_list_ui_note(deserializer);
+        return UiClipboardContent_Notes(var_field0);
+      case 2:
+        var var_field0 = sse_decode_list_ui_clip(deserializer);
+        return UiClipboardContent_Clips(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  UiEffectInstance sse_decode_ui_effect_instance(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_parameters = sse_decode_Map_u_32_f_32_None(deserializer);
+    return UiEffectInstance(
+      id: var_id,
+      name: var_name,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
+  UiEffectParameterSnapshot sse_decode_ui_effect_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_target = sse_decode_ui_effect_target(deserializer);
+    var var_effectId = sse_decode_u_32(deserializer);
+    var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
+    return UiEffectParameterSnapshot(
+      target: var_target,
+      effectId: var_effectId,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
+  UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_registryId = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    return UiEffectSummary(
+      id: var_id,
+      registryId: var_registryId,
+      name: var_name,
+    );
+  }
+
+  @protected
+  UiEffectTarget sse_decode_ui_effect_target(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiEffectTarget_Track(var_field0);
+      case 1:
+        return UiEffectTarget_Master();
+      case 2:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiEffectTarget_Bus(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  UiGeneratorInstance sse_decode_ui_generator_instance(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_instanceType = sse_decode_ui_generator_instance_type(deserializer);
+    return UiGeneratorInstance(id: var_id, instanceType: var_instanceType);
+  }
+
+  @protected
+  UiGeneratorInstanceType sse_decode_ui_generator_instance_type(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_box_autoadd_ui_plugin_instance(
+          deserializer,
+        );
+        return UiGeneratorInstanceType_Plugin(var_field0);
+      case 1:
+        var var_assetId = sse_decode_u_32(deserializer);
+        var var_rootNote = sse_decode_u_8(deserializer);
+        return UiGeneratorInstanceType_Sampler(
+          assetId: var_assetId,
+          rootNote: var_rootNote,
+        );
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_generatorId = sse_decode_u_32(deserializer);
+    var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
+    return UiGeneratorParameterSnapshot(
+      generatorId: var_generatorId,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
+  UiMixerChannel sse_decode_ui_mixer_channel(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_volume = sse_decode_f_32(deserializer);
+    var var_pan = sse_decode_f_32(deserializer);
+    var var_mute = sse_decode_bool(deserializer);
+    var var_solo = sse_decode_bool(deserializer);
+    var var_invertedPhase = sse_decode_bool(deserializer);
+    var var_effects = sse_decode_list_ui_effect_summary(deserializer);
+    return UiMixerChannel(
+      volume: var_volume,
+      pan: var_pan,
+      mute: var_mute,
+      solo: var_solo,
+      invertedPhase: var_invertedPhase,
+      effects: var_effects,
+    );
+  }
+
+  @protected
+  UiMixerChannelParams sse_decode_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_f_32(deserializer);
+        return UiMixerChannelParams_Volume(var_field0);
+      case 1:
+        var var_field0 = sse_decode_f_32(deserializer);
+        return UiMixerChannelParams_Pan(var_field0);
+      case 2:
+        var var_field0 = sse_decode_bool(deserializer);
+        return UiMixerChannelParams_Mute(var_field0);
+      case 3:
+        var var_field0 = sse_decode_bool(deserializer);
+        return UiMixerChannelParams_InvertedPhase(var_field0);
+      case 4:
+        var var_field0 = sse_decode_bool(deserializer);
+        return UiMixerChannelParams_Solo(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  UiMixerParamEvent sse_decode_ui_mixer_param_event(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_trackId = sse_decode_u_32(deserializer);
+    var var_volume = sse_decode_opt_box_autoadd_f_32(deserializer);
+    var var_pan = sse_decode_opt_box_autoadd_f_32(deserializer);
+    var var_mute = sse_decode_opt_box_autoadd_bool(deserializer);
+    var var_solo = sse_decode_opt_box_autoadd_bool(deserializer);
+    return UiMixerParamEvent(
+      trackId: var_trackId,
+      volume: var_volume,
+      pan: var_pan,
+      mute: var_mute,
+      solo: var_solo,
+    );
+  }
+
+  @protected
+  UiMixerState sse_decode_ui_mixer_state(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_channels = sse_decode_Map_u_32_ui_mixer_channel_None(deserializer);
+    var var_masterBus = sse_decode_ui_mixer_channel(deserializer);
+    var var_buses = sse_decode_Map_u_32_ui_bus_None(deserializer);
+    var var_routing = sse_decode_list_ui_routing_connection(deserializer);
+    return UiMixerState.raw(
+      channels: var_channels,
+      masterBus: var_masterBus,
+      buses: var_buses,
+      routing: var_routing,
+    );
+  }
+
+  @protected
+  UiNote sse_decode_ui_note(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_startTick = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_duration = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_key = sse_decode_u_8(deserializer);
+    var var_velocity = sse_decode_u_8(deserializer);
+    var var_probability = sse_decode_f_32(deserializer);
+    var var_microOffset = sse_decode_i_8(deserializer);
+    var var_mute = sse_decode_bool(deserializer);
+    return UiNote(
+      id: var_id,
+      startTick: var_startTick,
+      duration: var_duration,
+      key: var_key,
+      velocity: var_velocity,
+      probability: var_probability,
+      microOffset: var_microOffset,
+      mute: var_mute,
+    );
+  }
+
+  @protected
+  UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return UiParameterType.values[inner];
+  }
+
+  @protected
+  UiParameterValue sse_decode_ui_parameter_value(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_paramId = sse_decode_u_32(deserializer);
+    var var_value = sse_decode_f_32(deserializer);
+    return UiParameterValue(paramId: var_paramId, value: var_value);
+  }
+
+  @protected
+  UiPattern sse_decode_ui_pattern(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_lengthTicks = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_notes = sse_decode_list_ui_note(deserializer);
+    return UiPattern(
+      id: var_id,
+      name: var_name,
+      lengthTicks: var_lengthTicks,
+      notes: var_notes,
+    );
+  }
+
+  @protected
+  UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_pluginType = sse_decode_karbeat_plugin_type(deserializer);
+    return UiPluginInfo(id: var_id, name: var_name, pluginType: var_pluginType);
+  }
+
+  @protected
+  UiPluginInstance sse_decode_ui_plugin_instance(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_registryId = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_bypass = sse_decode_bool(deserializer);
+    var var_parameters = sse_decode_Map_u_32_f_32_None(deserializer);
+    return UiPluginInstance(
+      registryId: var_registryId,
+      name: var_name,
+      bypass: var_bypass,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
+  UiPluginParameter sse_decode_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_group = sse_decode_String(deserializer);
+    var var_value = sse_decode_f_32(deserializer);
+    var var_min = sse_decode_f_32(deserializer);
+    var var_max = sse_decode_f_32(deserializer);
+    var var_defaultValue = sse_decode_f_32(deserializer);
+    var var_step = sse_decode_f_32(deserializer);
+    var var_paramType = sse_decode_ui_parameter_type(deserializer);
+    var var_choices = sse_decode_list_String(deserializer);
+    return UiPluginParameter(
+      id: var_id,
+      name: var_name,
+      group: var_group,
+      value: var_value,
+      min: var_min,
+      max: var_max,
+      defaultValue: var_defaultValue,
+      step: var_step,
+      paramType: var_paramType,
+      choices: var_choices,
+    );
+  }
+
+  @protected
+  UiProjectMetadata sse_decode_ui_project_metadata(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_author = sse_decode_String(deserializer);
+    var var_version = sse_decode_String(deserializer);
+    var var_createdAt = sse_decode_String(deserializer);
+    return UiProjectMetadata(
+      name: var_name,
+      author: var_author,
+      version: var_version,
+      createdAt: var_createdAt,
+    );
+  }
+
+  @protected
+  UiResizeEdge sse_decode_ui_resize_edge(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return UiResizeEdge.values[inner];
+  }
+
+  @protected
+  UiResponseCurvePoint sse_decode_ui_response_curve_point(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_frequency = sse_decode_f_32(deserializer);
+    var var_magnitudeDb = sse_decode_f_32(deserializer);
+    return UiResponseCurvePoint(
+      frequency: var_frequency,
+      magnitudeDb: var_magnitudeDb,
+    );
+  }
+
+  @protected
+  UiRoutingConnection sse_decode_ui_routing_connection(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_source = sse_decode_ui_routing_node(deserializer);
+    var var_destination = sse_decode_ui_routing_node(deserializer);
+    var var_sendLevel = sse_decode_f_32(deserializer);
+    var var_isSend = sse_decode_bool(deserializer);
+    return UiRoutingConnection(
+      source: var_source,
+      destination: var_destination,
+      sendLevel: var_sendLevel,
+      isSend: var_isSend,
+    );
+  }
+
+  @protected
+  UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiRoutingNode_Track(var_field0);
+      case 1:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiRoutingNode_Bus(var_field0);
+      case 2:
+        return UiRoutingNode_Master();
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return UiSourceType.values[inner];
+  }
+
+  @protected
+  UiTrack sse_decode_ui_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_color = sse_decode_String(deserializer);
+    var var_trackType = sse_decode_ui_track_type(deserializer);
+    var var_clips = sse_decode_list_ui_clip(deserializer);
+    var var_generatorId = sse_decode_opt_box_autoadd_u_32(deserializer);
+    return UiTrack(
+      id: var_id,
+      name: var_name,
+      color: var_color,
+      trackType: var_trackType,
+      clips: var_clips,
+      generatorId: var_generatorId,
+    );
+  }
+
+  @protected
+  UiTrackType sse_decode_ui_track_type(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return UiTrackType.values[inner];
+  }
+
+  @protected
+  UiTransportFeedback sse_decode_ui_transport_feedback(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_samples = sse_decode_u_32(deserializer);
+    var var_ticks = sse_decode_u_32(deserializer);
+    var var_beat = sse_decode_CastedPrimitive_usize(deserializer);
+    var var_bar = sse_decode_CastedPrimitive_usize(deserializer);
+    var var_tempo = sse_decode_f_32(deserializer);
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_isPlaying = sse_decode_bool(deserializer);
+    var var_isLooping = sse_decode_bool(deserializer);
+    var var_isRecording = sse_decode_bool(deserializer);
+    var var_isPatternPlaying = sse_decode_bool(deserializer);
+    var var_isPatternMode = sse_decode_bool(deserializer);
+    var var_patternSamples = sse_decode_u_32(deserializer);
+    var var_patternTicks = sse_decode_u_32(deserializer);
+    var var_patternBeat = sse_decode_CastedPrimitive_usize(deserializer);
+    var var_patternBar = sse_decode_CastedPrimitive_usize(deserializer);
+    return UiTransportFeedback(
+      samples: var_samples,
+      ticks: var_ticks,
+      beat: var_beat,
+      bar: var_bar,
+      tempo: var_tempo,
+      sampleRate: var_sampleRate,
+      isPlaying: var_isPlaying,
+      isLooping: var_isLooping,
+      isRecording: var_isRecording,
+      isPatternPlaying: var_isPatternPlaying,
+      isPatternMode: var_isPatternMode,
+      patternSamples: var_patternSamples,
+      patternTicks: var_patternTicks,
+      patternBeat: var_patternBeat,
+      patternBar: var_patternBar,
+    );
+  }
+
+  @protected
+  UiTransportState sse_decode_ui_transport_state(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_bpm = sse_decode_f_32(deserializer);
+    var var_timeSignature = sse_decode_record_u_8_u_8(deserializer);
+    return UiTransportState(bpm: var_bpm, timeSignature: var_timeSignature);
+  }
+
+  @protected
+  void sse_decode_unit(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_CastedPrimitive_i_64(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(sseEncodeCastedPrimitiveI64(self), serializer);
+  }
+
+  @protected
+  void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(sseEncodeCastedPrimitiveU64(self), serializer);
+  }
+
+  @protected
+  void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(sseEncodeCastedPrimitiveU64(self), serializer);
+  }
+
+  @protected
+  void sse_encode_Map_u_32_audio_waveform_ui_for_clip_None(
+    Map<int, AudioWaveformUiForClip> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_audio_waveform_ui_for_clip(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
+    Map<int, AudioWaveformUiForSourceList> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_f_32_None(
+    Map<int, double> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_f_32(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_ui_bus_None(
+    Map<int, UiBus> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_ui_bus(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_ui_generator_instance_None(
+    Map<int, UiGeneratorInstance> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_ui_generator_instance(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_ui_mixer_channel_None(
+    Map<int, UiMixerChannel> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_ui_mixer_channel(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_ui_pattern_None(
+    Map<int, UiPattern> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_ui_pattern(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_ui_track_None(
+    Map<int, UiTrack> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_ui_track(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_StreamSink_f_32_Sse(
+    RustStreamSink<double> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_f_32,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_StreamSink_ui_mixer_param_event_Sse(
+    RustStreamSink<UiMixerParamEvent> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_ui_mixer_param_event,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_StreamSink_ui_transport_feedback_Sse(
+    RustStreamSink<UiTransportFeedback> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_ui_transport_feedback,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_String(String self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_audio_waveform_ui_for_audio_properties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_i_8_strict(self.previewBuffer, serializer);
+    sse_encode_String(self.filePath, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_u_16(self.channels, serializer);
+    sse_encode_f_64(self.duration, serializer);
+    sse_encode_u_8(self.rootNote, serializer);
+    sse_encode_i_16(self.fineTune, serializer);
+    sse_encode_u_32(self.trimStart, serializer);
+    sse_encode_u_32(self.trimEnd, serializer);
+    sse_encode_bool(self.isLooping, serializer);
+    sse_encode_bool(self.normalized, serializer);
+    sse_encode_bool(self.muted, serializer);
+  }
+
+  @protected
+  void sse_encode_audio_waveform_ui_for_clip(
+    AudioWaveformUiForClip self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_list_prim_i_8_strict(self.previewBuffer, serializer);
+    sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_u_16(self.channels, serializer);
+    sse_encode_f_64(self.duration, serializer);
+  }
+
+  @protected
+  void sse_encode_audio_waveform_ui_for_source_list(
+    AudioWaveformUiForSourceList self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_bool(self.muted, serializer);
+    sse_encode_u_32(self.sampleRate, serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_audio_waveform_ui_for_audio_properties(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_record_u_8_u_8(
+    (int, int) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_record_u_8_u_8(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ui_effect_target(
+    UiEffectTarget self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_effect_target(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ui_mixer_channel(
+    UiMixerChannel self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_mixer_channel(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ui_plugin_instance(
+    UiPluginInstance self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_plugin_instance(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ui_routing_node(
+    UiRoutingNode self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_routing_node(self, serializer);
+  }
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat32(self);
+  }
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_i_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt16(self);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putPlatformInt64(self);
+  }
+
+  @protected
+  void sse_encode_i_8(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt8(self);
+  }
+
+  @protected
+  void sse_encode_karbeat_plugin_type(
+    KarbeatPluginType self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_parameter_spec_dto(
+    List<ParameterSpecDTO> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_parameter_spec_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_i_8_strict(
+    Int8List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putInt8List(self);
+  }
+
+  @protected
+  void sse_encode_list_prim_u_32_loose(
+    List<int> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint32List(
+      self is Uint32List ? self : Uint32List.fromList(self),
+    );
+  }
+
+  @protected
+  void sse_encode_list_prim_u_32_strict(
+    Uint32List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint32List(self);
+  }
+
+  @protected
+  void sse_encode_list_prim_u_8_strict(
+    Uint8List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_audio_waveform_ui_for_clip(
+    List<(int, AudioWaveformUiForClip)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_audio_waveform_ui_for_clip(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
+    List<(int, AudioWaveformUiForSourceList)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_audio_waveform_ui_for_source_list(
+        item,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_f_32(
+    List<(int, double)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_f_32(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_ui_bus(
+    List<(int, UiBus)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_ui_bus(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_ui_generator_instance(
+    List<(int, UiGeneratorInstance)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_ui_generator_instance(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_ui_mixer_channel(
+    List<(int, UiMixerChannel)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_ui_mixer_channel(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_ui_pattern(
+    List<(int, UiPattern)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_ui_pattern(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_record_u_32_ui_track(
+    List<(int, UiTrack)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_ui_track(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_clip(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_effect_instance(
+    List<UiEffectInstance> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_effect_instance(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_effect_parameter_snapshot(
+    List<UiEffectParameterSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_effect_parameter_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_effect_summary(
+    List<UiEffectSummary> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_effect_summary(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_generator_parameter_snapshot(
+    List<UiGeneratorParameterSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_generator_parameter_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_mixer_channel_params(
+    List<UiMixerChannelParams> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_mixer_channel_params(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_note(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_parameter_value(
+    List<UiParameterValue> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_parameter_value(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_plugin_info(
+    List<UiPluginInfo> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_plugin_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_plugin_parameter(
+    List<UiPluginParameter> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_plugin_parameter(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_response_curve_point(
+    List<UiResponseCurvePoint> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_response_curve_point(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_routing_connection(
+    List<UiRoutingConnection> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_routing_connection(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_CastedPrimitive_i_64(
+    int? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_CastedPrimitive_i_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_CastedPrimitive_u_64(
+    int? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_CastedPrimitive_u_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
+    Map<int, AudioWaveformUiForSourceList>? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+    AudioWaveformUiForAudioProperties? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_bool(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_list_parameter_spec_dto(
+    List<ParameterSpecDTO>? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_parameter_spec_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_parameter_spec_dto(
+    ParameterSpecDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.group, serializer);
+    sse_encode_f_32(self.value, serializer);
+    sse_encode_f_32(self.min, serializer);
+    sse_encode_f_32(self.max, serializer);
+    sse_encode_f_32(self.defaultValue, serializer);
+    sse_encode_f_32(self.step, serializer);
+    sse_encode_parameter_value_type_dto(self.valueType, serializer);
+    sse_encode_list_String(self.choices, serializer);
+  }
+
+  @protected
+  void sse_encode_parameter_value_type_dto(
+    ParameterValueTypeDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_audio_waveform_ui_for_clip(
+    (int, AudioWaveformUiForClip) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_audio_waveform_ui_for_clip(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
+    (int, AudioWaveformUiForSourceList) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_audio_waveform_ui_for_source_list(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_f_32(
+    (int, double) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_f_32(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_ui_bus(
+    (int, UiBus) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_ui_bus(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_ui_generator_instance(
+    (int, UiGeneratorInstance) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_ui_generator_instance(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_ui_mixer_channel(
+    (int, UiMixerChannel) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_ui_mixer_channel(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_ui_pattern(
+    (int, UiPattern) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_ui_pattern(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_32_ui_track(
+    (int, UiTrack) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_ui_track(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_u_8_u_8((int, int) self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self.$1, serializer);
+    sse_encode_u_8(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_ui_mixer_channel_list_ui_effect_instance(
+    (UiMixerChannel, List<UiEffectInstance>) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_mixer_channel(self.$1, serializer);
+    sse_encode_list_ui_effect_instance(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint16(self);
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
+  void sse_encode_u_8(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self);
+  }
+
+  @protected
+  void sse_encode_ui_application_state(
+    UiApplicationState self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_project_metadata(self.metadata, serializer);
+    sse_encode_ui_transport_state(self.transport, serializer);
+    sse_encode_ui_audio_hardware_config(self.hardwareConfig, serializer);
+    sse_encode_Map_u_32_ui_track_None(self.tracks, serializer);
+    sse_encode_Map_u_32_ui_generator_instance_None(self.generators, serializer);
+    sse_encode_Map_u_32_ui_pattern_None(self.patterns, serializer);
+    sse_encode_ui_mixer_state(self.mixer, serializer);
+    sse_encode_u_32(self.maxSampleIndex, serializer);
+    sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
+      self.audioSources,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_ui_audio_hardware_config(
+    UiAudioHardwareConfig self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.selectedInputDevice, serializer);
+    sse_encode_String(self.selectedOutputDevice, serializer);
+    sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_u_32(self.bufferSize, serializer);
+    sse_encode_f_32(self.cpuLoad, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_bus(UiBus self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_ui_mixer_channel(self.channel, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_clip(UiClip self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_CastedPrimitive_u_64(self.startTime, serializer);
+    sse_encode_ui_clip_source(self.source, serializer);
+    sse_encode_CastedPrimitive_u_64(self.offsetStart, serializer);
+    sse_encode_CastedPrimitive_u_64(self.loopLength, serializer);
+    sse_encode_bool(self.isSampleBased, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiClipSource_Audio(sourceId: final sourceId):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_32(sourceId, serializer);
+      case UiClipSource_Midi(patternId: final patternId):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_32(patternId, serializer);
+      case UiClipSource_None():
+        sse_encode_i_32(2, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_ui_clipboard_content(
+    UiClipboardContent self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiClipboardContent_Empty():
+        sse_encode_i_32(0, serializer);
+      case UiClipboardContent_Notes(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_list_ui_note(field0, serializer);
+      case UiClipboardContent_Clips(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_list_ui_clip(field0, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_ui_effect_instance(
+    UiEffectInstance self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_Map_u_32_f_32_None(self.parameters, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_effect_parameter_snapshot(
+    UiEffectParameterSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_effect_target(self.target, serializer);
+    sse_encode_u_32(self.effectId, serializer);
+    sse_encode_list_ui_parameter_value(self.parameters, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_effect_summary(
+    UiEffectSummary self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_u_32(self.registryId, serializer);
+    sse_encode_String(self.name, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_effect_target(
+    UiEffectTarget self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiEffectTarget_Track(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_32(field0, serializer);
+      case UiEffectTarget_Master():
+        sse_encode_i_32(1, serializer);
+      case UiEffectTarget_Bus(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_u_32(field0, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_ui_generator_instance(
+    UiGeneratorInstance self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_ui_generator_instance_type(self.instanceType, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_generator_instance_type(
+    UiGeneratorInstanceType self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiGeneratorInstanceType_Plugin(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_box_autoadd_ui_plugin_instance(field0, serializer);
+      case UiGeneratorInstanceType_Sampler(
+        assetId: final assetId,
+        rootNote: final rootNote,
+      ):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_32(assetId, serializer);
+        sse_encode_u_8(rootNote, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_ui_generator_parameter_snapshot(
+    UiGeneratorParameterSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.generatorId, serializer);
+    sse_encode_list_ui_parameter_value(self.parameters, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_mixer_channel(
+    UiMixerChannel self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self.volume, serializer);
+    sse_encode_f_32(self.pan, serializer);
+    sse_encode_bool(self.mute, serializer);
+    sse_encode_bool(self.solo, serializer);
+    sse_encode_bool(self.invertedPhase, serializer);
+    sse_encode_list_ui_effect_summary(self.effects, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_mixer_channel_params(
+    UiMixerChannelParams self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiMixerChannelParams_Volume(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_f_32(field0, serializer);
+      case UiMixerChannelParams_Pan(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_f_32(field0, serializer);
+      case UiMixerChannelParams_Mute(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_bool(field0, serializer);
+      case UiMixerChannelParams_InvertedPhase(field0: final field0):
+        sse_encode_i_32(3, serializer);
+        sse_encode_bool(field0, serializer);
+      case UiMixerChannelParams_Solo(field0: final field0):
+        sse_encode_i_32(4, serializer);
+        sse_encode_bool(field0, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_ui_mixer_param_event(
+    UiMixerParamEvent self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.trackId, serializer);
+    sse_encode_opt_box_autoadd_f_32(self.volume, serializer);
+    sse_encode_opt_box_autoadd_f_32(self.pan, serializer);
+    sse_encode_opt_box_autoadd_bool(self.mute, serializer);
+    sse_encode_opt_box_autoadd_bool(self.solo, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_mixer_state(UiMixerState self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_Map_u_32_ui_mixer_channel_None(self.channels, serializer);
+    sse_encode_ui_mixer_channel(self.masterBus, serializer);
+    sse_encode_Map_u_32_ui_bus_None(self.buses, serializer);
+    sse_encode_list_ui_routing_connection(self.routing, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_note(UiNote self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_CastedPrimitive_u_64(self.startTick, serializer);
+    sse_encode_CastedPrimitive_u_64(self.duration, serializer);
+    sse_encode_u_8(self.key, serializer);
+    sse_encode_u_8(self.velocity, serializer);
+    sse_encode_f_32(self.probability, serializer);
+    sse_encode_i_8(self.microOffset, serializer);
+    sse_encode_bool(self.mute, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_parameter_type(
+    UiParameterType self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_parameter_value(
+    UiParameterValue self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.paramId, serializer);
+    sse_encode_f_32(self.value, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_CastedPrimitive_u_64(self.lengthTicks, serializer);
+    sse_encode_list_ui_note(self.notes, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_karbeat_plugin_type(self.pluginType, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_plugin_instance(
+    UiPluginInstance self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.registryId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_bool(self.bypass, serializer);
+    sse_encode_Map_u_32_f_32_None(self.parameters, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_plugin_parameter(
+    UiPluginParameter self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.group, serializer);
+    sse_encode_f_32(self.value, serializer);
+    sse_encode_f_32(self.min, serializer);
+    sse_encode_f_32(self.max, serializer);
+    sse_encode_f_32(self.defaultValue, serializer);
+    sse_encode_f_32(self.step, serializer);
+    sse_encode_ui_parameter_type(self.paramType, serializer);
+    sse_encode_list_String(self.choices, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_project_metadata(
+    UiProjectMetadata self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.author, serializer);
+    sse_encode_String(self.version, serializer);
+    sse_encode_String(self.createdAt, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_resize_edge(UiResizeEdge self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_response_curve_point(
+    UiResponseCurvePoint self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self.frequency, serializer);
+    sse_encode_f_32(self.magnitudeDb, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_routing_connection(
+    UiRoutingConnection self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_routing_node(self.source, serializer);
+    sse_encode_ui_routing_node(self.destination, serializer);
+    sse_encode_f_32(self.sendLevel, serializer);
+    sse_encode_bool(self.isSend, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_routing_node(
+    UiRoutingNode self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiRoutingNode_Track(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_32(field0, serializer);
+      case UiRoutingNode_Bus(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_32(field0, serializer);
+      case UiRoutingNode_Master():
+        sse_encode_i_32(2, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_track(UiTrack self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.color, serializer);
+    sse_encode_ui_track_type(self.trackType, serializer);
+    sse_encode_list_ui_clip(self.clips, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.generatorId, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_track_type(UiTrackType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_transport_feedback(
+    UiTransportFeedback self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.samples, serializer);
+    sse_encode_u_32(self.ticks, serializer);
+    sse_encode_CastedPrimitive_usize(self.beat, serializer);
+    sse_encode_CastedPrimitive_usize(self.bar, serializer);
+    sse_encode_f_32(self.tempo, serializer);
+    sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_bool(self.isPlaying, serializer);
+    sse_encode_bool(self.isLooping, serializer);
+    sse_encode_bool(self.isRecording, serializer);
+    sse_encode_bool(self.isPatternPlaying, serializer);
+    sse_encode_bool(self.isPatternMode, serializer);
+    sse_encode_u_32(self.patternSamples, serializer);
+    sse_encode_u_32(self.patternTicks, serializer);
+    sse_encode_CastedPrimitive_usize(self.patternBeat, serializer);
+    sse_encode_CastedPrimitive_usize(self.patternBar, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_transport_state(
+    UiTransportState self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self.bpm, serializer);
+    sse_encode_record_u_8_u_8(self.timeSignature, serializer);
+  }
+
+  @protected
+  void sse_encode_unit(void self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+}

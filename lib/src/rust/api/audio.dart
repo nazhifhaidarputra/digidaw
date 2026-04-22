@@ -7,65 +7,127 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
-            // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
-
-
-            /// GETTER: Fetch details + Downsampled Buffer for UI
-Future<AudioWaveformUiForAudioProperties?>  getAudioProperties({required int id }) => RustLib.instance.api.crateApiAudioGetAudioProperties(id: id);
+/// GETTER: Fetch details + Downsampled Buffer for UI
+Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
+  required int id,
+}) => RustLib.instance.api.crateApiAudioGetAudioProperties(id: id);
 
 /// ACTION: Play the sound via the Engine
-Future<void>  playSourcePreview({required int id }) => RustLib.instance.api.crateApiAudioPlaySourcePreview(id: id);
+Future<void> playSourcePreview({required int id}) =>
+    RustLib.instance.api.crateApiAudioPlaySourcePreview(id: id);
 
-Future<void>  stopAllPreviews() => RustLib.instance.api.crateApiAudioStopAllPreviews();
+Future<void> stopAllPreviews() =>
+    RustLib.instance.api.crateApiAudioStopAllPreviews();
 
-Future<UiAudioHardwareConfig>  getAudioConfig() => RustLib.instance.api.crateApiAudioGetAudioConfig();
+Future<UiAudioHardwareConfig> getAudioConfig() =>
+    RustLib.instance.api.crateApiAudioGetAudioConfig();
 
-Stream<UiTransportFeedback>  createPositionStream() => RustLib.instance.api.crateApiAudioCreatePositionStream();
+Stream<UiTransportFeedback> createPositionStream() =>
+    RustLib.instance.api.crateApiAudioCreatePositionStream();
 
 /// play preview sound when drawing note or pressing the piano tile on the UI
-Future<void>  playPreviewNote({required int trackId , required int noteKey , required int velocity , required bool isOn }) => RustLib.instance.api.crateApiAudioPlayPreviewNote(trackId: trackId, noteKey: noteKey, velocity: velocity, isOn: isOn);
+Future<void> playPreviewNote({
+  required int trackId,
+  required int noteKey,
+  required int velocity,
+  required bool isOn,
+}) => RustLib.instance.api.crateApiAudioPlayPreviewNote(
+  trackId: trackId,
+  noteKey: noteKey,
+  velocity: velocity,
+  isOn: isOn,
+);
 
 /// Play preview sound directly on a generator (without requiring a track).
 /// Used in plugin editor screens to test synth sounds.
-Future<void>  playPreviewNoteGenerator({required int generatorId , required int noteKey , required int velocity , required bool isOn }) => RustLib.instance.api.crateApiAudioPlayPreviewNoteGenerator(generatorId: generatorId, noteKey: noteKey, velocity: velocity, isOn: isOn);
+Future<void> playPreviewNoteGenerator({
+  required int generatorId,
+  required int noteKey,
+  required int velocity,
+  required bool isOn,
+}) => RustLib.instance.api.crateApiAudioPlayPreviewNoteGenerator(
+  generatorId: generatorId,
+  noteKey: noteKey,
+  velocity: velocity,
+  isOn: isOn,
+);
 
-void  setMetronomeActive({required bool active }) => RustLib.instance.api.crateApiAudioSetMetronomeActive(active: active);
+void setMetronomeActive({required bool active}) =>
+    RustLib.instance.api.crateApiAudioSetMetronomeActive(active: active);
 
-            class UiTransportFeedback  {
-                final int samples;
-final int ticks;
-final int beat;
-final int bar;
-final double tempo;
-final int sampleRate;
-final bool isPlaying;
-final bool isLooping;
-final bool isRecording;
-final bool isPatternPlaying;
-final bool isPatternMode;
-final int patternSamples;
-final int patternTicks;
-final int patternBeat;
-final int patternBar;
+class UiTransportFeedback {
+  final int samples;
+  final int ticks;
+  final int beat;
+  final int bar;
+  final double tempo;
+  final int sampleRate;
+  final bool isPlaying;
+  final bool isLooping;
+  final bool isRecording;
+  final bool isPatternPlaying;
+  final bool isPatternMode;
+  final int patternSamples;
+  final int patternTicks;
+  final int patternBeat;
+  final int patternBar;
 
-                const UiTransportFeedback({required this.samples ,required this.ticks ,required this.beat ,required this.bar ,required this.tempo ,required this.sampleRate ,required this.isPlaying ,required this.isLooping ,required this.isRecording ,required this.isPatternPlaying ,required this.isPatternMode ,required this.patternSamples ,required this.patternTicks ,required this.patternBeat ,required this.patternBar ,});
+  const UiTransportFeedback({
+    required this.samples,
+    required this.ticks,
+    required this.beat,
+    required this.bar,
+    required this.tempo,
+    required this.sampleRate,
+    required this.isPlaying,
+    required this.isLooping,
+    required this.isRecording,
+    required this.isPatternPlaying,
+    required this.isPatternMode,
+    required this.patternSamples,
+    required this.patternTicks,
+    required this.patternBeat,
+    required this.patternBar,
+  });
 
-                
-                
+  @override
+  int get hashCode =>
+      samples.hashCode ^
+      ticks.hashCode ^
+      beat.hashCode ^
+      bar.hashCode ^
+      tempo.hashCode ^
+      sampleRate.hashCode ^
+      isPlaying.hashCode ^
+      isLooping.hashCode ^
+      isRecording.hashCode ^
+      isPatternPlaying.hashCode ^
+      isPatternMode.hashCode ^
+      patternSamples.hashCode ^
+      patternTicks.hashCode ^
+      patternBeat.hashCode ^
+      patternBar.hashCode;
 
-                
-        @override
-        int get hashCode => samples.hashCode^ticks.hashCode^beat.hashCode^bar.hashCode^tempo.hashCode^sampleRate.hashCode^isPlaying.hashCode^isLooping.hashCode^isRecording.hashCode^isPatternPlaying.hashCode^isPatternMode.hashCode^patternSamples.hashCode^patternTicks.hashCode^patternBeat.hashCode^patternBar.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiTransportFeedback &&
-                runtimeType == other.runtimeType
-                && samples == other.samples&& ticks == other.ticks&& beat == other.beat&& bar == other.bar&& tempo == other.tempo&& sampleRate == other.sampleRate&& isPlaying == other.isPlaying&& isLooping == other.isLooping&& isRecording == other.isRecording&& isPatternPlaying == other.isPatternPlaying&& isPatternMode == other.isPatternMode&& patternSamples == other.patternSamples&& patternTicks == other.patternTicks&& patternBeat == other.patternBeat&& patternBar == other.patternBar;
-        
-            }
-            
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiTransportFeedback &&
+          runtimeType == other.runtimeType &&
+          samples == other.samples &&
+          ticks == other.ticks &&
+          beat == other.beat &&
+          bar == other.bar &&
+          tempo == other.tempo &&
+          sampleRate == other.sampleRate &&
+          isPlaying == other.isPlaying &&
+          isLooping == other.isLooping &&
+          isRecording == other.isRecording &&
+          isPatternPlaying == other.isPatternPlaying &&
+          isPatternMode == other.isPatternMode &&
+          patternSamples == other.patternSamples &&
+          patternTicks == other.patternTicks &&
+          patternBeat == other.patternBeat &&
+          patternBar == other.patternBar;
+}

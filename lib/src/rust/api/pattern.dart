@@ -6,84 +6,164 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `from`, `from`
 
-            // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `from`, `from`
+Future<UiPattern> getPattern({required int patternId}) =>
+    RustLib.instance.api.crateApiPatternGetPattern(patternId: patternId);
 
+Future<Map<int, UiPattern>> getPatterns() =>
+    RustLib.instance.api.crateApiPatternGetPatterns();
 
-            Future<UiPattern>  getPattern({required int patternId }) => RustLib.instance.api.crateApiPatternGetPattern(patternId: patternId);
+Future<UiNote> addNote({
+  required int patternId,
+  required int key,
+  required int startTick,
+  int? duration,
+}) => RustLib.instance.api.crateApiPatternAddNote(
+  patternId: patternId,
+  key: key,
+  startTick: startTick,
+  duration: duration,
+);
 
-Future<Map<int, UiPattern>>  getPatterns() => RustLib.instance.api.crateApiPatternGetPatterns();
+Future<UiNote> deleteNote({required int patternId, required int noteId}) =>
+    RustLib.instance.api.crateApiPatternDeleteNote(
+      patternId: patternId,
+      noteId: noteId,
+    );
 
-Future<UiNote>  addNote({required int patternId , required int key , required int startTick , int? duration }) => RustLib.instance.api.crateApiPatternAddNote(patternId: patternId, key: key, startTick: startTick, duration: duration);
+Future<UiNote> resizeNote({
+  required int patternId,
+  required int noteId,
+  required int newDuration,
+}) => RustLib.instance.api.crateApiPatternResizeNote(
+  patternId: patternId,
+  noteId: noteId,
+  newDuration: newDuration,
+);
 
-Future<UiNote>  deleteNote({required int patternId , required int noteId }) => RustLib.instance.api.crateApiPatternDeleteNote(patternId: patternId, noteId: noteId);
+Future<UiNote> moveNote({
+  required int patternId,
+  required int noteId,
+  required int newStartTick,
+  required int newKey,
+}) => RustLib.instance.api.crateApiPatternMoveNote(
+  patternId: patternId,
+  noteId: noteId,
+  newStartTick: newStartTick,
+  newKey: newKey,
+);
 
-Future<UiNote>  resizeNote({required int patternId , required int noteId , required int newDuration }) => RustLib.instance.api.crateApiPatternResizeNote(patternId: patternId, noteId: noteId, newDuration: newDuration);
-
-Future<UiNote>  moveNote({required int patternId , required int noteId , required int newStartTick , required int newKey }) => RustLib.instance.api.crateApiPatternMoveNote(patternId: patternId, noteId: noteId, newStartTick: newStartTick, newKey: newKey);
-
-Future<UiNote>  changeNoteParams({required int patternId , required int noteId , int? velocity , double? probability , int? microOffset , bool? mute }) => RustLib.instance.api.crateApiPatternChangeNoteParams(patternId: patternId, noteId: noteId, velocity: velocity, probability: probability, microOffset: microOffset, mute: mute);
+Future<UiNote> changeNoteParams({
+  required int patternId,
+  required int noteId,
+  int? velocity,
+  double? probability,
+  int? microOffset,
+  bool? mute,
+}) => RustLib.instance.api.crateApiPatternChangeNoteParams(
+  patternId: patternId,
+  noteId: noteId,
+  velocity: velocity,
+  probability: probability,
+  microOffset: microOffset,
+  mute: mute,
+);
 
 /// Play a pattern in isolation with a specific generator (looping automatically).
 /// This temporarily switches the engine to Pattern playback mode.
-Future<void>  playPatternPreview({required int patternId , required int generatorId }) => RustLib.instance.api.crateApiPatternPlayPatternPreview(patternId: patternId, generatorId: generatorId);
+Future<void> playPatternPreview({
+  required int patternId,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPatternPlayPatternPreview(
+  patternId: patternId,
+  generatorId: generatorId,
+);
+
+/// Stop pattern preview without changing song mode. used in stop button inside pattern playback
+Future<void> stopPatternPreviewLocal({
+  required int patternId,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPatternStopPatternPreviewLocal(
+  patternId: patternId,
+  generatorId: generatorId,
+);
 
 /// Stop pattern preview and return to Song mode.
-Future<void>  stopPatternPreview() => RustLib.instance.api.crateApiPatternStopPatternPreview();
+Future<void> stopPatternPreview() =>
+    RustLib.instance.api.crateApiPatternStopPatternPreview();
 
-            class UiNote  {
-                final int id;
-final int startTick;
-final int duration;
-final int key;
-final int velocity;
-final double probability;
-final int microOffset;
-final bool mute;
+class UiNote {
+  final int id;
+  final int startTick;
+  final int duration;
+  final int key;
+  final int velocity;
+  final double probability;
+  final int microOffset;
+  final bool mute;
 
-                const UiNote({required this.id ,required this.startTick ,required this.duration ,required this.key ,required this.velocity ,required this.probability ,required this.microOffset ,required this.mute ,});
+  const UiNote({
+    required this.id,
+    required this.startTick,
+    required this.duration,
+    required this.key,
+    required this.velocity,
+    required this.probability,
+    required this.microOffset,
+    required this.mute,
+  });
 
-                
-                
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      startTick.hashCode ^
+      duration.hashCode ^
+      key.hashCode ^
+      velocity.hashCode ^
+      probability.hashCode ^
+      microOffset.hashCode ^
+      mute.hashCode;
 
-                
-        @override
-        int get hashCode => id.hashCode^startTick.hashCode^duration.hashCode^key.hashCode^velocity.hashCode^probability.hashCode^microOffset.hashCode^mute.hashCode;
-        
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiNote &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          startTick == other.startTick &&
+          duration == other.duration &&
+          key == other.key &&
+          velocity == other.velocity &&
+          probability == other.probability &&
+          microOffset == other.microOffset &&
+          mute == other.mute;
+}
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiNote &&
-                runtimeType == other.runtimeType
-                && id == other.id&& startTick == other.startTick&& duration == other.duration&& key == other.key&& velocity == other.velocity&& probability == other.probability&& microOffset == other.microOffset&& mute == other.mute;
-        
-            }
+class UiPattern {
+  final int id;
+  final String name;
+  final int lengthTicks;
+  final List<UiNote> notes;
 
-class UiPattern  {
-                final int id;
-final String name;
-final int lengthTicks;
-final List<UiNote> notes;
+  const UiPattern({
+    required this.id,
+    required this.name,
+    required this.lengthTicks,
+    required this.notes,
+  });
 
-                const UiPattern({required this.id ,required this.name ,required this.lengthTicks ,required this.notes ,});
+  @override
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ lengthTicks.hashCode ^ notes.hashCode;
 
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^name.hashCode^lengthTicks.hashCode^notes.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiPattern &&
-                runtimeType == other.runtimeType
-                && id == other.id&& name == other.name&& lengthTicks == other.lengthTicks&& notes == other.notes;
-        
-            }
-            
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiPattern &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          lengthTicks == other.lengthTicks &&
+          notes == other.notes;
+}

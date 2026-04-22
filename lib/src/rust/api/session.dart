@@ -11,62 +11,124 @@ import 'project.dart';
 import 'track.dart';
 part 'session.freezed.dart';
 
-            // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `from`
 
-
-            /// Undo the last action.
-Future<void>  undo() => RustLib.instance.api.crateApiSessionUndo();
+/// Undo the last action.
+Future<void> undo() => RustLib.instance.api.crateApiSessionUndo();
 
 /// Redo the last undone action.
-Future<void>  redo() => RustLib.instance.api.crateApiSessionRedo();
+Future<void> redo() => RustLib.instance.api.crateApiSessionRedo();
 
 /// Copy selected pattern notes to the clipboard.
-Future<UiClipboardContent>  copyPatternNotes({required int patternId , required List<int> noteIds }) => RustLib.instance.api.crateApiSessionCopyPatternNotes(patternId: patternId, noteIds: noteIds);
+Future<UiClipboardContent> copyPatternNotes({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiSessionCopyPatternNotes(
+  patternId: patternId,
+  noteIds: noteIds,
+);
 
 /// Cut pattern notes: copies them to clipboard then deletes with history.
-Future<void>  cutPatternNotes({required int patternId , required List<int> noteIds }) => RustLib.instance.api.crateApiSessionCutPatternNotes(patternId: patternId, noteIds: noteIds);
+Future<void> cutPatternNotes({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiSessionCutPatternNotes(
+  patternId: patternId,
+  noteIds: noteIds,
+);
 
 /// Paste: Reads clipboard, creates new notes, creates Batch Add action
-Future<void>  pastePatternNotes({required int targetPatternId , required int playheadTick }) => RustLib.instance.api.crateApiSessionPastePatternNotes(targetPatternId: targetPatternId, playheadTick: playheadTick);
+Future<void> pastePatternNotes({
+  required int targetPatternId,
+  required int playheadTick,
+}) => RustLib.instance.api.crateApiSessionPastePatternNotes(
+  targetPatternId: targetPatternId,
+  playheadTick: playheadTick,
+);
 
 /// Delete notes in group. useful for range and group deletion
-Future<void>  deletePatternNotes({required int patternId , required List<int> noteIds }) => RustLib.instance.api.crateApiSessionDeletePatternNotes(patternId: patternId, noteIds: noteIds);
+Future<void> deletePatternNotes({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiSessionDeletePatternNotes(
+  patternId: patternId,
+  noteIds: noteIds,
+);
 
 /// Copy selected clips to the clipboard.
 /// Each (track_id, clip_id) pair identifies a clip to copy.
-Future<UiClipboardContent>  copyClips({required int trackId , required List<int> clipIds }) => RustLib.instance.api.crateApiSessionCopyClips(trackId: trackId, clipIds: clipIds);
+Future<UiClipboardContent> copyClips({
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiSessionCopyClips(
+  trackId: trackId,
+  clipIds: clipIds,
+);
 
 /// Cut selected clips: copies them to clipboard then deletes with history.
-Future<void>  cutClips({required int trackId , required List<int> clipIds }) => RustLib.instance.api.crateApiSessionCutClips(trackId: trackId, clipIds: clipIds);
+Future<void> cutClips({required int trackId, required List<int> clipIds}) =>
+    RustLib.instance.api.crateApiSessionCutClips(
+      trackId: trackId,
+      clipIds: clipIds,
+    );
 
 /// Paste clips from clipboard to a target track at a specified start time.
 /// Clips are offset relative to the earliest clip's start time.
-Future<void>  pasteClips({required int targetTrackId , required int pasteStartTime }) => RustLib.instance.api.crateApiSessionPasteClips(targetTrackId: targetTrackId, pasteStartTime: pasteStartTime);
+Future<void> pasteClips({
+  required int targetTrackId,
+  required int pasteStartTime,
+}) => RustLib.instance.api.crateApiSessionPasteClips(
+  targetTrackId: targetTrackId,
+  pasteStartTime: pasteStartTime,
+);
 
 /// Delete specified clips from a track with history support.
-Future<void>  deleteClips({required int trackId , required List<int> clipIds }) => RustLib.instance.api.crateApiSessionDeleteClips(trackId: trackId, clipIds: clipIds);
+Future<void> deleteClips({required int trackId, required List<int> clipIds}) =>
+    RustLib.instance.api.crateApiSessionDeleteClips(
+      trackId: trackId,
+      clipIds: clipIds,
+    );
 
 /// Move a clip from one track to another (or within the same track) with a new start time.
-Future<void>  moveClip({required int oldTrackId , required int newTrackId , required int clipId , required int newStartTime }) => RustLib.instance.api.crateApiSessionMoveClip(oldTrackId: oldTrackId, newTrackId: newTrackId, clipId: clipId, newStartTime: newStartTime);
+Future<void> moveClip({
+  required int oldTrackId,
+  required int newTrackId,
+  required int clipId,
+  required int newStartTime,
+}) => RustLib.instance.api.crateApiSessionMoveClip(
+  oldTrackId: oldTrackId,
+  newTrackId: newTrackId,
+  clipId: clipId,
+  newStartTime: newStartTime,
+);
 
 /// Resize a clip by updating its start_time, offset_start, and/or loop_length.
 /// Supports both left (slip edit) and right edge resizing with history support.
-Future<void>  resizeClip({required int trackId , required int clipId , required UiResizeEdge edge , required int newTimeVal }) => RustLib.instance.api.crateApiSessionResizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTimeVal);
+Future<void> resizeClip({
+  required int trackId,
+  required int clipId,
+  required UiResizeEdge edge,
+  required int newTimeVal,
+}) => RustLib.instance.api.crateApiSessionResizeClip(
+  trackId: trackId,
+  clipId: clipId,
+  edge: edge,
+  newTimeVal: newTimeVal,
+);
 
-Future<UiClipboardContent>  getClipboardContents() => RustLib.instance.api.crateApiSessionGetClipboardContents();
+Future<UiClipboardContent> getClipboardContents() =>
+    RustLib.instance.api.crateApiSessionGetClipboardContents();
 
-            @freezed
-                sealed class UiClipboardContent with _$UiClipboardContent  {
-                    const UiClipboardContent._();
+@freezed
+sealed class UiClipboardContent with _$UiClipboardContent {
+  const UiClipboardContent._();
 
-                     const factory UiClipboardContent.empty() = UiClipboardContent_Empty;
- const factory UiClipboardContent.notes(  List<UiNote> field0,) = UiClipboardContent_Notes;
- const factory UiClipboardContent.clips(  List<UiClip> field0,) = UiClipboardContent_Clips;
+  const factory UiClipboardContent.empty() = UiClipboardContent_Empty;
+  const factory UiClipboardContent.notes(List<UiNote> field0) =
+      UiClipboardContent_Notes;
+  const factory UiClipboardContent.clips(List<UiClip> field0) =
+      UiClipboardContent_Clips;
 
-                    
-
-                    static Future<UiClipboardContent>  default_()=>RustLib.instance.api.crateApiSessionUiClipboardContentDefault();
-
-
-                }
-            
+  static Future<UiClipboardContent> default_() =>
+      RustLib.instance.api.crateApiSessionUiClipboardContentDefault();
+}

@@ -52,6 +52,7 @@ pub fn play_pattern_preview(
         // Send commands to switch to Pattern mode and start playing
         try_send_audio_command_chain(
             vec![
+                AudioCommand::SetPlaying(false),
                 AudioCommand::SetPlaybackMode(PlaybackMode::Pattern {
                     pattern_id,
                     generator_id,
@@ -62,6 +63,13 @@ pub fn play_pattern_preview(
     }
 
     Ok(())
+}
+
+/// Stop pattern preview without changing the mode
+pub fn stop_pattern_preview_local(pattern_id: PatternId, generator_id: GeneratorId) -> anyhow::Result<()> {
+    try_send_audio_command_chain(
+        vec![AudioCommand::SetPlaybackMode(PlaybackMode::Pattern { pattern_id, generator_id }), AudioCommand::SetPlaying(false)]
+    )
 }
 
 pub fn stop_pattern_preview() -> anyhow::Result<()> {

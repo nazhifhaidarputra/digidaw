@@ -543,6 +543,10 @@ impl AudioEngine {
                     self.stop_all_active_generators();
                 }
                 self.is_playing = val;
+
+                if matches!(self.playback_mode, PlaybackMode::Pattern { .. }) {
+                    self.is_pattern_playing = val;
+                }
                 self.emit_current_playback_position();
             }
             AudioCommand::SetLooping(val) => {
@@ -550,7 +554,9 @@ impl AudioEngine {
                 self.emit_current_playback_position();
             }
             AudioCommand::StopAndReset => {
-                self.stop_playback();
+                if matches!(self.playback_mode, PlaybackMode::Song) {
+                    self.stop_playback();
+                }
             }
             AudioCommand::SetPlayhead(samples) => {
                 log::info!("[AudioEngine] Seek: {}", samples);

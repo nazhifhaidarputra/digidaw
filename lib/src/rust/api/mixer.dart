@@ -8,332 +8,448 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
-            // These functions are ignored because they are not marked as `pub`: `push_mixer_event`
+// These functions are ignored because they are not marked as `pub`: `push_mixer_event`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
-
-            /// Create the Rust → Flutter event stream for mixer param changes.
-Stream<UiMixerParamEvent>  createMixerEventStream() => RustLib.instance.api.crateApiMixerCreateMixerEventStream();
+/// Create the Rust → Flutter event stream for mixer param changes.
+Stream<UiMixerParamEvent> createMixerEventStream() =>
+    RustLib.instance.api.crateApiMixerCreateMixerEventStream();
 
 /// **GETTER: Fetch the mixer state**
-Future<UiMixerState>  getMixerState() => RustLib.instance.api.crateApiMixerGetMixerState();
+Future<UiMixerState> getMixerState() =>
+    RustLib.instance.api.crateApiMixerGetMixerState();
 
 /// **GETTER: Fetch a specific mixer channel**
-Future<UiMixerChannel>  getMixerChannel({required int trackId }) => RustLib.instance.api.crateApiMixerGetMixerChannel(trackId: trackId);
+Future<UiMixerChannel> getMixerChannel({required int trackId}) =>
+    RustLib.instance.api.crateApiMixerGetMixerChannel(trackId: trackId);
 
-Future<(UiMixerChannel,List<UiEffectInstance>)>  getMixerChannelPopulated({required int trackId }) => RustLib.instance.api.crateApiMixerGetMixerChannelPopulated(trackId: trackId);
+Future<(UiMixerChannel, List<UiEffectInstance>)> getMixerChannelPopulated({
+  required int trackId,
+}) => RustLib.instance.api.crateApiMixerGetMixerChannelPopulated(
+  trackId: trackId,
+);
 
 /// **GETTER: Fetch the master bus**
-Future<UiMixerChannel>  getMasterBus() => RustLib.instance.api.crateApiMixerGetMasterBus();
+Future<UiMixerChannel> getMasterBus() =>
+    RustLib.instance.api.crateApiMixerGetMasterBus();
 
-Future<List<UiEffectInstance>>  getMasterBusPopulated() => RustLib.instance.api.crateApiMixerGetMasterBusPopulated();
+Future<List<UiEffectInstance>> getMasterBusPopulated() =>
+    RustLib.instance.api.crateApiMixerGetMasterBusPopulated();
 
 /// **GETTER: Fetch all buses**
-Future<Map<int, UiBus>>  getBuses() => RustLib.instance.api.crateApiMixerGetBuses();
+Future<Map<int, UiBus>> getBuses() =>
+    RustLib.instance.api.crateApiMixerGetBuses();
 
 /// **GETTER: Fetch the routing matrix**
-Future<List<UiRoutingConnection>>  getRoutingMatrix() => RustLib.instance.api.crateApiMixerGetRoutingMatrix();
+Future<List<UiRoutingConnection>> getRoutingMatrix() =>
+    RustLib.instance.api.crateApiMixerGetRoutingMatrix();
 
 /// Get track channel's parameter specs
-Future<List<ParameterSpecDTO>?>  getTrackMixerChannelSpecs({required int trackId }) => RustLib.instance.api.crateApiMixerGetTrackMixerChannelSpecs(trackId: trackId);
+Future<List<ParameterSpecDTO>?> getTrackMixerChannelSpecs({
+  required int trackId,
+}) => RustLib.instance.api.crateApiMixerGetTrackMixerChannelSpecs(
+  trackId: trackId,
+);
 
 /// Get bus channel's parameter specs
-Future<List<ParameterSpecDTO>?>  getBusMixerChannelSpecs({required int busId }) => RustLib.instance.api.crateApiMixerGetBusMixerChannelSpecs(busId: busId);
+Future<List<ParameterSpecDTO>?> getBusMixerChannelSpecs({required int busId}) =>
+    RustLib.instance.api.crateApiMixerGetBusMixerChannelSpecs(busId: busId);
 
 /// get master channel's parameter specs
-Future<List<ParameterSpecDTO>>  getMasterChannelSpecs() => RustLib.instance.api.crateApiMixerGetMasterChannelSpecs();
+Future<List<ParameterSpecDTO>> getMasterChannelSpecs() =>
+    RustLib.instance.api.crateApiMixerGetMasterChannelSpecs();
 
-Future<void>  setMasterBusParams({required List<UiMixerChannelParams> params }) => RustLib.instance.api.crateApiMixerSetMasterBusParams(params: params);
+Future<void> setMasterBusParams({required List<UiMixerChannelParams> params}) =>
+    RustLib.instance.api.crateApiMixerSetMasterBusParams(params: params);
 
-Future<void>  setMixerChannelParams({required int trackId , required List<UiMixerChannelParams> params }) => RustLib.instance.api.crateApiMixerSetMixerChannelParams(trackId: trackId, params: params);
+Future<void> setMixerChannelParams({
+  required int trackId,
+  required List<UiMixerChannelParams> params,
+}) => RustLib.instance.api.crateApiMixerSetMixerChannelParams(
+  trackId: trackId,
+  params: params,
+);
 
 /// Add an effect to a mixer channel by its registry ID (preferred method).
-Future<void>  addEffectToMixerChannelById({required int trackId , required int registryId }) => RustLib.instance.api.crateApiMixerAddEffectToMixerChannelById(trackId: trackId, registryId: registryId);
+Future<void> addEffectToMixerChannelById({
+  required int trackId,
+  required int registryId,
+}) => RustLib.instance.api.crateApiMixerAddEffectToMixerChannelById(
+  trackId: trackId,
+  registryId: registryId,
+);
 
-Future<void>  removeEffectFromMixerChannel({required int trackId , required int effectInstanceId }) => RustLib.instance.api.crateApiMixerRemoveEffectFromMixerChannel(trackId: trackId, effectInstanceId: effectInstanceId);
+Future<void> removeEffectFromMixerChannel({
+  required int trackId,
+  required int effectInstanceId,
+}) => RustLib.instance.api.crateApiMixerRemoveEffectFromMixerChannel(
+  trackId: trackId,
+  effectInstanceId: effectInstanceId,
+);
 
-Future<void>  addEffectToMasterBus({required int registryId }) => RustLib.instance.api.crateApiMixerAddEffectToMasterBus(registryId: registryId);
+Future<void> addEffectToMasterBus({required int registryId}) => RustLib
+    .instance
+    .api
+    .crateApiMixerAddEffectToMasterBus(registryId: registryId);
 
-Future<void>  removeEffectFromMasterBus({required int effectInstanceId }) => RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(effectInstanceId: effectInstanceId);
+Future<void> removeEffectFromMasterBus({required int effectInstanceId}) =>
+    RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(
+      effectInstanceId: effectInstanceId,
+    );
 
 /// Create a new mixer bus and return its ID.
-Future<int>  createBus({required String name }) => RustLib.instance.api.crateApiMixerCreateBus(name: name);
+Future<int> createBus({required String name}) =>
+    RustLib.instance.api.crateApiMixerCreateBus(name: name);
 
 /// Delete a mixer bus.
-Future<void>  deleteBus({required int busId }) => RustLib.instance.api.crateApiMixerDeleteBus(busId: busId);
+Future<void> deleteBus({required int busId}) =>
+    RustLib.instance.api.crateApiMixerDeleteBus(busId: busId);
 
 /// Set bus channel parameters (volume, pan, mute).
-Future<void>  setBusParams({required int busId , required List<UiMixerChannelParams> params }) => RustLib.instance.api.crateApiMixerSetBusParams(busId: busId, params: params);
+Future<void> setBusParams({
+  required int busId,
+  required List<UiMixerChannelParams> params,
+}) => RustLib.instance.api.crateApiMixerSetBusParams(
+  busId: busId,
+  params: params,
+);
 
 /// Add an effect to a bus by its registry ID.
-Future<void>  addEffectToBus({required int busId , required int registryId }) => RustLib.instance.api.crateApiMixerAddEffectToBus(busId: busId, registryId: registryId);
+Future<void> addEffectToBus({required int busId, required int registryId}) =>
+    RustLib.instance.api.crateApiMixerAddEffectToBus(
+      busId: busId,
+      registryId: registryId,
+    );
 
-Future<void>  renameBus({required int busId , required String newName }) => RustLib.instance.api.crateApiMixerRenameBus(busId: busId, newName: newName);
+Future<void> renameBus({required int busId, required String newName}) =>
+    RustLib.instance.api.crateApiMixerRenameBus(busId: busId, newName: newName);
 
 /// Set routing: source → destination with send level.
-Future<void>  setRouting({required UiRoutingNode source , required UiRoutingNode destination , required double sendLevel , required bool isSend }) => RustLib.instance.api.crateApiMixerSetRouting(source: source, destination: destination, sendLevel: sendLevel, isSend: isSend);
+Future<void> setRouting({
+  required UiRoutingNode source,
+  required UiRoutingNode destination,
+  required double sendLevel,
+  required bool isSend,
+}) => RustLib.instance.api.crateApiMixerSetRouting(
+  source: source,
+  destination: destination,
+  sendLevel: sendLevel,
+  isSend: isSend,
+);
 
 /// Remove a routing connection.
-Future<void>  removeRouting({required UiRoutingNode source , required UiRoutingNode destination , required bool isSend }) => RustLib.instance.api.crateApiMixerRemoveRouting(source: source, destination: destination, isSend: isSend);
+Future<void> removeRouting({
+  required UiRoutingNode source,
+  required UiRoutingNode destination,
+  required bool isSend,
+}) => RustLib.instance.api.crateApiMixerRemoveRouting(
+  source: source,
+  destination: destination,
+  isSend: isSend,
+);
 
-            class ParameterSpecDTO  {
-                final int id;
-final String name;
-final String group;
-final double value;
-final double min;
-final double max;
-final double defaultValue;
-final double step;
-final ParameterValueTypeDTO valueType;
-final List<String> choices;
+class ParameterSpecDTO {
+  final int id;
+  final String name;
+  final String group;
+  final double value;
+  final double min;
+  final double max;
+  final double defaultValue;
+  final double step;
+  final ParameterValueTypeDTO valueType;
+  final List<String> choices;
 
-                const ParameterSpecDTO({required this.id ,required this.name ,required this.group ,required this.value ,required this.min ,required this.max ,required this.defaultValue ,required this.step ,required this.valueType ,required this.choices ,});
+  const ParameterSpecDTO({
+    required this.id,
+    required this.name,
+    required this.group,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.defaultValue,
+    required this.step,
+    required this.valueType,
+    required this.choices,
+  });
 
-                
-                
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      group.hashCode ^
+      value.hashCode ^
+      min.hashCode ^
+      max.hashCode ^
+      defaultValue.hashCode ^
+      step.hashCode ^
+      valueType.hashCode ^
+      choices.hashCode;
 
-                
-        @override
-        int get hashCode => id.hashCode^name.hashCode^group.hashCode^value.hashCode^min.hashCode^max.hashCode^defaultValue.hashCode^step.hashCode^valueType.hashCode^choices.hashCode;
-        
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ParameterSpecDTO &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          group == other.group &&
+          value == other.value &&
+          min == other.min &&
+          max == other.max &&
+          defaultValue == other.defaultValue &&
+          step == other.step &&
+          valueType == other.valueType &&
+          choices == other.choices;
+}
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is ParameterSpecDTO &&
-                runtimeType == other.runtimeType
-                && id == other.id&& name == other.name&& group == other.group&& value == other.value&& min == other.min&& max == other.max&& defaultValue == other.defaultValue&& step == other.step&& valueType == other.valueType&& choices == other.choices;
-        
-            }
-
-enum ParameterValueTypeDTO {
-                    float,
-int,
-bool,
-choice,
-                    ;
-                    
-                }
+enum ParameterValueTypeDTO { float, int, bool, choice }
 
 /// UI representation of a mixer bus.
-class UiBus  {
-                final int id;
-final String name;
-final UiMixerChannel channel;
+class UiBus {
+  final int id;
+  final String name;
+  final UiMixerChannel channel;
 
-                const UiBus({required this.id ,required this.name ,required this.channel ,});
+  const UiBus({required this.id, required this.name, required this.channel});
 
-                
-                
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ channel.hashCode;
 
-                
-        @override
-        int get hashCode => id.hashCode^name.hashCode^channel.hashCode;
-        
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiBus &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          channel == other.channel;
+}
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiBus &&
-                runtimeType == other.runtimeType
-                && id == other.id&& name == other.name&& channel == other.channel;
-        
-            }
+class UiEffectInstance {
+  final int id;
+  final String name;
+  final Map<int, double> parameters;
 
-class UiEffectInstance  {
-                final int id;
-final String name;
-final Map<int, double> parameters;
+  const UiEffectInstance({
+    required this.id,
+    required this.name,
+    required this.parameters,
+  });
 
-                const UiEffectInstance({required this.id ,required this.name ,required this.parameters ,});
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
 
-                
-                
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiEffectInstance &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          parameters == other.parameters;
+}
 
-                
-        @override
-        int get hashCode => id.hashCode^name.hashCode^parameters.hashCode;
-        
+class UiEffectSummary {
+  final int id;
+  final int registryId;
+  final String name;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiEffectInstance &&
-                runtimeType == other.runtimeType
-                && id == other.id&& name == other.name&& parameters == other.parameters;
-        
-            }
+  const UiEffectSummary({
+    required this.id,
+    required this.registryId,
+    required this.name,
+  });
 
-class UiEffectSummary  {
-                final int id;
-final int registryId;
-final String name;
+  @override
+  int get hashCode => id.hashCode ^ registryId.hashCode ^ name.hashCode;
 
-                const UiEffectSummary({required this.id ,required this.registryId ,required this.name ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^registryId.hashCode^name.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiEffectSummary &&
-                runtimeType == other.runtimeType
-                && id == other.id&& registryId == other.registryId&& name == other.name;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiEffectSummary &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          registryId == other.registryId &&
+          name == other.name;
+}
 
 /// UI representation of a mixer channel.
-class UiMixerChannel  {
-                final double volume;
-final double pan;
-final bool mute;
-final bool solo;
-final bool invertedPhase;
-/// List of effect summaries (ID and name).
-final List<UiEffectSummary> effects;
+class UiMixerChannel {
+  final double volume;
+  final double pan;
+  final bool mute;
+  final bool solo;
+  final bool invertedPhase;
 
-                const UiMixerChannel({required this.volume ,required this.pan ,required this.mute ,required this.solo ,required this.invertedPhase ,required this.effects ,});
+  /// List of effect summaries (ID and name).
+  final List<UiEffectSummary> effects;
 
-                
-                
+  const UiMixerChannel({
+    required this.volume,
+    required this.pan,
+    required this.mute,
+    required this.solo,
+    required this.invertedPhase,
+    required this.effects,
+  });
 
-                
-        @override
-        int get hashCode => volume.hashCode^pan.hashCode^mute.hashCode^solo.hashCode^invertedPhase.hashCode^effects.hashCode;
-        
+  @override
+  int get hashCode =>
+      volume.hashCode ^
+      pan.hashCode ^
+      mute.hashCode ^
+      solo.hashCode ^
+      invertedPhase.hashCode ^
+      effects.hashCode;
 
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiMixerChannel &&
-                runtimeType == other.runtimeType
-                && volume == other.volume&& pan == other.pan&& mute == other.mute&& solo == other.solo&& invertedPhase == other.invertedPhase&& effects == other.effects;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiMixerChannel &&
+          runtimeType == other.runtimeType &&
+          volume == other.volume &&
+          pan == other.pan &&
+          mute == other.mute &&
+          solo == other.solo &&
+          invertedPhase == other.invertedPhase &&
+          effects == other.effects;
+}
 
 @freezed
-                sealed class UiMixerChannelParams with _$UiMixerChannelParams  {
-                    const UiMixerChannelParams._();
+sealed class UiMixerChannelParams with _$UiMixerChannelParams {
+  const UiMixerChannelParams._();
 
-                     const factory UiMixerChannelParams.volume(  double field0,) = UiMixerChannelParams_Volume;
- const factory UiMixerChannelParams.pan(  double field0,) = UiMixerChannelParams_Pan;
- const factory UiMixerChannelParams.mute(  bool field0,) = UiMixerChannelParams_Mute;
- const factory UiMixerChannelParams.invertedPhase(  bool field0,) = UiMixerChannelParams_InvertedPhase;
- const factory UiMixerChannelParams.solo(  bool field0,) = UiMixerChannelParams_Solo;
+  const factory UiMixerChannelParams.volume(double field0) =
+      UiMixerChannelParams_Volume;
+  const factory UiMixerChannelParams.pan(double field0) =
+      UiMixerChannelParams_Pan;
+  const factory UiMixerChannelParams.mute(bool field0) =
+      UiMixerChannelParams_Mute;
+  const factory UiMixerChannelParams.invertedPhase(bool field0) =
+      UiMixerChannelParams_InvertedPhase;
+  const factory UiMixerChannelParams.solo(bool field0) =
+      UiMixerChannelParams_Solo;
+}
 
-                    
+class UiMixerParamEvent {
+  final int trackId;
+  final double? volume;
+  final double? pan;
+  final bool? mute;
+  final bool? solo;
 
-                    
-                }
+  const UiMixerParamEvent({
+    required this.trackId,
+    this.volume,
+    this.pan,
+    this.mute,
+    this.solo,
+  });
 
-class UiMixerParamEvent  {
-                final int trackId;
-final double? volume;
-final double? pan;
-final bool? mute;
-final bool? solo;
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      volume.hashCode ^
+      pan.hashCode ^
+      mute.hashCode ^
+      solo.hashCode;
 
-                const UiMixerParamEvent({required this.trackId ,this.volume ,this.pan ,this.mute ,this.solo ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => trackId.hashCode^volume.hashCode^pan.hashCode^mute.hashCode^solo.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiMixerParamEvent &&
-                runtimeType == other.runtimeType
-                && trackId == other.trackId&& volume == other.volume&& pan == other.pan&& mute == other.mute&& solo == other.solo;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiMixerParamEvent &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          volume == other.volume &&
+          pan == other.pan &&
+          mute == other.mute &&
+          solo == other.solo;
+}
 
 /// UI representation of the mixer state.
-class UiMixerState  {
-                final Map<int, UiMixerChannel> channels;
-final UiMixerChannel masterBus;
-final Map<int, UiBus> buses;
-final List<UiRoutingConnection> routing;
+class UiMixerState {
+  final Map<int, UiMixerChannel> channels;
+  final UiMixerChannel masterBus;
+  final Map<int, UiBus> buses;
+  final List<UiRoutingConnection> routing;
 
-                const UiMixerState.raw({required this.channels ,required this.masterBus ,required this.buses ,required this.routing ,});
+  const UiMixerState.raw({
+    required this.channels,
+    required this.masterBus,
+    required this.buses,
+    required this.routing,
+  });
 
-                factory UiMixerState()=>RustLib.instance.api.crateApiMixerUiMixerStateNew();
+  factory UiMixerState() => RustLib.instance.api.crateApiMixerUiMixerStateNew();
 
+  static UiMixerState newWithParam({
+    required Map<int, UiMixerChannel> channels,
+    required UiMixerChannel masterBus,
+    required Map<int, UiBus> buses,
+    required List<UiRoutingConnection> routing,
+  }) => RustLib.instance.api.crateApiMixerUiMixerStateNewWithParam(
+    channels: channels,
+    masterBus: masterBus,
+    buses: buses,
+    routing: routing,
+  );
 
-static UiMixerState  newWithParam({required Map<int, UiMixerChannel> channels , required UiMixerChannel masterBus , required Map<int, UiBus> buses , required List<UiRoutingConnection> routing })=>RustLib.instance.api.crateApiMixerUiMixerStateNewWithParam(channels: channels, masterBus: masterBus, buses: buses, routing: routing);
+  @override
+  int get hashCode =>
+      channels.hashCode ^
+      masterBus.hashCode ^
+      buses.hashCode ^
+      routing.hashCode;
 
-
-                
-
-                
-        @override
-        int get hashCode => channels.hashCode^masterBus.hashCode^buses.hashCode^routing.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiMixerState &&
-                runtimeType == other.runtimeType
-                && channels == other.channels&& masterBus == other.masterBus&& buses == other.buses&& routing == other.routing;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiMixerState &&
+          runtimeType == other.runtimeType &&
+          channels == other.channels &&
+          masterBus == other.masterBus &&
+          buses == other.buses &&
+          routing == other.routing;
+}
 
 /// UI representation of a routing connection.
-class UiRoutingConnection  {
-                final UiRoutingNode source;
-final UiRoutingNode destination;
-final double sendLevel;
-final bool isSend;
+class UiRoutingConnection {
+  final UiRoutingNode source;
+  final UiRoutingNode destination;
+  final double sendLevel;
+  final bool isSend;
 
-                const UiRoutingConnection({required this.source ,required this.destination ,required this.sendLevel ,required this.isSend ,});
+  const UiRoutingConnection({
+    required this.source,
+    required this.destination,
+    required this.sendLevel,
+    required this.isSend,
+  });
 
-                
-                
+  @override
+  int get hashCode =>
+      source.hashCode ^
+      destination.hashCode ^
+      sendLevel.hashCode ^
+      isSend.hashCode;
 
-                
-        @override
-        int get hashCode => source.hashCode^destination.hashCode^sendLevel.hashCode^isSend.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is UiRoutingConnection &&
-                runtimeType == other.runtimeType
-                && source == other.source&& destination == other.destination&& sendLevel == other.sendLevel&& isSend == other.isSend;
-        
-            }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiRoutingConnection &&
+          runtimeType == other.runtimeType &&
+          source == other.source &&
+          destination == other.destination &&
+          sendLevel == other.sendLevel &&
+          isSend == other.isSend;
+}
 
 @freezed
-                sealed class UiRoutingNode with _$UiRoutingNode  {
-                    const UiRoutingNode._();
+sealed class UiRoutingNode with _$UiRoutingNode {
+  const UiRoutingNode._();
 
-                     const factory UiRoutingNode.track(  int field0,) = UiRoutingNode_Track;
- const factory UiRoutingNode.bus(  int field0,) = UiRoutingNode_Bus;
- const factory UiRoutingNode.master() = UiRoutingNode_Master;
-
-                    
-
-                    
-                }
-            
+  const factory UiRoutingNode.track(int field0) = UiRoutingNode_Track;
+  const factory UiRoutingNode.bus(int field0) = UiRoutingNode_Bus;
+  const factory UiRoutingNode.master() = UiRoutingNode_Master;
+}

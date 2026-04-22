@@ -526,6 +526,8 @@ impl ApplicationState {
             }
         };
 
+        self.update_max_sample_index();
+
         Ok(clip)
     }
 
