@@ -71,6 +71,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
 
   @protected
+  RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<UiMixerParamEvent>
   dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw);
 
@@ -478,6 +481,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<double> sse_decode_StreamSink_f_32_Sse(
     SseDeserializer deserializer,
   );
 
@@ -988,6 +996,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_u_32_ui_track_None(
     Map<int, UiTrack> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_f_32_Sse(
+    RustStreamSink<double> self,
     SseSerializer serializer,
   );
 

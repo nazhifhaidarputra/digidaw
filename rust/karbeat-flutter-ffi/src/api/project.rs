@@ -1,23 +1,24 @@
-use std::{ collections::HashMap, ops::Deref };
+use std::{collections::HashMap, ops::Deref};
 
-use chrono::{ DateTime, Utc };
+use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
-use karbeat_core::api::{ audio_waveform_api, project_api, track_api };
-use karbeat_core::core::project::{ ApplicationState, PluginInstance };
-use karbeat_utils::audio_utils::quantize_to_i8;
-use serde::Serialize;
+use karbeat_core::api::{audio_waveform_api, project_api, track_api};
+use karbeat_core::audio::writer::BitPerSample;
+use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use karbeat_core::{
     core::project::{
         clip::Clip,
-        generator::{ GeneratorInstance, GeneratorInstanceType },
-        track::{ audio_waveform::AudioWaveform, KarbeatTrack, TrackType },
+        generator::{GeneratorInstance, GeneratorInstanceType},
+        track::{audio_waveform::AudioWaveform, KarbeatTrack, TrackType},
         transport::TransportState,
-        AudioHardwareConfig,
-        KarbeatSource,
-        ProjectMetadata,
+        AudioHardwareConfig, KarbeatSource, ProjectMetadata,
     },
     utils::get_waveform_buffer,
 };
+use karbeat_utils::audio_utils::quantize_to_i8;
+use serde::Serialize;
+
+use crate::frb_generated::StreamSink;
 
 pub enum UiTrackType {
     Audio,
@@ -39,28 +40,38 @@ pub struct UiApplicationState {
 
 impl From<ApplicationState> for UiApplicationState {
     fn from(value: ApplicationState) -> Self {
-        let tracks: HashMap<u32, UiTrack> = value.tracks
+        let tracks: HashMap<u32, UiTrack> = value
+            .tracks
             .iter()
             .map(|(id, track)| (id.to_u32(), UiTrack::from(track.as_ref())))
             .collect();
 
-        let generators: HashMap<u32, UiGeneratorInstance> = value.generator_pool
+        let generators: HashMap<u32, UiGeneratorInstance> = value
+            .generator_pool
             .iter()
             .map(|(id, gen)| (id.to_u32(), UiGeneratorInstance::from(gen.as_ref())))
             .collect();
 
-        let patterns: HashMap<u32, crate::api::pattern::UiPattern> = value.pattern_pool
+        let patterns: HashMap<u32, crate::api::pattern::UiPattern> = value
+            .pattern_pool
             .iter()
-            .map(|(id, pat)| { (id.to_u32(), crate::api::pattern::UiPattern::from(pat.as_ref())) })
+            .map(|(id, pat)| {
+                (
+                    id.to_u32(),
+                    crate::api::pattern::UiPattern::from(pat.as_ref()),
+                )
+            })
             .collect();
 
-        let audio_sources: HashMap<
-            u32,
-            AudioWaveformUiForSourceList
-        > = value.asset_library.source_map
+        let audio_sources: HashMap<u32, AudioWaveformUiForSourceList> = value
+            .asset_library
+            .source_map
             .iter()
             .map(|(id, source)| {
-                (id.to_u32(), AudioWaveformUiForSourceList::from(source.as_ref()))
+                (
+                    id.to_u32(),
+                    AudioWaveformUiForSourceList::from(source.as_ref()),
+                )
             })
             .collect();
 
@@ -195,7 +206,10 @@ impl From<UiTransportState> for TransportState {
 
 impl From<&KarbeatTrack> for UiTrack {
     fn from(value: &KarbeatTrack) -> Self {
-        let generator_id = value.generator.as_ref().map(|gen_instance| gen_instance.id.to_u32());
+        let generator_id = value
+            .generator
+            .as_ref()
+            .map(|gen_instance| gen_instance.id.to_u32());
         Self {
             id: value.id.to_u32(),
             name: value.name.clone(),
@@ -227,7 +241,7 @@ pub fn audio_hardware_config_new_with_param(
     selected_output_device: String,
     sample_rate: u32,
     buffer_size: u32,
-    cpu_load: f32
+    cpu_load: f32,
 ) -> UiAudioHardwareConfig {
     UiAudioHardwareConfig {
         selected_input_device,
@@ -255,20 +269,21 @@ pub fn transport_state_new_with_param(bpm: f32, time_signature: (u8, u8)) -> UiT
 pub struct UiClip {
     pub name: String,
     pub id: u32,
-    pub start_time: u32,
+    /// Start time in native units (samples if is_sample_based, ticks otherwise)
+    pub start_time: u64,
     pub source: UiClipSource,
-    pub offset_start: u32,
-    pub loop_length: u32,
+    /// Offset from start of source content in native units
+    pub offset_start: u64,
+    /// Loop length in native units
+    pub loop_length: u64,
+    /// True if units are raw samples (audio clips), false if ticks (MIDI/automation)
+    pub is_sample_based: bool,
 }
 
 #[derive(Clone)]
 pub enum UiClipSource {
-    Audio {
-        source_id: u32,
-    },
-    Midi {
-        pattern_id: u32,
-    },
+    Audio { source_id: u32 },
+    Midi { pattern_id: u32 },
     None, // represent clip with empty source, this is placeholder, as this will be removed when I already implement MIDI Pattern and automation
 }
 
@@ -276,26 +291,26 @@ impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
         let source = match &value.source {
-            KarbeatSource::Audio(source_id) =>
-                UiClipSource::Audio {
-                    source_id: source_id.to_u32(),
-                },
-            KarbeatSource::Midi(pattern_id) =>
-                UiClipSource::Midi {
-                    pattern_id: pattern_id.to_u32(),
-                },
+            KarbeatSource::Audio(source_id) => UiClipSource::Audio {
+                source_id: source_id.to_u32(),
+            },
+            KarbeatSource::Midi(pattern_id) => UiClipSource::Midi {
+                pattern_id: pattern_id.to_u32(),
+            },
             _ => UiClipSource::None,
         };
         Self {
             name: value.name.clone(),
             id: value.id.to_u32(),
-            start_time: value.start_time,
+            start_time: value.time.start_time_raw(),
             source,
-            offset_start: value.offset_start,
-            loop_length: value.loop_length,
+            offset_start: value.time.offset_start_raw(),
+            loop_length: value.time.loop_length_raw(),
+            is_sample_based: value.time.is_samples(),
         }
     }
 }
+
 
 // UI Data Structure for Audio Waveform window information (to change vol, pitch fine tune, normalization, panning, adsr envelope,
 // play the audio when pressing the waveform etc)
@@ -393,21 +408,20 @@ impl From<&AudioWaveform> for AudioWaveformUiForClip {
 #[frb(ignore)]
 impl AudioWaveformUiForClip {
     pub fn try_from_audio_waveform_with_target_sample_bin(source_id: u32) -> Result<Self, String> {
-        audio_waveform_api
-            ::get_audio_waveform(source_id, |waveform| {
-                let preview_buffer = get_waveform_buffer(&waveform.buffer)
-                    .map(|slice| quantize_to_i8(slice))
-                    .unwrap_or_default();
+        audio_waveform_api::get_audio_waveform(source_id, |waveform| {
+            let preview_buffer = get_waveform_buffer(&waveform.buffer)
+                .map(|slice| quantize_to_i8(slice))
+                .unwrap_or_default();
 
-                Self {
-                    preview_buffer,
-                    name: waveform.name.clone(),
-                    sample_rate: waveform.sample_rate,
-                    channels: waveform.channels,
-                    duration: waveform.duration,
-                }
-            })
-            .map_err(|e| e.to_string())
+            Self {
+                preview_buffer,
+                name: waveform.name.clone(),
+                sample_rate: waveform.sample_rate,
+                channels: waveform.channels,
+                duration: waveform.duration,
+            }
+        })
+        .map_err(|e| e.to_string())
     }
 }
 // ============================================================
@@ -442,19 +456,22 @@ impl From<PluginInstance> for UiPluginInstance {
 
 pub enum UiGeneratorInstanceType {
     Plugin(UiPluginInstance),
-    Sampler {
-        asset_id: u32,
-        root_note: u8,
-    },
+    Sampler { asset_id: u32, root_note: u8 },
 }
 
 impl From<GeneratorInstanceType> for UiGeneratorInstanceType {
     fn from(value: GeneratorInstanceType) -> Self {
         match value {
-            GeneratorInstanceType::Plugin(plugin_instance) =>
-                Self::Plugin(UiPluginInstance::from(plugin_instance)),
-            GeneratorInstanceType::Sampler { asset_id, root_note } =>
-                Self::Sampler { asset_id, root_note },
+            GeneratorInstanceType::Plugin(plugin_instance) => {
+                Self::Plugin(UiPluginInstance::from(plugin_instance))
+            }
+            GeneratorInstanceType::Sampler {
+                asset_id,
+                root_note,
+            } => Self::Sampler {
+                asset_id,
+                root_note,
+            },
         }
     }
 }
@@ -462,22 +479,22 @@ impl From<GeneratorInstanceType> for UiGeneratorInstanceType {
 impl From<&GeneratorInstance> for UiGeneratorInstance {
     fn from(generator_instance: &GeneratorInstance) -> Self {
         match &generator_instance.instance_type {
-            GeneratorInstanceType::Plugin(plugin_instance) =>
-                Self {
-                    id: generator_instance.id.to_u32(),
-                    instance_type: UiGeneratorInstanceType::Plugin(
-                        UiPluginInstance::from(plugin_instance.to_owned())
-                    ),
+            GeneratorInstanceType::Plugin(plugin_instance) => Self {
+                id: generator_instance.id.to_u32(),
+                instance_type: UiGeneratorInstanceType::Plugin(UiPluginInstance::from(
+                    plugin_instance.to_owned(),
+                )),
+            },
+            GeneratorInstanceType::Sampler {
+                asset_id,
+                root_note,
+            } => Self {
+                id: generator_instance.id.to_u32(),
+                instance_type: UiGeneratorInstanceType::Sampler {
+                    asset_id: *asset_id,
+                    root_note: *root_note,
                 },
-            GeneratorInstanceType::Sampler { asset_id, root_note } => {
-                Self {
-                    id: generator_instance.id.to_u32(),
-                    instance_type: UiGeneratorInstanceType::Sampler {
-                        asset_id: *asset_id,
-                        root_note: *root_note,
-                    },
-                }
-            }
+            },
         }
     }
 }
@@ -486,29 +503,25 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
 
 /// Get the current project metadata state from the backend
 pub fn get_project_metadata() -> Result<UiProjectMetadata, String> {
-    project_api
-        ::get_project_metadata(|m| UiProjectMetadata::from(m.clone()))
+    project_api::get_project_metadata(|m| UiProjectMetadata::from(m.clone()))
         .map_err(|e| e.to_string())
 }
 
 /// Get the transport state from the backend
 pub fn get_transport_state() -> Result<UiTransportState, String> {
-    project_api
-        ::get_transport_state(|t| UiTransportState::from(t.clone()))
+    project_api::get_transport_state(|t| UiTransportState::from(t.clone()))
         .map_err(|e| e.to_string())
 }
 
 /// Get all audio waveform source list from the backend
 pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForSourceList>> {
-    audio_waveform_api
-        ::get_audio_source_list(|id, wf| { (id, AudioWaveformUiForSourceList::from(wf)) })
+    audio_waveform_api::get_audio_source_list(|id, wf| (id, AudioWaveformUiForSourceList::from(wf)))
         .ok()
 }
 
 /// Get generator list used in the project
 pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String> {
-    project_api
-        ::get_generator_list(|id, gen| { (id, UiGeneratorInstance::from(gen)) })
+    project_api::get_generator_list(|id, gen| (id, UiGeneratorInstance::from(gen)))
         .map_err(|e| e.to_string())
 }
 
@@ -532,10 +545,30 @@ pub fn add_new_audio_track() -> UiTrack {
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
-    track_api::get_tracks(|id, track| { (id, UiTrack::from(track)) }).map_err(|e| e.to_string())
+    track_api::get_tracks(|id, track| (id, UiTrack::from(track))).map_err(|e| e.to_string())
 }
 
 /// Get the newest max sample index of the project
 pub fn get_max_sample_index() -> Result<u32, String> {
     project_api::get_max_sample_index().map_err(|e| e.to_string())
+}
+
+/// Export project to flutter. also report progress via StreamSink
+#[frb]
+pub fn export_project_flutter(
+    output_path: String,
+    sample_rate: u32,
+    bit_per_sample: u16,
+    progress_sink: StreamSink<f32>,
+) -> Result<(), String> {
+    let bps: BitPerSample = bit_per_sample
+        .try_into()
+        .map_err(|e: karbeat_core::audio::writer::BitPerSampleError| e.to_string())?;
+
+    project_api::export_project(&output_path, sample_rate, bps, |progress| {
+        // If the sink successfully adds the value, return true to keep rendering.
+        // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
+        progress_sink.add(progress).is_ok()
+    })
+    .map_err(|e| e.to_string())
 }

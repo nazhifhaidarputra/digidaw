@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use crate::{core::project::{
-     ApplicationState, Clip, ClipId, Note, NoteId, TrackId,
-}, shared::id::*};
+use crate::{
+    core::project::{ApplicationState, Clip, ClipId, Note, NoteId, TrackId},
+    shared::id::*,
+};
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
@@ -41,8 +42,8 @@ pub enum ProjectAction {
         old_track_id: TrackId,
         new_track_id: TrackId,
         clip_id: ClipId,
-        old_start_time: u32,
-        new_start_time: u32,
+        old_start_time: u64,
+        new_start_time: u64,
     },
     ResizeClip {
         track_id: TrackId,
@@ -51,7 +52,6 @@ pub enum ProjectAction {
     },
     /// Groups multiple actions into one Undo/Redo step (e.g. Paste)
     Batch(Vec<ProjectAction>),
-
     // TODO: Add history for creating or removing track
     // TODO: Add history for adding automation
 }
@@ -173,12 +173,13 @@ impl HistoryManager {
             }
             ProjectAction::AddClip { track_id, clip } => {
                 // Inverse of AddClip: Delete the clip
-                app.delete_clip_from_track(*track_id, clip.id, true)
+                app.delete_clip_from_track(*track_id, clip.id)
                     .map_err(|e| e.to_string())?;
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Inverse of DeleteClip: Restore the clip to the track
-                app.add_clip_to_track(*track_id, clip.clone(), true).map_err(|e| format!("{}", e))?;
+                app.add_clip_to_track(*track_id, clip.clone())
+                    .map_err(|e| format!("{}", e))?;
             }
             ProjectAction::MoveClip {
                 old_track_id,
@@ -200,7 +201,6 @@ impl HistoryManager {
                 // Remove current clip and insert old clip
                 track.clips.retain(|c| c.id != old_clip.id);
                 track.clips.insert(Arc::new(old_clip.clone()));
-                track.update_max_sample_index();
                 app.update_max_sample_index();
             }
         }
@@ -287,7 +287,7 @@ impl HistoryManager {
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Forward: Delete the clip from the track
-                app.delete_clip_from_track(*track_id, clip.id, true)
+                app.delete_clip_from_track(*track_id, clip.id)
                     .map_err(|e| e.to_string())?;
             }
             ProjectAction::MoveClip {
@@ -310,7 +310,6 @@ impl HistoryManager {
                 // Remove old clip and insert new clip
                 track.clips.retain(|c| c.id != new_clip.id);
                 track.clips.insert(Arc::new(new_clip.clone()));
-                track.update_max_sample_index();
                 app.update_max_sample_index();
             }
         }

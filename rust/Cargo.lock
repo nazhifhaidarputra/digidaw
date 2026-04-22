@@ -826,9 +826,9 @@ checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
 
 [[package]]
 name = "fastrand"
-version = "2.3.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
 name = "find-msvc-tools"
@@ -1278,7 +1278,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-dsp"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "dasp",
  "derive_builder",
@@ -1332,12 +1332,13 @@ dependencies = [
  "num-traits",
  "rustfft",
  "serde",
+ "smallvec",
  "wide",
 ]
 
 [[package]]
 name = "karbeat-host"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "karbeat-core",
  "karbeat-plugin-api",
@@ -1346,18 +1347,21 @@ dependencies = [
 
 [[package]]
 name = "karbeat-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "heck",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn",
 ]
 
 [[package]]
 name = "karbeat-plugin-api"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
+ "heck",
  "indexmap",
  "karbeat-dsp",
  "karbeat-macros",
@@ -1371,14 +1375,14 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugin-types"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "karbeat-plugins"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "dasp",
  "fastrand",
@@ -1396,7 +1400,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-utils"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "dasp",
  "hashbrown 0.17.0",
@@ -1409,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat_flutter_ffi"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytemuck",

@@ -54,8 +54,12 @@ Future<void> playPreviewNoteGenerator({
   isOn: isOn,
 );
 
+void setMetronomeActive({required bool active}) =>
+    RustLib.instance.api.crateApiAudioSetMetronomeActive(active: active);
+
 class UiTransportFeedback {
   final int samples;
+  final int ticks;
   final int beat;
   final int bar;
   final double tempo;
@@ -66,11 +70,13 @@ class UiTransportFeedback {
   final bool isPatternPlaying;
   final bool isPatternMode;
   final int patternSamples;
+  final int patternTicks;
   final int patternBeat;
   final int patternBar;
 
   const UiTransportFeedback({
     required this.samples,
+    required this.ticks,
     required this.beat,
     required this.bar,
     required this.tempo,
@@ -81,6 +87,7 @@ class UiTransportFeedback {
     required this.isPatternPlaying,
     required this.isPatternMode,
     required this.patternSamples,
+    required this.patternTicks,
     required this.patternBeat,
     required this.patternBar,
   });
@@ -88,6 +95,7 @@ class UiTransportFeedback {
   @override
   int get hashCode =>
       samples.hashCode ^
+      ticks.hashCode ^
       beat.hashCode ^
       bar.hashCode ^
       tempo.hashCode ^
@@ -98,6 +106,7 @@ class UiTransportFeedback {
       isPatternPlaying.hashCode ^
       isPatternMode.hashCode ^
       patternSamples.hashCode ^
+      patternTicks.hashCode ^
       patternBeat.hashCode ^
       patternBar.hashCode;
 
@@ -107,6 +116,7 @@ class UiTransportFeedback {
       other is UiTransportFeedback &&
           runtimeType == other.runtimeType &&
           samples == other.samples &&
+          ticks == other.ticks &&
           beat == other.beat &&
           bar == other.bar &&
           tempo == other.tempo &&
@@ -117,6 +127,7 @@ class UiTransportFeedback {
           isPatternPlaying == other.isPatternPlaying &&
           isPatternMode == other.isPatternMode &&
           patternSamples == other.patternSamples &&
+          patternTicks == other.patternTicks &&
           patternBeat == other.patternBeat &&
           patternBar == other.patternBar;
 }

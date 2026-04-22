@@ -1,3 +1,4 @@
+pub mod metronome;
 pub mod windowing;
 pub mod interpolation;
 pub mod envelope;

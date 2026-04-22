@@ -81,6 +81,17 @@ Future<Map<int, UiTrack>> getTracks() =>
 Future<int> getMaxSampleIndex() =>
     RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
 
+/// Export project to flutter. also report progress via StreamSink
+Stream<double> exportProjectFlutter({
+  required String outputPath,
+  required int sampleRate,
+  required int bitPerSample,
+}) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
+  outputPath: outputPath,
+  sampleRate: sampleRate,
+  bitPerSample: bitPerSample,
+);
+
 class AudioWaveformUiForAudioProperties {
   final Int8List previewBuffer;
   final String filePath;
@@ -296,10 +307,19 @@ class UiAudioHardwareConfig {
 class UiClip {
   final String name;
   final int id;
+
+  /// Start time in native units (samples if is_sample_based, ticks otherwise)
   final int startTime;
   final UiClipSource source;
+
+  /// Offset from start of source content in native units
   final int offsetStart;
+
+  /// Loop length in native units
   final int loopLength;
+
+  /// True if units are raw samples (audio clips), false if ticks (MIDI/automation)
+  final bool isSampleBased;
 
   const UiClip({
     required this.name,
@@ -308,6 +328,7 @@ class UiClip {
     required this.source,
     required this.offsetStart,
     required this.loopLength,
+    required this.isSampleBased,
   });
 
   @override
@@ -317,7 +338,8 @@ class UiClip {
       startTime.hashCode ^
       source.hashCode ^
       offsetStart.hashCode ^
-      loopLength.hashCode;
+      loopLength.hashCode ^
+      isSampleBased.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -329,7 +351,8 @@ class UiClip {
           startTime == other.startTime &&
           source == other.source &&
           offsetStart == other.offsetStart &&
-          loopLength == other.loopLength;
+          loopLength == other.loopLength &&
+          isSampleBased == other.isSampleBased;
 }
 
 @freezed

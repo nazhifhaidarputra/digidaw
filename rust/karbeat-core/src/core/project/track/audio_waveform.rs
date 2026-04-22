@@ -10,6 +10,19 @@ use std::{ path::PathBuf, sync::Arc };
 
 // STATIC global variables for waveform mipmaps
 
+/// ======================================
+/// AudioSampleMode
+/// Determines how an audio clip's timeline position is interpreted.
+/// - Default: raw samples (BPM-independent, for standard audio playback)
+/// - Stretch: ticks (BPM-dependent, for time-stretched audio — future feature)
+/// ======================================
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub enum AudioSampleMode {
+    #[default]
+    Default,
+    Stretch,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AudioWaveform {
     pub id: Option<AudioSourceId>,
@@ -40,6 +53,8 @@ pub struct AudioWaveform {
     pub normalized: bool,
     /// Whether the audio waveform is muted
     pub muted: bool,
+    /// How this audio source maps to the timeline (raw samples vs tempo-locked ticks)
+    pub sample_mode: AudioSampleMode,
 
     /// Effects applied to the audio waveform
     pub effects: Arc<Vec<PluginInstance>>,
@@ -60,6 +75,7 @@ impl PartialEq for AudioWaveform {
             self.is_looping == other.is_looping &&
             self.normalized == other.normalized &&
             self.muted == other.muted &&
+            self.sample_mode == other.sample_mode &&
             self.effects == other.effects
     }
 }
@@ -74,13 +90,14 @@ impl Default for AudioWaveform {
             sample_rate: 44100,
             channels: 2,
             duration: 0.0,
-            root_note: 60, // C5
+            root_note: 60, // C4
             fine_tune: 0,
             trim_start: 0,
             trim_end: 0,
             is_looping: false,
             normalized: false,
             muted: false,
+            sample_mode: AudioSampleMode::Default,
             effects: Default::default(),
         }
     }

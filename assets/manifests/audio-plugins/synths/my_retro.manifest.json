@@ -1,0 +1,152 @@
+{
+  "id": 1,
+  "name": "My Retro",
+  "internal_type": "MyRetro",
+  "is_synth": true,
+  "parameters": [
+    {
+      "id": 30,
+      "name": "Resolution",
+      "group": "Bitcrush",
+      "value": 16.0,
+      "min": 2.0,
+      "max": 256.0,
+      "default_value": 16.0,
+      "step": 1.0,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 10,
+      "name": "Waveform",
+      "group": "Oscillator 1",
+      "value": 2.0,
+      "min": 0.0,
+      "max": 4.0,
+      "default_value": 2.0,
+      "step": 1.0,
+      "value_type": "Choice",
+      "choices": [
+        "Sine",
+        "Saw",
+        "Square",
+        "Triangle",
+        "Noise"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Detune",
+      "group": "Oscillator 1",
+      "value": 0.0,
+      "min": -48.0,
+      "max": 48.0,
+      "default_value": 0.0,
+      "step": 0.2,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 12,
+      "name": "Phase Offset",
+      "group": "Oscillator 1",
+      "value": 0.0,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 0.0,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 13,
+      "name": "Mix",
+      "group": "Oscillator 1",
+      "value": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 1.0,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 14,
+      "name": "Pulse Width",
+      "group": "Oscillator 1",
+      "value": 0.5,
+      "min": 0.01,
+      "max": 0.99,
+      "default_value": 0.5,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 20,
+      "name": "Waveform",
+      "group": "Oscillator 2",
+      "value": 2.0,
+      "min": 0.0,
+      "max": 4.0,
+      "default_value": 2.0,
+      "step": 1.0,
+      "value_type": "Choice",
+      "choices": [
+        "Sine",
+        "Saw",
+        "Square",
+        "Triangle",
+        "Noise"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Detune",
+      "group": "Oscillator 2",
+      "value": -12.0,
+      "min": -48.0,
+      "max": 48.0,
+      "default_value": -12.0,
+      "step": 0.2,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 22,
+      "name": "Phase Offset",
+      "group": "Oscillator 2",
+      "value": 0.0,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 0.0,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 23,
+      "name": "Mix",
+      "group": "Oscillator 2",
+      "value": 0.8,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 0.8,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 24,
+      "name": "Pulse Width",
+      "group": "Oscillator 2",
+      "value": 0.5,
+      "min": 0.01,
+      "max": 0.99,
+      "default_value": 0.5,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    }
+  ]
+}

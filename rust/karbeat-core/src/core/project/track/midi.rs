@@ -19,9 +19,19 @@ pub struct Pattern {
 }
 
 impl Pattern {
+    /// Recalculate the pattern length to be exactly the end of the last note.
+    pub fn recalculate_length(&mut self) {
+        let max_end = self.notes.iter()
+            .map(|n| n.start_tick + n.duration)
+            .max()
+            .unwrap_or(0);
+        self.length_ticks = max_end;
+    }
+
     /// Sort notes by start time (in-place)
     pub fn sort_notes(&mut self) {
         self.notes.sort();
+        self.recalculate_length();
     }
 
     /// Sort notes by start time and return a new sorted vector
@@ -34,6 +44,7 @@ impl Pattern {
     /// Sort notes by start time (unstable, potentially faster)
     pub fn sort_notes_unstable(&mut self) {
         self.notes.sort_unstable();
+        self.recalculate_length();
     }
 
     /// Get notes sorted by start time without modifying the pattern
@@ -55,18 +66,13 @@ impl Pattern {
             return Err(anyhow::anyhow!("Note duration must be > 0"));
         }
 
-        // 2. Auto-expand Pattern (CUD Integrity)
-        let note_end = note.start_tick + note.duration;
-        if note_end > self.length_ticks {
-            self.length_ticks = note_end;
-        }
-
         // 3. ID Generation (Critical for Validity)
         note.id = NoteId::next(&mut self.next_note_id);
 
         // 4. Push & Sort
         self.notes.push(note.clone());
         self.sort_notes_unstable();
+        // recalculate_length is called in sort_notes_unstable
 
         Ok(note)
     }
@@ -107,7 +113,9 @@ impl Pattern {
             );
         }
 
-        Ok(self.notes.remove(index))
+        let removed = self.notes.remove(index);
+        self.recalculate_length();
+        Ok(removed)
     }
 
     /// Delete note by matching start_tick and key
@@ -115,6 +123,9 @@ impl Pattern {
     pub fn delete_note_by_params(&mut self, start_tick: u64, key: u8) -> usize {
         let initial_len = self.notes.len();
         self.notes.retain(|n| !(n.start_tick == start_tick && n.key == key));
+        if self.notes.len() < initial_len {
+            self.recalculate_length();
+        }
         initial_len - self.notes.len()
     }
 
@@ -122,12 +133,18 @@ impl Pattern {
     pub fn delete_notes_in_range(&mut self, start_tick: u64, end_tick: u64) -> usize {
         let initial_len = self.notes.len();
         self.notes.retain(|n| n.start_tick < start_tick || n.start_tick >= end_tick);
+        if self.notes.len() < initial_len {
+            self.recalculate_length();
+        }
         initial_len - self.notes.len()
     }
 
     pub fn delete_notes_by_id(&mut self, note_ids: Arc<[NoteId]>) -> usize {
         let initial_len = self.notes.len();
         self.notes.retain(|n| !note_ids.contains(&n.id));
+        if self.notes.len() < initial_len {
+            self.recalculate_length();
+        }
         initial_len - self.notes.len()
     }
 
@@ -149,6 +166,7 @@ impl Pattern {
         }
 
         self.notes[index].duration = new_duration;
+        self.recalculate_length();
         Ok(&self.notes[index])
     }
 
@@ -171,12 +189,6 @@ impl Pattern {
         // Validate Key
         if new_key > 127 {
             return Err(anyhow::anyhow!("MIDI key must be between 0 and 127, got {}", new_key));
-        }
-
-        let duration = self.notes[index].duration;
-        let note_end = new_start_tick + duration;
-        if note_end > self.length_ticks {
-            self.length_ticks = note_end;
         }
 
         // Validate Key
@@ -305,6 +317,7 @@ impl Pattern {
     /// Clear all notes from pattern
     pub fn clear_notes(&mut self) {
         self.notes.clear();
+        self.recalculate_length();
     }
 
     /// Used by Undo/Redo to insert a specific note state.
@@ -315,16 +328,10 @@ impl Pattern {
             return Err(anyhow::anyhow!("Invalid key {}", note.key));
         }
 
-        // 2. Auto-expand Pattern Length
-        let note_end = note.start_tick + note.duration;
-        if note_end > self.length_ticks {
-            self.length_ticks = note_end;
-        }
-
-        // 3. Insert directly (Preserving ID)
+        // 2. Insert directly (Preserving ID)
         self.notes.push(note);
 
-        // 4. Maintain Order
+        // 3. Maintain Order
         self.sort_notes_unstable();
 
         Ok(())

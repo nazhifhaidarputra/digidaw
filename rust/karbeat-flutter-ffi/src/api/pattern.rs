@@ -161,6 +161,11 @@ pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), St
     pattern_api::play_pattern_preview(pattern_id, generator_id).map_err(|e| e.to_string())
 }
 
+/// Stop pattern preview without changing song mode. used in stop button inside pattern playback
+pub fn stop_pattern_preview_local(pattern_id: u32, generator_id: u32) -> Result<(), String> {
+    pattern_api::stop_pattern_preview_local(PatternId::from(pattern_id), GeneratorId::from(generator_id)).map_err(|e| e.to_string())
+}
+
 /// Stop pattern preview and return to Song mode.
 pub fn stop_pattern_preview() -> Result<(), String> {
     pattern_api::stop_pattern_preview().map_err(|e| e.to_string())

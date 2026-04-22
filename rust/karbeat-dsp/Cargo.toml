@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-dsp"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "DSP algorithms and utilities for Karbeat"
 
@@ -16,6 +16,7 @@ karbeat-macros.workspace = true
 karbeat-plugin-types.workspace = true
 num-traits.workspace = true
 wide.workspace = true
+smallvec.workspace = true
 
 [lints]
 workspace = true

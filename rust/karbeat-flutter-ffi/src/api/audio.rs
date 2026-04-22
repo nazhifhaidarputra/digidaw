@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use flutter_rust_bridge::frb;
 use karbeat_core::api::audio_api;
 use karbeat_core:: audio::event::TransportFeedback ;
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
@@ -9,6 +10,7 @@ use crate::frb_generated::StreamSink;
 #[derive(Clone, Copy, Debug)]
 pub struct UiTransportFeedback {
     pub samples: u32,
+    pub ticks: u32,
     pub beat: usize,
     pub bar: usize,
     pub tempo: f32,
@@ -19,6 +21,7 @@ pub struct UiTransportFeedback {
     pub is_pattern_playing: bool,
     pub is_pattern_mode: bool,
     pub pattern_samples: u32,
+    pub pattern_ticks: u32,
     pub pattern_beat: usize,
     pub pattern_bar: usize,
 }
@@ -27,6 +30,7 @@ impl From<TransportFeedback> for UiTransportFeedback {
     fn from(f: TransportFeedback) -> Self {
         Self {
             samples: f.samples,
+            ticks: f.ticks,
             beat: f.beat,
             bar: f.bar,
             tempo: f.tempo,
@@ -37,6 +41,7 @@ impl From<TransportFeedback> for UiTransportFeedback {
             is_pattern_playing: f.is_pattern_playing,
             is_pattern_mode: f.is_pattern_mode,
             pattern_samples: f.pattern_samples,
+            pattern_ticks: f.pattern_ticks,
             pattern_beat: f.pattern_beat,
             pattern_bar: f.pattern_bar,
         }
@@ -145,4 +150,10 @@ pub fn play_preview_note_generator(
         is_on,
     )
     .map_err(|e| e.to_string())
+}
+
+
+#[frb(sync)]
+pub fn set_metronome_active(active: bool) {
+    audio_api::set_metronome_active(active);   
 }

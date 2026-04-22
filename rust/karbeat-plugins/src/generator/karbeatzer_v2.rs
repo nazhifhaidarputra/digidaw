@@ -4,7 +4,7 @@ use std::{ collections::HashMap, f32::consts::PI };
 
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_api::{ prelude::* };
+use karbeat_plugin_api::{ manifest::Manifestable, prelude::* };
 use karbeat_plugin_types::*;
 
 // ============================================================================
@@ -100,7 +100,7 @@ impl KarbeatzerEngine {
                         let naive = 2.0 * phase - 1.0;
                         // Apply PolyBLEP for anti-aliasing
                         naive - poly_blep(phase, dt_inc)
-                    },
+                    }
                     Waveform::Square => {
                         let naive = if phase < pws[i] { 1.0 } else { -1.0 };
                         // Apply PolyBLEP for anti-aliasing
@@ -285,6 +285,18 @@ fn poly_blep(mut t: f32, dt: f32) -> f32 {
         t * t + t + t + 1.0
     } else {
         0.0
+    }
+}
+
+impl Manifestable for KarbeatzerEngine {
+    fn build_manifest() -> karbeat_plugin_api::manifest::PluginManifest {
+        karbeat_plugin_api::manifest::PluginManifest {
+            id: 0,
+            name: "Karbeatzer".to_owned(),
+            internal_type: "KarbeatzerV2".to_owned(),
+            is_synth: true,
+            parameters: Self::default().get_parameter_specs(),
+        }
     }
 }
 

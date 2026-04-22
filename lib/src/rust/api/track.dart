@@ -84,11 +84,11 @@ Future<UiClip> moveClip({
 Future<List<UiClip>> cutClip({
   required int sourceTrackId,
   required int clipId,
-  required int cutPointSample,
+  required int cutPoint,
 }) => RustLib.instance.api.crateApiTrackCutClip(
   sourceTrackId: sourceTrackId,
   clipId: clipId,
-  cutPointSample: cutPointSample,
+  cutPoint: cutPoint,
 );
 
 /// Add a MIDI track with a generator by its registry ID (preferred method).
@@ -107,12 +107,12 @@ Future<UiTrack> getTrack({required int trackId}) =>
 Future<List<UiClip>> moveClipBatch({
   required int sourceTrackId,
   required List<int> clipIds,
-  required int deltaSamples,
+  required int deltaTicks,
   int? newTrackId,
 }) => RustLib.instance.api.crateApiTrackMoveClipBatch(
   sourceTrackId: sourceTrackId,
   clipIds: clipIds,
-  deltaSamples: deltaSamples,
+  deltaTicks: deltaTicks,
   newTrackId: newTrackId,
 );
 
@@ -121,12 +121,12 @@ Future<List<UiClip>> resizeClipBatch({
   required int trackId,
   required List<int> clipIds,
   required UiResizeEdge edge,
-  required int deltaSamples,
+  required int deltaTicks,
 }) => RustLib.instance.api.crateApiTrackResizeClipBatch(
   trackId: trackId,
   clipIds: clipIds,
   edge: edge,
-  deltaSamples: deltaSamples,
+  deltaTicks: deltaTicks,
 );
 
 /// Delete clips in batch

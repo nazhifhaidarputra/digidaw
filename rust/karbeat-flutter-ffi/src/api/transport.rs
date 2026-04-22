@@ -6,8 +6,7 @@ use karbeat_core::api::transport_api;
 
 /// set the play state of the transport
 pub fn set_playing(val: bool) -> Result<(), String> {
-    transport_api::set_playing(val);
-    Ok(())
+    transport_api::set_playing(val).map_err(|e| e.to_string())
 }
 
 /// set what position the playhead is at (in samples)

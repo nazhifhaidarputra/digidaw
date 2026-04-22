@@ -8,48 +8,132 @@ pub enum ResizeEdge {
     Right,
 }
 
-use crate::core::project::track::midi::{Pattern};
+use crate::core::project::track::midi::Pattern;
 use crate::core::project::{track::TrackType, ApplicationState, KarbeatSource};
-use crate::shared::{AudioSourceId, PatternId};
 use crate::shared::id::{ClipId, TrackId};
-
-
+use crate::shared::{AudioSourceId, PatternId};
 
 pub enum ClipSourceType {
     Midi,
     Audio,
 }
 
-/// Clip struct that holds data for clip in the timeline
-/// # Example:
-/// ```rust,ignore
-/// let clip = Clip {
-///     name: "My Clip".to_string(),
-///     id: ClipId::new(0),
-///     start_time: 0,
-///     source: KarbeatSource::Audio,
-///     source_id: 0,
-///     offset_start: 0,
-///     loop_length: 0,
-/// };
-/// ```
+/// ======================================
+/// ClipTimeUnit
+/// Encapsulates clip timeline positioning with explicit units.
+/// Audio clips use raw samples (BPM-independent).
+/// MIDI/Automation clips use ticks (960 PPQN, BPM-dependent).
+/// ======================================
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ClipTimeUnit {
+    /// Values in raw audio samples (BPM-independent)
+    Samples {
+        start_time: u64,
+        loop_length: u64,
+        offset_start: u64,
+    },
+    /// Values in ticks (960 PPQN, BPM-dependent)
+    Ticks {
+        start_time: u32,
+        loop_length: u32,
+        offset_start: u32,
+    },
+}
+
+impl ClipTimeUnit {
+    /// Get the start time in samples, converting ticks if necessary
+    pub fn start_time_samples(&self, bpm: f32, sample_rate: u32) -> u64 {
+        match self {
+            ClipTimeUnit::Samples { start_time, .. } => *start_time,
+            ClipTimeUnit::Ticks { start_time, .. } => {
+                let samples_per_tick = Self::samples_per_tick(bpm, sample_rate);
+                (*start_time as f64 * samples_per_tick) as u64
+            }
+        }
+    }
+
+    /// Get the loop length in samples, converting ticks if necessary
+    pub fn loop_length_samples(&self, bpm: f32, sample_rate: u32) -> u64 {
+        match self {
+            ClipTimeUnit::Samples { loop_length, .. } => *loop_length,
+            ClipTimeUnit::Ticks { loop_length, .. } => {
+                let samples_per_tick = Self::samples_per_tick(bpm, sample_rate);
+                (*loop_length as f64 * samples_per_tick) as u64
+            }
+        }
+    }
+
+    /// Get the offset start in samples, converting ticks if necessary
+    pub fn offset_start_samples(&self, bpm: f32, sample_rate: u32) -> u64 {
+        match self {
+            ClipTimeUnit::Samples { offset_start, .. } => *offset_start,
+            ClipTimeUnit::Ticks { offset_start, .. } => {
+                let samples_per_tick = Self::samples_per_tick(bpm, sample_rate);
+                (*offset_start as f64 * samples_per_tick) as u64
+            }
+        }
+    }
+
+    /// Get end position (start_time + loop_length) in samples
+    pub fn end_samples(&self, bpm: f32, sample_rate: u32) -> u64 {
+        self.start_time_samples(bpm, sample_rate) + self.loop_length_samples(bpm, sample_rate)
+    }
+
+    /// Get start_time in the native unit (u64 for either variant)
+    pub fn start_time_raw(&self) -> u64 {
+        match self {
+            ClipTimeUnit::Samples { start_time, .. } => *start_time,
+            ClipTimeUnit::Ticks { start_time, .. } => *start_time as u64,
+        }
+    }
+
+    /// Get loop_length in the native unit (u64 for either variant)
+    pub fn loop_length_raw(&self) -> u64 {
+        match self {
+            ClipTimeUnit::Samples { loop_length, .. } => *loop_length,
+            ClipTimeUnit::Ticks { loop_length, .. } => *loop_length as u64,
+        }
+    }
+
+    /// Get offset_start in the native unit (u64 for either variant)
+    pub fn offset_start_raw(&self) -> u64 {
+        match self {
+            ClipTimeUnit::Samples { offset_start, .. } => *offset_start,
+            ClipTimeUnit::Ticks { offset_start, .. } => *offset_start as u64,
+        }
+    }
+
+    /// Returns true if this is SamplesBased
+    pub fn is_samples(&self) -> bool {
+        matches!(self, ClipTimeUnit::Samples { .. })
+    }
+
+    /// Helper: compute samples per tick from BPM and sample_rate
+    pub fn samples_per_tick(bpm: f32, sample_rate: u32) -> f64 {
+        let bpm = if bpm <= 0.0 { 120.0 } else { bpm };
+        let samples_per_beat = (60.0 / bpm as f64) * sample_rate as f64;
+        samples_per_beat / 960.0
+    }
+}
+
+/// Clip struct that holds data for clip in the timeline.
+/// Positioning uses ClipTimeUnit to distinguish between sample-based (audio)
+/// and tick-based (MIDI/automation) clips.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Clip {
     /// Clip name
     pub name: String,
     /// Clip ID
     pub id: ClipId,
-    /// Refer to where it sits on the global timeline
-    pub start_time: u32,
     /// Source of the clip
     pub source: KarbeatSource,
-    pub offset_start: u32, // currently this does nothing since we set it always to 0
-    pub loop_length: u32,  // Refer to length of the entire clip when not shrinked
+    /// Timeline position and length — explicit units via enum
+    pub time: ClipTimeUnit,
 }
 
 impl PartialEq for Clip {
     fn eq(&self, other: &Self) -> bool {
-        self.start_time == other.start_time && self.id == other.id
+        self.time.start_time_raw() == other.time.start_time_raw() && self.id == other.id
     }
 }
 
@@ -58,7 +142,7 @@ impl Eq for Clip {}
 impl PartialOrd for Clip {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         // Primary ordering by start_time, then by id for tie-breaking
-        match self.start_time.cmp(&other.start_time) {
+        match self.time.start_time_raw().cmp(&other.time.start_time_raw()) {
             Ordering::Equal => Some(self.id.cmp(&other.id)),
             ordering => Some(ordering),
         }
@@ -72,12 +156,7 @@ impl Ord for Clip {
 }
 
 impl ApplicationState {
-    pub fn add_clip_to_track(
-        &mut self,
-        track_id: TrackId,
-        clip: Clip,
-        update_max_sample_index: bool,
-    ) -> anyhow::Result<()> {
+    pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) -> anyhow::Result<()> {
         // Get the track
         match self.tracks.get_mut(&track_id) {
             Some(track_arc) => {
@@ -87,9 +166,6 @@ impl ApplicationState {
                 // Add Clip & Check bounds
                 // We pass the Clip by value. The track takes ownership and wraps it in Arc.
                 let _ = track.add_clip(clip)?;
-                if update_max_sample_index {
-                    self.update_max_sample_index();
-                }
             }
             _ => return Err(anyhow::anyhow!("Track not found")),
         }
@@ -100,17 +176,11 @@ impl ApplicationState {
         &mut self,
         track_id: TrackId,
         clip_id: ClipId,
-        update_max_sample_index: bool,
     ) -> anyhow::Result<Arc<Clip>> {
         let deleted_clip = if let Some(track_arc) = self.tracks.get_mut(&track_id) {
-            let track= Arc::make_mut(track_arc);
+            let track = Arc::make_mut(track_arc);
             match track.remove_clip(&clip_id) {
-                Ok(clip) => {
-                    if update_max_sample_index {
-                        self.update_max_sample_index();
-                    }
-                    Ok(clip)
-                }
+                Ok(clip) => Ok(clip),
                 Err(e) => Err(e),
             }
         } else {
@@ -130,14 +200,14 @@ impl ApplicationState {
     }
 
     /// Move a clip from one track to another (or within the same track) with a new start time.
-    /// This removes the clip from the source track and adds it to the target track.
+    /// The new_start_time is in the clip's native unit (samples for audio, ticks for MIDI).
     /// Returns an error if the track or clip is not found, or if types are incompatible.
     pub fn move_clip(
         &mut self,
         source_track_id: TrackId,
         target_track_id: TrackId,
         clip_id: ClipId,
-        new_start_time: u32,
+        new_start_time: u64,
     ) -> Result<Clip, String> {
         // First, extract the clip from the source track
         let clip = {
@@ -155,14 +225,16 @@ impl ApplicationState {
                 .ok_or("Clip not found in source track")?;
 
             track.clips.remove(&clip_arc);
-            track.update_max_sample_index();
 
             (*clip_arc).clone()
         };
 
-        // Update the clip's start time
+        // Update the clip's start time (preserving the time unit variant)
         let mut modified_clip = clip;
-        modified_clip.start_time = new_start_time;
+        match &mut modified_clip.time {
+            ClipTimeUnit::Samples { start_time, .. } => *start_time = new_start_time,
+            ClipTimeUnit::Ticks { start_time, .. } => *start_time = new_start_time as u32,
+        }
 
         // Add the clip to the target track
         {
@@ -177,20 +249,93 @@ impl ApplicationState {
                 .map_err(|e| e.to_string())?;
         }
 
-        self.update_max_sample_index();
         Ok(modified_clip)
     }
 
-    /// Resize a clip by updating its start_time, offset_start, and loop_length.
+    /// Cut a clip at a given point (in the clip's native time unit).
+    /// Returns the two resulting clips.
+    pub fn cut_clip(
+        &mut self,
+        track_id: &TrackId,
+        clip_id: &ClipId,
+        cut_point: u64,
+    ) -> Result<(Clip, Clip), String> {
+        let track_arc = self.tracks.get_mut(track_id).ok_or("Track not found")?;
+        let track = Arc::make_mut(track_arc);
+
+        // Find and remove the old clip
+        let clip_arc = track
+            .clips
+            .iter()
+            .find(|c| c.id == *clip_id)
+            .cloned()
+            .ok_or("Clip not found")?;
+
+        let source_clip = (*clip_arc).clone();
+
+        let start = source_clip.time.start_time_raw();
+        let length = source_clip.time.loop_length_raw();
+        let offset = source_clip.time.offset_start_raw();
+
+        if cut_point <= start || cut_point >= start + length {
+            return Err("Cut point is out of range of clip boundaries".to_string());
+        }
+
+        let first_clip_length = cut_point - start;
+
+        // Create first clip (same start, shortened length)
+        let mut first_clip = source_clip.clone();
+        match &mut first_clip.time {
+            ClipTimeUnit::Samples { loop_length, .. } => *loop_length = first_clip_length,
+            ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = first_clip_length as u32,
+        }
+
+        // Create second clip (starts at cut point, offset adjusted)
+        let second_clip_id = ClipId::next(&mut self.clip_counter);
+        let mut second_clip = source_clip.clone();
+        second_clip.id = second_clip_id;
+        let second_clip_length = length - first_clip_length;
+        let second_clip_offset = offset + first_clip_length;
+        match &mut second_clip.time {
+            ClipTimeUnit::Samples {
+                start_time,
+                loop_length,
+                offset_start,
+            } => {
+                *start_time = cut_point;
+                *loop_length = second_clip_length;
+                *offset_start = second_clip_offset;
+            }
+            ClipTimeUnit::Ticks {
+                start_time,
+                loop_length,
+                offset_start,
+            } => {
+                *start_time = cut_point as u32;
+                *loop_length = second_clip_length as u32;
+                *offset_start = second_clip_offset as u32;
+            }
+        }
+
+        track.clips.remove(&clip_arc);
+        track.clips.insert(Arc::new(first_clip.clone()));
+        track.clips.insert(Arc::new(second_clip.clone()));
+
+        self.update_max_sample_index();
+
+        Ok((first_clip, second_clip))
+    }
+
+    /// Resize a clip by updating its time fields.
     /// Supports both left (slip edit) and right edge resizing.
     /// - `edge`: Which edge is being dragged (Left or Right)
-    /// - `new_time_val`: The new timeline position for the dragged edge
+    /// - `new_time_val`: The new timeline position for the dragged edge (in native units)
     pub fn resize_clip(
         &mut self,
         track_id: TrackId,
         clip_id: ClipId,
         edge: ResizeEdge,
-        new_time_val: u32,
+        new_time_val: u64,
     ) -> Result<Clip, String> {
         let track_arc = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
         let track = Arc::make_mut(track_arc);
@@ -206,36 +351,52 @@ impl ApplicationState {
         track.clips.remove(&clip_arc);
 
         let mut modified_clip = (*clip_arc).clone();
+        let old_start = modified_clip.time.start_time_raw();
+        let old_length = modified_clip.time.loop_length_raw();
+        let old_end = old_start + old_length;
+        let old_offset = modified_clip.time.offset_start_raw();
 
         match edge {
             ResizeEdge::Right => {
                 // Dragging Right Edge: Only change loop_length
-                if new_time_val > modified_clip.start_time {
-                    let new_length = new_time_val - modified_clip.start_time;
-                    modified_clip.loop_length = new_length;
+                if new_time_val > old_start {
+                    let new_length = new_time_val - old_start;
+                    match &mut modified_clip.time {
+                        ClipTimeUnit::Samples { loop_length, .. } => *loop_length = new_length,
+                        ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = new_length as u32,
+                    }
                 }
             }
             ResizeEdge::Left => {
                 // Dragging Left Edge: Slip Edit
-                let old_start = modified_clip.start_time;
-                let old_end = old_start + modified_clip.loop_length;
-
                 // Bound check: New Start cannot be past the old End
                 if new_time_val < old_end {
-                    let new_start = new_time_val;
+                    let delta = new_time_val as i64 - old_start as i64;
+                    let new_offset = old_offset as i64 + delta;
 
-                    // Calculate delta (positive = trimmed right, negative = expanded left)
-                    let delta = new_start as i64 - old_start as i64;
-
-                    let current_offset = modified_clip.offset_start as i64;
-                    let new_offset = current_offset + delta;
-
-                    // Constraint: offset cannot be negative (can't start before 0 of source)
+                    // Constraint: offset cannot be negative
                     if new_offset >= 0 {
-                        modified_clip.start_time = new_start;
-                        // Length shrinks as start moves right (or grows as it moves left)
-                        modified_clip.loop_length = old_end - new_start;
-                        modified_clip.offset_start = new_offset as u32;
+                        let new_length = old_end - new_time_val;
+                        match &mut modified_clip.time {
+                            ClipTimeUnit::Samples {
+                                start_time,
+                                loop_length,
+                                offset_start,
+                            } => {
+                                *start_time = new_time_val;
+                                *loop_length = new_length;
+                                *offset_start = new_offset as u64;
+                            }
+                            ClipTimeUnit::Ticks {
+                                start_time,
+                                loop_length,
+                                offset_start,
+                            } => {
+                                *start_time = new_time_val as u32;
+                                *loop_length = new_length as u32;
+                                *offset_start = new_offset as u32;
+                            }
+                        }
                     }
                 }
             }
@@ -243,12 +404,14 @@ impl ApplicationState {
 
         // Re-insert the clip
         track.clips.insert(Arc::new(modified_clip.clone()));
-        track.update_max_sample_index();
 
         self.update_max_sample_index();
         Ok(modified_clip)
     }
 
+    /// Create a new clip and add it to the track.
+    /// - `start_time`: Position on the timeline in ticks (from the UI).
+    ///   For audio clips, this will be converted to samples at creation time.
     pub fn create_new_clip(
         &mut self,
         source_id: Option<u32>,
@@ -276,36 +439,42 @@ impl ApplicationState {
                 let buffer_len = crate::utils::get_waveform_buffer(&audio_source.buffer)
                     .map(|b| b.len())
                     .unwrap_or(0);
-                let source_frames = (buffer_len as u32) / (audio_source.channels as u32);
-                let timeline_length = if source_sample_rate > 0.0 {
-                    ((source_frames as f64) * (project_sample_rate / source_sample_rate)) as u32
+                let source_frames = (buffer_len as u64) / (audio_source.channels as u64);
+
+                // clip length in samples (resampled to project sample rate)
+                let timeline_length_samples = if source_sample_rate > 0.0 {
+                    ((source_frames as f64) * (project_sample_rate / source_sample_rate)) as u64
                 } else {
                     source_frames // Fallback to avoid division by zero
                 };
+
+                // Convert the incoming start_time (ticks) to samples
+                let bpm = if self.transport.bpm == 0.0 {
+                    120.0
+                } else {
+                    self.transport.bpm
+                };
+                let samples_per_tick =
+                    ClipTimeUnit::samples_per_tick(bpm, self.audio_config.sample_rate);
+                let start_time_samples = (start_time as f64 * samples_per_tick) as u64;
 
                 let new_clip_id = ClipId::next(&mut self.clip_counter);
 
                 let clip = Clip {
                     name: audio_source.name.clone(),
                     id: new_clip_id,
-                    start_time,
                     source: KarbeatSource::Audio(source_id),
-                    offset_start: 0,
-                    loop_length: timeline_length,
+                    time: ClipTimeUnit::Samples {
+                        start_time: start_time_samples,
+                        loop_length: timeline_length_samples,
+                        offset_start: 0,
+                    },
                 };
-                self.add_clip_to_track(track_id, clip.clone(), true)?;
+                self.add_clip_to_track(track_id, clip.clone())?;
 
                 clip
             }
             ClipSourceType::Midi => {
-                let sample_rate = self.audio_config.sample_rate;
-                let bpm = if self.transport.bpm == 0.0 {
-                    120.0
-                } else {
-                    self.transport.bpm
-                };
-                let samples_per_beat = ((sample_rate as f32) / (bpm / 60.0)) as u32;
-
                 // Use existing pattern if source_id provided, otherwise create new
                 let (pattern_id, timeline_length) = if let Some(id) = source_id {
                     let pattern_id = PatternId::from(id);
@@ -314,15 +483,14 @@ impl ApplicationState {
                         .get(&pattern_id)
                         .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", id))?;
 
-                    // Calculate length from pattern's ticks
-                    let samples_per_tick = (samples_per_beat as f32) / 960.0;
-                    let length = ((pattern.length_ticks as f32) * samples_per_tick) as u32;
+                    // Length is in ticks
+                    let length = pattern.length_ticks as u32;
                     (pattern_id, length)
                 } else {
                     // Create new pattern
                     let new_pattern_id = PatternId::next(&mut self.pattern_counter);
                     let default_ticks = 4 * 960;
-                    let timeline_length = 4 * samples_per_beat;
+                    let timeline_length = 4 * 960; // 4 beats
 
                     let pattern = Arc::new(Pattern {
                         id: new_pattern_id,
@@ -345,26 +513,31 @@ impl ApplicationState {
                 let clip = Clip {
                     name: pattern_name,
                     id: new_clip_id,
-                    start_time,
                     source: KarbeatSource::Midi(pattern_id),
-                    offset_start: 0,
-                    loop_length: timeline_length,
+                    time: ClipTimeUnit::Ticks {
+                        start_time,
+                        loop_length: timeline_length,
+                        offset_start: 0,
+                    },
                 };
 
-                self.add_clip_to_track(track_id, clip.clone(), true)?;
+                self.add_clip_to_track(track_id, clip.clone())?;
                 clip
             }
         };
 
+        self.update_max_sample_index();
+
         Ok(clip)
     }
 
+    /// Batch move clips by a delta (in native units).
     pub fn move_clip_batch(
         &mut self,
         source_track_id: TrackId,
         target_track_id: TrackId,
         clip_ids: Vec<ClipId>,
-        delta_samples: i64,
+        delta: i64,
     ) -> Result<Vec<Clip>, String> {
         let mut result_clips = Vec::new();
         let target_type = if let Some(target) = self.tracks.get(&target_track_id) {
@@ -386,14 +559,16 @@ impl ApplicationState {
                     track.clips.remove(&clip);
                     let mut modified_clip = (*clip).clone();
                     // Apply delta with clamping to 0
-                    let new_start =
-                        ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
-                    modified_clip.start_time = new_start;
+                    let old_start = modified_clip.time.start_time_raw() as i64;
+                    let new_start = (old_start + delta).max(0);
+                    match &mut modified_clip.time {
+                        ClipTimeUnit::Samples { start_time, .. } => *start_time = new_start as u64,
+                        ClipTimeUnit::Ticks { start_time, .. } => *start_time = new_start as u32,
+                    }
                     track.clips.insert(Arc::new(modified_clip.clone()));
                     result_clips.push(modified_clip);
                 }
             }
-            track.update_max_sample_index();
         } else {
             // Cross-track move
             let mut clips_to_move = Vec::new();
@@ -424,7 +599,6 @@ impl ApplicationState {
                         clips_to_move.push(clip);
                     }
                 }
-                source_track.update_max_sample_index();
             }
 
             // Add to target track
@@ -435,8 +609,12 @@ impl ApplicationState {
             );
             for clip in clips_to_move {
                 let mut modified_clip = (*clip).clone();
-                let new_start = ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
-                modified_clip.start_time = new_start;
+                let old_start = modified_clip.time.start_time_raw() as i64;
+                let new_start = (old_start + delta).max(0);
+                match &mut modified_clip.time {
+                    ClipTimeUnit::Samples { start_time, .. } => *start_time = new_start as u64,
+                    ClipTimeUnit::Ticks { start_time, .. } => *start_time = new_start as u32,
+                }
                 let _ = target_track.add_clip(modified_clip.clone());
                 result_clips.push(modified_clip);
             }
@@ -445,12 +623,13 @@ impl ApplicationState {
         Ok(result_clips)
     }
 
+    /// Batch resize clips by a delta (in native units).
     pub fn resize_clip_batch(
         &mut self,
         track_id: TrackId,
         clip_ids: Vec<ClipId>,
         edge: ResizeEdge,
-        delta_samples: i64,
+        delta: i64,
     ) -> Result<Vec<Clip>, String> {
         let track_arc = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
         let track = Arc::make_mut(track_arc);
@@ -462,28 +641,51 @@ impl ApplicationState {
                 track.clips.remove(&clip);
                 let mut modified_clip = (*clip).clone();
 
+                let old_start = modified_clip.time.start_time_raw();
+                let old_length = modified_clip.time.loop_length_raw();
+                let old_end = old_start + old_length;
+                let old_offset = modified_clip.time.offset_start_raw();
+
                 match edge {
                     ResizeEdge::Right => {
-                        let current_end = modified_clip.start_time + modified_clip.loop_length;
-                        let new_end = ((current_end as i64) + delta_samples)
-                            .max((modified_clip.start_time as i64) + 100)
-                            as u32;
-                        modified_clip.loop_length = new_end - modified_clip.start_time;
+                        let new_end =
+                            ((old_end as i64) + delta).max((old_start as i64) + 10) as u64;
+                        let new_length = new_end - old_start;
+                        match &mut modified_clip.time {
+                            ClipTimeUnit::Samples { loop_length, .. } => *loop_length = new_length,
+                            ClipTimeUnit::Ticks { loop_length, .. } => {
+                                *loop_length = new_length as u32
+                            }
+                        }
                     }
                     ResizeEdge::Left => {
-                        let old_start = modified_clip.start_time;
-                        let old_end = old_start + modified_clip.loop_length;
-                        let new_start = ((old_start as i64) + delta_samples)
-                            .clamp(0, (old_end as i64) - 100)
-                            as u32;
+                        let new_start =
+                            ((old_start as i64) + delta).clamp(0, (old_end as i64) - 10) as u64;
 
-                        let delta = (new_start as i64) - (old_start as i64);
-                        let current_offset = modified_clip.offset_start as i64;
-                        let new_offset = (current_offset + delta).max(0) as u32;
+                        let d = (new_start as i64) - (old_start as i64);
+                        let new_offset = ((old_offset as i64) + d).max(0) as u64;
+                        let new_length = old_end - new_start;
 
-                        modified_clip.start_time = new_start;
-                        modified_clip.loop_length = old_end - new_start;
-                        modified_clip.offset_start = new_offset;
+                        match &mut modified_clip.time {
+                            ClipTimeUnit::Samples {
+                                start_time,
+                                loop_length,
+                                offset_start,
+                            } => {
+                                *start_time = new_start;
+                                *loop_length = new_length;
+                                *offset_start = new_offset;
+                            }
+                            ClipTimeUnit::Ticks {
+                                start_time,
+                                loop_length,
+                                offset_start,
+                            } => {
+                                *start_time = new_start as u32;
+                                *loop_length = new_length as u32;
+                                *offset_start = new_offset as u32;
+                            }
+                        }
                     }
                 }
 
@@ -491,7 +693,6 @@ impl ApplicationState {
                 result_clips.push(modified_clip);
             }
         }
-        track.update_max_sample_index();
         self.update_max_sample_index();
         Ok(result_clips)
     }

@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-macros"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [lib]
@@ -10,3 +10,5 @@ proc-macro = true
 syn = { version = "2.0.117", features = ["full"] }
 quote = "1.0.45"
 proc-macro2 = "1.0.106"
+serde_json.workspace = true
+heck.workspace = true

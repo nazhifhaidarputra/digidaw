@@ -34,7 +34,8 @@ impl ParameterSpec {
         val: f32,
         min: f32,
         max: f32,
-        default: f32
+        default: f32,
+        step: f32
     ) -> Self {
         Self {
             id,
@@ -44,7 +45,7 @@ impl ParameterSpec {
             min,
             max,
             default_value: default,
-            step: 0.0,
+            step,
             value_type: ParameterValueType::Float,
             choices: Vec::new(),
         }
@@ -112,6 +113,19 @@ impl ParamType for f32 {
     }
     fn to_f32(self) -> f32 {
         self
+    }
+}
+
+impl ParamType for f64 {
+    fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
+        match bounds {
+            ParamBounds::Continuous { min, max, .. } => (val as f64).clamp(*min, *max),
+            _ => val as f64,
+        }
+    }
+
+    fn to_f32(self) -> f32 {
+        self as f32
     }
 }
 
@@ -291,7 +305,7 @@ impl<T: ParamType> Param<T> {
 // In parameter.rs
 
 impl Param<f32> {
-    pub fn new_float(
+    pub fn new_f32(
         id: u32,
         name: &str,
         group: &str,
@@ -299,6 +313,27 @@ impl Param<f32> {
         min: f32,
         max: f32,
         step: f32
+    ) -> Self {
+        Self {
+            id,
+            name: name.to_owned(),
+            group: group.to_owned(),
+            base_value: default.clamp(min, max),
+            current_value: default.clamp(min, max),
+            bounds: ParamBounds::Continuous { min, max, step },
+        }
+    }
+}
+
+impl Param<f64> {
+    pub fn new_f64(
+        id: u32,
+        name: &str,
+        group: &str,
+        default: f64,
+        min: f64,
+        max: f64,
+        step: f64
     ) -> Self {
         Self {
             id,

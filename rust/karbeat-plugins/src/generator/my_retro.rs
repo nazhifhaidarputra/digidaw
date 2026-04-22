@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_api::prelude::*;
+use karbeat_plugin_api::{manifest::Manifestable, prelude::*};
 use karbeat_plugin_types::{parameter::AutoParams, *};
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
@@ -20,7 +20,7 @@ pub struct MyRetroEngine {
     #[nested]
     pub oscillators: [Oscillator; 2],
 
-    #[param(id = 30, name = "Resolution", group = "Bitcrush", min = 2.0, max = 256.0, default = 16.0)]
+    #[param(id = 30, name = "Resolution", group = "Bitcrush", min = 2.0, max = 256.0, default = 16.0, step=1.0)]
     pub bitcrush_resolution: f32, // Re-written by macro to Param<f32>
 }
 
@@ -243,6 +243,18 @@ impl RawSynthEngine for MyRetroEngine {
             map.insert(spec.id, spec.default_value);
         }
         map
+    }
+}
+
+impl Manifestable for MyRetroEngine {
+    fn build_manifest() -> karbeat_plugin_api::manifest::PluginManifest {
+        karbeat_plugin_api::manifest::PluginManifest {
+            id: 1,
+            name: "My Retro".to_owned(),
+            internal_type: "MyRetro".to_owned(),
+            is_synth: true,
+            parameters: Self::default().get_parameter_specs(),
+        }
     }
 }
 

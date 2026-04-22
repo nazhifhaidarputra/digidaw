@@ -106,15 +106,15 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     });
   }
 
-  int _getSnapTicks(int denom) {
-    return (960.0 * 4.0 / denom).round();
+  int _getSnapTicks(GridSize denom) {
+    return (960.0 * 4.0 / denom.value).round();
   }
 
-  // Helper to convert int back to GridValue for the setter
-  GridValue _intToGridValue(int val) {
-    return GridValue.values.firstWhere(
-      (e) => e.value == val,
-      orElse: () => GridValue.quarter, // Default fallback
+  // Helper to convert int back to GridSize for the setter
+  GridSize _intToGridSize(int val) {
+    return GridSize.values.firstWhere(
+      (e) => e.value == val.toDouble(),
+      orElse: () => GridSize.quarter, // Default fallback
     );
   }
 
@@ -221,7 +221,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
               if (val != null) {
                 setState(() {
                   ref.read(karbeatStateProvider).pianoRollGridDenom =
-                      _intToGridValue(val);
+                      _intToGridSize(val);
                 });
               }
             },
@@ -415,7 +415,7 @@ class _PianoRollToolbar extends ConsumerWidget {
   final String name;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
-  final int gridDenom;
+  final GridSize gridDenom;
   final ValueChanged<int?> onGridDenomChanged;
 
   const _PianoRollToolbar({
@@ -434,6 +434,7 @@ class _PianoRollToolbar extends ConsumerWidget {
     final generators = state.generators;
     final previewGeneratorId = state.previewGeneratorId;
     final isPatternPlaying = state.isPatternPlaying;
+    final isPatternMode = state.isPatternMode;
 
     return Container(
       height: 50,
@@ -454,6 +455,8 @@ class _PianoRollToolbar extends ConsumerWidget {
                       context,
                       isPatternPlaying,
                       previewGeneratorId,
+                      patternId,
+                      isPatternMode,
                     )
                   : null,
               tooltip: isPatternPlaying ? 'Stop' : 'Play Pattern',
@@ -525,7 +528,7 @@ class _PianoRollToolbar extends ConsumerWidget {
 
             // Grid dropdown
             DropdownButton<int>(
-              value: gridDenom,
+              value: gridDenom.value.toInt(),
               dropdownColor: Colors.grey.shade800,
               style: const TextStyle(color: Colors.white, fontSize: 12),
               underline: const SizedBox(),
@@ -591,10 +594,16 @@ class _PianoRollToolbar extends ConsumerWidget {
     BuildContext context,
     bool isPlaying,
     int generatorId,
+    int patternId,
+    bool isPatternMode,
   ) async {
     try {
       if (isPlaying) {
-        await stopPatternPreview();
+        if (!isPatternMode) return;
+        await stopPatternPreviewLocal(
+          generatorId: generatorId,
+          patternId: patternId,
+        );
       } else {
         await playPatternPreview(
           patternId: patternId,
@@ -602,7 +611,7 @@ class _PianoRollToolbar extends ConsumerWidget {
         );
       }
     } catch (e) {
-      debugPrint('Pattern playback error: $e');
+      KarbeatLogger.error('Pattern playback error: $e');
     }
   }
 }
@@ -960,7 +969,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
 class _PianoGridPainter extends CustomPainter {
   final double zoomX;
   final double keyHeight;
-  final int gridDenom;
+  final GridSize gridDenom;
 
   _PianoGridPainter({
     required this.zoomX,
@@ -980,7 +989,7 @@ class _PianoGridPainter extends CustomPainter {
     }
 
     // Vertical Lines (Grid)
-    double ticksPerGrid = 960.0 * 4.0 / gridDenom;
+    double ticksPerGrid = 960.0 * 4.0 / gridDenom.value;
     double pixelsPerGrid = ticksPerGrid * zoomX;
 
     if (pixelsPerGrid < 4) return;
@@ -989,8 +998,12 @@ class _PianoGridPainter extends CustomPainter {
     int gridIndex = 0;
 
     while (currentX < size.width) {
-      bool isBeat = (gridIndex * ticksPerGrid) % 960.0 == 0;
-      bool isBar = (gridIndex * ticksPerGrid) % (960.0 * 4.0) == 0;
+      // Calculate absolute ticks for precise modulo math
+      int currentTick = (gridIndex * ticksPerGrid).round();
+
+      // 3840 ticks = 1 Bar (4/4 time). 960 ticks = 1 Beat.
+      bool isBar = (currentTick % 3840) == 0;
+      bool isBeat = (currentTick % 960) == 0;
 
       if (isBar) {
         paint.color = Colors.white54;

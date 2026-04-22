@@ -158,7 +158,8 @@ pub enum AudioCommand {
         master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>,
         bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
         generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>>,
-    }
+    },
+    SetMetronomeActive(bool)
 }
 
 // ============================================================================

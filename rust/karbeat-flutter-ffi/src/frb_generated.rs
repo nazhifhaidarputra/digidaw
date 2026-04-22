@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -917136446;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1893798904;
 
 // Section: executor
 
@@ -717,14 +717,14 @@ fn wire__crate__api__track__cut_clip_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
-            let api_cut_point_sample = <u32>::sse_decode(&mut deserializer);
+            let api_cut_point = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::track::cut_clip(
                         api_source_track_id,
                         api_clip_id,
-                        api_cut_point_sample,
+                        api_cut_point,
                     )?;
                     Ok(output_ok)
                 })())
@@ -1160,6 +1160,50 @@ fn wire__crate__api__plugin__execute_plugin_command_generator_impl(
                             api_command,
                             api_payload_json,
                         ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__project__export_project_flutter_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "export_project_flutter",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_output_path = <String>::sse_decode(&mut deserializer);
+            let api_sample_rate = <u32>::sse_decode(&mut deserializer);
+            let api_bit_per_sample = <u16>::sse_decode(&mut deserializer);
+            let api_progress_sink =
+                <StreamSink<f32, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::project::export_project_flutter(
+                        api_output_path,
+                        api_sample_rate,
+                        api_bit_per_sample,
+                        api_progress_sink,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2551,7 +2595,7 @@ fn wire__crate__api__session__move_clip_impl(
             let api_old_track_id = <u32>::sse_decode(&mut deserializer);
             let api_new_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
-            let api_new_start_time = <u32>::sse_decode(&mut deserializer);
+            let api_new_start_time = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -2591,7 +2635,7 @@ fn wire__crate__api__track__move_clip_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
-            let api_new_start_time = <u32>::sse_decode(&mut deserializer);
+            let api_new_start_time = <u64>::sse_decode(&mut deserializer);
             let api_new_track_id = <Option<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -2632,7 +2676,7 @@ fn wire__crate__api__track__move_clip_batch_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
-            let api_delta_samples = <i64>::sse_decode(&mut deserializer);
+            let api_delta_ticks = <i64>::sse_decode(&mut deserializer);
             let api_new_track_id = <Option<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -2640,7 +2684,7 @@ fn wire__crate__api__track__move_clip_batch_impl(
                     let output_ok = crate::api::track::move_clip_batch(
                         api_source_track_id,
                         api_clip_ids,
-                        api_delta_samples,
+                        api_delta_ticks,
                         api_new_track_id,
                     )?;
                     Ok(output_ok)
@@ -2684,6 +2728,39 @@ fn wire__crate__api__pattern__move_note_impl(
                         api_new_start_tick,
                         api_new_key,
                     )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__serialization__new_blank_project_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "new_blank_project",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::serialization::new_blank_project())?;
                     Ok(output_ok)
                 })())
             }
@@ -3314,7 +3391,7 @@ fn wire__crate__api__session__resize_clip_impl(
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
-            let api_new_time_val = <u32>::sse_decode(&mut deserializer);
+            let api_new_time_val = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3355,7 +3432,7 @@ fn wire__crate__api__track__resize_clip_impl(
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
-            let api_new_time_val = <u32>::sse_decode(&mut deserializer);
+            let api_new_time_val = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3396,7 +3473,7 @@ fn wire__crate__api__track__resize_clip_batch_impl(
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
-            let api_delta_samples = <i64>::sse_decode(&mut deserializer);
+            let api_delta_ticks = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3404,7 +3481,7 @@ fn wire__crate__api__track__resize_clip_batch_impl(
                         api_track_id,
                         api_clip_ids,
                         api_edge,
-                        api_delta_samples,
+                        api_delta_ticks,
                     )?;
                     Ok(output_ok)
                 })())
@@ -3699,6 +3776,38 @@ fn wire__crate__api__mixer__set_master_bus_params_impl(
         },
     )
 }
+fn wire__crate__api__audio__set_metronome_active_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_metronome_active",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_active = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::audio::set_metronome_active(api_active);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__mixer__set_mixer_channel_params_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3902,6 +4011,43 @@ fn wire__crate__api__pattern__stop_pattern_preview_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::pattern::stop_pattern_preview()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__pattern__stop_pattern_preview_local_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stop_pattern_preview_local",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_generator_id = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::pattern::stop_pattern_preview_local(
+                        api_pattern_id,
+                        api_generator_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4360,6 +4506,14 @@ impl SseDecode for std::collections::HashMap<u32, crate::api::project::UiTrack> 
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <Vec<(u32, crate::api::project::UiTrack)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
+    }
+}
+
+impl SseDecode for StreamSink<f32, flutter_rust_bridge::for_generated::SseCodec> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
     }
 }
 
@@ -5206,10 +5360,11 @@ impl SseDecode for crate::api::project::UiClip {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_id = <u32>::sse_decode(deserializer);
-        let mut var_startTime = <u32>::sse_decode(deserializer);
+        let mut var_startTime = <u64>::sse_decode(deserializer);
         let mut var_source = <crate::api::project::UiClipSource>::sse_decode(deserializer);
-        let mut var_offsetStart = <u32>::sse_decode(deserializer);
-        let mut var_loopLength = <u32>::sse_decode(deserializer);
+        let mut var_offsetStart = <u64>::sse_decode(deserializer);
+        let mut var_loopLength = <u64>::sse_decode(deserializer);
+        let mut var_isSampleBased = <bool>::sse_decode(deserializer);
         return crate::api::project::UiClip {
             name: var_name,
             id: var_id,
@@ -5217,6 +5372,7 @@ impl SseDecode for crate::api::project::UiClip {
             source: var_source,
             offset_start: var_offsetStart,
             loop_length: var_loopLength,
+            is_sample_based: var_isSampleBased,
         };
     }
 }
@@ -5731,6 +5887,7 @@ impl SseDecode for crate::api::audio::UiTransportFeedback {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_samples = <u32>::sse_decode(deserializer);
+        let mut var_ticks = <u32>::sse_decode(deserializer);
         let mut var_beat = <usize>::sse_decode(deserializer);
         let mut var_bar = <usize>::sse_decode(deserializer);
         let mut var_tempo = <f32>::sse_decode(deserializer);
@@ -5741,10 +5898,12 @@ impl SseDecode for crate::api::audio::UiTransportFeedback {
         let mut var_isPatternPlaying = <bool>::sse_decode(deserializer);
         let mut var_isPatternMode = <bool>::sse_decode(deserializer);
         let mut var_patternSamples = <u32>::sse_decode(deserializer);
+        let mut var_patternTicks = <u32>::sse_decode(deserializer);
         let mut var_patternBeat = <usize>::sse_decode(deserializer);
         let mut var_patternBar = <usize>::sse_decode(deserializer);
         return crate::api::audio::UiTransportFeedback {
             samples: var_samples,
+            ticks: var_ticks,
             beat: var_beat,
             bar: var_bar,
             tempo: var_tempo,
@@ -5755,6 +5914,7 @@ impl SseDecode for crate::api::audio::UiTransportFeedback {
             is_pattern_playing: var_isPatternPlaying,
             is_pattern_mode: var_isPatternMode,
             pattern_samples: var_patternSamples,
+            pattern_ticks: var_patternTicks,
             pattern_beat: var_patternBeat,
             pattern_bar: var_patternBar,
         };
@@ -5867,263 +6027,283 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__audio__get_audio_config_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__audio__get_audio_properties_impl(port, ptr, rust_vec_len, data_len),
-        34 => {
+        32 => wire__crate__api__project__export_project_flutter_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        33 => wire__crate__api__audio__get_audio_config_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__audio__get_audio_properties_impl(port, ptr, rust_vec_len, data_len),
+        35 => {
             wire__crate__api__project__get_audio_source_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        35 => wire__crate__api__track__get_audio_waveform_clips_data_impl(
+        36 => wire__crate__api__track__get_audio_waveform_clips_data_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__track__get_audio_waveform_for_clip_impl(
+        37 => wire__crate__api__track__get_audio_waveform_for_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__track__get_audio_waveform_for_clip_all_available_in_tracks_impl(
+        38 => wire__crate__api__track__get_audio_waveform_for_clip_all_available_in_tracks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__track__get_audio_waveform_for_clip_only_in_specific_track_impl(
+        39 => wire__crate__api__track__get_audio_waveform_for_clip_only_in_specific_track_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__plugin__get_available_effects_with_ids_impl(
+        40 => wire__crate__api__plugin__get_available_effects_with_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__plugin__get_available_generators_with_ids_impl(
+        41 => wire__crate__api__plugin__get_available_generators_with_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__mixer__get_bus_mixer_channel_specs_impl(
+        42 => wire__crate__api__mixer__get_bus_mixer_channel_specs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__mixer__get_buses_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__track__get_clip_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__session__get_clipboard_contents_impl(
+        43 => wire__crate__api__mixer__get_buses_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__track__get_clip_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__session__get_clipboard_contents_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__plugin__get_effect_impl(port, ptr, rust_vec_len, data_len),
-        46 => {
+        46 => wire__crate__api__plugin__get_effect_impl(port, ptr, rust_vec_len, data_len),
+        47 => {
             wire__crate__api__plugin__get_effect_from_master_impl(port, ptr, rust_vec_len, data_len)
         }
-        47 => wire__crate__api__plugin__get_effect_parameter_specs_impl(
+        48 => wire__crate__api__plugin__get_effect_parameter_specs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => {
+        49 => {
             wire__crate__api__plugin__get_effects_from_track_impl(port, ptr, rust_vec_len, data_len)
         }
-        49 => wire__crate__api__plugins__eq__get_eq_response_curve_impl(
+        50 => wire__crate__api__plugins__eq__get_eq_response_curve_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__plugin__get_generator_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__project__get_generator_list_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__plugin__get_generator_parameter_impl(
+        51 => wire__crate__api__plugin__get_generator_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__project__get_generator_list_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__plugin__get_generator_parameter_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__plugin__get_generator_parameter_specs_impl(
+        54 => wire__crate__api__plugin__get_generator_parameter_specs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__mixer__get_master_bus_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__mixer__get_master_bus_populated_impl(
+        55 => wire__crate__api__mixer__get_master_bus_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__mixer__get_master_bus_populated_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__mixer__get_master_channel_specs_impl(
+        57 => wire__crate__api__mixer__get_master_channel_specs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__api__plugin__get_master_effects_impl(port, ptr, rust_vec_len, data_len),
-        58 => {
+        58 => wire__crate__api__plugin__get_master_effects_impl(port, ptr, rust_vec_len, data_len),
+        59 => {
             wire__crate__api__project__get_max_sample_index_impl(port, ptr, rust_vec_len, data_len)
         }
-        59 => wire__crate__api__mixer__get_mixer_channel_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__mixer__get_mixer_channel_populated_impl(
+        60 => wire__crate__api__mixer__get_mixer_channel_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__mixer__get_mixer_channel_populated_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__mixer__get_mixer_state_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__pattern__get_pattern_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__pattern__get_patterns_impl(port, ptr, rust_vec_len, data_len),
-        64 => {
+        62 => wire__crate__api__mixer__get_mixer_state_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__pattern__get_pattern_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__pattern__get_patterns_impl(port, ptr, rust_vec_len, data_len),
+        65 => {
             wire__crate__api__project__get_project_metadata_impl(port, ptr, rust_vec_len, data_len)
         }
-        65 => wire__crate__api__mixer__get_routing_matrix_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__track__get_track_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__mixer__get_track_mixer_channel_specs_impl(
+        66 => wire__crate__api__mixer__get_routing_matrix_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__track__get_track_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__mixer__get_track_mixer_channel_specs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__project__get_tracks_impl(port, ptr, rust_vec_len, data_len),
-        69 => {
+        69 => wire__crate__api__project__get_tracks_impl(port, ptr, rust_vec_len, data_len),
+        70 => {
             wire__crate__api__project__get_transport_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        71 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__serialization__load_project_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__session__move_clip_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__track__move_clip_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__track__move_clip_batch_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__pattern__move_note_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__session__paste_clips_impl(port, ptr, rust_vec_len, data_len),
-        79 => {
+        72 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__serialization__load_project_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__session__move_clip_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__track__move_clip_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__track__move_clip_batch_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__pattern__move_note_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__serialization__new_blank_project_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        80 => wire__crate__api__session__paste_clips_impl(port, ptr, rust_vec_len, data_len),
+        81 => {
             wire__crate__api__session__paste_pattern_notes_impl(port, ptr, rust_vec_len, data_len)
         }
-        80 => {
+        82 => {
             wire__crate__api__pattern__play_pattern_preview_impl(port, ptr, rust_vec_len, data_len)
         }
-        81 => wire__crate__api__audio__play_preview_note_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__audio__play_preview_note_generator_impl(
+        83 => wire__crate__api__audio__play_preview_note_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__audio__play_preview_note_generator_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__audio__play_source_preview_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__plugin__poll_effect_parameter_feedback_impl(
+        85 => wire__crate__api__audio__play_source_preview_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__plugin__poll_effect_parameter_feedback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__crate__api__plugin__poll_generator_parameter_feedback_impl(
+        87 => wire__crate__api__plugin__poll_generator_parameter_feedback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        87 => wire__crate__api__plugin__query_effect_parameters_impl(
+        89 => wire__crate__api__plugin__query_effect_parameters_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__api__plugin__query_generator_parameters_impl(
+        90 => wire__crate__api__plugin__query_generator_parameters_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__api__session__redo_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__mixer__remove_effect_from_master_bus_impl(
+        91 => wire__crate__api__session__redo_impl(port, ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__mixer__remove_effect_from_master_bus_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__mixer__remove_effect_from_mixer_channel_impl(
+        93 => wire__crate__api__mixer__remove_effect_from_mixer_channel_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__mixer__remove_routing_impl(port, ptr, rust_vec_len, data_len),
-        93 => wire__crate__api__mixer__rename_bus_impl(port, ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__session__resize_clip_impl(port, ptr, rust_vec_len, data_len),
-        95 => wire__crate__api__track__resize_clip_impl(port, ptr, rust_vec_len, data_len),
-        96 => wire__crate__api__track__resize_clip_batch_impl(port, ptr, rust_vec_len, data_len),
-        97 => wire__crate__api__pattern__resize_note_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__api__serialization__save_project_impl(port, ptr, rust_vec_len, data_len),
-        99 => wire__crate__api__transport__set_bpm_impl(port, ptr, rust_vec_len, data_len),
-        100 => wire__crate__api__mixer__set_bus_params_impl(port, ptr, rust_vec_len, data_len),
-        101 => {
+        94 => wire__crate__api__mixer__remove_routing_impl(port, ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__mixer__rename_bus_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__session__resize_clip_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__track__resize_clip_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__track__resize_clip_batch_impl(port, ptr, rust_vec_len, data_len),
+        99 => wire__crate__api__pattern__resize_note_impl(port, ptr, rust_vec_len, data_len),
+        100 => {
+            wire__crate__api__serialization__save_project_impl(port, ptr, rust_vec_len, data_len)
+        }
+        101 => wire__crate__api__transport__set_bpm_impl(port, ptr, rust_vec_len, data_len),
+        102 => wire__crate__api__mixer__set_bus_params_impl(port, ptr, rust_vec_len, data_len),
+        103 => {
             wire__crate__api__plugin__set_effect_parameter_impl(port, ptr, rust_vec_len, data_len)
         }
-        102 => wire__crate__api__plugin__set_generator_parameter_impl(
+        104 => wire__crate__api__plugin__set_generator_parameter_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
-        104 => {
+        105 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
+        106 => {
             wire__crate__api__mixer__set_master_bus_params_impl(port, ptr, rust_vec_len, data_len)
         }
-        105 => wire__crate__api__mixer__set_mixer_channel_params_impl(
+        108 => wire__crate__api__mixer__set_mixer_channel_params_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
-        107 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
-        108 => wire__crate__api__mixer__set_routing_impl(port, ptr, rust_vec_len, data_len),
-        109 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
-        110 => {
+        109 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
+        110 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
+        111 => wire__crate__api__mixer__set_routing_impl(port, ptr, rust_vec_len, data_len),
+        112 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
+        113 => {
             wire__crate__api__pattern__stop_pattern_preview_impl(port, ptr, rust_vec_len, data_len)
         }
-        111 => {
+        114 => wire__crate__api__pattern__stop_pattern_preview_local_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        115 => {
             wire__crate__api__transport__stop_song_playback_impl(port, ptr, rust_vec_len, data_len)
         }
-        112 => wire__crate__api__plugin__sync_effect_parameters_from_audio_impl(
+        116 => wire__crate__api__plugin__sync_effect_parameters_from_audio_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__plugin__sync_generator_parameters_from_audio_impl(
+        117 => wire__crate__api__plugin__sync_generator_parameters_from_audio_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        116 => wire__crate__api__session__ui_clipboard_content_default_impl(
+        120 => wire__crate__api__session__ui_clipboard_content_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        119 => wire__crate__api__project__ui_project_metadata_default_impl(
+        123 => wire__crate__api__project__ui_project_metadata_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        120 => wire__crate__api__project__ui_transport_state_default_impl(
+        124 => wire__crate__api__project__ui_transport_state_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        121 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -6142,19 +6322,20 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        70 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        77 => {
+        71 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        79 => {
             wire__crate__api__plugins__eq__parse_eq_curve_response_impl(ptr, rust_vec_len, data_len)
         }
-        86 => wire__crate__api__project__project_metadata_new_impl(ptr, rust_vec_len, data_len),
-        114 => wire__crate__api__project__transport_state_new_impl(ptr, rust_vec_len, data_len),
-        115 => wire__crate__api__project__transport_state_new_with_param_impl(
+        88 => wire__crate__api__project__project_metadata_new_impl(ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__audio__set_metronome_active_impl(ptr, rust_vec_len, data_len),
+        118 => wire__crate__api__project__transport_state_new_impl(ptr, rust_vec_len, data_len),
+        119 => wire__crate__api__project__transport_state_new_with_param_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        117 => wire__crate__api__mixer__ui_mixer_state_new_impl(ptr, rust_vec_len, data_len),
-        118 => {
+        121 => wire__crate__api__mixer__ui_mixer_state_new_impl(ptr, rust_vec_len, data_len),
+        122 => {
             wire__crate__api__mixer__ui_mixer_state_new_with_param_impl(ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -6393,6 +6574,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::project::UiClip {
             self.source.into_into_dart().into_dart(),
             self.offset_start.into_into_dart().into_dart(),
             self.loop_length.into_into_dart().into_dart(),
+            self.is_sample_based.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -7089,6 +7271,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::audio::UiTransportFeedback {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.samples.into_into_dart().into_dart(),
+            self.ticks.into_into_dart().into_dart(),
             self.beat.into_into_dart().into_dart(),
             self.bar.into_into_dart().into_dart(),
             self.tempo.into_into_dart().into_dart(),
@@ -7099,6 +7282,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::audio::UiTransportFeedback {
             self.is_pattern_playing.into_into_dart().into_dart(),
             self.is_pattern_mode.into_into_dart().into_dart(),
             self.pattern_samples.into_into_dart().into_dart(),
+            self.pattern_ticks.into_into_dart().into_dart(),
             self.pattern_beat.into_into_dart().into_dart(),
             self.pattern_bar.into_into_dart().into_dart(),
         ]
@@ -7218,6 +7402,13 @@ impl SseEncode for std::collections::HashMap<u32, crate::api::project::UiTrack> 
             self.into_iter().collect(),
             serializer,
         );
+    }
+}
+
+impl SseEncode for StreamSink<f32, flutter_rust_bridge::for_generated::SseCodec> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
     }
 }
 
@@ -7896,10 +8087,11 @@ impl SseEncode for crate::api::project::UiClip {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.name, serializer);
         <u32>::sse_encode(self.id, serializer);
-        <u32>::sse_encode(self.start_time, serializer);
+        <u64>::sse_encode(self.start_time, serializer);
         <crate::api::project::UiClipSource>::sse_encode(self.source, serializer);
-        <u32>::sse_encode(self.offset_start, serializer);
-        <u32>::sse_encode(self.loop_length, serializer);
+        <u64>::sse_encode(self.offset_start, serializer);
+        <u64>::sse_encode(self.loop_length, serializer);
+        <bool>::sse_encode(self.is_sample_based, serializer);
     }
 }
 
@@ -8304,6 +8496,7 @@ impl SseEncode for crate::api::audio::UiTransportFeedback {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.samples, serializer);
+        <u32>::sse_encode(self.ticks, serializer);
         <usize>::sse_encode(self.beat, serializer);
         <usize>::sse_encode(self.bar, serializer);
         <f32>::sse_encode(self.tempo, serializer);
@@ -8314,6 +8507,7 @@ impl SseEncode for crate::api::audio::UiTransportFeedback {
         <bool>::sse_encode(self.is_pattern_playing, serializer);
         <bool>::sse_encode(self.is_pattern_mode, serializer);
         <u32>::sse_encode(self.pattern_samples, serializer);
+        <u32>::sse_encode(self.pattern_ticks, serializer);
         <usize>::sse_encode(self.pattern_beat, serializer);
         <usize>::sse_encode(self.pattern_bar, serializer);
     }

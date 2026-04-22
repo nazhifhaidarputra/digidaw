@@ -12,7 +12,7 @@ use crate::{
     commands::AudioCommand,
     context::ctx,
     core::project::{ ApplicationState, GeneratorId, TrackId },
-    shared::id::*
+    shared::id::*,
 };
 
 #[derive(Debug, Clone, Error)]
@@ -31,13 +31,19 @@ impl AudioExportError {
     }
 }
 
-pub fn export_project(
+/// Export project to a sound file based on provided writer
+/// Generic, UI-agnostic.
+/// `progress_callback` should return `true` to continue, or `false` to abort rendering.
+pub fn export_project<F>(
     app_state: &ApplicationState,
     output_path: &str,
     sample_rate: u32,
     bit_per_sample: BitPerSample,
-    mut writer: impl AudioWriter
-) -> Result<(), AudioExportError> {
+    mut writer: impl AudioWriter + Send + 'static,
+    mut progress_callback: F
+) -> Result<(), AudioExportError>
+    where F: FnMut(f32) -> bool
+{
     log::info!("Starting offline render to: {}", output_path);
 
     let channels = 2; // Stereo
@@ -187,7 +193,29 @@ pub fn export_project(
         render_state.graph.max_sample_index + (((sample_rate as f32) * tail_seconds) as u32);
     let mut processed_samples: u32 = 0;
 
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<f32>>(4);
+
+    let writer_thread = std::thread::spawn(
+        move || -> Result<(), AudioExportError> {
+            // This thread wakes up whenever a new block of audio is ready
+            while let Ok(buffer) = rx.recv() {
+                writer
+                    .write(&buffer)
+                    .map_err(|e| AudioExportError::new("Writer", format!("Write error: {}", e)))?;
+            }
+
+            writer
+                .finalize()
+                .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {}", e)))?;
+
+            Ok(())
+        }
+    );
+
     let mut mix_buffer = vec![0.0; block_size * channels as usize];
+
+    let throttle_limit = (sample_rate / block_size as u32 / 30).max(1);
+    let mut loop_counter = 0;
 
     // The "Faster-Than-Realtime" Loop
     while processed_samples < total_samples {
@@ -199,21 +227,32 @@ pub fn export_project(
         let active_slice = &mut mix_buffer[..samples_to_process];
         offline_engine.process(active_slice);
 
-        // Delegate encoding and writing entirely to the generic writer interface
-        writer
-            .write(active_slice)
-            .map_err(|e| AudioExportError::new("Writer", format!("Write error: {}", e)))?;
+        if tx.send(active_slice.to_vec()).is_err() {
+            break; // Stop rendering if the writer thread panicked/crashed
+        }
 
         // Keep the position/feedback queues from filling up and blocking
         while let Ok(_) = _pos_consumer.pop() {}
         while let Ok(_) = _feedback_consumer.pop() {}
 
         processed_samples += frames_to_process as u32;
+        loop_counter += 1;
+
+        // Callback reporting
+        if loop_counter % throttle_limit == 0 {
+            let progress = processed_samples as f32 / total_samples as f32;
+            if !progress_callback(progress) {
+                log::warn!("Export cancelled by callback.");
+                break; // Break the DSP loop if the UI cancelled
+            }
+        }
     }
 
-    writer
-        .finalize()
-        .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {}", e)))?;
+    progress_callback(1.0);
+
+    drop(tx);
+
+    writer_thread.join().map_err(|_| AudioExportError::new("Thread", "Writer thread panicked"))??;
 
     log::info!("Offline render successfully completed!");
     Ok(())

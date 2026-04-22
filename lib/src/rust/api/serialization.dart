@@ -16,3 +16,6 @@ Future<void> saveProject({required String pathName}) =>
 /// Load the `.karbeat` project.
 Future<UiApplicationState> loadProject({required String pathName}) =>
     RustLib.instance.api.crateApiSerializationLoadProject(pathName: pathName);
+
+Future<UiApplicationState> newBlankProject() =>
+    RustLib.instance.api.crateApiSerializationNewBlankProject();

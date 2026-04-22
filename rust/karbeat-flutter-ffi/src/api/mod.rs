@@ -1,13 +1,13 @@
-pub mod automation;
-pub mod plugins;
 pub mod audio;
+pub mod automation;
 pub mod mixer;
 pub mod network;
 pub mod pattern;
 pub mod plugin;
+pub mod plugins;
 pub mod project;
+pub mod serialization;
 pub mod session;
 pub mod simple;
 pub mod track;
 pub mod transport;
-pub mod serialization;

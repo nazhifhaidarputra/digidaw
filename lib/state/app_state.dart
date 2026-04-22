@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
+import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -113,13 +114,16 @@ class KarbeatState extends ChangeNotifier {
   ToolSelection _selectedTool = ToolSelection.pointer;
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
-  int _piannoRollGridDenom = 4;
+  GridSize _piannoRollGridDenom = GridSize.quarter;
   int? _editingPatternId;
 
   // =========== SESSION STATE (frontend-only) ====================
   int? _selectedTrackId;
   List<int> _selectedClipIds = [];
   int? _focusClipId;
+  bool _isMetronomeActive = false;
+
+  bool get isMetronomeActive => _isMetronomeActive;
 
   // =========== PIANO ROLL STATE ====================
   PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.pointer;
@@ -130,7 +134,7 @@ class KarbeatState extends ChangeNotifier {
   InteractionTarget? _interactionTarget;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
-  int gridSize = 4;
+  GridSize gridSize = GridSize.quarter;
   bool snapToGrid = false;
 
   // ================== OTHER STATES ====================
@@ -156,6 +160,11 @@ class KarbeatState extends ChangeNotifier {
 
       if (pos.isLooping != _isLooping) {
         _isLooping = pos.isLooping;
+        changed = true;
+      }
+
+      if (pos.isPatternMode != _isPatternMode) {
+        _isPatternMode = pos.isPatternMode;
         changed = true;
       }
 
@@ -304,6 +313,18 @@ class KarbeatState extends ChangeNotifier {
   UiProjectMetadata get metadata => _metadata;
   bool get isPlaying => _isPlaying;
   bool get isPatternPlaying => _isPatternPlaying;
+  bool _isPatternMode = false;
+  bool get isPatternMode => _isPatternMode;
+
+  MusicalBeatSize _horizontalClipShiftSizeDenom = MusicalBeatSize.none;
+  
+
+  MusicalBeatSize get horizontalClipShiftSizeDenom => _horizontalClipShiftSizeDenom;
+
+  set horizontalClipShiftSizeDenom(MusicalBeatSize value) {
+    _horizontalClipShiftSizeDenom = value;
+    notifyListeners();
+  }
   bool get isSongPlaying => _isPlaying && !_isPatternPlaying;
   bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
@@ -316,7 +337,7 @@ class KarbeatState extends ChangeNotifier {
   UiAudioHardwareConfig get hardwareConfig => _hardwareConfig;
   Stream<UiTransportFeedback> get positionStream => _positionBroadcastStream;
   Map<int, UiPattern> get patterns => _patterns;
-  int get pianoRollGridDenom => _piannoRollGridDenom;
+  GridSize get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
   mixer_api.UiMixerState get mixerState => _mixerState;
@@ -333,20 +354,21 @@ class KarbeatState extends ChangeNotifier {
   int? get previewGeneratorId => _previewGeneratorId;
 
   // ================ SETTERS ===================
-  set pianoRollGridDenom(GridValue val) {
-    _piannoRollGridDenom = val.value;
+  set pianoRollGridDenom(GridSize val) {
+    _piannoRollGridDenom = val;
+    notifyListeners();
   }
 
   // =============== GLOBAL UI STATE ==========================
-  double _horizontalZoomLevel = 1000;
+  double _horizontalZoomLevel = 100;
 
-  /// Represent zoom level (the value here means number of samples per pixel)
-  /// e.g 1000 means 1000 samples per pixel
+  /// Represent zoom level (the value here means number of ticks per pixel)
+  /// e.g 1000 means 1000 ticks per pixel
   double get horizontalZoomLevel => _horizontalZoomLevel;
 
-  /// Min: 1 sample/px (each sample tick visible). Max: 100k samples/px.
+  /// Min: 1 sample/px (each sample tick visible). Max: 1k ticks/px.
   static const double _minZoom = 1.0;
-  static const double _maxZoom = 100000.0;
+  static const double _maxZoom = 1000.0;
 
   set horizontalZoomLevel(double val) {
     final clamped = val.clamp(_minZoom, _maxZoom);
@@ -586,6 +608,12 @@ class KarbeatState extends ChangeNotifier {
 
   // =============== ACTIONS ===============
 
+  void toggleMetronomeActive() {
+    _isMetronomeActive = !isMetronomeActive;
+    audio_api.setMetronomeActive(active: isMetronomeActive);
+    notifyListeners();
+  }
+
   /// Save project state using the provided file path
   Future<Result<void>> saveProject(String path) async {
     try {
@@ -761,17 +789,13 @@ class KarbeatState extends ChangeNotifier {
   /// Auto-scales horizontalZoomLevel so that grid lines remain visually fixed.
   Future<Result<void>> setBpm(double value) async {
     try {
-      final oldBpm = _transportState.bpm;
       _transportState = transportStateNewWithParam(
         bpm: value,
         timeSignature: _transportState.timeSignature,
       );
 
-      // Scale zoom so that (samplesPerBeat / zoomLevel) stays constant,
-      // keeping grid lines at the same pixel positions.
-      if (oldBpm > 0 && value > 0) {
-        horizontalZoomLevel = _horizontalZoomLevel * (oldBpm / value);
-      }
+      // (No longer scaling horizontalZoomLevel. Since it's in ticks/pixel, keeping it constant
+      // natively keeps the beat grids visually the same width independent of BPM)
 
       notifyListeners();
 
@@ -863,7 +887,7 @@ class KarbeatState extends ChangeNotifier {
     navigateTo(WorkspaceView.pianoRoll);
   }
 
-  void setGridSize(int newSize) {
+  void setGridSize(GridSize newSize) {
     if (gridSize != newSize) {
       gridSize = newSize;
       notifyListeners();
@@ -911,16 +935,12 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> cutClip(
-    int trackId,
-    int clipId,
-    int cutPointSample,
-  ) async {
+  Future<Result<void>> cutClip(int trackId, int clipId, int cutPoint) async {
     try {
       await track_api.cutClip(
         sourceTrackId: trackId,
         clipId: clipId,
-        cutPointSample: cutPointSample,
+        cutPoint: cutPoint,
       );
       await syncTrack(trackId);
       return Result.ok(null);
@@ -999,19 +1019,19 @@ class KarbeatState extends ChangeNotifier {
 
   // ===================== BATCH CLIP OPERATIONS ==========================
 
-  /// Move multiple clips by a delta amount (in samples)
+  /// Move multiple clips by a delta amount (in ticks)
   Future<Result<void>> moveClipBatch(
     int trackId,
     List<int> clipIds,
-    int deltaSamples, {
+    int deltaTicks, {
     int? newTrackId,
   }) async {
-    _applyOptimisticMoveBatch(trackId, clipIds, deltaSamples, newTrackId);
+    _applyOptimisticMoveBatch(trackId, clipIds, deltaTicks, newTrackId);
     try {
       await track_api.moveClipBatch(
         sourceTrackId: trackId,
         clipIds: clipIds,
-        deltaSamples: deltaSamples,
+        deltaTicks: deltaTicks,
         newTrackId: newTrackId,
       );
       // await syncTrack(trackId);
@@ -1025,20 +1045,20 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  /// Resize multiple clips by a delta amount (in samples)
+  /// Resize multiple clips by a delta amount (in ticks)
   Future<Result<void>> resizeClipBatch(
     int trackId,
     List<int> clipIds,
     UiResizeEdge edge,
-    int deltaSamples,
+    int deltaTicks,
   ) async {
-    _applyOptimisticResizeBatch(trackId, clipIds, edge, deltaSamples);
+    _applyOptimisticResizeBatch(trackId, clipIds, edge, deltaTicks);
     try {
       await track_api.resizeClipBatch(
         trackId: trackId,
         clipIds: clipIds,
         edge: edge,
-        deltaSamples: deltaSamples,
+        deltaTicks: deltaTicks,
       );
       // await syncTrack(trackId);
       return Result.ok(null);
@@ -1426,6 +1446,7 @@ class KarbeatState extends ChangeNotifier {
     UiClipSource? source,
     int? offsetStart,
     int? loopLength,
+    bool? isSampleBased,
   }) {
     return UiClip(
       name: name ?? original.name,
@@ -1434,6 +1455,7 @@ class KarbeatState extends ChangeNotifier {
       source: source ?? original.source,
       offsetStart: offsetStart ?? original.offsetStart,
       loopLength: loopLength ?? original.loopLength,
+      isSampleBased: isSampleBased ?? original.isSampleBased,
     );
   }
 

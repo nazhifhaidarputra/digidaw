@@ -80,6 +80,15 @@ Future<void> playPatternPreview({
   generatorId: generatorId,
 );
 
+/// Stop pattern preview without changing song mode. used in stop button inside pattern playback
+Future<void> stopPatternPreviewLocal({
+  required int patternId,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPatternStopPatternPreviewLocal(
+  patternId: patternId,
+  generatorId: generatorId,
+);
+
 /// Stop pattern preview and return to Song mode.
 Future<void> stopPatternPreview() =>
     RustLib.instance.api.crateApiPatternStopPatternPreview();
