@@ -248,8 +248,8 @@ class StereoWaveformClipPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
   final double zoomLevel;
-  final double offsetSamples;
-  final double ratio;
+  final double offsetTicks;
+  final double samplesPerTick;
 
   /// Scroll controller used for repainting
   final ScrollController scrollController;
@@ -260,8 +260,8 @@ class StereoWaveformClipPainter extends CustomPainter {
     required this.color,
     this.strokeWidth = 1.0,
     required this.zoomLevel,
-    required this.offsetSamples,
-    this.ratio = 1.0,
+    required this.offsetTicks,
+    required this.samplesPerTick,
     required this.scrollController,
     required this.clipLeftOffset,
   }) : super(repaint: scrollController);
@@ -271,7 +271,7 @@ class StereoWaveformClipPainter extends CustomPainter {
     if (samples.isEmpty || size.width <= 0) return;
 
     final int totalFrames = samples.length ~/ 2;
-    final double framesPerPixel = zoomLevel * ratio;
+    final double framesPerPixel = zoomLevel * samplesPerTick;
 
     final paint = Paint()
       ..color = color
@@ -352,8 +352,8 @@ class StereoWaveformClipPainter extends CustomPainter {
         .clamp(0, size.width);
     // Convert visible pixel range → frame range
     final double startFrameFloat =
-        (offsetSamples + (vLeft * zoomLevel)) * ratio;
-    final double endFrameFloat = (offsetSamples + (vRight * zoomLevel)) * ratio;
+        (offsetTicks + (vLeft * zoomLevel)) * samplesPerTick;
+    final double endFrameFloat = (offsetTicks + (vRight * zoomLevel)) * samplesPerTick;
 
     final int startFrame = startFrameFloat.floor().clamp(0, totalFrames);
     final int endFrame = endFrameFloat.ceil().clamp(0, totalFrames);
@@ -369,12 +369,12 @@ class StereoWaveformClipPainter extends CustomPainter {
     final double rightCenterY = size.height * 0.75;
 
     final double invZoom = 1.0 / zoomLevel;
-    final double invRatio = 1.0 / ratio;
+    final double invSamplesPerTick = 1.0 / samplesPerTick;
 
     int ptr = 0;
 
     for (int i = startFrame; i < endFrame; i++) {
-      final double x = ((i * invRatio) - offsetSamples) * invZoom;
+      final double x = ((i * invSamplesPerTick) - offsetTicks) * invZoom;
 
       final int idx = i * 2;
       final double l = samples[idx] * _kI8Scale;
@@ -404,9 +404,9 @@ class StereoWaveformClipPainter extends CustomPainter {
     double vRight,
   ) {
     // Intersect data bounds with viewport bounds
-    final double dataFirstPixel = -offsetSamples / zoomLevel;
+    final double dataFirstPixel = -offsetTicks / zoomLevel;
     final double dataLastPixel =
-        ((totalFrames / ratio) - offsetSamples) / zoomLevel;
+        ((totalFrames / samplesPerTick) - offsetTicks) / zoomLevel;
 
     final int startPixel = vLeft
         .floor()
@@ -434,8 +434,8 @@ class StereoWaveformClipPainter extends CustomPainter {
     if (framesPerPixel > 50) step = (framesPerPixel / 50).ceil();
 
     for (int x = startPixel; x < endPixel; x++) {
-      final double pixelTimelinePos = offsetSamples + (x * zoomLevel);
-      final double sourcePos = pixelTimelinePos * ratio;
+      final double pixelTimelinePos = offsetTicks + (x * zoomLevel);
+      final double sourcePos = pixelTimelinePos * samplesPerTick;
 
       final int startFrame = sourcePos.floor();
       final int endFrame = (sourcePos + framesPerPixel).ceil();
@@ -513,9 +513,9 @@ class StereoWaveformClipPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant StereoWaveformClipPainter oldDelegate) {
-    return oldDelegate.offsetSamples != offsetSamples ||
+    return oldDelegate.offsetTicks != offsetTicks ||
         oldDelegate.zoomLevel != zoomLevel ||
-        oldDelegate.ratio != ratio ||
+        oldDelegate.samplesPerTick != samplesPerTick ||
         oldDelegate.scrollController != scrollController ||
         oldDelegate.clipLeftOffset != clipLeftOffset ||
         !identical(oldDelegate.samples, samples) ||
@@ -531,8 +531,8 @@ class MonoWaveformClipPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
   final double zoomLevel;
-  final double offsetSamples;
-  final double ratio;
+  final double offsetTicks;
+  final double samplesPerTick;
   final ScrollController scrollController;
   final double clipLeftOffset;
 
@@ -541,8 +541,8 @@ class MonoWaveformClipPainter extends CustomPainter {
     required this.color,
     this.strokeWidth = 1.0,
     required this.zoomLevel,
-    required this.offsetSamples,
-    this.ratio = 1.0,
+    required this.offsetTicks,
+    required this.samplesPerTick,
     required this.scrollController,
     required this.clipLeftOffset,
   }) : super(repaint: scrollController);
@@ -558,7 +558,7 @@ class MonoWaveformClipPainter extends CustomPainter {
       ..strokeCap = StrokeCap.butt;
 
     final int totalFrames = samples.length ~/ 2;
-    final double framesPerPixel = zoomLevel * ratio;
+    final double framesPerPixel = zoomLevel * samplesPerTick;
 
     double scrollOffset = 0;
     double viewportWidth = 2000;
@@ -600,8 +600,8 @@ class MonoWaveformClipPainter extends CustomPainter {
     double vRight,
   ) {
     final double startFrameFloat =
-        (offsetSamples + (vLeft * zoomLevel)) * ratio;
-    final double endFrameFloat = (offsetSamples + (vRight * zoomLevel)) * ratio;
+        (offsetTicks + (vLeft * zoomLevel)) * samplesPerTick;
+    final double endFrameFloat = (offsetTicks + (vRight * zoomLevel)) * samplesPerTick;
 
     final int startFrame = startFrameFloat.floor().clamp(0, totalFrames);
     final int endFrame = endFrameFloat.ceil().clamp(0, totalFrames);
@@ -613,12 +613,12 @@ class MonoWaveformClipPainter extends CustomPainter {
 
     final double halfHeight = size.height / 2;
     final double invZoom = 1.0 / zoomLevel;
-    final double invRatio = 1.0 / ratio;
+    final double invSamplesPerTick = 1.0 / samplesPerTick;
 
     int ptr = 0;
 
     for (int i = startFrame; i < endFrame; i++) {
-      final double x = ((i * invRatio) - offsetSamples) * invZoom;
+      final double x = ((i * invSamplesPerTick) - offsetTicks) * invZoom;
 
       final int idx = i * 2;
       final double l = samples[idx] * _kI8Scale;
@@ -641,9 +641,9 @@ class MonoWaveformClipPainter extends CustomPainter {
     double vLeft,
     double vRight,
   ) {
-    final double dataFirstPixel = -offsetSamples / zoomLevel;
+    final double dataFirstPixel = -offsetTicks / zoomLevel;
     final double dataLastPixel =
-        ((totalFrames / ratio) - offsetSamples) / zoomLevel;
+        ((totalFrames / samplesPerTick) - offsetTicks) / zoomLevel;
 
     final int startPixel = vLeft
         .floor()
@@ -665,8 +665,8 @@ class MonoWaveformClipPainter extends CustomPainter {
     if (framesPerPixel > 50) step = (framesPerPixel / 50).ceil();
 
     for (int x = startPixel; x < endPixel; x++) {
-      final double pixelTimelinePos = offsetSamples + (x * zoomLevel);
-      final double sourcePos = pixelTimelinePos * ratio;
+      final double pixelTimelinePos = offsetTicks + (x * zoomLevel);
+      final double sourcePos = pixelTimelinePos * samplesPerTick;
       final int startFrame = sourcePos.floor();
       final int endFrame = (sourcePos + framesPerPixel).ceil();
 
@@ -721,9 +721,9 @@ class MonoWaveformClipPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant MonoWaveformClipPainter oldDelegate) {
-    return oldDelegate.offsetSamples != offsetSamples ||
+    return oldDelegate.offsetTicks != offsetTicks ||
         oldDelegate.zoomLevel != zoomLevel ||
-        oldDelegate.ratio != ratio ||
+        oldDelegate.samplesPerTick != samplesPerTick ||
         oldDelegate.scrollController != scrollController ||
         oldDelegate.clipLeftOffset != clipLeftOffset ||
         !identical(oldDelegate.samples, samples) ||

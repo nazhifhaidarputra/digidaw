@@ -1865,7 +1865,8 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   if (widget.clip.isSampleBased) {
                     // For audio clips: convert pixel→tick→sample
                     final bpm = state.tempo;
-                    final sr = state.hardwareConfig.sampleRate;
+                    final rawSr = state.hardwareConfig.sampleRate;
+                    final sr = rawSr > 0 ? rawSr : 48000;
                     int cutTick = widget.clip.startTimeInTicks(bpm, sr) +
                         (details.localPosition.dx * widget.zoomLevel).round();
                     if (state.snapToGrid) {
@@ -2048,12 +2049,18 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   }
                 }
 
+                final isSampleBased = widget.clip.isSampleBased;
+                final hardwareSampleRate = state.hardwareConfig.sampleRate;
+                final delta = isSampleBased
+                    ? ticksToSamples(_previousSnappedDelta, state.tempo, hardwareSampleRate > 0 ? hardwareSampleRate : 48000)
+                    : _previousSnappedDelta;
+
                 // Send command to Rust backend
                 if (_currentAction == _DragAction.move) {
                   state.moveClipBatch(
                     widget.trackId,
                     currentSelectedIds,
-                    _previousSnappedDelta,
+                    delta,
                     newTrackId: newTrackId,
                   );
                 } else if (_currentAction == _DragAction.resizeRight) {
@@ -2061,14 +2068,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                     widget.trackId,
                     currentSelectedIds,
                     UiResizeEdge.right,
-                    _previousSnappedDelta,
+                    delta,
                   );
                 } else if (_currentAction == _DragAction.resizeLeft) {
                   state.resizeClipBatch(
                     widget.trackId,
                     currentSelectedIds,
                     UiResizeEdge.left,
-                    _previousSnappedDelta,
+                    delta,
                   );
                 }
 
@@ -2179,20 +2186,17 @@ class _ClipRenderer extends ConsumerWidget {
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
-        double ratio = 1.0;
-
         final audioData = waveformMap[sourceId];
         if (audioData == null) {
           return const Center(
             child: Text("Loading...", style: TextStyle(fontSize: 8)),
           );
         }
-        if (projectSampleRate > 0 && audioData.sampleRate > 0) {
-          ratio = audioData.sampleRate / projectSampleRate;
-        }
-
-        final double effectiveOffset =
-            overrideOffset ?? clip.offsetStart.toDouble();
+        
+        final double effectiveOffsetTicks =
+            overrideOffset ?? clip.offsetStartInTicks(state.tempo, projectSampleRate).toDouble();
+            
+        final samplesPerTick = (60.0 / state.tempo) * (audioData.sampleRate / 960.0);
 
         return RepaintBoundary(
           child: CustomPaint(
@@ -2201,9 +2205,9 @@ class _ClipRenderer extends ConsumerWidget {
               samples: audioData.previewBuffer,
               color: Colors.white.withAlpha(200),
               zoomLevel: zoomLevel,
-              offsetSamples: effectiveOffset,
+              offsetTicks: effectiveOffsetTicks,
               strokeWidth: 1.0,
-              ratio: ratio,
+              samplesPerTick: samplesPerTick,
               scrollController: scrollController,
               clipLeftOffset: clipLeftOffset,
             ),

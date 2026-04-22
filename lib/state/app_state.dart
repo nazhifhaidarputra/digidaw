@@ -342,15 +342,15 @@ class KarbeatState extends ChangeNotifier {
   }
 
   // =============== GLOBAL UI STATE ==========================
-  double _horizontalZoomLevel = 1000;
+  double _horizontalZoomLevel = 100;
 
   /// Represent zoom level (the value here means number of ticks per pixel)
   /// e.g 1000 means 1000 ticks per pixel
   double get horizontalZoomLevel => _horizontalZoomLevel;
 
-  /// Min: 1 sample/px (each sample tick visible). Max: 100k samples/px.
+  /// Min: 1 sample/px (each sample tick visible). Max: 1k ticks/px.
   static const double _minZoom = 1.0;
-  static const double _maxZoom = 100000.0;
+  static const double _maxZoom = 1000.0;
 
   set horizontalZoomLevel(double val) {
     final clamped = val.clamp(_minZoom, _maxZoom);

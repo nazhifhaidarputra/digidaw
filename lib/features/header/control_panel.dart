@@ -449,7 +449,7 @@ class DefaultControlPanel extends ConsumerWidget {
       case ToolSelection.select:
         return Icons.crop_free;
       case ToolSelection.resize:
-        return Icons.zoom_out_map;
+        return MdiIcons.arrowLeftRight;
       default:
         return Icons.near_me;
     }
