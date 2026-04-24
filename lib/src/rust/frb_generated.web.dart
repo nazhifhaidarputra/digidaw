@@ -177,6 +177,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
 
   @protected
+  List<(int, int)> dco_decode_list_record_u_32_casted_primitive_u_64(
+    dynamic raw,
+  );
+
+  @protected
+  List<(int, int, int)> dco_decode_list_record_u_32_casted_primitive_u_64_u_8(
+    dynamic raw,
+  );
+
+  @protected
   List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw);
 
   @protected
@@ -196,6 +206,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
+
+  @protected
+  List<(int, int, int?)>
+  dco_decode_list_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    dynamic raw,
+  );
 
   @protected
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
@@ -286,6 +302,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
 
   @protected
+  (int, int) dco_decode_record_u_32_casted_primitive_u_64(dynamic raw);
+
+  @protected
+  (int, int, int) dco_decode_record_u_32_casted_primitive_u_64_u_8(dynamic raw);
+
+  @protected
   (int, double) dco_decode_record_u_32_f_32(dynamic raw);
 
   @protected
@@ -304,6 +326,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, UiTrack) dco_decode_record_u_32_ui_track(dynamic raw);
+
+  @protected
+  (int, int, int?)
+  dco_decode_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    dynamic raw,
+  );
 
   @protected
   (int, int) dco_decode_record_u_8_u_8(dynamic raw);
@@ -617,6 +645,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, int)> sse_decode_list_record_u_32_casted_primitive_u_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<(int, int, int)> sse_decode_list_record_u_32_casted_primitive_u_64_u_8(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(int, double)> sse_decode_list_record_u_32_f_32(
     SseDeserializer deserializer,
   );
@@ -644,6 +682,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, UiTrack)> sse_decode_list_record_u_32_ui_track(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<(int, int, int?)>
+  sse_decode_list_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
     SseDeserializer deserializer,
   );
 
@@ -758,6 +802,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  (int, int) sse_decode_record_u_32_casted_primitive_u_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, int, int) sse_decode_record_u_32_casted_primitive_u_64_u_8(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
 
   @protected
@@ -780,6 +834,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer);
+
+  @protected
+  (int, int, int?)
+  sse_decode_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    SseDeserializer deserializer,
+  );
 
   @protected
   (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
@@ -1155,6 +1215,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_casted_primitive_u_64(
+    List<(int, int)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_u_32_casted_primitive_u_64_u_8(
+    List<(int, int, int)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_f_32(
     List<(int, double)> self,
     SseSerializer serializer,
@@ -1187,6 +1259,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_u_32_ui_track(
     List<(int, UiTrack)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_list_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    List<(int, int, int?)> self,
     SseSerializer serializer,
   );
 
@@ -1317,6 +1396,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_u_32_casted_primitive_u_64(
+    (int, int) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_casted_primitive_u_64_u_8(
+    (int, int, int) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_u_32_f_32(
     (int, double) self,
     SseSerializer serializer,
@@ -1349,6 +1440,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_ui_track(
     (int, UiTrack) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    (int, int, int?) self,
     SseSerializer serializer,
   );
 

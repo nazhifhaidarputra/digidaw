@@ -529,6 +529,7 @@ class KarbeatParametricEqState
               (v) => _updateBandParam(i, 0, v),
               isLog: true,
               suffix: "Hz",
+              parameterName: "Frequency"
             ),
             _buildParamControl(
               "Gain",
@@ -537,6 +538,7 @@ class KarbeatParametricEqState
               maxGain,
               (v) => _updateBandParam(i, 1, v),
               suffix: "dB",
+              parameterName: "Gain"
             ),
             _buildParamControl(
               "Q",
@@ -545,6 +547,7 @@ class KarbeatParametricEqState
               20.0,
               (v) => _updateBandParam(i, 2, v),
               suffix: "",
+              parameterName: "Q Bandwidth"
             ),
 
             // Slope dropdown
@@ -584,6 +587,7 @@ class KarbeatParametricEqState
     ValueChanged<double> onChanged, {
     bool isLog = false,
     String suffix = "",
+    String parameterName = "",
   }) {
     return Column(
       children: [
@@ -600,7 +604,7 @@ class KarbeatParametricEqState
             max: max,
             step: isLog ? 1.0 : 0.1,
             onChanged: onChanged,
-            parameterName: '', 
+            parameterName: parameterName, 
             defaultValue: 40.0,
             child: Slider(
               value: (isLog ? log(val) / ln10 : val).clamp(

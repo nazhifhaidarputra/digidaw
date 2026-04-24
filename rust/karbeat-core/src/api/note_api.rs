@@ -130,43 +130,142 @@ pub fn change_note_params(
     Ok(note)
 }
 
-pub fn delete_notes_batch(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyhow::Result<()> {
-    let mut actions = Vec::new();
-
-    // 1. Mutate state and collect actions
-    {
+/// Add notes in batch
+/// 
+/// ## Parameters
+/// * pattern_id: [PatternId]
+/// * new_notes: Vector of tuples that contains (key, start_tick, duration)
+pub fn add_notes_batch(
+    pattern_id: PatternId,
+    notes_data: Vec<(u8, u64, Option<u64>)>
+) -> anyhow::Result<Vec<Note>> {
+    // 1. Mutate state
+    let added_notes = {
         let mut app = get_app_write();
-        let pattern_arc = app.pattern_pool
-            .get_mut(&pattern_id)
-            .ok_or_else(|| anyhow::anyhow!("Pattern not found"))?;
-        let pattern = Arc::make_mut(pattern_arc);
-
-        let notes_to_delete: Vec<Note> = pattern.notes
-            .iter()
-            .filter(|n| note_ids.contains(&n.id))
-            .cloned()
-            .collect();
-
-        pattern.delete_notes_by_id(note_ids.into());
-
-        for note in notes_to_delete {
-            actions.push(ProjectAction::DeleteNote { pattern_id, note });
-        }
-    }
+        app.add_notes_to_pattern_batch(pattern_id, &notes_data)?
+    };
 
     // 2. Update history
-    if !actions.is_empty() {
+    if !added_notes.is_empty() {
+        let mut actions = Vec::with_capacity(added_notes.len());
+        for note in &added_notes {
+            actions.push(ProjectAction::AddNote {
+                pattern_id,
+                note: note.clone(),
+            });
+        }
         let mut history = get_history_lock();
         if actions.len() == 1 {
             history.push(actions.remove(0));
         } else {
             history.push(ProjectAction::Batch(actions));
         }
+        broadcast_state_change();
     }
 
-    broadcast_state_change();
+    Ok(added_notes)
+}
+
+pub fn delete_notes_batch(
+    pattern_id: PatternId,
+    note_ids: Vec<NoteId>
+) -> anyhow::Result<()> {
+    // 1. Mutate state
+    let deleted_notes = {
+        let mut app = get_app_write();
+        app.delete_notes_from_pattern_batch(pattern_id, &note_ids)?
+    };
+
+    // 2. Update history
+    if !deleted_notes.is_empty() {
+        let mut actions = Vec::with_capacity(deleted_notes.len());
+        for note in deleted_notes {
+            actions.push(ProjectAction::DeleteNote { pattern_id, note });
+        }
+        let mut history = get_history_lock();
+        if actions.len() == 1 {
+            history.push(actions.remove(0));
+        } else {
+            history.push(ProjectAction::Batch(actions));
+        }
+        broadcast_state_change();
+    }
 
     Ok(())
+}
+
+/// Updates is Vec of (note_id, new_tick, new_key)
+pub fn move_notes_batch(
+    pattern_id: PatternId,
+    updates: Vec<(NoteId, u64, u8)> // (note_id, new_tick, new_key)
+) -> anyhow::Result<Vec<Note>> {
+    // 1. Mutate state
+    let moved_data = {
+        let mut app = get_app_write();
+        app.move_notes_in_pattern_batch(pattern_id, &updates)?
+    };
+
+    // 2. Update history
+    let mut final_notes = Vec::with_capacity(moved_data.len());
+    if !moved_data.is_empty() {
+        let mut actions = Vec::with_capacity(moved_data.len());
+        for (note, old_tick, old_key) in moved_data {
+            actions.push(ProjectAction::MoveNote {
+                pattern_id,
+                note_id: note.id,
+                old_tick,
+                old_key,
+                new_tick: note.start_tick,
+                new_key: note.key,
+            });
+            final_notes.push(note);
+        }
+        let mut history = get_history_lock();
+        if actions.len() == 1 {
+            history.push(actions.remove(0));
+        } else {
+            history.push(ProjectAction::Batch(actions));
+        }
+        broadcast_state_change();
+    }
+
+    Ok(final_notes)
+}
+
+/// updates is Vec of (note id, new size)
+pub fn resize_notes_batch(
+    pattern_id: PatternId,
+    updates: Vec<(NoteId, u64)> // (note_id, new_duration)
+) -> anyhow::Result<Vec<Note>> {
+    // 1. Mutate state
+    let resized_data = {
+        let mut app = get_app_write();
+        app.resize_notes_in_pattern_batch(pattern_id, &updates)?
+    };
+
+    // 2. Update history
+    let mut final_notes = Vec::with_capacity(resized_data.len());
+    if !resized_data.is_empty() {
+        let mut actions = Vec::with_capacity(resized_data.len());
+        for (note, old_duration) in resized_data {
+            actions.push(ProjectAction::ResizeNote {
+                pattern_id,
+                note_id: note.id,
+                old_duration,
+                new_duration: note.duration,
+            });
+            final_notes.push(note);
+        }
+        let mut history = get_history_lock();
+        if actions.len() == 1 {
+            history.push(actions.remove(0));
+        } else {
+            history.push(ProjectAction::Batch(actions));
+        }
+        broadcast_state_change();
+    }
+
+    Ok(final_notes)
 }
 
 pub fn paste_notes(target_pattern_id: PatternId, playhead_tick: u64) -> anyhow::Result<()> {

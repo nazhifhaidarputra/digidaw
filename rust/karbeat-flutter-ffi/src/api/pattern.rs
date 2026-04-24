@@ -151,6 +151,67 @@ pub fn change_note_params(
     Ok(note_ui)
 }
 
+// ==============================================================================
+// ======================== BATCH OPERATIONS ====================================
+// ==============================================================================
+
+/// Add notes in batch
+///
+/// ## Parameters
+/// * pattern_id: [u32], id of the pattern
+/// * new_notes: Vector of tuples that contains (key, start_tick, duration)
+pub fn add_notes_batch(pattern_id: u32, notes: Vec<(u8, u64, Option<u64>)>) -> Result<(), String> {
+    let _ = note_api::add_notes_batch(pattern_id.into(), notes).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Delete notes in batch
+///
+/// ## Parameters
+/// * pattern_id: [u32], id of the pattern
+/// * note_ids: Vector of notes ID to delete
+pub fn delete_notes_batch(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
+    note_api
+        ::delete_notes_batch(pattern_id.into(), note_ids.into_iter().map(NoteId::from).collect())
+        .map_err(|e| e.to_string())
+}
+
+/// Move notes in batch
+///
+/// ## Parameters
+/// * pattern_id: [u32], id of the pattern
+/// * note_ids: Vector of notes updates (id, )
+pub fn move_notes_batch(
+    pattern_id: u32,
+    updates: Vec<(u32, u64, u8)>
+) -> Result<(), String> {
+    let _ = note_api
+        ::move_notes_batch(
+            pattern_id.into(),
+            updates
+                .into_iter()
+                .map(|u| (u.0.into(), u.1, u.2))
+                .collect()
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn resize_notes_batch(
+    pattern_id: u32,
+    updates: Vec<(u32, u64)>
+) -> Result<(), String> {
+    let pattern_id_typed: PatternId = pattern_id.into();
+    let updates_proper = updates
+        .into_iter()
+        .map(|u| (u.0.into(), u.1))
+        .collect();
+    let _ = note_api
+        ::resize_notes_batch(pattern_id_typed, updates_proper)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ========================= PATTERN PREVIEW TRANSPORT ============================
 
 /// Play a pattern in isolation with a specific generator (looping automatically).
@@ -163,7 +224,9 @@ pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), St
 
 /// Stop pattern preview without changing song mode. used in stop button inside pattern playback
 pub fn stop_pattern_preview_local(pattern_id: u32, generator_id: u32) -> Result<(), String> {
-    pattern_api::stop_pattern_preview_local(PatternId::from(pattern_id), GeneratorId::from(generator_id)).map_err(|e| e.to_string())
+    pattern_api
+        ::stop_pattern_preview_local(PatternId::from(pattern_id), GeneratorId::from(generator_id))
+        .map_err(|e| e.to_string())
 }
 
 /// Stop pattern preview and return to Song mode.

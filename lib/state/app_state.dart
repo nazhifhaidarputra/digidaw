@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
+import 'package:karbeat/models/payload.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -29,7 +30,7 @@ final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
 enum ToolSelection { pointer, cut, draw, move, delete, zoom, select, resize }
 
 /// Piano roll specific tool selection (independent from main toolbar)
-enum PianoRollToolSelection { pointer, draw, delete, select, slice }
+enum PianoRollToolSelection { grab, draw, delete, select, slice, pan, zoom }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
@@ -126,7 +127,15 @@ class KarbeatState extends ChangeNotifier {
   bool get isMetronomeActive => _isMetronomeActive;
 
   // =========== PIANO ROLL STATE ====================
-  PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.pointer;
+  PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.grab;
+  double _zoomLevelTick = 1;
+
+  double get zoomLevelTick => _zoomLevelTick;
+
+  set zoomLevelTick(double value) {
+    _zoomLevelTick = value.clamp(0.1, 10);
+  }
+
   Set<int> _selectedNoteIds = {};
   int? _previewGeneratorId;
 
@@ -317,14 +326,15 @@ class KarbeatState extends ChangeNotifier {
   bool get isPatternMode => _isPatternMode;
 
   MusicalBeatSize _horizontalClipShiftSizeDenom = MusicalBeatSize.none;
-  
 
-  MusicalBeatSize get horizontalClipShiftSizeDenom => _horizontalClipShiftSizeDenom;
+  MusicalBeatSize get horizontalClipShiftSizeDenom =>
+      _horizontalClipShiftSizeDenom;
 
   set horizontalClipShiftSizeDenom(MusicalBeatSize value) {
     _horizontalClipShiftSizeDenom = value;
     notifyListeners();
   }
+
   bool get isSongPlaying => _isPlaying && !_isPatternPlaying;
   bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
@@ -1147,6 +1157,66 @@ class KarbeatState extends ChangeNotifier {
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error adding note: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addPatternNoteBatch({
+    required int patternId,
+    required List<(int, int, int?)> notes,
+  }) async {
+    try {
+      await addNotesBatch(patternId: patternId, notes: notes);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error adding notes in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> deletePatternNoteBatch({
+    required int patternId,
+    required List<int> noteIds,
+  }) async {
+    for (final noteId in noteIds) {
+      _applyOptimisticNoteDeletion(patternId, noteId);
+    }
+    try {
+      await deleteNotesBatch(patternId: patternId, noteIds: noteIds);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error deleting notes in batch: $e");
+      await syncPattern(patternId);
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> movePatternNoteBatch({
+    required int patternId,
+    required List<(int, int, int)> updates,
+  }) async {
+    try {
+      await moveNotesBatch(patternId: patternId, updates: updates);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error moving notes in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> resizePatternNoteBatch({
+    required int patternId,
+    required List<(int, int)> updates,
+  }) async {
+    try {
+      await resizeNotesBatch(patternId: patternId, updates: updates);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error resizing notes in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
