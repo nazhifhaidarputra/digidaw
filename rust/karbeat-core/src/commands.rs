@@ -4,14 +4,19 @@ use crate::{
     audio::engine::PlaybackMode,
     core::project::{
         GeneratorId, mixer::RoutingConnection, plugin::{KarbeatEffect, KarbeatGenerator}, track::audio_waveform::AudioWaveform
-    }, shared::id::{BusId, EffectId, TrackId},
+    }, shared::{PatternId, id::{BusId, EffectId, TrackId}},
 };
 
 pub enum AudioCommand {
+    // =============================
+    // Transport Command
+    // =============================
     PlayOneShot(AudioWaveform),
     StopAllPreviews,
     /// Set playback state (play/pause)
     SetPlaying(bool),
+    TogglePlayingWithPlaybackMode(PlaybackMode),
+    TogglePatternPlayback {pattern_id: PatternId, generator_id: GeneratorId, },
     /// Set loop mode
     SetLooping(bool),
     /// Stop playback and reset playhead to 0
@@ -26,6 +31,9 @@ pub enum AudioCommand {
     /// Set BPM to the field0 value
     SetBPM(f32),
     SetPlaybackMode(PlaybackMode),
+    
+    /// Hot-swaps the active generator while pattern playback is running
+    SwitchPatternGenerator(crate::shared::id::GeneratorId),
 
     // =========================================================================
     // Generator Plugin Commands

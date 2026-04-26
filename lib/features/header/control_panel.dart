@@ -4,8 +4,10 @@ import 'package:flutter_material_design_icons/flutter_material_design_icons.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
+import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 
 class ControlPanel extends StatelessWidget {
@@ -248,12 +250,30 @@ class DefaultControlPanel extends ConsumerWidget {
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ControlPanelToolbarItem(
-            name: state.isSongPlaying ? "Pause" : "Play",
-            icon: state.isSongPlaying ? Icons.pause : Icons.play_arrow,
-            color: Colors.greenAccent,
-            isActive: state.isSongPlaying,
-            onTap: () => ref.read(karbeatStateProvider).togglePlay(),
+          StreamBuilder(
+            stream: ref.read(karbeatStateProvider).positionStream,
+            builder: (context, asyncSnapshot) {
+              final pos = asyncSnapshot.data;
+
+              final isSongPlaying =
+                  pos != null && pos.isPlaying && !pos.isPatternMode;
+
+              return ControlPanelToolbarItem(
+                name: isSongPlaying ? "Pause" : "Play",
+                icon: isSongPlaying ? Icons.pause : Icons.play_arrow,
+                color: Colors.greenAccent,
+                isActive: isSongPlaying,
+                onTap: () {
+                  try {
+                    togglePlaybackWithMode(
+                      playbackMode: const PlaybackModeDto.song(),
+                    );
+                  } catch (e) {
+                    KarbeatLogger.error("Failed to toggle playback: $e");
+                  }
+                },
+              );
+            },
           ),
           ControlPanelToolbarItem(
             name: "Stop",

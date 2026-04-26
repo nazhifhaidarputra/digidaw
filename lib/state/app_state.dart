@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
-import 'package:karbeat/models/payload.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -756,22 +755,22 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> togglePlay() async {
-    try {
-      final newPlaying = _isPatternPlaying ? !_isPatternPlaying : !_isPlaying;
+  // Future<Result<void>> togglePlay() async {
+  //   try {
+  //     final newPlaying = _isPatternPlaying ? !_isPatternPlaying : !_isPlaying;
 
-      if (newPlaying) {
-        _pendingPlayRequest = true;
-      }
+  //     if (newPlaying) {
+  //       _pendingPlayRequest = true;
+  //     }
 
-      await transport_api.setPlaying(val: newPlaying);
-      return Result.ok(null);
-    } catch (e) {
-      log("Failed to toggle play: $e");
-      _pendingPlayRequest = false;
-      return Result.error(Exception("$e"));
-    }
-  }
+  //     await transport_api.setPlaying(val: newPlaying);
+  //     return Result.ok(null);
+  //   } catch (e) {
+  //     log("Failed to toggle play: $e");
+  //     _pendingPlayRequest = false;
+  //     return Result.error(Exception("$e"));
+  //   }
+  // }
 
   Future<Result<void>> stop() async {
     try {

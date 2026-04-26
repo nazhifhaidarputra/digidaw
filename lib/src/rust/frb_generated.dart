@@ -76,7 +76,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 890949617;
+  int get rustContentHash => 1622916413;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -571,12 +571,25 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiTransportStopSongPlayback();
 
+  Future<void> crateApiTransportSwitchPatternGenerator({
+    required int generatorId,
+  });
+
   Future<void> crateApiPluginSyncEffectParametersFromAudio({
     required List<UiEffectParameterSnapshot> snapshots,
   });
 
   Future<void> crateApiPluginSyncGeneratorParametersFromAudio({
     required List<UiGeneratorParameterSnapshot> snapshots,
+  });
+
+  Future<void> crateApiTransportTogglePatternPlayback({
+    required int patternId,
+    required int generatorId,
+  });
+
+  Future<void> crateApiTransportTogglePlaybackWithMode({
+    required PlaybackModeDto playbackMode,
   });
 
   UiTransportState crateApiProjectTransportStateNew();
@@ -4511,6 +4524,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "stop_song_playback", argNames: []);
 
   @override
+  Future<void> crateApiTransportSwitchPatternGenerator({
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 120,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTransportSwitchPatternGeneratorConstMeta,
+        argValues: [generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransportSwitchPatternGeneratorConstMeta =>
+      const TaskConstMeta(
+        debugName: "switch_pattern_generator",
+        argNames: ["generatorId"],
+      );
+
+  @override
   Future<void> crateApiPluginSyncEffectParametersFromAudio({
     required List<UiEffectParameterSnapshot> snapshots,
   }) {
@@ -4522,7 +4568,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 120,
+            funcId: 121,
             port: port_,
           );
         },
@@ -4558,7 +4604,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 121,
+            funcId: 122,
             port: port_,
           );
         },
@@ -4580,6 +4626,74 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiTransportTogglePatternPlayback({
+    required int patternId,
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(patternId, serializer);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 123,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTransportTogglePatternPlaybackConstMeta,
+        argValues: [patternId, generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransportTogglePatternPlaybackConstMeta =>
+      const TaskConstMeta(
+        debugName: "toggle_pattern_playback",
+        argNames: ["patternId", "generatorId"],
+      );
+
+  @override
+  Future<void> crateApiTransportTogglePlaybackWithMode({
+    required PlaybackModeDto playbackMode,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_playback_mode_dto(playbackMode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 124,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTransportTogglePlaybackWithModeConstMeta,
+        argValues: [playbackMode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransportTogglePlaybackWithModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "toggle_playback_with_mode",
+        argNames: ["playbackMode"],
+      );
+
+  @override
   UiTransportState crateApiProjectTransportStateNew() {
     return handler.executeSync(
       SyncTask(
@@ -4588,7 +4702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 122,
+            funcId: 125,
           )!;
         },
         codec: SseCodec(
@@ -4619,7 +4733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 123,
+            funcId: 126,
           )!;
         },
         codec: SseCodec(
@@ -4648,7 +4762,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 124,
+            funcId: 127,
             port: port_,
           );
         },
@@ -4678,7 +4792,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 125,
+            funcId: 128,
           )!;
         },
         codec: SseCodec(
@@ -4713,7 +4827,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 126,
+            funcId: 129,
           )!;
         },
         codec: SseCodec(
@@ -4742,7 +4856,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 127,
+            funcId: 130,
             port: port_,
           );
         },
@@ -4772,7 +4886,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 128,
+            funcId: 131,
             port: port_,
           );
         },
@@ -4802,7 +4916,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 129,
+            funcId: 132,
             port: port_,
           );
         },
@@ -5035,6 +5149,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double dco_decode_box_autoadd_f_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_playback_mode_dto(raw);
   }
 
   @protected
@@ -5422,6 +5542,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return ParameterValueTypeDTO.values[raw as int];
+  }
+
+  @protected
+  PlaybackModeDto dco_decode_playback_mode_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return PlaybackModeDto_Song();
+      case 1:
+        return PlaybackModeDto_Pattern(
+          patternId: dco_decode_u_32(raw[1]),
+          generatorId: dco_decode_u_32(raw[2]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
   }
 
   @protected
@@ -6333,6 +6469,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlaybackModeDto sse_decode_box_autoadd_playback_mode_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_playback_mode_dto(deserializer));
+  }
+
+  @protected
   (int, int) sse_decode_box_autoadd_record_u_8_u_8(
     SseDeserializer deserializer,
   ) {
@@ -6951,6 +7095,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return ParameterValueTypeDTO.values[inner];
+  }
+
+  @protected
+  PlaybackModeDto sse_decode_playback_mode_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return PlaybackModeDto_Song();
+      case 1:
+        var var_patternId = sse_decode_u_32(deserializer);
+        var var_generatorId = sse_decode_u_32(deserializer);
+        return PlaybackModeDto_Pattern(
+          patternId: var_patternId,
+          generatorId: var_generatorId,
+        );
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -7938,6 +8102,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_playback_mode_dto(
+    PlaybackModeDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_playback_mode_dto(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_record_u_8_u_8(
     (int, int) self,
     SseSerializer serializer,
@@ -8509,6 +8682,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_playback_mode_dto(
+    PlaybackModeDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case PlaybackModeDto_Song():
+        sse_encode_i_32(0, serializer);
+      case PlaybackModeDto_Pattern(
+        patternId: final patternId,
+        generatorId: final generatorId,
+      ):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_32(patternId, serializer);
+        sse_encode_u_32(generatorId, serializer);
+    }
   }
 
   @protected

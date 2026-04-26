@@ -10,6 +10,7 @@ import 'package:karbeat/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
@@ -106,13 +107,13 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   void _handleZoom(double scale) {
     final state = ref.read(karbeatStateProvider);
     final newZoom = (state.zoomLevelTick * scale).clamp(0.1, 5.0);
-    
+
     // Only update if the value actually changed
     if (state.zoomLevelTick != newZoom) {
-      state.zoomLevelTick = newZoom; 
-      // The state provider *should* trigger a rebuild via notifyListeners(), 
+      state.zoomLevelTick = newZoom;
+      // The state provider *should* trigger a rebuild via notifyListeners(),
       // but to guarantee the local pointer event updates the UI instantly:
-      setState(() {}); 
+      setState(() {});
     }
   }
 
@@ -666,13 +667,7 @@ class _PianoRollToolbar extends ConsumerWidget {
                 color: isPatternPlaying ? Colors.orange : Colors.white70,
               ),
               onPressed: previewGeneratorId != null
-                  ? () => _togglePatternPlayback(
-                      context,
-                      isPatternPlaying,
-                      previewGeneratorId,
-                      patternId,
-                      isPatternMode,
-                    )
+                  ? () => _togglePatternPlayback(previewGeneratorId, patternId)
                   : null,
               tooltip: isPatternPlaying ? 'Stop' : 'Play Pattern',
               iconSize: 24,
@@ -806,8 +801,17 @@ class _PianoRollToolbar extends ConsumerWidget {
                   ),
                 ),
               ],
-              onChanged: (value) =>
-                  state.setPreviewGenerator(generatorId: value),
+              onChanged: (value) {
+                state.setPreviewGenerator(generatorId: value);
+
+                if (value != null && isPatternPlaying && isPatternMode) {
+                  try {
+                    switchPatternGenerator(generatorId: value);
+                  } catch (e) {
+                    KarbeatLogger.error("Failed to hot-swap generator: $e");
+                  }
+                }
+              }   
             ),
           ],
         ),
@@ -819,26 +823,12 @@ class _PianoRollToolbar extends ConsumerWidget {
     return Container(width: 1, height: 30, color: Colors.grey.shade600);
   }
 
-  void _togglePatternPlayback(
-    BuildContext context,
-    bool isPlaying,
-    int generatorId,
-    int patternId,
-    bool isPatternMode,
-  ) async {
+  void _togglePatternPlayback(int generatorId, int patternId) async {
     try {
-      if (isPlaying) {
-        if (!isPatternMode) return;
-        await stopPatternPreviewLocal(
-          generatorId: generatorId,
-          patternId: patternId,
-        );
-      } else {
-        await playPatternPreview(
-          patternId: patternId,
-          generatorId: generatorId,
-        );
-      }
+      await togglePatternPlayback(
+        patternId: patternId,
+        generatorId: generatorId,
+      );
     } catch (e) {
       KarbeatLogger.error('Pattern playback error: $e');
     }

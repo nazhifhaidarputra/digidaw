@@ -110,6 +110,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_32(dynamic raw);
 
   @protected
+  PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw);
+
+  @protected
   (int, int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw);
 
   @protected
@@ -290,6 +293,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw);
+
+  @protected
+  PlaybackModeDto dco_decode_playback_mode_dto(dynamic raw);
 
   @protected
   (int, AudioWaveformUiForClip)
@@ -560,6 +566,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
+  PlaybackModeDto sse_decode_box_autoadd_playback_mode_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, int) sse_decode_box_autoadd_record_u_8_u_8(
     SseDeserializer deserializer,
   );
@@ -786,6 +797,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ParameterValueTypeDTO sse_decode_parameter_value_type_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  PlaybackModeDto sse_decode_playback_mode_dto(SseDeserializer deserializer);
 
   @protected
   (int, AudioWaveformUiForClip)
@@ -1114,6 +1128,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_playback_mode_dto(
+    PlaybackModeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_record_u_8_u_8(
     (int, int) self,
     SseSerializer serializer,
@@ -1378,6 +1398,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_parameter_value_type_dto(
     ParameterValueTypeDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playback_mode_dto(
+    PlaybackModeDto self,
     SseSerializer serializer,
   );
 

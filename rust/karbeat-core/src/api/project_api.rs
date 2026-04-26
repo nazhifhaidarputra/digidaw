@@ -3,7 +3,6 @@ use std::path::Path;
 use indexmap::IndexMap;
 
 use crate::audio::exporter::{export_project as export_project_internal, AudioExportError};
-use crate::audio::render_state::broadcast_plugin_state_loading;
 use crate::audio::writer::wav::WavAudioWriter;
 use crate::audio::writer::{AudioFormat, BitPerSample};
 use crate::commands::AudioCommand;
@@ -151,7 +150,6 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     for (gen_id, gen_arc) in &app.generator_pool {
         if let GeneratorInstanceType::Plugin(plugin_instance) = &gen_arc.instance_type {
             if let Some((mut plugin, _)) = registry.create_generator_by_id(plugin_instance.registry_id) {
-                // CRITICAL FIX: Apply saved parameters to the DSP plugin
                 for (&param_id, &val) in &plugin_instance.parameters {
                     plugin.set_parameter(param_id, val);
                 }
@@ -203,7 +201,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     }
 
     // Send the fully configured plugins to the Live Audio Engine
-    crate::context::utils::send_audio_command(AudioCommand::PreparePlugin {
+    send_audio_command(AudioCommand::PreparePlugin {
         generators,
         track_effects,
         bus_effects,
