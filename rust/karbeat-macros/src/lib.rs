@@ -100,6 +100,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(item as DeriveInput);
     let struct_name = &ast.ident;
     let enum_name = format_ident!("{}ParamIds", struct_name);
+    let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
     let mut params = Vec::new();
     let mut nested_fields: Vec<(syn::Ident, bool)> = Vec::new();
     let mut used_ids: HashMap<u32, syn::Ident> = HashMap::new();
@@ -463,7 +464,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
             use karbeat_plugin_types::parameter::ParamType;
             use karbeat_plugin_types::parameter::EnumParam;
             use karbeat_plugin_types::parameter::AutoParams;
-            impl AutoParams for #struct_name {
+            impl #impl_generics AutoParams for #struct_name #ty_generics #where_clause {
                 fn auto_set_parameter(&mut self, id: u32, value: f32) {
                     match id {
                         #(#set_match_arms)*
@@ -611,6 +612,7 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 
     let name = &input_derive.ident;
 
+    let (impl_generics, ty_generics, where_clause) = input_derive.generics.split_for_impl();
     let fields = match &input_derive.data {
         Data::Struct(data_struct) => match &data_struct.fields {
             Fields::Named(fields_named) => &fields_named.named,
@@ -699,12 +701,10 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         const _: () = {
-            // Automatically bring required traits and types into scope 
-            // so the generated .to_f32() methods work seamlessly!
             use karbeat_plugin_types::ParamType;
             use karbeat_plugin_types::parameter::{AutoParams, ParameterSpec};
 
-            impl AutoParams for #name {
+            impl #impl_generics AutoParams for #name #ty_generics #where_clause {
                 fn auto_get_parameter(&self, id: u32) -> Option<f32> {
                     #(#get_arms)*
                     None

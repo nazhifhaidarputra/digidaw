@@ -53,7 +53,6 @@ class KarbeatState extends ChangeNotifier {
   UiTransportState _transportState = transportStateNew();
 
   // Runtime transport state (derived from TransportFeedback stream)
-  bool _isPlaying = false;
   bool _isLooping = false;
   bool _isPatternPlaying = false;
 
@@ -146,7 +145,6 @@ class KarbeatState extends ChangeNotifier {
   bool snapToGrid = false;
 
   // ================== OTHER STATES ====================
-  bool _pendingPlayRequest = false;
   bool _showFloatingMidiKeyboard = false;
 
   // ================ CONSTRUCTOR ==================
@@ -154,10 +152,6 @@ class KarbeatState extends ChangeNotifier {
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
-      if (pos.isPlaying) {
-        _pendingPlayRequest = false;
-      }
-
       // Update runtime transport state from audio thread feedback
       bool changed = false;
 
@@ -173,14 +167,6 @@ class KarbeatState extends ChangeNotifier {
 
       if (pos.isPatternMode != _isPatternMode) {
         _isPatternMode = pos.isPatternMode;
-        changed = true;
-      }
-
-      if (pos.isPlaying != _isPlaying) {
-        if (_pendingPlayRequest && !pos.isPlaying) {
-          return;
-        }
-        _isPlaying = pos.isPlaying;
         changed = true;
       }
 
@@ -319,7 +305,7 @@ class KarbeatState extends ChangeNotifier {
   // ============== GETTERS =================
   UiTransportState get transport => _transportState;
   UiProjectMetadata get metadata => _metadata;
-  bool get isPlaying => _isPlaying;
+
   bool get isPatternPlaying => _isPatternPlaying;
   bool _isPatternMode = false;
   bool get isPatternMode => _isPatternMode;
@@ -334,7 +320,6 @@ class KarbeatState extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get isSongPlaying => _isPlaying && !_isPatternPlaying;
   bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
@@ -1878,6 +1863,11 @@ class KarbeatState extends ChangeNotifier {
       routing: _mixerState.routing,
     );
 
+    notifyListeners();
+  }
+
+  void removeNotesFromSelection(Set<int> noteIds) {
+    _selectedNoteIds = _selectedNoteIds.where((id) => !noteIds.contains(id)).toSet();
     notifyListeners();
   }
 }

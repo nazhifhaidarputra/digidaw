@@ -1,11 +1,25 @@
 //! Biquad filter building block. A general purpose, reusable biquad filter
 //! Can be used for things such as Equalizer or Compressor
 
-use karbeat_macros::{AutoParams, EnumParam};
-use karbeat_plugin_types::Param;
+use karbeat_macros::{ AutoParams, EnumParam };
+use karbeat_plugin_types::{ EnumParam, Param };
+use smallvec::{ smallvec, SmallVec };
 
-const MAX_CHANNELS: usize = 2;
-const MAX_CASCADES: usize = 4;
+const DEFAULT_CHANNELS: usize = 2;
+const DEFAULT_CASCADES: usize = 8;
+
+pub trait FilterMode: Copy + Default + PartialEq + EnumParam {
+    /// Get coefficients based on type and current audio parameters
+    fn get_coefficients(
+        &self,
+        freq: f32,
+        q: f32,
+        gain: f32,
+        sample_rate: f32
+    ) -> BiquadCoefficients;
+    /// Fast check if the filter is completely bypassed
+    fn is_off(&self) -> bool;
+}
 
 /// Options of Simple filter often used (LPF, HPF, and BPF)
 #[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam)]
@@ -25,6 +39,189 @@ impl From<f32> for SimpleFilterMode {
             1 => SimpleFilterMode::HighPass,
             2 => SimpleFilterMode::BandPass,
             _ => SimpleFilterMode::Off,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam)]
+#[repr(usize)]
+pub enum BiquadFilterType {
+    #[default]
+    Peaking = 0,
+    LowShelf = 1,
+    HighShelf = 2,
+    LowPass = 3,
+    HighPass = 4,
+    BandPass = 5,
+    Notch = 6,
+    Off = 7,
+}
+
+impl From<f32> for BiquadFilterType {
+    fn from(v: f32) -> Self {
+        match v as u32 {
+            0 => BiquadFilterType::Peaking,
+            1 => BiquadFilterType::LowShelf,
+            2 => BiquadFilterType::HighShelf,
+            3 => BiquadFilterType::LowPass,
+            4 => BiquadFilterType::HighPass,
+            5 => BiquadFilterType::BandPass,
+            6 => BiquadFilterType::Notch,
+            _ => BiquadFilterType::Off,
+        }
+    }
+}
+
+impl FilterMode for SimpleFilterMode {
+    #[inline]
+    fn is_off(&self) -> bool {
+        *self == SimpleFilterMode::Off
+    }
+
+    fn get_coefficients(
+        &self,
+        freq: f32,
+        q: f32,
+        _gain: f32,
+        sample_rate: f32
+    ) -> BiquadCoefficients {
+        if self.is_off() {
+            return BiquadCoefficients::default();
+        }
+
+        let w0 = (2.0 * std::f32::consts::PI * freq) / sample_rate;
+        let alpha = w0.sin() / (2.0 * q);
+        let cos_w0 = w0.cos();
+
+        let (b0, b1, b2, a0, a1, a2) = match self {
+            SimpleFilterMode::LowPass => {
+                (
+                    (1.0 - cos_w0) / 2.0,
+                    1.0 - cos_w0,
+                    (1.0 - cos_w0) / 2.0,
+                    1.0 + alpha,
+                    -2.0 * cos_w0,
+                    1.0 - alpha,
+                )
+            }
+            SimpleFilterMode::HighPass => {
+                (
+                    (1.0 + cos_w0) / 2.0,
+                    -(1.0 + cos_w0),
+                    (1.0 + cos_w0) / 2.0,
+                    1.0 + alpha,
+                    -2.0 * cos_w0,
+                    1.0 - alpha,
+                )
+            }
+            SimpleFilterMode::BandPass => {
+                (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha)
+            }
+            SimpleFilterMode::Off => unreachable!(),
+        };
+
+        let inv_a0 = 1.0 / a0;
+        BiquadCoefficients {
+            b0: b0 * inv_a0,
+            b1: b1 * inv_a0,
+            b2: b2 * inv_a0,
+            a1: a1 * inv_a0,
+            a2: a2 * inv_a0,
+        }
+    }
+}
+
+impl FilterMode for BiquadFilterType {
+    #[inline]
+    fn is_off(&self) -> bool {
+        *self == BiquadFilterType::Off
+    }
+
+    fn get_coefficients(
+        &self,
+        freq: f32,
+        q: f32,
+        gain: f32,
+        sample_rate: f32
+    ) -> BiquadCoefficients {
+        if self.is_off() {
+            return BiquadCoefficients::default();
+        }
+
+        let a = (10.0f32).powf(gain / 40.0);
+        let w0 = (2.0 * std::f32::consts::PI * freq) / sample_rate;
+        let alpha = w0.sin() / (2.0 * q);
+        let cos_w0 = w0.cos();
+
+        let (b0, b1, b2, a0, a1, a2) = match self {
+            BiquadFilterType::Peaking => {
+                (
+                    1.0 + alpha * a,
+                    -2.0 * cos_w0,
+                    1.0 - alpha * a,
+                    1.0 + alpha / a,
+                    -2.0 * cos_w0,
+                    1.0 - alpha / a,
+                )
+            }
+            BiquadFilterType::LowShelf => {
+                let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
+                (
+                    a * (a + 1.0 - (a - 1.0) * cos_w0 + two_sqrt_a_alpha),
+                    2.0 * a * (a - 1.0 - (a + 1.0) * cos_w0),
+                    a * (a + 1.0 - (a - 1.0) * cos_w0 - two_sqrt_a_alpha),
+                    a + 1.0 + (a - 1.0) * cos_w0 + two_sqrt_a_alpha,
+                    -2.0 * (a - 1.0 + (a + 1.0) * cos_w0),
+                    a + 1.0 + (a - 1.0) * cos_w0 - two_sqrt_a_alpha,
+                )
+            }
+            BiquadFilterType::HighShelf => {
+                let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
+                (
+                    a * (a + 1.0 + (a - 1.0) * cos_w0 + two_sqrt_a_alpha),
+                    -2.0 * a * (a - 1.0 + (a + 1.0) * cos_w0),
+                    a * (a + 1.0 + (a - 1.0) * cos_w0 - two_sqrt_a_alpha),
+                    a + 1.0 - (a - 1.0) * cos_w0 + two_sqrt_a_alpha,
+                    2.0 * (a - 1.0 - (a + 1.0) * cos_w0),
+                    a + 1.0 - (a - 1.0) * cos_w0 - two_sqrt_a_alpha,
+                )
+            }
+            BiquadFilterType::LowPass => {
+                (
+                    (1.0 - cos_w0) / 2.0,
+                    1.0 - cos_w0,
+                    (1.0 - cos_w0) / 2.0,
+                    1.0 + alpha,
+                    -2.0 * cos_w0,
+                    1.0 - alpha,
+                )
+            }
+            BiquadFilterType::HighPass => {
+                (
+                    (1.0 + cos_w0) / 2.0,
+                    -(1.0 + cos_w0),
+                    (1.0 + cos_w0) / 2.0,
+                    1.0 + alpha,
+                    -2.0 * cos_w0,
+                    1.0 - alpha,
+                )
+            }
+            BiquadFilterType::BandPass => {
+                (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha)
+            }
+            BiquadFilterType::Notch => {
+                (1.0, -2.0 * cos_w0, 1.0, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha)
+            }
+            BiquadFilterType::Off => unreachable!(),
+        };
+
+        let inv_a0 = 1.0 / a0;
+        BiquadCoefficients {
+            b0: b0 * inv_a0,
+            b1: b1 * inv_a0,
+            b2: b2 * inv_a0,
+            a1: a1 * inv_a0,
+            a2: a2 * inv_a0,
         }
     }
 }
@@ -51,11 +248,12 @@ pub struct BiquadState {
 impl BiquadState {
     #[inline(always)]
     pub fn process(&mut self, input: f32, coeffs: &BiquadCoefficients) -> f32 {
-        let output = coeffs.b0 * input 
-                   + coeffs.b1 * self.x1 
-                   + coeffs.b2 * self.x2
-                   - coeffs.a1 * self.y1 
-                   - coeffs.a2 * self.y2;
+        let output =
+            coeffs.b0 * input +
+            coeffs.b1 * self.x1 +
+            coeffs.b2 * self.x2 -
+            coeffs.a1 * self.y1 -
+            coeffs.a2 * self.y2;
 
         // Shift delay lines
         self.x2 = self.x1;
@@ -67,14 +265,48 @@ impl BiquadState {
     }
 }
 
+/// A filter chain for a SINGLE channel that handles N cascaded biquad stages
+#[derive(Clone, Debug)]
+pub struct SingleBiquadFilterStage {
+    pub stages: SmallVec<[BiquadState; DEFAULT_CASCADES]>,
+}
+
+impl SingleBiquadFilterStage {
+    pub fn new(num_cascades: usize) -> Self {
+        Self {
+            stages: smallvec![BiquadState::default(); num_cascades],
+        }
+    }
+
+    /// Expands or shrinks the number of cascaded stages
+    pub fn resize_cascades(&mut self, num_cascades: usize) {
+        self.stages.resize(num_cascades, BiquadState::default());
+    }
+
+    pub fn reset_state(&mut self) {
+        for stage in &mut self.stages {
+            *stage = BiquadState::default();
+        }
+    }
+
+    #[inline(always)]
+    pub fn process(&mut self, mut input: f32, coeffs: &BiquadCoefficients) -> f32 {
+        // Cascade the signal through all configured biquad stages
+        for stage in &mut self.stages {
+            input = stage.process(input, coeffs);
+        }
+        input
+    }
+}
+
 /// Biquad filter implemented from RBJ EQ Cookbook
 #[derive(Clone, Debug, AutoParams)]
-pub struct BiquadFilter {
+pub struct BiquadFilter<T: FilterMode + 'static> {
     pub freq: Param<f32>,
     pub gain: Param<f32>,
     pub q: Param<f32>,
     pub active: Param<bool>,
-    pub filter_type: Param<SimpleFilterMode>,
+    pub filter_type: Param<T>,
     pub cascades: Param<f32>,
 
     // ==========================
@@ -90,40 +322,56 @@ pub struct BiquadFilter {
     #[skip]
     coeff: BiquadCoefficients,
 
-    // Cascaded Biquad State
+    // Multi-channel layout using stacked single-channel filters
     #[skip]
-    state: [[BiquadState; MAX_CASCADES]; MAX_CHANNELS],
+    channels: SmallVec<[SingleBiquadFilterStage; DEFAULT_CHANNELS]>,
 }
 
-impl Default for BiquadFilter {
+impl<T: FilterMode + 'static> Default for BiquadFilter<T> {
     fn default() -> Self {
         Self {
             freq: Param::new_f32(0, "Frequency", "Filter", 1000.0, 20.0, 20000.0, 1.0),
             gain: Param::new_f32(1, "Gain", "Filter", 0.0, -24.0, 24.0, 0.1),
             q: Param::new_f32(2, "Q", "Filter", 0.707, 0.1, 10.0, 0.01),
             active: Param::new_bool(3, "Active", "Filter", true),
-            filter_type: Param::new_enum(4, "Type", "Filter", SimpleFilterMode::LowPass),
-            cascades: Param::new_f32(5, "Order", "Filter", 1.0, 1.0, MAX_CASCADES as f32, 1.0),
-            
-            num_of_channels: 2,
+            filter_type: Param::new_enum(4, "Type", "Filter", T::default()),
+            cascades: Param::new_f32(5, "Order", "Filter", 1.0, 1.0, 8.0, 1.0),
+
+            num_of_channels: DEFAULT_CHANNELS as u8,
             sample_rate: 44100.0,
             coeff: BiquadCoefficients::default(),
-            state: [[BiquadState::default(); MAX_CASCADES]; MAX_CHANNELS],
+            channels: smallvec![SingleBiquadFilterStage::new(1); DEFAULT_CHANNELS],
         }
     }
 }
 
-impl BiquadFilter {
+impl<T: FilterMode + 'static> BiquadFilter<T> {
     /// Initializes the filter for the current audio stream format
     pub fn prepare(&mut self, num_channels: u8, sample_rate: u32) {
-        self.num_of_channels = num_channels.min(MAX_CHANNELS as u8);
         self.sample_rate = sample_rate as f32;
+        self.resize_channels(num_channels as usize);
         self.reset_state();
+    }
+
+    /// Expands or shrinks the filter to handle N discrete channels
+    pub fn resize_channels(&mut self, new_channels: usize) {
+        self.num_of_channels = new_channels as u8;
+        let active_cascades = self.cascades.get().max(1.0) as usize;
+        self.channels.resize(new_channels, SingleBiquadFilterStage::new(active_cascades));
+    }
+
+    /// Expands or shrinks the filter's processing order (cascades)
+    pub fn resize_cascades(&mut self, new_cascades: usize) {
+        for channel in &mut self.channels {
+            channel.resize_cascades(new_cascades);
+        }
     }
 
     /// Clears all historical delay lines (prevents clicking when jumping playhead)
     pub fn reset_state(&mut self) {
-        self.state = [[BiquadState::default(); MAX_CASCADES]; MAX_CHANNELS];
+        for channel in &mut self.channels {
+            channel.reset_state();
+        }
     }
 
     /// Recalculates the coefficients based on current UI parameters.
@@ -134,81 +382,37 @@ impl BiquadFilter {
         }
 
         let filter_mode = self.filter_type.get();
-        if filter_mode == SimpleFilterMode::Off {
+        if filter_mode.is_off() {
             return;
+        }
+
+        // Dynamically resize cascades if the param changed
+        let active_cascades = self.cascades.get().max(1.0) as usize;
+        if self.channels.first().map_or(0, |ch| ch.stages.len()) != active_cascades {
+            self.resize_cascades(active_cascades);
         }
 
         let freq = self.freq.get().clamp(20.0, self.sample_rate / 2.1); // Nyquist safety
         let q = self.q.get().max(0.01);
-        
-        let w0 = 2.0 * std::f32::consts::PI * freq / self.sample_rate;
-        let alpha = w0.sin() / (2.0 * q);
-        let cos_w0 = w0.cos();
+        let gain = self.gain.get();
 
-        let (b0, b1, b2, a0, a1, a2);
-
-        match filter_mode {
-            SimpleFilterMode::LowPass => {
-                b0 = (1.0 - cos_w0) / 2.0;
-                b1 = 1.0 - cos_w0;
-                b2 = (1.0 - cos_w0) / 2.0;
-                a0 = 1.0 + alpha;
-                a1 = -2.0 * cos_w0;
-                a2 = 1.0 - alpha;
-            }
-            SimpleFilterMode::HighPass => {
-                b0 = (1.0 + cos_w0) / 2.0;
-                b1 = -(1.0 + cos_w0);
-                b2 = (1.0 + cos_w0) / 2.0;
-                a0 = 1.0 + alpha;
-                a1 = -2.0 * cos_w0;
-                a2 = 1.0 - alpha;
-            }
-            SimpleFilterMode::BandPass => {
-                b0 = alpha;
-                b1 = 0.0;
-                b2 = -alpha;
-                a0 = 1.0 + alpha;
-                a1 = -2.0 * cos_w0;
-                a2 = 1.0 - alpha;
-            }
-            SimpleFilterMode::Off => unreachable!(),
-        }
-
-        // Pre-divide by a0 for maximum performance in the audio loop
-        let inv_a0 = 1.0 / a0;
-        self.coeff= BiquadCoefficients {
-            b0: b0 * inv_a0,
-            b1: b1 * inv_a0,
-            b2: b2 * inv_a0,
-            a1: a1 * inv_a0,
-            a2: a2 * inv_a0,
-        };
+        self.coeff = filter_mode.get_coefficients(freq, q, gain, self.sample_rate);
     }
 
     /// Process a single multi-channel frame of audio
     #[inline(always)]
     pub fn process_frame(&mut self, frame: &mut [f32]) {
-        if !self.active.get() || self.filter_type.get() == SimpleFilterMode::Off {
+        if !self.active.get() || self.filter_type.get().is_off() {
             return;
         }
 
-        let num_cascades = self.cascades.get() as usize;
-        let active_cascades = num_cascades.clamp(1, MAX_CASCADES);
-
-        // Process each channel independently
-        for (ch_idx, sample) in frame.iter_mut().enumerate().take(self.num_of_channels as usize) {
-            let mut current_sample = *sample;
-
-            // Cascade the signal through the required number of biquad stages
-            for stage_idx in 0..active_cascades {
-                current_sample = self.state[ch_idx][stage_idx].process(
-                    current_sample, 
-                    &self.coeff
-                );
+        for (ch_idx, sample) in frame
+            .iter_mut()
+            .enumerate()
+            .take(self.num_of_channels as usize) {
+            if let Some(channel_filter) = self.channels.get_mut(ch_idx) {
+                *sample = channel_filter.process(*sample, &self.coeff);
             }
-
-            *sample = current_sample;
         }
     }
 }
