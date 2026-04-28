@@ -38,12 +38,14 @@ Future<void> cutPatternNotes({
 );
 
 /// Paste: Reads clipboard, creates new notes, creates Batch Add action
-Future<void> pastePatternNotes({
+Future<List<UiNote>> pastePatternNotes({
   required int targetPatternId,
   required int playheadTick,
+  int? targetKey,
 }) => RustLib.instance.api.crateApiSessionPastePatternNotes(
   targetPatternId: targetPatternId,
   playheadTick: playheadTick,
+  targetKey: targetKey,
 );
 
 /// Delete notes in group. useful for range and group deletion

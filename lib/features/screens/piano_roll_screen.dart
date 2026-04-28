@@ -51,6 +51,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   double _lastZoomDragY = 0;
   Offset? _selectionStart;
   Offset? _selectionEnd;
+  Offset? _lastInteractionPos;
 
   @override
   void initState() {
@@ -451,6 +452,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     : const NeverScrollableScrollPhysics(),
                                 child: Listener(
                                   onPointerDown: (event) {
+                                    _lastInteractionPos = event.localPosition;
+
                                     if (isDrawing) {
                                       _resetPaintState();
                                       _handleBrushAdd(event.localPosition);
@@ -518,191 +521,218 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                         width:
                                             pattern.lengthTicks * zoomX +
                                             1000, // Approx width
-                                        child: Stack(
-                                          children: [
-                                            // Grid background
-                                            Positioned.fill(
-                                              child: RepaintBoundary(
-                                                child: CustomPaint(
-                                                  painter: _PianoGridPainter(
-                                                    zoomX: zoomX,
-                                                    keyHeight: _keyHeight,
-                                                    gridDenom: gridDenom,
+                                        child: ContextMenuWrapper(
+                                          title: "Actions",
+                                          actions: [
+                                            KarbeatContextAction(
+                                            title: "Paste",
+                                            icon: Icons.paste,
+                                            onTap: () {
+                                              if (_lastInteractionPos == null) return;
+                                              
+                                              // Convert local pixel position to Ticks and MIDI Key
+                                              int tick = (_lastInteractionPos!.dx / zoomX).round();
+                                              int keyIndex = (_lastInteractionPos!.dy / _keyHeight).floor();
+                                              int midiKey = (127 - keyIndex).clamp(0, 127);
+                                              
+                                              // Snap to grid for clean pasting
+                                              int snap = _getSnapTicks(gridDenom);
+                                              int snappedTick = (tick / snap).round() * snap;
+
+                                              ref.read(karbeatStateProvider).pasteNotesFromClipboardToPattern(
+                                                pattern.id,
+                                                snappedTick,
+                                                midiKey,
+                                              );
+                                            },
+                                          ),
+                                          ],
+                                          child: Stack(
+                                            children: [
+                                              // Grid background
+                                              Positioned.fill(
+                                                child: RepaintBoundary(
+                                                  child: CustomPaint(
+                                                    painter: _PianoGridPainter(
+                                                      zoomX: zoomX,
+                                                      keyHeight: _keyHeight,
+                                                      gridDenom: gridDenom,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-
-                                            // LAYER B1: Unselected Interactive Notes
-                                            ...unselectedNotes.map((note) {
-                                              final isPendingDelete =
-                                                  _brushDeleteNoteIds.contains(
-                                                    note.id,
-                                                  );
-                                              return _InteractiveNote(
-                                                key: ValueKey(note.id),
-                                                note: note,
-                                                noteId: note.id,
-                                                patternId: pattern.id,
-                                                generatorId: widget.generatorId,
-                                                zoomX: zoomX,
-                                                keyHeight: _keyHeight,
-                                                selectedTool: selectedTool,
-                                                snapTicks: _getSnapTicks(
-                                                  gridDenom,
-                                                ),
-                                                opacity: isPendingDelete
-                                                    ? 0.3
-                                                    : 0.8,
-                                                borderColor: Colors.white30,
-                                                onDragUpdate: (globalPos) {
-                                                  if (selectedTool ==
-                                                      PianoRollToolSelection
-                                                          .grab) {
-                                                    final screenSize =
-                                                        MediaQuery.of(
-                                                          context,
-                                                        ).size;
-                                                    _handleAutoScroll(
-                                                      globalPos,
-                                                      screenSize,
-                                                    );
-                                                  }
-                                                },
-                                                onDragEnd: () {
-                                                  _stopAutoScroll();
-                                                },
-                                                onTapOverride: () {
-                                                  if (selectedTool ==
-                                                          PianoRollToolSelection
-                                                              .select ||
-                                                      selectedTool ==
-                                                          PianoRollToolSelection
-                                                              .grab) {
-                                                    // Selecting an unselected note clears previous selection and selects only this one
-                                                    state.selectNotes({
+                                          
+                                              // LAYER B1: Unselected Interactive Notes
+                                              ...unselectedNotes.map((note) {
+                                                final isPendingDelete =
+                                                    _brushDeleteNoteIds.contains(
                                                       note.id,
-                                                    });
-                                                  }
-                                                },
-                                              );
-                                            }),
-
-                                            // LAYER B2: Selected Batch Notes
-                                            if (selectedNotes.isNotEmpty)
-                                              _InteractiveNoteGroup(
-                                                notes: selectedNotes,
-                                                patternId: pattern.id,
-                                                generatorId: widget.generatorId,
-                                                zoomX: zoomX,
-                                                keyHeight: _keyHeight,
-                                                selectedTool: selectedTool,
-                                                snapTicks: _getSnapTicks(
-                                                  gridDenom,
-                                                ),
-                                                pendingDeleteIds:
-                                                    _brushDeleteNoteIds,
-                                                onDragUpdate: (globalPos) {
-                                                  if (selectedTool ==
-                                                      PianoRollToolSelection
-                                                          .grab) {
-                                                    final screenSize =
-                                                        MediaQuery.of(
-                                                          context,
-                                                        ).size;
-                                                    _handleAutoScroll(
-                                                      globalPos,
-                                                      screenSize,
                                                     );
-                                                  }
-                                                },
-                                                onDragEnd: () {
-                                                  _stopAutoScroll();
-                                                },
-                                              ),
-
-                                            // LAYER C: Preview Add Notes
-                                            ..._brushAddNotes.map((addInfo) {
-                                              final (key, startTick, duration) =
-                                                  addInfo;
-                                              return Positioned(
-                                                top:
-                                                    (127 - key) * _keyHeight +
-                                                    1,
-                                                left: startTick * zoomX,
-                                                width: duration * zoomX < 5
-                                                    ? 5
-                                                    : duration * zoomX,
-                                                height: _keyHeight - 2,
-                                                child: IgnorePointer(
+                                                return _InteractiveNote(
+                                                  key: ValueKey(note.id),
+                                                  note: note,
+                                                  noteId: note.id,
+                                                  patternId: pattern.id,
+                                                  generatorId: widget.generatorId,
+                                                  zoomX: zoomX,
+                                                  keyHeight: _keyHeight,
+                                                  selectedTool: selectedTool,
+                                                  snapTicks: _getSnapTicks(
+                                                    gridDenom,
+                                                  ),
+                                                  opacity: isPendingDelete
+                                                      ? 0.3
+                                                      : 0.8,
+                                                  borderColor: Colors.white30,
+                                                  onDragUpdate: (globalPos) {
+                                                    if (selectedTool ==
+                                                        PianoRollToolSelection
+                                                            .grab) {
+                                                      final screenSize =
+                                                          MediaQuery.of(
+                                                            context,
+                                                          ).size;
+                                                      _handleAutoScroll(
+                                                        globalPos,
+                                                        screenSize,
+                                                      );
+                                                    }
+                                                  },
+                                                  onDragEnd: () {
+                                                    _stopAutoScroll();
+                                                  },
+                                                  onTapOverride: () {
+                                                    if (selectedTool ==
+                                                            PianoRollToolSelection
+                                                                .select ||
+                                                        selectedTool ==
+                                                            PianoRollToolSelection
+                                                                .grab) {
+                                                      // Selecting an unselected note clears previous selection and selects only this one
+                                                      state.selectNotes({
+                                                        note.id,
+                                                      });
+                                                    }
+                                                  },
+                                                );
+                                              }),
+                                          
+                                              // LAYER B2: Selected Batch Notes
+                                              if (selectedNotes.isNotEmpty)
+                                                _InteractiveNoteGroup(
+                                                  notes: selectedNotes,
+                                                  patternId: pattern.id,
+                                                  generatorId: widget.generatorId,
+                                                  zoomX: zoomX,
+                                                  keyHeight: _keyHeight,
+                                                  selectedTool: selectedTool,
+                                                  snapTicks: _getSnapTicks(
+                                                    gridDenom,
+                                                  ),
+                                                  pendingDeleteIds:
+                                                      _brushDeleteNoteIds,
+                                                  onDragUpdate: (globalPos) {
+                                                    if (selectedTool ==
+                                                        PianoRollToolSelection
+                                                            .grab) {
+                                                      final screenSize =
+                                                          MediaQuery.of(
+                                                            context,
+                                                          ).size;
+                                                      _handleAutoScroll(
+                                                        globalPos,
+                                                        screenSize,
+                                                      );
+                                                    }
+                                                  },
+                                                  onDragEnd: () {
+                                                    _stopAutoScroll();
+                                                  },
+                                                ),
+                                          
+                                              // LAYER C: Preview Add Notes
+                                              ..._brushAddNotes.map((addInfo) {
+                                                final (key, startTick, duration) =
+                                                    addInfo;
+                                                return Positioned(
+                                                  top:
+                                                      (127 - key) * _keyHeight +
+                                                      1,
+                                                  left: startTick * zoomX,
+                                                  width: duration * zoomX < 5
+                                                      ? 5
+                                                      : duration * zoomX,
+                                                  height: _keyHeight - 2,
+                                                  child: IgnorePointer(
+                                                    child: Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.pinkAccent
+                                                            .withAlpha(128),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              2,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: Colors.white54,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }),
+                                          
+                                              // LAYER D: Range Selection Box
+                                              if (_selectionStart != null &&
+                                                  _selectionEnd != null)
+                                                Positioned.fromRect(
+                                                  rect: Rect.fromPoints(
+                                                    _selectionStart!,
+                                                    _selectionEnd!,
+                                                  ),
                                                   child: Container(
                                                     decoration: BoxDecoration(
-                                                      color: Colors.pinkAccent
-                                                          .withAlpha(128),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            2,
-                                                          ),
+                                                      color: Colors.blueAccent
+                                                          .withAlpha(80),
                                                       border: Border.all(
-                                                        color: Colors.white54,
+                                                        color: Colors.blueAccent,
+                                                        width: 1.0,
                                                       ),
                                                     ),
                                                   ),
                                                 ),
-                                              );
-                                            }),
-
-                                            // LAYER D: Range Selection Box
-                                            if (_selectionStart != null &&
-                                                _selectionEnd != null)
-                                              Positioned.fromRect(
-                                                rect: Rect.fromPoints(
-                                                  _selectionStart!,
-                                                  _selectionEnd!,
-                                                ),
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.blueAccent
-                                                        .withAlpha(80),
-                                                    border: Border.all(
-                                                      color: Colors.blueAccent,
-                                                      width: 1.0,
-                                                    ),
+                                          
+                                              // LAYER E: Playhead Overlay (top)
+                                              Positioned.fill(
+                                                child: IgnorePointer(
+                                                  ignoring: false,
+                                                  child: PlayheadOverlay(
+                                                    offsetAdjustment: 0,
+                                                    scrollController:
+                                                        _gridHorizontalController,
+                                                    onSeek: (int newSamples) {
+                                                      // We currently don't support seeking inside pattern playback.
+                                                      // TODO: Add pattern playback seek implementation
+                                                    },
+                                                    zoomLevel: 1.0 / zoomX,
+                                                    sampleSelector: (pos) {
+                                                      if (pos.isPatternMode) {
+                                                        // Convert samples to ticks: ticks = samples * (PPQ * bpm) / (60 * sampleRate)
+                                                        const ppq = 960;
+                                                        final ticks =
+                                                            (pos.patternSamples *
+                                                                ppq *
+                                                                pos.tempo) /
+                                                            (60.0 *
+                                                                pos.sampleRate);
+                                                        return ticks.round();
+                                                      }
+                                                      return 0;
+                                                    },
                                                   ),
                                                 ),
                                               ),
-
-                                            // LAYER E: Playhead Overlay (top)
-                                            Positioned.fill(
-                                              child: IgnorePointer(
-                                                ignoring: false,
-                                                child: PlayheadOverlay(
-                                                  offsetAdjustment: 0,
-                                                  scrollController:
-                                                      _gridHorizontalController,
-                                                  onSeek: (int newSamples) {
-                                                    // We currently don't support seeking inside pattern playback.
-                                                    // TODO: Add pattern playback seek implementation
-                                                  },
-                                                  zoomLevel: 1.0 / zoomX,
-                                                  sampleSelector: (pos) {
-                                                    if (pos.isPatternMode) {
-                                                      // Convert samples to ticks: ticks = samples * (PPQ * bpm) / (60 * sampleRate)
-                                                      const ppq = 960;
-                                                      final ticks =
-                                                          (pos.patternSamples *
-                                                              ppq *
-                                                              pos.tempo) /
-                                                          (60.0 *
-                                                              pos.sampleRate);
-                                                      return ticks.round();
-                                                    }
-                                                    return 0;
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -726,6 +756,36 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     ref
                                         .read(karbeatStateProvider)
                                         .clearNoteSelection();
+                                  },
+                                ),
+                                KarbeatContextAction(
+                                  title: "Copy",
+                                  onTap: () async {
+                                    if (widget.patternId == null) {
+                                      return;
+                                    }
+                                    await ref
+                                        .read(karbeatStateProvider)
+                                        .copyNotesFromPattern(
+                                          widget.patternId!,
+                                          selectedNoteIds.toList(),
+                                        );
+                                    // we do not clear because every DAW do this
+                                  },
+                                ),
+                                KarbeatContextAction(
+                                  title: "Cut",
+                                  onTap: () async {
+                                    if (widget.patternId == null) {
+                                      return;
+                                    }
+
+                                    await ref
+                                        .read(karbeatStateProvider)
+                                        .cutNotesFromPattern(
+                                          widget.patternId!,
+                                          selectedNoteIds.toList(),
+                                        );
                                   },
                                 ),
                               ],

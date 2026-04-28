@@ -1,12 +1,6 @@
 use crate::api::track::UiResizeEdge;
 use crate::api::{ pattern::UiNote, project::UiClip };
-use karbeat_core::api::{
-    self,
-    clip_api as clip_api,
-    clipboard_api,
-    note_api as note_api,
-    pattern_api,
-};
+use karbeat_core::api::{ self, clip_api as clip_api, clipboard_api, note_api as note_api };
 use karbeat_core::core::project::{ NoteId, PatternId };
 use karbeat_core::core::project::{ clipboard::ClipboardContent };
 
@@ -69,7 +63,7 @@ pub fn copy_pattern_notes(
     let pattern_id = PatternId::from(pattern_id);
     let note_ids: Vec<NoteId> = note_ids.into_iter().map(NoteId::from).collect();
 
-    pattern_api
+    clipboard_api
         ::copy_pattern_notes(pattern_id, note_ids, |clipboard| {
             UiClipboardContent::from(clipboard)
         })
@@ -78,17 +72,30 @@ pub fn copy_pattern_notes(
 
 /// Cut pattern notes: copies them to clipboard then deletes with history.
 pub fn cut_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
-    copy_pattern_notes(pattern_id, note_ids.clone())?;
-    delete_pattern_notes(pattern_id, note_ids)?;
+    clipboard_api
+        ::cut_notes(
+            pattern_id.into(),
+            note_ids
+                .into_iter()
+                .map(|note_id| note_id.into())
+                .collect()
+        )
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Paste: Reads clipboard, creates new notes, creates Batch Add action
-pub fn paste_pattern_notes(target_pattern_id: u32, playhead_tick: u64) -> Result<(), String> {
-    note_api
-        ::paste_notes(PatternId::from(target_pattern_id), playhead_tick)
+pub fn paste_pattern_notes(
+    target_pattern_id: u32,
+    playhead_tick: u64,
+    target_key: Option<u8>
+) -> Result<Vec<UiNote>, String> {
+    let notes = clipboard_api
+        ::paste_notes(PatternId::from(target_pattern_id), playhead_tick, target_key, |note|
+            UiNote::from(note)
+        )
         .map_err(|e| format!("{}", e))?;
-    Ok(())
+    Ok(notes)
 }
 
 /// Delete notes in group. useful for range and group deletion

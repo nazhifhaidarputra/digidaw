@@ -417,9 +417,10 @@ abstract class RustLibApi extends BaseApi {
     required int pasteStartTime,
   });
 
-  Future<void> crateApiSessionPastePatternNotes({
+  Future<List<UiNote>> crateApiSessionPastePatternNotes({
     required int targetPatternId,
     required int playheadTick,
+    int? targetKey,
   });
 
   Future<void> crateApiPatternPlayPatternPreview({
@@ -3340,9 +3341,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<void> crateApiSessionPastePatternNotes({
+  Future<List<UiNote>> crateApiSessionPastePatternNotes({
     required int targetPatternId,
     required int playheadTick,
+    int? targetKey,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -3350,6 +3352,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(targetPatternId, serializer);
           sse_encode_CastedPrimitive_u_64(playheadTick, serializer);
+          sse_encode_opt_box_autoadd_u_8(targetKey, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3358,11 +3361,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_list_ui_note,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSessionPastePatternNotesConstMeta,
-        argValues: [targetPatternId, playheadTick],
+        argValues: [targetPatternId, playheadTick, targetKey],
         apiImpl: this,
       ),
     );
@@ -3371,7 +3374,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiSessionPastePatternNotesConstMeta =>
       const TaskConstMeta(
         debugName: "paste_pattern_notes",
-        argNames: ["targetPatternId", "playheadTick"],
+        argNames: ["targetPatternId", "playheadTick", "targetKey"],
       );
 
   @override
@@ -5170,6 +5173,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_ui_effect_target(raw);
@@ -5510,6 +5519,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_8(raw);
   }
 
   @protected
@@ -6491,6 +6506,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_8(deserializer));
+  }
+
+  @protected
   UiEffectTarget sse_decode_box_autoadd_ui_effect_target(
     SseDeserializer deserializer,
   ) {
@@ -7043,6 +7064,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_8(deserializer));
     } else {
       return null;
     }
@@ -8126,6 +8158,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_ui_effect_target(
     UiEffectTarget self,
     SseSerializer serializer,
@@ -8641,6 +8679,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_8(self, serializer);
     }
   }
 

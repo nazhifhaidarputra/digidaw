@@ -7,6 +7,7 @@ import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -1867,8 +1868,94 @@ class KarbeatState extends ChangeNotifier {
   }
 
   void removeNotesFromSelection(Set<int> noteIds) {
-    _selectedNoteIds = _selectedNoteIds.where((id) => !noteIds.contains(id)).toSet();
+    _selectedNoteIds = _selectedNoteIds
+        .where((id) => !noteIds.contains(id))
+        .toSet();
     notifyListeners();
+  }
+
+  // ==============================================
+  // Session's clipboard API
+  // ==============================================
+
+  /// Copy notes from a pattern
+  Future<void> copyNotesFromPattern(int patternId, List<int> noteIds) async {
+    try {
+      session_api.copyPatternNotes(patternId: patternId, noteIds: noteIds);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      // rethrow;
+    }
+  }
+
+  Future<void> cutNotesFromPattern(int patternId, List<int> noteIds) async {
+    for (final noteId in noteIds) {
+      _applyOptimisticNoteDeletion(patternId, noteId);
+    }
+    
+    // Clear selection since the items are gone
+    _selectedNoteIds.clear();
+    notifyListeners();
+
+    // Perform Backend Call
+    try {
+      await session_api.cutPatternNotes(patternId: patternId, noteIds: noteIds);
+
+      notifyCustomBackendChange(() async {
+        await syncPattern(patternId);
+      });
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      // Re-sync on failure to restore accidentally "deleted" notes
+      await syncPattern(patternId);
+    }
+  }
+
+  Future<void> pasteNotesFromClipboardToPattern(
+    int targetPatternId,
+    int newTickStart,
+    int newKey,
+  ) async {
+    try {
+      // The API call returns the fully constructed list of notes
+      // (with their new IDs assigned by the backend)
+      final pastedNotes = await session_api.pastePatternNotes(
+        targetPatternId: targetPatternId,
+        playheadTick: newTickStart,
+        targetKey: newKey
+      );
+
+      if (pastedNotes.isEmpty) return;
+
+      // Optimistic Update: Append the newly pasted notes immediately
+      final pattern = _patterns[targetPatternId];
+      if (pattern != null) {
+        final updatedNotes = List<UiNote>.from(pattern.notes)..addAll(pastedNotes);
+        
+        final updatedPattern = UiPattern(
+          id: pattern.id,
+          name: pattern.name,
+          lengthTicks: pattern.lengthTicks, // Backend recalcs this, but frontend will catch up
+          notes: updatedNotes,
+        );
+
+        final newPatterns = Map<int, UiPattern>.from(_patterns);
+        newPatterns[targetPatternId] = updatedPattern;
+        _patterns = newPatterns;
+        
+        // Auto-select the newly pasted notes
+        _selectedNoteIds = pastedNotes.map((n) => n.id).toSet();
+        notifyListeners();
+      }
+
+      // Sync to get the authoritative length & sort order
+      notifyCustomBackendChange(() async {
+        await syncPattern(targetPatternId);
+      });
+      
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+    }
   }
 }
 

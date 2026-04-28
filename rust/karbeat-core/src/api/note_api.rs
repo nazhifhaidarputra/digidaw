@@ -1,9 +1,8 @@
 use crate::context::utils::broadcast_state_change;
 use crate::core::history::ProjectAction;
 use crate::shared::id::*;
-use crate::core::project::{ clipboard::ClipboardContent, Note, NoteId };
+use crate::core::project::{Note, NoteId };
 use crate::lock::{ get_app_write, get_history_lock };
-use std::sync::Arc;
 
 pub fn add_note(
     pattern_id: PatternId,
@@ -266,60 +265,4 @@ pub fn resize_notes_batch(
     }
 
     Ok(final_notes)
-}
-
-pub fn paste_notes(target_pattern_id: PatternId, playhead_tick: u64) -> anyhow::Result<()> {
-    let mut actions = Vec::new();
-
-    // 1. Mutate state
-    {
-        let mut app = get_app_write();
-
-        let notes_to_paste = match &app.clipboard {
-            ClipboardContent::Notes(notes) => notes.clone(),
-            _ => {
-                return Ok(());
-            }
-        };
-
-        if notes_to_paste.is_empty() {
-            return Ok(());
-        }
-
-        let min_tick = notes_to_paste
-            .iter()
-            .map(|n| n.start_tick)
-            .min()
-            .unwrap_or(0);
-        let offset = (playhead_tick as i64) - (min_tick as i64);
-
-        let pattern_arc = app.pattern_pool
-            .get_mut(&target_pattern_id)
-            .ok_or_else(|| anyhow::anyhow!("Pattern not found"))?;
-        let pattern = Arc::make_mut(pattern_arc);
-
-        for mut note in notes_to_paste {
-            let new_start = ((note.start_tick as i64) + offset).max(0) as u64;
-            note.start_tick = new_start;
-
-            if let Ok(inserted_note) = pattern.insert_note(note) {
-                actions.push(ProjectAction::AddNote {
-                    pattern_id: target_pattern_id,
-                    note: inserted_note,
-                });
-            }
-        }
-    }
-
-    // 2. Update history
-    if !actions.is_empty() {
-        let mut history = get_history_lock();
-        if actions.len() == 1 {
-            history.push(actions.remove(0));
-        } else {
-            history.push(ProjectAction::Batch(actions));
-        }
-    }
-    broadcast_state_change();
-    Ok(())
 }

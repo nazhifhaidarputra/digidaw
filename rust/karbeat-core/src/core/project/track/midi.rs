@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde::{ Deserialize, Serialize };
 
 use crate::core::project::ApplicationState;
+use crate::core::project::ClipboardContent;
 use crate::core::project::Note;
 use crate::core::project::NoteId;
 use crate::shared::id::PatternId;
@@ -631,5 +632,97 @@ impl ApplicationState {
         let pattern = Arc::make_mut(pattern_arc);
 
         pattern.resize_notes_batch(updates)
+    }
+
+    pub fn copy_pattern_notes_batch(
+        &mut self,
+        pattern_id: PatternId,
+        note_ids: &[NoteId],
+    ) -> anyhow::Result<()> {
+       let pattern = self.pattern_pool
+            .get(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
+
+        // Filter and clone the requested notes
+        let notes_to_copy: Vec<Note> = pattern.notes
+            .iter()
+            .filter(|n| note_ids.contains(&n.id))
+            .cloned()
+            .collect();
+
+        // Update the App's clipboard state
+        if !notes_to_copy.is_empty() {
+            self.clipboard = ClipboardContent::Notes(notes_to_copy);
+        } else {
+            self.clipboard = ClipboardContent::Empty;
+        }
+
+        Ok(())
+    }
+
+    pub fn paste_pattern_notes_batch(
+        &mut self,
+        target_pattern_id: &PatternId,
+        left_bound_tick: u64,
+        left_note_key: Option<u8>,
+    ) -> anyhow::Result<Vec<Note>>{
+        let pattern_arc  = self.pattern_pool
+            .get_mut(target_pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", target_pattern_id.to_u32()))?;
+
+        // Get clipboard
+
+        let clipboard = &self.clipboard;
+
+        // paste into the pattern
+        let ClipboardContent::Notes(notes_vec) = clipboard else {
+            return Ok(Vec::new());
+        };
+
+        if notes_vec.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        #[allow(clippy::unwrap_used)]
+        let earliest_note = notes_vec.iter().min_by_key(|n| n.start_tick).unwrap();
+
+        let min_tick = earliest_note.start_tick;
+        let tick_offset = (left_bound_tick as i64) - (min_tick as i64);
+
+        // If a target key is provided, calculate the pitch shift relative to the earliest note
+        let key_offset = if let Some(target_key) = left_note_key {
+            (target_key as i16) - (earliest_note.key as i16)
+        } else {
+            0
+        };
+        
+        let mut notes_to_insert = Vec::with_capacity(notes_vec.len());
+        for note in notes_vec {
+            let mut new_note = note.clone();
+            
+            // Apply bounds and clamps
+            new_note.start_tick = ((new_note.start_tick as i64) + tick_offset).max(0) as u64;
+            new_note.key = ((new_note.key as i16) + key_offset).clamp(0, 127) as u8;
+            
+            notes_to_insert.push(new_note);
+        }
+
+        let pattern_mut = Arc::make_mut(pattern_arc);
+        let inserted_notes = pattern_mut.insert_notes_batch(notes_to_insert)?;
+
+        Ok(inserted_notes)
+    }
+
+    pub fn cut_pattern_notes_batch(
+        &mut self,
+        pattern_id: PatternId,
+        note_ids: &[NoteId],
+    ) -> anyhow::Result<Vec<Note>> {
+        // Copy the targeted notes to the internal clipboard
+        self.copy_pattern_notes_batch(pattern_id, note_ids)?;
+
+        // Delete them from the pattern and return the deleted notes 
+        // (so the API wrapper can add them to the undo/redo history)
+        self.delete_notes_from_pattern_batch(pattern_id, note_ids)
     }
 }
