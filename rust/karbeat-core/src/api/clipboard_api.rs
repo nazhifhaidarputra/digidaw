@@ -1,8 +1,8 @@
 use crate::{
     context::utils::broadcast_state_change,
-    core::{ history::ProjectAction, project::{ ClipboardContent, Note } },
+    core::{ history::ProjectAction, project::{ Clip, ClipboardContent, Note, clip::ClipTimeUnit } },
     lock::{ get_app_read, get_app_write, get_history_lock },
-    shared::{ NoteId, PatternId },
+    shared::{ ClipId, NoteId, PatternId, TrackId },
 };
 
 pub fn get_clipboard_contents<T, F>(mapper: F) -> T where F: FnOnce(&ClipboardContent) -> T {
@@ -98,4 +98,80 @@ pub fn cut_notes(
     // 3. Notify UI
     broadcast_state_change();
     Ok(())
+}
+
+pub fn copy_clips(source_track_id: TrackId, clip_ids: &[ClipId]) {
+    if clip_ids.is_empty() {
+        return;
+    }
+
+    {
+        let mut app = get_app_write();
+        let _ = app.copy_clip_batch(source_track_id, clip_ids);
+    }
+}
+
+pub fn cut_clips(source_track_id: TrackId, clip_ids: Vec<ClipId>)  {
+    if clip_ids.is_empty() {
+        return;
+    }
+
+    // 1. Mutate state
+    let deleted_clips = {
+        let mut app = get_app_write();
+        app.cut_clipboard_clip_batch(source_track_id, &clip_ids)
+    };
+
+    if deleted_clips.is_empty() {
+        return;
+    }
+
+    // 2. Update history
+    let mut actions = Vec::with_capacity(deleted_clips.len());
+    for clip in deleted_clips {
+        actions.push(ProjectAction::DeleteClip {
+            track_id: source_track_id,
+            clip,
+        });
+    }
+
+    let mut history = get_history_lock();
+    if actions.len() == 1 {
+        history.push(actions.remove(0));
+    } else {
+        history.push(ProjectAction::Batch(actions));
+    }
+
+    broadcast_state_change();
+}
+
+pub fn paste_clips(target_track_id: TrackId, paste_start_time: ClipTimeUnit) -> anyhow::Result<Vec<Clip>> {
+    // Mutate state
+    let pasted_clips = {
+        let mut app = get_app_write();
+        app.paste_clip_batch(target_track_id, paste_start_time)?
+    };
+
+    if pasted_clips.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 2. Update history
+    let mut actions = Vec::with_capacity(pasted_clips.len());
+    for clip in pasted_clips.clone() {
+        actions.push(ProjectAction::AddClip {
+            track_id: target_track_id,
+            clip,
+        });
+    }
+
+    let mut history = get_history_lock();
+    if actions.len() == 1 {
+        history.push(actions.remove(0));
+    } else {
+        history.push(ProjectAction::Batch(actions));
+    }
+
+    broadcast_state_change();
+    Ok(pasted_clips)
 }

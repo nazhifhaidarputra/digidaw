@@ -348,10 +348,10 @@ class DefaultControlPanel extends ConsumerWidget {
             ),
           ),
           PopupMenuItem(
-            value: ToolSelection.cut,
+            value: ToolSelection.slice,
             child: ListTile(
               leading: Icon(Icons.content_cut, color: Colors.blueAccent),
-              title: Text("Cut", style: TextStyle(color: Colors.white)),
+              title: Text("Slice", style: TextStyle(color: Colors.white)),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -437,7 +437,7 @@ class DefaultControlPanel extends ConsumerWidget {
     switch (tool) {
       case ToolSelection.pointer:
         return "Pointer";
-      case ToolSelection.cut:
+      case ToolSelection.slice:
         return "Cut";
       case ToolSelection.draw:
         return "Draw";
@@ -458,7 +458,7 @@ class DefaultControlPanel extends ConsumerWidget {
     switch (tool) {
       case ToolSelection.pointer:
         return Icons.near_me;
-      case ToolSelection.cut:
+      case ToolSelection.slice:
         return Icons.content_cut;
       case ToolSelection.draw:
         return Icons.edit;

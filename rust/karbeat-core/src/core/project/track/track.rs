@@ -197,7 +197,7 @@ impl KarbeatTrack {
             .unwrap_or(0);
     }
 
-    pub fn cut_clip(
+    pub fn slice_clip(
         &mut self,
         clip_id: &ClipId,
         cut_point: u64,

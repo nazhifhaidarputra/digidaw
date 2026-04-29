@@ -153,11 +153,11 @@ pub fn move_clip(
 /// - source_track_id: Track where clip resides
 /// - clip_id: The cut clip id inside the track
 /// - cut_point_sample: Absolute sample point of cut location
-pub fn cut_clip(source_track_id: u32, clip_id: u32, cut_point: u64) -> Result<Vec<UiClip>, String> {
+pub fn slice_clip(source_track_id: u32, clip_id: u32, cut_point: u64) -> Result<Vec<UiClip>, String> {
     let source_track_id_typed = TrackId::from(source_track_id);
     let clip_id_typed = ClipId::from(clip_id);
 
-    let (c1, c2) = clip_api::cut_clip(source_track_id_typed, clip_id_typed, cut_point)
+    let (c1, c2) = clip_api::slice_clip(source_track_id_typed, clip_id_typed, cut_point)
         .map_err(|e| format!("{}", e))?;
 
     Ok(vec![UiClip::from(&c1), UiClip::from(&c2)])

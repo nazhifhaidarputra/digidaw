@@ -27,7 +27,7 @@ final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
   return KarbeatState();
 });
 
-enum ToolSelection { pointer, cut, draw, move, delete, zoom, select, resize }
+enum ToolSelection { pointer, slice, draw, move, delete, zoom, select, resize }
 
 /// Piano roll specific tool selection (independent from main toolbar)
 enum PianoRollToolSelection { grab, draw, delete, select, slice, pan, zoom }
@@ -930,9 +930,9 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> cutClip(int trackId, int clipId, int cutPoint) async {
+  Future<Result<void>> sliceClip(int trackId, int clipId, int cutPoint) async {
     try {
-      await track_api.cutClip(
+      await track_api.sliceClip(
         sourceTrackId: trackId,
         clipId: clipId,
         cutPoint: cutPoint,
@@ -1892,7 +1892,7 @@ class KarbeatState extends ChangeNotifier {
     for (final noteId in noteIds) {
       _applyOptimisticNoteDeletion(patternId, noteId);
     }
-    
+
     // Clear selection since the items are gone
     _selectedNoteIds.clear();
     notifyListeners();
@@ -1922,7 +1922,7 @@ class KarbeatState extends ChangeNotifier {
       final pastedNotes = await session_api.pastePatternNotes(
         targetPatternId: targetPatternId,
         playheadTick: newTickStart,
-        targetKey: newKey
+        targetKey: newKey,
       );
 
       if (pastedNotes.isEmpty) return;
@@ -1930,19 +1930,21 @@ class KarbeatState extends ChangeNotifier {
       // Optimistic Update: Append the newly pasted notes immediately
       final pattern = _patterns[targetPatternId];
       if (pattern != null) {
-        final updatedNotes = List<UiNote>.from(pattern.notes)..addAll(pastedNotes);
-        
+        final updatedNotes = List<UiNote>.from(pattern.notes)
+          ..addAll(pastedNotes);
+
         final updatedPattern = UiPattern(
           id: pattern.id,
           name: pattern.name,
-          lengthTicks: pattern.lengthTicks, // Backend recalcs this, but frontend will catch up
+          lengthTicks: pattern
+              .lengthTicks, // Backend recalcs this, but frontend will catch up
           notes: updatedNotes,
         );
 
         final newPatterns = Map<int, UiPattern>.from(_patterns);
         newPatterns[targetPatternId] = updatedPattern;
         _patterns = newPatterns;
-        
+
         // Auto-select the newly pasted notes
         _selectedNoteIds = pastedNotes.map((n) => n.id).toSet();
         notifyListeners();
@@ -1952,9 +1954,109 @@ class KarbeatState extends ChangeNotifier {
       notifyCustomBackendChange(() async {
         await syncPattern(targetPatternId);
       });
-      
     } catch (e) {
       KarbeatLogger.error(e.toString());
+    }
+  }
+
+  // ======================================
+  // Clip's clipboard action API
+  // ======================================
+
+  Future<Result<void>> copySelectedClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.copyClips(trackId: trackId, clipIds: clipIds);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> cutSelectedClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.cutClips(trackId: trackId, clipIds: clipIds);
+
+      // Do optimistic update
+      if (_tracks.containsKey(trackId)) {
+        final track = _tracks[trackId]!;
+        final clipIdSet = clipIds.toSet();
+
+        // Filter out the cut clips
+        final updatedClips = track.clips
+            .where((c) => !clipIdSet.contains(c.id))
+            .toList();
+
+        // Update the tracks map
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+
+        // Clear selection since these clips are no longer on the timeline
+        _selectedClipIds = [];
+        if (_selectedTrackId == trackId) {
+          _selectedTrackId = null;
+          _focusClipId = null;
+        }
+
+        notifyListeners();
+      }
+
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> pasteClips({
+    required int targetTrackId,
+    required int pasteStartTime,
+    required UiTrackType trackType,
+  }) async {
+    try {
+      final clips = await session_api.pasteClips(
+        targetTrackId: targetTrackId,
+        pasteStartTime: pasteStartTime,
+        trackType: trackType,
+      );
+
+      debugPrint(clips.length.toString());
+      if (clips.isEmpty) return Result.ok(null);
+
+      // SUCCESS: Update frontend immediately
+      if (_tracks.containsKey(targetTrackId)) {
+        final track = _tracks[targetTrackId]!;
+
+        // Append the newly pasted clips from the backend
+        final updatedClips = List<UiClip>.from(track.clips)..addAll(clips);
+
+        // Update the tracks map
+        _tracks = Map.from(_tracks);
+        _tracks[targetTrackId] = _copyWithTrack(track, clips: updatedClips);
+
+        // Automatically select the pasted clips so the user can easily drag them
+        _selectedTrackId = targetTrackId;
+        _selectedClipIds = clips.map((c) => c.id).toList();
+        _focusClipId = clips.last.id;
+
+        notifyListeners();
+      }
+
+      // Trigger a background sync to ensure perfect consistency (recalculating lengths, etc)
+      notifyCustomBackendChange(() async {
+        await syncTrack(targetTrackId);
+      });
+
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      return Result.error(Exception("$e"));
     }
   }
 }

@@ -671,7 +671,6 @@ impl ApplicationState {
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", target_pattern_id.to_u32()))?;
 
         // Get clipboard
-
         let clipboard = &self.clipboard;
 
         // paste into the pattern

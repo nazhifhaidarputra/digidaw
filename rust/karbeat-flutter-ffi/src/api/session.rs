@@ -1,8 +1,10 @@
+use crate::api::project::UiTrackType;
 use crate::api::track::UiResizeEdge;
-use crate::api::{ pattern::UiNote, project::UiClip };
-use karbeat_core::api::{ self, clip_api as clip_api, clipboard_api, note_api as note_api };
-use karbeat_core::core::project::{ NoteId, PatternId };
-use karbeat_core::core::project::{ clipboard::ClipboardContent };
+use crate::api::{pattern::UiNote, project::UiClip};
+use karbeat_core::api::{self, clip_api, clipboard_api, note_api};
+use karbeat_core::core::project::clip::ClipTimeUnit;
+use karbeat_core::core::project::clipboard::ClipboardContent;
+use karbeat_core::core::project::{NoteId, PatternId};
 
 use karbeat_core::shared::id::*;
 
@@ -58,29 +60,24 @@ pub fn redo() -> Result<(), String> {
 /// Copy selected pattern notes to the clipboard.
 pub fn copy_pattern_notes(
     pattern_id: u32,
-    note_ids: Vec<u32>
+    note_ids: Vec<u32>,
 ) -> Result<UiClipboardContent, String> {
     let pattern_id = PatternId::from(pattern_id);
     let note_ids: Vec<NoteId> = note_ids.into_iter().map(NoteId::from).collect();
 
-    clipboard_api
-        ::copy_pattern_notes(pattern_id, note_ids, |clipboard| {
-            UiClipboardContent::from(clipboard)
-        })
-        .map_err(|e| e.to_string())
+    clipboard_api::copy_pattern_notes(pattern_id, note_ids, |clipboard| {
+        UiClipboardContent::from(clipboard)
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Cut pattern notes: copies them to clipboard then deletes with history.
 pub fn cut_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
-    clipboard_api
-        ::cut_notes(
-            pattern_id.into(),
-            note_ids
-                .into_iter()
-                .map(|note_id| note_id.into())
-                .collect()
-        )
-        .map_err(|e| e.to_string())?;
+    clipboard_api::cut_notes(
+        pattern_id.into(),
+        note_ids.into_iter().map(|note_id| note_id.into()).collect(),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -88,13 +85,15 @@ pub fn cut_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), Stri
 pub fn paste_pattern_notes(
     target_pattern_id: u32,
     playhead_tick: u64,
-    target_key: Option<u8>
+    target_key: Option<u8>,
 ) -> Result<Vec<UiNote>, String> {
-    let notes = clipboard_api
-        ::paste_notes(PatternId::from(target_pattern_id), playhead_tick, target_key, |note|
-            UiNote::from(note)
-        )
-        .map_err(|e| format!("{}", e))?;
+    let notes = clipboard_api::paste_notes(
+        PatternId::from(target_pattern_id),
+        playhead_tick,
+        target_key,
+        |note| UiNote::from(note),
+    )
+    .map_err(|e| format!("{}", e))?;
     Ok(notes)
 }
 
@@ -104,8 +103,7 @@ pub fn delete_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), S
         .into_iter()
         .map(karbeat_core::core::project::NoteId::from)
         .collect();
-    note_api
-        ::delete_notes_batch(PatternId::from(pattern_id), note_ids_typed)
+    note_api::delete_notes_batch(PatternId::from(pattern_id), note_ids_typed)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())
@@ -117,41 +115,55 @@ pub fn delete_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), S
 
 /// Copy selected clips to the clipboard.
 /// Each (track_id, clip_id) pair identifies a clip to copy.
-pub fn copy_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<UiClipboardContent, String> {
+pub fn copy_clips(track_id: u32, clip_ids: Vec<u32>) {
     let track_id = TrackId::from(track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
 
-    clip_api
-        ::copy_clips(track_id, clip_ids, |clipboard| { UiClipboardContent::from(clipboard) })
-        .map_err(|e| e.to_string())
+    clipboard_api::copy_clips(track_id, &clip_ids)
 }
 
 /// Cut selected clips: copies them to clipboard then deletes with history.
 pub fn cut_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
-    // First copy to clipboard
-    copy_clips(track_id, clip_ids.clone())?;
-
-    // Then delete with history
-    delete_clips(track_id, clip_ids)?;
+    let clip_ids_typed = clip_ids.into_iter().map(|c| c.into()).collect();
+    clipboard_api::cut_clips(track_id.into(), clip_ids_typed);
 
     Ok(())
 }
 
 /// Paste clips from clipboard to a target track at a specified start time.
 /// Clips are offset relative to the earliest clip's start time.
-pub fn paste_clips(target_track_id: u32, paste_start_time: u32) -> Result<(), String> {
-    clip_api
-        ::paste_clips(TrackId::from(target_track_id), paste_start_time)
-        .map_err(|e| format!("{}", e))?;
+pub fn paste_clips(
+    target_track_id: u32,
+    paste_start_time: u32,
+    track_type: UiTrackType,
+) -> Result<Vec<UiClip>, String> {
+    let clip_time_unit = match track_type {
+        UiTrackType::Audio => ClipTimeUnit::Samples {
+            start_time: paste_start_time as u64,
+            loop_length: 0,
+            offset_start: 0,
+        },
+        UiTrackType::Midi => ClipTimeUnit::Ticks {
+            start_time: paste_start_time,
+            loop_length: 0,
+            offset_start: 0,
+        },
+        UiTrackType::Automation => ClipTimeUnit::Ticks {
+            start_time: paste_start_time,
+            loop_length: 0,
+            offset_start: 0,
+        },
+    };
+    let pasted_clips = clipboard_api::paste_clips(TrackId::from(target_track_id), clip_time_unit)
+        .map_err(|e| e.to_string())?;
 
-    Ok(())
+    Ok(pasted_clips.iter().map(UiClip::from).collect())
 }
 
 /// Delete specified clips from a track with history support.
 pub fn delete_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
     let clip_ids_typed = clip_ids.into_iter().map(ClipId::from).collect();
-    clip_api
-        ::batch_delete_clips(TrackId::from(track_id), clip_ids_typed)
+    clip_api::batch_delete_clips(TrackId::from(track_id), clip_ids_typed)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())
@@ -162,16 +174,15 @@ pub fn move_clip(
     old_track_id: u32,
     new_track_id: u32,
     clip_id: u32,
-    new_start_time: u64
+    new_start_time: u64,
 ) -> Result<(), String> {
-    clip_api
-        ::move_clip(
-            TrackId::from(old_track_id),
-            TrackId::from(new_track_id),
-            ClipId::from(clip_id),
-            new_start_time
-        )
-        .map_err(|e| format!("{}", e))?;
+    clip_api::move_clip(
+        TrackId::from(old_track_id),
+        TrackId::from(new_track_id),
+        ClipId::from(clip_id),
+        new_start_time,
+    )
+    .map_err(|e| format!("{}", e))?;
 
     Ok(())
 }
@@ -182,11 +193,15 @@ pub fn resize_clip(
     track_id: u32,
     clip_id: u32,
     edge: UiResizeEdge,
-    new_time_val: u64
+    new_time_val: u64,
 ) -> Result<(), String> {
-    clip_api
-        ::resize_clip(TrackId::from(track_id), ClipId::from(clip_id), edge.into(), new_time_val)
-        .map_err(|e| format!("{}", e))?;
+    clip_api::resize_clip(
+        TrackId::from(track_id),
+        ClipId::from(clip_id),
+        edge.into(),
+        new_time_val,
+    )
+    .map_err(|e| format!("{}", e))?;
 
     Ok(())
 }
@@ -196,7 +211,5 @@ pub fn resize_clip(
 // ==================================
 
 pub fn get_clipboard_contents() -> UiClipboardContent {
-    clipboard_api::get_clipboard_contents(|clipboard_ref| {
-        UiClipboardContent::from(clipboard_ref)
-    })
+    clipboard_api::get_clipboard_contents(|clipboard_ref| UiClipboardContent::from(clipboard_ref))
 }

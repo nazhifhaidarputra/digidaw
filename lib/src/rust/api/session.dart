@@ -59,13 +59,11 @@ Future<void> deletePatternNotes({
 
 /// Copy selected clips to the clipboard.
 /// Each (track_id, clip_id) pair identifies a clip to copy.
-Future<UiClipboardContent> copyClips({
-  required int trackId,
-  required List<int> clipIds,
-}) => RustLib.instance.api.crateApiSessionCopyClips(
-  trackId: trackId,
-  clipIds: clipIds,
-);
+Future<void> copyClips({required int trackId, required List<int> clipIds}) =>
+    RustLib.instance.api.crateApiSessionCopyClips(
+      trackId: trackId,
+      clipIds: clipIds,
+    );
 
 /// Cut selected clips: copies them to clipboard then deletes with history.
 Future<void> cutClips({required int trackId, required List<int> clipIds}) =>
@@ -76,12 +74,14 @@ Future<void> cutClips({required int trackId, required List<int> clipIds}) =>
 
 /// Paste clips from clipboard to a target track at a specified start time.
 /// Clips are offset relative to the earliest clip's start time.
-Future<void> pasteClips({
+Future<List<UiClip>> pasteClips({
   required int targetTrackId,
   required int pasteStartTime,
+  required UiTrackType trackType,
 }) => RustLib.instance.api.crateApiSessionPasteClips(
   targetTrackId: targetTrackId,
   pasteStartTime: pasteStartTime,
+  trackType: trackType,
 );
 
 /// Delete specified clips from a track with history support.

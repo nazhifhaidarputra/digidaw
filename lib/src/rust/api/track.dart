@@ -81,11 +81,11 @@ Future<UiClip> moveClip({
 /// - source_track_id: Track where clip resides
 /// - clip_id: The cut clip id inside the track
 /// - cut_point_sample: Absolute sample point of cut location
-Future<List<UiClip>> cutClip({
+Future<List<UiClip>> sliceClip({
   required int sourceTrackId,
   required int clipId,
   required int cutPoint,
-}) => RustLib.instance.api.crateApiTrackCutClip(
+}) => RustLib.instance.api.crateApiTrackSliceClip(
   sourceTrackId: sourceTrackId,
   clipId: clipId,
   cutPoint: cutPoint,
