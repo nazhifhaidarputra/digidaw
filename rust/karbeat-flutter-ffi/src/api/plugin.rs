@@ -35,6 +35,7 @@ impl From<ParameterValueType> for UiParameterType {
 #[derive(Clone, Debug)]
 pub struct UiPluginParameter {
     pub id: u32,
+    pub path: String,
     pub name: String,
     pub group: String,
     pub value: f32,
@@ -44,6 +45,22 @@ pub struct UiPluginParameter {
     pub step: f32,
     pub param_type: UiParameterType,
     pub choices: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub enum UiParamId {
+    Id(u32),
+    Path(String),
+}
+
+impl UiParamId {
+    /// Resolves the FRB enum into the raw u32 hash expected by the audio thread
+    pub fn resolve(self) -> u32 {
+        match self {
+            UiParamId::Id(id) => id,
+            UiParamId::Path(path) => karbeat_utils::hash::hash_str(&path),
+        }
+    }
 }
 
 // ============================================================================
@@ -139,6 +156,7 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
     let gen_id = GeneratorId::from(generator_id);
     plugin_api::get_generator_parameter_specs(&gen_id, |p, value| UiPluginParameter {
         id: p.id,
+        path: p.path,
         name: p.name,
         group: p.group,
         value,
@@ -152,15 +170,15 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
 }
 
 /// Set a parameter on a generator plugin.
-pub fn set_generator_parameter(generator_id: u32, param_id: u32, value: f32) -> Result<(), String> {
+pub fn set_generator_parameter(generator_id: u32, param_id: UiParamId, value: f32) -> Result<(), String> {
     let gen_id = GeneratorId::from(generator_id);
-    plugin_api::set_generator_parameter(&gen_id, param_id, value)
+    plugin_api::set_generator_parameter(&gen_id, param_id.resolve(), value)
 }
 
 /// Get a parameter value from a generator plugin.
-pub fn get_generator_parameter(generator_id: u32, param_id: u32) -> Result<f32, String> {
+pub fn get_generator_parameter(generator_id: u32, param_id: UiParamId) -> Result<f32, String> {
     let gen_id = GeneratorId::from(generator_id);
-    plugin_api::get_generator_parameter(&gen_id, param_id)
+    plugin_api::get_generator_parameter(&gen_id, param_id.resolve())
 }
 
 // ============================================================================
@@ -289,6 +307,7 @@ pub fn get_effect_parameter_specs(
     plugin_api::get_effect_parameter_specs(&effect_target, &effect_id_typed, |p, value| {
         UiPluginParameter {
             id: p.id,
+            path: p.path,
             name: p.name,
             group: p.group,
             value,
@@ -305,12 +324,12 @@ pub fn get_effect_parameter_specs(
 pub fn set_effect_parameter(
     target: UiEffectTarget,
     effect_id: u32,
-    param_id: u32,
+    param_id: UiParamId,
     value: f32
 ) -> Result<(), String> {
     let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
-    plugin_api::set_effect_parameter(&effect_target, &effect_id_typed, param_id, value)
+    plugin_api::set_effect_parameter(&effect_target, &effect_id_typed, param_id.resolve(), value)
 }
 
 pub fn query_effect_parameters(target: UiEffectTarget, effect_id: u32) -> Result<(), String> {

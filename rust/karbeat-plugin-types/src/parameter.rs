@@ -14,6 +14,7 @@ pub enum ParameterValueType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ParameterSpec {
     pub id: u32,
+    pub path: String,
     pub name: String,
     pub group: String, // e.g., "Oscillator 1", "Master"
     pub value: f32, // Current value
@@ -39,6 +40,7 @@ impl ParameterSpec {
     ) -> Self {
         Self {
             id,
+            path: String::new(),
             name: name.to_string(),
             group: group.to_string(),
             value: val,
@@ -55,6 +57,7 @@ impl ParameterSpec {
     pub fn new_bool(id: u32, name: &str, group: &str, val: bool, default: bool) -> Self {
         Self {
             id,
+            path: String::new(),
             name: name.to_string(),
             group: group.to_string(),
             value: if val {
@@ -86,6 +89,7 @@ impl ParameterSpec {
     ) -> Self {
         Self {
             id,
+            path: String::new(),
             name: name.to_string(),
             group: group.to_string(),
             value: val as f32,
@@ -263,6 +267,7 @@ impl<T: ParamType> Param<T> {
     pub fn to_spec(&self) -> ParameterSpec {
         ParameterSpec {
             id: self.id,
+            path: String::new(),
             name: self.name.to_string(),
             group: self.group.to_string(),
             value: self.get_base().to_f32(),
@@ -406,9 +411,9 @@ impl<T: EnumParam> Param<T> {
 
 /// Traits that implements the automatic parameters getter, setter, specs, and automation
 pub trait AutoParams {
-    fn auto_get_parameter(&self, id: u32) -> Option<f32>;
-    fn auto_set_parameter(&mut self, id: u32, value: f32);
-    fn auto_apply_automation(&mut self, id: u32, value: f32);
-    fn auto_clear_automation(&mut self, id: u32);
-    fn auto_get_parameter_specs(&self) -> Vec<ParameterSpec>;
+    fn auto_set_parameter(&mut self, prefix_hash: u32, id: u32, value: f32) -> bool;
+    fn auto_get_parameter(&self, prefix_hash: u32, id: u32) -> Option<f32>;
+    fn auto_apply_automation(&mut self, prefix_hash: u32, id: u32, value: f32) -> bool;
+    fn auto_clear_automation(&mut self, prefix_hash: u32, id: u32) -> bool;
+    fn auto_get_parameter_specs(&self, prefix_hash: u32, prefix_str: &str) -> Vec<ParameterSpec>;
 }

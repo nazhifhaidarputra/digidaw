@@ -9,3 +9,4 @@ pub use crate::oscillator::*;
 pub use crate::pitch_shift::*;
 pub use crate::reverb::*;
 pub use crate::stretcher::*;
+pub use crate::voice::*;

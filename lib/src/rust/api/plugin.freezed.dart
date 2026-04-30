@@ -341,4 +341,296 @@ as int,
 
 }
 
+/// @nodoc
+mixin _$UiParamId {
+
+ Object get field0;
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiParamId&&const DeepCollectionEquality().equals(other.field0, field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(field0));
+
+@override
+String toString() {
+  return 'UiParamId(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+class $UiParamIdCopyWith<$Res>  {
+$UiParamIdCopyWith(UiParamId _, $Res Function(UiParamId) __);
+}
+
+
+/// Adds pattern-matching-related methods to [UiParamId].
+extension UiParamIdPatterns on UiParamId {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiParamId_Id value)?  id,TResult Function( UiParamId_Path value)?  path,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case UiParamId_Id() when id != null:
+return id(_that);case UiParamId_Path() when path != null:
+return path(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiParamId_Id value)  id,required TResult Function( UiParamId_Path value)  path,}){
+final _that = this;
+switch (_that) {
+case UiParamId_Id():
+return id(_that);case UiParamId_Path():
+return path(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiParamId_Id value)?  id,TResult? Function( UiParamId_Path value)?  path,}){
+final _that = this;
+switch (_that) {
+case UiParamId_Id() when id != null:
+return id(_that);case UiParamId_Path() when path != null:
+return path(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int field0)?  id,TResult Function( String field0)?  path,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case UiParamId_Id() when id != null:
+return id(_that.field0);case UiParamId_Path() when path != null:
+return path(_that.field0);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int field0)  id,required TResult Function( String field0)  path,}) {final _that = this;
+switch (_that) {
+case UiParamId_Id():
+return id(_that.field0);case UiParamId_Path():
+return path(_that.field0);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int field0)?  id,TResult? Function( String field0)?  path,}) {final _that = this;
+switch (_that) {
+case UiParamId_Id() when id != null:
+return id(_that.field0);case UiParamId_Path() when path != null:
+return path(_that.field0);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class UiParamId_Id extends UiParamId {
+  const UiParamId_Id(this.field0): super._();
+  
+
+@override final  int field0;
+
+/// Create a copy of UiParamId
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiParamId_IdCopyWith<UiParamId_Id> get copyWith => _$UiParamId_IdCopyWithImpl<UiParamId_Id>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiParamId_Id&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiParamId.id(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiParamId_IdCopyWith<$Res> implements $UiParamIdCopyWith<$Res> {
+  factory $UiParamId_IdCopyWith(UiParamId_Id value, $Res Function(UiParamId_Id) _then) = _$UiParamId_IdCopyWithImpl;
+@useResult
+$Res call({
+ int field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiParamId_IdCopyWithImpl<$Res>
+    implements $UiParamId_IdCopyWith<$Res> {
+  _$UiParamId_IdCopyWithImpl(this._self, this._then);
+
+  final UiParamId_Id _self;
+  final $Res Function(UiParamId_Id) _then;
+
+/// Create a copy of UiParamId
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiParamId_Id(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiParamId_Path extends UiParamId {
+  const UiParamId_Path(this.field0): super._();
+  
+
+@override final  String field0;
+
+/// Create a copy of UiParamId
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiParamId_PathCopyWith<UiParamId_Path> get copyWith => _$UiParamId_PathCopyWithImpl<UiParamId_Path>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiParamId_Path&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiParamId.path(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiParamId_PathCopyWith<$Res> implements $UiParamIdCopyWith<$Res> {
+  factory $UiParamId_PathCopyWith(UiParamId_Path value, $Res Function(UiParamId_Path) _then) = _$UiParamId_PathCopyWithImpl;
+@useResult
+$Res call({
+ String field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiParamId_PathCopyWithImpl<$Res>
+    implements $UiParamId_PathCopyWith<$Res> {
+  _$UiParamId_PathCopyWithImpl(this._self, this._then);
+
+  final UiParamId_Path _self;
+  final $Res Function(UiParamId_Path) _then;
+
+/// Create a copy of UiParamId
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiParamId_Path(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
 // dart format on

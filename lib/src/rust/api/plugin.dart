@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
 /// Get all available generators with their registry IDs (preferred for UI)
@@ -52,7 +52,7 @@ Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
 /// Set a parameter on a generator plugin.
 Future<void> setGeneratorParameter({
   required int generatorId,
-  required int paramId,
+  required UiParamId paramId,
   required double value,
 }) => RustLib.instance.api.crateApiPluginSetGeneratorParameter(
   generatorId: generatorId,
@@ -63,7 +63,7 @@ Future<void> setGeneratorParameter({
 /// Get a parameter value from a generator plugin.
 Future<double> getGeneratorParameter({
   required int generatorId,
-  required int paramId,
+  required UiParamId paramId,
 }) => RustLib.instance.api.crateApiPluginGetGeneratorParameter(
   generatorId: generatorId,
   paramId: paramId,
@@ -106,7 +106,7 @@ Future<List<UiPluginParameter>> getEffectParameterSpecs({
 Future<void> setEffectParameter({
   required UiEffectTarget target,
   required int effectId,
-  required int paramId,
+  required UiParamId paramId,
   required double value,
 }) => RustLib.instance.api.crateApiPluginSetEffectParameter(
   target: target,
@@ -222,6 +222,18 @@ class UiGeneratorParameterSnapshot {
           parameters == other.parameters;
 }
 
+@freezed
+sealed class UiParamId with _$UiParamId {
+  const UiParamId._();
+
+  const factory UiParamId.id(int field0) = UiParamId_Id;
+  const factory UiParamId.path(String field0) = UiParamId_Path;
+
+  /// Resolves the FRB enum into the raw u32 hash expected by the audio thread
+  Future<int> resolve() =>
+      RustLib.instance.api.crateApiPluginUiParamIdResolve(that: this);
+}
+
 /// Parameter type enum for FRB
 enum UiParameterType { float, int, bool, choice }
 
@@ -271,6 +283,7 @@ class UiPluginInfo {
 /// Plugin parameter description for UI generation
 class UiPluginParameter {
   final int id;
+  final String path;
   final String name;
   final String group;
   final double value;
@@ -283,6 +296,7 @@ class UiPluginParameter {
 
   const UiPluginParameter({
     required this.id,
+    required this.path,
     required this.name,
     required this.group,
     required this.value,
@@ -297,6 +311,7 @@ class UiPluginParameter {
   @override
   int get hashCode =>
       id.hashCode ^
+      path.hashCode ^
       name.hashCode ^
       group.hashCode ^
       value.hashCode ^
@@ -313,6 +328,7 @@ class UiPluginParameter {
       other is UiPluginParameter &&
           runtimeType == other.runtimeType &&
           id == other.id &&
+          path == other.path &&
           name == other.name &&
           group == other.group &&
           value == other.value &&

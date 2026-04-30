@@ -128,6 +128,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
   @protected
+  UiParamId dco_decode_box_autoadd_ui_param_id(dynamic raw);
+
+  @protected
   UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw);
 
   @protected
@@ -421,6 +424,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiNote dco_decode_ui_note(dynamic raw);
 
   @protected
+  UiParamId dco_decode_ui_param_id(dynamic raw);
+
+  @protected
   UiParameterType dco_decode_ui_parameter_type(dynamic raw);
 
   @protected
@@ -596,6 +602,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiParamId sse_decode_box_autoadd_ui_param_id(SseDeserializer deserializer);
 
   @protected
   UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(
@@ -959,6 +968,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiNote sse_decode_ui_note(SseDeserializer deserializer);
 
   @protected
+  UiParamId sse_decode_ui_param_id(SseDeserializer deserializer);
+
+  @protected
   UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
 
   @protected
@@ -1166,6 +1178,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_mixer_channel(
     UiMixerChannel self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_param_id(
+    UiParamId self,
     SseSerializer serializer,
   );
 
@@ -1604,6 +1622,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_note(UiNote self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_param_id(UiParamId self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_parameter_type(

@@ -16,6 +16,34 @@ use crate::{
 
 use std::sync::Arc;
 
+// ============================================================================
+// PARAMETER ID RESOLVER
+// ============================================================================
+
+/// Helper trait to allow the API to accept either raw u32 hashes or UI string paths.
+pub trait IntoParamId {
+    fn into_id(self) -> u32;
+}
+
+impl IntoParamId for u32 {
+    #[inline(always)]
+    fn into_id(self) -> u32 {
+        self
+    }
+}
+
+impl IntoParamId for &str {
+    fn into_id(self) -> u32 {
+        karbeat_utils::hash::hash_str(self)
+    }
+}
+
+impl IntoParamId for String {
+    fn into_id(self) -> u32 {
+        karbeat_utils::hash::hash_str(&self)
+    }
+}
+
 pub fn get_available_generators<C, U, M>(mapper: M) -> C
 where
     M: Fn(&PluginInfo) -> U,
@@ -248,9 +276,10 @@ where
 
 pub fn set_generator_parameter(
     generator_id: &GeneratorId,
-    param_id: u32,
+    param_id: impl IntoParamId,
     value: f32,
 ) -> Result<(), String> {
+    let param_id = param_id.into_id();
     if let Some(sender) = ctx().command_sender.lock().as_mut() {
         let _ = sender.push(AudioCommand::SetGeneratorParameter {
             generator_id: *generator_id,
@@ -273,7 +302,8 @@ pub fn set_generator_parameter(
     Ok(())
 }
 
-pub fn get_generator_parameter(generator_id: &GeneratorId, param_id: u32) -> Result<f32, String> {
+pub fn get_generator_parameter(generator_id: &GeneratorId, param_id: impl IntoParamId) -> Result<f32, String> {
+    let param_id = param_id.into_id();
     let app = get_app_read();
 
     let generator_arc = app
@@ -297,9 +327,10 @@ pub fn get_generator_parameter(generator_id: &GeneratorId, param_id: u32) -> Res
 pub fn set_effect_parameter(
     target: &EffectTarget,
     effect_id: &EffectId,
-    param_id: u32,
+    param_id: impl IntoParamId,
     value: f32,
 ) -> Result<(), String> {
+    let param_id = param_id.into_id();
     if let Some(sender) = ctx().command_sender.lock().as_mut() {
         match target {
             EffectTarget::Track(track_id) => {
@@ -368,6 +399,7 @@ pub fn set_effect_parameter(
     crate::context::utils::broadcast_state_change();
     Ok(())
 }
+
 
 pub fn query_generator_parameters(generator_id: &GeneratorId) -> Result<(), String> {
     if let Some(sender) = ctx().command_sender.lock().as_mut() {

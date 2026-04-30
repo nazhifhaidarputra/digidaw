@@ -1,23 +1,38 @@
 {
   "id": 0,
-  "name": "Karbeatzer",
+  "name": "Karbeatzer V2",
   "internal_type": "KarbeatzerV2",
   "is_synth": true,
   "parameters": [
     {
-      "id": 8,
+      "id": 531555959,
+      "path": "drive",
       "name": "Drive",
       "group": "Master",
       "value": 0.0,
       "min": 0.0,
       "max": 1.0,
       "default_value": 0.0,
-      "step": 0.0,
+      "step": 0.01,
       "value_type": "Float",
       "choices": []
     },
     {
-      "id": 10,
+      "id": 458499838,
+      "path": "gain",
+      "name": "Gain",
+      "group": "Master",
+      "value": 0.8,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 0.8,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 1262875742,
+      "path": "osc0/waveform",
       "name": "Waveform",
       "group": "Oscillator 1",
       "value": 1.0,
@@ -35,7 +50,8 @@
       ]
     },
     {
-      "id": 11,
+      "id": 1191210616,
+      "path": "osc0/detune",
       "name": "Detune",
       "group": "Oscillator 1",
       "value": 0.0,
@@ -47,7 +63,8 @@
       "choices": []
     },
     {
-      "id": 12,
+      "id": 2617434910,
+      "path": "osc0/phase_offset",
       "name": "Phase Offset",
       "group": "Oscillator 1",
       "value": 0.0,
@@ -59,7 +76,8 @@
       "choices": []
     },
     {
-      "id": 13,
+      "id": 3788236845,
+      "path": "osc0/mix",
       "name": "Mix",
       "group": "Oscillator 1",
       "value": 1.0,
@@ -71,7 +89,8 @@
       "choices": []
     },
     {
-      "id": 14,
+      "id": 3207620001,
+      "path": "osc0/pulse_width",
       "name": "Pulse Width",
       "group": "Oscillator 1",
       "value": 0.5,
@@ -83,7 +102,8 @@
       "choices": []
     },
     {
-      "id": 20,
+      "id": 4009544755,
+      "path": "osc1/waveform",
       "name": "Waveform",
       "group": "Oscillator 2",
       "value": 2.0,
@@ -101,7 +121,8 @@
       ]
     },
     {
-      "id": 21,
+      "id": 2165867149,
+      "path": "osc1/detune",
       "name": "Detune",
       "group": "Oscillator 2",
       "value": 0.1,
@@ -113,7 +134,8 @@
       "choices": []
     },
     {
-      "id": 22,
+      "id": 2748436067,
+      "path": "osc1/phase_offset",
       "name": "Phase Offset",
       "group": "Oscillator 2",
       "value": 0.0,
@@ -125,7 +147,8 @@
       "choices": []
     },
     {
-      "id": 23,
+      "id": 2841829646,
+      "path": "osc1/mix",
       "name": "Mix",
       "group": "Oscillator 2",
       "value": 0.5,
@@ -137,7 +160,8 @@
       "choices": []
     },
     {
-      "id": 24,
+      "id": 907917422,
+      "path": "osc1/pulse_width",
       "name": "Pulse Width",
       "group": "Oscillator 2",
       "value": 0.5,
@@ -149,7 +173,8 @@
       "choices": []
     },
     {
-      "id": 30,
+      "id": 4146162432,
+      "path": "osc2/waveform",
       "name": "Waveform",
       "group": "Oscillator 3",
       "value": 0.0,
@@ -167,7 +192,8 @@
       ]
     },
     {
-      "id": 31,
+      "id": 627716106,
+      "path": "osc2/detune",
       "name": "Detune",
       "group": "Oscillator 3",
       "value": -12.0,
@@ -179,7 +205,8 @@
       "choices": []
     },
     {
-      "id": 32,
+      "id": 2635417572,
+      "path": "osc2/phase_offset",
       "name": "Phase Offset",
       "group": "Oscillator 3",
       "value": 0.0,
@@ -191,7 +218,8 @@
       "choices": []
     },
     {
-      "id": 33,
+      "id": 1468104687,
+      "path": "osc2/mix",
       "name": "Mix",
       "group": "Oscillator 3",
       "value": 0.3,
@@ -203,7 +231,8 @@
       "choices": []
     },
     {
-      "id": 34,
+      "id": 675802031,
+      "path": "osc2/pulse_width",
       "name": "Pulse Width",
       "group": "Oscillator 3",
       "value": 0.5,
@@ -211,6 +240,141 @@
       "max": 0.99,
       "default_value": 0.5,
       "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 3344238218,
+      "path": "amp_env/attack",
+      "name": "Attack",
+      "group": "Envelope",
+      "value": 0.01,
+      "min": 0.001,
+      "max": 10.0,
+      "default_value": 0.01,
+      "step": 0.001,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 4033872628,
+      "path": "amp_env/decay",
+      "name": "Decay",
+      "group": "Envelope",
+      "value": 0.2,
+      "min": 0.001,
+      "max": 10.0,
+      "default_value": 0.2,
+      "step": 0.001,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 2427644079,
+      "path": "amp_env/sustain",
+      "name": "Sustain",
+      "group": "Envelope",
+      "value": 0.7,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 0.7,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 2226377911,
+      "path": "amp_env/release",
+      "name": "Release",
+      "group": "Envelope",
+      "value": 0.5,
+      "min": 0.001,
+      "max": 10.0,
+      "default_value": 0.5,
+      "step": 0.001,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 1931150098,
+      "path": "filter/freq",
+      "name": "Frequency",
+      "group": "Filter",
+      "value": 1000.0,
+      "min": 20.0,
+      "max": 20000.0,
+      "default_value": 1000.0,
+      "step": 1.0,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 3180303307,
+      "path": "filter/gain",
+      "name": "Gain",
+      "group": "Filter",
+      "value": 0.0,
+      "min": -24.0,
+      "max": 24.0,
+      "default_value": 0.0,
+      "step": 0.1,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 3101584891,
+      "path": "filter/q",
+      "name": "Q",
+      "group": "Filter",
+      "value": 0.707,
+      "min": 0.1,
+      "max": 10.0,
+      "default_value": 0.707,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 523745730,
+      "path": "filter/active",
+      "name": "Active",
+      "group": "Filter",
+      "value": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 1.0,
+      "step": 1.0,
+      "value_type": "Bool",
+      "choices": []
+    },
+    {
+      "id": 2579916128,
+      "path": "filter/type",
+      "name": "Type",
+      "group": "Filter",
+      "value": 0.0,
+      "min": 0.0,
+      "max": 3.0,
+      "default_value": 0.0,
+      "step": 1.0,
+      "value_type": "Choice",
+      "choices": [
+        "LowPass",
+        "HighPass",
+        "BandPass",
+        "Off"
+      ]
+    },
+    {
+      "id": 1596721003,
+      "path": "filter/cascades",
+      "name": "Order",
+      "group": "Filter",
+      "value": 1.0,
+      "min": 1.0,
+      "max": 8.0,
+      "default_value": 1.0,
+      "step": 1.0,
       "value_type": "Float",
       "choices": []
     }

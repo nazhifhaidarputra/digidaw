@@ -4,7 +4,7 @@ use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
 
 // use crate::effect::compressor::create_compressor;
-use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
+use karbeat_plugin_api::traits::{AudioPluginBuilder, KarbeatEffect, KarbeatGenerator};
 
 use crate::{effect::parametric_eq::KarbeatParametricEQ, generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro}};
 

@@ -124,12 +124,6 @@ class KarbeatParametricEqState
   /// Fetch the response curve from the Rust backend
   Future<void> _fetchResponseCurve() async {
     try {
-      // final curve = await eq_api.getEqResponseCurve(
-      //   target: widget.target,
-      //   effectId: widget.effectIdx,
-      //   numPoints: 200,
-      // );
-
       final responseStr = await plugin_api.executeEffectInstanceCommand(
         target: widget.target,
         effectId: widget.effectId,
@@ -154,33 +148,39 @@ class KarbeatParametricEqState
 
     setState(() {
       for (final p in parameters) {
-        if (p.group == 'Master' && p.name == 'Base Gain') {
+        // 1. Direct path check for base_gain
+        if (p.path == 'base_gain') {
           masterGain = p.value;
           continue;
         }
 
-        final match = RegExp(r'Band (\d+)').firstMatch(p.group);
+        // 2. Regex to extract the band index and parameter name from the string path!
+        // Matches e.g., "band0/freq", "band1/active", etc.
+        final match = RegExp(r'band(\d+)/(.+)').firstMatch(p.path);
         if (match != null) {
-          final bandIndex = int.parse(match.group(1)!) - 1;
+          final bandIndex = int.parse(match.group(1)!);
+          
           if (bandIndex >= 0 && bandIndex < bands.length) {
             final band = bands[bandIndex];
-            switch (p.name) {
-              case 'Active':
+            final paramName = match.group(2)!;
+            
+            switch (paramName) {
+              case 'active':
                 band.active = p.value > 0.5;
                 break;
-              case 'Type':
+              case 'type':
                 band.filterType = p.value.toInt();
                 break;
-              case 'Frequency':
+              case 'freq':
                 band.freq = p.value;
                 break;
-              case 'Q':
+              case 'q':
                 band.q = p.value;
                 break;
-              case 'Gain':
+              case 'gain':
                 band.gain = p.value;
                 break;
-              case 'Slope':
+              case 'slope':
                 band.order = p.value.toInt();
                 break;
             }
@@ -222,38 +222,46 @@ class KarbeatParametricEqState
 
   void _updateMasterGain(double value) {
     setState(() => masterGain = value);
-    setParameter(2, value.toDouble());
+    setParameterString('base_gain', value);
     _fetchResponseCurve();
   }
 
   void _updateBandParam(int bandIdx, int paramType, double value) {
+    String suffix = "";
+    
     setState(() {
       final band = bands[bandIdx];
       switch (paramType) {
         case 0:
           band.freq = value;
+          suffix = "freq";
           break;
         case 1:
           band.gain = value;
+          suffix = "gain";
           break;
         case 2:
           band.q = value;
+          suffix = "q";
           break;
         case 3:
           band.active = value > 0.5;
+          suffix = "active";
           break;
         case 4:
           band.filterType = value.toInt();
+          suffix = "type";
           break;
         case 5:
           band.order = value.toInt();
+          suffix = "slope";
           break;
       }
     });
 
-    // ID Formula from parametric_eq.rs: base_id = 3 + (band_idx * 6)
-    int paramId = 3 + (bandIdx * 6) + paramType;
-    setParameter(paramId, value.toDouble());
+    // Easily reconstruct the string path mapped in the JSON manifest
+    final path = "band$bandIdx/$suffix";
+    setParameterString(path, value);
     _fetchResponseCurve();
   }
 

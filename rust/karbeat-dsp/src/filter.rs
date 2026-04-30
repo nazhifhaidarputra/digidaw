@@ -1,7 +1,7 @@
 //! Biquad filter building block. A general purpose, reusable biquad filter
 //! Can be used for things such as Equalizer or Compressor
 
-use karbeat_macros::{ AutoParams, EnumParam };
+use karbeat_macros::{ AutoParams, EnumParam, karbeat_plugin };
 use karbeat_plugin_types::{ EnumParam, Param };
 use smallvec::{ smallvec, SmallVec };
 
@@ -300,48 +300,42 @@ impl SingleBiquadFilterStage {
 }
 
 /// Biquad filter implemented from RBJ EQ Cookbook
-#[derive(Clone, Debug, AutoParams)]
+#[derive(Clone, Debug)]
+#[karbeat_plugin]
 pub struct BiquadFilter<T: FilterMode + 'static> {
-    pub freq: Param<f32>,
-    pub gain: Param<f32>,
-    pub q: Param<f32>,
-    pub active: Param<bool>,
-    pub filter_type: Param<T>,
-    pub cascades: Param<f32>,
+    #[param(id = "freq", name = "Frequency", group = "Filter", min = 20.0, max = 20000.0, default = 1000.0, step = 1.0)]
+    pub freq: f32,
 
-    // ==========================
-    // Internal state
-    // ==========================
+    #[param(id = "gain", name = "Gain", group = "Filter", min = -24.0, max = 24.0, default = 0.0, step = 0.1)]
+    pub gain: f32,
 
-    #[skip]
+    #[param(id = "q", name = "Q", group = "Filter", min = 0.1, max = 10.0, default = 0.707, step = 0.01)]
+    pub q: f32,
+
+    #[param(id = "active", name = "Active", group = "Filter", default = 1.0)]
+    pub active: bool,
+
+    #[param(id = "type", name = "Type", group = "Filter", default = 0.0)]
+    pub filter_type: T,
+
+    #[param(id = "cascades", name = "Order", group = "Filter", min = 1.0, max = 8.0, default = 1.0, step = 1.0)]
+    pub cascades: f32,
+
+    // Internal state ignored by parameter UI
     num_of_channels: u8,
-    #[skip]
     sample_rate: f32,
-
-    // Internal runtime coefficient (known size at compile Time)
-    #[skip]
     coeff: BiquadCoefficients,
-
-    // Multi-channel layout using stacked single-channel filters
-    #[skip]
-    channels: SmallVec<[SingleBiquadFilterStage; DEFAULT_CHANNELS]>,
+    channels: SmallVec<[SingleBiquadFilterStage; 2]>,
 }
 
 impl<T: FilterMode + 'static> Default for BiquadFilter<T> {
     fn default() -> Self {
-        Self {
-            freq: Param::new_f32(0, "Frequency", "Filter", 1000.0, 20.0, 20000.0, 1.0),
-            gain: Param::new_f32(1, "Gain", "Filter", 0.0, -24.0, 24.0, 0.1),
-            q: Param::new_f32(2, "Q", "Filter", 0.707, 0.1, 10.0, 0.01),
-            active: Param::new_bool(3, "Active", "Filter", true),
-            filter_type: Param::new_enum(4, "Type", "Filter", T::default()),
-            cascades: Param::new_f32(5, "Order", "Filter", 1.0, 1.0, 8.0, 1.0),
-
-            num_of_channels: DEFAULT_CHANNELS as u8,
-            sample_rate: 44100.0,
-            coeff: BiquadCoefficients::default(),
-            channels: smallvec![SingleBiquadFilterStage::new(1); DEFAULT_CHANNELS],
-        }
+        let mut filter = Self::base_default();
+        filter.num_of_channels = 2;
+        filter.sample_rate = 44100.0;
+        filter.coeff = BiquadCoefficients::default();
+        filter.channels = smallvec![SingleBiquadFilterStage::new(1); 2];
+        filter
     }
 }
 

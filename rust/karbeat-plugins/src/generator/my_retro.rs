@@ -3,54 +3,76 @@
 // Author: Haidar Wibowo
 // ====================================================
 
-use std::collections::HashMap;
+use std::any::Any;
 
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_api::{manifest::Manifestable, prelude::*};
-use karbeat_plugin_types::{parameter::AutoParams, *};
+use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*, traits::{KarbeatGenerator, AudioPluginBuilder}};
+use karbeat_plugin_types::*;
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
-/// It only has strictly two oscillators and only
-/// available as monophonic voice for each oscillator, making it
-/// a simple 8-bit retro sound
+/// It has strictly two oscillators, making it a simple 8-bit retro sound.
 #[derive(Clone)]
 #[karbeat_plugin]
-pub struct MyRetroEngine {
-    #[nested]
+pub struct MyRetro {
+    // Nested building blocks
+    #[nested(prefix = "osc")]
     pub oscillators: [Oscillator; 2],
 
-    #[param(id = 30, name = "Resolution", group = "Bitcrush", min = 2.0, max = 256.0, default = 16.0, step=1.0)]
-    pub bitcrush_resolution: f32, // Re-written by macro to Param<f32>
+    #[nested(prefix = "amp_env/")]
+    pub amp_envelope: EnvelopeSettings,
+
+    // Local Parameters
+    #[param(id = "bitcrush", name = "Resolution", group = "Bitcrush", min = 2.0, max = 256.0, default = 16.0, step = 1.0)]
+    pub bitcrush_resolution: f32, 
+
+    #[param(id = "gain", name = "Gain", group = "Master", min = 0.0, max = 1.0, default = 0.8, step = 0.01)]
+    pub gain: f32,
+
+    // Internal Decoupled State
+    pub active_voices: Vec<SynthVoice>,
+    pub sample_rate: f32,
+    pub channels: usize,
 }
 
-impl Default for MyRetroEngine {
+impl Default for MyRetro {
     fn default() -> Self {
-        // Get the perfectly initialized parameters from the macro
         let mut engine = Self::base_default();
 
         // Override specific nested logic for the two oscillators safely
-        let mut osc1 = Oscillator::new(10, "Oscillator 1");
-        osc1.waveform.set_base(Waveform::Square.to_index() as f32);
+        let mut osc1 = Oscillator::new("Oscillator 1");
+        osc1.waveform.set_base(Waveform::Square as usize as f32);
         osc1.mix.set_base(1.0);
 
-        let mut osc2 = Oscillator::new(20, "Oscillator 2");
-        osc2.waveform.set_base(Waveform::Square.to_index() as f32);
+        let mut osc2 = Oscillator::new("Oscillator 2");
+        osc2.waveform.set_base(Waveform::Square as usize as f32);
         osc2.detune.set_base(-12.0);
         osc2.mix.set_base(0.8);
 
         engine.oscillators = [osc1, osc2];
 
+        // Init internal state
+        engine.active_voices = Vec::with_capacity(16);
+        engine.sample_rate = 48000.0;
+        engine.channels = 2;
+
         engine
     }
 }
 
-impl MyRetroEngine {
+impl MyRetro {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pure associated function (no `&self`). 
+    /// Takes only the specific slices and primitives it needs!
     pub fn generate_voice_block(
-        &self,
-        sample_rate: f32,
-        channels: u8,
+        oscillators: &[Oscillator; 2],
         amp_envelope: &EnvelopeSettings,
+        crush_steps: f32,
+        sample_rate: f32,
+        channels: usize,
         voice: &mut SynthVoice,
         buffer: &mut [f32],
     ) {
@@ -58,38 +80,28 @@ impl MyRetroEngine {
 
         let base_freq = 440.0 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
         let dt = 1.0 / sample_rate;
-        let crush_steps = self.bitcrush_resolution.get().max(2.0);
 
-        for frame in buffer.chunks_exact_mut(channels as usize) {
+        for frame in buffer.chunks_exact_mut(channels) {
             let env_level = voice.advance_envelope(dt, amp_envelope);
 
             if !voice.is_active {
-                for ch in frame.iter_mut() {
-                    *ch = 0.0;
-                }
                 continue;
             }
 
             let velocity_gain = (voice.velocity as f32) / 127.0;
             let current_gain = velocity_gain * env_level;
             
-            // We need a temporary buffer to hold the output of the oscillators
-            // BEFORE we apply the bitcrusher
+            // Temporary buffer to hold the output of the oscillators BEFORE bitcrush
             let mut temp_sample = 0.0;
 
-            for (i, osc) in self.oscillators.iter().enumerate() {
-                if i >= voice.phase.len() {
-                    voice.phase.push(0.0);
-                }
-
-                let mut phase = voice.phase[i] as f64;
+            for (i, osc) in oscillators.iter().enumerate() {
+                let mut phase = voice.phase[i];
                 
-                // We create a tiny 1-sample mono buffer to extract the exact value
-                // of the oscillator at this exact phase
+                // Extract 1 sample frame
                 let mut osc_output = [0.0; 2];
                 osc.output_wave(&mut osc_output, sample_rate as u32, 2, base_freq, &mut phase);
                 
-                voice.phase[i] = phase as f32;
+                voice.phase[i] = phase;
                 
                 // Mix the raw, uncrushed oscillators together
                 temp_sample += osc_output[0];
@@ -97,8 +109,6 @@ impl MyRetroEngine {
 
             // Apply the bitcrush ONCE to the cleanly summed signal, 
             // and apply the envelope GAIN *AFTER* the bitcrush!
-            // (If you apply gain before bitcrush, the envelope decay will sound zipper-y and broken)
-            
             let crushed_sample = (temp_sample * crush_steps).round() / crush_steps;
             let final_sample = crushed_sample * current_gain;
 
@@ -109,25 +119,38 @@ impl MyRetroEngine {
     }
 }
 
-impl RawSynthEngine for MyRetroEngine {
-    fn name() -> &'static str {
-        "MyRetro"
+// ============================================================================
+// DIRECT GENERATOR IMPLEMENTATION
+// ============================================================================
+
+impl KarbeatGenerator for MyRetro {
+    fn name(&self) -> &str {
+        "My Retro"
     }
 
-    fn process(
-        &mut self,
-        base: &mut StandardSynthBase,
-        output_buffer: &mut [f32],
-        midi_events: &[MidiEvent],
-    ) {
+    fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
+        self.sample_rate = sample_rate;
+        self.channels = channels;
+    }
+
+    fn reset(&mut self) {
+        self.active_voices.clear();
+    }
+
+    fn process(&mut self, output_buffer: &mut [f32], midi_events: &[MidiEvent]) {
         output_buffer.fill(0.0);
 
-        let total_frames = output_buffer.len() / 2;
+        // Extract primitives outside the loop
+        let master_gain = self.gain.get();
+        let crush_steps = self.bitcrush_resolution.get().max(2.0);
+        let total_frames = output_buffer.len() / self.channels;
+        
         let mut current_frame = 0;
         let mut event_idx = 0;
 
+        let mut scratch = vec![0.0; total_frames * self.channels];
+
         while current_frame < total_frames {
-            // Determine block boundaries based on next MIDI event
             let next_event_frame = if event_idx < midi_events.len() {
                 midi_events[event_idx].sample_offset as usize
             } else {
@@ -138,55 +161,59 @@ impl RawSynthEngine for MyRetroEngine {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice = &mut output_buffer[current_frame * 2..end_frame * 2];
+                let out_slice = &mut output_buffer[current_frame * self.channels .. end_frame * self.channels];
 
-                // Process each active voice
-                for voice in base.active_voices.iter_mut() {
+                // Destructure `self` to separate mutable voices from immutable parameters
+                let MyRetro {
+                    active_voices,
+                    oscillators,
+                    amp_envelope,
+                    sample_rate,
+                    channels,
+                    ..
+                } = self;
+
+                for voice in active_voices.iter_mut() {
                     if !voice.is_active {
                         continue;
                     }
 
-                    // Resize scratch buffer to match exact frame length * 2 (stereo)
-                    if base.voice_buffer.len() < block_len * 2 {
-                        base.voice_buffer.resize(block_len * 2, 0.0);
-                    }
-
-                    let scratch = &mut base.voice_buffer[0..block_len * 2];
-
-                    self.generate_voice_block(
-                        base.sample_rate,
-                        2, // Stereo
-                        &base.amp_envelope,
+                    let scratch_slice = &mut scratch[0..block_len * *channels];
+                    
+                    Self::generate_voice_block(
+                        oscillators,
+                        amp_envelope,
+                        crush_steps,
+                        *sample_rate,
+                        *channels,
                         voice,
-                        scratch,
+                        scratch_slice,
                     );
 
                     // Mix the voice scratch buffer into the main output
-                    for (i, &sample) in scratch.iter().enumerate() {
+                    for (i, &sample) in scratch_slice.iter().enumerate() {
                         out_slice[i] += sample;
                     }
                 }
 
                 // Apply Master Synth Gain
                 for sample in out_slice.iter_mut() {
-                    *sample *= base.gain;
+                    *sample *= master_gain;
                 }
             }
 
             // Handle MIDI events at this exact frame
-            while event_idx < midi_events.len()
-                && (midi_events[event_idx].sample_offset as usize) == end_frame
-            {
+            while event_idx < midi_events.len() && (midi_events[event_idx].sample_offset as usize) == end_frame {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
                         if velocity > 0 {
-                            let mut voice = SynthVoice::new(key, velocity, self.oscillators.len());
+                            let mut voice = SynthVoice::new(key, velocity);
                             for (i, osc) in self.oscillators.iter().enumerate() {
-                                voice.phase[i] = osc.phase_offset.get() as f32; // Assuming your PhaseTracker holds f32
+                                voice.phase[i] = osc.phase_offset.get() as f64; 
                             }
-                            base.active_voices.push(voice);
+                            self.active_voices.push(voice);
                         } else {
-                            for v in base.active_voices.iter_mut() {
+                            for v in self.active_voices.iter_mut() {
                                 if v.note == key && v.is_active {
                                     v.release();
                                 }
@@ -194,7 +221,7 @@ impl RawSynthEngine for MyRetroEngine {
                         }
                     }
                     MidiMessage::NoteOff { key } => {
-                        for v in base.active_voices.iter_mut() {
+                        for v in self.active_voices.iter_mut() {
                             if v.note == key && v.is_active {
                                 v.release();
                             }
@@ -208,58 +235,65 @@ impl RawSynthEngine for MyRetroEngine {
             current_frame = end_frame;
         }
 
-        // Garbage collect dead voices
-        base.cleanup_voices();
+        self.active_voices.retain(|v| v.is_active);
     }
 
-    // ========================================================================
-    // PARAMETER ROUTING (Magic via Macros)
-    // ========================================================================
+    // --- Dynamic Hashed Routing ---
 
-    fn set_custom_parameter(&mut self, id: u32, value: f32) {
-        self.auto_set_parameter(id, value);
+    fn set_parameter(&mut self, id: u32, value: f32) {
+        self.auto_set_parameter(karbeat_utils::hash::FNV_OFFSET, id, value);
     }
 
-    fn get_custom_parameter(&self, id: u32) -> Option<f32> {
-        self.auto_get_parameter(id)
+    fn get_parameter(&self, id: u32) -> f32 {
+        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
     }
 
     fn apply_automation(&mut self, id: u32, value: f32) {
-        self.auto_apply_automation(id, value);
+        self.auto_apply_automation(karbeat_utils::hash::FNV_OFFSET, id, value);
     }
-    
+
     fn clear_automation(&mut self, id: u32) {
-        self.auto_clear_automation(id);
+        self.auto_clear_automation(karbeat_utils::hash::FNV_OFFSET, id);
+    }
+
+    fn default_parameters(&self) -> indexmap::IndexMap<u32, f32> {
+        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
+            .into_iter()
+            .map(|spec| (spec.id, spec.default_value))
+            .collect()
     }
 
     fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
-        self.auto_get_parameter_specs()
+        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
-    fn custom_default_parameters() -> HashMap<u32, f32> where Self: Sized {
-        let mut map = HashMap::new();
-        // Dynamically build the map directly from the spec list so you never have to hardcode defaults!
-        for spec in Self::default().auto_get_parameter_specs() {
-            map.insert(spec.id, spec.default_value);
-        }
-        map
+    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized {
+        Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
-impl Manifestable for MyRetroEngine {
-    fn build_manifest() -> karbeat_plugin_api::manifest::PluginManifest {
-        karbeat_plugin_api::manifest::PluginManifest {
+// ============================================================================
+// REGISTRY BUILDER & MANIFEST
+// ============================================================================
+
+impl AudioPluginBuilder for MyRetro {
+    fn build() -> Self {
+        Self::new()
+    }
+}
+
+impl Manifestable for MyRetro {
+    fn build_manifest() -> PluginManifest {
+        PluginManifest {
             id: 1,
             name: "My Retro".to_owned(),
             internal_type: "MyRetro".to_owned(),
             is_synth: true,
-            parameters: Self::default().get_parameter_specs(),
+            parameters: Self::static_parameter_specs(),
         }
     }
 }
-
-/// A generator/synthesizer that produces a retro-sounding synth sound.
-/// It only has strictly two oscillators and only
-/// available as monophonic voice for each oscillator, making it
-/// a simple 8-bit retro sound
-pub type MyRetro = RawSynthWrapper<MyRetroEngine>;
