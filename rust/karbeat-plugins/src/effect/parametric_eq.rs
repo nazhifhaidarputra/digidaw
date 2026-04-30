@@ -1,11 +1,15 @@
-use std::any::Any;
+use std::{any::Any, sync::Arc};
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*};
 use karbeat_plugin_types::*;
+use num_complex::{Complex, Complex32};
+use rustfft::{Fft, FftPlanner, num_traits::{Float, Zero}};
 use serde_json::{json, Value};
+use smallvec::{SmallVec, smallvec};
 
 /// Maximum number of cascaded biquad stages per band (order 0..3 = 1..4 stages)
 const MAX_ORDER: usize = 8;
+const FFT_SIZE: usize = 4096;
 
 #[derive(Clone, Copy, Debug, PartialEq, Default, EnumParam)]
 pub enum FilterType {
@@ -267,6 +271,12 @@ pub struct KarbeatParametricEQ {
 
     last_sample_rate: f32,
     channels: usize,
+
+    // FFT Analyzer State
+    analyzer_buffer: SmallVec<[f32; FFT_SIZE]>,
+    analyzer_idx: usize,
+    spectrum_history: Vec<f32>,
+    fft_instance: Option<Arc<dyn Fft<f32>>>,
 }
 
 impl Default for KarbeatParametricEQ {
@@ -286,6 +296,13 @@ impl KarbeatParametricEQ {
 
         engine.last_sample_rate = 48000.0;
         engine.channels = 2;
+
+        let mut planner = FftPlanner::new();
+        engine.fft_instance = Some(planner.plan_fft_forward(FFT_SIZE));
+        engine.analyzer_buffer = smallvec![0.0; FFT_SIZE];
+        engine.analyzer_idx = 0;
+        engine.spectrum_history = Vec::new();
+
         engine
     }
 
@@ -353,6 +370,8 @@ impl KarbeatEffect for KarbeatParametricEQ {
         };
 
         for i in (0..buffer.len()).step_by(self.channels) {
+            let mut mono_mix = 0.0;
+
             for channel in 0..self.channels {
                 if i + channel < buffer.len() {
                     let mut sample = buffer[i + channel] * master_linear_gain;
@@ -362,8 +381,16 @@ impl KarbeatEffect for KarbeatParametricEQ {
                     }
 
                     buffer[i + channel] = sample;
+                    mono_mix += sample;
                 }
             }
+
+            if self.analyzer_buffer.len() < FFT_SIZE {
+                self.analyzer_buffer.resize(FFT_SIZE, 0.0);
+            }
+
+            self.analyzer_buffer[self.analyzer_idx] = mono_mix / self.channels as f32;
+            self.analyzer_idx = (self.analyzer_idx + 1) % FFT_SIZE;
         }
     }
 
@@ -371,9 +398,9 @@ impl KarbeatEffect for KarbeatParametricEQ {
         for node in &mut self.nodes {
             node.reset_state();
         }
+        self.analyzer_buffer.fill(0.0);
+        self.spectrum_history.fill(-100.0);
     }
-
-    // --- The Routing Magic ---
 
     fn set_parameter(&mut self, id: u32, value: f32) {
         if self.auto_set_parameter(karbeat_utils::hash::FNV_OFFSET, id, value) {
@@ -432,6 +459,79 @@ impl KarbeatEffect for KarbeatParametricEQ {
                     .collect();
 
                 Some(json!(json_response))
+            }
+            "GET_SPECTRUM" => {
+                let num_points = payload.get("num_points").and_then(|v| v.as_u64()).unwrap_or(100) as usize;
+
+                let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> = smallvec![Complex::zero(); FFT_SIZE];
+                for i in 0..FFT_SIZE {
+                    // Read backwards from current idx to get sequential chronological data
+                    let idx = (self.analyzer_idx + i) % FFT_SIZE;
+                    let sample = self.analyzer_buffer[idx];
+                    
+                    // Hann window to prevent spectral leakage
+                    let window = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (FFT_SIZE - 1) as f32).cos());
+                    fft_input[i] = Complex::new(sample * window, 0.0);
+                }
+
+                if let Some(fft) = &self.fft_instance {
+                    fft.process(&mut fft_input);
+                }
+
+                let mut raw_magnitudes = vec![0.0; FFT_SIZE / 2];
+                let norm_factor = (FFT_SIZE as f32) / 2.0;
+                
+                for i in 0..(FFT_SIZE / 2) {
+                    let mag = fft_input[i].norm() / norm_factor;
+                    // FIX: Clamp the noise floor to -100dB explicitly
+                    let db = 20.0 * mag.log10();
+                    raw_magnitudes[i] = db.clamp(-100.0, 24.0);
+                }
+
+                if self.spectrum_history.len() != num_points {
+                    self.spectrum_history = vec![-100.0; num_points];
+                }
+                let min_freq = 20.0; let max_freq = 20000.0;
+                let log_min = min_freq.log10(); let log_max = max_freq.log10();
+                
+                let mut json_response = Vec::with_capacity(num_points);
+
+                for i in 0..num_points {
+                    let t = (i as f32) / ((num_points - 1).max(1) as f32);
+                    let target_freq = (10.0_f32).powf(log_min + t * (log_max - log_min));
+                    
+                    let bin_exact = target_freq * (FFT_SIZE as f32) / self.last_sample_rate.max(1.0);
+                    let bin_idx = bin_exact.round() as usize;
+
+                    let mut current_db = -100.0;
+                    if bin_idx > 0 && bin_idx < raw_magnitudes.len() {
+                        // Max pooling over nearby bins prevents skipping spikes at high frequencies
+                        let pool_radius = (bin_exact * 0.02).max(1.0) as usize; 
+                        let start = bin_idx.saturating_sub(pool_radius);
+                        let end = (bin_idx + pool_radius).min(raw_magnitudes.len() - 1);
+                        
+                        for b in start..=end {
+                            if raw_magnitudes[b] > current_db {
+                                current_db = raw_magnitudes[b];
+                            }
+                        }
+                    }
+
+                    // Apply Temporal Smoothing (Fast Attack, Slow Release)
+                    let prev_db = self.spectrum_history[i];
+                    let smoothed_db = if current_db > prev_db {
+                        current_db * 0.8 + prev_db * 0.2 
+                    } else {
+                        current_db * 0.1 + prev_db * 0.9
+                    };
+                    self.spectrum_history[i] = smoothed_db;
+
+                    json_response.push(json!({ "frequency": target_freq, "magnitude_db": smoothed_db }));
+                }
+
+                // log::debug!("Send some Spectrum response");
+                Some(json!(json_response))
+                
             }
             _ => None,
         }

@@ -3,6 +3,7 @@ use karbeat_plugins::registry::PluginInfo;
 use parking_lot::Mutex;
 
 use crate::{
+    audio::event::PluginTarget,
     commands::{AudioCommand, AudioFeedback, EffectTarget},
     context::ctx,
     core::project::{
@@ -14,7 +15,7 @@ use crate::{
     shared::id::*
 };
 
-use std::sync::Arc;
+use std::sync::{atomic::{AtomicU32, Ordering}, Arc};
 
 // ============================================================================
 // PARAMETER ID RESOLVER
@@ -646,6 +647,87 @@ pub fn execute_generator_instance_command(
 }
 
 static PENDING_FEEDBACK: Mutex<Vec<AudioFeedback>> = Mutex::new(Vec::new());
+
+// ============================================================================
+// Real-time Plugin Command Channel
+// ============================================================================
+
+/// Monotonically increasing counter used to generate unique request IDs.
+/// Each call to `execute_plugin_command` claims one ID so that the caller
+/// can match the eventual `PluginCommandResponse` that arrives on the stream.
+static PLUGIN_COMMAND_REQUEST_ID: AtomicU32 = AtomicU32::new(1);
+
+/// Dispatches a custom command to a live plugin instance running on the audio
+/// thread. The audio engine will invoke `execute_custom_command` on the
+/// target plugin and push an `AudioFeedback::PluginCommandResponse` back
+/// through the feedback channel.
+///
+/// # Parameters
+/// - `target`: Which plugin instance to target (Generator, TrackEffect, etc.).
+/// - `command`: A string key identifying the command (e.g. `"get_meter"`).
+/// - `payload`: Arbitrary JSON value sent as the command argument.
+///
+/// # Returns
+/// `Ok(request_id)` on success. Use this ID to correlate the response that
+/// arrives via the feedback stream. Returns `Err` if the audio stream is not
+/// initialised or the command queue is full.
+pub fn execute_plugin_command(
+    target: PluginTarget,
+    command: String,
+    payload: serde_json::Value,
+) -> Result<u32, String> {
+    let request_id = PLUGIN_COMMAND_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
+        sender
+            .push(AudioCommand::ExecutePluginCommand {
+                target,
+                command,
+                payload,
+                request_id,
+            })
+            .map_err(|_| "Command queue full".to_string())?;
+        Ok(request_id)
+    } else {
+        Err("Audio stream not initialised".to_string())
+    }
+}
+
+/// Drains all pending `PluginCommandResponse` messages from the feedback
+/// channel and maps each one through the provided `mapper` closure.
+///
+/// Unrelated feedback messages (parameter snapshots, etc.) are kept in the
+/// pending buffer so that their respective poll functions can still consume
+/// them.
+///
+/// # Parameters
+/// - `mapper`: Called once per response with `(request_id, response_value)`.
+///   Returns `T`, which is collected into the output `Vec`.
+pub fn drain_plugin_command_responses<T, F>(mut mapper: F) -> Vec<T>
+where
+    F: FnMut(u32, serde_json::Value) -> T,
+{
+    let mut results = Vec::new();
+    let mut pending = PENDING_FEEDBACK.lock();
+
+    // Drain the live feedback consumer into the shared pending buffer first
+    if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
+        while let Ok(feedback) = consumer.pop() {
+            pending.push(feedback);
+        }
+    }
+
+    // Extract only PluginCommandResponse messages; leave the rest intact
+    pending.retain(|feedback| match feedback {
+        AudioFeedback::PluginCommandResponse { request_id, response } => {
+            results.push(mapper(*request_id, response.clone()));
+            false // consumed — remove from pending
+        }
+        _ => true, // keep all other feedback for other pollers
+    });
+
+    results
+}
 
 pub fn poll_generator_parameter_feedback<T, F>(mut mapper: F) -> Vec<T>
 where

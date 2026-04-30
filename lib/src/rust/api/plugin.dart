@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `hash`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
 /// Get all available generators with their registry IDs (preferred for UI)
@@ -165,6 +165,43 @@ Future<String> executeGeneratorInstanceCommand({
   payloadJson: payloadJson,
 );
 
+/// Dispatches a real-time command to a live plugin instance on the audio thread.
+///
+/// The plugin's `execute_custom_command` is called from within the audio callback,
+/// so the command and payload must be cheap to process. The response arrives
+/// asynchronously via the `StreamSink` opened by `create_plugin_message_stream`.
+///
+/// # Parameters
+/// - `target`: Which plugin instance to target.
+/// - `command`: Command key string (e.g. `"get_meter"`, `"get_spectrum"`).
+/// - `payload_json`: JSON string sent as the command argument. Defaults to `{}`
+///   if the string is not valid JSON.
+///
+/// # Returns
+/// `Ok(request_id)` — correlate this with `UiPluginCommandResponse.request_id`
+/// in the stream. Returns `Err` if the audio stream is not active or the
+/// command queue is full.
+Future<int> executeRealtimePluginCommand({
+  required UiPluginTarget target,
+  required String command,
+  required String payloadJson,
+}) => RustLib.instance.api.crateApiPluginExecuteRealtimePluginCommand(
+  target: target,
+  command: command,
+  payloadJson: payloadJson,
+);
+
+/// Opens a stream that continuously polls the audio→UI feedback channel and
+/// forwards any `PluginCommandResponse` messages to Flutter.
+///
+/// Flutter can subscribe to this stream with a `StreamBuilder<UiPluginCommandResponse>`
+/// and use `response.request_id` to match responses to pending commands.
+///
+/// The polling thread runs at ~16ms intervals (≈60fps). It terminates
+/// automatically when Flutter closes the stream (sink returns an error).
+Stream<UiPluginCommandResponse> createPluginMessageStream() =>
+    RustLib.instance.api.crateApiPluginCreatePluginMessageStream();
+
 enum KarbeatPluginType { generator, effect }
 
 class UiEffectParameterSnapshot {
@@ -256,6 +293,33 @@ class UiParameterValue {
           value == other.value;
 }
 
+/// A response message arriving from the audio thread to Flutter.
+/// Flutter uses the `request_id` to correlate with the original command sent
+/// via `execute_realtime_plugin_command`.
+class UiPluginCommandResponse {
+  /// Matches the `request_id` returned by `execute_realtime_plugin_command`
+  final int requestId;
+
+  /// JSON-encoded response from the plugin's `execute_custom_command`
+  final String responseJson;
+
+  const UiPluginCommandResponse({
+    required this.requestId,
+    required this.responseJson,
+  });
+
+  @override
+  int get hashCode => requestId.hashCode ^ responseJson.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiPluginCommandResponse &&
+          runtimeType == other.runtimeType &&
+          requestId == other.requestId &&
+          responseJson == other.responseJson;
+}
+
 class UiPluginInfo {
   final int id;
   final String name;
@@ -338,4 +402,28 @@ class UiPluginParameter {
           step == other.step &&
           paramType == other.paramType &&
           choices == other.choices;
+}
+
+@freezed
+sealed class UiPluginTarget with _$UiPluginTarget {
+  const UiPluginTarget._();
+
+  /// A generator plugin identified by its GeneratorId
+  const factory UiPluginTarget.generator(int field0) = UiPluginTarget_Generator;
+
+  /// A track effect identified by (TrackId, EffectId)
+  const factory UiPluginTarget.trackEffect({
+    required int trackId,
+    required int effectId,
+  }) = UiPluginTarget_TrackEffect;
+
+  /// A bus effect identified by (BusId, EffectId)
+  const factory UiPluginTarget.busEffect({
+    required int busId,
+    required int effectId,
+  }) = UiPluginTarget_BusEffect;
+
+  /// An effect on the master bus
+  const factory UiPluginTarget.masterEffect(int field0) =
+      UiPluginTarget_MasterEffect;
 }

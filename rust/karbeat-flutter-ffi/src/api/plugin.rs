@@ -1,11 +1,14 @@
-use crate::api::{ mixer::UiEffectInstance, project::UiGeneratorInstance };
+use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
+use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use karbeat_core::api::plugin_api;
-use karbeat_core::core::project::{ TrackId };
-use karbeat_core::shared::id::*;
+use karbeat_core::audio::event::PluginTarget;
+use karbeat_core::core::project::TrackId;
 use karbeat_core::plugin_types::ParameterValueType;
+use karbeat_core::shared::id::*;
 use karbeat_plugins::registry::PluginInfo;
 use karbeat_utils::parser::FromPluginCommand;
+use std::time::Duration;
 
 // ============================================================================
 // UI TYPES FOR FLUTTER RUST BRIDGE
@@ -100,27 +103,22 @@ impl UiPluginInfo {
 
 /// Get all available generators with their registry IDs (preferred for UI)
 pub fn get_available_generators_with_ids() -> Result<Vec<UiPluginInfo>, String> {
-    Ok(
-        plugin_api::get_available_generators(|plugin_info| {
-            UiPluginInfo::from_info_to_synth(plugin_info)
-        })
-    )
+    Ok(plugin_api::get_available_generators(|plugin_info| {
+        UiPluginInfo::from_info_to_synth(plugin_info)
+    }))
 }
 
 /// Get all available effects with their registry IDs (preferred for UI)
 pub fn get_available_effects_with_ids() -> Result<Vec<UiPluginInfo>, String> {
-    Ok(
-        plugin_api::get_available_effects(|plugin_info| {
-            UiPluginInfo::from_info_to_effect(plugin_info)
-        })
-    )
+    Ok(plugin_api::get_available_effects(|plugin_info| {
+        UiPluginInfo::from_info_to_effect(plugin_info)
+    }))
 }
 
 /// Get a single generator state from the Generator Pool
 pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
     let gen_id = GeneratorId::from(generator_id);
-    let gen_instance = plugin_api
-        ::get_generator(&gen_id, |g| UiGeneratorInstance::from(g))
+    let gen_instance = plugin_api::get_generator(&gen_id, |g| UiGeneratorInstance::from(g))
         .ok_or_else(|| format!("Generator {} not found", generator_id))?;
     Ok(gen_instance)
 }
@@ -128,22 +126,19 @@ pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
 pub fn get_effect(track_id: u32, effect_id: u32) -> Result<UiEffectInstance, String> {
     let track_id = TrackId::from(track_id);
     let effect_id = EffectId::from(effect_id);
-    plugin_api
-        ::get_effect(&track_id, &effect_id, |e| UiEffectInstance::from(e))
+    plugin_api::get_effect(&track_id, &effect_id, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Effect {} not found", effect_id.0))
 }
 
 pub fn get_effect_from_master(effect_id: u32) -> Result<UiEffectInstance, String> {
     let effect_id_typed = EffectId::from(effect_id);
-    plugin_api
-        ::get_effect_from_master(&effect_id_typed, |e| UiEffectInstance::from(e))
+    plugin_api::get_effect_from_master(&effect_id_typed, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Effect {} not found", effect_id))
 }
 
 pub fn get_effects_from_track(track_id: u32) -> Result<Vec<UiEffectInstance>, String> {
     let track_id = TrackId::from(track_id);
-    plugin_api
-        ::get_effects_from_track(&track_id, |e| UiEffectInstance::from(e))
+    plugin_api::get_effects_from_track(&track_id, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Track {} not found", track_id.0))
 }
 
@@ -170,7 +165,11 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
 }
 
 /// Set a parameter on a generator plugin.
-pub fn set_generator_parameter(generator_id: u32, param_id: UiParamId, value: f32) -> Result<(), String> {
+pub fn set_generator_parameter(
+    generator_id: u32,
+    param_id: UiParamId,
+    value: f32,
+) -> Result<(), String> {
     let gen_id = GeneratorId::from(generator_id);
     plugin_api::set_generator_parameter(&gen_id, param_id.resolve(), value)
 }
@@ -259,7 +258,8 @@ pub fn poll_generator_parameter_feedback() -> Vec<UiGeneratorParameterSnapshot> 
 /// Sync parameter values from audio thread to stored parameters.
 pub fn sync_generator_parameters_from_audio(snapshots: &[UiGeneratorParameterSnapshot]) {
     let items = snapshots.iter().map(|snapshot| {
-        let params = snapshot.parameters
+        let params = snapshot
+            .parameters
             .iter()
             .map(|p| (p.param_id, p.value))
             .collect::<Vec<_>>();
@@ -284,11 +284,16 @@ pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
 
 pub fn sync_effect_parameters_from_audio(snapshots: &[UiEffectParameterSnapshot]) {
     let items = snapshots.iter().map(|snapshot| {
-        let params = snapshot.parameters
+        let params = snapshot
+            .parameters
             .iter()
             .map(|p| (p.param_id, p.value))
             .collect::<Vec<_>>();
-        (snapshot.target.clone().into(), EffectId::from(snapshot.effect_id), params)
+        (
+            snapshot.target.clone().into(),
+            EffectId::from(snapshot.effect_id),
+            params,
+        )
     });
     plugin_api::sync_effect_parameters_from_audio(items);
 }
@@ -299,7 +304,7 @@ pub fn sync_effect_parameters_from_audio(snapshots: &[UiEffectParameterSnapshot]
 
 pub fn get_effect_parameter_specs(
     target: UiEffectTarget,
-    effect_id: u32
+    effect_id: u32,
 ) -> Result<Vec<UiPluginParameter>, String> {
     let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
@@ -325,7 +330,7 @@ pub fn set_effect_parameter(
     target: UiEffectTarget,
     effect_id: u32,
     param_id: UiParamId,
-    value: f32
+    value: f32,
 ) -> Result<(), String> {
     let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
@@ -345,28 +350,24 @@ pub fn query_effect_parameters(target: UiEffectTarget, effect_id: u32) -> Result
 pub fn execute_plugin_command_generator(
     gen_registry_id: u32,
     command: String,
-    payload_json: String
+    payload_json: String,
 ) -> Option<String> {
-    let payload_value: serde_json::Value = serde_json
-        ::from_str(&payload_json)
-        .unwrap_or(serde_json::json!({}));
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    plugin_api
-        ::execute_plugin_command_generator(gen_registry_id, &command, &payload_value)
+    plugin_api::execute_plugin_command_generator(gen_registry_id, &command, &payload_value)
         .map(|v| v.to_string())
 }
 
 pub fn execute_plugin_command_effect(
     effect_registry_id: u32,
     command: String,
-    payload_json: String
+    payload_json: String,
 ) -> Option<String> {
-    let payload_value: serde_json::Value = serde_json
-        ::from_str(&payload_json)
-        .unwrap_or(serde_json::json!({}));
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    plugin_api
-        ::execute_plugin_command_effect(effect_registry_id, &command, &payload_value)
+    plugin_api::execute_plugin_command_effect(effect_registry_id, &command, &payload_value)
         .map(|v| v.to_string())
 }
 
@@ -378,44 +379,146 @@ pub fn execute_effect_instance_command(
     target: UiEffectTarget,
     effect_id: u32,
     command: String,
-    payload_json: String
+    payload_json: String,
 ) -> Result<String, String> {
     let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
-    let payload_value: serde_json::Value = serde_json
-        ::from_str(&payload_json)
-        .unwrap_or(serde_json::json!({}));
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    plugin_api
-        ::execute_effect_instance_command(
-            &effect_target,
-            &effect_id_typed,
-            &command,
-            &payload_value
-        )
-        .map(|v| v.to_string())
+    plugin_api::execute_effect_instance_command(
+        &effect_target,
+        &effect_id_typed,
+        &command,
+        &payload_value,
+    )
+    .map(|v| v.to_string())
 }
 
 pub fn execute_generator_instance_command(
     generator_id: u32,
     command: String,
-    payload_json: String
+    payload_json: String,
 ) -> Result<String, String> {
     let gen_id_typed = GeneratorId::from(generator_id);
-    let payload_value: serde_json::Value = serde_json
-        ::from_str(&payload_json)
-        .unwrap_or(serde_json::json!({}));
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    plugin_api
-        ::execute_generator_instance_command(&gen_id_typed, &command, &payload_value)
+    plugin_api::execute_generator_instance_command(&gen_id_typed, &command, &payload_value)
         .map(|v| v.to_string())
 }
 
 #[frb(ignore)]
 pub fn parse_plugin_response<T: FromPluginCommand>(json_str: &str) -> Result<T, String> {
-    let payload: serde_json::Value = serde_json
-        ::from_str(json_str)
+    let payload: serde_json::Value = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse JSON string: {}", e))?;
 
     T::from_json(&payload)
+}
+
+// ============================================================================
+// Real-time Plugin Command Channel (UI → Audio → UI via StreamSink)
+// ============================================================================
+
+/// Identifies which live plugin instance on the audio thread to target.
+/// Mirrors `karbeat_core::audio::event::PluginTarget` for FRB exposure.
+#[derive(Clone, Debug)]
+pub enum UiPluginTarget {
+    /// A generator plugin identified by its GeneratorId
+    Generator(u32),
+    /// A track effect identified by (TrackId, EffectId)
+    TrackEffect { track_id: u32, effect_id: u32 },
+    /// A bus effect identified by (BusId, EffectId)
+    BusEffect { bus_id: u32, effect_id: u32 },
+    /// An effect on the master bus
+    MasterEffect(u32),
+}
+
+impl From<UiPluginTarget> for PluginTarget {
+    fn from(val: UiPluginTarget) -> Self {
+        match val {
+            UiPluginTarget::Generator(id) => PluginTarget::Generator(GeneratorId::from(id)),
+            UiPluginTarget::TrackEffect {
+                track_id,
+                effect_id,
+            } => PluginTarget::TrackEffect(TrackId::from(track_id), EffectId::from(effect_id)),
+            UiPluginTarget::BusEffect { bus_id, effect_id } => {
+                PluginTarget::BusEffect(BusId::from(bus_id), EffectId::from(effect_id))
+            }
+            UiPluginTarget::MasterEffect(id) => PluginTarget::MasterEffect(EffectId::from(id)),
+        }
+    }
+}
+
+/// A response message arriving from the audio thread to Flutter.
+/// Flutter uses the `request_id` to correlate with the original command sent
+/// via `execute_realtime_plugin_command`.
+#[derive(Clone, Debug)]
+pub struct UiPluginCommandResponse {
+    /// Matches the `request_id` returned by `execute_realtime_plugin_command`
+    pub request_id: u32,
+    /// JSON-encoded response from the plugin's `execute_custom_command`
+    pub response_json: String,
+}
+
+/// Dispatches a real-time command to a live plugin instance on the audio thread.
+///
+/// The plugin's `execute_custom_command` is called from within the audio callback,
+/// so the command and payload must be cheap to process. The response arrives
+/// asynchronously via the `StreamSink` opened by `create_plugin_message_stream`.
+///
+/// # Parameters
+/// - `target`: Which plugin instance to target.
+/// - `command`: Command key string (e.g. `"get_meter"`, `"get_spectrum"`).
+/// - `payload_json`: JSON string sent as the command argument. Defaults to `{}`
+///   if the string is not valid JSON.
+///
+/// # Returns
+/// `Ok(request_id)` — correlate this with `UiPluginCommandResponse.request_id`
+/// in the stream. Returns `Err` if the audio stream is not active or the
+/// command queue is full.
+pub fn execute_realtime_plugin_command(
+    target: UiPluginTarget,
+    command: String,
+    payload_json: String,
+) -> Result<u32, String> {
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
+
+    plugin_api::execute_plugin_command(target.into(), command, payload)
+}
+
+/// Opens a stream that continuously polls the audio→UI feedback channel and
+/// forwards any `PluginCommandResponse` messages to Flutter.
+///
+/// Flutter can subscribe to this stream with a `StreamBuilder<UiPluginCommandResponse>`
+/// and use `response.request_id` to match responses to pending commands.
+///
+/// The polling thread runs at ~16ms intervals (≈60fps). It terminates
+/// automatically when Flutter closes the stream (sink returns an error).
+pub fn create_plugin_message_stream(
+    sink: StreamSink<UiPluginCommandResponse>,
+) -> Result<(), String> {
+    std::thread::spawn(move || {
+        loop {
+            let responses = plugin_api::drain_plugin_command_responses(|request_id, response| {
+                UiPluginCommandResponse {
+                    request_id,
+                    response_json: response.to_string(),
+                }
+            });
+
+            for msg in responses {
+                if sink.add(msg).is_err() {
+                    // Flutter closed the stream — exit cleanly
+                    return;
+                }
+            }
+
+            // ~60fps poll rate, same as the transport position stream
+            std::thread::sleep(Duration::from_millis(16));
+        }
+    });
+
+    Ok(())
 }

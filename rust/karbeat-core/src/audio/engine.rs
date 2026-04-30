@@ -16,8 +16,7 @@ use wide::f32x4;
 use crate::{
     audio::{
         event::{
-            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent,
-            TrackAutomationEvent, TransportFeedback,
+            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent, PluginTarget, TrackAutomationEvent, TransportFeedback
         },
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
@@ -28,11 +27,7 @@ use crate::{
         GeneratorParameterSnapshot,
     },
     core::project::{
-        automation::AutomationTarget,
-        mixer::{MixerChannel, RoutingNode},
-        plugin::{MidiEvent, MidiMessage},
-        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
-        PatternId, TrackId,
+        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern, PatternId, TrackId, automation::AutomationTarget, mixer::{MixerChannel, RoutingNode}, plugin::{MidiEvent, MidiMessage}
     },
     shared::id::*,
     utils::{apply_simd_mix, apply_simd_mix_gain, get_waveform_buffer},
@@ -1168,6 +1163,40 @@ impl AudioEngine {
                         *generator_id = new_gen_id;
                     }
                 }
+            },
+            AudioCommand::ExecutePluginCommand { target, command, payload, request_id } => {
+               let response = match target {
+                    PluginTarget::Generator(generator_id) => {
+                        self.plugin_state
+                            .get_generator_mut(generator_id.to_u32() as usize)
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                    PluginTarget::TrackEffect(track_id, effect_id) => {
+                        self.plugin_state
+                            .get_track_effects_mut(track_id.to_u32() as usize)
+                            .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                    PluginTarget::BusEffect(bus_id, effect_id) => {
+                        self.plugin_state
+                            .get_bus_effects_mut(bus_id.to_u32() as usize)
+                            .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                    PluginTarget::MasterEffect(effect_id) => {
+                        self.plugin_state.master_effects.iter_mut()
+                            .find(|e| e.id == effect_id)
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                };
+                // If the plugin returned a response, send it back to the UI
+                if let Some(res) = response {
+                    let _ = self.feedback_producer.push(AudioFeedback::PluginCommandResponse {
+                        request_id,
+                        response: res,
+                    });
+                }
+
             },
         }
     }

@@ -633,4 +633,444 @@ as String,
 
 }
 
+/// @nodoc
+mixin _$UiPluginTarget {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginTarget);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'UiPluginTarget()';
+}
+
+
+}
+
+/// @nodoc
+class $UiPluginTargetCopyWith<$Res>  {
+$UiPluginTargetCopyWith(UiPluginTarget _, $Res Function(UiPluginTarget) __);
+}
+
+
+/// Adds pattern-matching-related methods to [UiPluginTarget].
+extension UiPluginTargetPatterns on UiPluginTarget {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiPluginTarget_Generator value)?  generator,TResult Function( UiPluginTarget_TrackEffect value)?  trackEffect,TResult Function( UiPluginTarget_BusEffect value)?  busEffect,TResult Function( UiPluginTarget_MasterEffect value)?  masterEffect,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case UiPluginTarget_Generator() when generator != null:
+return generator(_that);case UiPluginTarget_TrackEffect() when trackEffect != null:
+return trackEffect(_that);case UiPluginTarget_BusEffect() when busEffect != null:
+return busEffect(_that);case UiPluginTarget_MasterEffect() when masterEffect != null:
+return masterEffect(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiPluginTarget_Generator value)  generator,required TResult Function( UiPluginTarget_TrackEffect value)  trackEffect,required TResult Function( UiPluginTarget_BusEffect value)  busEffect,required TResult Function( UiPluginTarget_MasterEffect value)  masterEffect,}){
+final _that = this;
+switch (_that) {
+case UiPluginTarget_Generator():
+return generator(_that);case UiPluginTarget_TrackEffect():
+return trackEffect(_that);case UiPluginTarget_BusEffect():
+return busEffect(_that);case UiPluginTarget_MasterEffect():
+return masterEffect(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiPluginTarget_Generator value)?  generator,TResult? Function( UiPluginTarget_TrackEffect value)?  trackEffect,TResult? Function( UiPluginTarget_BusEffect value)?  busEffect,TResult? Function( UiPluginTarget_MasterEffect value)?  masterEffect,}){
+final _that = this;
+switch (_that) {
+case UiPluginTarget_Generator() when generator != null:
+return generator(_that);case UiPluginTarget_TrackEffect() when trackEffect != null:
+return trackEffect(_that);case UiPluginTarget_BusEffect() when busEffect != null:
+return busEffect(_that);case UiPluginTarget_MasterEffect() when masterEffect != null:
+return masterEffect(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int field0)?  generator,TResult Function( int trackId,  int effectId)?  trackEffect,TResult Function( int busId,  int effectId)?  busEffect,TResult Function( int field0)?  masterEffect,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case UiPluginTarget_Generator() when generator != null:
+return generator(_that.field0);case UiPluginTarget_TrackEffect() when trackEffect != null:
+return trackEffect(_that.trackId,_that.effectId);case UiPluginTarget_BusEffect() when busEffect != null:
+return busEffect(_that.busId,_that.effectId);case UiPluginTarget_MasterEffect() when masterEffect != null:
+return masterEffect(_that.field0);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int field0)  generator,required TResult Function( int trackId,  int effectId)  trackEffect,required TResult Function( int busId,  int effectId)  busEffect,required TResult Function( int field0)  masterEffect,}) {final _that = this;
+switch (_that) {
+case UiPluginTarget_Generator():
+return generator(_that.field0);case UiPluginTarget_TrackEffect():
+return trackEffect(_that.trackId,_that.effectId);case UiPluginTarget_BusEffect():
+return busEffect(_that.busId,_that.effectId);case UiPluginTarget_MasterEffect():
+return masterEffect(_that.field0);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int field0)?  generator,TResult? Function( int trackId,  int effectId)?  trackEffect,TResult? Function( int busId,  int effectId)?  busEffect,TResult? Function( int field0)?  masterEffect,}) {final _that = this;
+switch (_that) {
+case UiPluginTarget_Generator() when generator != null:
+return generator(_that.field0);case UiPluginTarget_TrackEffect() when trackEffect != null:
+return trackEffect(_that.trackId,_that.effectId);case UiPluginTarget_BusEffect() when busEffect != null:
+return busEffect(_that.busId,_that.effectId);case UiPluginTarget_MasterEffect() when masterEffect != null:
+return masterEffect(_that.field0);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class UiPluginTarget_Generator extends UiPluginTarget {
+  const UiPluginTarget_Generator(this.field0): super._();
+  
+
+ final  int field0;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiPluginTarget_GeneratorCopyWith<UiPluginTarget_Generator> get copyWith => _$UiPluginTarget_GeneratorCopyWithImpl<UiPluginTarget_Generator>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginTarget_Generator&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiPluginTarget.generator(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiPluginTarget_GeneratorCopyWith<$Res> implements $UiPluginTargetCopyWith<$Res> {
+  factory $UiPluginTarget_GeneratorCopyWith(UiPluginTarget_Generator value, $Res Function(UiPluginTarget_Generator) _then) = _$UiPluginTarget_GeneratorCopyWithImpl;
+@useResult
+$Res call({
+ int field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiPluginTarget_GeneratorCopyWithImpl<$Res>
+    implements $UiPluginTarget_GeneratorCopyWith<$Res> {
+  _$UiPluginTarget_GeneratorCopyWithImpl(this._self, this._then);
+
+  final UiPluginTarget_Generator _self;
+  final $Res Function(UiPluginTarget_Generator) _then;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiPluginTarget_Generator(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiPluginTarget_TrackEffect extends UiPluginTarget {
+  const UiPluginTarget_TrackEffect({required this.trackId, required this.effectId}): super._();
+  
+
+ final  int trackId;
+ final  int effectId;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiPluginTarget_TrackEffectCopyWith<UiPluginTarget_TrackEffect> get copyWith => _$UiPluginTarget_TrackEffectCopyWithImpl<UiPluginTarget_TrackEffect>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginTarget_TrackEffect&&(identical(other.trackId, trackId) || other.trackId == trackId)&&(identical(other.effectId, effectId) || other.effectId == effectId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,trackId,effectId);
+
+@override
+String toString() {
+  return 'UiPluginTarget.trackEffect(trackId: $trackId, effectId: $effectId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiPluginTarget_TrackEffectCopyWith<$Res> implements $UiPluginTargetCopyWith<$Res> {
+  factory $UiPluginTarget_TrackEffectCopyWith(UiPluginTarget_TrackEffect value, $Res Function(UiPluginTarget_TrackEffect) _then) = _$UiPluginTarget_TrackEffectCopyWithImpl;
+@useResult
+$Res call({
+ int trackId, int effectId
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiPluginTarget_TrackEffectCopyWithImpl<$Res>
+    implements $UiPluginTarget_TrackEffectCopyWith<$Res> {
+  _$UiPluginTarget_TrackEffectCopyWithImpl(this._self, this._then);
+
+  final UiPluginTarget_TrackEffect _self;
+  final $Res Function(UiPluginTarget_TrackEffect) _then;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? trackId = null,Object? effectId = null,}) {
+  return _then(UiPluginTarget_TrackEffect(
+trackId: null == trackId ? _self.trackId : trackId // ignore: cast_nullable_to_non_nullable
+as int,effectId: null == effectId ? _self.effectId : effectId // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiPluginTarget_BusEffect extends UiPluginTarget {
+  const UiPluginTarget_BusEffect({required this.busId, required this.effectId}): super._();
+  
+
+ final  int busId;
+ final  int effectId;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiPluginTarget_BusEffectCopyWith<UiPluginTarget_BusEffect> get copyWith => _$UiPluginTarget_BusEffectCopyWithImpl<UiPluginTarget_BusEffect>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginTarget_BusEffect&&(identical(other.busId, busId) || other.busId == busId)&&(identical(other.effectId, effectId) || other.effectId == effectId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,busId,effectId);
+
+@override
+String toString() {
+  return 'UiPluginTarget.busEffect(busId: $busId, effectId: $effectId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiPluginTarget_BusEffectCopyWith<$Res> implements $UiPluginTargetCopyWith<$Res> {
+  factory $UiPluginTarget_BusEffectCopyWith(UiPluginTarget_BusEffect value, $Res Function(UiPluginTarget_BusEffect) _then) = _$UiPluginTarget_BusEffectCopyWithImpl;
+@useResult
+$Res call({
+ int busId, int effectId
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiPluginTarget_BusEffectCopyWithImpl<$Res>
+    implements $UiPluginTarget_BusEffectCopyWith<$Res> {
+  _$UiPluginTarget_BusEffectCopyWithImpl(this._self, this._then);
+
+  final UiPluginTarget_BusEffect _self;
+  final $Res Function(UiPluginTarget_BusEffect) _then;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? busId = null,Object? effectId = null,}) {
+  return _then(UiPluginTarget_BusEffect(
+busId: null == busId ? _self.busId : busId // ignore: cast_nullable_to_non_nullable
+as int,effectId: null == effectId ? _self.effectId : effectId // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiPluginTarget_MasterEffect extends UiPluginTarget {
+  const UiPluginTarget_MasterEffect(this.field0): super._();
+  
+
+ final  int field0;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiPluginTarget_MasterEffectCopyWith<UiPluginTarget_MasterEffect> get copyWith => _$UiPluginTarget_MasterEffectCopyWithImpl<UiPluginTarget_MasterEffect>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginTarget_MasterEffect&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiPluginTarget.masterEffect(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiPluginTarget_MasterEffectCopyWith<$Res> implements $UiPluginTargetCopyWith<$Res> {
+  factory $UiPluginTarget_MasterEffectCopyWith(UiPluginTarget_MasterEffect value, $Res Function(UiPluginTarget_MasterEffect) _then) = _$UiPluginTarget_MasterEffectCopyWithImpl;
+@useResult
+$Res call({
+ int field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiPluginTarget_MasterEffectCopyWithImpl<$Res>
+    implements $UiPluginTarget_MasterEffectCopyWith<$Res> {
+  _$UiPluginTarget_MasterEffectCopyWithImpl(this._self, this._then);
+
+  final UiPluginTarget_MasterEffect _self;
+  final $Res Function(UiPluginTarget_MasterEffect) _then;
+
+/// Create a copy of UiPluginTarget
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiPluginTarget_MasterEffect(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
 // dart format on

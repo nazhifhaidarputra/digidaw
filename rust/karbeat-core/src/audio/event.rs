@@ -71,3 +71,10 @@ pub enum AudioSourceAutomationEvent {
     Pan(f32),
     Volume(f32),
 }
+
+pub enum PluginTarget {
+    Generator(GeneratorId),
+    TrackEffect(TrackId, EffectId),
+    BusEffect(BusId, EffectId),
+    MasterEffect(EffectId),
+}

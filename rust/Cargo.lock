@@ -1415,6 +1415,8 @@ dependencies = [
  "karbeat-plugin-types",
  "karbeat-utils",
  "log",
+ "num-complex",
+ "rustfft",
  "serde",
  "serde_json",
  "smallvec",

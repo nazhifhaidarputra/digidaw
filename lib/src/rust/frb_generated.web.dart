@@ -80,6 +80,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<UiPluginCommandResponse>
+  dco_decode_StreamSink_ui_plugin_command_response_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
@@ -134,6 +138,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw);
+
+  @protected
+  UiPluginTarget dco_decode_box_autoadd_ui_plugin_target(dynamic raw);
 
   @protected
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
@@ -438,6 +445,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiPattern dco_decode_ui_pattern(dynamic raw);
 
   @protected
+  UiPluginCommandResponse dco_decode_ui_plugin_command_response(dynamic raw);
+
+  @protected
   UiPluginInfo dco_decode_ui_plugin_info(dynamic raw);
 
   @protected
@@ -445,6 +455,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
+
+  @protected
+  UiPluginTarget dco_decode_ui_plugin_target(dynamic raw);
 
   @protected
   UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw);
@@ -542,6 +555,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<UiPluginCommandResponse>
+  sse_decode_StreamSink_ui_plugin_command_response_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
@@ -610,6 +629,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiPluginTarget sse_decode_box_autoadd_ui_plugin_target(
     SseDeserializer deserializer,
   );
 
@@ -982,6 +1006,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
 
   @protected
+  UiPluginCommandResponse sse_decode_ui_plugin_command_response(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer);
 
   @protected
@@ -991,6 +1020,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiPluginParameter sse_decode_ui_plugin_parameter(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiPluginTarget sse_decode_ui_plugin_target(SseDeserializer deserializer);
 
   @protected
   UiProjectMetadata sse_decode_ui_project_metadata(
@@ -1112,6 +1144,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_plugin_command_response_Sse(
+    RustStreamSink<UiPluginCommandResponse> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_ui_transport_feedback_Sse(
     RustStreamSink<UiTransportFeedback> self,
     SseSerializer serializer,
@@ -1192,6 +1230,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_plugin_instance(
     UiPluginInstance self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_plugin_target(
+    UiPluginTarget self,
     SseSerializer serializer,
   );
 
@@ -1644,6 +1688,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_plugin_command_response(
+    UiPluginCommandResponse self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer);
 
   @protected
@@ -1655,6 +1705,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_plugin_parameter(
     UiPluginParameter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_plugin_target(
+    UiPluginTarget self,
     SseSerializer serializer,
   );
 

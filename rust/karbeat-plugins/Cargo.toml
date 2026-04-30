@@ -19,6 +19,8 @@ hashbrown.workspace = true
 smallvec.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
+rustfft.workspace = true
+num-complex.workspace = true
 
 [lints]
 workspace = true
