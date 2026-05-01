@@ -38,8 +38,8 @@ impl From<f32> for Waveform {
 // OSCILLATOR
 // ============================================================================
 
-// We use #[karbeat_plugin] instead of #[derive(AutoParams)].
-// The macro will rewrite these standard types into Param<T> fields!
+/// A Oscillator module component. you can use this to add oscillator to 
+/// your plugin audio plugin
 #[derive(Clone, Debug)]
 #[karbeat_plugin]
 pub struct Oscillator {

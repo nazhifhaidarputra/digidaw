@@ -250,6 +250,7 @@ abstract class RustLibApi extends BaseApi {
     required String outputPath,
     required int sampleRate,
     required int bitPerSample,
+    required TailHandlingDTO tailHandling,
   });
 
   Future<UiAudioHardwareConfig> crateApiAudioGetAudioConfig();
@@ -1841,32 +1842,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String outputPath,
     required int sampleRate,
     required int bitPerSample,
+    required TailHandlingDTO tailHandling,
   }) {
     final progressSink = RustStreamSink<double>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_String(outputPath, serializer);
-            sse_encode_u_32(sampleRate, serializer);
-            sse_encode_u_16(bitPerSample, serializer);
-            sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 35,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_String,
-          ),
-          constMeta: kCrateApiProjectExportProjectFlutterConstMeta,
-          argValues: [outputPath, sampleRate, bitPerSample, progressSink],
-          apiImpl: this,
+    handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_u_32(sampleRate, serializer);
+          sse_encode_u_16(bitPerSample, serializer);
+          sse_encode_tail_handling_dto(tailHandling, serializer);
+          sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
         ),
+        constMeta: kCrateApiProjectExportProjectFlutterConstMeta,
+        argValues: [
+          outputPath,
+          sampleRate,
+          bitPerSample,
+          tailHandling,
+          progressSink,
+        ],
+        apiImpl: this,
       ),
     );
     return progressSink.stream;
@@ -1875,7 +1877,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiProjectExportProjectFlutterConstMeta =>
       const TaskConstMeta(
         debugName: "export_project_flutter",
-        argNames: ["outputPath", "sampleRate", "bitPerSample", "progressSink"],
+        argNames: [
+          "outputPath",
+          "sampleRate",
+          "bitPerSample",
+          "tailHandling",
+          "progressSink",
+        ],
       );
 
   @override
@@ -5868,6 +5876,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TailHandlingDTO dco_decode_tail_handling_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TailHandlingDTO.values[raw as int];
+  }
+
+  @protected
   int dco_decode_u_16(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -7482,6 +7496,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_field0 = sse_decode_ui_mixer_channel(deserializer);
     var var_field1 = sse_decode_list_ui_effect_instance(deserializer);
     return (var_field0, var_field1);
+  }
+
+  @protected
+  TailHandlingDTO sse_decode_tail_handling_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TailHandlingDTO.values[inner];
   }
 
   @protected
@@ -9183,6 +9204,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_ui_mixer_channel(self.$1, serializer);
     sse_encode_list_ui_effect_instance(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_tail_handling_dto(
+    TailHandlingDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected

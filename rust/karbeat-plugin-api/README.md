@@ -1,75 +1,105 @@
 # Karbeat Plugin API
 
-This is the documentation for the implementation of Karbeat's Plugin API. We will
-talk about what you need to know and how to implement the API
+This document describes how to implement plugins using the Karbeat Plugin API.
 
-(for more detail on this will be added in the future). To see more examples you can see it [here](../karbeat-plugins/)
+It covers the core traits, helper macros, and how to register your plugin.
+More detailed documentation will be added over time.
 
-## Scope
+👉 For complete examples, see: [karbeat-plugins](../karbeat-plugins/)
 
-### 1. Base Trait
+---
 
-The core definition for both generator/synth and effect can be found at [traits.rs](./src/traits.rs). This file
-includes the trait user needs to implement
+## Overview
 
-```rs
+A Karbeat plugin can be either:
+
+* **Effect** (audio processing)
+* **Generator** (sound source / synth)
+
+Both are defined via traits that you implement.
+
+---
+
+## 1. Core Traits
+
+The base traits are defined in [`traits.rs`](./src/traits.rs).
+
+```rust
 pub trait KarbeatEffect: Send + Sync {
     fn name(&self) -> &str;
-    ...
+    // ...
 }
 
-pub trait KarbeatGenerator: Send + Sync  {
+pub trait KarbeatGenerator: Send + Sync {
     fn name(&self) -> &str;
-    ...
+    // ...
 }
 ```
 
-User can freely decided how to implement required method freely. 
-Though we also provide a wrapper that can be used to add base parameter specifications, 
-**User can implement the mapping of each parameter freely**, but with a guarantee that the frontend knows the mapping of each parameter. For it to be less error-prone. you can the map parameter integer keys to
-an enum or constant which both the frontend and the backend agrees.
+### Notes
 
-### 2. Base Synth & Base Effect
+* You are free to implement the required methods however you like.
+* Parameter handling is **fully customizable**, but:
 
-We provided reserved parameters for common DSP found in synths or effects,
-and we put it as base implementation so we don't have to rewrite this part
-each time you want to implement some plugin. So, you can focus on implementing
-the complex audio signal processing for the plugin.
+  * The frontend must understand your parameter mapping.
+  * Consistency between frontend and backend is your responsibility.
 
-For more detail see [effect_base.rs](./src/effect_base.rs) and [synth_base.rs](./src/synth_base.rs)
+### Recommended Approach
 
-### 3. Plugin Wrapper
+To avoid errors, map parameter IDs (`u32`) using:
 
-Plugin wrapper in [wrapper.rs](./src/wrapper.rs) lets you easily integrate
-your plugin logic with the traits and plugin base setup so you don't have to worry about
-wiring your implemented logic with the API
+* Enums or constants shared across frontend/backend, **or**
+* The provided `#[karbeat_plugin]` macro (recommended)
 
-**Example of implementation.**
+The macro generates stable parameter IDs from string-based identifiers (hashed internally).
 
-To see examples of implementation you can see it [here](../karbeat-plugins/)
+---
 
-### 4. Macro
+## 2. Macro Support (`#[karbeat_plugin]`)
 
-Implementing this with all the boilerplate might be tedious. So, we have prepared an macro
-to help implementing the macro (see more at [karbeat_macros](../karbeat-macros/src/lib.rs))
+Writing parameter boilerplate manually can be tedious.
+The `karbeat_macros` crate provides a derive macro to simplify this.
 
-Example:
+👉 See implementation: [`karbeat-macros`](../karbeat-macros/src/lib.rs)
+
+### Example
 
 ```rust
 #[derive(Clone)]
 #[karbeat_plugin]
-pub struct KarbeatzerEngine {
-    // IMPORTANT: Oscillator needs to implement AutoParams to make this work. 
-    // it depends on `karbeat-plugin-types` crate, so you have to include it in the Cargo.toml
-    #[nested]
-    oscillators: [Oscillator; 3], 
-    #[param(id = 8, name = "Drive", group = "Master", min = 0.0, max = 1.0, default = 0.0)]
+pub struct Karbeatzer {
+    // IMPORTANT:
+    // Nested components must implement AutoParams (from karbeat-plugin-types)
+    // Built-in Oscillator already supports this.
+    #[nested(prefix = "osc")]
+    oscillators: [Oscillator; 3],
+
+    #[param(
+        id = "drive",
+        name = "Drive",
+        group = "Master",
+        min = 0.0,
+        max = 1.0,
+        default = 0.0
+    )]
     drive: f32,
 }
+```
 
-// This will generate the auto implementation for boilerplate parameter manipulation.
-// you can just call it like this
-impl RawSynthEngine for KarbeatzerEngine {
+### Generated Helpers
+
+The macro generates helper methods like:
+
+* `auto_set_parameter`
+* `auto_get_parameter`
+* `auto_apply_automation`
+* `auto_clear_automation`
+* `auto_get_parameter_specs`
+
+You can delegate your trait implementation to these:
+
+```rust
+impl KarbeatGenerator for Karbeatzer {
     fn set_custom_parameter(&mut self, id: u32, value: f32) {
         self.auto_set_parameter(id, value);
     }
@@ -92,30 +122,81 @@ impl RawSynthEngine for KarbeatzerEngine {
 }
 ```
 
-### 5. Adding to Registry
+---
 
-To add it to registry, the inner struct must implement Default so that the registry
-can call the builder
+## 3. Plugin Registration
+
+To register your plugin, your internal engine must implement `Default`.
 
 ```rust
-impl Default for PluginEngine {
+impl Default for MyPlugin {
     fn default() -> Self {
-        // ...Your default implementation
+        // Your initialization logic
     }
 }
-
-// This will generate YourAwesomePlugin::build() Automatically
-pub type YourAwesomePlugin = RawSynthWrapper<PluginEngine>;
-
 ```
 
-## ⚠ Limitations and Important Note
+Then implement the AudioPluginBuilder trait to the plugin:
 
-- **Currently, there are only limited methods can be implemented in the trait.
-As the project grows, more trait are added, and may cause breaking changes.
-As the current state of the development is still on the alpha phase, you will expect this very often**
+```rust
+impl AudioPluginBuilder for MyPlugin {
+    pub fn build() -> Self {
+        Self::default();
+    }
+}
+```
 
-- Currently the Base Wrapper is still unstable and may cause a lot of bug. We recommended to build the DSP from scratch
-using provided building blocks inside the `karbeat-dsp` crate
+And lastly, implement the Manifestable if you want to generate
+the plugin JSON manifest
 
+```rust
+impl Manifestable for KarbeatParametricEQ {
+    fn build_manifest() -> PluginManifest {
+        PluginManifest {
+            id: 0,
+            name: "Karbeat Parametric EQ".into(),
+            internal_type: "KarbeatParametricEQ".into(),
+            is_synth: false,
+            parameters: Self::static_parameter_specs(),
+        }
+    }
+}
+```
 
+This enables automatic construction via the registry.
+
+---
+
+## ⚠ Limitations & Notes
+
+### API Stability
+
+* The API is **still in alpha**
+* Breaking changes are expected as the system evolves
+* Trait definitions and available features may change
+
+---
+
+### Architecture Update
+
+> **Recent change:** Wrapper-based design has been removed.
+
+The system now uses a **modular approach**, which is:
+
+* Easier to maintain
+* More flexible for future extensions
+
+At the moment:
+
+* The `karbeat-dsp` crate has limited components
+* More utilities and DSP modules will be added progressively
+
+---
+
+## Future Improvements
+
+* More built-in DSP components
+* Better documentation and examples
+* Stabilized API (post-alpha)
+
+---

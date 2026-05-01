@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/models/export_audio.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -19,10 +20,11 @@ class ProjectExportPanel extends ConsumerStatefulWidget {
 class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   late TextEditingController _nameController;
   String _exportDirectory = "Select Directory...";
-  String _selectedFormat = "WAV";
-  int _selectedBitDepth = 16;
+  SupportedAudioFormat _selectedFormat = SupportedAudioFormat.Wav;
+  BitPerSample _selectedBitDepth = BitPerSample.b16;
+  SampleRate _selectedSampleRate = SampleRate.hz44100;
+  TailHandling _tailHandling = TailHandling.LeaveRemainder;
   int _selectedBitrate = 192;
-  String _tailHandling = "Leave Tail";
   bool _openFolderAfterExport = true;
 
   bool _isExporting = false;
@@ -53,7 +55,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   Future<void> _handleExport() async {
     if (_exportDirectory == "Select Directory...") {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select an export directory first.")),
+        const SnackBar(
+          content: Text("Please select an export directory first."),
+        ),
       );
       return;
     }
@@ -63,32 +67,57 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       _exportProgress = 0.0;
     });
 
-    // Mock progress to simulate backend rendering
-    for (int i = 0; i <= 10; i++) {
-      await Future.delayed(const Duration(milliseconds: 200));
-      if (!mounted) return;
-      setState(() {
-        _exportProgress = i / 10.0;
-      });
+    final state = ref.read(karbeatStateProvider.notifier);
+
+    try {
+      // Consume the progress stream
+      final progressStream = state.exportProject(
+        path: _exportDirectory,
+        soundfileName: _nameController.text,
+        format: _selectedFormat,
+        bitPerSample:
+            _selectedFormat == SupportedAudioFormat.Wav ||
+                _selectedFormat == SupportedAudioFormat.Flac
+            ? _selectedBitDepth
+            : null,
+        bitrate:
+            _selectedFormat == SupportedAudioFormat.Mp3 ||
+                _selectedFormat == SupportedAudioFormat.Ogg
+            ? _selectedBitrate
+            : null,
+        sampleRate: _selectedSampleRate,
+        tailHandling: _tailHandling,
+      );
+
+      await for (final progress in progressStream) {
+        if (!mounted) break;
+        setState(() {
+          _exportProgress = progress;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Export failed: $e")));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
     }
 
-    // TODO: Call your actual backend export API via karbeatStateProvider here
-    // final state = ref.read(karbeatStateProvider);
-    // await state.exportProject(...);
-
-    setState(() {
-      _isExporting = false;
-    });
-
-    if (_openFolderAfterExport) {
-       // Best effort to open folder (works mostly on desktop platforms)
-       if (Platform.isWindows) {
-         Process.run('explorer.exe', [_exportDirectory]);
-       } else if (Platform.isMacOS) {
-         Process.run('open', [_exportDirectory]);
-       } else if (Platform.isLinux) {
-         Process.run('xdg-open', [_exportDirectory]);
-       }
+    if (_openFolderAfterExport && mounted) {
+      // Best effort to open folder
+      if (Platform.isWindows) {
+        Process.run('explorer.exe', [_exportDirectory]);
+      } else if (Platform.isMacOS) {
+        Process.run('open', [_exportDirectory]);
+      } else if (Platform.isLinux) {
+        Process.run('xdg-open', [_exportDirectory]);
+      }
     }
 
     widget.onClose();
@@ -96,7 +125,6 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(karbeatStateProvider);
     final size = MediaQuery.of(context).size;
 
     return Center(
@@ -104,7 +132,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         color: Colors.transparent,
         child: Container(
           width: size.width * 0.5,
-          height: size.height * 0.6,
+          height: size.height * 0.65,
           decoration: BoxDecoration(
             color: Colors.grey.shade900,
             borderRadius: BorderRadius.circular(8),
@@ -124,7 +152,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade800,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -147,7 +177,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                   ],
                 ),
               ),
-              
+
               // Body
               Expanded(
                 child: Padding(
@@ -162,7 +192,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.grey.shade800,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                           isDense: true,
                         ),
                       ),
@@ -174,7 +206,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         children: [
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.grey.shade800,
                                 borderRadius: BorderRadius.circular(4),
@@ -182,8 +217,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               child: Text(
                                 _exportDirectory,
                                 style: TextStyle(
-                                  color: _exportDirectory == "Select Directory..." 
-                                      ? Colors.white54 
+                                  color:
+                                      _exportDirectory == "Select Directory..."
+                                      ? Colors.white54
                                       : Colors.white,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -215,10 +251,12 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _buildSectionTitle("Format"),
-                                _buildDropdown<String>(
+                                _buildDropdown<SupportedAudioFormat>(
                                   value: _selectedFormat,
-                                  items: ["WAV", "MP3", "OGG", "FLAC"],
-                                  onChanged: (val) => setState(() => _selectedFormat = val!),
+                                  items: SupportedAudioFormat.values,
+                                  itemLabel: (f) => f.name.toUpperCase(),
+                                  onChanged: (val) =>
+                                      setState(() => _selectedFormat = val!),
                                 ),
                               ],
                             ),
@@ -228,20 +266,52 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                _buildSectionTitle("Sample Rate"),
+                                _buildDropdown<SampleRate>(
+                                  value: _selectedSampleRate,
+                                  items: SampleRate.values,
+                                  itemLabel: (s) => s.label,
+                                  onChanged: (val) => setState(
+                                    () => _selectedSampleRate = val!,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Format Settings - Row 2 (Bit Depth/Rate & Tail Handling)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 _buildSectionTitle("Bit Depth / Bitrate"),
-                                if (_selectedFormat == "WAV" || _selectedFormat == "FLAC")
-                                  _buildDropdown<int>(
+                                if (_selectedFormat ==
+                                        SupportedAudioFormat.Wav ||
+                                    _selectedFormat ==
+                                        SupportedAudioFormat.Flac)
+                                  _buildDropdown<BitPerSample>(
                                     value: _selectedBitDepth,
-                                    items: [16, 24, 32],
+                                    items: BitPerSample.values,
+                                    itemLabel: (b) => b.name.substring(1),
                                     suffix: "-bit",
-                                    onChanged: (val) => setState(() => _selectedBitDepth = val!),
+                                    onChanged: (val) => setState(
+                                      () => _selectedBitDepth = val!,
+                                    ),
                                   )
                                 else
                                   _buildDropdown<int>(
                                     value: _selectedBitrate,
-                                    items: [128, 192, 256, 320],
+                                    items: const [128, 192, 256, 320],
+                                    itemLabel: (b) => b.toString(),
                                     suffix: " kbps",
-                                    onChanged: (val) => setState(() => _selectedBitrate = val!),
+                                    onChanged: (val) =>
+                                        setState(() => _selectedBitrate = val!),
                                   ),
                               ],
                             ),
@@ -252,25 +322,33 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _buildSectionTitle("Tail Handling"),
-                                _buildDropdown<String>(
+                                _buildDropdown<TailHandling>(
                                   value: _tailHandling,
-                                  items: ["Leave Tail", "Cut Remainder", "Wrap Remainder"],
-                                  onChanged: (val) => setState(() => _tailHandling = val!),
+                                  items: TailHandling.values,
+                                  itemLabel: (t) => t.name.replaceAll(
+                                    RegExp(r'(?<!^)(?=[A-Z])'),
+                                    ' ',
+                                  ),
+                                  onChanged: (val) =>
+                                      setState(() => _tailHandling = val!),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-
+                      const SizedBox(height: 16),
                       // Options
                       Row(
                         children: [
                           Checkbox(
                             value: _openFolderAfterExport,
                             activeColor: Colors.blueAccent,
-                            onChanged: _isExporting ? null : (val) => setState(() => _openFolderAfterExport = val!),
+                            onChanged: _isExporting
+                                ? null
+                                : (val) => setState(
+                                    () => _openFolderAfterExport = val!,
+                                  ),
                           ),
                           const Text(
                             "Open folder after export",
@@ -278,30 +356,37 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                           ),
                         ],
                       ),
-                      
+
                       const SizedBox(height: 16),
 
                       // Progress Bar
                       if (_isExporting) ...[
                         Text(
                           "Rendering: ${(_exportProgress * 100).toInt()}%",
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         ),
                         const SizedBox(height: 8),
+                        // TODO: Wrap this with Stream
                         LinearProgressIndicator(
                           value: _exportProgress,
                           backgroundColor: Colors.grey.shade800,
                           color: Colors.greenAccent,
                         ),
-                      ]
+                      ],
                     ],
                   ),
                 ),
               ),
-              
+
               // Footer / Actions
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 decoration: BoxDecoration(
                   border: Border(top: BorderSide(color: Colors.grey.shade800)),
                 ),
@@ -310,7 +395,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                   children: [
                     TextButton(
                       onPressed: _isExporting ? null : widget.onClose,
-                      child: const Text("Cancel", style: TextStyle(color: Colors.white70)),
+                      child: const Text(
+                        "Cancel",
+                        style: TextStyle(color: Colors.white70),
+                      ),
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton(
@@ -318,13 +406,19 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.greenAccent.shade700,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
                       ),
                       child: _isExporting
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Text("Export Audio"),
                     ),
@@ -357,6 +451,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     required T value,
     required List<T> items,
     required ValueChanged<T?> onChanged,
+    required String Function(T) itemLabel,
     String suffix = "",
   }) {
     return Container(
@@ -375,7 +470,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
           items: items.map((T item) {
             return DropdownMenuItem<T>(
               value: item,
-              child: Text("$item$suffix"),
+              child: Text("${itemLabel(item)}$suffix"),
             );
           }).toList(),
           onChanged: _isExporting ? null : onChanged,

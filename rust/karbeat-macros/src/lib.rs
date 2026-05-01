@@ -85,7 +85,8 @@ struct ParamDef {
 
 /// # Overview
 ///
-/// Macro to generate implementation for getter, setter, and automation
+/// Macro to generate implementation for getter, setter, and automation, and it also wrap your raw data type Item to Param<Item>
+/// Therefore, you don't have to manually wrap all params with Param<Item>. This macro handles them for you
 ///
 /// # How to Use
 ///

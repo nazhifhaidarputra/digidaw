@@ -2,7 +2,7 @@ use std::path::Path;
 
 use indexmap::IndexMap;
 
-use crate::audio::exporter::{export_project as export_project_internal, AudioExportError};
+use crate::audio::exporter::{AudioExportError, TailHandling, export_project as export_project_internal};
 use crate::audio::writer::wav::WavAudioWriter;
 use crate::audio::writer::{AudioFormat, BitPerSample};
 use crate::commands::AudioCommand;
@@ -86,6 +86,7 @@ pub fn export_project<F>(
     output_path: &String,
     sample_rate: u32,
     bit_per_sample: BitPerSample,
+    tail_handling: TailHandling,
     progress_callback: F,
 ) -> anyhow::Result<()>
 where
@@ -93,6 +94,17 @@ where
 {
     let mut app_state = get_app_write();
     let path = Path::new(output_path);
+
+    let is_wav = path
+        .extension()
+        .map(|ext| ext.to_string_lossy().eq_ignore_ascii_case("wav"))
+        .unwrap_or(false);
+
+    if !is_wav {
+        return Err(anyhow::anyhow!(
+            "Unsupported file format. Currently, only .wav exports are supported."
+        ));
+    }
     let writer = WavAudioWriter::new(
         path,
         AudioFormat {
@@ -112,6 +124,7 @@ where
         sample_rate,
         bit_per_sample,
         writer,
+        tail_handling,
         progress_callback,
     )
     .map_err(|e| anyhow::anyhow!("{}", e))?;

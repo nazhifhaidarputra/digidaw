@@ -1275,16 +1275,15 @@ fn wire__crate__api__plugin__execute_realtime_plugin_command_impl(
     )
 }
 fn wire__crate__api__project__export_project_flutter_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "export_project_flutter",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -1299,22 +1298,23 @@ fn wire__crate__api__project__export_project_flutter_impl(
             let api_output_path = <String>::sse_decode(&mut deserializer);
             let api_sample_rate = <u32>::sse_decode(&mut deserializer);
             let api_bit_per_sample = <u16>::sse_decode(&mut deserializer);
+            let api_tail_handling =
+                <crate::api::project::TailHandlingDTO>::sse_decode(&mut deserializer);
             let api_progress_sink =
                 <StreamSink<f32, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
                     &mut deserializer,
                 );
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::project::export_project_flutter(
-                        api_output_path,
-                        api_sample_rate,
-                        api_bit_per_sample,
-                        api_progress_sink,
-                    )?;
-                    Ok(output_ok)
-                })())
-            }
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::project::export_project_flutter(
+                    api_output_path,
+                    api_sample_rate,
+                    api_bit_per_sample,
+                    api_tail_handling,
+                    api_progress_sink,
+                )?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -5733,6 +5733,19 @@ impl SseDecode
     }
 }
 
+impl SseDecode for crate::api::project::TailHandlingDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::project::TailHandlingDTO::CutRemaining,
+            1 => crate::api::project::TailHandlingDTO::LeaveRemaining,
+            2 => crate::api::project::TailHandlingDTO::WrapRemaining,
+            _ => unreachable!("Invalid variant for TailHandlingDTO: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for u16 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6587,12 +6600,6 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__project__export_project_flutter_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         36 => wire__crate__api__audio__get_audio_config_impl(port, ptr, rust_vec_len, data_len),
         37 => wire__crate__api__audio__get_audio_properties_impl(port, ptr, rust_vec_len, data_len),
         38 => {
@@ -6908,6 +6915,7 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
+        35 => wire__crate__api__project__export_project_flutter_impl(ptr, rust_vec_len, data_len),
         74 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         83 => {
             wire__crate__api__plugins__eq__parse_eq_curve_response_impl(ptr, rust_vec_len, data_len)
@@ -7109,6 +7117,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::transport::PlaybackModeDto>
     for crate::api::transport::PlaybackModeDto
 {
     fn into_into_dart(self) -> crate::api::transport::PlaybackModeDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::TailHandlingDTO {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::CutRemaining => 0.into_dart(),
+            Self::LeaveRemaining => 1.into_dart(),
+            Self::WrapRemaining => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::TailHandlingDTO
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::TailHandlingDTO>
+    for crate::api::project::TailHandlingDTO
+{
+    fn into_into_dart(self) -> crate::api::project::TailHandlingDTO {
         self
     }
 }
@@ -8812,6 +8842,23 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::mixer::UiMixerChannel>::sse_encode(self.0, serializer);
         <Vec<crate::api::mixer::UiEffectInstance>>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::TailHandlingDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::project::TailHandlingDTO::CutRemaining => 0,
+                crate::api::project::TailHandlingDTO::LeaveRemaining => 1,
+                crate::api::project::TailHandlingDTO::WrapRemaining => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

@@ -3,10 +3,12 @@ import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/models/export_audio.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/project.dart' as project_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -147,6 +149,13 @@ class KarbeatState extends ChangeNotifier {
 
   // ================== OTHER STATES ====================
   bool _showFloatingMidiKeyboard = false;
+  bool _showExportPanel = false;
+
+  bool get showExportPanel => _showExportPanel;
+
+  // set showExportPanel(bool value) {
+  //   _showExportPanel = value;
+  // }
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
@@ -603,11 +612,25 @@ class KarbeatState extends ChangeNotifier {
 
   // =============== ACTIONS ===============
 
+  void openExportPanel() {
+    _showExportPanel = true;
+    notifyListeners();
+  }
+
+  void closeExportPanel() {
+    _showExportPanel = false;
+    notifyListeners();
+  }
+
   void toggleMetronomeActive() {
     _isMetronomeActive = !isMetronomeActive;
     audio_api.setMetronomeActive(active: isMetronomeActive);
     notifyListeners();
   }
+
+  // ======================================================
+  // Project related action
+  // ======================================================
 
   /// Save project state using the provided file path
   Future<Result<void>> saveProject(String path) async {
@@ -647,6 +670,36 @@ class KarbeatState extends ChangeNotifier {
       KarbeatLogger.error("Failed to load project: $e");
       return Result.error(Exception("$e"));
     }
+  }
+
+  Stream<double> exportProject({
+    required String path,
+    required String soundfileName,
+    required SupportedAudioFormat format,
+    required SampleRate sampleRate,
+    BitPerSample? bitPerSample,
+    int? bitrate,
+    required TailHandling tailHandling,
+  }) async* {
+    // Construct final file path based on selected format
+    final ext = format.name.toLowerCase();
+    final fullPath = "$path/$soundfileName.$ext";
+
+    final bpsValue = bitPerSample != null
+        ? int.parse(bitPerSample.name.substring(1))
+        : 16;
+
+    final tailHandlingDto = switch (tailHandling) {
+      TailHandling.CutRemainder => TailHandlingDTO.cutRemaining,
+      TailHandling.LeaveRemainder => TailHandlingDTO.leaveRemaining,
+      TailHandling.WrapRemainder => TailHandlingDTO.wrapRemaining,
+    };
+    yield* project_api.exportProjectFlutter(
+      outputPath: fullPath,
+      sampleRate: sampleRate.value,
+      bitPerSample: bpsValue,
+      tailHandling: tailHandlingDto,
+    );
   }
 
   /// Loads an audio file and refreshes the source list

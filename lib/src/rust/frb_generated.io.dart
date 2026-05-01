@@ -361,6 +361,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw);
 
   @protected
+  TailHandlingDTO dco_decode_tail_handling_dto(dynamic raw);
+
+  @protected
   int dco_decode_u_16(dynamic raw);
 
   @protected
@@ -906,6 +909,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_record_ui_mixer_channel_list_ui_effect_instance(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TailHandlingDTO sse_decode_tail_handling_dto(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -1559,6 +1565,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_ui_mixer_channel_list_ui_effect_instance(
     (UiMixerChannel, List<UiEffectInstance>) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_tail_handling_dto(
+    TailHandlingDTO self,
     SseSerializer serializer,
   );
 

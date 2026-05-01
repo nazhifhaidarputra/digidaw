@@ -1,4 +1,5 @@
 use std::{any::Any, sync::Arc};
+use karbeat_dsp::windowing::Windowing;
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*};
 use karbeat_plugin_types::*;
@@ -470,8 +471,10 @@ impl KarbeatEffect for KarbeatParametricEQ {
                     let sample = self.analyzer_buffer[idx];
                     
                     // Hann window to prevent spectral leakage
-                    let window = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (FFT_SIZE - 1) as f32).cos());
-                    fft_input[i] = Complex::new(sample * window, 0.0);
+                    let window_func = Windowing::Hann;
+                    let windowed_sample = window_func.apply_single_sample(sample, i, FFT_SIZE);
+
+                    fft_input[i] = Complex::new(windowed_sample, 0.0);
                 }
 
                 if let Some(fft) = &self.fft_instance {
