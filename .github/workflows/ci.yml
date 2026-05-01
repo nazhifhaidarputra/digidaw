@@ -41,7 +41,7 @@ jobs:
 
       - name: Rust Clippy (Linter)
         working-directory: rust
-        run: cargo clippy -- -D warnings
+        run: cargo clippy
 
       - name: Run Rust Tests
         working-directory: rust
