@@ -535,8 +535,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                               title: "Paste",
                                               icon: Icons.paste,
                                               onTap: () {
-                                                if (_lastInteractionPos == null)
+                                                if (_lastInteractionPos ==
+                                                    null) {
                                                   return;
+                                                }
 
                                                 // Convert local pixel position to Ticks and MIDI Key
                                                 int tick =

@@ -253,7 +253,8 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 _buildSectionTitle("Format"),
                                 _buildDropdown<SupportedAudioFormat>(
                                   value: _selectedFormat,
-                                  items: SupportedAudioFormat.values,
+                                  // items: SupportedAudioFormat.values,
+                                  items: const [SupportedAudioFormat.Wav],
                                   itemLabel: (f) => f.name.toUpperCase(),
                                   onChanged: (val) =>
                                       setState(() => _selectedFormat = val!),
@@ -369,7 +370,6 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        // TODO: Wrap this with Stream
                         LinearProgressIndicator(
                           value: _exportProgress,
                           backgroundColor: Colors.grey.shade800,
