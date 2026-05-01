@@ -2803,10 +2803,12 @@ fn get_read_pos(
     }
 }
 
-// Helper function to decode 16-bit PCM WAV bytes into a flat f32 array
+/// Helper function to decode 16-bit PCM WAV bytes into a flat f32 array
 fn load_internal_wav(bytes: &[u8]) -> Vec<f32> {
     let cursor = std::io::Cursor::new(bytes);
-    let reader = hound::WavReader::new(cursor).expect("Failed to parse internal metronome WAV");
+    let Ok(reader) = hound::WavReader::new(cursor) else {
+        return Vec::new();
+    };
 
     // Convert 16-bit integer (-32768 to 32767) to f32 (-1.0 to 1.0)
     reader

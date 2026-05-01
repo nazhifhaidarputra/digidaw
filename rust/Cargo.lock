@@ -1297,7 +1297,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1340,7 +1340,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-dsp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dasp",
  "derive_builder",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-host"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "karbeat-core",
  "karbeat-plugin-api",
@@ -1368,7 +1368,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-macros"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1379,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugin-api"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "heck",
@@ -1396,14 +1396,14 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugin-types"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "karbeat-plugins"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dasp",
  "fastrand",
@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-utils"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dasp",
  "hashbrown 0.17.0",
@@ -1437,7 +1437,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat_flutter_ffi"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytemuck",

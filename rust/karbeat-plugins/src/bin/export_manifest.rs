@@ -1,6 +1,8 @@
 use karbeat_plugin_api::manifest::Manifestable;
 use karbeat_plugins::plugins::*;
 
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used)]
 fn main() {
     println!("Starting Karbeat Manifest Extractor...");
 

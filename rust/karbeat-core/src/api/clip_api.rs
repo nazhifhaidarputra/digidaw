@@ -184,7 +184,7 @@ pub fn slice_clip(
 pub fn batch_delete_clips(track_id: TrackId, clip_ids: Vec<ClipId>) -> anyhow::Result<()> {
     let mut deleted_actions = Vec::new();
 
-    // 1. Mutate state and collect actions
+    // 1. Mutate state and wllect actions
     {
         let mut app = get_app_write();
         for clip_id in clip_ids {
