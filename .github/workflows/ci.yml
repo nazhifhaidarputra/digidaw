@@ -34,6 +34,10 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
+      - name: Install Cargokit Dependencies
+        working-directory: rust_builder/cargokit/build_tool
+        run: dart pub get
+
       # RUST CHECKS
       - name: Check Rust Formatting
         working-directory: rust

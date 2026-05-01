@@ -1,22 +1,8 @@
-enum BitPerSample {
-  b8,
-  b16,
-  b24,
-  b32
-}
+enum BitPerSample { b8, b16, b24, b32 }
 
-enum TailHandling {
-  CutRemainder,
-  LeaveRemainder,
-  WrapRemainder,
-}
+enum TailHandling { cutRemainder, leaveRemainder, wrapRemainder }
 
-enum SupportedAudioFormat {
-  Wav,
-  Mp3,
-  Ogg,
-  Flac
-}
+enum SupportedAudioFormat { wav, mp3, ogg, flac }
 
 enum SampleRate {
   hz44100(44100),
@@ -28,5 +14,6 @@ enum SampleRate {
   final int value;
   const SampleRate(this.value);
 
-  String get label => '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)} kHz';
+  String get label =>
+      '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)} kHz';
 }

@@ -2402,12 +2402,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
                 if (_currentAction == _DragAction.resizeRight) {
                   final maxShrink = -(shortestClip.loopLength - minTicks);
-                  if (rawTotalDelta < maxShrink)
+                  if (rawTotalDelta < maxShrink) {
                     rawTotalDelta = maxShrink.toInt();
+                  }
                 } else if (_currentAction == _DragAction.resizeLeft) {
                   final maxShrink = shortestClip.loopLength - minTicks;
-                  if (rawTotalDelta > maxShrink)
+                  if (rawTotalDelta > maxShrink) {
                     rawTotalDelta = maxShrink.toInt();
+                  }
                 }
 
                 int snappedTotalDelta = rawTotalDelta;
@@ -2878,8 +2880,9 @@ class _GroupedBatchOverlay extends ConsumerWidget {
         final selectedClipIds = state.selectedClipIds;
         final selectedTrackId = state.selectedTrackId;
 
-        if (selectedTrackId == null || selectedClipIds.isEmpty)
+        if (selectedTrackId == null || selectedClipIds.isEmpty) {
           return const SizedBox();
+        }
 
         final track = state.tracks[selectedTrackId];
         if (track == null) return const SizedBox();

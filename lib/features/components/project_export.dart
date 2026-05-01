@@ -20,10 +20,10 @@ class ProjectExportPanel extends ConsumerStatefulWidget {
 class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   late TextEditingController _nameController;
   String _exportDirectory = "Select Directory...";
-  SupportedAudioFormat _selectedFormat = SupportedAudioFormat.Wav;
+  SupportedAudioFormat _selectedFormat = SupportedAudioFormat.wav;
   BitPerSample _selectedBitDepth = BitPerSample.b16;
   SampleRate _selectedSampleRate = SampleRate.hz44100;
-  TailHandling _tailHandling = TailHandling.LeaveRemainder;
+  TailHandling _tailHandling = TailHandling.leaveRemainder;
   int _selectedBitrate = 192;
   bool _openFolderAfterExport = true;
 
@@ -76,13 +76,13 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         soundfileName: _nameController.text,
         format: _selectedFormat,
         bitPerSample:
-            _selectedFormat == SupportedAudioFormat.Wav ||
-                _selectedFormat == SupportedAudioFormat.Flac
+            _selectedFormat == SupportedAudioFormat.wav ||
+                _selectedFormat == SupportedAudioFormat.flac
             ? _selectedBitDepth
             : null,
         bitrate:
-            _selectedFormat == SupportedAudioFormat.Mp3 ||
-                _selectedFormat == SupportedAudioFormat.Ogg
+            _selectedFormat == SupportedAudioFormat.mp3 ||
+                _selectedFormat == SupportedAudioFormat.ogg
             ? _selectedBitrate
             : null,
         sampleRate: _selectedSampleRate,
@@ -254,7 +254,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 _buildDropdown<SupportedAudioFormat>(
                                   value: _selectedFormat,
                                   // items: SupportedAudioFormat.values,
-                                  items: const [SupportedAudioFormat.Wav],
+                                  items: const [SupportedAudioFormat.wav],
                                   itemLabel: (f) => f.name.toUpperCase(),
                                   onChanged: (val) =>
                                       setState(() => _selectedFormat = val!),
@@ -293,9 +293,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               children: [
                                 _buildSectionTitle("Bit Depth / Bitrate"),
                                 if (_selectedFormat ==
-                                        SupportedAudioFormat.Wav ||
+                                        SupportedAudioFormat.wav ||
                                     _selectedFormat ==
-                                        SupportedAudioFormat.Flac)
+                                        SupportedAudioFormat.flac)
                                   _buildDropdown<BitPerSample>(
                                     value: _selectedBitDepth,
                                     items: BitPerSample.values,

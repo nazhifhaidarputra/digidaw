@@ -100,7 +100,7 @@ class SourceListScreen extends ConsumerWidget {
                 _ => "Sampler",
               };
 
-              final gen_instance = switch (instanceType) {
+              final genInstance = switch (instanceType) {
                 UiGeneratorInstanceType_Plugin(:final field0) => field0,
                 _ => null,
               };
@@ -113,8 +113,12 @@ class SourceListScreen extends ConsumerWidget {
                 onTap: () {
                   Widget screen;
                   try {
-                    final availableGenerators = ref.read(karbeatStateProvider).availableGenerators;
-                    final registryId = availableGenerators.firstWhere((p) => p.id == gen_instance?.registryId).id;
+                    final availableGenerators = ref
+                        .read(karbeatStateProvider)
+                        .availableGenerators;
+                    final registryId = availableGenerators
+                        .firstWhere((p) => p.id == genInstance?.registryId)
+                        .id;
                     final builder = SynthRegistry.getSynthBuilder(registryId);
                     screen = builder(id);
                   } catch (_) {

@@ -690,9 +690,9 @@ class KarbeatState extends ChangeNotifier {
         : 16;
 
     final tailHandlingDto = switch (tailHandling) {
-      TailHandling.CutRemainder => TailHandlingDTO.cutRemaining,
-      TailHandling.LeaveRemainder => TailHandlingDTO.leaveRemaining,
-      TailHandling.WrapRemainder => TailHandlingDTO.wrapRemaining,
+      TailHandling.cutRemainder => TailHandlingDTO.cutRemaining,
+      TailHandling.leaveRemainder => TailHandlingDTO.leaveRemaining,
+      TailHandling.wrapRemainder => TailHandlingDTO.wrapRemaining,
     };
     yield* project_api.exportProjectFlutter(
       outputPath: fullPath,

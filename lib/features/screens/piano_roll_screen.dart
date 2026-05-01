@@ -320,7 +320,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     final gridDenom = state.pianoRollGridDenom;
 
     final selectedNoteIds = state.selectedNoteIds;
-    bool _isInteracting = false;
+    bool isInteracting = false;
 
     if (pattern == null) {
       return const Center(
@@ -455,7 +455,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                   onPointerDown: (event) {
                                     _lastInteractionPos = event.localPosition;
                                     if (isZoom || isPan) {
-                                      setState(() => _isInteracting = true);
+                                      setState(() => isInteracting = true);
                                     }
 
                                     if (isDrawing) {
@@ -502,8 +502,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     }
                                   },
                                   onPointerUp: (event) {
-                                    if (_isInteracting) {
-                                      setState(() => _isInteracting = false);
+                                    if (isInteracting) {
+                                      setState(() => isInteracting = false);
                                     }
                                     if (isDrawing) {
                                       _submitBrushAdd(pattern.id);
@@ -742,7 +742,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       // TODO: Add pattern playback seek implementation
                                                     },
                                                     isInteracting:
-                                                        _isInteracting,
+                                                        isInteracting,
                                                     zoomLevel: 1.0 / zoomX,
                                                     sampleSelector: (pos) {
                                                       if (pos.isPatternMode) {
@@ -1681,8 +1681,9 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                     }
                   },
                   onPanStart: (details) {
-                    if (widget.selectedTool != PianoRollToolSelection.grab)
+                    if (widget.selectedTool != PianoRollToolSelection.grab) {
                       return;
+                    }
                     final renderBox = context.findRenderObject() as RenderBox;
                     final localPos = renderBox.globalToLocal(
                       details.globalPosition,
