@@ -588,7 +588,7 @@ impl AudioEngine {
             }
             AudioCommand::SetPlayhead(samples) => {
                 log::info!("[AudioEngine] Seek: {}", samples);
-                self.song_state.playhead_samples = samples as u32;
+                self.song_state.playhead_samples = samples;
                 self.recalculate_beat_bar();
                 self.song_state.last_emitted_samples = self.song_state.playhead_samples;
                 self.emit_current_playback_position(); // Snap UI immediately
@@ -2684,7 +2684,7 @@ impl AudioEngine {
                 self.metronome_state.play_index = 0; // Reset playhead to start of WAV
 
                 let curr_beat_idx = (current_sample as f32 / samples_per_beat) as u32;
-                self.metronome_state.is_downbeat = curr_beat_idx % 4 == 0;
+                self.metronome_state.is_downbeat = curr_beat_idx.is_multiple_of(4);
             }
 
             if self.metronome_state.is_playing {

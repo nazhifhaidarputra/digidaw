@@ -253,7 +253,7 @@ impl MixerState {
         let mixer_channel_arc = self.channels
             .get_mut(track_id)
             .ok_or_else(|| {
-                MixerSetParamError::new(track_id.clone(), "Cannot find the mixer channel")
+                MixerSetParamError::new(*track_id, "Cannot find the mixer channel")
             })?;
 
         let channel = Arc::make_mut(mixer_channel_arc);
@@ -323,7 +323,7 @@ impl MixerState {
         let mixer_channel_arc = self.channels
             .get_mut(track_id)
             .ok_or_else(|| {
-                MixerNotFoundError::new(track_id.clone(), "Cannot find the mixer channel")
+                MixerNotFoundError::new(*track_id, "Cannot find the mixer channel")
             })
             .map_err(|e| anyhow::anyhow!(e))?;
 
@@ -334,7 +334,7 @@ impl MixerState {
 
         // Push to the audio thread
         send_audio_command(AudioCommand::AddTrackEffect {
-            track_id: track_id.clone(),
+            track_id: *track_id,
             effect_id,
             effect: effect_plugin,
         });
@@ -357,7 +357,7 @@ impl MixerState {
         let mixer_channel_arc = self.channels
             .get_mut(track_id)
             .ok_or_else(|| {
-                MixerNotFoundError::new(track_id.clone(), "Cannot find the mixer channel")
+                MixerNotFoundError::new(*track_id, "Cannot find the mixer channel")
             })
             .map_err(|e| anyhow::anyhow!(e))?;
 
@@ -365,7 +365,7 @@ impl MixerState {
         let channel = Arc::make_mut(mixer_channel_arc);
         channel.remove_effect(effect_id)?;
 
-        send_audio_command(AudioCommand::RemoveTrackEffect { track_id: track_id.clone(), effect_id });
+        send_audio_command(AudioCommand::RemoveTrackEffect { track_id: *track_id, effect_id });
 
         Ok(())
     }
@@ -378,7 +378,7 @@ impl MixerState {
         let mut mixer_channel_arc = self.channels
             .get(track_id)
             .ok_or_else(|| {
-                MixerNotFoundError::new(track_id.clone(), "Cannot find the mixer channel")
+                MixerNotFoundError::new(*track_id, "Cannot find the mixer channel")
             })?
             .to_owned();
 

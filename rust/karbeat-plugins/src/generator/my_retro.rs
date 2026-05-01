@@ -176,7 +176,7 @@ impl KarbeatGenerator for MyRetro {
 
         while current_frame < total_frames {
             let next_event_frame = if event_idx < midi_events.len() {
-                midi_events[event_idx].sample_offset as usize
+                midi_events[event_idx].sample_offset
             } else {
                 total_frames
             };
@@ -230,7 +230,7 @@ impl KarbeatGenerator for MyRetro {
             // Handle MIDI events at this exact frame
             while
                 event_idx < midi_events.len() &&
-                (midi_events[event_idx].sample_offset as usize) == end_frame
+                midi_events[event_idx].sample_offset == end_frame
             {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {

@@ -105,8 +105,8 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut params = Vec::new();
     let mut nested_fields: Vec<(syn::Ident, bool, String)> = Vec::new();
     let mut used_ids: HashMap<String, syn::Ident> = HashMap::new();
-    if let Data::Struct(data_struct) = &mut ast.data {
-        if let Fields::Named(fields) = &mut data_struct.fields {
+    if let Data::Struct(data_struct) = &mut ast.data
+        && let Fields::Named(fields) = &mut data_struct.fields {
             for field in fields.named.iter_mut() {
                 let field_ident = field.ident.clone().unwrap();
                 let mut is_param = false;
@@ -201,11 +201,10 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         
                         // Parse prefix attribute if provided
                         let _ = attr.parse_nested_meta(|meta| {
-                            if meta.path.is_ident("prefix") {
-                                if let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()? {
+                            if meta.path.is_ident("prefix")
+                                && let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()? {
                                     n_prefix = lit_str.value();
                                 }
-                            }
                             Ok(())
                         });
 
@@ -241,7 +240,6 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 );
             }
         }
-    }
 
     let enum_variants = params.iter().map(|p| {
         let variant_name = format_ident!("{}", p.name.replace(" ", ""));
@@ -418,8 +416,8 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut default_field_inits = Vec::new();
 
-    if let Data::Struct(data_struct) = &ast.data {
-        if let Fields::Named(fields) = &data_struct.fields {
+    if let Data::Struct(data_struct) = &ast.data
+        && let Fields::Named(fields) = &data_struct.fields {
             for field in fields.named.iter() {
                 let field_ident = field.ident.as_ref().unwrap();
 
@@ -471,7 +469,6 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
-    }
 
     let expanded =
         quote! {
@@ -654,13 +651,11 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
         if !is_nested {
             let mut is_valid_param = false;
 
-            if let Type::Path(type_path) = &field.ty {
-                if let Some(segment) = type_path.path.segments.last() {
-                    if segment.ident == "Param" {
+            if let Type::Path(type_path) = &field.ty
+                && let Some(segment) = type_path.path.segments.last()
+                    && segment.ident == "Param" {
                         is_valid_param = true;
                     }
-                }
-            }
 
             if !is_valid_param {
                 let error_msg = format!(
@@ -681,14 +676,13 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
             for attr in &field.attrs {
                 if attr.path().is_ident("param") {
                     let _ = attr.parse_nested_meta(|meta| {
-                        if meta.path.is_ident("id") {
-                            if let Ok(syn::Lit::Str(lit_str)) = meta
+                        if meta.path.is_ident("id")
+                            && let Ok(syn::Lit::Str(lit_str)) = meta
                                 .value()
                                 .and_then(|v| v.parse::<syn::Lit>())
                             {
                                 id_str = lit_str.value();
                             }
-                        }
                         Ok(())
                     });
                 }

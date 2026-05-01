@@ -119,7 +119,7 @@ where
     .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     export_project_internal(
-        &mut *app_state,
+        &mut app_state,
         output_path,
         sample_rate,
         bit_per_sample,

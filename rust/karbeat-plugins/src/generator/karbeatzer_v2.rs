@@ -88,7 +88,7 @@ impl KarbeatzerV2 {
             let freq = base_freq * (2.0_f32).powf(detune / 12.0);
 
             phase_incs[i] = freq / sample_rate;
-            wfs[i] = osc.waveform.get().into();
+            wfs[i] = osc.waveform.get();
             mixes[i] = osc.mix.get();
             pws[i] = osc.pulse_width.get();
         }
@@ -240,7 +240,7 @@ impl KarbeatGenerator for KarbeatzerV2 {
             }
 
             // Process MIDI
-            while event_idx < midi_events.len() && (midi_events[event_idx].sample_offset as usize) == end_frame {
+            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
                         if velocity > 0 {

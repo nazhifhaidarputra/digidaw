@@ -47,7 +47,7 @@ pub fn export_project<F>(
     output_path: &str,
     sample_rate: u32,
     bit_per_sample: BitPerSample,
-    mut writer: impl AudioWriter + Send + 'static,
+    mut writer: impl AudioWriter + 'static,
     tail_handling: TailHandling,
     mut progress_callback: F
 ) -> Result<(), AudioExportError>
@@ -81,7 +81,7 @@ pub fn export_project<F>(
         pos_producer,
         feedback_producer,
         sample_rate,
-        channels as u16,
+        channels,
         app_state.transport.bpm,
         render_state.clone()
     );
