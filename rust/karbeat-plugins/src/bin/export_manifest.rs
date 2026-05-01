@@ -1,9 +1,8 @@
 use karbeat_plugin_api::manifest::Manifestable;
-use karbeat_plugins::{
-    effect::parametric_eq::{ KarbeatParametricEQEngine },
-    generator::{ karbeatzer_v2::KarbeatzerEngine, my_retro::MyRetroEngine },
-};
+use karbeat_plugins::plugins::*;
 
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used)]
 fn main() {
     println!("Starting Karbeat Manifest Extractor...");
 
@@ -14,9 +13,9 @@ fn main() {
         .unwrap_or("../../assets/manifests/audio-plugins".into());
 
     // Call the export function on all plugins
-    MyRetroEngine::export_manifest(&export_dir).unwrap();
-    KarbeatzerEngine::export_manifest(&export_dir).unwrap();
-    KarbeatParametricEQEngine::export_manifest(&export_dir).unwrap();
+    MyRetro::export_manifest(&export_dir).unwrap();
+    KarbeatzerV2::export_manifest(&export_dir).unwrap();
+    KarbeatParametricEQ::export_manifest(&export_dir).unwrap();
 
     println!("INFO: All manifests exported successfully to Flutter assets!");
 }

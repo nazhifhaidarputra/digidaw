@@ -1,17 +1,32 @@
 use indexmap::IndexMap;
 
 use crate::{
-    audio::engine::PlaybackMode,
+    audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
-        GeneratorId, mixer::RoutingConnection, plugin::{KarbeatEffect, KarbeatGenerator}, track::audio_waveform::AudioWaveform
-    }, shared::id::{BusId, EffectId, TrackId},
+        mixer::RoutingConnection,
+        plugin::{KarbeatEffect, KarbeatGenerator},
+        track::audio_waveform::AudioWaveform,
+        GeneratorId,
+    },
+    shared::{
+        id::{BusId, EffectId, TrackId},
+        PatternId,
+    },
 };
 
 pub enum AudioCommand {
+    // =============================
+    // Transport Command
+    // =============================
     PlayOneShot(AudioWaveform),
     StopAllPreviews,
     /// Set playback state (play/pause)
     SetPlaying(bool),
+    TogglePlayingWithPlaybackMode(PlaybackMode),
+    TogglePatternPlayback {
+        pattern_id: PatternId,
+        generator_id: GeneratorId,
+    },
     /// Set loop mode
     SetLooping(bool),
     /// Stop playback and reset playhead to 0
@@ -26,6 +41,9 @@ pub enum AudioCommand {
     /// Set BPM to the field0 value
     SetBPM(f32),
     SetPlaybackMode(PlaybackMode),
+
+    /// Hot-swaps the active generator while pattern playback is running
+    SwitchPatternGenerator(crate::shared::id::GeneratorId),
 
     // =========================================================================
     // Generator Plugin Commands
@@ -159,7 +177,16 @@ pub enum AudioCommand {
         bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
         generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>>,
     },
-    SetMetronomeActive(bool)
+    SetMetronomeActive(bool),
+
+    /// Send command to execute command from real-time plugin state. to use this
+    /// effectively, use a message passing channel for real-time data streaming
+    ExecutePluginCommand {
+        target: PluginTarget,
+        command: String,
+        payload: serde_json::Value,
+        request_id: u32,
+    },
 }
 
 // ============================================================================
@@ -220,4 +247,10 @@ pub enum AudioFeedback {
     EffectParameterChanged(EffectParameterUpdate),
     /// Full parameter snapshot for an effect in response to query
     EffectParameterSnapshot(EffectParameterSnapshot),
+
+    // --- Command Response Feedback
+    PluginCommandResponse {
+        request_id: u32,
+        response: serde_json::Value,
+    },
 }

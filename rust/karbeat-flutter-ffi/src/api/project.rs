@@ -3,6 +3,7 @@ use std::{collections::HashMap, ops::Deref};
 use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
+use karbeat_core::audio::exporter::TailHandling;
 use karbeat_core::audio::writer::BitPerSample;
 use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use karbeat_core::{
@@ -499,6 +500,23 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
     }
 }
 
+// ========================= Tail Handling DTO ========================
+pub enum TailHandlingDTO {
+    CutRemaining,
+    LeaveRemaining,
+    WrapRemaining,
+}
+
+impl From<TailHandlingDTO> for TailHandling {
+    fn from(value: TailHandlingDTO) -> Self {
+        match value {
+            TailHandlingDTO::CutRemaining => TailHandling::CutRemainder,
+            TailHandlingDTO::LeaveRemaining => TailHandling::LeaveRemainder,
+            TailHandlingDTO::WrapRemaining => TailHandling::WrapRemainder,
+        }
+    }
+}
+
 // ============================ APIs ==================================
 
 /// Get the current project metadata state from the backend
@@ -554,18 +572,19 @@ pub fn get_max_sample_index() -> Result<u32, String> {
 }
 
 /// Export project to flutter. also report progress via StreamSink
-#[frb]
+#[frb(sync)]
 pub fn export_project_flutter(
     output_path: String,
     sample_rate: u32,
     bit_per_sample: u16,
+    tail_handling: TailHandlingDTO,
     progress_sink: StreamSink<f32>,
 ) -> Result<(), String> {
     let bps: BitPerSample = bit_per_sample
         .try_into()
         .map_err(|e: karbeat_core::audio::writer::BitPerSampleError| e.to_string())?;
 
-    project_api::export_project(&output_path, sample_rate, bps, |progress| {
+    project_api::export_project(&output_path, sample_rate, bps, tail_handling.into(), |progress| {
         // If the sink successfully adds the value, return true to keep rendering.
         // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
         progress_sink.add(progress).is_ok()

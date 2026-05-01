@@ -1,16 +1,18 @@
 use crate::audio::engine::PlaybackMode;
 use crate::commands::AudioCommand;
 use crate::context::utils::{
-    broadcast_state_change, send_audio_command, try_send_audio_command_chain,
+    broadcast_state_change,
+    send_audio_command,
+    try_send_audio_command_chain,
 };
 use crate::lock::get_app_write;
+use crate::shared::{GeneratorId, PatternId};
 
 /// Set is playing for song mode
-pub fn set_playing(val: bool) -> anyhow::Result<()>{
-    try_send_audio_command_chain(vec![
-        AudioCommand::SetPlaybackMode(PlaybackMode::Song),
-        AudioCommand::SetPlaying(val),
-    ])?;
+pub fn set_playing(val: bool) -> anyhow::Result<()> {
+    try_send_audio_command_chain(
+        vec![AudioCommand::SetPlaybackMode(PlaybackMode::Song), AudioCommand::SetPlaying(val)]
+    )?;
 
     Ok(())
 }
@@ -38,4 +40,19 @@ pub fn set_bpm(val: f32) {
 
 pub fn stop_song_playback() {
     send_audio_command(AudioCommand::StopAndReset);
+}
+
+pub fn toggle_pattern_playback(pattern_id: PatternId, generator_id: GeneratorId) {
+    send_audio_command(AudioCommand::TogglePatternPlayback {
+        pattern_id,
+        generator_id,
+    });
+}
+
+pub fn toggle_playing_with_playback(playback_mode: PlaybackMode) {
+    send_audio_command(AudioCommand::TogglePlayingWithPlaybackMode(playback_mode));
+}
+
+pub fn switch_pattern_generator(generator_id: GeneratorId) {
+    send_audio_command(AudioCommand::SwitchPatternGenerator(generator_id));
 }

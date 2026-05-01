@@ -6,17 +6,17 @@
 /* src/audio/engine.rs */
 
 use dasp::slice;
+use hashbrown::HashMap;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
-use std::{collections::HashMap, sync::Arc};
+use std::{sync::Arc};
 use triple_buffer::Output;
 use wide::f32x4;
 
 use crate::{
     audio::{
         event::{
-            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent,
-            TrackAutomationEvent, TransportFeedback,
+            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent, PluginTarget, TrackAutomationEvent, TransportFeedback
         },
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
@@ -27,11 +27,7 @@ use crate::{
         GeneratorParameterSnapshot,
     },
     core::project::{
-        automation::AutomationTarget,
-        mixer::{MixerChannel, RoutingNode},
-        plugin::{MidiEvent, MidiMessage},
-        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
-        PatternId, TrackId,
+        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern, PatternId, TrackId, automation::AutomationTarget, mixer::{MixerChannel, RoutingNode}, plugin::{MidiEvent, MidiMessage}
     },
     shared::id::*,
     utils::{apply_simd_mix, apply_simd_mix_gain, get_waveform_buffer},
@@ -47,6 +43,52 @@ pub enum PlaybackMode {
     },
 }
 
+#[derive(Debug, Clone)]
+pub struct SongPlaybackState {
+    pub is_playing: bool,
+    pub is_looping: bool,
+    pub is_recording: bool,
+    pub playhead_samples: u32,
+    pub current_beat: usize,
+    pub current_bar: usize,
+    pub last_emitted_samples: u32,
+}
+
+impl Default for SongPlaybackState {
+    fn default() -> Self {
+        Self {
+            is_playing: false,
+            is_looping: false,
+            is_recording: false,
+            playhead_samples: 0,
+            current_beat: 1,
+            current_bar: 1,
+            last_emitted_samples: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PatternPlaybackState {
+    pub is_playing: bool,
+    pub playhead_samples: u32,
+    pub current_beat: usize,
+    pub current_bar: usize,
+    pub last_emitted_samples: u32,
+}
+
+impl Default for PatternPlaybackState {
+    fn default() -> Self {
+        Self {
+            is_playing: false,
+            playhead_samples: 0,
+            current_beat: 1,
+            current_bar: 1,
+            last_emitted_samples: 0,
+        }
+    }
+}
+
 pub struct AudioEngine {
     // Comms
     state_consumer: Output<AudioRenderState>,
@@ -57,24 +99,12 @@ pub struct AudioEngine {
     // ======================================
     // Transport State (owned by audio thread)
     // ======================================
-    is_playing: bool,
-    is_looping: bool,
-    is_recording: bool,
-    is_pattern_playing: bool,
     bpm: f32,
-
     sample_rate: u32,
     num_channels: u16,
-    // Timeline (Song mode)
-    playhead_samples: u32,
-    current_beat: usize,
-    current_bar: usize,
 
-    // Timeline (Pattern mode - independent from song)
-    pattern_playhead_samples: u32,
-    pattern_beat: usize,
-    pattern_bar: usize,
-    last_emitted_pattern_samples: u32,
+    song_state: SongPlaybackState,
+    pattern_state: PatternPlaybackState,
 
     // Active Voices (lightweight references to plugins in plugin_state)
     active_generators: Vec<GeneratorVoice>,
@@ -86,9 +116,6 @@ pub struct AudioEngine {
 
     // Real-time Command Queue (UI → Audio)
     command_consumer: Consumer<AudioCommand>,
-
-    // Update emit scheduler
-    last_emitted_samples: u32,
 
     mix_buffer: Vec<f32>,
 
@@ -215,26 +242,15 @@ impl AudioEngine {
             position_producer,
             feedback_producer,
             current_state: initial_state,
-            // Transport state
-            is_playing: false,
-            is_looping: false,
-            is_recording: false,
-            is_pattern_playing: false,
             bpm: initial_bpm,
             sample_rate,
             num_channels,
-            playhead_samples: 0,
+            song_state: SongPlaybackState::default(),
+            pattern_state: PatternPlaybackState::default(),
             active_generators: Vec::with_capacity(32),
             active_oneshots: Vec::with_capacity(16),
             preview_voices: Vec::with_capacity(4),
             plugin_state: AudioPluginState::default(),
-            current_beat: 1,
-            current_bar: 1,
-            pattern_playhead_samples: 0,
-            pattern_beat: 1,
-            pattern_bar: 1,
-            last_emitted_pattern_samples: 0,
-            last_emitted_samples: 0,
             mix_buffer,
             bus_buffers: HashMap::new(),
             bus_temp_buffer: Vec::with_capacity(2048),
@@ -269,7 +285,12 @@ impl AudioEngine {
         let frame_count = output_buffer.len() / channels;
 
         // Transport Logic
-        if self.is_playing {
+        let is_currently_playing = match self.playback_mode {
+            PlaybackMode::Song => self.song_state.is_playing,
+            PlaybackMode::Pattern { .. } => self.pattern_state.is_playing,
+        };
+
+        if is_currently_playing {
             match self.playback_mode {
                 PlaybackMode::Song => {
                     self.process_song_mode(frame_count, output_buffer, channels);
@@ -299,15 +320,15 @@ impl AudioEngine {
         self.render_previews_to_buffer(output_buffer, channels);
     }
 
-    fn advance_playhead(&mut self, frame_count: usize) {
-        self.playhead_samples += frame_count as u32;
+    fn advance_song_playhead(&mut self, frame_count: usize) {
+        self.song_state.playhead_samples += frame_count as u32;
         self.recalculate_beat_bar();
         self.emit_playback_position();
         self.cleanup_finished_voices();
     }
 
     fn advance_pattern_playhead(&mut self, frame_count: usize) {
-        self.pattern_playhead_samples += frame_count as u32;
+        self.pattern_state.playhead_samples += frame_count as u32;
         self.recalculate_pattern_beat_bar();
         self.emit_playback_position();
         self.cleanup_finished_voices();
@@ -326,8 +347,8 @@ impl AudioEngine {
         }
 
         // Pattern beat/bar are 1-indexed within the pattern
-        self.pattern_beat = (self.pattern_playhead_samples as usize) / samples_per_beat + 1;
-        self.pattern_bar = (self.pattern_beat - 1) / 4 + 1;
+        self.pattern_state.current_beat = (self.pattern_state.playhead_samples as usize) / samples_per_beat + 1;
+        self.pattern_state.current_bar = (self.pattern_state.current_beat - 1) / 4 + 1;
     }
 
     fn process_song_mode(
@@ -336,12 +357,12 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
-        if self.playhead_samples > self.current_state.graph.max_sample_index {
-            if self.is_looping {
+        if self.song_state.playhead_samples > self.current_state.graph.max_sample_index {
+            if self.song_state.is_looping {
                 // Reset playhead back to 0 without changing `is_playing` state
-                self.playhead_samples = 0;
+                self.song_state.playhead_samples = 0;
                 self.recalculate_beat_bar();
-                self.last_emitted_samples = 0;
+                self.song_state.last_emitted_samples = 0;
 
                 // Kill trailing notes/audio to prevent a massive wall of sound
                 // from release tails accumulating when jumping back to bar 1
@@ -378,10 +399,10 @@ impl AudioEngine {
         // Render Active Voices
         self.render_voices_to_buffer(output_buffer, channels);
 
-        self.render_metronome(output_buffer, channels, self.playhead_samples);
+        self.render_metronome(output_buffer, channels, self.song_state.playhead_samples);
 
         // Advance Playhead
-        self.advance_playhead(buffer_size);
+        self.advance_song_playhead(buffer_size);
     }
 
     fn process_pattern_mode(
@@ -423,9 +444,9 @@ impl AudioEngine {
         }
 
         // Use PATTERN playhead (independent from song)
-        if self.pattern_playhead_samples >= loop_len_samples {
-            self.pattern_playhead_samples = 0;
-            self.last_emitted_pattern_samples = 0;
+        if self.pattern_state.playhead_samples >= loop_len_samples {
+            self.pattern_state.playhead_samples = 0;
+            self.pattern_state.last_emitted_samples = 0;
 
             // This safely clears tracked keys to prevent hang on pattern loop
             Self::stop_all_active_generators_impl(
@@ -434,7 +455,7 @@ impl AudioEngine {
             );
         }
 
-        let start_time = self.pattern_playhead_samples;
+        let start_time = self.pattern_state.playhead_samples;
         let end_time = start_time + (frame_count as u32);
 
         // Find or create voice for this generator
@@ -497,9 +518,10 @@ impl AudioEngine {
         self.advance_pattern_playhead(frame_count);
     }
 
+    /// Stop and reset the playhead to 0
     fn stop_playback(&mut self) {
-        self.is_playing = false;
-        self.is_pattern_playing = false;
+        self.song_state.is_playing = false;
+        self.pattern_state.is_playing = false;
         self.stop_all_active_generators();
         self.stop_all_automation_events();
         self.reset_playhead();
@@ -538,19 +560,25 @@ impl AudioEngine {
             }
             AudioCommand::StopAllPreviews => self.preview_voices.clear(),
             AudioCommand::SetPlaying(val) => {
-                if self.is_playing && !val {
+                let was_playing = match self.playback_mode {
+                    PlaybackMode::Song => self.song_state.is_playing,
+                    PlaybackMode::Pattern { .. } => self.pattern_state.is_playing,
+                };
+
+                if was_playing && !val {
                     // Stopping: silence all active generators
                     self.stop_all_active_generators();
                 }
-                self.is_playing = val;
 
-                if matches!(self.playback_mode, PlaybackMode::Pattern { .. }) {
-                    self.is_pattern_playing = val;
+                match self.playback_mode {
+                    PlaybackMode::Song => self.song_state.is_playing = val,
+                    PlaybackMode::Pattern { .. } => self.pattern_state.is_playing = val,
                 }
+
                 self.emit_current_playback_position();
             }
             AudioCommand::SetLooping(val) => {
-                self.is_looping = val;
+                self.song_state.is_looping = val;
                 self.emit_current_playback_position();
             }
             AudioCommand::StopAndReset => {
@@ -560,9 +588,9 @@ impl AudioEngine {
             }
             AudioCommand::SetPlayhead(samples) => {
                 log::info!("[AudioEngine] Seek: {}", samples);
-                self.playhead_samples = samples as u32;
+                self.song_state.playhead_samples = samples;
                 self.recalculate_beat_bar();
-                self.last_emitted_samples = self.playhead_samples;
+                self.song_state.last_emitted_samples = self.song_state.playhead_samples;
                 self.emit_current_playback_position(); // Snap UI immediately
             }
             AudioCommand::PlayPreviewNote {
@@ -588,16 +616,16 @@ impl AudioEngine {
                 // Reset the specific playhead for the new mode
                 match (self.playback_mode, playback_mode) {
                     (PlaybackMode::Song, PlaybackMode::Pattern { .. }) => {
-                        self.pattern_playhead_samples = 0;
-                        self.last_emitted_pattern_samples = 0;
+                        self.pattern_state.playhead_samples = 0;
+                        self.pattern_state.last_emitted_samples = 0;
                         self.recalculate_pattern_beat_bar();
-                        self.is_pattern_playing = true;
+                        self.pattern_state.is_playing = true;
                     }
                     (PlaybackMode::Pattern { .. }, PlaybackMode::Song) => {
-                        self.pattern_playhead_samples = 0;
-                        self.last_emitted_pattern_samples = 0;
+                        self.pattern_state.playhead_samples = 0;
+                        self.pattern_state.last_emitted_samples = 0;
                         self.recalculate_pattern_beat_bar();
-                        self.is_pattern_playing = false;
+                        self.pattern_state.is_playing = false;
                     }
                     _ => {} // Same mode, do nothing
                 }
@@ -1054,6 +1082,122 @@ impl AudioEngine {
                 self.metronome_state.is_active = active;
                 log::info!("[AudioEngine] Metronome Active: {}", active);
             }
+            AudioCommand::TogglePlayingWithPlaybackMode(playback_mode) => {
+                // check if the mode is same as before. if it is, then check the is playing
+                if self.playback_mode == playback_mode {
+                    let is_currently_playing = match self.playback_mode {
+                        PlaybackMode::Song => self.song_state.is_playing,
+                        PlaybackMode::Pattern { .. } => self.pattern_state.is_playing,
+                    };
+                    if is_currently_playing {
+                        match self.playback_mode {
+                            PlaybackMode::Song => self.song_state.is_playing = false,
+                            PlaybackMode::Pattern { .. } => self.pattern_state.is_playing = false,
+                        }
+                        self.stop_all_active_generators();
+                    } else {
+                        match self.playback_mode {
+                            PlaybackMode::Song => self.song_state.is_playing = true,
+                            PlaybackMode::Pattern { .. } => self.pattern_state.is_playing = true,
+                        }
+                    }
+                } else {
+                    // stop and reset first when the playback mode changes
+                    self.stop_playback();
+                    self.playback_mode = playback_mode;
+                    match self.playback_mode {
+                        PlaybackMode::Song => self.song_state.is_playing = true,
+                        PlaybackMode::Pattern { .. } => {
+                            self.pattern_state.playhead_samples = 0;
+                            self.pattern_state.last_emitted_samples = 0;
+                            self.recalculate_pattern_beat_bar();
+                            self.pattern_state.is_playing = true;
+                        }
+                    }
+                }
+                self.emit_current_playback_position();
+            },
+            AudioCommand::TogglePatternPlayback { pattern_id, generator_id } => {
+                let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
+
+                if !is_pattern_mode {
+                    // If not in pattern mode: Stop song, change mode, and immediately play from start
+                    self.stop_playback();
+                    self.playback_mode = PlaybackMode::Pattern { pattern_id, generator_id };
+                    self.pattern_state.playhead_samples = 0;
+                    self.pattern_state.last_emitted_samples = 0;
+                    self.recalculate_pattern_beat_bar();
+                    self.pattern_state.is_playing = true;
+                } else {
+                    // Else we check current state
+                    if self.pattern_state.is_playing {
+                        // If it is playing: stop, silence voices, and go to first tick
+                        self.pattern_state.is_playing = false;
+                        self.stop_all_active_generators();
+                        
+                        self.pattern_state.playhead_samples = 0;
+                        self.pattern_state.last_emitted_samples = 0;
+                        self.recalculate_pattern_beat_bar();
+                    } else {
+                        // If it is stopped: just play
+                        self.pattern_state.is_playing = true;
+                    }
+                }
+                
+                self.emit_current_playback_position();
+            }
+            AudioCommand::SwitchPatternGenerator(new_gen_id) => {
+                if let PlaybackMode::Pattern { generator_id, .. } = &mut self.playback_mode {
+                    if *generator_id != new_gen_id {
+                        // Silence the old generator so ADSR tails/notes don't hang forever
+                        if let Some(old_voice) = self.active_generators.iter_mut().find(|g| g.id == *generator_id) {
+                            if let Some(gen_instance) = self.plugin_state.get_generator_mut(old_voice.id.to_u32() as usize) {
+                                gen_instance.plugin.reset();
+                            }
+                            old_voice.midi_events.clear();
+                            old_voice.playing_keys.clear();
+                        }
+                        
+                        // Hot-swap the ID. The `process_pattern_mode` function will 
+                        // automatically route the next batch of MIDI notes to the new generator.
+                        *generator_id = new_gen_id;
+                    }
+                }
+            },
+            AudioCommand::ExecutePluginCommand { target, command, payload, request_id } => {
+               let response = match target {
+                    PluginTarget::Generator(generator_id) => {
+                        self.plugin_state
+                            .get_generator_mut(generator_id.to_u32() as usize)
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                    PluginTarget::TrackEffect(track_id, effect_id) => {
+                        self.plugin_state
+                            .get_track_effects_mut(track_id.to_u32() as usize)
+                            .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                    PluginTarget::BusEffect(bus_id, effect_id) => {
+                        self.plugin_state
+                            .get_bus_effects_mut(bus_id.to_u32() as usize)
+                            .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                    PluginTarget::MasterEffect(effect_id) => {
+                        self.plugin_state.master_effects.iter_mut()
+                            .find(|e| e.id == effect_id)
+                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
+                    },
+                };
+                // If the plugin returned a response, send it back to the UI
+                if let Some(res) = response {
+                    let _ = self.feedback_producer.push(AudioFeedback::PluginCommandResponse {
+                        request_id,
+                        response: res,
+                    });
+                }
+
+            },
         }
     }
 
@@ -1070,26 +1214,26 @@ impl AudioEngine {
             return;
         }
 
-        self.current_beat = (self.playhead_samples as usize) / samples_per_beat + 1;
-        self.current_bar = (self.current_beat - 1) / 4 + 1;
+        self.song_state.current_beat = (self.song_state.playhead_samples as usize) / samples_per_beat + 1;
+        self.song_state.current_bar = (self.song_state.current_beat - 1) / 4 + 1;
     }
 
     fn reset_playhead(&mut self) {
         log::info!("[AudioEngine] Reset Playhead");
-        self.playhead_samples = 0;
-        self.current_beat = 1;
-        self.current_bar = 1;
-        self.last_emitted_samples = 0;
+        self.song_state.playhead_samples = 0;
+        self.song_state.current_beat = 1;
+        self.song_state.current_bar = 1;
+        self.song_state.last_emitted_samples = 0;
         self.emit_static_position();
     }
 
     fn emit_playback_position(&mut self) {
         let emission_interval = self.sample_rate / 60; // ~60fps
         let (current, last) = match self.playback_mode {
-            PlaybackMode::Song => (self.playhead_samples, self.last_emitted_samples),
+            PlaybackMode::Song => (self.song_state.playhead_samples, self.song_state.last_emitted_samples),
             PlaybackMode::Pattern { .. } => (
-                self.pattern_playhead_samples,
-                self.last_emitted_pattern_samples,
+                self.pattern_state.playhead_samples,
+                self.pattern_state.last_emitted_samples,
             ),
         };
         if current >= last + emission_interval {
@@ -1100,10 +1244,10 @@ impl AudioEngine {
             }
             match self.playback_mode {
                 PlaybackMode::Song => {
-                    self.last_emitted_samples = self.playhead_samples;
+                    self.song_state.last_emitted_samples = self.song_state.playhead_samples;
                 }
                 PlaybackMode::Pattern { .. } => {
-                    self.last_emitted_pattern_samples = self.pattern_playhead_samples;
+                    self.pattern_state.last_emitted_samples = self.pattern_state.playhead_samples;
                 }
             }
         }
@@ -1118,11 +1262,14 @@ impl AudioEngine {
     }
 
     fn build_position_struct(&self, is_playing: Option<bool>) -> TransportFeedback {
-        let is_playing = is_playing.unwrap_or(self.is_playing);
+        let is_playing = is_playing.unwrap_or_else(|| match self.playback_mode {
+            PlaybackMode::Song => self.song_state.is_playing,
+            PlaybackMode::Pattern { .. } => self.pattern_state.is_playing,
+        });
         let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
 
-        let ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
-            (self.playhead_samples as f64
+       let ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
+            (self.song_state.playhead_samples as f64
                 * (self.bpm as f64 / 60.0)
                 * (960.0 / self.sample_rate as f64)) as u32
         } else {
@@ -1130,7 +1277,7 @@ impl AudioEngine {
         };
 
         let pattern_ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
-            (self.pattern_playhead_samples as f64
+            (self.pattern_state.playhead_samples as f64
                 * (self.bpm as f64 / 60.0)
                 * (960.0 / self.sample_rate as f64)) as u32
         } else {
@@ -1139,23 +1286,23 @@ impl AudioEngine {
 
         TransportFeedback {
             // Song position
-            samples: self.playhead_samples,
+            samples: self.song_state.playhead_samples,
             ticks,
-            beat: self.current_beat,
-            bar: self.current_bar,
+            beat: self.song_state.current_beat,
+            bar: self.song_state.current_bar,
             tempo: self.bpm,
             sample_rate: self.current_state.graph.sample_rate,
             // Transport state
             is_playing,
-            is_looping: self.is_looping,
-            is_recording: self.is_recording,
-            is_pattern_playing: self.is_pattern_playing,
+            is_looping: self.song_state.is_looping,
+            is_recording: self.song_state.is_recording,
+            is_pattern_playing: self.pattern_state.is_playing,
             // Pattern position (independent)
             is_pattern_mode,
-            pattern_samples: self.pattern_playhead_samples,
+            pattern_samples: self.pattern_state.playhead_samples,
             pattern_ticks,
-            pattern_beat: self.pattern_beat,
-            pattern_bar: self.pattern_bar,
+            pattern_beat: self.pattern_state.current_beat,
+            pattern_bar: self.pattern_state.current_bar,
         }
     }
 
@@ -1943,7 +2090,7 @@ impl AudioEngine {
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
-        let start_time = self.playhead_samples;
+        let start_time = self.song_state.playhead_samples;
         let end_time = start_time + (buffer_size as u32);
 
         // Use the tracks from the current audio graph state
@@ -2388,7 +2535,7 @@ impl AudioEngine {
         // Convert playhead from samples to ticks (960 ticks per beat)
         let samples_per_beat = (60.0 / tempo) * (self.sample_rate as f32);
         let samples_per_tick = samples_per_beat / 960.0;
-        let current_tick = ((self.playhead_samples as f64) / (samples_per_tick as f64)) as u32;
+        let current_tick = ((self.song_state.playhead_samples as f64) / (samples_per_tick as f64)) as u32;
 
         for lane in self.current_state.graph.automation_lanes.values() {
             let value = lane.value_at_ticks(current_tick);
@@ -2537,7 +2684,7 @@ impl AudioEngine {
                 self.metronome_state.play_index = 0; // Reset playhead to start of WAV
 
                 let curr_beat_idx = (current_sample as f32 / samples_per_beat) as u32;
-                self.metronome_state.is_downbeat = curr_beat_idx % 4 == 0;
+                self.metronome_state.is_downbeat = curr_beat_idx.is_multiple_of(4);
             }
 
             if self.metronome_state.is_playing {
@@ -2656,10 +2803,12 @@ fn get_read_pos(
     }
 }
 
-// Helper function to decode 16-bit PCM WAV bytes into a flat f32 array
+/// Helper function to decode 16-bit PCM WAV bytes into a flat f32 array
 fn load_internal_wav(bytes: &[u8]) -> Vec<f32> {
     let cursor = std::io::Cursor::new(bytes);
-    let reader = hound::WavReader::new(cursor).expect("Failed to parse internal metronome WAV");
+    let Ok(reader) = hound::WavReader::new(cursor) else {
+        return Vec::new();
+    };
 
     // Convert 16-bit integer (-32768 to 32767) to f32 (-1.0 to 1.0)
     reader

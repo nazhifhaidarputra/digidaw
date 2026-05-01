@@ -197,7 +197,7 @@ impl KarbeatTrack {
             .unwrap_or(0);
     }
 
-    pub fn cut_clip(
+    pub fn slice_clip(
         &mut self,
         clip_id: &ClipId,
         cut_point: u64,
@@ -268,7 +268,7 @@ impl ApplicationState {
         let new_track = KarbeatTrack {
             track_type: TrackType::Audio,
             id: new_track_id,
-            name: format!("Track {}", new_track_id.to_string()),
+            name: format!("Track {}", new_track_id),
             ..Default::default()
         };
         let track_arc = Arc::new(new_track);
@@ -432,7 +432,7 @@ impl ApplicationState {
         let automation_clip = Clip {
             id: ClipId::next(&mut self.clip_counter),
             name: label,
-            source: KarbeatSource::Automation(new_automation_lane.id.clone()),
+            source: KarbeatSource::Automation(new_automation_lane.id),
             time: ClipTimeUnit::Ticks {
                 start_time: 0,
                 loop_length: end_sample,

@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -86,10 +86,12 @@ Stream<double> exportProjectFlutter({
   required String outputPath,
   required int sampleRate,
   required int bitPerSample,
+  required TailHandlingDTO tailHandling,
 }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
   outputPath: outputPath,
   sampleRate: sampleRate,
   bitPerSample: bitPerSample,
+  tailHandling: tailHandling,
 );
 
 class AudioWaveformUiForAudioProperties {
@@ -217,6 +219,8 @@ class AudioWaveformUiForSourceList {
           muted == other.muted &&
           sampleRate == other.sampleRate;
 }
+
+enum TailHandlingDTO { cutRemaining, leaveRemaining, wrapRemaining }
 
 class UiApplicationState {
   final UiProjectMetadata metadata;

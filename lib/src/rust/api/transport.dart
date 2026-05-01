@@ -5,6 +5,10 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'transport.freezed.dart';
+
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`
 
 /// set the play state of the transport
 Future<void> setPlaying({required bool val}) =>
@@ -26,3 +30,34 @@ Future<void> setBpm({required double val}) =>
 /// stop the song playback and reset the playhead to 0
 Future<void> stopSongPlayback() =>
     RustLib.instance.api.crateApiTransportStopSongPlayback();
+
+/// Toggle the pattern playback
+Future<void> togglePatternPlayback({
+  required int patternId,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiTransportTogglePatternPlayback(
+  patternId: patternId,
+  generatorId: generatorId,
+);
+
+/// Toggle the playback with specific playback
+Future<void> togglePlaybackWithMode({required PlaybackModeDto playbackMode}) =>
+    RustLib.instance.api.crateApiTransportTogglePlaybackWithMode(
+      playbackMode: playbackMode,
+    );
+
+Future<void> switchPatternGenerator({required int generatorId}) => RustLib
+    .instance
+    .api
+    .crateApiTransportSwitchPatternGenerator(generatorId: generatorId);
+
+@freezed
+sealed class PlaybackModeDto with _$PlaybackModeDto {
+  const PlaybackModeDto._();
+
+  const factory PlaybackModeDto.song() = PlaybackModeDto_Song;
+  const factory PlaybackModeDto.pattern({
+    required int patternId,
+    required int generatorId,
+  }) = PlaybackModeDto_Pattern;
+}

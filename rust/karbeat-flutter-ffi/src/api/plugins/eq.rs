@@ -89,7 +89,7 @@ pub fn get_eq_response_curve(
         .downcast_ref::<KarbeatParametricEQ>()
         .ok_or_else(|| "Effect is not a Parametric EQ".to_string())?;
 
-    let response = eq.engine.compute_magnitude_response(num_points as usize);
+    let response = eq.compute_magnitude_response(num_points as usize);
 
     Ok(
         response

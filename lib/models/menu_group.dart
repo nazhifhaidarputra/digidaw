@@ -115,7 +115,7 @@ class KarbeatToolbarMenuGroupFactory {
           if (result != null && result.files.single.path != null) {
             final path = result.files.single.path!;
 
-            // 1. Put up the "Glass Pane" blocking all touch events
+            // Put up the "Glass Pane" blocking all touch events
             if (context.mounted) {
               showDialog(
                 context: context,
@@ -144,17 +144,17 @@ class KarbeatToolbarMenuGroupFactory {
             }
 
             try {
-              // 2. Await the Rust Shadow Load & Swap
+              // Await the Rust Shadow Load & Swap
               await state.loadProject(path);
 
-              // 3. Update UI state (Window title, etc.)
+              // Update UI state (Window title, etc.)
               state.currentFilePath = path;
               await _updateWindowTitle(path);
             } catch (e) {
               debugPrint("Failed to load project: $e");
               // Optional: Show error snackbar here
             } finally {
-              // 4. Tear down the "Glass Pane" SAFELY
+              // Tear down the "Glass Pane" SAFELY
               if (context.mounted) {
                 Navigator.of(context, rootNavigator: true).pop();
               }
@@ -192,7 +192,12 @@ class KarbeatToolbarMenuGroupFactory {
         },
       ),
       KarbeatToolbarMenuAction('Import Audio'),
-      KarbeatToolbarMenuAction('Export Project'),
+      KarbeatToolbarMenuAction(
+        'Export Project',
+        callback: (context, state) async {
+          state.openExportPanel();
+        },
+      ),
       KarbeatToolbarMenuAction('Settings'),
     ],
   );

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde::{ Deserialize, Serialize };
 
 use crate::core::project::ApplicationState;
+use crate::core::project::ClipboardContent;
 use crate::core::project::Note;
 use crate::core::project::NoteId;
 use crate::shared::id::PatternId;
@@ -148,6 +149,47 @@ impl Pattern {
         initial_len - self.notes.len()
     }
 
+    /// Efficiently adds multiple notes and sorts only once at the end.
+    pub fn insert_notes_batch(&mut self, new_notes: Vec<Note>) -> anyhow::Result<Vec<Note>> {
+        let mut inserted = Vec::with_capacity(new_notes.len());
+        for mut note in new_notes {
+            if note.key > 127 || note.duration == 0 {
+                continue; // Safely skip invalid notes during a batch drag
+            }
+            note.id = NoteId::next(&mut self.next_note_id);
+            self.notes.push(note.clone());
+            inserted.push(note);
+        }
+        
+        // Sort and recalculate timeline boundaries exactly once
+        self.sort_notes_unstable();
+        Ok(inserted)
+    }
+
+    /// Efficiently moves multiple notes and sorts only once at the end.
+    pub fn move_notes_batch(&mut self, updates: &[(NoteId, u64, u8)]) -> anyhow::Result<Vec<(Note, u64, u8)>> {
+        let mut results = Vec::new();
+        
+        for &(note_id, new_start_tick, new_key) in updates {
+            if new_key > 127 { continue; }
+            if let Some(index) = self.notes.iter().position(|n| n.id == note_id) {
+                let old_tick = self.notes[index].start_tick;
+                let old_key = self.notes[index].key;
+                
+                self.notes[index].start_tick = new_start_tick;
+                self.notes[index].key = new_key;
+                
+                results.push((self.notes[index].clone(), old_tick, old_key));
+            }
+        }
+        
+        if !results.is_empty() {
+            self.sort_notes_unstable();
+        }
+        
+        Ok(results)
+    }
+
     /// Resize a note's duration
     /// Returns the modified note or an error if index is invalid
     pub fn resize_note(&mut self, index: usize, new_duration: u64) -> anyhow::Result<&Note> {
@@ -168,6 +210,27 @@ impl Pattern {
         self.notes[index].duration = new_duration;
         self.recalculate_length();
         Ok(&self.notes[index])
+    }
+
+    /// Efficiently resizes multiple notes and recalculates length only once.
+    pub fn resize_notes_batch(&mut self, updates: &[(NoteId, u64)]) -> anyhow::Result<Vec<(Note, u64)>> {
+        let mut results = Vec::new();
+        
+        for &(note_id, new_duration) in updates {
+            if new_duration == 0 { continue; }
+            if let Some(index) = self.notes.iter().position(|n| n.id == note_id) {
+                let old_duration = self.notes[index].duration;
+                self.notes[index].duration = new_duration;
+                
+                results.push((self.notes[index].clone(), old_duration));
+            }
+        }
+        
+        if !results.is_empty() {
+            self.recalculate_length();
+        }
+        
+        Ok(results)
     }
 
     pub fn move_note(
@@ -494,5 +557,171 @@ impl ApplicationState {
             .set_note_params(index, velocity, probability, micro_offset, mute)?
             .clone();
         Ok(note)
+    }
+
+    pub fn add_notes_to_pattern_batch(
+        &mut self,
+        pattern_id: PatternId,
+        notes_data: &[(u8, u64, Option<u64>)]
+    ) -> anyhow::Result<Vec<Note>> {
+        let pattern_arc = self.pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        let mut notes_to_insert = Vec::with_capacity(notes_data.len());
+        for &(key, start_tick, duration) in notes_data {
+            notes_to_insert.push(Note {
+                id: NoteId::default(), // Automatically overwritten by pattern.insert_notes_batch
+                start_tick,
+                duration: duration.unwrap_or(960),
+                key,
+                velocity: 100,
+                probability: 1.0,
+                micro_offset: 0,
+                mute: false,
+            });
+        }
+
+        pattern.insert_notes_batch(notes_to_insert)
+    }
+
+    pub fn delete_notes_from_pattern_batch(
+        &mut self,
+        pattern_id: PatternId,
+        note_ids: &[NoteId]
+    ) -> anyhow::Result<Vec<Note>> {
+        let pattern_arc = self.pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        let deleted_notes: Vec<Note> = pattern.notes
+            .iter()
+            .filter(|n| note_ids.contains(&n.id))
+            .cloned()
+            .collect();
+
+        // Relies on your existing `delete_notes_by_id` implementation
+        pattern.delete_notes_by_id(note_ids.into());
+
+        Ok(deleted_notes)
+    }
+
+    pub fn move_notes_in_pattern_batch(
+        &mut self,
+        pattern_id: PatternId,
+        updates: &[(NoteId, u64, u8)]
+    ) -> anyhow::Result<Vec<(Note, u64, u8)>> {
+        let pattern_arc = self.pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        pattern.move_notes_batch(updates)
+    }
+
+    pub fn resize_notes_in_pattern_batch(
+        &mut self,
+        pattern_id: PatternId,
+        updates: &[(NoteId, u64)]
+    ) -> anyhow::Result<Vec<(Note, u64)>> {
+        let pattern_arc = self.pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        pattern.resize_notes_batch(updates)
+    }
+
+    pub fn copy_pattern_notes_batch(
+        &mut self,
+        pattern_id: PatternId,
+        note_ids: &[NoteId],
+    ) -> anyhow::Result<()> {
+       let pattern = self.pattern_pool
+            .get(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
+
+        // Filter and clone the requested notes
+        let notes_to_copy: Vec<Note> = pattern.notes
+            .iter()
+            .filter(|n| note_ids.contains(&n.id))
+            .cloned()
+            .collect();
+
+        // Update the App's clipboard state
+        if !notes_to_copy.is_empty() {
+            self.clipboard = ClipboardContent::Notes(notes_to_copy);
+        } else {
+            self.clipboard = ClipboardContent::Empty;
+        }
+
+        Ok(())
+    }
+
+    pub fn paste_pattern_notes_batch(
+        &mut self,
+        target_pattern_id: &PatternId,
+        left_bound_tick: u64,
+        left_note_key: Option<u8>,
+    ) -> anyhow::Result<Vec<Note>>{
+        let pattern_arc  = self.pattern_pool
+            .get_mut(target_pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", target_pattern_id.to_u32()))?;
+
+        // Get clipboard
+        let clipboard = &self.clipboard;
+
+        // paste into the pattern
+        let ClipboardContent::Notes(notes_vec) = clipboard else {
+            return Ok(Vec::new());
+        };
+
+        if notes_vec.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        #[allow(clippy::unwrap_used)]
+        let earliest_note = notes_vec.iter().min_by_key(|n| n.start_tick).unwrap();
+
+        let min_tick = earliest_note.start_tick;
+        let tick_offset = (left_bound_tick as i64) - (min_tick as i64);
+
+        // If a target key is provided, calculate the pitch shift relative to the earliest note
+        let key_offset = if let Some(target_key) = left_note_key {
+            (target_key as i16) - (earliest_note.key as i16)
+        } else {
+            0
+        };
+        
+        let mut notes_to_insert = Vec::with_capacity(notes_vec.len());
+        for note in notes_vec {
+            let mut new_note = note.clone();
+            
+            // Apply bounds and clamps
+            new_note.start_tick = ((new_note.start_tick as i64) + tick_offset).max(0) as u64;
+            new_note.key = ((new_note.key as i16) + key_offset).clamp(0, 127) as u8;
+            
+            notes_to_insert.push(new_note);
+        }
+
+        let pattern_mut = Arc::make_mut(pattern_arc);
+        let inserted_notes = pattern_mut.insert_notes_batch(notes_to_insert)?;
+
+        Ok(inserted_notes)
+    }
+
+    pub fn cut_pattern_notes_batch(
+        &mut self,
+        pattern_id: PatternId,
+        note_ids: &[NoteId],
+    ) -> anyhow::Result<Vec<Note>> {
+        // Copy the targeted notes to the internal clipboard
+        self.copy_pattern_notes_batch(pattern_id, note_ids)?;
+
+        // Delete them from the pattern and return the deleted notes 
+        // (so the API wrapper can add them to the undo/redo history)
+        self.delete_notes_from_pattern_batch(pattern_id, note_ids)
     }
 }

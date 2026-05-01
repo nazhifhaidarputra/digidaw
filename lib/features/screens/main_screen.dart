@@ -1,5 +1,8 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/components/project_export.dart';
 import 'package:karbeat/features/layout/main_content.dart';
 import 'package:karbeat/features/side_panel/side_panel.dart';
 import 'package:karbeat/features/side_panel/sidebar.dart';
@@ -17,6 +20,10 @@ class MainScreen extends ConsumerWidget {
     );
     final showMidiKeyboard = ref.watch(
       karbeatStateProvider.select((s) => s.showFloatingMidiKeyboard),
+    );
+
+    final showExportPanel = ref.watch(
+      karbeatStateProvider.select((s) => s.showExportPanel),
     );
 
     return Scaffold(
@@ -37,9 +44,30 @@ class MainScreen extends ConsumerWidget {
               bottom: 0,
               child: _buildContextPanel(context, ref, currentContext),
             ),
-          
-          if (showMidiKeyboard)
-            const FloatingMidiKeyboard(),
+
+          if (showMidiKeyboard) const FloatingMidiKeyboard(),
+          if (showExportPanel) ...[
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  // ref.read(karbeatStateProvider).closeExportPanel();
+                },
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                  child: Container(color: Colors.black.withAlpha(100)),
+                ),
+              ),
+            ),
+
+            // Export panel
+            Positioned.fill(
+              child: ProjectExportPanel(
+                onClose: () {
+                  ref.read(karbeatStateProvider).closeExportPanel();
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

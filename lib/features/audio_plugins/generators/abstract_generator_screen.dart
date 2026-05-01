@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/plugin_parameter_widget.dart';
-import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api; // Import the universal widgets
+import 'package:karbeat/src/rust/api/plugin.dart'
+    as plugin_api; // Import the universal widgets
 
 /// # Overview
-/// 
+///
 /// **Abstract base class for generator plugin screens.**
 ///
 /// Provides default implementations for:
@@ -16,7 +17,7 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api; // Import the u
 /// - Standard Scaffold/AppBar layout
 /// - Automatic Dynamic UI Generation based on Rust #[param] specs
 ///
-/// Subclasses can override [buildGeneratorBody] to define a custom effect UI, 
+/// Subclasses can override [buildGeneratorBody] to define a custom effect UI,
 /// but it defaults to an automatically generated layout.
 abstract class AbstractGeneratorScreen extends ConsumerStatefulWidget {
   final int generatorId;
@@ -92,6 +93,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
               // Copy all immutable fields but update the value
               parameters[index] = plugin_api.UiPluginParameter(
                 id: parameters[index].id,
+                path: parameters[index].path,
                 name: parameters[index].name,
                 group: parameters[index].group,
                 value: paramValue.value,
@@ -144,6 +146,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
       if (index != -1) {
         parameters[index] = plugin_api.UiPluginParameter(
           id: parameters[index].id,
+          path: parameters[index].path,
           name: parameters[index].name,
           group: parameters[index].group,
           value: value,
@@ -162,7 +165,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
     try {
       await plugin_api.setGeneratorParameter(
         generatorId: widget.generatorId,
-        paramId: paramId,
+        paramId: plugin_api.UiParamId.id(paramId),
         value: value,
       );
     } catch (e) {
@@ -174,6 +177,48 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   double getParameter(int paramId, double fallback) {
     try {
       return parameters.firstWhere((p) => p.id == paramId).value;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  Future<void> setParameterString(String paramId, double value) async {
+    setState(() {
+      final index = parameters.indexWhere((p) => p.path == paramId);
+      if (index != -1) {
+        parameters[index] = plugin_api.UiPluginParameter(
+          id: parameters[index].id,
+          path: parameters[index].path,
+          name: parameters[index].name,
+          group: parameters[index].group,
+          value: value,
+          min: parameters[index].min,
+          max: parameters[index].max,
+          defaultValue: parameters[index].defaultValue,
+          step: parameters[index].step,
+          paramType: parameters[index].paramType,
+          choices: parameters[index].choices,
+        );
+      }
+    });
+
+    onParametersUpdated();
+
+    try {
+      await plugin_api.setGeneratorParameter(
+        generatorId: widget.generatorId,
+        paramId: plugin_api.UiParamId.path(paramId),
+        value: value,
+      );
+    } catch (e) {
+      debugPrint('Error setting generator parameter: $e');
+    }
+  }
+
+  @protected
+  double getParameterString(String paramId, double fallback) {
+    try {
+      return parameters.firstWhere((p) => p.path == paramId).value;
     } catch (e) {
       return fallback;
     }
@@ -212,7 +257,9 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionHeader(entry.key), // The group name (e.g. "Master", "Oscillator 1")
+              _buildSectionHeader(
+                entry.key,
+              ), // The group name (e.g. "Master", "Oscillator 1")
               _buildSectionContainer(
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,7 +282,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   /// Automatically routes the parameter to the correct universal widget based on its type.
   @protected
   Widget buildDynamicParameterWidget(plugin_api.UiPluginParameter param) {
-    // Note: Adjust the enum names below based on how FRB generated them in Dart 
+    // Note: Adjust the enum names below based on how FRB generated them in Dart
     // (e.g., ParameterValueType.float vs ParameterValueType.Float)
     switch (param.paramType) {
       case plugin_api.UiParameterType.float:
@@ -297,7 +344,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
     );
   }
 
-  /// Subclasses can override this to provide a custom UI layout, 
+  /// Subclasses can override this to provide a custom UI layout,
   /// but it defaults to the dynamic layout.
   Widget buildGeneratorBody(BuildContext context) {
     return buildDynamicGeneratorBody(context);

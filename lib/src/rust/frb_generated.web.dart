@@ -80,6 +80,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<UiPluginCommandResponse>
+  dco_decode_StreamSink_ui_plugin_command_response_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
@@ -112,10 +116,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_32(dynamic raw);
 
   @protected
+  PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw);
+
+  @protected
   (int, int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw);
 
   @protected
   UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw);
@@ -124,7 +134,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
   @protected
+  UiParamId dco_decode_box_autoadd_ui_param_id(dynamic raw);
+
+  @protected
   UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw);
+
+  @protected
+  UiPluginTarget dco_decode_box_autoadd_ui_plugin_target(dynamic raw);
 
   @protected
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
@@ -177,6 +193,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
 
   @protected
+  List<(int, int)> dco_decode_list_record_u_32_casted_primitive_u_64(
+    dynamic raw,
+  );
+
+  @protected
+  List<(int, int, int)> dco_decode_list_record_u_32_casted_primitive_u_64_u_8(
+    dynamic raw,
+  );
+
+  @protected
   List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw);
 
   @protected
@@ -196,6 +222,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
+
+  @protected
+  List<(int, int, int?)>
+  dco_decode_list_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    dynamic raw,
+  );
 
   @protected
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
@@ -269,6 +301,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
+
+  @protected
   List<ParameterSpecDTO>? dco_decode_opt_list_parameter_spec_dto(dynamic raw);
 
   @protected
@@ -278,12 +313,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw);
 
   @protected
+  PlaybackModeDto dco_decode_playback_mode_dto(dynamic raw);
+
+  @protected
   (int, AudioWaveformUiForClip)
   dco_decode_record_u_32_audio_waveform_ui_for_clip(dynamic raw);
 
   @protected
   (int, AudioWaveformUiForSourceList)
   dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+
+  @protected
+  (int, int) dco_decode_record_u_32_casted_primitive_u_64(dynamic raw);
+
+  @protected
+  (int, int, int) dco_decode_record_u_32_casted_primitive_u_64_u_8(dynamic raw);
 
   @protected
   (int, double) dco_decode_record_u_32_f_32(dynamic raw);
@@ -306,11 +350,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, UiTrack) dco_decode_record_u_32_ui_track(dynamic raw);
 
   @protected
+  (int, int, int?)
+  dco_decode_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    dynamic raw,
+  );
+
+  @protected
   (int, int) dco_decode_record_u_8_u_8(dynamic raw);
 
   @protected
   (UiMixerChannel, List<UiEffectInstance>)
   dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw);
+
+  @protected
+  TailHandlingDTO dco_decode_tail_handling_dto(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -383,6 +436,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiNote dco_decode_ui_note(dynamic raw);
 
   @protected
+  UiParamId dco_decode_ui_param_id(dynamic raw);
+
+  @protected
   UiParameterType dco_decode_ui_parameter_type(dynamic raw);
 
   @protected
@@ -392,6 +448,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiPattern dco_decode_ui_pattern(dynamic raw);
 
   @protected
+  UiPluginCommandResponse dco_decode_ui_plugin_command_response(dynamic raw);
+
+  @protected
   UiPluginInfo dco_decode_ui_plugin_info(dynamic raw);
 
   @protected
@@ -399,6 +458,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
+
+  @protected
+  UiPluginTarget dco_decode_ui_plugin_target(dynamic raw);
 
   @protected
   UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw);
@@ -496,6 +558,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<UiPluginCommandResponse>
+  sse_decode_StreamSink_ui_plugin_command_response_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
@@ -534,12 +602,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
+  PlaybackModeDto sse_decode_box_autoadd_playback_mode_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, int) sse_decode_box_autoadd_record_u_8_u_8(
     SseDeserializer deserializer,
   );
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer);
 
   @protected
   UiEffectTarget sse_decode_box_autoadd_ui_effect_target(
@@ -552,7 +628,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiParamId sse_decode_box_autoadd_ui_param_id(SseDeserializer deserializer);
+
+  @protected
   UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiPluginTarget sse_decode_box_autoadd_ui_plugin_target(
     SseDeserializer deserializer,
   );
 
@@ -617,6 +701,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, int)> sse_decode_list_record_u_32_casted_primitive_u_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<(int, int, int)> sse_decode_list_record_u_32_casted_primitive_u_64_u_8(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(int, double)> sse_decode_list_record_u_32_f_32(
     SseDeserializer deserializer,
   );
@@ -644,6 +738,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, UiTrack)> sse_decode_list_record_u_32_ui_track(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<(int, int, int?)>
+  sse_decode_list_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
     SseDeserializer deserializer,
   );
 
@@ -733,6 +833,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
   List<ParameterSpecDTO>? sse_decode_opt_list_parameter_spec_dto(
     SseDeserializer deserializer,
   );
@@ -746,6 +849,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackModeDto sse_decode_playback_mode_dto(SseDeserializer deserializer);
+
+  @protected
   (int, AudioWaveformUiForClip)
   sse_decode_record_u_32_audio_waveform_ui_for_clip(
     SseDeserializer deserializer,
@@ -754,6 +860,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   (int, AudioWaveformUiForSourceList)
   sse_decode_record_u_32_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, int) sse_decode_record_u_32_casted_primitive_u_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, int, int) sse_decode_record_u_32_casted_primitive_u_64_u_8(
     SseDeserializer deserializer,
   );
 
@@ -782,6 +898,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer);
 
   @protected
+  (int, int, int?)
+  sse_decode_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
 
   @protected
@@ -789,6 +911,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_record_ui_mixer_channel_list_ui_effect_instance(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TailHandlingDTO sse_decode_tail_handling_dto(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -875,6 +1000,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiNote sse_decode_ui_note(SseDeserializer deserializer);
 
   @protected
+  UiParamId sse_decode_ui_param_id(SseDeserializer deserializer);
+
+  @protected
   UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
 
   @protected
@@ -882,6 +1010,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
+
+  @protected
+  UiPluginCommandResponse sse_decode_ui_plugin_command_response(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer);
@@ -893,6 +1026,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiPluginParameter sse_decode_ui_plugin_parameter(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiPluginTarget sse_decode_ui_plugin_target(SseDeserializer deserializer);
 
   @protected
   UiProjectMetadata sse_decode_ui_project_metadata(
@@ -1014,6 +1150,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_plugin_command_response_Sse(
+    RustStreamSink<UiPluginCommandResponse> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_ui_transport_feedback_Sse(
     RustStreamSink<UiTransportFeedback> self,
     SseSerializer serializer,
@@ -1056,6 +1198,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_playback_mode_dto(
+    PlaybackModeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_record_u_8_u_8(
     (int, int) self,
     SseSerializer serializer,
@@ -1063,6 +1211,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_ui_effect_target(
@@ -1077,8 +1228,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_param_id(
+    UiParamId self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_plugin_instance(
     UiPluginInstance self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_plugin_target(
+    UiPluginTarget self,
     SseSerializer serializer,
   );
 
@@ -1155,6 +1318,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_casted_primitive_u_64(
+    List<(int, int)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_u_32_casted_primitive_u_64_u_8(
+    List<(int, int, int)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_f_32(
     List<(int, double)> self,
     SseSerializer serializer,
@@ -1187,6 +1362,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_u_32_ui_track(
     List<(int, UiTrack)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_list_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    List<(int, int, int?)> self,
     SseSerializer serializer,
   );
 
@@ -1287,6 +1469,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_list_parameter_spec_dto(
     List<ParameterSpecDTO>? self,
     SseSerializer serializer,
@@ -1305,6 +1490,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_playback_mode_dto(
+    PlaybackModeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_u_32_audio_waveform_ui_for_clip(
     (int, AudioWaveformUiForClip) self,
     SseSerializer serializer,
@@ -1313,6 +1504,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
     (int, AudioWaveformUiForSourceList) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_casted_primitive_u_64(
+    (int, int) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_casted_primitive_u_64_u_8(
+    (int, int, int) self,
     SseSerializer serializer,
   );
 
@@ -1353,11 +1556,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_u_8_casted_primitive_u_64_opt_casted_primitive_u_64(
+    (int, int, int?) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_u_8_u_8((int, int) self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_ui_mixer_channel_list_ui_effect_instance(
     (UiMixerChannel, List<UiEffectInstance>) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_tail_handling_dto(
+    TailHandlingDTO self,
     SseSerializer serializer,
   );
 
@@ -1467,6 +1682,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_note(UiNote self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_param_id(UiParamId self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_parameter_type(
     UiParameterType self,
     SseSerializer serializer,
@@ -1482,6 +1700,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_plugin_command_response(
+    UiPluginCommandResponse self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer);
 
   @protected
@@ -1493,6 +1717,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_plugin_parameter(
     UiPluginParameter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_plugin_target(
+    UiPluginTarget self,
     SseSerializer serializer,
   );
 

@@ -1,42 +1,86 @@
-// oscillator.rs (part of karbeat_dsp library)
-
 use std::f64::consts::TAU;
-use dasp::{ Frame };
+use dasp::Frame;
 
-// Import your new universal parameter types
-use karbeat_macros::{ AutoParams, EnumParam };
-use karbeat_plugin_types::{ parameter::{ Param } };
+// Import your universal parameter types and macros
+use karbeat_macros::{karbeat_plugin, EnumParam};
+use karbeat_plugin_types::parameter::Param;
+
+// ============================================================================
+// WAVEFORM ENUM
+// ============================================================================
+
+#[derive(Clone, Debug, Copy, PartialEq, Default, EnumParam)]
+#[repr(usize)]
+pub enum Waveform {
+    #[default]
+    Sine = 0,
+    Saw = 1,
+    Square = 2,
+    Triangle = 3,
+    Noise = 4,
+}
+
+// Ensure the enum can convert back from the host's f32 automation signals
+impl From<f32> for Waveform {
+    fn from(v: f32) -> Self {
+        match v.round() as i32 {
+            0 => Waveform::Sine,
+            1 => Waveform::Saw,
+            2 => Waveform::Square,
+            3 => Waveform::Triangle,
+            4 => Waveform::Noise,
+            _ => Waveform::Sine,
+        }
+    }
+}
 
 // ============================================================================
 // OSCILLATOR
 // ============================================================================
 
-#[derive(Clone, Debug, AutoParams)]
+/// A Oscillator module component. you can use this to add oscillator to 
+/// your plugin audio plugin
+#[derive(Clone, Debug)]
+#[karbeat_plugin]
 pub struct Oscillator {
-    pub waveform: Param<Waveform>,
-    pub detune: Param<f32>,
-    pub phase_offset: Param<f32>,
-    pub mix: Param<f32>,
-    pub pulse_width: Param<f32>,
+    #[param(id = "waveform", name = "Waveform", group = "Oscillator", default = 0.0)]
+    pub waveform: Waveform,
+
+    #[param(id = "detune", name = "Detune", group = "Oscillator", min = -48.0, max = 48.0, default = 0.0, step = 0.2)]
+    pub detune: f32,
+
+    #[param(id = "phase_offset", name = "Phase Offset", group = "Oscillator", min = 0.0, max = 1.0, default = 0.0, step = 0.01)]
+    pub phase_offset: f32,
+
+    #[param(id = "mix", name = "Mix", group = "Oscillator", min = 0.0, max = 1.0, default = 1.0, step = 0.01)]
+    pub mix: f32,
+
+    #[param(id = "pulse_width", name = "Pulse Width", group = "Oscillator", min = 0.01, max = 0.99, default = 0.5, step = 0.01)]
+    pub pulse_width: f32,
 }
 
 impl Default for Oscillator {
     fn default() -> Self {
-        Self::new(0, "Default Osc")
+        Self::new("Default Osc")
     }
 }
 
 impl Oscillator {
     /// Create a new Oscillator building block.
-    /// Assigns sequential IDs starting from `id_start` under the specified UI `group`.
-    pub fn new(id_start: u32, group: &'static str) -> Self {
-        Self {
-            waveform: Param::new_enum(id_start, "Waveform", group, Waveform::Sine),
-            detune: Param::new_f32(id_start + 1, "Detune", group, 0.0, -48.0, 48.0, 0.2),
-            phase_offset: Param::new_f32(id_start + 2, "Phase Offset", group, 0.0, 0.0, 1.0, 0.01),
-            mix: Param::new_f32(id_start + 3, "Mix", group, 1.0, 0.0, 1.0, 0.01),
-            pulse_width: Param::new_f32(id_start + 4, "Pulse Width", group, 0.5, 0.01, 0.99, 0.01),
-        }
+    /// We no longer need `id_start`! The macro handles unique hashing automatically.
+    pub fn new(group: &str) -> Self {
+        // The macro automatically generates base_default() to init the Params!
+        let mut osc = Self::base_default();
+        
+        // Dynamically override the UI group string based on where it's used
+        let group_string = group.to_string();
+        osc.waveform.group = group_string.clone();
+        osc.detune.group = group_string.clone();
+        osc.phase_offset.group = group_string.clone();
+        osc.mix.group = group_string.clone();
+        osc.pulse_width.group = group_string;
+
+        osc
     }
 
     /// Standard audio output using dasp frames
@@ -175,120 +219,4 @@ impl Oscillator {
             0.0
         }
     }
-}
-
-// impl AutoParams for Oscillator {
-//     fn auto_get_parameter(&self, id: u32) -> Option<f32> {
-//         if self.waveform.id == id {
-//             return Some(self.waveform.get_base().to_f32());
-//         }
-//         if self.detune.id == id {
-//             return Some(self.detune.get_base().to_f32());
-//         }
-//         if self.phase_offset.id == id {
-//             return Some(self.phase_offset.get_base().to_f32());
-//         }
-//         if self.mix.id == id {
-//             return Some(self.mix.get_base().to_f32());
-//         }
-//         if self.pulse_width.id == id {
-//             return Some(self.pulse_width.get_base().to_f32());
-//         }
-//         None
-//     }
-
-//     fn auto_set_parameter(&mut self, id: u32, value: f32) {
-//         if self.waveform.id == id {
-//             self.waveform.set_base(value);
-//             return;
-//         }
-//         if self.detune.id == id {
-//             self.detune.set_base(value);
-//             return;
-//         }
-//         if self.phase_offset.id == id {
-//             self.phase_offset.set_base(value);
-//             return;
-//         }
-//         if self.mix.id == id {
-//             self.mix.set_base(value);
-//             return;
-//         }
-//         if self.pulse_width.id == id {
-//             self.pulse_width.set_base(value);
-//             return;
-//         }
-//     }
-
-//     fn auto_apply_automation(&mut self, id: u32, value: f32) {
-//         if self.waveform.id == id {
-//             self.waveform.apply_automation(value);
-//             return;
-//         }
-//         if self.detune.id == id {
-//             self.detune.apply_automation(value);
-//             return;
-//         }
-//         if self.phase_offset.id == id {
-//             self.phase_offset.apply_automation(value);
-//             return;
-//         }
-//         if self.mix.id == id {
-//             self.mix.apply_automation(value);
-//             return;
-//         }
-//         if self.pulse_width.id == id {
-//             self.pulse_width.apply_automation(value);
-//             return;
-//         }
-//     }
-
-//     fn auto_clear_automation(&mut self, id: u32) {
-//         if self.waveform.id == id {
-//             self.waveform.clear_automation();
-//             return;
-//         }
-//         if self.detune.id == id {
-//             self.detune.clear_automation();
-//             return;
-//         }
-//         if self.phase_offset.id == id {
-//             self.phase_offset.clear_automation();
-//             return;
-//         }
-//         if self.mix.id == id {
-//             self.mix.clear_automation();
-//             return;
-//         }
-//         if self.pulse_width.id == id {
-//             self.pulse_width.clear_automation();
-//             return;
-//         }
-//     }
-
-//     fn auto_get_parameter_specs(&self) -> Vec<ParameterSpec> {
-//         vec![
-//             self.waveform.to_spec(),
-//             self.detune.to_spec(),
-//             self.phase_offset.to_spec(),
-//             self.mix.to_spec(),
-//             self.pulse_width.to_spec()
-//         ]
-//     }
-
-// }
-
-// ============================================================================
-// WAVEFORM ENUM
-// ============================================================================
-
-#[derive(Clone, Debug, Copy, PartialEq, Default, EnumParam)]
-#[repr(usize)]
-pub enum Waveform {
-    #[default]
-    Sine = 0,
-    Saw = 1,
-    Square = 2,
-    Triangle = 3,
-    Noise = 4,
 }

@@ -14,7 +14,7 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 /// - Standard Scaffold/AppBar layout
 /// - Automatic Dynamic UI Generation based on Rust #[param] specs
 ///
-/// Subclasses can override [buildEffectBody] to define a custom effect UI, 
+/// Subclasses can override [buildEffectBody] to define a custom effect UI,
 /// but it defaults to an automatically generated layout.
 abstract class AbstractEffectScreen extends ConsumerStatefulWidget {
   final plugin_api.UiEffectTarget target;
@@ -111,6 +111,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
               // Copy all immutable fields but update the value
               parameters[index] = plugin_api.UiPluginParameter(
                 id: parameters[index].id,
+                path: parameters[index].path,
                 name: parameters[index].name,
                 group: parameters[index].group,
                 value: paramValue.value,
@@ -167,6 +168,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       if (index != -1) {
         parameters[index] = plugin_api.UiPluginParameter(
           id: parameters[index].id,
+          path: parameters[index].path,
           name: parameters[index].name,
           group: parameters[index].group,
           value: value,
@@ -187,7 +189,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       await plugin_api.setEffectParameter(
         target: widget.target,
         effectId: widget.effectId,
-        paramId: paramId,
+        paramId: plugin_api.UiParamId.id(paramId),
         value: value,
       );
     } catch (e) {
@@ -199,6 +201,51 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   double getParameter(int paramId, double fallback) {
     try {
       return parameters.firstWhere((p) => p.id == paramId).value;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  @protected
+  Future<void> setParameterString(String paramId, double value) async {
+    setState(() {
+      final index = parameters.indexWhere((p) => p.path == paramId);
+      if (index != -1) {
+        parameters[index] = plugin_api.UiPluginParameter(
+          id: parameters[index].id,
+          path: parameters[index].path,
+          name: parameters[index].name,
+          group: parameters[index].group,
+          value: value,
+          min: parameters[index].min,
+          max: parameters[index].max,
+          defaultValue: parameters[index].defaultValue,
+          step: parameters[index].step,
+          paramType: parameters[index].paramType,
+          choices: parameters[index].choices,
+        );
+      }
+    });
+
+     onParametersUpdated();
+
+    // Send to backend
+    try {
+      await plugin_api.setEffectParameter(
+        target: widget.target,
+        effectId: widget.effectId,
+        paramId: plugin_api.UiParamId.path(paramId),
+        value: value,
+      );
+    } catch (e) {
+      debugPrint('Error setting effect parameter: $e');
+    }
+  }
+
+  @protected
+  double getParameterString(String paramId, double fallback) {
+    try {
+      return parameters.firstWhere((p) => p.path == paramId).value;
     } catch (e) {
       return fallback;
     }
@@ -321,7 +368,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     );
   }
 
-  /// Subclasses can override this to provide a custom UI layout, 
+  /// Subclasses can override this to provide a custom UI layout,
   /// but it defaults to the dynamic layout.
   Widget buildEffectBody(BuildContext context) {
     return buildDynamicEffectBody(context);

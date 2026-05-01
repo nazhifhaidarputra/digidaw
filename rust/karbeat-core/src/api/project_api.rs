@@ -2,8 +2,7 @@ use std::path::Path;
 
 use indexmap::IndexMap;
 
-use crate::audio::exporter::{export_project as export_project_internal, AudioExportError};
-use crate::audio::render_state::broadcast_plugin_state_loading;
+use crate::audio::exporter::{AudioExportError, TailHandling, export_project as export_project_internal};
 use crate::audio::writer::wav::WavAudioWriter;
 use crate::audio::writer::{AudioFormat, BitPerSample};
 use crate::commands::AudioCommand;
@@ -87,6 +86,7 @@ pub fn export_project<F>(
     output_path: &String,
     sample_rate: u32,
     bit_per_sample: BitPerSample,
+    tail_handling: TailHandling,
     progress_callback: F,
 ) -> anyhow::Result<()>
 where
@@ -94,6 +94,17 @@ where
 {
     let mut app_state = get_app_write();
     let path = Path::new(output_path);
+
+    let is_wav = path
+        .extension()
+        .map(|ext| ext.to_string_lossy().eq_ignore_ascii_case("wav"))
+        .unwrap_or(false);
+
+    if !is_wav {
+        return Err(anyhow::anyhow!(
+            "Unsupported file format. Currently, only .wav exports are supported."
+        ));
+    }
     let writer = WavAudioWriter::new(
         path,
         AudioFormat {
@@ -108,11 +119,12 @@ where
     .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     export_project_internal(
-        &mut *app_state,
+        &mut app_state,
         output_path,
         sample_rate,
         bit_per_sample,
         writer,
+        tail_handling,
         progress_callback,
     )
     .map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -151,7 +163,6 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     for (gen_id, gen_arc) in &app.generator_pool {
         if let GeneratorInstanceType::Plugin(plugin_instance) = &gen_arc.instance_type {
             if let Some((mut plugin, _)) = registry.create_generator_by_id(plugin_instance.registry_id) {
-                // CRITICAL FIX: Apply saved parameters to the DSP plugin
                 for (&param_id, &val) in &plugin_instance.parameters {
                     plugin.set_parameter(param_id, val);
                 }
@@ -203,7 +214,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     }
 
     // Send the fully configured plugins to the Live Audio Engine
-    crate::context::utils::send_audio_command(AudioCommand::PreparePlugin {
+    send_audio_command(AudioCommand::PreparePlugin {
         generators,
         track_effects,
         bus_effects,

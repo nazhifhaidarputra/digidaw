@@ -1,7 +1,6 @@
 use crate::context::utils::broadcast_state_change;
 use crate::core::history::ProjectAction;
-use crate::core::project::clip::{Clip, ClipSourceType, ClipTimeUnit, ResizeEdge};
-use crate::core::project::clipboard::ClipboardContent;
+use crate::core::project::clip::{Clip, ClipSourceType, ResizeEdge};
 use crate::lock::{get_app_read, get_app_write, get_history_lock};
 use crate::shared::id::*;
 use std::sync::Arc;
@@ -141,7 +140,7 @@ pub fn resize_clip(
     Ok(modified_clip)
 }
 
-pub fn cut_clip(
+pub fn slice_clip(
     track_id: TrackId,
     clip_id: ClipId,
     cut_point: u64,
@@ -156,7 +155,7 @@ pub fn cut_clip(
     // 2. Mutate state
     let (c1, c2) = {
         let mut app = get_app_write();
-        app.cut_clip(&track_id, &clip_id, cut_point)
+        app.slice_clip(&track_id, &clip_id, cut_point)
             .map_err(|e| anyhow::anyhow!("{}", e))?
     };
 
@@ -185,7 +184,7 @@ pub fn cut_clip(
 pub fn batch_delete_clips(track_id: TrackId, clip_ids: Vec<ClipId>) -> anyhow::Result<()> {
     let mut deleted_actions = Vec::new();
 
-    // 1. Mutate state and collect actions
+    // 1. Mutate state and wllect actions
     {
         let mut app = get_app_write();
         for clip_id in clip_ids {
@@ -303,124 +302,4 @@ pub fn batch_resize_clips(
     }
     broadcast_state_change();
     Ok(modified_clips)
-}
-
-pub fn copy_clips<T, F>(track_id: TrackId, clip_ids: Vec<ClipId>, mapper: F) -> anyhow::Result<T>
-where
-    F: FnOnce(&ClipboardContent) -> T,
-{
-    let mut app = get_app_write();
-    let mut clips_to_copy = Vec::with_capacity(clip_ids.len());
-
-    let track = app
-        .tracks
-        .get(&track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-    // Clone the requested clips
-    for clip_id in &clip_ids {
-        let clip_arc = track
-            .get_clip(clip_id)
-            .ok_or_else(|| anyhow::anyhow!("Clip {:?} not found", clip_id))?;
-
-        // Dereference the Arc and clone the inner Clip struct
-        clips_to_copy.push(clip_arc.as_ref().clone());
-    }
-
-    // Update the App's clipboard state
-    if !clips_to_copy.is_empty() {
-        app.clipboard = ClipboardContent::Clips(clips_to_copy);
-    } else {
-        // Standardize empty behavior
-        app.clipboard = ClipboardContent::Empty;
-    }
-
-    // Return the mapped DTO
-    Ok(mapper(&app.clipboard))
-}
-
-pub fn paste_clips(target_track_id: TrackId, paste_start_time: u32) -> anyhow::Result<()> {
-    let mut actions = Vec::new();
-
-    // 1. Mutate state
-    {
-        let mut app = get_app_write();
-
-        let clips_to_paste = match &app.clipboard {
-            ClipboardContent::Clips(clips) => clips.clone(),
-            _ => return Ok(()),
-        };
-
-        if clips_to_paste.is_empty() {
-            return Ok(());
-        }
-
-        let min_start = clips_to_paste
-            .iter()
-            .map(|c| c.time.start_time_raw())
-            .min()
-            .unwrap_or(0);
-        let offset = paste_start_time as i64 - min_start as i64;
-
-        let new_clips: Vec<Clip> = clips_to_paste
-            .iter()
-            .map(|clip| {
-                let new_clip_id = ClipId::next(&mut app.clip_counter);
-                let new_start = (clip.time.start_time_raw() as i64 + offset).max(0);
-                let new_time = match &clip.time {
-                    ClipTimeUnit::Samples {
-                        loop_length,
-                        offset_start,
-                        ..
-                    } => ClipTimeUnit::Samples {
-                        start_time: new_start as u64,
-                        loop_length: *loop_length,
-                        offset_start: *offset_start,
-                    },
-                    ClipTimeUnit::Ticks {
-                        loop_length,
-                        offset_start,
-                        ..
-                    } => ClipTimeUnit::Ticks {
-                        start_time: new_start as u32,
-                        loop_length: *loop_length,
-                        offset_start: *offset_start,
-                    },
-                };
-                Clip {
-                    id: new_clip_id,
-                    name: clip.name.clone(),
-                    source: clip.source.clone(),
-                    time: new_time,
-                }
-            })
-            .collect();
-
-        let track_arc = app
-            .tracks
-            .get_mut(&target_track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
-        let track = Arc::make_mut(track_arc);
-
-        for new_clip in new_clips {
-            if let Ok(_) = track.add_clip(new_clip.clone()) {
-                actions.push(ProjectAction::AddClip {
-                    track_id: target_track_id,
-                    clip: new_clip,
-                });
-            }
-        }
-    }
-
-    // 2. Update history
-    if !actions.is_empty() {
-        let mut history = get_history_lock();
-        if actions.len() == 1 {
-            history.push(actions.remove(0));
-        } else {
-            history.push(ProjectAction::Batch(actions));
-        }
-    }
-    broadcast_state_change();
-    Ok(())
 }

@@ -3,10 +3,13 @@ import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/models/export_audio.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/project.dart' as project_api;
+import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -26,10 +29,10 @@ final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
   return KarbeatState();
 });
 
-enum ToolSelection { pointer, cut, draw, move, delete, zoom, select, resize }
+enum ToolSelection { pointer, slice, draw, move, delete, zoom, select, resize }
 
 /// Piano roll specific tool selection (independent from main toolbar)
-enum PianoRollToolSelection { pointer, draw, delete, select, slice }
+enum PianoRollToolSelection { grab, draw, delete, select, slice, pan, zoom }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
@@ -53,7 +56,6 @@ class KarbeatState extends ChangeNotifier {
   UiTransportState _transportState = transportStateNew();
 
   // Runtime transport state (derived from TransportFeedback stream)
-  bool _isPlaying = false;
   bool _isLooping = false;
   bool _isPatternPlaying = false;
 
@@ -126,7 +128,15 @@ class KarbeatState extends ChangeNotifier {
   bool get isMetronomeActive => _isMetronomeActive;
 
   // =========== PIANO ROLL STATE ====================
-  PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.pointer;
+  PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.grab;
+  double _zoomLevelTick = 1;
+
+  double get zoomLevelTick => _zoomLevelTick;
+
+  set zoomLevelTick(double value) {
+    _zoomLevelTick = value.clamp(0.1, 10);
+  }
+
   Set<int> _selectedNoteIds = {};
   int? _previewGeneratorId;
 
@@ -138,18 +148,20 @@ class KarbeatState extends ChangeNotifier {
   bool snapToGrid = false;
 
   // ================== OTHER STATES ====================
-  bool _pendingPlayRequest = false;
   bool _showFloatingMidiKeyboard = false;
+  bool _showExportPanel = false;
+
+  bool get showExportPanel => _showExportPanel;
+
+  // set showExportPanel(bool value) {
+  //   _showExportPanel = value;
+  // }
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
-      if (pos.isPlaying) {
-        _pendingPlayRequest = false;
-      }
-
       // Update runtime transport state from audio thread feedback
       bool changed = false;
 
@@ -165,14 +177,6 @@ class KarbeatState extends ChangeNotifier {
 
       if (pos.isPatternMode != _isPatternMode) {
         _isPatternMode = pos.isPatternMode;
-        changed = true;
-      }
-
-      if (pos.isPlaying != _isPlaying) {
-        if (_pendingPlayRequest && !pos.isPlaying) {
-          return;
-        }
-        _isPlaying = pos.isPlaying;
         changed = true;
       }
 
@@ -311,21 +315,21 @@ class KarbeatState extends ChangeNotifier {
   // ============== GETTERS =================
   UiTransportState get transport => _transportState;
   UiProjectMetadata get metadata => _metadata;
-  bool get isPlaying => _isPlaying;
+
   bool get isPatternPlaying => _isPatternPlaying;
   bool _isPatternMode = false;
   bool get isPatternMode => _isPatternMode;
 
   MusicalBeatSize _horizontalClipShiftSizeDenom = MusicalBeatSize.none;
-  
 
-  MusicalBeatSize get horizontalClipShiftSizeDenom => _horizontalClipShiftSizeDenom;
+  MusicalBeatSize get horizontalClipShiftSizeDenom =>
+      _horizontalClipShiftSizeDenom;
 
   set horizontalClipShiftSizeDenom(MusicalBeatSize value) {
     _horizontalClipShiftSizeDenom = value;
     notifyListeners();
   }
-  bool get isSongPlaying => _isPlaying && !_isPatternPlaying;
+
   bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
@@ -608,11 +612,25 @@ class KarbeatState extends ChangeNotifier {
 
   // =============== ACTIONS ===============
 
+  void openExportPanel() {
+    _showExportPanel = true;
+    notifyListeners();
+  }
+
+  void closeExportPanel() {
+    _showExportPanel = false;
+    notifyListeners();
+  }
+
   void toggleMetronomeActive() {
     _isMetronomeActive = !isMetronomeActive;
     audio_api.setMetronomeActive(active: isMetronomeActive);
     notifyListeners();
   }
+
+  // ======================================================
+  // Project related action
+  // ======================================================
 
   /// Save project state using the provided file path
   Future<Result<void>> saveProject(String path) async {
@@ -652,6 +670,36 @@ class KarbeatState extends ChangeNotifier {
       KarbeatLogger.error("Failed to load project: $e");
       return Result.error(Exception("$e"));
     }
+  }
+
+  Stream<double> exportProject({
+    required String path,
+    required String soundfileName,
+    required SupportedAudioFormat format,
+    required SampleRate sampleRate,
+    BitPerSample? bitPerSample,
+    int? bitrate,
+    required TailHandling tailHandling,
+  }) async* {
+    // Construct final file path based on selected format
+    final ext = format.name.toLowerCase();
+    final fullPath = "$path/$soundfileName.$ext";
+
+    final bpsValue = bitPerSample != null
+        ? int.parse(bitPerSample.name.substring(1))
+        : 16;
+
+    final tailHandlingDto = switch (tailHandling) {
+      TailHandling.CutRemainder => TailHandlingDTO.cutRemaining,
+      TailHandling.LeaveRemainder => TailHandlingDTO.leaveRemaining,
+      TailHandling.WrapRemainder => TailHandlingDTO.wrapRemaining,
+    };
+    yield* project_api.exportProjectFlutter(
+      outputPath: fullPath,
+      sampleRate: sampleRate.value,
+      bitPerSample: bpsValue,
+      tailHandling: tailHandlingDto,
+    );
   }
 
   /// Loads an audio file and refreshes the source list
@@ -746,22 +794,22 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> togglePlay() async {
-    try {
-      final newPlaying = _isPatternPlaying ? !_isPatternPlaying : !_isPlaying;
+  // Future<Result<void>> togglePlay() async {
+  //   try {
+  //     final newPlaying = _isPatternPlaying ? !_isPatternPlaying : !_isPlaying;
 
-      if (newPlaying) {
-        _pendingPlayRequest = true;
-      }
+  //     if (newPlaying) {
+  //       _pendingPlayRequest = true;
+  //     }
 
-      await transport_api.setPlaying(val: newPlaying);
-      return Result.ok(null);
-    } catch (e) {
-      log("Failed to toggle play: $e");
-      _pendingPlayRequest = false;
-      return Result.error(Exception("$e"));
-    }
-  }
+  //     await transport_api.setPlaying(val: newPlaying);
+  //     return Result.ok(null);
+  //   } catch (e) {
+  //     log("Failed to toggle play: $e");
+  //     _pendingPlayRequest = false;
+  //     return Result.error(Exception("$e"));
+  //   }
+  // }
 
   Future<Result<void>> stop() async {
     try {
@@ -935,9 +983,9 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> cutClip(int trackId, int clipId, int cutPoint) async {
+  Future<Result<void>> sliceClip(int trackId, int clipId, int cutPoint) async {
     try {
-      await track_api.cutClip(
+      await track_api.sliceClip(
         sourceTrackId: trackId,
         clipId: clipId,
         cutPoint: cutPoint,
@@ -1147,6 +1195,66 @@ class KarbeatState extends ChangeNotifier {
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error adding note: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addPatternNoteBatch({
+    required int patternId,
+    required List<(int, int, int?)> notes,
+  }) async {
+    try {
+      await addNotesBatch(patternId: patternId, notes: notes);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error adding notes in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> deletePatternNoteBatch({
+    required int patternId,
+    required List<int> noteIds,
+  }) async {
+    for (final noteId in noteIds) {
+      _applyOptimisticNoteDeletion(patternId, noteId);
+    }
+    try {
+      await deleteNotesBatch(patternId: patternId, noteIds: noteIds);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error deleting notes in batch: $e");
+      await syncPattern(patternId);
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> movePatternNoteBatch({
+    required int patternId,
+    required List<(int, int, int)> updates,
+  }) async {
+    try {
+      await moveNotesBatch(patternId: patternId, updates: updates);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error moving notes in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> resizePatternNoteBatch({
+    required int patternId,
+    required List<(int, int)> updates,
+  }) async {
+    try {
+      await resizeNotesBatch(patternId: patternId, updates: updates);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error resizing notes in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1810,6 +1918,199 @@ class KarbeatState extends ChangeNotifier {
     );
 
     notifyListeners();
+  }
+
+  void removeNotesFromSelection(Set<int> noteIds) {
+    _selectedNoteIds = _selectedNoteIds
+        .where((id) => !noteIds.contains(id))
+        .toSet();
+    notifyListeners();
+  }
+
+  // ==============================================
+  // Session's clipboard API
+  // ==============================================
+
+  /// Copy notes from a pattern
+  Future<void> copyNotesFromPattern(int patternId, List<int> noteIds) async {
+    try {
+      session_api.copyPatternNotes(patternId: patternId, noteIds: noteIds);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      // rethrow;
+    }
+  }
+
+  Future<void> cutNotesFromPattern(int patternId, List<int> noteIds) async {
+    for (final noteId in noteIds) {
+      _applyOptimisticNoteDeletion(patternId, noteId);
+    }
+
+    // Clear selection since the items are gone
+    _selectedNoteIds.clear();
+    notifyListeners();
+
+    // Perform Backend Call
+    try {
+      await session_api.cutPatternNotes(patternId: patternId, noteIds: noteIds);
+
+      notifyCustomBackendChange(() async {
+        await syncPattern(patternId);
+      });
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      // Re-sync on failure to restore accidentally "deleted" notes
+      await syncPattern(patternId);
+    }
+  }
+
+  Future<void> pasteNotesFromClipboardToPattern(
+    int targetPatternId,
+    int newTickStart,
+    int newKey,
+  ) async {
+    try {
+      // The API call returns the fully constructed list of notes
+      // (with their new IDs assigned by the backend)
+      final pastedNotes = await session_api.pastePatternNotes(
+        targetPatternId: targetPatternId,
+        playheadTick: newTickStart,
+        targetKey: newKey,
+      );
+
+      if (pastedNotes.isEmpty) return;
+
+      // Optimistic Update: Append the newly pasted notes immediately
+      final pattern = _patterns[targetPatternId];
+      if (pattern != null) {
+        final updatedNotes = List<UiNote>.from(pattern.notes)
+          ..addAll(pastedNotes);
+
+        final updatedPattern = UiPattern(
+          id: pattern.id,
+          name: pattern.name,
+          lengthTicks: pattern
+              .lengthTicks, // Backend recalcs this, but frontend will catch up
+          notes: updatedNotes,
+        );
+
+        final newPatterns = Map<int, UiPattern>.from(_patterns);
+        newPatterns[targetPatternId] = updatedPattern;
+        _patterns = newPatterns;
+
+        // Auto-select the newly pasted notes
+        _selectedNoteIds = pastedNotes.map((n) => n.id).toSet();
+        notifyListeners();
+      }
+
+      // Sync to get the authoritative length & sort order
+      notifyCustomBackendChange(() async {
+        await syncPattern(targetPatternId);
+      });
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+    }
+  }
+
+  // ======================================
+  // Clip's clipboard action API
+  // ======================================
+
+  Future<Result<void>> copySelectedClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.copyClips(trackId: trackId, clipIds: clipIds);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> cutSelectedClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.cutClips(trackId: trackId, clipIds: clipIds);
+
+      // Do optimistic update
+      if (_tracks.containsKey(trackId)) {
+        final track = _tracks[trackId]!;
+        final clipIdSet = clipIds.toSet();
+
+        // Filter out the cut clips
+        final updatedClips = track.clips
+            .where((c) => !clipIdSet.contains(c.id))
+            .toList();
+
+        // Update the tracks map
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+
+        // Clear selection since these clips are no longer on the timeline
+        _selectedClipIds = [];
+        if (_selectedTrackId == trackId) {
+          _selectedTrackId = null;
+          _focusClipId = null;
+        }
+
+        notifyListeners();
+      }
+
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> pasteClips({
+    required int targetTrackId,
+    required int pasteStartTime,
+    required UiTrackType trackType,
+  }) async {
+    try {
+      final clips = await session_api.pasteClips(
+        targetTrackId: targetTrackId,
+        pasteStartTime: pasteStartTime,
+        trackType: trackType,
+      );
+
+      debugPrint(clips.length.toString());
+      if (clips.isEmpty) return Result.ok(null);
+
+      // SUCCESS: Update frontend immediately
+      if (_tracks.containsKey(targetTrackId)) {
+        final track = _tracks[targetTrackId]!;
+
+        // Append the newly pasted clips from the backend
+        final updatedClips = List<UiClip>.from(track.clips)..addAll(clips);
+
+        // Update the tracks map
+        _tracks = Map.from(_tracks);
+        _tracks[targetTrackId] = _copyWithTrack(track, clips: updatedClips);
+
+        // Automatically select the pasted clips so the user can easily drag them
+        _selectedTrackId = targetTrackId;
+        _selectedClipIds = clips.map((c) => c.id).toList();
+        _focusClipId = clips.last.id;
+
+        notifyListeners();
+      }
+
+      // Trigger a background sync to ensure perfect consistency (recalculating lengths, etc)
+      notifyCustomBackendChange(() async {
+        await syncTrack(targetTrackId);
+      });
+
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
   }
 }
 

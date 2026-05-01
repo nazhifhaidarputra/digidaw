@@ -1,3 +1,4 @@
+pub mod hash;
 pub mod audio;
 pub mod audio_utils;
 pub mod macros;

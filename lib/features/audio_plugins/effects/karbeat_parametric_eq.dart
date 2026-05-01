@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -78,6 +79,24 @@ class KarbeatParametricEqState
 
   // Backend-computed response curve
   List<eq_api.UiResponseCurvePoint> _responseCurve = [];
+  List<eq_api.UiResponseCurvePoint> _spectrumCurve = [];
+
+  // ======================================
+  // Real-time Plugin Command Stream
+  // ======================================
+
+  /// Subscription to the plugin command response stream.
+  StreamSubscription<plugin_api.UiPluginCommandResponse>? _pluginStreamSub;
+
+  /// request_id of the most recently dispatched GET_MAGNITUDE_RESPONSE command.
+  /// Responses are matched by ID so stale replies are ignored.
+  int? _magnitudeRequestId;
+
+  /// request_id of the most recently dispatched GET_SPECTRUM command.
+  int? _spectrumRequestId;
+
+  /// Timer that re-fires GET_SPECTRUM at ~30 FPS to drive the analyzer.
+  Timer? _spectrumPollTimer;
 
   final List<Color> _bandColors = [
     Colors.redAccent,
@@ -118,33 +137,107 @@ class KarbeatParametricEqState
   void initState() {
     super.initState();
     _initDefaultBands();
-    _fetchResponseCurve();
+
+    // Open the real-time plugin command stream once and subscribe.
+    // All GET_MAGNITUDE_RESPONSE and GET_SPECTRUM replies arrive here.
+    _pluginStreamSub = plugin_api.createPluginMessageStream().listen(
+      _onPluginMessage,
+    );
+
+    // Request the initial magnitude response after the first frame so that
+    // the widget.target and widget.effectId are fully bound.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _sendMagnitudeRequest(),
+    );
+
+    // Re-fire GET_SPECTRUM at ~30 FPS to drive the real-time spectrum analyzer.
+    _spectrumPollTimer = Timer.periodic(
+      const Duration(milliseconds: 33),
+      (_) => _sendSpectrumRequest(),
+    );
   }
 
-  /// Fetch the response curve from the Rust backend
-  Future<void> _fetchResponseCurve() async {
-    try {
-      // final curve = await eq_api.getEqResponseCurve(
-      //   target: widget.target,
-      //   effectId: widget.effectIdx,
-      //   numPoints: 200,
-      // );
+  @override
+  void dispose() {
+    _pluginStreamSub?.cancel();
+    _spectrumPollTimer?.cancel();
+    super.dispose();
+  }
 
-      final responseStr = await plugin_api.executeEffectInstanceCommand(
-        target: widget.target,
-        effectId: widget.effectId,
-        command: "GET_MAGNITUDE_RESPONSE",
-        payloadJson: jsonEncode({'num_points': 100}),
+  // ======================================
+  // Real-time Plugin Command Helpers
+  // ======================================
+
+  /// Converts the abstract [UiEffectTarget] + effectId pair into a
+  /// [UiPluginTarget] understood by the real-time command channel.
+  plugin_api.UiPluginTarget _toPluginTarget() {
+    final t = widget.target;
+    final eid = widget.effectId;
+    if (t is plugin_api.UiEffectTarget_Track) {
+      return plugin_api.UiPluginTarget.trackEffect(
+        trackId: t.field0,
+        effectId: eid,
       );
+    } else if (t is plugin_api.UiEffectTarget_Bus) {
+      return plugin_api.UiPluginTarget.busEffect(
+        busId: t.field0,
+        effectId: eid,
+      );
+    } else {
+      // UiEffectTarget_Master
+      return plugin_api.UiPluginTarget.masterEffect(eid);
+    }
+  }
 
-      final List<eq_api.UiResponseCurvePoint> curvePoints = eq_api
-          .parseEqCurveResponse(jsonStr: responseStr);
+  /// Sends GET_MAGNITUDE_RESPONSE to the live plugin instance.
+  /// The response arrives via [_onPluginMessage].
+  void _sendMagnitudeRequest() {
+    plugin_api
+        .executeRealtimePluginCommand(
+          target: _toPluginTarget(),
+          command: 'GET_MAGNITUDE_RESPONSE',
+          payloadJson: jsonEncode({'num_points': 1000}),
+        )
+        .then((id) {
+          _magnitudeRequestId = id;
+        })
+        .catchError((Object e) {
+          debugPrint('EQ magnitude request failed: $e');
+        });
+  }
 
-      if (mounted) {
-        setState(() => _responseCurve = curvePoints);
-      }
-    } catch (e) {
-      debugPrint('Error fetching EQ response curve: $e');
+  /// Sends GET_SPECTRUM to the live plugin instance.
+  /// Fired at ~30 FPS by [_spectrumPollTimer].
+  void _sendSpectrumRequest() {
+    plugin_api
+        .executeRealtimePluginCommand(
+          target: _toPluginTarget(),
+          command: 'GET_SPECTRUM',
+          payloadJson: jsonEncode({'num_points': 1500}),
+        )
+        .then((id) {
+          _spectrumRequestId = id;
+        })
+        .catchError((Object _) {
+          /* Ignore dropped frames */
+        });
+  }
+
+  /// Routes incoming plugin command responses to the correct state field.
+  /// Only the most-recently-issued request ID is accepted to discard stale data.
+  void _onPluginMessage(plugin_api.UiPluginCommandResponse msg) {
+    if (!mounted) return;
+
+    if (msg.requestId == _magnitudeRequestId) {
+      final curvePoints = eq_api.parseEqCurveResponse(
+        jsonStr: msg.responseJson,
+      );
+      setState(() => _responseCurve = curvePoints);
+    } else if (msg.requestId == _spectrumRequestId) {
+      final curvePoints = eq_api.parseEqCurveResponse(
+        jsonStr: msg.responseJson,
+      );
+      setState(() => _spectrumCurve = curvePoints);
     }
   }
 
@@ -154,33 +247,39 @@ class KarbeatParametricEqState
 
     setState(() {
       for (final p in parameters) {
-        if (p.group == 'Master' && p.name == 'Base Gain') {
+        // 1. Direct path check for base_gain
+        if (p.path == 'base_gain') {
           masterGain = p.value;
           continue;
         }
 
-        final match = RegExp(r'Band (\d+)').firstMatch(p.group);
+        // 2. Regex to extract the band index and parameter name from the string path!
+        // Matches e.g., "band0/freq", "band1/active", etc.
+        final match = RegExp(r'band(\d+)/(.+)').firstMatch(p.path);
         if (match != null) {
-          final bandIndex = int.parse(match.group(1)!) - 1;
+          final bandIndex = int.parse(match.group(1)!);
+
           if (bandIndex >= 0 && bandIndex < bands.length) {
             final band = bands[bandIndex];
-            switch (p.name) {
-              case 'Active':
+            final paramName = match.group(2)!;
+
+            switch (paramName) {
+              case 'active':
                 band.active = p.value > 0.5;
                 break;
-              case 'Type':
+              case 'type':
                 band.filterType = p.value.toInt();
                 break;
-              case 'Frequency':
+              case 'freq':
                 band.freq = p.value;
                 break;
-              case 'Q':
+              case 'q':
                 band.q = p.value;
                 break;
-              case 'Gain':
+              case 'gain':
                 band.gain = p.value;
                 break;
-              case 'Slope':
+              case 'slope':
                 band.order = p.value.toInt();
                 break;
             }
@@ -189,7 +288,7 @@ class KarbeatParametricEqState
       }
     });
 
-    _fetchResponseCurve();
+    _sendMagnitudeRequest();
   }
 
   void _initDefaultBands() {
@@ -222,39 +321,47 @@ class KarbeatParametricEqState
 
   void _updateMasterGain(double value) {
     setState(() => masterGain = value);
-    setParameter(2, value.toDouble());
-    _fetchResponseCurve();
+    setParameterString('base_gain', value);
+    _sendMagnitudeRequest();
   }
 
   void _updateBandParam(int bandIdx, int paramType, double value) {
+    String suffix = "";
+
     setState(() {
       final band = bands[bandIdx];
       switch (paramType) {
         case 0:
           band.freq = value;
+          suffix = "freq";
           break;
         case 1:
           band.gain = value;
+          suffix = "gain";
           break;
         case 2:
           band.q = value;
+          suffix = "q";
           break;
         case 3:
           band.active = value > 0.5;
+          suffix = "active";
           break;
         case 4:
           band.filterType = value.toInt();
+          suffix = "type";
           break;
         case 5:
           band.order = value.toInt();
+          suffix = "slope";
           break;
       }
     });
 
-    // ID Formula from parametric_eq.rs: base_id = 3 + (band_idx * 6)
-    int paramId = 3 + (bandIdx * 6) + paramType;
-    setParameter(paramId, value.toDouble());
-    _fetchResponseCurve();
+    // Easily reconstruct the string path mapped in the JSON manifest
+    final path = "band$bandIdx/$suffix";
+    setParameterString(path, value);
+    _sendMagnitudeRequest();
   }
 
   // === Graph Interaction ===
@@ -335,6 +442,7 @@ class KarbeatParametricEqState
                           bandColors: _bandColors,
                           activeNodeIndex: _draggingNodeIndex,
                           responseCurve: _responseCurve,
+                          spectrumCurve: _spectrumCurve,
                         ),
                       ),
                     );
@@ -498,22 +606,44 @@ class KarbeatParametricEqState
             // Type Dropdown (compact)
             SizedBox(
               height: 28,
-              child: DropdownButton<int>(
-                value: band.filterType,
-                isExpanded: true,
-                dropdownColor: Colors.grey.shade800,
-                style: const TextStyle(color: Colors.white54, fontSize: 9),
-                underline: const SizedBox(),
-                isDense: true,
-                onChanged: (val) => _updateBandParam(i, 4, val!.toDouble()),
-                items: List<DropdownMenuItem<int>>.generate(
+              child: PopupMenuButton<int>(
+                initialValue: band.filterType,
+                padding: EdgeInsets.zero,
+                color: Colors.grey.shade800,
+                onSelected: (val) => _updateBandParam(i, 4, val.toDouble()),
+                itemBuilder: (context) => List.generate(
                   _filterTypes.length,
-                  (idx) {
-                    return DropdownMenuItem<int>(
-                      value: idx,
-                      child: Text(_filterTypes[idx]),
-                    );
-                  },
+                  (idx) => PopupMenuItem<int>(
+                    value: idx,
+                    height: 32,
+                    child: Text(
+                      _filterTypes[idx],
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _filterTypes[band.filterType],
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 9,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 12,
+                      color: Colors.white54,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -529,6 +659,7 @@ class KarbeatParametricEqState
               (v) => _updateBandParam(i, 0, v),
               isLog: true,
               suffix: "Hz",
+              parameterName: "Frequency",
             ),
             _buildParamControl(
               "Gain",
@@ -537,6 +668,7 @@ class KarbeatParametricEqState
               maxGain,
               (v) => _updateBandParam(i, 1, v),
               suffix: "dB",
+              parameterName: "Gain",
             ),
             _buildParamControl(
               "Q",
@@ -545,28 +677,54 @@ class KarbeatParametricEqState
               20.0,
               (v) => _updateBandParam(i, 2, v),
               suffix: "",
+              parameterName: "Q Bandwidth",
             ),
 
             // Slope dropdown
             const SizedBox(height: 4),
             SizedBox(
               height: 28,
-              child: DropdownButton<int>(
-                value: band.order.clamp(0, _slopeChoices.length - 1),
-                isExpanded: true,
-                dropdownColor: Colors.grey.shade800,
-                style: const TextStyle(color: Colors.white54, fontSize: 9),
-                underline: const SizedBox(),
-                isDense: true,
-                onChanged: (val) => _updateBandParam(i, 5, val!.toDouble()),
-                items: List<DropdownMenuItem<int>>.generate(
+              child: PopupMenuButton<int>(
+                initialValue: band.order.clamp(0, _slopeChoices.length - 1),
+                padding: EdgeInsets.zero,
+                color: Colors.grey.shade800,
+                onSelected: (val) => _updateBandParam(i, 5, val.toDouble()),
+                itemBuilder: (context) => List.generate(
                   _slopeChoices.length,
-                  (idx) {
-                    return DropdownMenuItem<int>(
-                      value: idx,
-                      child: Text(_slopeChoices[idx]),
-                    );
-                  },
+                  (idx) => PopupMenuItem<int>(
+                    value: idx,
+                    height: 32,
+                    child: Text(
+                      _slopeChoices[idx],
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _slopeChoices[band.order.clamp(
+                          0,
+                          _slopeChoices.length - 1,
+                        )],
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 9,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 12,
+                      color: Colors.white54,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -584,6 +742,7 @@ class KarbeatParametricEqState
     ValueChanged<double> onChanged, {
     bool isLog = false,
     String suffix = "",
+    String parameterName = "",
   }) {
     return Column(
       children: [
@@ -600,7 +759,7 @@ class KarbeatParametricEqState
             max: max,
             step: isLog ? 1.0 : 0.1,
             onChanged: onChanged,
-            parameterName: '', 
+            parameterName: parameterName,
             defaultValue: 40.0,
             child: Slider(
               value: (isLog ? log(val) / ln10 : val).clamp(
@@ -630,12 +789,14 @@ class _EqResponsePainter extends CustomPainter {
   final List<Color> bandColors;
   final int? activeNodeIndex;
   final List<eq_api.UiResponseCurvePoint> responseCurve;
+  final List<eq_api.UiResponseCurvePoint> spectrumCurve;
 
   _EqResponsePainter({
     required this.bands,
     required this.bandColors,
     required this.activeNodeIndex,
     required this.responseCurve,
+    required this.spectrumCurve,
   });
 
   @override
@@ -671,26 +832,57 @@ class _EqResponsePainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
+    // Draw FFT Spectrum Analyzer
+    if (spectrumCurve.isNotEmpty) {
+      final pts = spectrumCurve.map((p) {
+        final x = _freqToX(p.frequency.toDouble(), w);
+        final normalizedDb =
+            (p.magnitudeDb.toDouble() - (-100.0)) / (24.0 - (-100.0));
+        final y = h - (normalizedDb.clamp(0.0, 1.0) * h);
+        return Offset(x, y);
+      }).toList();
+
+      final path = _buildSmoothPath(pts);
+
+      final fillPath = Path.from(path)
+        ..lineTo(w, h)
+        ..lineTo(0, h)
+        ..close();
+
+      canvas.drawPath(
+        fillPath,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white.withAlpha(120), Colors.white.withAlpha(20)],
+          ).createShader(Rect.fromLTWH(0, 0, w, h))
+          ..style = PaintingStyle.fill,
+      );
+
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = Colors.white.withAlpha(150)
+          ..strokeWidth = 1.0
+          ..style = PaintingStyle.stroke
+          ..isAntiAlias = true,
+      );
+    }
+
     // Draw the response curve from backend-computed data
     if (responseCurve.isNotEmpty) {
-      final path = Path();
-
-      for (int i = 0; i < responseCurve.length; i++) {
-        final point = responseCurve[i];
+      final pts = responseCurve.map((point) {
         final x = _freqToX(point.frequency.toDouble(), w);
         final y = _gainToY(
           point.magnitudeDb.toDouble().clamp(minGain, maxGain),
           h,
         );
+        return Offset(x, y);
+      }).toList();
 
-        if (i == 0) {
-          path.moveTo(x, y);
-        } else {
-          path.lineTo(x, y);
-        }
-      }
+      final path = _buildSmoothPath(pts);
 
-      // Fill under curve
       final fillPath = Path.from(path)
         ..lineTo(w, h / 2)
         ..lineTo(0, h / 2)
@@ -703,13 +895,13 @@ class _EqResponsePainter extends CustomPainter {
           ..style = PaintingStyle.fill,
       );
 
-      // Stroke curve
       canvas.drawPath(
         path,
         Paint()
           ..color = Colors.cyanAccent
           ..strokeWidth = 2
-          ..style = PaintingStyle.stroke,
+          ..style = PaintingStyle.stroke
+          ..isAntiAlias = true,
       );
     }
 
@@ -768,3 +960,42 @@ class _EqResponsePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _EqResponsePainter oldDelegate) => true;
 }
+
+Path _buildSmoothPath(List<Offset> pts) {
+  final path = Path();
+  if (pts.isEmpty) return path;
+  if (pts.length == 1) {
+    path.addOval(Rect.fromCircle(center: pts[0], radius: 1));
+    return path;
+  }
+
+  path.moveTo(pts[0].dx, pts[0].dy);
+
+  Offset pAt(int i) {
+    if (i < 0) return pts.first;
+    if (i >= pts.length) return pts.last;
+    return pts[i];
+  }
+
+  for (int i = 0; i < pts.length - 1; i++) {
+    final p0 = pAt(i - 1);
+    final p1 = pAt(i);
+    final p2 = pAt(i + 1);
+    final p3 = pAt(i + 2);
+
+    // Catmull-Rom -> cubic Bezier
+    final c1 = Offset(
+      p1.dx + (p2.dx - p0.dx) / 6.0,
+      p1.dy + (p2.dy - p0.dy) / 6.0,
+    );
+    final c2 = Offset(
+      p2.dx - (p3.dx - p1.dx) / 6.0,
+      p2.dy - (p3.dy - p1.dy) / 6.0,
+    );
+
+    path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
+  }
+
+  return path;
+}
+

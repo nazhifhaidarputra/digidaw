@@ -70,6 +70,53 @@ Future<UiNote> changeNoteParams({
   mute: mute,
 );
 
+/// Add notes in batch
+///
+/// ## Parameters
+/// * pattern_id: [u32], id of the pattern
+/// * new_notes: Vector of tuples that contains (key, start_tick, duration)
+Future<void> addNotesBatch({
+  required int patternId,
+  required List<(int, int, int?)> notes,
+}) => RustLib.instance.api.crateApiPatternAddNotesBatch(
+  patternId: patternId,
+  notes: notes,
+);
+
+/// Delete notes in batch
+///
+/// ## Parameters
+/// * pattern_id: [u32], id of the pattern
+/// * note_ids: Vector of notes ID to delete
+Future<void> deleteNotesBatch({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiPatternDeleteNotesBatch(
+  patternId: patternId,
+  noteIds: noteIds,
+);
+
+/// Move notes in batch
+///
+/// ## Parameters
+/// * pattern_id: [u32], id of the pattern
+/// * note_ids: Vector of notes updates (id, )
+Future<void> moveNotesBatch({
+  required int patternId,
+  required List<(int, int, int)> updates,
+}) => RustLib.instance.api.crateApiPatternMoveNotesBatch(
+  patternId: patternId,
+  updates: updates,
+);
+
+Future<void> resizeNotesBatch({
+  required int patternId,
+  required List<(int, int)> updates,
+}) => RustLib.instance.api.crateApiPatternResizeNotesBatch(
+  patternId: patternId,
+  updates: updates,
+);
+
 /// Play a pattern in isolation with a specific generator (looping automatically).
 /// This temporarily switches the engine to Pattern playback mode.
 Future<void> playPatternPreview({

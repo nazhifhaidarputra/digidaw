@@ -8,12 +8,14 @@ class KarbeatContextAction {
   final IconData? icon;
   final VoidCallback onTap;
   final bool isDestructive;
+  final Color? color;
 
   KarbeatContextAction({
     required this.title,
     required this.onTap,
     this.icon,
     this.isDestructive = false,
+    this.color,
   });
 }
 
@@ -93,3 +95,106 @@ class ContextMenuWrapper extends StatelessWidget {
   }
 }
 
+/// A floating panel that displays context-specific actions at the bottom of the screen.
+/// Uses the shared [KarbeatContextAction] model.
+class FloatingContextPanel extends StatelessWidget {
+  final List<KarbeatContextAction> actions;
+  final VoidCallback onClose;
+  final String title;
+
+  const FloatingContextPanel({
+    super.key,
+    required this.actions,
+    required this.onClose,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (actions.isEmpty) return const SizedBox.shrink();
+
+    return Positioned(
+      bottom: 20,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(12),
+          color: const Color(0xFF2A2A2A),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title / Close button
+                InkWell(
+                  onTap: onClose,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.close, color: Colors.white54, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: Colors.white24),
+                const SizedBox(width: 8),
+
+                // Action Buttons
+                ...actions.map((action) => _FloatingActionButtonItem(action: action)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingActionButtonItem extends StatelessWidget {
+  final KarbeatContextAction action;
+
+  const _FloatingActionButtonItem({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    // Resolve the final color based on destructive flag or explicit color
+    final color = action.color ?? (action.isDestructive ? Colors.redAccent : Colors.white);
+    
+    return Tooltip(
+      message: action.title,
+      child: InkWell(
+        onTap: action.onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (action.icon != null) ...[
+                Icon(action.icon, color: color, size: 20),
+                const SizedBox(height: 2),
+              ],
+              Text(
+                action.title,
+                style: TextStyle(color: color, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

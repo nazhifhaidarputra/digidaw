@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-plugins"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Collection of first-party plugins for Karbeat"
 
@@ -18,6 +18,9 @@ fastrand.workspace = true
 hashbrown.workspace = true
 smallvec.workspace = true
 serde_json.workspace = true
+indexmap.workspace = true
+rustfft.workspace = true
+num-complex.workspace = true
 
 [lints]
 workspace = true

@@ -31,6 +31,14 @@ impl AudioExportError {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub enum TailHandling {
+    #[default]
+    CutRemainder,
+    LeaveRemainder,
+    WrapRemainder,
+}
+
 /// Export project to a sound file based on provided writer
 /// Generic, UI-agnostic.
 /// `progress_callback` should return `true` to continue, or `false` to abort rendering.
@@ -39,7 +47,8 @@ pub fn export_project<F>(
     output_path: &str,
     sample_rate: u32,
     bit_per_sample: BitPerSample,
-    mut writer: impl AudioWriter + Send + 'static,
+    mut writer: impl AudioWriter + 'static,
+    tail_handling: TailHandling,
     mut progress_callback: F
 ) -> Result<(), AudioExportError>
     where F: FnMut(f32) -> bool
@@ -72,7 +81,7 @@ pub fn export_project<F>(
         pos_producer,
         feedback_producer,
         sample_rate,
-        channels as u16,
+        channels,
         app_state.transport.bpm,
         render_state.clone()
     );
@@ -186,13 +195,8 @@ pub fn export_project<F>(
         .push(AudioCommand::SetPlaying(true))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
 
-    // Determine exact render length
-    // TODO: Track tails from effect calculations or add a long tail and trim when the audio gets 0 magnitude
-    let tail_seconds = 3.0; // Wait 3 seconds after the last clip for reverb/delays to fade.
-    let total_samples =
-        render_state.graph.max_sample_index + (((sample_rate as f32) * tail_seconds) as u32);
-    let mut processed_samples: u32 = 0;
 
+    let song_length_samples = render_state.graph.max_sample_index;
     let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<f32>>(4);
 
     let writer_thread = std::thread::spawn(
@@ -214,12 +218,57 @@ pub fn export_project<F>(
 
     let mut mix_buffer = vec![0.0; block_size * channels as usize];
 
-    let throttle_limit = (sample_rate / block_size as u32 / 30).max(1);
+    let throttle_limit = (sample_rate / (block_size as u32) / 30).max(1);
     let mut loop_counter = 0;
 
+    // ========================================================================
+    // PHASE 1: PRE-ROLL (Only for WrapRemainder)
+    // Plays the entire track into memory to prime the delay and reverb buffers
+    // ========================================================================
+    if matches!(tail_handling, TailHandling::WrapRemainder) {
+        log::info!("Pre-rolling engine for WrapRemainder...");
+        let mut preroll_processed = 0;
+
+        while preroll_processed < song_length_samples {
+            let remaining = song_length_samples - preroll_processed;
+            let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
+            let samples_to_process = frames_to_process * (channels as usize);
+
+            let active_slice = &mut mix_buffer[..samples_to_process];
+            offline_engine.process(active_slice);
+
+            // Discard the audio, just clear queues
+            while let Ok(_) = _pos_consumer.pop() {}
+            while let Ok(_) = _feedback_consumer.pop() {}
+
+            preroll_processed += frames_to_process as u32;
+            loop_counter += 1;
+
+            if loop_counter % throttle_limit == 0 {
+                // UI Progress (0% to 50%)
+                let progress = ((preroll_processed as f32) / (song_length_samples as f32)) * 0.5;
+                if !progress_callback(progress) {
+                    return Ok(());
+                }
+            }
+        }
+
+        // Reset playhead for the actual render. We do NOT recreate plugins,
+        // ensuring their delay buffers carry over seamlessly into the actual render.
+        cmd_producer
+            .push(AudioCommand::SetPlayhead(0))
+            .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
+    }
+
+    // ========================================================================
+    // PHASE 2: MAIN RENDER
+    // ========================================================================
+    log::info!("Rendering main track bounds...");
+    let mut processed_samples: u32 = 0;
+
     // The "Faster-Than-Realtime" Loop
-    while processed_samples < total_samples {
-        let remaining = total_samples - processed_samples;
+    while processed_samples < song_length_samples {
+        let remaining = song_length_samples - processed_samples;
         let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
         let samples_to_process = frames_to_process * (channels as usize);
 
@@ -240,10 +289,73 @@ pub fn export_project<F>(
 
         // Callback reporting
         if loop_counter % throttle_limit == 0 {
-            let progress = processed_samples as f32 / total_samples as f32;
+            // Adjust progress scaling based on the mode
+            let base_progress = if matches!(tail_handling, TailHandling::WrapRemainder) {
+                0.5
+            } else {
+                0.0
+            };
+            let progress_scale = if matches!(tail_handling, TailHandling::LeaveRemainder) {
+                0.95
+            } else {
+                0.5
+            };
+
+            let progress =
+                base_progress +
+                ((processed_samples as f32) / (song_length_samples as f32)) * progress_scale;
             if !progress_callback(progress) {
                 log::warn!("Export cancelled by callback.");
-                break; // Break the DSP loop if the UI cancelled
+                return Ok(());
+            }
+        }
+    }
+
+    // ========================================================================
+    // PHASE 3: DYNAMIC TAIL RENDERING (Only for LeaveRemainder)
+    // Detects when the reverb/delay naturally dies out
+    // ========================================================================
+    if matches!(tail_handling, TailHandling::LeaveRemainder) {
+        log::info!("Rendering dynamic tail (LeaveRemainder)...");
+        let max_tail_samples = sample_rate * 60; // Hard fallback cap at 60 seconds
+        let silence_threshold = 10f32.powf(-90.0 / 20.0); // True silence at -90dB
+        let required_silence_samples = sample_rate; // Require 1 full second of absolute silence to stop
+        
+        let mut current_silence_samples = 0;
+        let mut tail_processed = 0;
+
+        while tail_processed < max_tail_samples {
+            let frames_to_process = block_size;
+            let samples_to_process = frames_to_process * (channels as usize);
+            let active_slice = &mut mix_buffer[..samples_to_process];
+            
+            offline_engine.process(active_slice);
+
+            // Silence detection loop
+            let mut is_silent = true;
+            for &sample in active_slice.iter() {
+                if sample.abs() > silence_threshold {
+                    is_silent = false;
+                    break;
+                }
+            }
+
+            if is_silent {
+                current_silence_samples += frames_to_process as u32;
+            } else {
+                current_silence_samples = 0; // Reset if the delay suddenly spikes
+            }
+
+            if tx.send(active_slice.to_vec()).is_err() { break; }
+
+            while let Ok(_) = _pos_consumer.pop() {}
+            while let Ok(_) = _feedback_consumer.pop() {}
+
+            tail_processed += frames_to_process as u32;
+
+            if current_silence_samples >= required_silence_samples {
+                log::info!("Silence detected. Tail cleanly finished after {} samples.", tail_processed);
+                break;
             }
         }
     }
