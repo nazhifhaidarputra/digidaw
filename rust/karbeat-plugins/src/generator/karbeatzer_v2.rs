@@ -2,7 +2,7 @@
 
 use std::{any::Any, f32::consts::PI};
 
-use karbeat_dsp::prelude::*; // Assuming this brings in Waveform, Oscillator, etc.
+use karbeat_dsp::prelude::*; 
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*, traits::{KarbeatGenerator, AudioPluginBuilder}};
 use karbeat_plugin_types::*;
@@ -75,7 +75,7 @@ impl KarbeatzerV2 {
     ) {
         let block_size = buffer.len();
         let base_freq = 440.0 * (2.0_f32).powf(((voice.note as f32) - 69.0) / 12.0);
-        let dt = 1.0 / sample_rate;
+        // let dt = 1.0 / sample_rate;
 
         // Extract oscillator parameters
         let mut phase_incs = [0.0; 3];
@@ -95,7 +95,7 @@ impl KarbeatzerV2 {
 
         // Render block
         for frame in 0..block_size {
-            let env_level = voice.advance_envelope(dt, amp_envelope);
+            let env_level = voice.adsr.process(amp_envelope);
 
             if !voice.is_active {
                 buffer[frame] = 0.0;
@@ -244,7 +244,7 @@ impl KarbeatGenerator for KarbeatzerV2 {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
                         if velocity > 0 {
-                            self.active_voices.push(SynthVoice::new(key, velocity));
+                            self.active_voices.push(SynthVoice::new(key, velocity, self.sample_rate, self.oscillators.len()));
                         } else {
                             for v in self.active_voices.iter_mut().filter(|v| v.note == key) { v.release(); }
                         }

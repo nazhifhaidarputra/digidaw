@@ -1,7 +1,7 @@
 //! Biquad filter building block. A general purpose, reusable biquad filter
 //! Can be used for things such as Equalizer or Compressor
 
-use karbeat_macros::{ AutoParams, EnumParam, karbeat_plugin };
+use karbeat_macros::{EnumParam, karbeat_plugin };
 use karbeat_plugin_types::{ EnumParam, Param };
 use smallvec::{ smallvec, SmallVec };
 
@@ -334,7 +334,7 @@ impl<T: FilterMode + 'static> Default for BiquadFilter<T> {
         filter.num_of_channels = 2;
         filter.sample_rate = 44100.0;
         filter.coeff = BiquadCoefficients::default();
-        filter.channels = smallvec![SingleBiquadFilterStage::new(1); 2];
+        filter.channels = smallvec![SingleBiquadFilterStage::new(1); DEFAULT_CHANNELS];
         filter
     }
 }

@@ -1,3 +1,6 @@
+//! importing prelude means bringing all building blocks
+//! for building audio plugin
+
 #![allow(unused_imports)]
 
 pub use crate::bit_crush::*;

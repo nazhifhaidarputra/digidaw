@@ -7,7 +7,11 @@ use std::any::Any;
 
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*, traits::{KarbeatGenerator, AudioPluginBuilder}};
+use karbeat_plugin_api::{
+    manifest::{ Manifestable, PluginManifest },
+    prelude::*,
+    traits::{ KarbeatGenerator, AudioPluginBuilder },
+};
 use karbeat_plugin_types::*;
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
@@ -23,10 +27,26 @@ pub struct MyRetro {
     pub amp_envelope: EnvelopeSettings,
 
     // Local Parameters
-    #[param(id = "bitcrush", name = "Resolution", group = "Bitcrush", min = 2.0, max = 256.0, default = 16.0, step = 1.0)]
-    pub bitcrush_resolution: f32, 
+    #[param(
+        id = "bitcrush",
+        name = "Resolution",
+        group = "Bitcrush",
+        min = 2.0,
+        max = 256.0,
+        default = 16.0,
+        step = 1.0
+    )]
+    pub bitcrush_resolution: f32,
 
-    #[param(id = "gain", name = "Gain", group = "Master", min = 0.0, max = 1.0, default = 0.8, step = 0.01)]
+    #[param(
+        id = "gain",
+        name = "Gain",
+        group = "Master",
+        min = 0.0,
+        max = 1.0,
+        default = 0.8,
+        step = 0.01
+    )]
     pub gain: f32,
 
     // Internal Decoupled State
@@ -65,7 +85,7 @@ impl MyRetro {
         Self::default()
     }
 
-    /// Pure associated function (no `&self`). 
+    /// Pure associated function (no `&self`).
     /// Takes only the specific slices and primitives it needs!
     pub fn generate_voice_block(
         oscillators: &[Oscillator; 2],
@@ -74,40 +94,44 @@ impl MyRetro {
         sample_rate: f32,
         channels: usize,
         voice: &mut SynthVoice,
-        buffer: &mut [f32],
+        buffer: &mut [f32]
     ) {
         buffer.fill(0.0);
 
         let base_freq = 440.0 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
-        let dt = 1.0 / sample_rate;
 
         for frame in buffer.chunks_exact_mut(channels) {
-            let env_level = voice.advance_envelope(dt, amp_envelope);
-
             if !voice.is_active {
+                continue;
+            }
+
+            let env_level = voice.adsr.process(amp_envelope);
+
+            if voice.adsr.state == EnvelopeState::Idle {
+                voice.is_active = false;
                 continue;
             }
 
             let velocity_gain = (voice.velocity as f32) / 127.0;
             let current_gain = velocity_gain * env_level;
-            
+
             // Temporary buffer to hold the output of the oscillators BEFORE bitcrush
             let mut temp_sample = 0.0;
 
             for (i, osc) in oscillators.iter().enumerate() {
                 let mut phase = voice.phase[i];
-                
+
                 // Extract 1 sample frame
                 let mut osc_output = [0.0; 2];
                 osc.output_wave(&mut osc_output, sample_rate as u32, 2, base_freq, &mut phase);
-                
+
                 voice.phase[i] = phase;
-                
+
                 // Mix the raw, uncrushed oscillators together
                 temp_sample += osc_output[0];
             }
 
-            // Apply the bitcrush ONCE to the cleanly summed signal, 
+            // Apply the bitcrush ONCE to the cleanly summed signal,
             // and apply the envelope GAIN *AFTER* the bitcrush!
             let crushed_sample = (temp_sample * crush_steps).round() / crush_steps;
             let final_sample = crushed_sample * current_gain;
@@ -144,7 +168,7 @@ impl KarbeatGenerator for MyRetro {
         let master_gain = self.gain.get();
         let crush_steps = self.bitcrush_resolution.get().max(2.0);
         let total_frames = output_buffer.len() / self.channels;
-        
+
         let mut current_frame = 0;
         let mut event_idx = 0;
 
@@ -161,7 +185,8 @@ impl KarbeatGenerator for MyRetro {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice = &mut output_buffer[current_frame * self.channels .. end_frame * self.channels];
+                let out_slice =
+                    &mut output_buffer[current_frame * self.channels..end_frame * self.channels];
 
                 // Destructure `self` to separate mutable voices from immutable parameters
                 let MyRetro {
@@ -179,7 +204,7 @@ impl KarbeatGenerator for MyRetro {
                     }
 
                     let scratch_slice = &mut scratch[0..block_len * *channels];
-                    
+
                     Self::generate_voice_block(
                         oscillators,
                         amp_envelope,
@@ -187,7 +212,7 @@ impl KarbeatGenerator for MyRetro {
                         *sample_rate,
                         *channels,
                         voice,
-                        scratch_slice,
+                        scratch_slice
                     );
 
                     // Mix the voice scratch buffer into the main output
@@ -203,13 +228,21 @@ impl KarbeatGenerator for MyRetro {
             }
 
             // Handle MIDI events at this exact frame
-            while event_idx < midi_events.len() && (midi_events[event_idx].sample_offset as usize) == end_frame {
+            while
+                event_idx < midi_events.len() &&
+                (midi_events[event_idx].sample_offset as usize) == end_frame
+            {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
                         if velocity > 0 {
-                            let mut voice = SynthVoice::new(key, velocity);
+                            let mut voice = SynthVoice::new(
+                                key,
+                                velocity,
+                                self.sample_rate,
+                                self.oscillators.len()
+                            );
                             for (i, osc) in self.oscillators.iter().enumerate() {
-                                voice.phase[i] = osc.phase_offset.get() as f64; 
+                                voice.phase[i] = osc.phase_offset.get() as f64;
                             }
                             self.active_voices.push(voice);
                         } else {
@@ -237,8 +270,6 @@ impl KarbeatGenerator for MyRetro {
 
         self.active_voices.retain(|v| v.is_active);
     }
-
-    // --- Dynamic Hashed Routing ---
 
     fn set_parameter(&mut self, id: u32, value: f32) {
         self.auto_set_parameter(karbeat_utils::hash::FNV_OFFSET, id, value);

@@ -198,7 +198,9 @@ class KarbeatParametricEqState
           command: 'GET_MAGNITUDE_RESPONSE',
           payloadJson: jsonEncode({'num_points': 1000}),
         )
-        .then((id) => _magnitudeRequestId = id)
+        .then((id) {
+          _magnitudeRequestId = id;
+        })
         .catchError((Object e) {
           debugPrint('EQ magnitude request failed: $e');
         });
@@ -213,7 +215,9 @@ class KarbeatParametricEqState
           command: 'GET_SPECTRUM',
           payloadJson: jsonEncode({'num_points': 1500}),
         )
-        .then((id) => _spectrumRequestId = id)
+        .then((id) {
+          _spectrumRequestId = id;
+        })
         .catchError((Object _) {
           /* Ignore dropped frames */
         });
@@ -704,9 +708,10 @@ class KarbeatParametricEqState
                   children: [
                     Expanded(
                       child: Text(
-                        _slopeChoices[
-                          band.order.clamp(0, _slopeChoices.length - 1)
-                        ],
+                        _slopeChoices[band.order.clamp(
+                          0,
+                          _slopeChoices.length - 1,
+                        )],
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 9,
@@ -994,12 +999,3 @@ Path _buildSmoothPath(List<Offset> pts) {
   return path;
 }
 
-Offset _curvePointToOffset(
-  eq_api.UiResponseCurvePoint point,
-  double w,
-  double h,
-) {
-  final x = _freqToX(point.frequency.toDouble(), w);
-  final y = _gainToY(point.magnitudeDb.toDouble().clamp(minGain, maxGain), h);
-  return Offset(x, y);
-}
