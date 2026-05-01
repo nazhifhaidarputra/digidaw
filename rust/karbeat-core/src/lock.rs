@@ -1,5 +1,5 @@
 use karbeat_plugins::registry::PluginRegistry;
-use parking_lot::{ MutexGuard, RwLockReadGuard, RwLockWriteGuard };
+use parking_lot::{MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::context::ctx;
 
@@ -29,19 +29,13 @@ pub fn get_history_lock() -> MutexGuard<'static, crate::core::history::HistoryMa
 }
 
 /// Get plugin registry read lock
-pub fn get_plugin_registry_read() -> parking_lot::lock_api::RwLockReadGuard<
-    'static,
-    parking_lot::RawRwLock,
-    PluginRegistry
-> {
+pub fn get_plugin_registry_read(
+) -> parking_lot::lock_api::RwLockReadGuard<'static, parking_lot::RawRwLock, PluginRegistry> {
     ctx().plugin_registry.read()
 }
 
 /// Get plugin registry write lock
-pub fn get_plugin_registry_write() -> parking_lot::lock_api::RwLockWriteGuard<
-    'static,
-    parking_lot::RawRwLock,
-    PluginRegistry
-> {
+pub fn get_plugin_registry_write(
+) -> parking_lot::lock_api::RwLockWriteGuard<'static, parking_lot::RawRwLock, PluginRegistry> {
     ctx().plugin_registry.write()
 }

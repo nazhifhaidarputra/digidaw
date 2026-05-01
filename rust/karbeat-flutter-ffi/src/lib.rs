@@ -21,7 +21,6 @@ pub use karbeat_core::context::{ctx as get_ctx, INIT_LOGGER as get_init};
 // ================== Functions =====================================
 // ==================================================================
 
-
 fn generate_startup_beep() -> AudioWaveform {
     let sample_rate = 48000;
     let duration_secs = 0.5;

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ParameterValueType {
@@ -17,7 +17,7 @@ pub struct ParameterSpec {
     pub path: String,
     pub name: String,
     pub group: String, // e.g., "Oscillator 1", "Master"
-    pub value: f32, // Current value
+    pub value: f32,    // Current value
     pub min: f32,
     pub max: f32,
     pub default_value: f32,
@@ -36,7 +36,7 @@ impl ParameterSpec {
         min: f32,
         max: f32,
         default: f32,
-        step: f32
+        step: f32,
     ) -> Self {
         Self {
             id,
@@ -60,18 +60,10 @@ impl ParameterSpec {
             path: String::new(),
             name: name.to_string(),
             group: group.to_string(),
-            value: if val {
-                1.0
-            } else {
-                0.0
-            },
+            value: if val { 1.0 } else { 0.0 },
             min: 0.0,
             max: 1.0,
-            default_value: if default {
-                1.0
-            } else {
-                0.0
-            },
+            default_value: if default { 1.0 } else { 0.0 },
             step: 1.0,
             value_type: ParameterValueType::Bool,
             choices: Vec::new(),
@@ -85,7 +77,7 @@ impl ParameterSpec {
         group: &str,
         val: u32,
         choices: Vec<String>,
-        default: u32
+        default: u32,
     ) -> Self {
         Self {
             id,
@@ -136,8 +128,9 @@ impl ParamType for f64 {
 impl ParamType for i32 {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
-            ParamBounds::Discrete { min, max , ..} =>
-                val.round().clamp(*min as f32, *max as f32) as i32,
+            ParamBounds::Discrete { min, max, .. } => {
+                val.round().clamp(*min as f32, *max as f32) as i32
+            }
             _ => val.round() as i32,
         }
     }
@@ -197,21 +190,10 @@ impl<T: EnumParam> ParamType for T {
 /// Defines the constraints and behavior of a parameter.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ParamBounds<T> {
-    Continuous {
-        min: T,
-        max: T,
-        step: T,
-    },
-    Discrete {
-        min: T,
-        max: T,
-        step: T,
-    },
+    Continuous { min: T, max: T, step: T },
+    Discrete { min: T, max: T, step: T },
     Toggle,
-    Choice {
-        count: usize,
-        labels: Vec<String>,
-    },
+    Choice { count: usize, labels: Vec<String> },
 }
 
 /// A strictly typed, thread-safe parameter wrapper for DSP plugins.
@@ -296,11 +278,9 @@ impl<T: ParamType> Param<T> {
                 ParamBounds::Choice { .. } => ParameterValueType::Choice,
             },
             choices: match &self.bounds {
-                ParamBounds::Choice { labels, .. } =>
-                    labels
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect(),
+                ParamBounds::Choice { labels, .. } => {
+                    labels.iter().map(|s| s.to_string()).collect()
+                }
                 _ => vec![],
             },
         }
@@ -317,7 +297,7 @@ impl Param<f32> {
         default: f32,
         min: f32,
         max: f32,
-        step: f32
+        step: f32,
     ) -> Self {
         Self {
             id,
@@ -338,7 +318,7 @@ impl Param<f64> {
         default: f64,
         min: f64,
         max: f64,
-        step: f64
+        step: f64,
     ) -> Self {
         Self {
             id,
@@ -365,13 +345,7 @@ impl Param<bool> {
 }
 
 impl Param<usize> {
-    pub fn new_choice(
-        id: u32,
-        name: &str,
-        group: &str,
-        default: usize,
-        labels: Vec<&str>
-    ) -> Self {
+    pub fn new_choice(id: u32, name: &str, group: &str, default: usize, labels: Vec<&str>) -> Self {
         Self {
             id,
             name: name.to_string(),
@@ -380,10 +354,7 @@ impl Param<usize> {
             current_value: default,
             bounds: ParamBounds::Choice {
                 count: labels.len(),
-                labels: labels
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect(),
+                labels: labels.iter().map(|s| s.to_string()).collect(),
             },
         }
     }
@@ -400,10 +371,7 @@ impl<T: EnumParam> Param<T> {
             current_value: default,
             bounds: ParamBounds::Choice {
                 count: T::variants().len(),
-                labels: T::variants()
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect(),
+                labels: T::variants().iter().map(|s| s.to_string()).collect(),
             },
         }
     }

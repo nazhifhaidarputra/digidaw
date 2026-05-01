@@ -8,8 +8,8 @@ pub enum Windowing {
     /// ```tex
     /// w[i] = 0.5 * (1 - \cos(\frac{2*\pi*i, N - 1} ))
     /// ```
-    /// 
-    /// where i is the sample index, 
+    ///
+    /// where i is the sample index,
     /// and N is the window size
     Hann,
 }

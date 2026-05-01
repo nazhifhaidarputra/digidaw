@@ -23,8 +23,8 @@ pub fn save_karbeat_project(save_path: &Path, app_state: &ApplicationState) -> a
 
     let mut zip = ZipWriter::new(file);
 
-
-    let deflated_options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    let deflated_options =
+        SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     let stored_options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
 
     zip.start_file("metadata.toml", deflated_options)?;
@@ -51,13 +51,12 @@ pub fn save_karbeat_project(save_path: &Path, app_state: &ApplicationState) -> a
     }
 
     // Write audio files to zip
-   for (id, original_path, internal_name) in valid_sources {
+    for (id, original_path, internal_name) in valid_sources {
         zip.start_file(&internal_name, stored_options)?;
 
-        let source_audio_file = File::open(&original_path).with_context(|| {
-            format!("Failed to open audio file: {}", original_path.display())
-        })?;
-        
+        let source_audio_file = File::open(&original_path)
+            .with_context(|| format!("Failed to open audio file: {}", original_path.display()))?;
+
         // Use a BufReader with a 128KB chunk size for much faster sequential disk reads
         let mut reader = BufReader::with_capacity(128 * 1024, source_audio_file);
         std::io::copy(&mut reader, &mut zip)?;
@@ -130,11 +129,14 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
 
         let audio_folder = cache_dir.join(id.to_string());
         std::fs::create_dir_all(&audio_folder)?;
-        
+
         let dest_path = audio_folder.join(&file_name);
 
         let mut dest_file = File::create(&dest_path).with_context(|| {
-            format!("Failed to create extracted audio file at {}", dest_path.display())
+            format!(
+                "Failed to create extracted audio file at {}",
+                dest_path.display()
+            )
         })?;
 
         std::io::copy(&mut entry, &mut dest_file).with_context(|| {
@@ -156,10 +158,11 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
                 )
             })?;
 
-            let mut waveform = load_audio_file(dest_path_str, Some(&file_name)).with_context(|| {
-                format!("Failed to decode embedded audio for source id {id} ({file_name})")
-            })?;
-            
+            let mut waveform =
+                load_audio_file(dest_path_str, Some(&file_name)).with_context(|| {
+                    format!("Failed to decode embedded audio for source id {id} ({file_name})")
+                })?;
+
             waveform
                 .try_assign_id(AudioSourceId::from(id))
                 .with_context(|| format!("Duplicate or invalid audio source id {id}"))?;
@@ -218,7 +221,6 @@ fn parse_embedded_audio_path(zip_name: &str) -> Option<(u32, String)> {
     let id = id_str.parse().ok()?;
     Some((id, file_name.to_string()))
 }
-
 
 #[cfg(test)]
 mod test {

@@ -194,17 +194,20 @@ impl AutomationLane {
         if index >= self.points.len() {
             return None;
         }
-        
+
         let mut point = self.points.remove(index);
-        
+
         point.time_ticks = time_ticks;
         point.value = value;
-        
-        let new_index = match self.points.binary_search_by(|p| p.time_ticks.cmp(&point.time_ticks)) {
+
+        let new_index = match self
+            .points
+            .binary_search_by(|p| p.time_ticks.cmp(&point.time_ticks))
+        {
             Ok(pos) => pos,
             Err(pos) => pos,
         };
-        
+
         self.points.insert(new_index, point);
         Some(new_index)
     }
@@ -300,4 +303,3 @@ impl AutomationLane {
 // fn lerp(a: f32, b: f32, t: f32) -> f32 {
 //     a + (b - a) * t
 // }
-

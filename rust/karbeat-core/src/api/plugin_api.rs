@@ -7,15 +7,17 @@ use crate::{
     commands::{AudioCommand, AudioFeedback, EffectTarget},
     context::ctx,
     core::project::{
-        generator::GeneratorInstanceType,
-        mixer::{EffectInstance},
-        GeneratorId, GeneratorInstance, TrackId,
+        generator::GeneratorInstanceType, mixer::EffectInstance, GeneratorId, GeneratorInstance,
+        TrackId,
     },
     lock::{get_app_read, get_app_write, get_plugin_registry_read},
-    shared::id::*
+    shared::id::*,
 };
 
-use std::sync::{atomic::{AtomicU32, Ordering}, Arc};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
 
 // ============================================================================
 // PARAMETER ID RESOLVER
@@ -303,7 +305,10 @@ pub fn set_generator_parameter(
     Ok(())
 }
 
-pub fn get_generator_parameter(generator_id: &GeneratorId, param_id: impl IntoParamId) -> Result<f32, String> {
+pub fn get_generator_parameter(
+    generator_id: &GeneratorId,
+    param_id: impl IntoParamId,
+) -> Result<f32, String> {
     let param_id = param_id.into_id();
     let app = get_app_read();
 
@@ -400,7 +405,6 @@ pub fn set_effect_parameter(
     crate::context::utils::broadcast_state_change();
     Ok(())
 }
-
 
 pub fn query_generator_parameters(generator_id: &GeneratorId) -> Result<(), String> {
     if let Some(sender) = ctx().command_sender.lock().as_mut() {
@@ -719,7 +723,10 @@ where
 
     // Extract only PluginCommandResponse messages; leave the rest intact
     pending.retain(|feedback| match feedback {
-        AudioFeedback::PluginCommandResponse { request_id, response } => {
+        AudioFeedback::PluginCommandResponse {
+            request_id,
+            response,
+        } => {
             results.push(mapper(*request_id, response.clone()));
             false // consumed — remove from pending
         }

@@ -5,40 +5,43 @@ use karbeat_plugin_types::ParameterSpec;
 use crate::{
     context::utils::broadcast_state_change,
     core::project::{
-        TrackId,
         mixer::{
-            EffectInstance,
-            MixerBus,
-            MixerChannel,
-            MixerChannelParams,
-            MixerState,
-            RoutingConnection,
-            RoutingNode,
+            EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState,
+            RoutingConnection, RoutingNode,
         },
+        TrackId,
     },
+    lock::{get_app_read, get_app_write},
     shared::id::*,
-    lock::{ get_app_read, get_app_write },
 };
 
 /// **GETTER: Fetch the mixer state from application state and map it to T value**
-pub fn get_mixer_state<T, F>(mapper: F) -> T where F: FnOnce(&MixerState) -> T {
+pub fn get_mixer_state<T, F>(mapper: F) -> T
+where
+    F: FnOnce(&MixerState) -> T,
+{
     let app = get_app_read();
     mapper(&app.mixer)
 }
 
 /// **GETTER: Get Specific Mixer Channel and map it to T value
 pub fn get_mixer_channel<T, F>(track_id: TrackId, mapper: F) -> anyhow::Result<T>
-    where F: Fn(&MixerChannel) -> T
+where
+    F: Fn(&MixerChannel) -> T,
 {
     let app = get_app_read();
     let mixer_state = &app.mixer;
     let channel = mixer_state.channels.get(&track_id);
-    channel.ok_or_else(|| anyhow::anyhow!("Channel not found")).map(|c| mapper(c.as_ref()))
+    channel
+        .ok_or_else(|| anyhow::anyhow!("Channel not found"))
+        .map(|c| mapper(c.as_ref()))
 }
 
 /// Get track channel's parameter specs
 pub fn get_track_mixer_channel_specs<C, U, M>(track_id: &TrackId, mapper: M) -> Option<C>
-    where M: Fn(&ParameterSpec) -> U, C: FromIterator<U>
+where
+    M: Fn(&ParameterSpec) -> U,
+    C: FromIterator<U>,
 {
     let app = get_app_read();
     let mix_channel = app.mixer.channels.get(track_id)?;
@@ -47,42 +50,58 @@ pub fn get_track_mixer_channel_specs<C, U, M>(track_id: &TrackId, mapper: M) -> 
 
 /// Get bus channel's parameter specs
 pub fn get_bus_mixer_channel_specs<C, U, M>(bus_id: &BusId, mapper: M) -> Option<C>
-    where M: Fn(&ParameterSpec) -> U, C: FromIterator<U>
+where
+    M: Fn(&ParameterSpec) -> U,
+    C: FromIterator<U>,
 {
     let app = get_app_read();
     let bus_channel = app.mixer.buses.get(bus_id)?;
-    Some(bus_channel.channel.get_channel_specs().iter().map(mapper).collect())
+    Some(
+        bus_channel
+            .channel
+            .get_channel_specs()
+            .iter()
+            .map(mapper)
+            .collect(),
+    )
 }
 
 /// get master channel's parameter specs
-pub fn get_master_channel_specs<C, U, M>(mapper: M) -> C where M: Fn(&ParameterSpec) -> U, C: FromIterator<U> {
+pub fn get_master_channel_specs<C, U, M>(mapper: M) -> C
+where
+    M: Fn(&ParameterSpec) -> U,
+    C: FromIterator<U>,
+{
     let app = get_app_read();
-    app.mixer.master_bus.get_channel_specs().iter().map(mapper).collect()
+    app.mixer
+        .master_bus
+        .get_channel_specs()
+        .iter()
+        .map(mapper)
+        .collect()
 }
 
 pub fn get_mixer_channel_populated<C, MC, EI, MixChanF, EffInstF>(
     track_id: TrackId,
     mixer_mapper: MixChanF,
-    instance_mapper: EffInstF
-)
-    -> anyhow::Result<(MC, C)>
-    where
-        MixChanF: FnOnce(&MixerChannel) -> MC,
-        EffInstF: Fn(&EffectInstance) -> EI,
-        C: FromIterator<EI>
+    instance_mapper: EffInstF,
+) -> anyhow::Result<(MC, C)>
+where
+    MixChanF: FnOnce(&MixerChannel) -> MC,
+    EffInstF: Fn(&EffectInstance) -> EI,
+    C: FromIterator<EI>,
 {
     let app = get_app_read();
 
-    let channel = app.mixer.channels
+    let channel = app
+        .mixer
+        .channels
         .get(&track_id)
         .ok_or_else(|| anyhow::anyhow!("Channel not found"))?;
 
     let mapped_channel = mixer_mapper(channel.as_ref());
 
-    let mapped_effects: C = channel.effects
-        .iter()
-        .map(|e| instance_mapper(e))
-        .collect();
+    let mapped_effects: C = channel.effects.iter().map(|e| instance_mapper(e)).collect();
 
     Ok((mapped_channel, mapped_effects))
 }
@@ -93,10 +112,14 @@ pub fn get_master_bus() -> Arc<MixerChannel> {
 }
 
 pub fn get_master_bus_populated<C, T, F>(mapper: F) -> C
-    where F: Fn(&EffectInstance) -> T, C: FromIterator<T>
+where
+    F: Fn(&EffectInstance) -> T,
+    C: FromIterator<T>,
 {
     let app = get_app_read();
-    app.mixer.master_bus.effects
+    app.mixer
+        .master_bus
+        .effects
         .iter()
         .map(|e| mapper(e))
         .collect()
@@ -104,10 +127,13 @@ pub fn get_master_bus_populated<C, T, F>(mapper: F) -> C
 
 /// **GETTER: Fetch all buses**
 pub fn get_buses<C, T, F>(mut mapper: F) -> C
-    where F: FnMut(&BusId, &MixerBus) -> T, C: FromIterator<T>
+where
+    F: FnMut(&BusId, &MixerBus) -> T,
+    C: FromIterator<T>,
 {
     let app = get_app_read();
-    app.mixer.buses
+    app.mixer
+        .buses
         .iter()
         .map(|(id, bus)| mapper(id, bus.as_ref()))
         .collect()
@@ -115,19 +141,20 @@ pub fn get_buses<C, T, F>(mut mapper: F) -> C
 
 /// **GETTER: Fetch the routing matrix**
 pub fn get_routing_matrix<C, T, F>(mut mapper: F) -> C
-    where F: FnMut(&RoutingConnection) -> T, C: FromIterator<T>
+where
+    F: FnMut(&RoutingConnection) -> T,
+    C: FromIterator<T>,
 {
     let app = get_app_read();
-    app.mixer.routing
-        .iter()
-        .map(|conn| mapper(conn))
-        .collect()
+    app.mixer.routing.iter().map(|conn| mapper(conn)).collect()
 }
 
 pub fn set_master_bus_params(params: &[MixerChannelParams]) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
-        app.mixer.set_params_master_bus(params).map_err(|e| anyhow::anyhow!(e.message))?;
+        app.mixer
+            .set_params_master_bus(params)
+            .map_err(|e| anyhow::anyhow!(e.message))?;
     }
     broadcast_state_change();
     Ok(())
@@ -135,7 +162,7 @@ pub fn set_master_bus_params(params: &[MixerChannelParams]) -> anyhow::Result<()
 
 pub fn set_mixer_channel_params(
     track_id: TrackId,
-    params: &[MixerChannelParams]
+    params: &[MixerChannelParams],
 ) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
@@ -149,11 +176,12 @@ pub fn set_mixer_channel_params(
 
 pub fn add_effect_to_mixer_channel_by_id(
     track_id: TrackId,
-    registry_id: u32
+    registry_id: u32,
 ) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
-        app.mixer.add_effect_descriptor_by_id(&track_id, registry_id)?;
+        app.mixer
+            .add_effect_descriptor_by_id(&track_id, registry_id)?;
     }
     broadcast_state_change();
     Ok(())
@@ -161,11 +189,12 @@ pub fn add_effect_to_mixer_channel_by_id(
 
 pub fn remove_effect_from_mixer_channel(
     track_id: TrackId,
-    effect_instance_id: EffectId
+    effect_instance_id: EffectId,
 ) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
-        app.mixer.remove_effect_by_id(&track_id, effect_instance_id)?;
+        app.mixer
+            .remove_effect_by_id(&track_id, effect_instance_id)?;
     }
     broadcast_state_change();
     Ok(())
@@ -183,7 +212,8 @@ pub fn add_effect_to_master_bus(registry_id: u32) -> anyhow::Result<()> {
 pub fn remove_effect_from_master_bus(effect_instance_id: EffectId) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
-        app.mixer.remove_effect_from_master_bus(effect_instance_id)?;
+        app.mixer
+            .remove_effect_from_master_bus(effect_instance_id)?;
     }
     broadcast_state_change();
     Ok(())
@@ -246,7 +276,7 @@ pub fn set_routing(conn: RoutingConnection) -> anyhow::Result<()> {
 pub fn remove_routing(
     source: RoutingNode,
     destination: RoutingNode,
-    is_send: bool
+    is_send: bool,
 ) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();

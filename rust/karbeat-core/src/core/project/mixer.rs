@@ -1,17 +1,20 @@
 use indexmap::IndexMap;
 use karbeat_plugin_types::{Param, ParameterSpec};
 use smallvec::SmallVec;
-use std::{ collections::{ HashMap, HashSet }, sync::Arc };
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     commands::AudioCommand,
-    context::{ ctx, utils::send_audio_command },
-    core::project::{ ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect }, shared::{BusId, EffectId},
+    context::{ctx, utils::send_audio_command},
+    core::project::{plugin::KarbeatEffect, ApplicationState, PluginInstance, TrackId},
+    shared::{BusId, EffectId},
 };
-
 
 // =============================================================================
 // Routing Matrix Types
@@ -79,7 +82,7 @@ impl MixerBus {
         Self {
             id,
             name: name.to_string(),
-            channel: MixerChannel::default()
+            channel: MixerChannel::default(),
         }
     }
 }
@@ -166,7 +169,7 @@ pub struct MixerState {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MixerChannel {
     pub volume: Param<f32>, //dB
-    pub pan: Param<f32>, // -1.0 to 1.0
+    pub pan: Param<f32>,    // -1.0 to 1.0
     pub mute: bool,
     pub solo: bool,
     pub inverted_phase: bool,
@@ -181,7 +184,7 @@ impl Default for MixerChannel {
     fn default() -> Self {
         Self {
             volume: Param::new_f32(1, "Volume", "MixerChannel", 0.0, -60.0, 6.0, 0.1), // 0 dB = unity gain
-            pan: Param::new_f32(2, "Pan", "MixerChannel", 0.0, -1.0,  1.0, 0.01),
+            pan: Param::new_f32(2, "Pan", "MixerChannel", 0.0, -1.0, 1.0, 0.01),
             mute: false,
             solo: false,
             effect_counter: 0,
@@ -194,7 +197,7 @@ impl Default for MixerChannel {
 impl MixerChannel {
     pub fn add_effect(
         &mut self,
-        effect_registry_id: u32
+        effect_registry_id: u32,
     ) -> anyhow::Result<(Box<dyn KarbeatEffect + Send + Sync>, String, EffectId)> {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
@@ -204,8 +207,10 @@ impl MixerChannel {
                 let default_params = effect_box.default_parameters();
                 (effect_box, name, default_params)
             } else {
-                let message =
-                    format!("Effect with ID {} not found in registry", effect_registry_id);
+                let message = format!(
+                    "Effect with ID {} not found in registry",
+                    effect_registry_id
+                );
                 log::error!("{}", message);
                 // Decrement counters if failed to prevent gaps/orphans
                 self.effect_counter -= 1;
@@ -214,11 +219,8 @@ impl MixerChannel {
             }
         };
 
-        let plugin_instance = PluginInstance::new_with_params(
-            effect_registry_id,
-            &effect_name,
-            default_params
-        );
+        let plugin_instance =
+            PluginInstance::new_with_params(effect_registry_id, &effect_name, default_params);
 
         let effect_instance = EffectInstance::new(effect_id, plugin_instance);
         self.effects.push(effect_instance);
@@ -231,7 +233,6 @@ impl MixerChannel {
 
         Ok(())
     }
-
 
     /// Get parameter specs of channel's parameter
     pub fn get_channel_specs(&self) -> Vec<ParameterSpec> {
@@ -248,13 +249,12 @@ impl MixerState {
     pub fn set_params_mixer_channel(
         &mut self,
         track_id: &TrackId,
-        params: &[MixerChannelParams]
+        params: &[MixerChannelParams],
     ) -> Result<Arc<MixerChannel>, MixerSetParamError> {
-        let mixer_channel_arc = self.channels
+        let mixer_channel_arc = self
+            .channels
             .get_mut(track_id)
-            .ok_or_else(|| {
-                MixerSetParamError::new(*track_id, "Cannot find the mixer channel")
-            })?;
+            .ok_or_else(|| MixerSetParamError::new(*track_id, "Cannot find the mixer channel"))?;
 
         let channel = Arc::make_mut(mixer_channel_arc);
 
@@ -287,7 +287,7 @@ impl MixerState {
     // set the master bus params
     pub fn set_params_master_bus(
         &mut self,
-        params: &[MixerChannelParams]
+        params: &[MixerChannelParams],
     ) -> Result<Arc<MixerChannel>, MixerSetParamError> {
         let channel = Arc::make_mut(&mut self.master_bus);
 
@@ -318,13 +318,12 @@ impl MixerState {
     pub fn add_effect_descriptor_by_id(
         &mut self,
         track_id: &TrackId,
-        registry_id: u32
+        registry_id: u32,
     ) -> anyhow::Result<()> {
-        let mixer_channel_arc = self.channels
+        let mixer_channel_arc = self
+            .channels
             .get_mut(track_id)
-            .ok_or_else(|| {
-                MixerNotFoundError::new(*track_id, "Cannot find the mixer channel")
-            })
+            .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))
             .map_err(|e| anyhow::anyhow!(e))?;
 
         // Clone and modify the channel
@@ -352,20 +351,22 @@ impl MixerState {
     pub fn remove_effect_by_id(
         &mut self,
         track_id: &TrackId,
-        effect_id: EffectId
+        effect_id: EffectId,
     ) -> anyhow::Result<()> {
-        let mixer_channel_arc = self.channels
+        let mixer_channel_arc = self
+            .channels
             .get_mut(track_id)
-            .ok_or_else(|| {
-                MixerNotFoundError::new(*track_id, "Cannot find the mixer channel")
-            })
+            .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))
             .map_err(|e| anyhow::anyhow!(e))?;
 
         // Clone and modify the channel
         let channel = Arc::make_mut(mixer_channel_arc);
         channel.remove_effect(effect_id)?;
 
-        send_audio_command(AudioCommand::RemoveTrackEffect { track_id: *track_id, effect_id });
+        send_audio_command(AudioCommand::RemoveTrackEffect {
+            track_id: *track_id,
+            effect_id,
+        });
 
         Ok(())
     }
@@ -373,13 +374,12 @@ impl MixerState {
     /// Get all effect instances from a mixer channel
     pub fn get_effects(
         &self,
-        track_id: &TrackId
+        track_id: &TrackId,
     ) -> Result<Vec<EffectInstance>, MixerNotFoundError> {
-        let mut mixer_channel_arc = self.channels
+        let mut mixer_channel_arc = self
+            .channels
             .get(track_id)
-            .ok_or_else(|| {
-                MixerNotFoundError::new(*track_id, "Cannot find the mixer channel")
-            })?
+            .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))?
             .to_owned();
 
         // Clone and modify the channel
@@ -396,7 +396,11 @@ impl MixerState {
             effect: effect_plugin,
         });
 
-        log::info!("Effect {} (registry_id={}) added to master bus", effect_name, registry_id);
+        log::info!(
+            "Effect {} (registry_id={}) added to master bus",
+            effect_name,
+            registry_id
+        );
         Ok(())
     }
 
@@ -421,13 +425,13 @@ impl MixerState {
         self.buses.insert(bus_id, Arc::new(bus));
 
         // By default, new buses route to master
-        self.routing.push(RoutingConnection::new(RoutingNode::Bus(bus_id), RoutingNode::Master));
+        self.routing.push(RoutingConnection::new(
+            RoutingNode::Bus(bus_id),
+            RoutingNode::Master,
+        ));
 
         // send signal to audio thread that the BUSSSS is created
-        send_audio_command(AudioCommand::AddBus {
-            bus_id,
-            name,
-        });
+        send_audio_command(AudioCommand::AddBus { bus_id, name });
 
         bus_id
     }
@@ -461,9 +465,10 @@ impl MixerState {
     pub fn set_params_bus(
         &mut self,
         bus_id: &BusId,
-        params: &[MixerChannelParams]
+        params: &[MixerChannelParams],
     ) -> anyhow::Result<Arc<MixerBus>> {
-        let bus_arc = self.buses
+        let bus_arc = self
+            .buses
             .get_mut(bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
@@ -492,7 +497,8 @@ impl MixerState {
     }
 
     pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
-        let bus_arc = self.buses
+        let bus_arc = self
+            .buses
             .get_mut(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
@@ -507,9 +513,10 @@ impl MixerState {
     pub fn add_effect_to_bus(
         &mut self,
         bus_id: BusId,
-        registry_id: u32
+        registry_id: u32,
     ) -> anyhow::Result<(String, EffectId)> {
-        let bus_arc = self.buses
+        let bus_arc = self
+            .buses
             .get_mut(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
@@ -535,9 +542,10 @@ impl MixerState {
     pub fn remove_effect_from_bus(
         &mut self,
         bus_id: BusId,
-        effect_id: EffectId
+        effect_id: EffectId,
     ) -> anyhow::Result<()> {
-        let bus_arc = self.buses
+        let bus_arc = self
+            .buses
             .get_mut(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
@@ -565,13 +573,11 @@ impl MixerState {
         }
 
         // Check for duplicate
-        let exists = self.routing
-            .iter()
-            .any(|c| {
-                c.source == connection.source &&
-                    c.destination == connection.destination &&
-                    c.is_send == connection.is_send
-            });
+        let exists = self.routing.iter().any(|c| {
+            c.source == connection.source
+                && c.destination == connection.destination
+                && c.is_send == connection.is_send
+        });
         if exists {
             return Err(anyhow::anyhow!("Routing connection already exists"));
         }
@@ -596,7 +602,7 @@ impl MixerState {
         &mut self,
         source: RoutingNode,
         destination: RoutingNode,
-        is_send: bool
+        is_send: bool,
     ) -> anyhow::Result<()> {
         let original_len = self.routing.len();
         self.routing.retain(|c| {
@@ -624,7 +630,8 @@ impl MixerState {
         }
 
         for conn in &self.routing {
-            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination) {
+            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)
+            {
                 if let Some(neighbors) = adj.get_mut(&src) {
                     neighbors.push(dst);
                 }
@@ -636,7 +643,8 @@ impl MixerState {
         let mut rec_stack = HashSet::new();
 
         for bus_id in self.buses.keys() {
-            if !visited.contains(bus_id) && find_cycle(*bus_id, &adj, &mut visited, &mut rec_stack) {
+            if !visited.contains(bus_id) && find_cycle(*bus_id, &adj, &mut visited, &mut rec_stack)
+            {
                 return true;
             }
         }
@@ -648,7 +656,8 @@ impl MixerState {
     /// Returns nodes in order: sources first, then intermediate buses, then master
     pub fn get_routing_order(&self) -> Vec<RoutingNode> {
         // All tracks come first (they are sources)
-        let mut order: Vec<RoutingNode> = self.channels
+        let mut order: Vec<RoutingNode> = self
+            .channels
             .keys()
             .map(|id| RoutingNode::Track(*id))
             .collect();
@@ -664,7 +673,8 @@ impl MixerState {
 
         // Count incoming edges from other buses
         for conn in &self.routing {
-            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination) {
+            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)
+            {
                 if let Some(neighbors) = adj.get_mut(&src) {
                     neighbors.push(dst);
                 }
@@ -704,18 +714,23 @@ impl MixerState {
     /// Auto-route a track to master (used when creating new tracks)
     pub fn add_track_default_routing(&mut self, track_id: TrackId) {
         // Check if track already has any routing
-        let has_routing = self.routing.iter().any(|c| c.source == RoutingNode::Track(track_id));
+        let has_routing = self
+            .routing
+            .iter()
+            .any(|c| c.source == RoutingNode::Track(track_id));
 
         if !has_routing {
-            self.routing.push(
-                RoutingConnection::new(RoutingNode::Track(track_id), RoutingNode::Master)
-            );
+            self.routing.push(RoutingConnection::new(
+                RoutingNode::Track(track_id),
+                RoutingNode::Master,
+            ));
         }
     }
 
     /// Remove all routing for a track (used when deleting tracks)
     pub fn remove_track_routing(&mut self, track_id: TrackId) {
-        self.routing.retain(|c| c.source != RoutingNode::Track(track_id));
+        self.routing
+            .retain(|c| c.source != RoutingNode::Track(track_id));
     }
 }
 
@@ -745,7 +760,7 @@ fn find_cycle(
     node: BusId,
     adj: &HashMap<BusId, Vec<BusId>>,
     visited: &mut HashSet<BusId>,
-    rec_stack: &mut HashSet<BusId>
+    rec_stack: &mut HashSet<BusId>,
 ) -> bool {
     visited.insert(node);
     rec_stack.insert(node);

@@ -5,8 +5,8 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
-use quote::{ format_ident, quote };
-use syn::{ Data, DeriveInput, Fields, ItemImpl, Lit, LitStr, Type, parse_macro_input };
+use quote::{format_ident, quote};
+use syn::{Data, DeriveInput, Fields, ItemImpl, Lit, LitStr, Type, parse_macro_input};
 
 #[proc_macro_derive(EnumParam)]
 pub fn derive_enum_param(input: TokenStream) -> TokenStream {
@@ -20,29 +20,27 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
     let variants: Vec<_> = data_enum.variants.into_iter().collect();
 
     // Extract variant identifiers and strings for use in generated code
-    let variant_idents: Vec<_> = variants
-        .iter()
-        .map(|v| v.ident.clone())
-        .collect();
-    let variant_strings: Vec<_> = variants
-        .iter()
-        .map(|v| v.ident.to_string())
-        .collect();
+    let variant_idents: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
+    let variant_strings: Vec<_> = variants.iter().map(|v| v.ident.to_string()).collect();
 
     // Fallback to the first variant if #[default] is missing
     let mut default_variant = variants
         .first()
         .expect("Enum must have at least one variant")
-        .ident.clone();
+        .ident
+        .clone();
     for variant in &variants {
-        if variant.attrs.iter().any(|attr| attr.path().is_ident("default")) {
+        if variant
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("default"))
+        {
             default_variant = variant.ident.clone();
             break;
         }
     }
 
-    let expanded =
-        quote! {
+    let expanded = quote! {
         impl ::karbeat_plugin_types::parameter::EnumParam for #name {
             #[inline(always)]
             fn to_index(self) -> usize {
@@ -53,7 +51,7 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
             fn from_index(index: usize) -> Self {
                 // Generate an array of all variants
                 let variants = [ #( #name::#variant_idents ),* ];
-                
+
                 if index < variants.len() {
                     variants[index]
                 } else {
@@ -106,25 +104,26 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut nested_fields: Vec<(syn::Ident, bool, String)> = Vec::new();
     let mut used_ids: HashMap<String, syn::Ident> = HashMap::new();
     if let Data::Struct(data_struct) = &mut ast.data
-        && let Fields::Named(fields) = &mut data_struct.fields {
-            for field in fields.named.iter_mut() {
-                let field_ident = field.ident.clone().unwrap();
-                let mut is_param = false;
+        && let Fields::Named(fields) = &mut data_struct.fields
+    {
+        for field in fields.named.iter_mut() {
+            let field_ident = field.ident.clone().unwrap();
+            let mut is_param = false;
 
-                let mut macro_error: Option<syn::Error> = None;
+            let mut macro_error: Option<syn::Error> = None;
 
-                for attr in &field.attrs {
-                    if attr.path().is_ident("param") {
-                        is_param = true;
-                        let mut p_id_str = String::new();
-                        let mut p_name = String::new();
-                        let mut p_group = String::new();
-                        let mut p_min = 0.0;
-                        let mut p_max = 1.0;
-                        let mut p_default = 0.0;
-                        let mut p_step = 0.0;
+            for attr in &field.attrs {
+                if attr.path().is_ident("param") {
+                    is_param = true;
+                    let mut p_id_str = String::new();
+                    let mut p_name = String::new();
+                    let mut p_group = String::new();
+                    let mut p_min = 0.0;
+                    let mut p_max = 1.0;
+                    let mut p_default = 0.0;
+                    let mut p_step = 0.0;
 
-                        let res = attr.parse_nested_meta(|meta| {
+                    let res = attr.parse_nested_meta(|meta| {
                             if meta.path.is_ident("id") {
                                 let value = meta.value()?.parse::<Lit>()?;
                                 if let Lit::Str(lit_str) = value {
@@ -181,65 +180,66 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             Ok(())
                         });
 
-                        if let Err(e) = res {
-                            macro_error = Some(e);
-                        }
-
-                        params.push(ParamDef {
-                            field_name: field_ident.clone(),
-                            original_type: field.ty.clone(),
-                            id_str: p_id_str,
-                            name: p_name,
-                            group: p_group,
-                            min: p_min,
-                            max: p_max,
-                            step: p_step,
-                            default: p_default,
-                        });
-                    } else if attr.path().is_ident("nested") {
-                        let mut n_prefix = String::new();
-                        
-                        // Parse prefix attribute if provided
-                        let _ = attr.parse_nested_meta(|meta| {
-                            if meta.path.is_ident("prefix")
-                                && let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()? {
-                                    n_prefix = lit_str.value();
-                                }
-                            Ok(())
-                        });
-
-                        let is_iterable = match &field.ty {
-                            Type::Array(_) | Type::Slice(_) => true,
-                            Type::Path(p) => {
-                                if let Some(segment) = p.path.segments.last() {
-                                    let id = segment.ident.to_string();
-                                    id == "Vec" || id == "VecDeque" || id == "Option"
-                                } else {
-                                    false
-                                }
-                            }
-                            _ => false,
-                        };
-                        nested_fields.push((field_ident.clone(), is_iterable, n_prefix));
+                    if let Err(e) = res {
+                        macro_error = Some(e);
                     }
-                }
 
-                if let Some(err) = macro_error {
-                    return TokenStream::from(err.to_compile_error());
-                }
+                    params.push(ParamDef {
+                        field_name: field_ident.clone(),
+                        original_type: field.ty.clone(),
+                        id_str: p_id_str,
+                        name: p_name,
+                        group: p_group,
+                        min: p_min,
+                        max: p_max,
+                        step: p_step,
+                        default: p_default,
+                    });
+                } else if attr.path().is_ident("nested") {
+                    let mut n_prefix = String::new();
 
-                if is_param {
-                    let orig_ty = &field.ty;
-                    let new_ty: Type = syn::parse_quote!(Param<#orig_ty>);
-                    field.ty = new_ty;
-                }
+                    // Parse prefix attribute if provided
+                    let _ = attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("prefix")
+                            && let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()?
+                        {
+                            n_prefix = lit_str.value();
+                        }
+                        Ok(())
+                    });
 
-                // Remove the custom attributes so the Rust compiler doesn't panic
-                field.attrs.retain(
-                    |attr| !attr.path().is_ident("param") && !attr.path().is_ident("nested")
-                );
+                    let is_iterable = match &field.ty {
+                        Type::Array(_) | Type::Slice(_) => true,
+                        Type::Path(p) => {
+                            if let Some(segment) = p.path.segments.last() {
+                                let id = segment.ident.to_string();
+                                id == "Vec" || id == "VecDeque" || id == "Option"
+                            } else {
+                                false
+                            }
+                        }
+                        _ => false,
+                    };
+                    nested_fields.push((field_ident.clone(), is_iterable, n_prefix));
+                }
             }
+
+            if let Some(err) = macro_error {
+                return TokenStream::from(err.to_compile_error());
+            }
+
+            if is_param {
+                let orig_ty = &field.ty;
+                let new_ty: Type = syn::parse_quote!(Param<#orig_ty>);
+                field.ty = new_ty;
+            }
+
+            // Remove the custom attributes so the Rust compiler doesn't panic
+            field
+                .attrs
+                .retain(|attr| !attr.path().is_ident("param") && !attr.path().is_ident("nested"));
         }
+    }
 
     let enum_variants = params.iter().map(|p| {
         let variant_name = format_ident!("{}", p.name.replace(" ", ""));
@@ -250,11 +250,11 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let set_match_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        quote! { 
+        quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                self.#field.set_base(value); 
-                return true; 
-            } 
+                self.#field.set_base(value);
+                return true;
+            }
         }
     });
 
@@ -282,10 +282,10 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let get_match_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        quote! { 
+        quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
                 return Some(self.#field.get_base().to_f32());
-            } 
+            }
         }
     });
 
@@ -310,14 +310,14 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     });
 
-   let apply_auto_arms = params.iter().map(|p| {
+    let apply_auto_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        quote! { 
+        quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                self.#field.apply_automation(value); 
-                return true; 
-            } 
+                self.#field.apply_automation(value);
+                return true;
+            }
         }
     });
 
@@ -345,11 +345,11 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let clear_auto_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        quote! { 
+        quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                self.#field.clear_automation(); 
-                return true; 
-            } 
+                self.#field.clear_automation();
+                return true;
+            }
         }
     });
 
@@ -378,12 +378,12 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let spec_pushes = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        quote! { 
+        quote! {
             let mut spec = self.#field.to_spec();
             spec.id = ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str);
             // Concatenate the parent prefix with the local ID
             spec.path = ::std::format!("{}{}", prefix_str, #id_str);
-            specs.push(spec); 
+            specs.push(spec);
         }
     });
 
@@ -417,61 +417,57 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut default_field_inits = Vec::new();
 
     if let Data::Struct(data_struct) = &ast.data
-        && let Fields::Named(fields) = &data_struct.fields {
-            for field in fields.named.iter() {
-                let field_ident = field.ident.as_ref().unwrap();
+        && let Fields::Named(fields) = &data_struct.fields
+    {
+        for field in fields.named.iter() {
+            let field_ident = field.ident.as_ref().unwrap();
 
-                // If the field is in our parsed parameters list, initialize it fully
-                if let Some(p) = params.iter().find(|p| &p.field_name == field_ident) {
-                    let id = &p.id_str;
-                    let name = &p.name;
-                    let group = &p.group;
-                    let default_val = p.default;
-                    let min = p.min;
-                    let max = p.max;
-                    let step = p.step;
-                    let ty = &p.original_type;
+            // If the field is in our parsed parameters list, initialize it fully
+            if let Some(p) = params.iter().find(|p| &p.field_name == field_ident) {
+                let id = &p.id_str;
+                let name = &p.name;
+                let group = &p.group;
+                let default_val = p.default;
+                let min = p.min;
+                let max = p.max;
+                let step = p.step;
+                let ty = &p.original_type;
 
-                    // Convert the AST Type to a string to check what it is
-                    let ty_str = quote!(#ty).to_string().replace(" ", "");
+                // Convert the AST Type to a string to check what it is
+                let ty_str = quote!(#ty).to_string().replace(" ", "");
 
-                    let local_hash = quote! { ::karbeat_utils::hash::hash_str(#id) };
+                let local_hash = quote! { ::karbeat_utils::hash::hash_str(#id) };
 
-                    let param_init = if ty_str == "f32" {
-                        quote! {
-                            ::karbeat_plugin_types::parameter::Param::new_f32(#local_hash, #name, #group, #default_val, #min, #max, #step)
-                        }
-                    } else if ty_str == "bool" {
-                        quote! {
-                            ::karbeat_plugin_types::parameter::Param::new_bool(#local_hash, #name, #group, #default_val > 0.5)
-                        }
-                    } else {
-                        quote! {
-                            ::karbeat_plugin_types::parameter::Param::new_enum(
-                                #local_hash, #name, #group, 
-                                <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_val as usize)
-                            )
-                        }
-                    };
-
-                    default_field_inits.push(
-                        quote! {
-                        #field_ident: #param_init
+                let param_init = if ty_str == "f32" {
+                    quote! {
+                        ::karbeat_plugin_types::parameter::Param::new_f32(#local_hash, #name, #group, #default_val, #min, #max, #step)
                     }
-                    );
+                } else if ty_str == "bool" {
+                    quote! {
+                        ::karbeat_plugin_types::parameter::Param::new_bool(#local_hash, #name, #group, #default_val > 0.5)
+                    }
                 } else {
-                    // For #[nested] or standard fields, fallback to standard default
-                    default_field_inits.push(
-                        quote! {
-                        #field_ident: std::default::Default::default()
+                    quote! {
+                        ::karbeat_plugin_types::parameter::Param::new_enum(
+                            #local_hash, #name, #group,
+                            <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_val as usize)
+                        )
                     }
-                    );
-                }
+                };
+
+                default_field_inits.push(quote! {
+                    #field_ident: #param_init
+                });
+            } else {
+                // For #[nested] or standard fields, fallback to standard default
+                default_field_inits.push(quote! {
+                    #field_ident: std::default::Default::default()
+                });
             }
         }
+    }
 
-    let expanded =
-        quote! {
+    let expanded = quote! {
         #ast
 
         #[repr(u32)]
@@ -482,7 +478,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
        impl #impl_generics #struct_name #ty_generics #where_clause {
             /// Creates an instance with all `#[param]` fields initialized to their macro defaults.
             pub fn base_default() -> Self {
-                // Compile-time type check to ensure the field types (including generics like T) 
+                // Compile-time type check to ensure the field types (including generics like T)
                 // implement the required traits. Zero runtime overhead.
                 fn assert_implements_param_type<TypeToCheck: ::karbeat_plugin_types::parameter::ParamType>() {}
                 #(#type_assertions)*
@@ -571,15 +567,16 @@ pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStrea
     let item_impl = parse_macro_input!(item as ItemImpl);
 
     let generics = &item_impl.generics;
-    let trait_path = &item_impl.trait_
+    let trait_path = &item_impl
+        .trait_
         .as_ref()
-        .expect("This macro must be applied to a trait implementation").1;
+        .expect("This macro must be applied to a trait implementation")
+        .1;
     let self_ty = &item_impl.self_ty;
     let items = &item_impl.items;
 
     // Generate the boilerplate methods using their AutoParams implementation
-    let injected_code =
-        quote! {
+    let injected_code = quote! {
         fn set_custom_parameter(&mut self, prefix_hash:u32, id: u32, value: f32) {
             self.auto_set_parameter(prefix_hash, id, value);
             #side_effect_call
@@ -593,7 +590,7 @@ pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStrea
             self.auto_apply_automation(prefix_hash, id, value);
             #side_effect_call
         }
-        
+
         fn clear_automation(&mut self, prefix_hash:u32, id: u32) {
             self.auto_clear_automation(prefix_hash, id);
             #side_effect_call
@@ -613,12 +610,11 @@ pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStrea
     };
 
     // Rebuild the impl block: Original User Methods + Injected Boilerplate
-    let expanded =
-        quote! {
+    let expanded = quote! {
         impl #generics #trait_path for #self_ty {
             // Keep the user's manual process(), name(), prepare(), etc.
             #(#items)*
-            
+
             // Inject the magic
             #injected_code
         }
@@ -653,9 +649,10 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 
             if let Type::Path(type_path) = &field.ty
                 && let Some(segment) = type_path.path.segments.last()
-                    && segment.ident == "Param" {
-                        is_valid_param = true;
-                    }
+                && segment.ident == "Param"
+            {
+                is_valid_param = true;
+            }
 
             if !is_valid_param {
                 let error_msg = format!(
@@ -677,12 +674,11 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                 if attr.path().is_ident("param") {
                     let _ = attr.parse_nested_meta(|meta| {
                         if meta.path.is_ident("id")
-                            && let Ok(syn::Lit::Str(lit_str)) = meta
-                                .value()
-                                .and_then(|v| v.parse::<syn::Lit>())
-                            {
-                                id_str = lit_str.value();
-                            }
+                            && let Ok(syn::Lit::Str(lit_str)) =
+                                meta.value().and_then(|v| v.parse::<syn::Lit>())
+                        {
+                            id_str = lit_str.value();
+                        }
                         Ok(())
                     });
                 }
@@ -811,9 +807,9 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
 
                 let id = manifest["id"].as_u64().expect("Missing id") as u32;
                 let name = manifest["name"].as_str().expect("Missing name");
-                
+
                 let internal_type_str = manifest["internal_type"]
-                .as_str()
+                    .as_str()
                     .expect("Missing 'internal_type' in manifest!");
                 let internal_ident = format_ident!("{}", internal_type_str);
 
@@ -835,7 +831,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                         let min = p["min"].as_f64().unwrap() as f32;
                         let max = p["max"].as_f64().unwrap() as f32;
                         let step = p["step"].as_f64().unwrap() as f32;
-                        
+
                         let val_type_str = p["value_type"].as_str().unwrap();
                         let val_type_ident = format_ident!("{}", val_type_str);
 
@@ -870,7 +866,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                 let insert_stmt = quote! {
                     let specs = vec![ #(#param_tokens),* ];
                     let factory: Box<dyn Fn() -> Box<_> + Send + Sync> = Box::new(|| Box::new( <#internal_ident>::build() ));
-                    
+
                     let registered = RegisteredPlugin {
                         name: #name.to_string(),
                         factory,
@@ -903,7 +899,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
 
         pub fn new_with_defaults() -> Self {
             let mut registry = Self::new();
-            
+
             // Inject file trackers to ensure macro hygiene and hot-reloading
             #(#file_trackers)*
 

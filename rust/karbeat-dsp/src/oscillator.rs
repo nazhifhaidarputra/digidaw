@@ -1,5 +1,5 @@
-use std::f64::consts::TAU;
 use dasp::Frame;
+use std::f64::consts::TAU;
 
 // Import your universal parameter types and macros
 use karbeat_macros::{karbeat_plugin, EnumParam};
@@ -38,24 +38,53 @@ impl From<f32> for Waveform {
 // OSCILLATOR
 // ============================================================================
 
-/// A Oscillator module component. you can use this to add oscillator to 
+/// A Oscillator module component. you can use this to add oscillator to
 /// your plugin audio plugin
 #[derive(Clone, Debug)]
 #[karbeat_plugin]
 pub struct Oscillator {
-    #[param(id = "waveform", name = "Waveform", group = "Oscillator", default = 0.0)]
+    #[param(
+        id = "waveform",
+        name = "Waveform",
+        group = "Oscillator",
+        default = 0.0
+    )]
     pub waveform: Waveform,
 
     #[param(id = "detune", name = "Detune", group = "Oscillator", min = -48.0, max = 48.0, default = 0.0, step = 0.2)]
     pub detune: f32,
 
-    #[param(id = "phase_offset", name = "Phase Offset", group = "Oscillator", min = 0.0, max = 1.0, default = 0.0, step = 0.01)]
+    #[param(
+        id = "phase_offset",
+        name = "Phase Offset",
+        group = "Oscillator",
+        min = 0.0,
+        max = 1.0,
+        default = 0.0,
+        step = 0.01
+    )]
     pub phase_offset: f32,
 
-    #[param(id = "mix", name = "Mix", group = "Oscillator", min = 0.0, max = 1.0, default = 1.0, step = 0.01)]
+    #[param(
+        id = "mix",
+        name = "Mix",
+        group = "Oscillator",
+        min = 0.0,
+        max = 1.0,
+        default = 1.0,
+        step = 0.01
+    )]
     pub mix: f32,
 
-    #[param(id = "pulse_width", name = "Pulse Width", group = "Oscillator", min = 0.01, max = 0.99, default = 0.5, step = 0.01)]
+    #[param(
+        id = "pulse_width",
+        name = "Pulse Width",
+        group = "Oscillator",
+        min = 0.01,
+        max = 0.99,
+        default = 0.5,
+        step = 0.01
+    )]
     pub pulse_width: f32,
 }
 
@@ -71,7 +100,7 @@ impl Oscillator {
     pub fn new(group: &str) -> Self {
         // The macro automatically generates base_default() to init the Params!
         let mut osc = Self::base_default();
-        
+
         // Dynamically override the UI group string based on where it's used
         let group_string = group.to_string();
         osc.waveform.group = group_string.clone();
@@ -90,7 +119,7 @@ impl Oscillator {
         sample_rate: u32,
         channels: u8,
         base_freq: f64,
-        current_phase: &mut f64
+        current_phase: &mut f64,
     ) {
         let current_mix = self.mix.get();
         if current_mix <= 0.0 || out_block.is_empty() {
@@ -106,12 +135,8 @@ impl Oscillator {
 
         // Process frame by frame, dynamically adapting to channel count
         for frame in out_block.chunks_exact_mut(channels as usize) {
-            let sample = Self::generate_aa_sample(
-                current_waveform,
-                current_pw,
-                *current_phase,
-                phase_inc
-            );
+            let sample =
+                Self::generate_aa_sample(current_waveform, current_pw, *current_phase, phase_inc);
 
             let final_sample = (sample * (current_mix as f64)) as f32;
 
@@ -134,7 +159,7 @@ impl Oscillator {
         sample_rate: u32,
         channels: u8,
         base_freq: f64,
-        current_phase: &mut f64
+        current_phase: &mut f64,
     ) {
         let current_mix = self.mix.get();
         if current_mix <= 0.0 || out_block.is_empty() {
@@ -159,13 +184,9 @@ impl Oscillator {
             let modulation = (mod_frame[0] as f64) * fm_depth;
             let modulated_phase = (*current_phase + modulation).rem_euclid(1.0);
 
-            let sample = Self::generate_aa_sample(
-                current_waveform,
-                current_pw,
-                modulated_phase,
-                phase_inc
-            );
-            
+            let sample =
+                Self::generate_aa_sample(current_waveform, current_pw, modulated_phase, phase_inc);
+
             let final_sample = (sample * (current_mix as f64)) as f32;
 
             // Apply to all channels in the frame
@@ -185,23 +206,23 @@ impl Oscillator {
             Waveform::Sine => (phase * TAU).sin(),
             Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
             Waveform::Noise => fastrand::f64() * 2.0 - 1.0,
-            
+
             // Discontinuous waves: Require PolyBLEP
             Waveform::Saw => {
                 let naive = 2.0 * phase - 1.0;
                 // A rising saw jumps DOWN at phase 0, so we subtract the residual
                 naive - Self::poly_blep(phase, phase_inc)
-            },
+            }
             Waveform::Square => {
                 let naive = if phase < pulse_width { 1.0 } else { -1.0 };
-                
+
                 // Jump 1: Upwards at phase 0
                 let blep_up = Self::poly_blep(phase, phase_inc);
-                
+
                 // Jump 2: Downwards at phase = pulse_width
                 let shifted_phase = (phase + 1.0 - pulse_width).fract();
                 let blep_down = Self::poly_blep(shifted_phase, phase_inc);
-                
+
                 naive + blep_up - blep_down
             }
         }

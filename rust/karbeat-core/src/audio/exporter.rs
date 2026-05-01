@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use karbeat_plugin_api::traits::{ KarbeatEffect, KarbeatGenerator };
+use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
 use rtrb::RingBuffer;
 use thiserror::Error;
 
@@ -7,11 +7,11 @@ use crate::{
     audio::{
         engine::AudioEngine,
         render_state::AudioRenderState,
-        writer::{ AudioFormatBuilder, AudioWriter, BitPerSample },
+        writer::{AudioFormatBuilder, AudioWriter, BitPerSample},
     },
     commands::AudioCommand,
     context::ctx,
-    core::project::{ ApplicationState, GeneratorId, TrackId },
+    core::project::{ApplicationState, GeneratorId, TrackId},
     shared::id::*,
 };
 
@@ -49,9 +49,10 @@ pub fn export_project<F>(
     bit_per_sample: BitPerSample,
     mut writer: impl AudioWriter + 'static,
     tail_handling: TailHandling,
-    mut progress_callback: F
+    mut progress_callback: F,
 ) -> Result<(), AudioExportError>
-    where F: FnMut(f32) -> bool
+where
+    F: FnMut(f32) -> bool,
 {
     log::info!("Starting offline render to: {}", output_path);
 
@@ -83,39 +84,30 @@ pub fn export_project<F>(
         sample_rate,
         channels,
         app_state.transport.bpm,
-        render_state.clone()
+        render_state.clone(),
     );
 
     // Hydrate the Engine (Load fresh plugin clones)
     let registry = ctx().plugin_registry.read();
 
-    let mut generators: IndexMap<
-        GeneratorId,
-        Box<dyn KarbeatGenerator + Send + Sync>
-    > = IndexMap::new();
+    let mut generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>> =
+        IndexMap::new();
     let mut track_effects: IndexMap<
         TrackId,
-        IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>
+        IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>,
     > = IndexMap::new();
-    let mut bus_effects: IndexMap<
-        BusId,
-        IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>
-    > = IndexMap::new();
-    let mut master_effects: IndexMap<
-        EffectId,
-        Box<dyn KarbeatEffect + Send + Sync>
-    > = IndexMap::new();
+    let mut bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> =
+        IndexMap::new();
+    let mut master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> =
+        IndexMap::new();
 
     // Instantiate Generators
     for (gen_id, gen_arc) in &app_state.generator_pool {
-        if
-            let crate::core::project::GeneratorInstanceType::Plugin(plugin_instance) =
-                &gen_arc.instance_type
+        if let crate::core::project::GeneratorInstanceType::Plugin(plugin_instance) =
+            &gen_arc.instance_type
         {
-            if
-                let Some((mut plugin, _)) = registry.create_generator_by_id(
-                    plugin_instance.registry_id
-                )
+            if let Some((mut plugin, _)) =
+                registry.create_generator_by_id(plugin_instance.registry_id)
             {
                 for (&param_id, &val) in &plugin_instance.parameters {
                     plugin.set_parameter(param_id, val);
@@ -129,10 +121,7 @@ pub fn export_project<F>(
     for (track_id, channel) in &app_state.mixer.channels {
         let mut track_chain = IndexMap::new();
         for effect in &channel.effects {
-            if
-                let Some((mut plugin, _)) = registry.create_effect_by_id(
-                    effect.instance.registry_id
-                )
+            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
             {
                 for (&param_id, &val) in &effect.instance.parameters {
                     plugin.set_parameter(param_id, val);
@@ -149,10 +138,7 @@ pub fn export_project<F>(
     for (bus_id, bus) in &app_state.mixer.buses {
         let mut bus_chain = IndexMap::new();
         for effect in &bus.channel.effects {
-            if
-                let Some((mut plugin, _)) = registry.create_effect_by_id(
-                    effect.instance.registry_id
-                )
+            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
             {
                 for (&param_id, &val) in &effect.instance.parameters {
                     plugin.set_parameter(param_id, val);
@@ -186,7 +172,9 @@ pub fn export_project<F>(
         .map_err(|_| AudioExportError::new("Engine", "Failed to send PreparePlugin command"))?;
 
     cmd_producer
-        .push(AudioCommand::SetPlaybackMode(crate::audio::engine::PlaybackMode::Song))
+        .push(AudioCommand::SetPlaybackMode(
+            crate::audio::engine::PlaybackMode::Song,
+        ))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
     cmd_producer
         .push(AudioCommand::SetPlayhead(0))
@@ -195,26 +183,23 @@ pub fn export_project<F>(
         .push(AudioCommand::SetPlaying(true))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
 
-
     let song_length_samples = render_state.graph.max_sample_index;
     let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<f32>>(4);
 
-    let writer_thread = std::thread::spawn(
-        move || -> Result<(), AudioExportError> {
-            // This thread wakes up whenever a new block of audio is ready
-            while let Ok(buffer) = rx.recv() {
-                writer
-                    .write(&buffer)
-                    .map_err(|e| AudioExportError::new("Writer", format!("Write error: {}", e)))?;
-            }
-
+    let writer_thread = std::thread::spawn(move || -> Result<(), AudioExportError> {
+        // This thread wakes up whenever a new block of audio is ready
+        while let Ok(buffer) = rx.recv() {
             writer
-                .finalize()
-                .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {}", e)))?;
-
-            Ok(())
+                .write(&buffer)
+                .map_err(|e| AudioExportError::new("Writer", format!("Write error: {}", e)))?;
         }
-    );
+
+        writer
+            .finalize()
+            .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {}", e)))?;
+
+        Ok(())
+    });
 
     let mut mix_buffer = vec![0.0; block_size * channels as usize];
 
@@ -301,9 +286,8 @@ pub fn export_project<F>(
                 0.5
             };
 
-            let progress =
-                base_progress +
-                ((processed_samples as f32) / (song_length_samples as f32)) * progress_scale;
+            let progress = base_progress
+                + ((processed_samples as f32) / (song_length_samples as f32)) * progress_scale;
             if !progress_callback(progress) {
                 log::warn!("Export cancelled by callback.");
                 return Ok(());
@@ -320,7 +304,7 @@ pub fn export_project<F>(
         let max_tail_samples = sample_rate * 60; // Hard fallback cap at 60 seconds
         let silence_threshold = 10f32.powf(-90.0 / 20.0); // True silence at -90dB
         let required_silence_samples = sample_rate; // Require 1 full second of absolute silence to stop
-        
+
         let mut current_silence_samples = 0;
         let mut tail_processed = 0;
 
@@ -328,7 +312,7 @@ pub fn export_project<F>(
             let frames_to_process = block_size;
             let samples_to_process = frames_to_process * (channels as usize);
             let active_slice = &mut mix_buffer[..samples_to_process];
-            
+
             offline_engine.process(active_slice);
 
             // Silence detection loop
@@ -346,7 +330,9 @@ pub fn export_project<F>(
                 current_silence_samples = 0; // Reset if the delay suddenly spikes
             }
 
-            if tx.send(active_slice.to_vec()).is_err() { break; }
+            if tx.send(active_slice.to_vec()).is_err() {
+                break;
+            }
 
             while let Ok(_) = _pos_consumer.pop() {}
             while let Ok(_) = _feedback_consumer.pop() {}
@@ -354,7 +340,10 @@ pub fn export_project<F>(
             tail_processed += frames_to_process as u32;
 
             if current_silence_samples >= required_silence_samples {
-                log::info!("Silence detected. Tail cleanly finished after {} samples.", tail_processed);
+                log::info!(
+                    "Silence detected. Tail cleanly finished after {} samples.",
+                    tail_processed
+                );
                 break;
             }
         }
@@ -364,7 +353,9 @@ pub fn export_project<F>(
 
     drop(tx);
 
-    writer_thread.join().map_err(|_| AudioExportError::new("Thread", "Writer thread panicked"))??;
+    writer_thread
+        .join()
+        .map_err(|_| AudioExportError::new("Thread", "Writer thread panicked"))??;
 
     log::info!("Offline render successfully completed!");
     Ok(())

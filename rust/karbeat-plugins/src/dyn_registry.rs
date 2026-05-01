@@ -6,7 +6,10 @@ use karbeat_plugin_types::ParameterSpec;
 // use crate::effect::compressor::create_compressor;
 use karbeat_plugin_api::traits::{AudioPluginBuilder, KarbeatEffect, KarbeatGenerator};
 
-use crate::{effect::parametric_eq::KarbeatParametricEQ, generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro}};
+use crate::{
+    effect::parametric_eq::KarbeatParametricEQ,
+    generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
+};
 
 /// A function pointer type that creates a new Generator instance
 type GeneratorFactory = Box<dyn Fn() -> Box<dyn KarbeatGenerator + Send + Sync> + Send + Sync>;

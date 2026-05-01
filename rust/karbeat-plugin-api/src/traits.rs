@@ -5,7 +5,6 @@ use indexmap::IndexMap;
 use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
 
-
 /// Trait that provides the parameter specs of plugin
 pub trait AudioPluginMeta {
     fn get_parameter_specs() -> Vec<ParameterSpec>;
@@ -14,7 +13,6 @@ pub trait AudioPluginMeta {
 /// Trait that indicates an Effect plugin
 /// Requires Send + Sync so it can be moved between UI and Audio threads
 pub trait KarbeatEffect: Send + Sync {
-    
     /// Returns the unique name of the plugin
     fn name(&self) -> &str;
 
@@ -47,7 +45,9 @@ pub trait KarbeatEffect: Send + Sync {
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> IndexMap<u32, f32>;
 
-    fn static_parameter_specs() -> Vec<ParameterSpec> where Self:Sized;
+    fn static_parameter_specs() -> Vec<ParameterSpec>
+    where
+        Self: Sized;
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
 
@@ -90,7 +90,9 @@ pub trait KarbeatGenerator: Send + Sync {
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> IndexMap<u32, f32>;
 
-    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized;
+    fn static_parameter_specs() -> Vec<ParameterSpec>
+    where
+        Self: Sized;
 
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<ParameterSpec>;

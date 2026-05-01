@@ -1,11 +1,17 @@
 use crate::{
     context::utils::broadcast_state_change,
-    core::{ history::ProjectAction, project::{ Clip, ClipboardContent, Note, clip::ClipTimeUnit } },
-    lock::{ get_app_read, get_app_write, get_history_lock },
-    shared::{ ClipId, NoteId, PatternId, TrackId },
+    core::{
+        history::ProjectAction,
+        project::{clip::ClipTimeUnit, Clip, ClipboardContent, Note},
+    },
+    lock::{get_app_read, get_app_write, get_history_lock},
+    shared::{ClipId, NoteId, PatternId, TrackId},
 };
 
-pub fn get_clipboard_contents<T, F>(mapper: F) -> T where F: FnOnce(&ClipboardContent) -> T {
+pub fn get_clipboard_contents<T, F>(mapper: F) -> T
+where
+    F: FnOnce(&ClipboardContent) -> T,
+{
     let app = get_app_read();
     mapper(&app.clipboard)
 }
@@ -13,9 +19,10 @@ pub fn get_clipboard_contents<T, F>(mapper: F) -> T where F: FnOnce(&ClipboardCo
 pub fn copy_pattern_notes<T, F>(
     pattern_id: PatternId,
     note_ids: Vec<NoteId>,
-    mapper: F
+    mapper: F,
 ) -> anyhow::Result<T>
-    where F: FnOnce(&ClipboardContent) -> T
+where
+    F: FnOnce(&ClipboardContent) -> T,
 {
     let mut app = get_app_write();
 
@@ -29,9 +36,10 @@ pub fn paste_notes<T, F>(
     target_pattern_id: PatternId,
     playhead_tick: u64,
     target_key: Option<u8>,
-    mapper: F
+    mapper: F,
 ) -> anyhow::Result<Vec<T>>
-    where F: Fn(&Note) -> T
+where
+    F: Fn(&Note) -> T,
 {
     let inserted_notes = {
         let mut app = get_app_write();
@@ -61,10 +69,7 @@ pub fn paste_notes<T, F>(
     Ok(inserted_notes.iter().map(mapper).collect())
 }
 
-pub fn cut_notes(
-    pattern_id: PatternId,
-    note_ids: Vec<NoteId>,
-) -> anyhow::Result<()> {
+pub fn cut_notes(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyhow::Result<()> {
     if note_ids.is_empty() {
         return Ok(());
     }
@@ -82,10 +87,7 @@ pub fn cut_notes(
     // 2. Update history
     let mut actions = Vec::with_capacity(deleted_notes.len());
     for note in deleted_notes {
-        actions.push(ProjectAction::DeleteNote {
-            pattern_id,
-            note,
-        });
+        actions.push(ProjectAction::DeleteNote { pattern_id, note });
     }
 
     let mut history = get_history_lock();
@@ -111,7 +113,7 @@ pub fn copy_clips(source_track_id: TrackId, clip_ids: &[ClipId]) {
     }
 }
 
-pub fn cut_clips(source_track_id: TrackId, clip_ids: Vec<ClipId>)  {
+pub fn cut_clips(source_track_id: TrackId, clip_ids: Vec<ClipId>) {
     if clip_ids.is_empty() {
         return;
     }
@@ -145,7 +147,10 @@ pub fn cut_clips(source_track_id: TrackId, clip_ids: Vec<ClipId>)  {
     broadcast_state_change();
 }
 
-pub fn paste_clips(target_track_id: TrackId, paste_start_time: ClipTimeUnit) -> anyhow::Result<Vec<Clip>> {
+pub fn paste_clips(
+    target_track_id: TrackId,
+    paste_start_time: ClipTimeUnit,
+) -> anyhow::Result<Vec<Clip>> {
     // Mutate state
     let pasted_clips = {
         let mut app = get_app_write();

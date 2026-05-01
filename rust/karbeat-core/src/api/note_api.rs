@@ -1,14 +1,14 @@
 use crate::context::utils::broadcast_state_change;
 use crate::core::history::ProjectAction;
+use crate::core::project::{Note, NoteId};
+use crate::lock::{get_app_write, get_history_lock};
 use crate::shared::id::*;
-use crate::core::project::{Note, NoteId };
-use crate::lock::{ get_app_write, get_history_lock };
 
 pub fn add_note(
     pattern_id: PatternId,
     key: u8,
     start_tick: u64,
-    duration: Option<u64>
+    duration: Option<u64>,
 ) -> anyhow::Result<Note> {
     // 1. Mutate state
     let note = {
@@ -53,7 +53,7 @@ pub fn move_note(
     pattern_id: PatternId,
     note_id: NoteId,
     new_start_tick: u64,
-    new_key: u8
+    new_key: u8,
 ) -> anyhow::Result<Note> {
     // 1. Mutate state
     let (note, old_tick, old_key) = {
@@ -81,7 +81,7 @@ pub fn move_note(
 pub fn resize_note(
     pattern_id: PatternId,
     note_id: NoteId,
-    new_duration: u64
+    new_duration: u64,
 ) -> anyhow::Result<Note> {
     // 1. Mutate state
     let (note, old_duration) = {
@@ -111,7 +111,7 @@ pub fn change_note_params(
     velocity: Option<u8>,
     probability: Option<f32>,
     micro_offset: Option<i8>,
-    mute: Option<bool>
+    mute: Option<bool>,
 ) -> anyhow::Result<Note> {
     let note = {
         let mut app = get_app_write();
@@ -121,7 +121,7 @@ pub fn change_note_params(
             velocity,
             probability,
             micro_offset,
-            mute
+            mute,
         )?
     };
 
@@ -130,13 +130,13 @@ pub fn change_note_params(
 }
 
 /// Add notes in batch
-/// 
+///
 /// ## Parameters
 /// * pattern_id: [PatternId]
 /// * new_notes: Vector of tuples that contains (key, start_tick, duration)
 pub fn add_notes_batch(
     pattern_id: PatternId,
-    notes_data: Vec<(u8, u64, Option<u64>)>
+    notes_data: Vec<(u8, u64, Option<u64>)>,
 ) -> anyhow::Result<Vec<Note>> {
     // 1. Mutate state
     let added_notes = {
@@ -165,10 +165,7 @@ pub fn add_notes_batch(
     Ok(added_notes)
 }
 
-pub fn delete_notes_batch(
-    pattern_id: PatternId,
-    note_ids: Vec<NoteId>
-) -> anyhow::Result<()> {
+pub fn delete_notes_batch(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyhow::Result<()> {
     // 1. Mutate state
     let deleted_notes = {
         let mut app = get_app_write();
@@ -196,7 +193,7 @@ pub fn delete_notes_batch(
 /// Updates is Vec of (note_id, new_tick, new_key)
 pub fn move_notes_batch(
     pattern_id: PatternId,
-    updates: Vec<(NoteId, u64, u8)> // (note_id, new_tick, new_key)
+    updates: Vec<(NoteId, u64, u8)>, // (note_id, new_tick, new_key)
 ) -> anyhow::Result<Vec<Note>> {
     // 1. Mutate state
     let moved_data = {
@@ -234,7 +231,7 @@ pub fn move_notes_batch(
 /// updates is Vec of (note id, new size)
 pub fn resize_notes_batch(
     pattern_id: PatternId,
-    updates: Vec<(NoteId, u64)> // (note_id, new_duration)
+    updates: Vec<(NoteId, u64)>, // (note_id, new_duration)
 ) -> anyhow::Result<Vec<Note>> {
     // 1. Mutate state
     let resized_data = {

@@ -1,4 +1,4 @@
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 use crate::{core::project::PluginInstance, shared::id::AudioSourceId};
 
@@ -6,7 +6,7 @@ pub type AudioFrame = [f32; 2];
 
 use memmap2::Mmap;
 /// Audio Waveform data of an audio sample
-use std::{ path::PathBuf, sync::Arc };
+use std::{path::PathBuf, sync::Arc};
 
 // STATIC global variables for waveform mipmaps
 
@@ -62,21 +62,21 @@ pub struct AudioWaveform {
 
 impl PartialEq for AudioWaveform {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id &&
-            self.file_path == other.file_path &&
-            self.name == other.name &&
-            self.sample_rate == other.sample_rate &&
-            self.channels == other.channels &&
-            self.duration == other.duration &&
-            self.root_note == other.root_note &&
-            self.fine_tune == other.fine_tune &&
-            self.trim_start == other.trim_start &&
-            self.trim_end == other.trim_end &&
-            self.is_looping == other.is_looping &&
-            self.normalized == other.normalized &&
-            self.muted == other.muted &&
-            self.sample_mode == other.sample_mode &&
-            self.effects == other.effects
+        self.id == other.id
+            && self.file_path == other.file_path
+            && self.name == other.name
+            && self.sample_rate == other.sample_rate
+            && self.channels == other.channels
+            && self.duration == other.duration
+            && self.root_note == other.root_note
+            && self.fine_tune == other.fine_tune
+            && self.trim_start == other.trim_start
+            && self.trim_end == other.trim_end
+            && self.is_looping == other.is_looping
+            && self.normalized == other.normalized
+            && self.muted == other.muted
+            && self.sample_mode == other.sample_mode
+            && self.effects == other.effects
     }
 }
 

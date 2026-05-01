@@ -2,16 +2,18 @@ use std::path::Path;
 
 use indexmap::IndexMap;
 
-use crate::audio::exporter::{AudioExportError, TailHandling, export_project as export_project_internal};
+use crate::audio::exporter::{
+    export_project as export_project_internal, AudioExportError, TailHandling,
+};
 use crate::audio::writer::wav::WavAudioWriter;
 use crate::audio::writer::{AudioFormat, BitPerSample};
 use crate::commands::AudioCommand;
 use crate::context::utils::{broadcast_state_change, send_audio_command};
 use crate::core::file_manager::project_loader::{load_karbeat_project, save_karbeat_project};
-use crate::core::project::{ApplicationState, GeneratorInstanceType};
 use crate::core::project::{
     generator::GeneratorInstance, transport::TransportState, ProjectMetadata,
 };
+use crate::core::project::{ApplicationState, GeneratorInstanceType};
 use crate::lock::{get_app_read, get_app_write};
 
 pub fn get_project_metadata<T, F>(mapper: F) -> anyhow::Result<T>
@@ -132,7 +134,7 @@ where
     Ok(())
 }
 
-/// Create a blank, new, default project. 
+/// Create a blank, new, default project.
 pub fn new_blank_project() -> ApplicationState {
     let app = {
         let mut app = get_app_write();
@@ -148,7 +150,7 @@ pub fn new_blank_project() -> ApplicationState {
     app
 }
 
-/// Safely instantiates all DSP plugins from the current state, 
+/// Safely instantiates all DSP plugins from the current state,
 /// explicitly applies their saved parameters, and sends them to the audio thread.
 pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     let app = crate::lock::get_app_read();
@@ -162,7 +164,9 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     // 1. Hydrate Generators
     for (gen_id, gen_arc) in &app.generator_pool {
         if let GeneratorInstanceType::Plugin(plugin_instance) = &gen_arc.instance_type {
-            if let Some((mut plugin, _)) = registry.create_generator_by_id(plugin_instance.registry_id) {
+            if let Some((mut plugin, _)) =
+                registry.create_generator_by_id(plugin_instance.registry_id)
+            {
                 for (&param_id, &val) in &plugin_instance.parameters {
                     plugin.set_parameter(param_id, val);
                 }
@@ -175,7 +179,8 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     for (track_id, channel_arc) in &app.mixer.channels {
         let mut track_chain = IndexMap::new();
         for effect in &channel_arc.effects {
-            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id) {
+            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
+            {
                 for (&param_id, &val) in &effect.instance.parameters {
                     plugin.set_parameter(param_id, val);
                 }
@@ -191,7 +196,8 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     for (bus_id, bus_arc) in &app.mixer.buses {
         let mut bus_chain = IndexMap::new();
         for effect in &bus_arc.channel.effects {
-            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id) {
+            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
+            {
                 for (&param_id, &val) in &effect.instance.parameters {
                     plugin.set_parameter(param_id, val);
                 }

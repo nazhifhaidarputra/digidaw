@@ -1,11 +1,11 @@
 use std::time::Duration;
 
+use crate::api::project::{AudioWaveformUiForAudioProperties, UiAudioHardwareConfig};
+use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use karbeat_core::api::audio_api;
-use karbeat_core:: audio::event::TransportFeedback ;
+use karbeat_core::audio::event::TransportFeedback;
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
-use crate::api::project::{ AudioWaveformUiForAudioProperties, UiAudioHardwareConfig };
-use crate::frb_generated::StreamSink;
 
 #[derive(Clone, Copy, Debug)]
 pub struct UiTransportFeedback {
@@ -79,11 +79,11 @@ pub fn get_audio_config() -> Result<UiAudioHardwareConfig, String> {
 
 pub fn create_position_stream(sink: StreamSink<UiTransportFeedback>) -> Result<(), String> {
     // Spawn a thread to poll the ring buffer
-   std::thread::spawn(move || {
+    std::thread::spawn(move || {
         loop {
             // Drain all pending events from the Core
             let feedbacks = audio_api::drain_position_feedback(UiTransportFeedback::from);
-            
+
             for fb in feedbacks {
                 if sink.add(fb).is_err() {
                     println!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
@@ -104,7 +104,7 @@ pub fn play_preview_note(
     track_id: u32,
     note_key: i32,
     velocity: i32,
-    is_on: bool
+    is_on: bool,
 ) -> Result<(), String> {
     if !(0..=127).contains(&note_key) {
         return Err("Note key must be between 0 and 127".to_string());
@@ -129,7 +129,7 @@ pub fn play_preview_note_generator(
     generator_id: u32,
     note_key: i32,
     velocity: i32,
-    is_on: bool
+    is_on: bool,
 ) -> Result<(), String> {
     if !(0..=127).contains(&note_key) {
         return Err("Note key must be between 0 and 127".to_string());
@@ -152,8 +152,7 @@ pub fn play_preview_note_generator(
     .map_err(|e| e.to_string())
 }
 
-
 #[frb(sync)]
 pub fn set_metronome_active(active: bool) {
-    audio_api::set_metronome_active(active);   
+    audio_api::set_metronome_active(active);
 }

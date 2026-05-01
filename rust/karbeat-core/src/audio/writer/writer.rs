@@ -1,6 +1,6 @@
-use anyhow::{Result, anyhow};
-use std::path::Path;
+use anyhow::{anyhow, Result};
 use derive_builder::Builder;
+use std::path::Path;
 
 use crate::audio::writer::wav;
 
@@ -55,8 +55,8 @@ pub struct AudioFormat {
 pub trait AudioWriter: Send {
     /// Writes interleaved f32 samples (e.g., [L, R, L, R])
     fn write(&mut self, samples: &[f32]) -> Result<()>;
-    
-    /// Flushes buffers and writes trailing file headers. 
+
+    /// Flushes buffers and writes trailing file headers.
     /// Must be called before the writer is dropped.
     fn finalize(&mut self) -> Result<()>;
 }

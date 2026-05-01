@@ -9,14 +9,15 @@ use dasp::slice;
 use hashbrown::HashMap;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
-use std::{sync::Arc};
+use std::sync::Arc;
 use triple_buffer::Output;
 use wide::f32x4;
 
 use crate::{
     audio::{
         event::{
-            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent, PluginTarget, TrackAutomationEvent, TransportFeedback
+            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent, PluginTarget,
+            TrackAutomationEvent, TransportFeedback,
         },
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
@@ -27,7 +28,11 @@ use crate::{
         GeneratorParameterSnapshot,
     },
     core::project::{
-        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern, PatternId, TrackId, automation::AutomationTarget, mixer::{MixerChannel, RoutingNode}, plugin::{MidiEvent, MidiMessage}
+        automation::AutomationTarget,
+        mixer::{MixerChannel, RoutingNode},
+        plugin::{MidiEvent, MidiMessage},
+        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
+        PatternId, TrackId,
     },
     shared::id::*,
     utils::{apply_simd_mix, apply_simd_mix_gain, get_waveform_buffer},
@@ -347,7 +352,8 @@ impl AudioEngine {
         }
 
         // Pattern beat/bar are 1-indexed within the pattern
-        self.pattern_state.current_beat = (self.pattern_state.playhead_samples as usize) / samples_per_beat + 1;
+        self.pattern_state.current_beat =
+            (self.pattern_state.playhead_samples as usize) / samples_per_beat + 1;
         self.pattern_state.current_bar = (self.pattern_state.current_beat - 1) / 4 + 1;
     }
 
@@ -1116,14 +1122,20 @@ impl AudioEngine {
                     }
                 }
                 self.emit_current_playback_position();
-            },
-            AudioCommand::TogglePatternPlayback { pattern_id, generator_id } => {
+            }
+            AudioCommand::TogglePatternPlayback {
+                pattern_id,
+                generator_id,
+            } => {
                 let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
 
                 if !is_pattern_mode {
                     // If not in pattern mode: Stop song, change mode, and immediately play from start
                     self.stop_playback();
-                    self.playback_mode = PlaybackMode::Pattern { pattern_id, generator_id };
+                    self.playback_mode = PlaybackMode::Pattern {
+                        pattern_id,
+                        generator_id,
+                    };
                     self.pattern_state.playhead_samples = 0;
                     self.pattern_state.last_emitted_samples = 0;
                     self.recalculate_pattern_beat_bar();
@@ -1134,7 +1146,7 @@ impl AudioEngine {
                         // If it is playing: stop, silence voices, and go to first tick
                         self.pattern_state.is_playing = false;
                         self.stop_all_active_generators();
-                        
+
                         self.pattern_state.playhead_samples = 0;
                         self.pattern_state.last_emitted_samples = 0;
                         self.recalculate_pattern_beat_bar();
@@ -1143,61 +1155,80 @@ impl AudioEngine {
                         self.pattern_state.is_playing = true;
                     }
                 }
-                
+
                 self.emit_current_playback_position();
             }
             AudioCommand::SwitchPatternGenerator(new_gen_id) => {
                 if let PlaybackMode::Pattern { generator_id, .. } = &mut self.playback_mode {
                     if *generator_id != new_gen_id {
                         // Silence the old generator so ADSR tails/notes don't hang forever
-                        if let Some(old_voice) = self.active_generators.iter_mut().find(|g| g.id == *generator_id) {
-                            if let Some(gen_instance) = self.plugin_state.get_generator_mut(old_voice.id.to_u32() as usize) {
+                        if let Some(old_voice) = self
+                            .active_generators
+                            .iter_mut()
+                            .find(|g| g.id == *generator_id)
+                        {
+                            if let Some(gen_instance) = self
+                                .plugin_state
+                                .get_generator_mut(old_voice.id.to_u32() as usize)
+                            {
                                 gen_instance.plugin.reset();
                             }
                             old_voice.midi_events.clear();
                             old_voice.playing_keys.clear();
                         }
-                        
-                        // Hot-swap the ID. The `process_pattern_mode` function will 
+
+                        // Hot-swap the ID. The `process_pattern_mode` function will
                         // automatically route the next batch of MIDI notes to the new generator.
                         *generator_id = new_gen_id;
                     }
                 }
-            },
-            AudioCommand::ExecutePluginCommand { target, command, payload, request_id } => {
-               let response = match target {
-                    PluginTarget::Generator(generator_id) => {
-                        self.plugin_state
-                            .get_generator_mut(generator_id.to_u32() as usize)
-                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
-                    },
-                    PluginTarget::TrackEffect(track_id, effect_id) => {
-                        self.plugin_state
-                            .get_track_effects_mut(track_id.to_u32() as usize)
-                            .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
-                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
-                    },
-                    PluginTarget::BusEffect(bus_id, effect_id) => {
-                        self.plugin_state
-                            .get_bus_effects_mut(bus_id.to_u32() as usize)
-                            .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
-                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
-                    },
-                    PluginTarget::MasterEffect(effect_id) => {
-                        self.plugin_state.master_effects.iter_mut()
-                            .find(|e| e.id == effect_id)
-                            .and_then(|instance| instance.plugin.execute_custom_command(&command, &payload))
-                    },
+            }
+            AudioCommand::ExecutePluginCommand {
+                target,
+                command,
+                payload,
+                request_id,
+            } => {
+                let response = match target {
+                    PluginTarget::Generator(generator_id) => self
+                        .plugin_state
+                        .get_generator_mut(generator_id.to_u32() as usize)
+                        .and_then(|instance| {
+                            instance.plugin.execute_custom_command(&command, &payload)
+                        }),
+                    PluginTarget::TrackEffect(track_id, effect_id) => self
+                        .plugin_state
+                        .get_track_effects_mut(track_id.to_u32() as usize)
+                        .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
+                        .and_then(|instance| {
+                            instance.plugin.execute_custom_command(&command, &payload)
+                        }),
+                    PluginTarget::BusEffect(bus_id, effect_id) => self
+                        .plugin_state
+                        .get_bus_effects_mut(bus_id.to_u32() as usize)
+                        .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
+                        .and_then(|instance| {
+                            instance.plugin.execute_custom_command(&command, &payload)
+                        }),
+                    PluginTarget::MasterEffect(effect_id) => self
+                        .plugin_state
+                        .master_effects
+                        .iter_mut()
+                        .find(|e| e.id == effect_id)
+                        .and_then(|instance| {
+                            instance.plugin.execute_custom_command(&command, &payload)
+                        }),
                 };
                 // If the plugin returned a response, send it back to the UI
                 if let Some(res) = response {
-                    let _ = self.feedback_producer.push(AudioFeedback::PluginCommandResponse {
-                        request_id,
-                        response: res,
-                    });
+                    let _ = self
+                        .feedback_producer
+                        .push(AudioFeedback::PluginCommandResponse {
+                            request_id,
+                            response: res,
+                        });
                 }
-
-            },
+            }
         }
     }
 
@@ -1214,7 +1245,8 @@ impl AudioEngine {
             return;
         }
 
-        self.song_state.current_beat = (self.song_state.playhead_samples as usize) / samples_per_beat + 1;
+        self.song_state.current_beat =
+            (self.song_state.playhead_samples as usize) / samples_per_beat + 1;
         self.song_state.current_bar = (self.song_state.current_beat - 1) / 4 + 1;
     }
 
@@ -1230,7 +1262,10 @@ impl AudioEngine {
     fn emit_playback_position(&mut self) {
         let emission_interval = self.sample_rate / 60; // ~60fps
         let (current, last) = match self.playback_mode {
-            PlaybackMode::Song => (self.song_state.playhead_samples, self.song_state.last_emitted_samples),
+            PlaybackMode::Song => (
+                self.song_state.playhead_samples,
+                self.song_state.last_emitted_samples,
+            ),
             PlaybackMode::Pattern { .. } => (
                 self.pattern_state.playhead_samples,
                 self.pattern_state.last_emitted_samples,
@@ -1268,7 +1303,7 @@ impl AudioEngine {
         });
         let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
 
-       let ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
+        let ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
             (self.song_state.playhead_samples as f64
                 * (self.bpm as f64 / 60.0)
                 * (960.0 / self.sample_rate as f64)) as u32
@@ -2428,8 +2463,7 @@ impl AudioEngine {
         for note in &pattern.notes {
             let note_start =
                 (((note.start_tick as f64) / 960.0) * (samples_per_beat as f64)) as u32;
-            let note_dur =
-                (((note.duration as f64) / 960.0) * (samples_per_beat as f64)) as u32;
+            let note_dur = (((note.duration as f64) / 960.0) * (samples_per_beat as f64)) as u32;
 
             // Note position within the pattern (in samples from pattern start)
             let note_pos_in_pattern = pattern_offset + note_start;
@@ -2444,7 +2478,7 @@ impl AudioEngine {
             let abs_end = abs_start + note_dur;
 
             // Skip notes that start at or after the clip end (outside trimmed region)
-            // Because we no longer loop, if the clip is dragged out longer than the 
+            // Because we no longer loop, if the clip is dragged out longer than the
             // pattern, abs_start will naturally just stop being evaluated when the notes run out!
             if abs_start >= clip_end {
                 continue;
@@ -2535,7 +2569,8 @@ impl AudioEngine {
         // Convert playhead from samples to ticks (960 ticks per beat)
         let samples_per_beat = (60.0 / tempo) * (self.sample_rate as f32);
         let samples_per_tick = samples_per_beat / 960.0;
-        let current_tick = ((self.song_state.playhead_samples as f64) / (samples_per_tick as f64)) as u32;
+        let current_tick =
+            ((self.song_state.playhead_samples as f64) / (samples_per_tick as f64)) as u32;
 
         for lane in self.current_state.graph.automation_lanes.values() {
             let value = lane.value_at_ticks(current_tick);

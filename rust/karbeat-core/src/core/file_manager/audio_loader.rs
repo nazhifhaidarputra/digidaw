@@ -15,10 +15,7 @@ use anyhow::{anyhow, Context, Result};
 use memmap2::MmapOptions;
 use rodio::Source;
 
-use crate::core::project::{
-    track::audio_waveform::AudioWaveform,
-    ApplicationState, AudioSourceId,
-};
+use crate::core::project::{track::audio_waveform::AudioWaveform, ApplicationState, AudioSourceId};
 
 trait FileNameExt {
     fn file_name_string(&self) -> String;
@@ -157,7 +154,7 @@ impl AudioLoader for ApplicationState {
         };
         let raw_id = self.asset_library.next_id;
         let source_id = AudioSourceId::from(raw_id);
-        
+
         let asset_library = Arc::make_mut(&mut self.asset_library);
         asset_library.next_id += 1;
 
@@ -173,10 +170,7 @@ impl AudioLoader for ApplicationState {
     }
 
     fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>> {
-        self.asset_library
-            .source_map
-            .get(id)
-            .cloned()
+        self.asset_library.source_map.get(id).cloned()
     }
 
     fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>> {

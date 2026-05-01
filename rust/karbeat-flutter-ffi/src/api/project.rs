@@ -312,7 +312,6 @@ impl From<&Clip> for UiClip {
     }
 }
 
-
 // UI Data Structure for Audio Waveform window information (to change vol, pitch fine tune, normalization, panning, adsr envelope,
 // play the audio when pressing the waveform etc)
 
@@ -584,10 +583,16 @@ pub fn export_project_flutter(
         .try_into()
         .map_err(|e: karbeat_core::audio::writer::BitPerSampleError| e.to_string())?;
 
-    project_api::export_project(&output_path, sample_rate, bps, tail_handling.into(), |progress| {
-        // If the sink successfully adds the value, return true to keep rendering.
-        // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
-        progress_sink.add(progress).is_ok()
-    })
+    project_api::export_project(
+        &output_path,
+        sample_rate,
+        bps,
+        tail_handling.into(),
+        |progress| {
+            // If the sink successfully adds the value, return true to keep rendering.
+            // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
+            progress_sink.add(progress).is_ok()
+        },
+    )
     .map_err(|e| e.to_string())
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 use crate::core::project::ApplicationState;
 use crate::core::project::ClipboardContent;
@@ -22,7 +22,9 @@ pub struct Pattern {
 impl Pattern {
     /// Recalculate the pattern length to be exactly the end of the last note.
     pub fn recalculate_length(&mut self) {
-        let max_end = self.notes.iter()
+        let max_end = self
+            .notes
+            .iter()
             .map(|n| n.start_tick + n.duration)
             .max()
             .unwrap_or(0);
@@ -82,7 +84,7 @@ impl Pattern {
         &mut self,
         key: u8,
         start_tick: u64,
-        duration: Option<u64>
+        duration: Option<u64>,
     ) -> anyhow::Result<Note> {
         let duration_proper = duration.unwrap_or(960);
         // Construct the note (ID will be overridden by insert_note)
@@ -105,13 +107,11 @@ impl Pattern {
     /// Returns the deleted note or an error if index is out of bounds
     pub fn delete_note(&mut self, index: usize) -> anyhow::Result<Note> {
         if index >= self.notes.len() {
-            return Err(
-                anyhow::anyhow!(
-                    "Note index {} out of bounds (pattern has {} notes)",
-                    index,
-                    self.notes.len()
-                )
-            );
+            return Err(anyhow::anyhow!(
+                "Note index {} out of bounds (pattern has {} notes)",
+                index,
+                self.notes.len()
+            ));
         }
 
         let removed = self.notes.remove(index);
@@ -123,7 +123,8 @@ impl Pattern {
     /// Returns the number of notes deleted
     pub fn delete_note_by_params(&mut self, start_tick: u64, key: u8) -> usize {
         let initial_len = self.notes.len();
-        self.notes.retain(|n| !(n.start_tick == start_tick && n.key == key));
+        self.notes
+            .retain(|n| !(n.start_tick == start_tick && n.key == key));
         if self.notes.len() < initial_len {
             self.recalculate_length();
         }
@@ -133,7 +134,8 @@ impl Pattern {
     /// Delete all notes within a time range
     pub fn delete_notes_in_range(&mut self, start_tick: u64, end_tick: u64) -> usize {
         let initial_len = self.notes.len();
-        self.notes.retain(|n| n.start_tick < start_tick || n.start_tick >= end_tick);
+        self.notes
+            .retain(|n| n.start_tick < start_tick || n.start_tick >= end_tick);
         if self.notes.len() < initial_len {
             self.recalculate_length();
         }
@@ -160,33 +162,38 @@ impl Pattern {
             self.notes.push(note.clone());
             inserted.push(note);
         }
-        
+
         // Sort and recalculate timeline boundaries exactly once
         self.sort_notes_unstable();
         Ok(inserted)
     }
 
     /// Efficiently moves multiple notes and sorts only once at the end.
-    pub fn move_notes_batch(&mut self, updates: &[(NoteId, u64, u8)]) -> anyhow::Result<Vec<(Note, u64, u8)>> {
+    pub fn move_notes_batch(
+        &mut self,
+        updates: &[(NoteId, u64, u8)],
+    ) -> anyhow::Result<Vec<(Note, u64, u8)>> {
         let mut results = Vec::new();
-        
+
         for &(note_id, new_start_tick, new_key) in updates {
-            if new_key > 127 { continue; }
+            if new_key > 127 {
+                continue;
+            }
             if let Some(index) = self.notes.iter().position(|n| n.id == note_id) {
                 let old_tick = self.notes[index].start_tick;
                 let old_key = self.notes[index].key;
-                
+
                 self.notes[index].start_tick = new_start_tick;
                 self.notes[index].key = new_key;
-                
+
                 results.push((self.notes[index].clone(), old_tick, old_key));
             }
         }
-        
+
         if !results.is_empty() {
             self.sort_notes_unstable();
         }
-        
+
         Ok(results)
     }
 
@@ -194,13 +201,11 @@ impl Pattern {
     /// Returns the modified note or an error if index is invalid
     pub fn resize_note(&mut self, index: usize, new_duration: u64) -> anyhow::Result<&Note> {
         if index >= self.notes.len() {
-            return Err(
-                anyhow::anyhow!(
-                    "Note index {} out of bounds (pattern has {} notes)",
-                    index,
-                    self.notes.len()
-                )
-            );
+            return Err(anyhow::anyhow!(
+                "Note index {} out of bounds (pattern has {} notes)",
+                index,
+                self.notes.len()
+            ));
         }
 
         if new_duration == 0 {
@@ -213,23 +218,28 @@ impl Pattern {
     }
 
     /// Efficiently resizes multiple notes and recalculates length only once.
-    pub fn resize_notes_batch(&mut self, updates: &[(NoteId, u64)]) -> anyhow::Result<Vec<(Note, u64)>> {
+    pub fn resize_notes_batch(
+        &mut self,
+        updates: &[(NoteId, u64)],
+    ) -> anyhow::Result<Vec<(Note, u64)>> {
         let mut results = Vec::new();
-        
+
         for &(note_id, new_duration) in updates {
-            if new_duration == 0 { continue; }
+            if new_duration == 0 {
+                continue;
+            }
             if let Some(index) = self.notes.iter().position(|n| n.id == note_id) {
                 let old_duration = self.notes[index].duration;
                 self.notes[index].duration = new_duration;
-                
+
                 results.push((self.notes[index].clone(), old_duration));
             }
         }
-        
+
         if !results.is_empty() {
             self.recalculate_length();
         }
-        
+
         Ok(results)
     }
 
@@ -237,26 +247,30 @@ impl Pattern {
         &mut self,
         index: usize,
         new_start_tick: u64,
-        new_key: u8
+        new_key: u8,
     ) -> anyhow::Result<&Note> {
         if index >= self.notes.len() {
-            return Err(
-                anyhow::anyhow!(
-                    "Note index {} out of bounds (pattern has {} notes)",
-                    index,
-                    self.notes.len()
-                )
-            );
+            return Err(anyhow::anyhow!(
+                "Note index {} out of bounds (pattern has {} notes)",
+                index,
+                self.notes.len()
+            ));
         }
 
         // Validate Key
         if new_key > 127 {
-            return Err(anyhow::anyhow!("MIDI key must be between 0 and 127, got {}", new_key));
+            return Err(anyhow::anyhow!(
+                "MIDI key must be between 0 and 127, got {}",
+                new_key
+            ));
         }
 
         // Validate Key
         if new_key > 127 {
-            return Err(anyhow::anyhow!("MIDI key must be between 0 and 127, got {}", new_key));
+            return Err(anyhow::anyhow!(
+                "MIDI key must be between 0 and 127, got {}",
+                new_key
+            ));
         }
 
         // Update the note
@@ -268,7 +282,8 @@ impl Pattern {
 
         // Retrieve reference to the updated note
         // We search by both tick and key to ensure we find the correct note (or an identical one)
-        let note = self.notes
+        let note = self
+            .notes
             .iter()
             .find(|n| n.start_tick == new_start_tick && n.key == new_key)
             .ok_or_else(|| anyhow::anyhow!("Note not found after moving"))?;
@@ -282,16 +297,14 @@ impl Pattern {
         velocity: Option<u8>,
         probability: Option<f32>,
         micro_offset: Option<i8>,
-        mute: Option<bool>
+        mute: Option<bool>,
     ) -> anyhow::Result<&Note> {
         if index >= self.notes.len() {
-            return Err(
-                anyhow::anyhow!(
-                    "Note index {} out of bounds (pattern has {} notes)",
-                    index,
-                    self.notes.len()
-                )
-            );
+            return Err(anyhow::anyhow!(
+                "Note index {} out of bounds (pattern has {} notes)",
+                index,
+                self.notes.len()
+            ));
         }
 
         let note = &mut self.notes[index];
@@ -299,14 +312,20 @@ impl Pattern {
         // Update each parameter if provided
         if let Some(v) = velocity {
             if v > 127 {
-                return Err(anyhow::anyhow!("Velocity must be between 0 and 127, got {}", v));
+                return Err(anyhow::anyhow!(
+                    "Velocity must be between 0 and 127, got {}",
+                    v
+                ));
             }
             note.velocity = v;
         }
 
         if let Some(p) = probability {
             if !(0.0..=1.0).contains(&p) {
-                return Err(anyhow::anyhow!("Probability must be between 0.0 and 1.0, got {}", p));
+                return Err(anyhow::anyhow!(
+                    "Probability must be between 0.0 and 1.0, got {}",
+                    p
+                ));
             }
             note.probability = p;
         }
@@ -325,17 +344,18 @@ impl Pattern {
     /// Update a note's key (pitch)
     pub fn set_note_key(&mut self, index: usize, key: u8) -> anyhow::Result<&Note> {
         if index >= self.notes.len() {
-            return Err(
-                anyhow::anyhow!(
-                    "Note index {} out of bounds (pattern has {} notes)",
-                    index,
-                    self.notes.len()
-                )
-            );
+            return Err(anyhow::anyhow!(
+                "Note index {} out of bounds (pattern has {} notes)",
+                index,
+                self.notes.len()
+            ));
         }
 
         if key > 127 {
-            return Err(anyhow::anyhow!("MIDI key must be between 0 and 127, got {}", key));
+            return Err(anyhow::anyhow!(
+                "MIDI key must be between 0 and 127, got {}",
+                key
+            ));
         }
 
         self.notes[index].key = key;
@@ -366,10 +386,7 @@ impl Pattern {
 
     /// Find notes by key (pitch)
     pub fn find_notes_by_key(&self, key: u8) -> Vec<&Note> {
-        self.notes
-            .iter()
-            .filter(|n| n.key == key)
-            .collect()
+        self.notes.iter().filter(|n| n.key == key).collect()
     }
 
     /// Count total notes in pattern
@@ -434,12 +451,10 @@ impl Pattern {
             let new_key = (note.key as i16) + semitones;
 
             if new_key < 0 || new_key > 127 {
-                return Err(
-                    anyhow::anyhow!(
-                        "Transposition would move note {} outside valid MIDI range (0-127)",
-                        note.key
-                    )
-                );
+                return Err(anyhow::anyhow!(
+                    "Transposition would move note {} outside valid MIDI range (0-127)",
+                    note.key
+                ));
             }
 
             note.key = new_key as u8;
@@ -455,9 +470,10 @@ impl ApplicationState {
         pattern_id: PatternId,
         key: u8,
         start_tick: u64,
-        duration: Option<u64>
+        duration: Option<u64>,
     ) -> anyhow::Result<Note> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern: &mut Pattern = Arc::make_mut(pattern_arc);
@@ -470,14 +486,16 @@ impl ApplicationState {
     pub fn delete_note_from_pattern(
         &mut self,
         pattern_id: PatternId,
-        note_id: NoteId
+        note_id: NoteId,
     ) -> anyhow::Result<Note> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
 
-        let index = pattern.notes
+        let index = pattern
+            .notes
             .iter()
             .position(|n| n.id == note_id)
             .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
@@ -491,14 +509,16 @@ impl ApplicationState {
         &mut self,
         pattern_id: PatternId,
         note_id: NoteId,
-        new_duration: u64
+        new_duration: u64,
     ) -> anyhow::Result<(Note, u64)> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
 
-        let index = pattern.notes
+        let index = pattern
+            .notes
             .iter()
             .position(|n| n.id == note_id)
             .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
@@ -514,14 +534,16 @@ impl ApplicationState {
         pattern_id: PatternId,
         note_id: NoteId,
         new_start_tick: u64,
-        new_key: u8
+        new_key: u8,
     ) -> anyhow::Result<(Note, u64, u8)> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
 
-        let index = pattern.notes
+        let index = pattern
+            .notes
             .iter()
             .position(|n| n.id == note_id)
             .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
@@ -541,14 +563,16 @@ impl ApplicationState {
         velocity: Option<u8>,
         probability: Option<f32>,
         micro_offset: Option<i8>,
-        mute: Option<bool>
+        mute: Option<bool>,
     ) -> anyhow::Result<Note> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
 
-        let index = pattern.notes
+        let index = pattern
+            .notes
             .iter()
             .position(|n| n.id == note_id)
             .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
@@ -562,9 +586,10 @@ impl ApplicationState {
     pub fn add_notes_to_pattern_batch(
         &mut self,
         pattern_id: PatternId,
-        notes_data: &[(u8, u64, Option<u64>)]
+        notes_data: &[(u8, u64, Option<u64>)],
     ) -> anyhow::Result<Vec<Note>> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
@@ -589,14 +614,16 @@ impl ApplicationState {
     pub fn delete_notes_from_pattern_batch(
         &mut self,
         pattern_id: PatternId,
-        note_ids: &[NoteId]
+        note_ids: &[NoteId],
     ) -> anyhow::Result<Vec<Note>> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
 
-        let deleted_notes: Vec<Note> = pattern.notes
+        let deleted_notes: Vec<Note> = pattern
+            .notes
             .iter()
             .filter(|n| note_ids.contains(&n.id))
             .cloned()
@@ -611,9 +638,10 @@ impl ApplicationState {
     pub fn move_notes_in_pattern_batch(
         &mut self,
         pattern_id: PatternId,
-        updates: &[(NoteId, u64, u8)]
+        updates: &[(NoteId, u64, u8)],
     ) -> anyhow::Result<Vec<(Note, u64, u8)>> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
@@ -624,9 +652,10 @@ impl ApplicationState {
     pub fn resize_notes_in_pattern_batch(
         &mut self,
         pattern_id: PatternId,
-        updates: &[(NoteId, u64)]
+        updates: &[(NoteId, u64)],
     ) -> anyhow::Result<Vec<(Note, u64)>> {
-        let pattern_arc = self.pattern_pool
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         let pattern = Arc::make_mut(pattern_arc);
@@ -639,12 +668,14 @@ impl ApplicationState {
         pattern_id: PatternId,
         note_ids: &[NoteId],
     ) -> anyhow::Result<()> {
-       let pattern = self.pattern_pool
+        let pattern = self
+            .pattern_pool
             .get(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
 
         // Filter and clone the requested notes
-        let notes_to_copy: Vec<Note> = pattern.notes
+        let notes_to_copy: Vec<Note> = pattern
+            .notes
             .iter()
             .filter(|n| note_ids.contains(&n.id))
             .cloned()
@@ -665,8 +696,9 @@ impl ApplicationState {
         target_pattern_id: &PatternId,
         left_bound_tick: u64,
         left_note_key: Option<u8>,
-    ) -> anyhow::Result<Vec<Note>>{
-        let pattern_arc  = self.pattern_pool
+    ) -> anyhow::Result<Vec<Note>> {
+        let pattern_arc = self
+            .pattern_pool
             .get_mut(target_pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", target_pattern_id.to_u32()))?;
 
@@ -694,15 +726,15 @@ impl ApplicationState {
         } else {
             0
         };
-        
+
         let mut notes_to_insert = Vec::with_capacity(notes_vec.len());
         for note in notes_vec {
             let mut new_note = note.clone();
-            
+
             // Apply bounds and clamps
             new_note.start_tick = ((new_note.start_tick as i64) + tick_offset).max(0) as u64;
             new_note.key = ((new_note.key as i16) + key_offset).clamp(0, 127) as u8;
-            
+
             notes_to_insert.push(new_note);
         }
 
@@ -720,7 +752,7 @@ impl ApplicationState {
         // Copy the targeted notes to the internal clipboard
         self.copy_pattern_notes_batch(pattern_id, note_ids)?;
 
-        // Delete them from the pattern and return the deleted notes 
+        // Delete them from the pattern and return the deleted notes
         // (so the API wrapper can add them to the undo/redo history)
         self.delete_notes_from_pattern_batch(pattern_id, note_ids)
     }

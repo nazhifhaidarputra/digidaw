@@ -1,24 +1,20 @@
-use std::{ ops::Deref, sync::Arc };
+use std::{ops::Deref, sync::Arc};
 
+use crate::shared::id::*;
 use crate::{
     commands::AudioCommand,
     context::utils::send_audio_command,
     core::project::{
-        ApplicationState,
-        AssetLibrary,
-        GeneratorId,
-        GeneratorInstanceType,
-        TrackId,
-        automation::{ AutomationPoint, AutomationTarget, CurveType },
-        mixer::{ MixerState },
-        plugin::{ KarbeatEffect, KarbeatGenerator },
-        track::{ KarbeatTrack, midi::{ Pattern} },
+        automation::{AutomationPoint, AutomationTarget, CurveType},
+        mixer::MixerState,
+        plugin::{KarbeatEffect, KarbeatGenerator},
+        track::{midi::Pattern, KarbeatTrack},
+        ApplicationState, AssetLibrary, GeneratorId, GeneratorInstanceType, TrackId,
     },
-    lock::{ get_app_read, get_plugin_registry_read },
+    lock::{get_app_read, get_plugin_registry_read},
 };
 use indexmap::IndexMap;
 use karbeat_utils::math::is_power_of_two;
-use crate::shared::id::*;
 
 // =============================================================================
 // Audio Thread Owned Plugin State
@@ -102,7 +98,7 @@ impl AudioPluginState {
     #[inline]
     pub fn get_track_effects_mut(
         &mut self,
-        track_id_index: usize
+        track_id_index: usize,
     ) -> Option<&mut Vec<AudioEffectInstance>> {
         self.track_effects.get_mut(track_id_index)
     }
@@ -140,7 +136,7 @@ impl AudioPluginState {
     #[inline]
     pub fn get_bus_effects_mut(
         &mut self,
-        bus_id_index: usize
+        bus_id_index: usize,
     ) -> Option<&mut Vec<AudioEffectInstance>> {
         self.bus_effects.get_mut(bus_id_index)
     }
@@ -201,7 +197,9 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
     }
 
     // Binary search for the surrounding pair
-    let idx = points.binary_search_by(|p| p.time_ticks.cmp(&time_ticks)).unwrap_or_else(|i| i);
+    let idx = points
+        .binary_search_by(|p| p.time_ticks.cmp(&time_ticks))
+        .unwrap_or_else(|i| i);
 
     if idx == 0 {
         return points[0].value;
@@ -247,7 +245,8 @@ impl From<&ApplicationState> for AudioGraphState {
         tracks_vec.sort_by_key(|t| t.id);
 
         // Convert automation pool to lightweight audio-thread snapshots
-        let automation_lanes: IndexMap<AutomationId, AudioAutomationLane> = app.automation_pool
+        let automation_lanes: IndexMap<AutomationId, AudioAutomationLane> = app
+            .automation_pool
             .iter()
             .filter(|(_, lane)| lane.enabled && !lane.points.is_empty())
             .map(|(&id, lane)| {
@@ -304,10 +303,8 @@ pub fn broadcast_plugin_state_loading() {
     let registry = get_plugin_registry_read();
 
     // get current generator
-    let generators: IndexMap<
-        GeneratorId,
-        Box<dyn KarbeatGenerator + Send + Sync>
-    > = app_state.generator_pool
+    let generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>> = app_state
+        .generator_pool
         .iter()
         .filter_map(|(id, arc)| {
             let generator_instance = arc.deref().to_owned();
@@ -318,7 +315,8 @@ pub fn broadcast_plugin_state_loading() {
 
             // get box plugin from registry
 
-            let Some((box_plugin, _)) = registry.create_generator_by_id(instance.registry_id) else {
+            let Some((box_plugin, _)) = registry.create_generator_by_id(instance.registry_id)
+            else {
                 return None;
             };
 
@@ -332,72 +330,67 @@ pub fn broadcast_plugin_state_loading() {
 
     // As usual, doing the same thing but for track_channels
     // Turn it to IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>
-    let track_effects: IndexMap<
-        TrackId,
-        IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>
-    > = track_chan
-        .iter()
-        .map(|(track_id, arc_mixer_chan)| {
-            let mix_chan = arc_mixer_chan.deref().to_owned();
+    let track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> =
+        track_chan
+            .iter()
+            .map(|(track_id, arc_mixer_chan)| {
+                let mix_chan = arc_mixer_chan.deref().to_owned();
 
-            // iterate through effects
-            // Use filter_map here because the inner registry lookup can fail (return None)
-            let effects_map: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> = mix_chan.effects
-                .iter()
-                .filter_map(|eff| {
-                    let effect_id = eff.id;
-                    let eff_instance = eff.instance.as_ref();
+                // iterate through effects
+                // Use filter_map here because the inner registry lookup can fail (return None)
+                let effects_map: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> =
+                    mix_chan
+                        .effects
+                        .iter()
+                        .filter_map(|eff| {
+                            let effect_id = eff.id;
+                            let eff_instance = eff.instance.as_ref();
 
-                    // Get the effect from registry.
-                    // We map the result to a tuple (effect_id, plugin_box) if successful.
-                    registry
-                        .create_effect_by_id(eff_instance.registry_id)
-                        .map(|(plugin_box, _)| (
-                            effect_id,
-                            plugin_box,
-                        ))
-                })
-                .collect();
+                            // Get the effect from registry.
+                            // We map the result to a tuple (effect_id, plugin_box) if successful.
+                            registry
+                                .create_effect_by_id(eff_instance.registry_id)
+                                .map(|(plugin_box, _)| (effect_id, plugin_box))
+                        })
+                        .collect();
 
-            // Return the tuple for the outer IndexMap
-            (track_id.to_owned(), effects_map)
-        })
-        .collect();
+                // Return the tuple for the outer IndexMap
+                (track_id.to_owned(), effects_map)
+            })
+            .collect();
 
     // Do the same for bus_channels
     let bus_chan = &mixer_state.buses;
 
-    let bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> = bus_chan
-        .iter()
-        .map(|(id, arc_mixer_channel)| {
-            let mix_bus = arc_mixer_channel.deref().to_owned();
+    let bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> =
+        bus_chan
+            .iter()
+            .map(|(id, arc_mixer_channel)| {
+                let mix_bus = arc_mixer_channel.deref().to_owned();
 
-            let effect_maps: IndexMap<
-                EffectId,
-                Box<dyn KarbeatEffect + Send + Sync>
-            > = mix_bus.channel.effects
-                .iter()
-                .filter_map(|eff| {
-                    let effect_id = eff.id;
-                    let eff_instance = eff.instance.as_ref();
+                let effect_maps: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> = mix_bus
+                    .channel
+                    .effects
+                    .iter()
+                    .filter_map(|eff| {
+                        let effect_id = eff.id;
+                        let eff_instance = eff.instance.as_ref();
 
-                    // Get the effect from registry.
-                    // We map the result to a tuple (effect_id, plugin_box) if successful.
-                    registry
-                        .create_effect_by_id(eff_instance.registry_id)
-                        .map(|(plugin_box, _)| (
-                            effect_id,
-                            plugin_box,
-                        ))
-                })
-                .collect();
+                        // Get the effect from registry.
+                        // We map the result to a tuple (effect_id, plugin_box) if successful.
+                        registry
+                            .create_effect_by_id(eff_instance.registry_id)
+                            .map(|(plugin_box, _)| (effect_id, plugin_box))
+                    })
+                    .collect();
 
-            (id.to_owned(), effect_maps)
-        })
-        .collect();
+                (id.to_owned(), effect_maps)
+            })
+            .collect();
 
     let master_channel = mixer_state.master_bus.as_ref();
-    let master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> = master_channel.effects
+    let master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> = master_channel
+        .effects
         .iter()
         .filter_map(|eff| {
             let effect_id = eff.id;

@@ -8,8 +8,7 @@ fn main() {
 
     // Points to shared assets folder.
     // This runs from the root of the rust workspace.
-    let export_dir = std::env
-        ::var("PLUGIN_MANIFEST_DIR")
+    let export_dir = std::env::var("PLUGIN_MANIFEST_DIR")
         .unwrap_or("../../assets/manifests/audio-plugins".into());
 
     // Call the export function on all plugins

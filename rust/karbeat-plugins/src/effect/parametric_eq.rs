@@ -1,12 +1,18 @@
-use std::{any::Any, sync::Arc};
 use karbeat_dsp::windowing::Windowing;
 use karbeat_macros::{karbeat_plugin, EnumParam};
-use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*};
+use karbeat_plugin_api::{
+    manifest::{Manifestable, PluginManifest},
+    prelude::*,
+};
 use karbeat_plugin_types::*;
 use num_complex::{Complex, Complex32};
-use rustfft::{Fft, FftPlanner, num_traits::{Float, Zero}};
+use rustfft::{
+    num_traits::{Float, Zero},
+    Fft, FftPlanner,
+};
 use serde_json::{json, Value};
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
+use std::{any::Any, sync::Arc};
 
 /// Maximum number of cascaded biquad stages per band (order 0..3 = 1..4 stages)
 const MAX_ORDER: usize = 8;
@@ -67,13 +73,29 @@ impl From<f32> for FilterSlope {
 #[derive(Clone)]
 #[karbeat_plugin]
 pub struct KarbeatParametricEQFilterNode {
-    #[param(id = "freq", name = "Frequency", group = "Band", min = 20.0, max = 20000.0, default = 1000.0, step = 1.0)]
+    #[param(
+        id = "freq",
+        name = "Frequency",
+        group = "Band",
+        min = 20.0,
+        max = 20000.0,
+        default = 1000.0,
+        step = 1.0
+    )]
     pub freq: f32,
 
     #[param(id = "gain", name = "Gain", group = "Band", min = -24.0, max = 24.0, default = 0.0, step = 0.1)]
     pub gain: f32,
 
-    #[param(id = "q", name = "Q", group = "Band", min = 0.1, max = 20.0, default = 0.707, step = 0.1)]
+    #[param(
+        id = "q",
+        name = "Q",
+        group = "Band",
+        min = 0.1,
+        max = 20.0,
+        default = 0.707,
+        step = 0.1
+    )]
     pub q: f32,
 
     #[param(id = "active", name = "Active", group = "Band", default = 1.0)]
@@ -102,7 +124,7 @@ pub struct KarbeatParametricEQFilterNode {
 impl KarbeatParametricEQFilterNode {
     pub fn new(band_idx: usize, default_freq: f32) -> Self {
         let mut node = Self::base_default();
-        
+
         let group_name = format!("Band {}", band_idx + 1);
 
         node.freq.set_base(default_freq);
@@ -114,9 +136,11 @@ impl KarbeatParametricEQFilterNode {
         node.order.group = group_name;
 
         if band_idx == 0 {
-            node.filter_type.set_base(FilterType::LowShelf as i32 as f32);
+            node.filter_type
+                .set_base(FilterType::LowShelf as i32 as f32);
         } else if band_idx == 7 {
-            node.filter_type.set_base(FilterType::HighShelf as i32 as f32);
+            node.filter_type
+                .set_base(FilterType::HighShelf as i32 as f32);
         }
 
         node.x1 = vec![[0.0; MAX_ORDER]; 2];
@@ -138,7 +162,9 @@ impl KarbeatParametricEQFilterNode {
     }
 
     pub fn update_coefficients(&mut self, sample_rate: f32) {
-        if sample_rate <= 0.0 { return; }
+        if sample_rate <= 0.0 {
+            return;
+        }
 
         let freq = self.freq.get();
         let q = self.q.get();
@@ -154,8 +180,12 @@ impl KarbeatParametricEQFilterNode {
             FilterType::Peaking => {
                 let alpha_peak = sin_w0 / (2.0 * q);
                 (
-                    1.0 + alpha_peak * a, -2.0 * cos_w0, 1.0 - alpha_peak * a,
-                    1.0 + alpha_peak / a, -2.0 * cos_w0, 1.0 - alpha_peak / a,
+                    1.0 + alpha_peak * a,
+                    -2.0 * cos_w0,
+                    1.0 - alpha_peak * a,
+                    1.0 + alpha_peak / a,
+                    -2.0 * cos_w0,
+                    1.0 - alpha_peak / a,
                 )
             }
             FilterType::LowShelf => {
@@ -183,15 +213,30 @@ impl KarbeatParametricEQFilterNode {
                 )
             }
             FilterType::LowPass => (
-                (1.0 - cos_w0) / 2.0, 1.0 - cos_w0, (1.0 - cos_w0) / 2.0,
-                1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha,
+                (1.0 - cos_w0) / 2.0,
+                1.0 - cos_w0,
+                (1.0 - cos_w0) / 2.0,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
             ),
             FilterType::HighPass => (
-                (1.0 + cos_w0) / 2.0, -(1.0 + cos_w0), (1.0 + cos_w0) / 2.0,
-                1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha,
+                (1.0 + cos_w0) / 2.0,
+                -(1.0 + cos_w0),
+                (1.0 + cos_w0) / 2.0,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
             ),
             FilterType::BandPass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha),
-            FilterType::Notch => (1.0, -2.0 * cos_w0, 1.0, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha),
+            FilterType::Notch => (
+                1.0,
+                -2.0 * cos_w0,
+                1.0,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
+            ),
         };
 
         let inv_a0 = 1.0 / a0_raw;
@@ -203,15 +248,20 @@ impl KarbeatParametricEQFilterNode {
     }
 
     pub fn process_sample(&mut self, sample: f32, channel: usize) -> f32 {
-        if !self.active.get() || channel >= self.x1.len() { return sample; }
+        if !self.active.get() || channel >= self.x1.len() {
+            return sample;
+        }
 
         let num_stages = (self.order.get() as usize + 1).min(MAX_ORDER);
         let mut signal = sample;
 
         for stage in 0..num_stages {
             let x0 = signal;
-            let y0 = self.b0 * x0 + self.b1 * self.x1[channel][stage] + self.b2 * self.x2[channel][stage]
-                - self.a1 * self.y1[channel][stage] - self.a2 * self.y2[channel][stage];
+            let y0 = self.b0 * x0
+                + self.b1 * self.x1[channel][stage]
+                + self.b2 * self.x2[channel][stage]
+                - self.a1 * self.y1[channel][stage]
+                - self.a2 * self.y2[channel][stage];
 
             self.x2[channel][stage] = self.x1[channel][stage];
             self.x1[channel][stage] = x0;
@@ -233,7 +283,9 @@ impl KarbeatParametricEQFilterNode {
     }
 
     pub fn magnitude_db_at(&self, freq: f32, sample_rate: f32) -> f32 {
-        if !self.active.get() { return 0.0; }
+        if !self.active.get() {
+            return 0.0;
+        }
 
         let w = (2.0 * std::f32::consts::PI * freq) / sample_rate;
         let cos_w = w.cos();
@@ -249,7 +301,9 @@ impl KarbeatParametricEQFilterNode {
         let den_im = -(self.a1 * sin_w + self.a2 * sin_2w);
         let den_mag_sq = den_re * den_re + den_im * den_im;
 
-        if den_mag_sq < 1e-20 { return 0.0; }
+        if den_mag_sq < 1e-20 {
+            return 0.0;
+        }
 
         let single_stage_db = 10.0 * (num_mag_sq / den_mag_sq).max(1e-20).log10();
         let num_stages = (self.order.get() as usize as f32) + 1.0;
@@ -352,7 +406,8 @@ impl KarbeatEffect for KarbeatParametricEQ {
     }
 
     fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
-        let needs_update = (sample_rate - self.last_sample_rate).abs() > 0.1 || self.channels != channels;
+        let needs_update =
+            (sample_rate - self.last_sample_rate).abs() > 0.1 || self.channels != channels;
         if needs_update {
             self.last_sample_rate = sample_rate;
             self.channels = channels;
@@ -361,7 +416,9 @@ impl KarbeatEffect for KarbeatParametricEQ {
     }
 
     fn process(&mut self, buffer: &mut [f32]) {
-        if self.channels == 0 { return; }
+        if self.channels == 0 {
+            return;
+        }
 
         let current_base_gain = self.base_gain.get();
         let master_linear_gain = if current_base_gain.abs() > 0.01 {
@@ -410,7 +467,8 @@ impl KarbeatEffect for KarbeatParametricEQ {
     }
 
     fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
+        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
+            .unwrap_or(0.0)
     }
 
     fn apply_automation(&mut self, id: u32, value: f32) {
@@ -436,7 +494,10 @@ impl KarbeatEffect for KarbeatParametricEQ {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
-    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized {
+    fn static_parameter_specs() -> Vec<ParameterSpec>
+    where
+        Self: Sized,
+    {
         Self::new().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
@@ -462,14 +523,18 @@ impl KarbeatEffect for KarbeatParametricEQ {
                 Some(json!(json_response))
             }
             "GET_SPECTRUM" => {
-                let num_points = payload.get("num_points").and_then(|v| v.as_u64()).unwrap_or(100) as usize;
+                let num_points = payload
+                    .get("num_points")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100) as usize;
 
-                let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> = smallvec![Complex::zero(); FFT_SIZE];
+                let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> =
+                    smallvec![Complex::zero(); FFT_SIZE];
                 for i in 0..FFT_SIZE {
                     // Read backwards from current idx to get sequential chronological data
                     let idx = (self.analyzer_idx + i) % FFT_SIZE;
                     let sample = self.analyzer_buffer[idx];
-                    
+
                     // Hann window to prevent spectral leakage
                     let window_func = Windowing::Hann;
                     let windowed_sample = window_func.apply_single_sample(sample, i, FFT_SIZE);
@@ -483,7 +548,7 @@ impl KarbeatEffect for KarbeatParametricEQ {
 
                 let mut raw_magnitudes = vec![0.0; FFT_SIZE / 2];
                 let norm_factor = (FFT_SIZE as f32) / 2.0;
-                
+
                 for i in 0..(FFT_SIZE / 2) {
                     let mag = fft_input[i].norm() / norm_factor;
                     // FIX: Clamp the noise floor to -100dB explicitly
@@ -494,25 +559,28 @@ impl KarbeatEffect for KarbeatParametricEQ {
                 if self.spectrum_history.len() != num_points {
                     self.spectrum_history = vec![-100.0; num_points];
                 }
-                let min_freq = 20.0; let max_freq = 20000.0;
-                let log_min = min_freq.log10(); let log_max = max_freq.log10();
-                
+                let min_freq = 20.0;
+                let max_freq = 20000.0;
+                let log_min = min_freq.log10();
+                let log_max = max_freq.log10();
+
                 let mut json_response = Vec::with_capacity(num_points);
 
                 for i in 0..num_points {
                     let t = (i as f32) / ((num_points - 1).max(1) as f32);
                     let target_freq = (10.0_f32).powf(log_min + t * (log_max - log_min));
-                    
-                    let bin_exact = target_freq * (FFT_SIZE as f32) / self.last_sample_rate.max(1.0);
+
+                    let bin_exact =
+                        target_freq * (FFT_SIZE as f32) / self.last_sample_rate.max(1.0);
                     let bin_idx = bin_exact.round() as usize;
 
                     let mut current_db = -100.0;
                     if bin_idx > 0 && bin_idx < raw_magnitudes.len() {
                         // Max pooling over nearby bins prevents skipping spikes at high frequencies
-                        let pool_radius = (bin_exact * 0.02).max(1.0) as usize; 
+                        let pool_radius = (bin_exact * 0.02).max(1.0) as usize;
                         let start = bin_idx.saturating_sub(pool_radius);
                         let end = (bin_idx + pool_radius).min(raw_magnitudes.len() - 1);
-                        
+
                         for b in start..=end {
                             if raw_magnitudes[b] > current_db {
                                 current_db = raw_magnitudes[b];
@@ -523,18 +591,18 @@ impl KarbeatEffect for KarbeatParametricEQ {
                     // Apply Temporal Smoothing (Fast Attack, Slow Release)
                     let prev_db = self.spectrum_history[i];
                     let smoothed_db = if current_db > prev_db {
-                        current_db * 0.8 + prev_db * 0.2 
+                        current_db * 0.8 + prev_db * 0.2
                     } else {
                         current_db * 0.1 + prev_db * 0.9
                     };
                     self.spectrum_history[i] = smoothed_db;
 
-                    json_response.push(json!({ "frequency": target_freq, "magnitude_db": smoothed_db }));
+                    json_response
+                        .push(json!({ "frequency": target_freq, "magnitude_db": smoothed_db }));
                 }
 
                 // log::debug!("Send some Spectrum response");
                 Some(json!(json_response))
-                
             }
             _ => None,
         }

@@ -4,13 +4,14 @@ use crate::{
     audio::engine::PlaybackMode,
     commands::AudioCommand,
     context::utils::try_send_audio_command_chain,
-    core::project::{ GeneratorId, Pattern, PatternId },
-    lock:: get_app_read ,
+    core::project::{GeneratorId, Pattern, PatternId},
+    lock::get_app_read,
 };
 
 pub fn get_pattern(pattern_id: &PatternId) -> anyhow::Result<Arc<Pattern>> {
     let app = get_app_read();
-    let pattern_ref = app.pattern_pool
+    let pattern_ref = app
+        .pattern_pool
         .get(pattern_id)
         .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
 
@@ -19,13 +20,14 @@ pub fn get_pattern(pattern_id: &PatternId) -> anyhow::Result<Arc<Pattern>> {
 
 /// Fetches patterns, applies a mapper, and collects into ANY collection type `C`.
 pub fn get_patterns<C, Item, F>(mapper: F) -> anyhow::Result<C>
-    where
-        F: Fn(u32, &Pattern) -> Item, // The mapper takes the ID and the Pattern, and returns an Item
-        C: FromIterator<Item> // The collection must be buildable from an iterator of Items
+where
+    F: Fn(u32, &Pattern) -> Item, // The mapper takes the ID and the Pattern, and returns an Item
+    C: FromIterator<Item>,        // The collection must be buildable from an iterator of Items
 {
     let app = get_app_read();
 
-    let patterns = app.pattern_pool
+    let patterns = app
+        .pattern_pool
         .iter()
         .map(|(&id, pattern_arc)| {
             // Let the closure handle exactly what the Item shape looks like
@@ -38,7 +40,7 @@ pub fn get_patterns<C, Item, F>(mapper: F) -> anyhow::Result<C>
 
 pub fn play_pattern_preview(
     pattern_id: PatternId,
-    generator_id: GeneratorId
+    generator_id: GeneratorId,
 ) -> anyhow::Result<()> {
     {
         let app = get_app_read();
@@ -50,32 +52,37 @@ pub fn play_pattern_preview(
     // Try send command
     {
         // Send commands to switch to Pattern mode and start playing
-        try_send_audio_command_chain(
-            vec![
-                AudioCommand::SetPlaying(false),
-                AudioCommand::SetPlaybackMode(PlaybackMode::Pattern {
-                    pattern_id,
-                    generator_id,
-                }),
-                AudioCommand::SetPlaying(true)
-            ]
-        )?;
+        try_send_audio_command_chain(vec![
+            AudioCommand::SetPlaying(false),
+            AudioCommand::SetPlaybackMode(PlaybackMode::Pattern {
+                pattern_id,
+                generator_id,
+            }),
+            AudioCommand::SetPlaying(true),
+        ])?;
     }
 
     Ok(())
 }
 
 /// Stop pattern preview without changing the mode
-pub fn stop_pattern_preview_local(pattern_id: PatternId, generator_id: GeneratorId) -> anyhow::Result<()> {
-    try_send_audio_command_chain(
-        vec![AudioCommand::SetPlaybackMode(PlaybackMode::Pattern { pattern_id, generator_id }), AudioCommand::SetPlaying(false)]
-    )
+pub fn stop_pattern_preview_local(
+    pattern_id: PatternId,
+    generator_id: GeneratorId,
+) -> anyhow::Result<()> {
+    try_send_audio_command_chain(vec![
+        AudioCommand::SetPlaybackMode(PlaybackMode::Pattern {
+            pattern_id,
+            generator_id,
+        }),
+        AudioCommand::SetPlaying(false),
+    ])
 }
 
 pub fn stop_pattern_preview() -> anyhow::Result<()> {
     // Send commands to stop playing and switch back to Song mode
-    try_send_audio_command_chain(
-        vec![AudioCommand::SetPlaying(false), AudioCommand::SetPlaybackMode(PlaybackMode::Song)]
-    )
+    try_send_audio_command_chain(vec![
+        AudioCommand::SetPlaying(false),
+        AudioCommand::SetPlaybackMode(PlaybackMode::Song),
+    ])
 }
-

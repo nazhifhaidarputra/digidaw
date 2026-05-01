@@ -3,25 +3,24 @@
 //! BPM is also persisted in ApplicationState for project serialization.
 
 use flutter_rust_bridge::frb;
-use karbeat_core::{ api::transport_api, audio::engine::PlaybackMode };
+use karbeat_core::{api::transport_api, audio::engine::PlaybackMode};
 
 pub enum PlaybackModeDto {
     Song,
-    Pattern {
-        pattern_id: u32,
-        generator_id: u32,
-    },
+    Pattern { pattern_id: u32, generator_id: u32 },
 }
 
 impl From<&PlaybackMode> for PlaybackModeDto {
     fn from(value: &PlaybackMode) -> Self {
         match value {
             PlaybackMode::Song => PlaybackModeDto::Song,
-            PlaybackMode::Pattern { pattern_id, generator_id } =>
-                PlaybackModeDto::Pattern {
-                    pattern_id: pattern_id.to_u32(),
-                    generator_id: generator_id.to_u32(),
-                },
+            PlaybackMode::Pattern {
+                pattern_id,
+                generator_id,
+            } => PlaybackModeDto::Pattern {
+                pattern_id: pattern_id.to_u32(),
+                generator_id: generator_id.to_u32(),
+            },
         }
     }
 }
@@ -30,11 +29,13 @@ impl From<PlaybackModeDto> for PlaybackMode {
     fn from(value: PlaybackModeDto) -> Self {
         match value {
             PlaybackModeDto::Song => PlaybackMode::Song,
-            PlaybackModeDto::Pattern { pattern_id, generator_id } =>
-                PlaybackMode::Pattern {
-                    pattern_id: pattern_id.into(),
-                    generator_id: generator_id.into(),
-                },
+            PlaybackModeDto::Pattern {
+                pattern_id,
+                generator_id,
+            } => PlaybackMode::Pattern {
+                pattern_id: pattern_id.into(),
+                generator_id: generator_id.into(),
+            },
         }
     }
 }

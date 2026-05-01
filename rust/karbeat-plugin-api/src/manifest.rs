@@ -22,13 +22,11 @@ pub trait Manifestable {
     /// Automatically handles routing the JSON to the correct folder and saving it
     fn export_manifest(base_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut manifest = Self::build_manifest();
-        
+
         // SANITIZATION PASS
         for param in &mut manifest.parameters {
             // Helper closure to round to 4 decimal places to kill IEEE 754 garbage
-            let clean_float = |val: f32| -> f32 {
-                (val * 10000.0).round() / 10000.0
-            };
+            let clean_float = |val: f32| -> f32 { (val * 10000.0).round() / 10000.0 };
 
             param.min = clean_float(param.min);
             param.max = clean_float(param.max);
@@ -40,19 +38,23 @@ pub trait Manifestable {
             //     // If step is missing or 0, calculate a safe step (1% of the total range)
             //     let range = param.max - param.min;
             //     let safe_step = if range > 0.0 { range / 100.0 } else { 0.01 };
-                
+
             //     param.step = clean_float(safe_step);
-                
+
             //     // Ultimate fallback just in case min and max were identical
             //     if param.step == 0.0 {
             //         param.step = 0.01;
             //     }
             // }
         }
-        
+
         let json = serde_json::to_string_pretty(&manifest)?;
-        let folder = if manifest.is_synth { "synths" } else { "effects" };
-        
+        let folder = if manifest.is_synth {
+            "synths"
+        } else {
+            "effects"
+        };
+
         // Use the internal_type as the file name (e.g., "karbeatzerv2.json")
         let file_name = format!("{}.manifest.json", manifest.internal_type.to_snake_case());
         let path = PathBuf::from(base_dir).join(folder).join(&file_name);
@@ -60,8 +62,11 @@ pub trait Manifestable {
             fs::create_dir_all(parent)?;
         }
         fs::write(&path, json)?;
-        
-        println!("✅ Exported clean manifest: {} -> {:?}", manifest.name, path);
+
+        println!(
+            "✅ Exported clean manifest: {} -> {:?}",
+            manifest.name, path
+        );
         Ok(())
     }
 }

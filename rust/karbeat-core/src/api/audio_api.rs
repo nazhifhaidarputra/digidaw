@@ -1,16 +1,17 @@
 use crate::{
     audio::event::TransportFeedback,
     commands::AudioCommand,
-    context::{ ctx, utils::send_audio_command },
+    context::{ctx, utils::send_audio_command},
     core::{
         file_manager::audio_loader::AudioLoader,
-        project::{ AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId },
+        project::{AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId},
     },
     lock::get_app_read,
 };
 
 pub fn get_audio_source<T, F>(id: AudioSourceId, mapper: F) -> Option<T>
-    where F: FnOnce(&AudioWaveform) -> T
+where
+    F: FnOnce(&AudioWaveform) -> T,
 {
     let app = get_app_read();
     app.get_audio_source(&id).map(|w| mapper(w.as_ref()))
@@ -37,13 +38,19 @@ pub fn set_metronome_active(active: bool) {
     send_audio_command(AudioCommand::SetMetronomeActive(active));
 }
 
-pub fn get_audio_config<T, F>(mapper: F) -> T where F: FnOnce(&AudioHardwareConfig) -> T {
+pub fn get_audio_config<T, F>(mapper: F) -> T
+where
+    F: FnOnce(&AudioHardwareConfig) -> T,
+{
     let app = get_app_read();
     mapper(&app.audio_config)
 }
 
 /// Drains the position feedback ring buffer and maps it to UI types
-pub fn drain_position_feedback<T, F>(mut mapper: F) -> Vec<T> where F: FnMut(TransportFeedback) -> T {
+pub fn drain_position_feedback<T, F>(mut mapper: F) -> Vec<T>
+where
+    F: FnMut(TransportFeedback) -> T,
+{
     let mut results = Vec::new();
     if let Some(consumer) = ctx().position_consumer.lock().as_mut() {
         while let Ok(pos_data) = consumer.pop() {
@@ -57,14 +64,19 @@ pub fn play_preview_note(
     track_id: TrackId,
     note_key: u8,
     velocity: u8,
-    is_on: bool
+    is_on: bool,
 ) -> anyhow::Result<()> {
     let generator_id = {
         let app = get_app_read();
-        let track = app.tracks
+        let track = app
+            .tracks
             .get(&track_id)
             .ok_or_else(|| anyhow::anyhow!("Can't find requested track"))?;
-        track.generator.as_ref().ok_or_else(|| anyhow::anyhow!("Track has no generator"))?.id
+        track
+            .generator
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Track has no generator"))?
+            .id
     };
 
     if let Some(sender) = ctx().command_sender.lock().as_mut() {
@@ -83,7 +95,7 @@ pub fn play_preview_note_generator(
     generator_id: GeneratorId,
     note_key: u8,
     velocity: u8,
-    is_on: bool
+    is_on: bool,
 ) -> anyhow::Result<()> {
     if let Some(sender) = ctx().command_sender.lock().as_mut() {
         let _ = sender.push(AudioCommand::PlayPreviewNote {

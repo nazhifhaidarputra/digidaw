@@ -2,14 +2,16 @@ use std::sync::Arc;
 
 use crate::{
     context::utils::broadcast_state_change,
-    core::project::automation::{ AutomationLane, AutomationPoint, AutomationTarget },
-    lock::{ get_app_read, get_app_write },
-    shared::{ AutomationId, BusId, TrackId },
+    core::project::automation::{AutomationLane, AutomationPoint, AutomationTarget},
+    lock::{get_app_read, get_app_write},
+    shared::{AutomationId, BusId, TrackId},
 };
 
 /// Get all automations lane for all types
 pub fn get_automations_lanes_all<C, U, M>(mapper: M) -> C
-    where M: Fn(&AutomationLane) -> U, C: FromIterator<U>
+where
+    M: Fn(&AutomationLane) -> U,
+    C: FromIterator<U>,
 {
     let app = get_app_read();
 
@@ -25,7 +27,7 @@ pub fn add_automation_lane_for_track(
     label: impl Into<String>,
     min: f32,
     max: f32,
-    default_value: f32
+    default_value: f32,
 ) -> anyhow::Result<Arc<AutomationLane>> {
     let lane = {
         let mut app = get_app_write();
@@ -41,7 +43,7 @@ pub fn add_automation_lane_for_track(
 
 pub fn add_automation_lane_for_bus(
     bus_id: BusId,
-    target: AutomationTarget
+    target: AutomationTarget,
 ) -> anyhow::Result<Arc<AutomationLane>> {
     let lane = {
         let mut app = get_app_write();
@@ -70,23 +72,20 @@ pub fn add_new_automation_point(
     time_ticks: u32,
     value: f32,
 ) -> anyhow::Result<AutomationPoint> {
-    let auto_point  = {
+    let auto_point = {
         let mut app = get_app_write();
         let point = AutomationPoint::new(time_ticks, value);
         app.add_automation_point(automation_id, point.clone())?;
         point
     };
-    
+
     broadcast_state_change();
 
     // TODO: Add history
     Ok(auto_point)
 }
 
-pub fn remove_automation_point (
-    automation_id: AutomationId,
-    index: usize
-) -> anyhow::Result<()>{
+pub fn remove_automation_point(automation_id: AutomationId, index: usize) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
         app.remove_automation_point(automation_id, index)?;
@@ -95,16 +94,17 @@ pub fn remove_automation_point (
     Ok(())
 }
 
-pub fn update_automation_point (
+pub fn update_automation_point(
     automation_id: AutomationId,
     index: usize,
     time_ticks: u32,
     value: f32,
- ) -> anyhow::Result<usize> {
+) -> anyhow::Result<usize> {
     let new_index = {
         let mut app = get_app_write();
 
-        let (_, new_index) = app.update_automation_point(automation_id, index, time_ticks, value)?;
+        let (_, new_index) =
+            app.update_automation_point(automation_id, index, time_ticks, value)?;
         new_index
     };
 

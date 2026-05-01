@@ -31,7 +31,7 @@ impl WavAudioWriter {
 
         Ok(Self {
             writer: Some(writer),
-            spec
+            spec,
         })
     }
 }
@@ -39,7 +39,7 @@ impl WavAudioWriter {
 impl AudioWriter for WavAudioWriter {
     fn write(&mut self, samples: &[f32]) -> Result<()> {
         let writer = self.writer.as_mut().context("Writer already finalized")?;
-        
+
         match self.spec.sample_format {
             SampleFormat::Float => {
                 // For 32-bit float, we can write the f32 samples directly
@@ -75,7 +75,10 @@ impl AudioWriter for WavAudioWriter {
                             writer.write_sample(int_sample)?;
                         }
                     }
-                    _ => anyhow::bail!("Unsupported bit depth for integer format: {}", self.spec.bits_per_sample),
+                    _ => anyhow::bail!(
+                        "Unsupported bit depth for integer format: {}",
+                        self.spec.bits_per_sample
+                    ),
                 }
             }
         }

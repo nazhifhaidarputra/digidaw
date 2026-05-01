@@ -1,10 +1,13 @@
-use anyhow::{ anyhow, Context, Result };
-use cpal::{ traits::{ DeviceTrait, HostTrait, StreamTrait }, OutputCallbackInfo };
-use rtrb::{ Consumer, RingBuffer };
+use anyhow::{anyhow, Context, Result};
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    OutputCallbackInfo,
+};
+use rtrb::{Consumer, RingBuffer};
 use triple_buffer::Output;
 
 use crate::{
-    audio::{ engine::AudioEngine, event::TransportFeedback, render_state::AudioRenderState },
+    audio::{engine::AudioEngine, event::TransportFeedback, render_state::AudioRenderState},
     commands::AudioCommand,
     context::ctx,
 };
@@ -31,8 +34,7 @@ macro_rules! run_stream {
         $sample_type:ty,
         $converter:expr,
         $err_fn:expr
-    ) => {
-        {
+    ) => {{
         let mut audio_ctx = $audio_ctx;
         let mut consumer = $consumer;
         // Internal buffer for reading from ringbuffer before conversion
@@ -76,8 +78,7 @@ macro_rules! run_stream {
             $err_fn,
             None,
         )
-        }
-    };
+    }};
 }
 
 /// Set host to use the optimized host for each platform.
@@ -146,7 +147,7 @@ fn set_host() -> cpal::Host {
 pub fn start_audio_stream(
     mut state_consumer: Output<AudioRenderState>,
     command_consumer: Consumer<AudioCommand>,
-    initial_state: AudioRenderState
+    initial_state: AudioRenderState,
 ) -> Result<()> {
     {
         let mut guard = ctx().stream_guard.lock();
@@ -157,7 +158,9 @@ pub fn start_audio_stream(
     }
     let host = set_host();
 
-    let device = host.default_output_device().context("no audio output device available")?;
+    let device = host
+        .default_output_device()
+        .context("no audio output device available")?;
 
     // debug!("Output dev");
     let device_name = match device.description() {
@@ -218,9 +221,8 @@ pub fn start_audio_stream(
     *ctx().position_consumer.lock() = Some(pos_consumer);
 
     // Create feedback ring buffer (Audio → UI for parameter updates)
-    let (feedback_producer, feedback_consumer) = RingBuffer::<crate::commands::AudioFeedback>::new(
-        256
-    );
+    let (feedback_producer, feedback_consumer) =
+        RingBuffer::<crate::commands::AudioFeedback>::new(256);
     *ctx().feedback_consumer.lock() = Some(feedback_consumer);
 
     // Read initial BPM from app state for the audio engine
@@ -237,7 +239,7 @@ pub fn start_audio_stream(
         sample_rate,
         channels as u16,
         initial_bpm,
-        initial_state
+        initial_state,
     );
 
     let ring_buffer_capacity = 4096;
@@ -259,38 +261,35 @@ pub fn start_audio_stream(
             run_stream!(device, config, audio_ctx, consumer, f32, |s| s, err_fn)
         }
 
-        cpal::SampleFormat::I16 =>
-            run_stream!(
-                device,
-                config,
-                audio_ctx,
-                consumer,
-                i16,
-                |s: f32| (s * (i16::MAX as f32)).clamp(i16::MIN as f32, i16::MAX as f32) as i16,
-                err_fn
-            ),
+        cpal::SampleFormat::I16 => run_stream!(
+            device,
+            config,
+            audio_ctx,
+            consumer,
+            i16,
+            |s: f32| (s * (i16::MAX as f32)).clamp(i16::MIN as f32, i16::MAX as f32) as i16,
+            err_fn
+        ),
 
-        cpal::SampleFormat::U16 =>
-            run_stream!(
-                device,
-                config,
-                audio_ctx,
-                consumer,
-                u16,
-                |s: f32| ((s + 1.0) * 0.5 * (u16::MAX as f32)).clamp(0.0, u16::MAX as f32) as u16,
-                err_fn
-            ),
+        cpal::SampleFormat::U16 => run_stream!(
+            device,
+            config,
+            audio_ctx,
+            consumer,
+            u16,
+            |s: f32| ((s + 1.0) * 0.5 * (u16::MAX as f32)).clamp(0.0, u16::MAX as f32) as u16,
+            err_fn
+        ),
 
-        cpal::SampleFormat::U8 =>
-            run_stream!(
-                device,
-                config,
-                audio_ctx,
-                consumer,
-                u8,
-                |s: f32| ((s + 1.0) * 0.5 * 255.0).clamp(0.0, 255.0) as u8,
-                err_fn
-            ),
+        cpal::SampleFormat::U8 => run_stream!(
+            device,
+            config,
+            audio_ctx,
+            consumer,
+            u8,
+            |s: f32| ((s + 1.0) * 0.5 * 255.0).clamp(0.0, 255.0) as u8,
+            err_fn
+        ),
 
         other => {
             return Err(anyhow!("Unsupported sample format: {:?}", other));

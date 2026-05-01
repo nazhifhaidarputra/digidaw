@@ -24,8 +24,8 @@
 //! }
 //! ```
 //!
-//! User can freely decided how to implement required method freely. 
-//! Though we also provide a wrapper that can be used to add base parameter specifications, 
+//! User can freely decided how to implement required method freely.
+//! Though we also provide a wrapper that can be used to add base parameter specifications,
 //! **User can implement the mapping of each parameter freely**, but with a guarantee that the frontend knows the mapping of each parameter. For it to be less error-prone. you can the map parameter integer keys to
 //! an enum or constant which both the frontend and the backend agrees.
 //!
@@ -98,7 +98,7 @@
 //! }
 //!
 //! // This will make the struct implements RawEffectEngine, which can be used
-//! // for RawEffectWrapper generic trait bound which turns 
+//! // for RawEffectWrapper generic trait bound which turns
 //! // the KarbeatCompressor to a struct that
 //! // implements dyn KarbeatEffect + Send + Sync (required for safe concurrency)
 //! impl RawEffectEngine for KarbeatCompressor {
@@ -262,8 +262,7 @@
 //! - Currently the Base Wrapper is still unstable and may cause a lot of bug. We recommended to build the DSP from scratch
 //! using provided building blocks inside the `karbeat-dsp` crate
 
-
 pub mod macros;
+pub mod manifest;
 pub mod prelude;
 pub mod traits;
-pub mod manifest;

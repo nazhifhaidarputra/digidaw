@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{core::project::{ApplicationState, plugin::instance::PluginInstance}, shared::id::GeneratorId};
+use crate::{
+    core::project::{plugin::instance::PluginInstance, ApplicationState},
+    shared::id::GeneratorId,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeneratorInstance {
@@ -24,13 +27,9 @@ impl ApplicationState {
         let id = GeneratorId::next(&mut self.generator_counter);
 
         // Ensure the inner instance knows its ID
-        let instance = GeneratorInstance {
-            id,
-            instance_type,
-        };
+        let instance = GeneratorInstance { id, instance_type };
 
-        self.generator_pool
-            .insert(id, Arc::new(instance));
+        self.generator_pool.insert(id, Arc::new(instance));
         id
     }
 

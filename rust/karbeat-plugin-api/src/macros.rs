@@ -43,7 +43,7 @@ macro_rules! impl_plugin_parameters {
     };
 }
 
-/// A macro to directly inject redundant boilerplate implementation for 
+/// A macro to directly inject redundant boilerplate implementation for
 /// KarbeatEffect and KarbeatGenerator wrappers.
 /// This assumes the wrapper struct has `base` and `engine` fields.
 #[macro_export]
@@ -73,16 +73,17 @@ macro_rules! delegate_plugin_boilerplate {
         fn as_any(&self) -> &dyn Any {
             self
         }
-        
+
         fn apply_automation(&mut self, id: u32, value: f32) {
             // FIX: Route to engine if base doesn't handle it
-            if !self.base.set_parameter(id, value) { // Assuming apply_automation uses the same ID check
+            if !self.base.set_parameter(id, value) {
+                // Assuming apply_automation uses the same ID check
                 self.engine.apply_automation(id, value);
             } else {
                 self.base.apply_automation(id, value);
             }
         }
-        
+
         fn clear_automation(&mut self, id: u32) {
             // FIX: Route to engine if base doesn't handle it
             // (You may need a `base.has_parameter(id)` check here instead depending on your base API)

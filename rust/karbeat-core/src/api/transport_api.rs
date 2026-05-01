@@ -1,18 +1,17 @@
 use crate::audio::engine::PlaybackMode;
 use crate::commands::AudioCommand;
 use crate::context::utils::{
-    broadcast_state_change,
-    send_audio_command,
-    try_send_audio_command_chain,
+    broadcast_state_change, send_audio_command, try_send_audio_command_chain,
 };
 use crate::lock::get_app_write;
 use crate::shared::{GeneratorId, PatternId};
 
 /// Set is playing for song mode
 pub fn set_playing(val: bool) -> anyhow::Result<()> {
-    try_send_audio_command_chain(
-        vec![AudioCommand::SetPlaybackMode(PlaybackMode::Song), AudioCommand::SetPlaying(val)]
-    )?;
+    try_send_audio_command_chain(vec![
+        AudioCommand::SetPlaybackMode(PlaybackMode::Song),
+        AudioCommand::SetPlaying(val),
+    ])?;
 
     Ok(())
 }

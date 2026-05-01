@@ -1,42 +1,47 @@
-use std::{ collections::HashSet, sync::Arc };
+use std::{collections::HashSet, sync::Arc};
 
 use crate::{
-    context::utils::broadcast_state_change, core::{
+    context::utils::broadcast_state_change,
+    core::{
         file_manager::audio_loader::AudioLoader,
-        project::{ AudioSourceId, AudioWaveform, KarbeatSource, TrackId, TrackType },
-    }, lock::{ get_app_read, get_app_write }
+        project::{AudioSourceId, AudioWaveform, KarbeatSource, TrackId, TrackType},
+    },
+    lock::{get_app_read, get_app_write},
 };
 
 /// Get audio waveform clips data from Application and map them into U value
 pub fn get_audio_waveform_clips_data<C, U, M>(mapper: M) -> anyhow::Result<C>
-    where M: Fn(&AudioSourceId, &AudioWaveform) -> U, C: FromIterator<U>
+where
+    M: Fn(&AudioSourceId, &AudioWaveform) -> U,
+    C: FromIterator<U>,
 {
     let app = get_app_read();
     let map = app
         .get_audio_sources()
         .iter()
-        .map(|(id, audio_waveform)| { mapper(id, audio_waveform) })
+        .map(|(id, audio_waveform)| mapper(id, audio_waveform))
         .collect();
     Ok(map)
 }
 
 pub fn get_audio_waveform_for_clip(
-    audio_source_id: &AudioSourceId
+    audio_source_id: &AudioSourceId,
 ) -> anyhow::Result<Arc<AudioWaveform>> {
     let app = get_app_read();
-    let audio_waveform = app
-        .get_audio_source(audio_source_id)
-        .ok_or_else(|| anyhow::anyhow!("Cannot get the audio source with id {}", audio_source_id))?;
+    let audio_waveform = app.get_audio_source(audio_source_id).ok_or_else(|| {
+        anyhow::anyhow!("Cannot get the audio source with id {}", audio_source_id)
+    })?;
 
     Ok(audio_waveform.clone())
 }
 
 pub fn get_audio_waveform_for_clip_only_in_specific_track<C, U, M>(
     track_id: &TrackId,
-    mapper: M
-)
-    -> Option<C>
-    where M: Fn(&AudioSourceId, &AudioWaveform) -> U, C: FromIterator<U>
+    mapper: M,
+) -> Option<C>
+where
+    M: Fn(&AudioSourceId, &AudioWaveform) -> U,
+    C: FromIterator<U>,
 {
     let app = get_app_read();
     let track = app.tracks.get(track_id)?.as_ref();
@@ -63,12 +68,15 @@ pub fn get_audio_waveform_for_clip_only_in_specific_track<C, U, M>(
 }
 
 pub fn get_audio_waveform_for_clip_all_available_in_tracks<C, U, M>(mapper: M) -> anyhow::Result<C>
-    where M: Fn(u32, &AudioWaveform) -> U, C: FromIterator<U>
+where
+    M: Fn(u32, &AudioWaveform) -> U,
+    C: FromIterator<U>,
 {
     let app = get_app_read();
     let mut processed = HashSet::new();
 
-    let return_col = app.tracks
+    let return_col = app
+        .tracks
         .values()
         .filter(|t| matches!(t.track_type, TrackType::Audio))
         .flat_map(|t| t.clips().iter())
@@ -90,19 +98,21 @@ pub fn get_audio_waveform_for_clip_all_available_in_tracks<C, U, M>(mapper: M) -
 }
 
 pub fn get_audio_source_list<C, U, M>(mapper: M) -> anyhow::Result<C>
-    where M: Fn(u32, &AudioWaveform) -> U, C: FromIterator<U>
+where
+    M: Fn(u32, &AudioWaveform) -> U,
+    C: FromIterator<U>,
 {
     let app = get_app_read();
-    Ok(
-        app.asset_library.source_map
-            .iter()
-            .map(|(&id, wf)| mapper(id.to_u32(), wf.as_ref()))
-            .collect()
-    )
+    Ok(app
+        .asset_library
+        .source_map
+        .iter()
+        .map(|(&id, wf)| mapper(id.to_u32(), wf.as_ref()))
+        .collect())
 }
 
 pub fn add_audio_source(file_path: &str) -> anyhow::Result<AudioSourceId> {
-    let id  = {
+    let id = {
         let mut app = get_app_write();
         let result = app.load_audio(file_path, None);
         match result {
@@ -121,7 +131,8 @@ pub fn add_audio_source(file_path: &str) -> anyhow::Result<AudioSourceId> {
 }
 
 pub fn get_audio_waveform<T, F>(source_id: u32, mapper: F) -> anyhow::Result<T>
-    where F: Fn(&AudioWaveform) -> T
+where
+    F: Fn(&AudioWaveform) -> T,
 {
     let app = get_app_read();
     let waveform = app

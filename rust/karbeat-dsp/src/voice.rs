@@ -13,7 +13,7 @@ impl SynthVoice {
     pub fn new(note: u8, velocity: u8, sample_rate: f32, num_voices: usize) -> Self {
         let mut adsr = AdsrProcessor::new(sample_rate);
         adsr.note_on(); // Start the attack phase immediately
-        
+
         Self {
             note,
             velocity,

@@ -3,17 +3,17 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
-use std::sync::{ Arc, Once };
+use std::sync::{Arc, Once};
 
 use once_cell::sync::Lazy;
-use parking_lot::{ Mutex, RwLock };
+use parking_lot::{Mutex, RwLock};
 use rtrb::Producer;
 use triple_buffer::Input;
 
 use crate::{
-    audio::{ event::TransportFeedback, render_state::AudioRenderState },
-    commands::{ AudioCommand, AudioFeedback },
-    core::{ history::HistoryManager, project::ApplicationState },
+    audio::{event::TransportFeedback, render_state::AudioRenderState},
+    commands::{AudioCommand, AudioFeedback},
+    core::{history::HistoryManager, project::ApplicationState},
 };
 use karbeat_plugins::registry::PluginRegistry;
 
@@ -98,9 +98,12 @@ pub fn ctx() -> &'static KarbeatContext<'static> {
 }
 
 pub mod utils {
-    use karbeat_plugin_api::traits::{ KarbeatEffect, KarbeatGenerator };
+    use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
 
-    use crate::{ audio::render_state::AudioRenderState, commands::AudioCommand, context::ctx, lock::get_app_read };
+    use crate::{
+        audio::render_state::AudioRenderState, commands::AudioCommand, context::ctx,
+        lock::get_app_read,
+    };
 
     /// Helper function to send AudioCommand to context's command sender
     pub fn send_audio_command(command: AudioCommand) {
@@ -111,7 +114,9 @@ pub mod utils {
 
     pub fn try_send_audio_command_chain(commands: Vec<AudioCommand>) -> anyhow::Result<()> {
         if let Some(sender) = ctx().command_sender.lock().as_mut() {
-            commands.into_iter().try_for_each(|command| sender.push(command))?;
+            commands
+                .into_iter()
+                .try_for_each(|command| sender.push(command))?;
         }
 
         Ok(())
@@ -127,7 +132,7 @@ pub mod utils {
     }
 
     pub fn get_synth_plugin_box(
-        registry_id: u32
+        registry_id: u32,
     ) -> std::option::Option<Box<dyn KarbeatGenerator + Send + Sync>> {
         let registry = ctx().plugin_registry.read();
         let Some((plugin, _)) = registry.create_generator_by_id(registry_id) else {

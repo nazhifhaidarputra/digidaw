@@ -2,9 +2,13 @@
 
 use std::{any::Any, f32::consts::PI};
 
-use karbeat_dsp::prelude::*; 
+use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_api::{manifest::{Manifestable, PluginManifest}, prelude::*, traits::{KarbeatGenerator, AudioPluginBuilder}};
+use karbeat_plugin_api::{
+    manifest::{Manifestable, PluginManifest},
+    prelude::*,
+    traits::{AudioPluginBuilder, KarbeatGenerator},
+};
 use karbeat_plugin_types::*;
 
 #[derive(Clone)]
@@ -21,10 +25,26 @@ pub struct KarbeatzerV2 {
     pub filter: BiquadFilter<SimpleFilterMode>,
 
     // Local Parameters
-    #[param(id = "drive", name = "Drive", group = "Master", min = 0.0, max = 1.0, default = 0.0, step = 0.01)]
+    #[param(
+        id = "drive",
+        name = "Drive",
+        group = "Master",
+        min = 0.0,
+        max = 1.0,
+        default = 0.0,
+        step = 0.01
+    )]
     pub drive: f32,
 
-    #[param(id = "gain", name = "Gain", group = "Master", min = 0.0, max = 1.0, default = 0.8, step = 0.01)]
+    #[param(
+        id = "gain",
+        name = "Gain",
+        group = "Master",
+        min = 0.0,
+        max = 1.0,
+        default = 0.8,
+        step = 0.01
+    )]
     pub gain: f32,
 
     // Internal Decoupled State (Ignored by Param UI)
@@ -44,14 +64,20 @@ impl Default for KarbeatzerV2 {
         ];
 
         // Setup some nice default starting values
-        engine.oscillators[0].waveform.set_base(Waveform::Saw as usize as f32);
+        engine.oscillators[0]
+            .waveform
+            .set_base(Waveform::Saw as usize as f32);
         engine.oscillators[0].mix.set_base(1.0);
 
-        engine.oscillators[1].waveform.set_base(Waveform::Square as usize as f32);
+        engine.oscillators[1]
+            .waveform
+            .set_base(Waveform::Square as usize as f32);
         engine.oscillators[1].detune.set_base(0.1);
         engine.oscillators[1].mix.set_base(0.5);
 
-        engine.oscillators[2].waveform.set_base(Waveform::Sine as usize as f32);
+        engine.oscillators[2]
+            .waveform
+            .set_base(Waveform::Sine as usize as f32);
         engine.oscillators[2].detune.set_base(-12.0);
         engine.oscillators[2].mix.set_base(0.3);
 
@@ -66,7 +92,7 @@ impl Default for KarbeatzerV2 {
 
 impl KarbeatzerV2 {
     /// Mixes a block of audio for a single voice
-   fn generate_voice_block(
+    fn generate_voice_block(
         oscillators: &[Oscillator; 3],
         amp_envelope: &EnvelopeSettings,
         sample_rate: f32,
@@ -130,7 +156,9 @@ impl KarbeatzerV2 {
                 sample_accum += osc_out * mixes[i];
 
                 voice.phase[i] += dt_inc as f64;
-                if voice.phase[i] >= 1.0 { voice.phase[i] -= 1.0; }
+                if voice.phase[i] >= 1.0 {
+                    voice.phase[i] -= 1.0;
+                }
             }
 
             buffer[frame] = sample_accum * current_gain;
@@ -170,10 +198,10 @@ impl KarbeatGenerator for KarbeatzerV2 {
         let current_drive = self.drive.get();
         let master_gain = self.gain.get();
         let total_frames = output_buffer.len() / self.channels;
-        
+
         let mut current_frame = 0;
         let mut event_idx = 0;
-        
+
         // A temporary scratch buffer for mono voice rendering
         let mut scratch = vec![0.0; total_frames];
 
@@ -188,28 +216,31 @@ impl KarbeatGenerator for KarbeatzerV2 {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice = &mut output_buffer[current_frame * self.channels .. end_frame * self.channels];
+                let out_slice =
+                    &mut output_buffer[current_frame * self.channels..end_frame * self.channels];
                 let scratch_slice = &mut scratch[0..block_len];
 
                 // Destructure `self` to separate the mutable voices from the immutable components!
-                let KarbeatzerV2 { 
-                    active_voices, 
-                    oscillators, 
-                    amp_envelope, 
-                    sample_rate, 
-                    .. 
+                let KarbeatzerV2 {
+                    active_voices,
+                    oscillators,
+                    amp_envelope,
+                    sample_rate,
+                    ..
                 } = self;
 
                 // 1. Render all active voices
                 for voice in active_voices.iter_mut() {
-                    if !voice.is_active { continue; }
+                    if !voice.is_active {
+                        continue;
+                    }
 
                     Self::generate_voice_block(
                         oscillators,
                         amp_envelope,
                         *sample_rate,
                         voice,
-                        scratch_slice
+                        scratch_slice,
                     );
 
                     // Mix mono voice into stereo output buffer
@@ -240,17 +271,27 @@ impl KarbeatGenerator for KarbeatzerV2 {
             }
 
             // Process MIDI
-            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame {
+            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
+            {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
                         if velocity > 0 {
-                            self.active_voices.push(SynthVoice::new(key, velocity, self.sample_rate, self.oscillators.len()));
+                            self.active_voices.push(SynthVoice::new(
+                                key,
+                                velocity,
+                                self.sample_rate,
+                                self.oscillators.len(),
+                            ));
                         } else {
-                            for v in self.active_voices.iter_mut().filter(|v| v.note == key) { v.release(); }
+                            for v in self.active_voices.iter_mut().filter(|v| v.note == key) {
+                                v.release();
+                            }
                         }
                     }
                     MidiMessage::NoteOff { key } => {
-                        for v in self.active_voices.iter_mut().filter(|v| v.note == key) { v.release(); }
+                        for v in self.active_voices.iter_mut().filter(|v| v.note == key) {
+                            v.release();
+                        }
                     }
                     _ => {}
                 }
@@ -272,7 +313,8 @@ impl KarbeatGenerator for KarbeatzerV2 {
     }
 
     fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
+        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
+            .unwrap_or(0.0)
     }
 
     fn apply_automation(&mut self, id: u32, value: f32) {
@@ -301,8 +343,11 @@ impl KarbeatGenerator for KarbeatzerV2 {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized {
+
+    fn static_parameter_specs() -> Vec<ParameterSpec>
+    where
+        Self: Sized,
+    {
         Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 }
@@ -324,7 +369,8 @@ impl Manifestable for KarbeatzerV2 {
             name: "Karbeatzer V2".to_owned(),
             internal_type: "KarbeatzerV2".to_owned(),
             is_synth: true,
-            parameters: Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, ""),
+            parameters: Self::default()
+                .auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, ""),
         }
     }
 }

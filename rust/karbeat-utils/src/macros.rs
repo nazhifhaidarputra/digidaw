@@ -1,17 +1,7 @@
 #[macro_export]
 macro_rules! define_id {
     ($name:ident) => {
-        #[derive(
-            Clone,
-            Copy,
-            Debug,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            Default,
-        )]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
         pub struct $name(pub u32);
 
         impl serde::Serialize for $name {
@@ -54,7 +44,7 @@ macro_rules! define_id {
                     {
                         value.parse::<u32>().map_err(serde::de::Error::custom)
                     }
-                    
+
                     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
                     where
                         E: serde::de::Error,
