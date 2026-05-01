@@ -36,6 +36,8 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
   /// Logic to determine which sample count to display (Song vs Pattern)
   final int Function(UiTransportFeedback) sampleSelector;
 
+  final bool isInteracting;
+
   const PlayheadOverlay({
     super.key,
     required this.offsetAdjustment,
@@ -43,6 +45,7 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
     required this.onSeek,
     required this.zoomLevel,
     required this.sampleSelector,
+    this.isInteracting = false,
   });
 
   @override
@@ -54,6 +57,8 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
 
   bool _isDragging = false;
   int _dragSamples = 0;
+
+  int _lastKnownSamples = 0;
 
   @override
   void initState() {
@@ -75,11 +80,13 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox();
 
-                final streamSamples = widget.sampleSelector(snapshot.data!);
+                _lastKnownSamples = widget.sampleSelector(snapshot.data!);
+
+                // final streamSamples = widget.sampleSelector(snapshot.data!);
 
                 final currentSamples = _isDragging
                     ? _dragSamples
-                    : streamSamples;
+                    : _lastKnownSamples;
 
                 double playheadAbsoluteX = 0;
                 if (widget.zoomLevel > 0) {
@@ -118,17 +125,21 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                             onHorizontalDragStart: (details) {
                               setState(() {
                                 _isDragging = true;
-                                _dragSamples = streamSamples;
+                                _dragSamples = currentSamples;
                               });
                             },
                             onHorizontalDragUpdate: (details) {
                               // Update local state instantly for buttery smooth UI
                               setState(() {
-                                final deltaSamples = (details.delta.dx * widget.zoomLevel).toInt();
+                                final deltaSamples =
+                                    (details.delta.dx * widget.zoomLevel)
+                                        .toInt();
                                 _dragSamples += deltaSamples;
-                                if (_dragSamples < 0) _dragSamples = 0; // Prevent negative time
+                                if (_dragSamples < 0) {
+                                  _dragSamples = 0; // Prevent negative time
+                                }
                               });
-                              
+
                               widget.onSeek(_dragSamples);
                             },
                             onHorizontalDragEnd: (details) {
@@ -153,7 +164,8 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                             child: Container(
                               width: 1.5,
                               color: Colors.yellowAccent.withAlpha(
-                                (0.8 * 255).round(),
+                                // If the user is zooming/panning the screen, dim the playhead slightly to indicate interaction
+                                widget.isInteracting ? 100 : 204,
                               ),
                             ),
                           ),

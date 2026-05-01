@@ -320,6 +320,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     final gridDenom = state.pianoRollGridDenom;
 
     final selectedNoteIds = state.selectedNoteIds;
+    bool _isInteracting = false;
 
     if (pattern == null) {
       return const Center(
@@ -453,6 +454,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                 child: Listener(
                                   onPointerDown: (event) {
                                     _lastInteractionPos = event.localPosition;
+                                    if (isZoom || isPan) {
+                                      setState(() => _isInteracting = true);
+                                    }
 
                                     if (isDrawing) {
                                       _resetPaintState();
@@ -498,6 +502,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     }
                                   },
                                   onPointerUp: (event) {
+                                    if (_isInteracting) {
+                                      setState(() => _isInteracting = false);
+                                    }
                                     if (isDrawing) {
                                       _submitBrushAdd(pattern.id);
                                     } else if (isDeleting) {
@@ -525,27 +532,41 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                           title: "Actions",
                                           actions: [
                                             KarbeatContextAction(
-                                            title: "Paste",
-                                            icon: Icons.paste,
-                                            onTap: () {
-                                              if (_lastInteractionPos == null) return;
-                                              
-                                              // Convert local pixel position to Ticks and MIDI Key
-                                              int tick = (_lastInteractionPos!.dx / zoomX).round();
-                                              int keyIndex = (_lastInteractionPos!.dy / _keyHeight).floor();
-                                              int midiKey = (127 - keyIndex).clamp(0, 127);
-                                              
-                                              // Snap to grid for clean pasting
-                                              int snap = _getSnapTicks(gridDenom);
-                                              int snappedTick = (tick / snap).round() * snap;
+                                              title: "Paste",
+                                              icon: Icons.paste,
+                                              onTap: () {
+                                                if (_lastInteractionPos == null)
+                                                  return;
 
-                                              ref.read(karbeatStateProvider).pasteNotesFromClipboardToPattern(
-                                                pattern.id,
-                                                snappedTick,
-                                                midiKey,
-                                              );
-                                            },
-                                          ),
+                                                // Convert local pixel position to Ticks and MIDI Key
+                                                int tick =
+                                                    (_lastInteractionPos!.dx /
+                                                            zoomX)
+                                                        .round();
+                                                int keyIndex =
+                                                    (_lastInteractionPos!.dy /
+                                                            _keyHeight)
+                                                        .floor();
+                                                int midiKey = (127 - keyIndex)
+                                                    .clamp(0, 127);
+
+                                                // Snap to grid for clean pasting
+                                                int snap = _getSnapTicks(
+                                                  gridDenom,
+                                                );
+                                                int snappedTick =
+                                                    (tick / snap).round() *
+                                                    snap;
+
+                                                ref
+                                                    .read(karbeatStateProvider)
+                                                    .pasteNotesFromClipboardToPattern(
+                                                      pattern.id,
+                                                      snappedTick,
+                                                      midiKey,
+                                                    );
+                                              },
+                                            ),
                                           ],
                                           child: Stack(
                                             children: [
@@ -561,19 +582,19 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                   ),
                                                 ),
                                               ),
-                                          
+
                                               // LAYER B1: Unselected Interactive Notes
                                               ...unselectedNotes.map((note) {
                                                 final isPendingDelete =
-                                                    _brushDeleteNoteIds.contains(
-                                                      note.id,
-                                                    );
+                                                    _brushDeleteNoteIds
+                                                        .contains(note.id);
                                                 return _InteractiveNote(
                                                   key: ValueKey(note.id),
                                                   note: note,
                                                   noteId: note.id,
                                                   patternId: pattern.id,
-                                                  generatorId: widget.generatorId,
+                                                  generatorId:
+                                                      widget.generatorId,
                                                   zoomX: zoomX,
                                                   keyHeight: _keyHeight,
                                                   selectedTool: selectedTool,
@@ -616,13 +637,14 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                   },
                                                 );
                                               }),
-                                          
+
                                               // LAYER B2: Selected Batch Notes
                                               if (selectedNotes.isNotEmpty)
                                                 _InteractiveNoteGroup(
                                                   notes: selectedNotes,
                                                   patternId: pattern.id,
-                                                  generatorId: widget.generatorId,
+                                                  generatorId:
+                                                      widget.generatorId,
                                                   zoomX: zoomX,
                                                   keyHeight: _keyHeight,
                                                   selectedTool: selectedTool,
@@ -649,11 +671,14 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     _stopAutoScroll();
                                                   },
                                                 ),
-                                          
+
                                               // LAYER C: Preview Add Notes
                                               ..._brushAddNotes.map((addInfo) {
-                                                final (key, startTick, duration) =
-                                                    addInfo;
+                                                final (
+                                                  key,
+                                                  startTick,
+                                                  duration,
+                                                ) = addInfo;
                                                 return Positioned(
                                                   top:
                                                       (127 - key) * _keyHeight +
@@ -680,7 +705,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                   ),
                                                 );
                                               }),
-                                          
+
                                               // LAYER D: Range Selection Box
                                               if (_selectionStart != null &&
                                                   _selectionEnd != null)
@@ -694,13 +719,14 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       color: Colors.blueAccent
                                                           .withAlpha(80),
                                                       border: Border.all(
-                                                        color: Colors.blueAccent,
+                                                        color:
+                                                            Colors.blueAccent,
                                                         width: 1.0,
                                                       ),
                                                     ),
                                                   ),
                                                 ),
-                                          
+
                                               // LAYER E: Playhead Overlay (top)
                                               Positioned.fill(
                                                 child: IgnorePointer(
@@ -713,6 +739,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       // We currently don't support seeking inside pattern playback.
                                                       // TODO: Add pattern playback seek implementation
                                                     },
+                                                    isInteracting:
+                                                        _isInteracting,
                                                     zoomLevel: 1.0 / zoomX,
                                                     sampleSelector: (pos) {
                                                       if (pos.isPatternMode) {
