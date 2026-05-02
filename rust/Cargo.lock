@@ -1382,6 +1382,7 @@ name = "karbeat-plugin-api"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "hashbrown 0.17.0",
  "heck",
  "indexmap",
  "karbeat-dsp",

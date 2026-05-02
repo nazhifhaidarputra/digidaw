@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
+use karbeat_plugin_api::traits::{KarbeatPlugin};
 use rtrb::RingBuffer;
 use thiserror::Error;
 
@@ -90,15 +90,15 @@ where
     // Hydrate the Engine (Load fresh plugin clones)
     let registry = ctx().plugin_registry.read();
 
-    let mut generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>> =
+    let mut generators: IndexMap<GeneratorId, Box<dyn KarbeatPlugin + Send + Sync>> =
         IndexMap::new();
     let mut track_effects: IndexMap<
         TrackId,
-        IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>,
+        IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>,
     > = IndexMap::new();
-    let mut bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> =
+    let mut bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>> =
         IndexMap::new();
-    let mut master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> =
+    let mut master_effects: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>> =
         IndexMap::new();
 
     // Instantiate Generators

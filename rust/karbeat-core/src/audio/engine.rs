@@ -30,7 +30,7 @@ use crate::{
     core::project::{
         automation::AutomationTarget,
         mixer::{MixerChannel, RoutingNode},
-        plugin::{MidiEvent, MidiMessage},
+        plugin::{MidiEvent, MidiMessage, ProcessContext},
         AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
         PatternId, TrackId,
     },
@@ -316,7 +316,7 @@ impl AudioEngine {
         } else {
             // When transport is stopped, still render any active voices
             // (e.g., preview notes with sustain, ADSR tails)
-            self.render_voices_to_buffer(output_buffer, channels);
+            self.render_voices_to_buffer(output_buffer, channels, false);
             self.cleanup_finished_voices();
             self.emit_static_position();
         }
@@ -403,7 +403,7 @@ impl AudioEngine {
         self.evaluate_automation_lanes();
 
         // Render Active Voices
-        self.render_voices_to_buffer(output_buffer, channels);
+        self.render_voices_to_buffer(output_buffer, channels, true);
 
         self.render_metronome(output_buffer, channels, self.song_state.playhead_samples);
 
@@ -516,7 +516,7 @@ impl AudioEngine {
         gen_voice.midi_events.sort_by_key(|e| e.sample_offset);
 
         // Render voices to buffer
-        self.render_voices_to_buffer(output_buffer, channels);
+        self.render_voices_to_buffer(output_buffer, channels, true);
 
         self.render_metronome(output_buffer, channels, start_time);
 
@@ -1444,8 +1444,18 @@ impl AudioEngine {
         }
     }
 
-    fn render_voices_to_buffer(&mut self, output: &mut [f32], channels: usize) {
+    fn render_voices_to_buffer(&mut self, output: &mut [f32], channels: usize, is_playing: bool) {
         let buf_len = output.len();
+
+        // ======================================
+        // Pre-copy transport state for ProcessContext construction
+        // (must happen before any borrows of self fields are taken)
+        // ======================================
+        let bpm = self.bpm;
+        let sample_position = match self.playback_mode {
+            PlaybackMode::Song => self.song_state.playhead_samples as u64,
+            PlaybackMode::Pattern { .. } => self.pattern_state.playhead_samples as u64,
+        };
 
         // Ensure bus buffers are properly sized
         for (_bus_id, buf) in self.bus_buffers.iter_mut() {
@@ -1522,7 +1532,16 @@ impl AudioEngine {
                         }
                     }
                     // PROCESS AUDIO
-                    gen_instance.plugin.process(&mut self.mix_buffer, events);
+                    // Build context for the generator — MIDI events are passed via ProcessContext
+                    let gen_ctx = ProcessContext {
+                        bpm,
+                        time_sig_numerator: 4,
+                        time_sig_denominator: 4,
+                        is_playing,
+                        sample_position,
+                        midi_events: events,
+                    };
+                    gen_instance.plugin.process(&mut self.mix_buffer, &gen_ctx);
                     has_signal = true;
                 }
             }
@@ -1543,6 +1562,15 @@ impl AudioEngine {
             }
 
             // Apply track mixer channel (volume/pan/phase) and effects
+            // Effects receive an empty MIDI slice — track routing is audio-only at this stage
+            let track_effect_ctx = ProcessContext {
+                bpm,
+                time_sig_numerator: 4,
+                time_sig_denominator: 4,
+                is_playing,
+                sample_position,
+                midi_events: &[],
+            };
             Self::apply_mixer_channel_with_effects(
                 channel_mut,
                 &mut self.plugin_state.track_effects,
@@ -1550,6 +1578,7 @@ impl AudioEngine {
                 track_id,
                 &mut self.mix_buffer,
                 channels,
+                &track_effect_ctx,
             );
 
             // Route the track signal to destinations based on routing matrix
@@ -1665,8 +1694,17 @@ impl AudioEngine {
                     .plugin_state
                     .get_bus_effects_mut(bus_id.to_u32() as usize)
                 {
+                    // Bus effects receive no MIDI — pure audio processing
+                    let bus_effect_ctx = ProcessContext {
+                        bpm,
+                        time_sig_numerator: 4,
+                        time_sig_denominator: 4,
+                        is_playing,
+                        sample_position,
+                        midi_events: &[],
+                    };
                     for effect in effects.iter_mut() {
-                        effect.plugin.process(&mut self.mix_buffer);
+                        effect.plugin.process(&mut self.mix_buffer, &bus_effect_ctx);
                     }
                 }
 
@@ -1733,6 +1771,15 @@ impl AudioEngine {
         }
 
         // ==== Phase 3: Apply master bus effects ====
+        // Master effects receive no MIDI — pure audio processing
+        let master_effect_ctx = ProcessContext {
+            bpm,
+            time_sig_numerator: 4,
+            time_sig_denominator: 4,
+            is_playing,
+            sample_position,
+            midi_events: &[],
+        };
         let mut master_bus = self.current_state.graph.mixer_state.master_bus.clone();
         let master_bus_mut = Arc::make_mut(&mut master_bus);
         Self::apply_master_bus_with_effects(
@@ -1741,6 +1788,7 @@ impl AudioEngine {
             &self.master_automation_events,
             output,
             channels,
+            &master_effect_ctx,
         );
     }
 
@@ -1923,6 +1971,7 @@ impl AudioEngine {
         track_id: TrackId,
         buffer: &mut [f32],
         channels: usize,
+        process_ctx: &ProcessContext,
     ) {
         // Extract base values from the current UI state
         let track_volume = &mut mixer_channel.volume;
@@ -1975,7 +2024,7 @@ impl AudioEngine {
         // Effects chain from plugin_state
         if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
             for effect in effects.iter_mut() {
-                effect.plugin.process(buffer);
+                effect.plugin.process(buffer, process_ctx);
             }
         }
 
@@ -2036,6 +2085,7 @@ impl AudioEngine {
         master_automation_events: &[MasterAutomationEvent],
         buffer: &mut [f32],
         channels: usize,
+        process_ctx: &ProcessContext,
     ) {
         let master_volume = &mut master_bus.volume;
         let master_pan = &mut master_bus.pan;
@@ -2079,7 +2129,7 @@ impl AudioEngine {
 
         // Master effects chain
         for effect in master_effects.iter_mut() {
-            effect.plugin.process(buffer);
+            effect.plugin.process(buffer, process_ctx);
         }
 
         // Volume and Pan (volume is stored in dB)

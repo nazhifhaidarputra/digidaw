@@ -4,7 +4,7 @@ use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
         mixer::RoutingConnection,
-        plugin::{KarbeatEffect, KarbeatGenerator},
+        plugin::KarbeatPlugin,
         track::audio_waveform::AudioWaveform,
         GeneratorId,
     },
@@ -52,7 +52,7 @@ pub enum AudioCommand {
     AddGenerator {
         generator_id: GeneratorId,
         track_id: TrackId,
-        plugin: Box<dyn KarbeatGenerator + Send>,
+        plugin: Box<dyn KarbeatPlugin + Send>,
     },
     /// Remove a generator plugin from the audio thread
     RemoveGenerator {
@@ -81,7 +81,7 @@ pub enum AudioCommand {
     AddTrackEffect {
         track_id: TrackId,
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send + Sync>,
+        effect: Box<dyn KarbeatPlugin + Send + Sync>,
     },
     /// Remove an effect from a track's effect chain
     RemoveTrackEffect {
@@ -107,7 +107,7 @@ pub enum AudioCommand {
     /// Add an effect to the master bus
     AddMasterEffect {
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send + Sync>,
+        effect: Box<dyn KarbeatPlugin + Send + Sync>,
     },
     /// Remove an effect from the master bus
     RemoveMasterEffect {
@@ -147,7 +147,7 @@ pub enum AudioCommand {
     AddBusEffect {
         bus_id: BusId,
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send + Sync>,
+        effect: Box<dyn KarbeatPlugin + Send + Sync>,
     },
     /// Remove effect from a bus
     RemoveBusEffect {
@@ -172,10 +172,10 @@ pub enum AudioCommand {
     },
     /// Prepare all of plugins from ApplicationState to AudioEngine (upon loading project)
     PreparePlugin {
-        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
-        master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>,
-        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
-        generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>>,
+        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>,
+        master_effects: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>,
+        generators: IndexMap<GeneratorId, Box<dyn KarbeatPlugin + Send + Sync>>,
     },
     SetMetronomeActive(bool),
 

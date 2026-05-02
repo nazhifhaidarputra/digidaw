@@ -5,13 +5,10 @@
 
 use std::any::Any;
 
+use hashbrown::HashMap;
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_api::{
-    manifest::{Manifestable, PluginManifest},
-    prelude::*,
-    traits::{AudioPluginBuilder, KarbeatGenerator},
-};
+use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
@@ -94,7 +91,7 @@ impl MyRetro {
         sample_rate: f32,
         channels: usize,
         voice: &mut SynthVoice,
-        buffer: &mut [f32],
+        buffer: &mut [f32]
     ) {
         buffer.fill(0.0);
 
@@ -123,13 +120,7 @@ impl MyRetro {
 
                 // Extract 1 sample frame
                 let mut osc_output = [0.0; 2];
-                osc.output_wave(
-                    &mut osc_output,
-                    sample_rate as u32,
-                    2,
-                    base_freq,
-                    &mut phase,
-                );
+                osc.output_wave(&mut osc_output, sample_rate as u32, 2, base_freq, &mut phase);
 
                 voice.phase[i] = phase;
 
@@ -153,7 +144,7 @@ impl MyRetro {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
-impl KarbeatGenerator for MyRetro {
+impl KarbeatPlugin for MyRetro {
     fn name(&self) -> &str {
         "My Retro"
     }
@@ -167,8 +158,10 @@ impl KarbeatGenerator for MyRetro {
         self.active_voices.clear();
     }
 
-    fn process(&mut self, output_buffer: &mut [f32], midi_events: &[MidiEvent]) {
+    fn process(&mut self, output_buffer: &mut [f32], context: &ProcessContext) {
         output_buffer.fill(0.0);
+
+        let midi_events = context.midi_events;
 
         // Extract primitives outside the loop
         let master_gain = self.gain.get();
@@ -218,7 +211,7 @@ impl KarbeatGenerator for MyRetro {
                         *sample_rate,
                         *channels,
                         voice,
-                        scratch_slice,
+                        scratch_slice
                     );
 
                     // Mix the voice scratch buffer into the main output
@@ -234,7 +227,9 @@ impl KarbeatGenerator for MyRetro {
             }
 
             // Handle MIDI events at this exact frame
-            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
+            while
+                event_idx < midi_events.len() &&
+                midi_events[event_idx].sample_offset == end_frame
             {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
@@ -243,7 +238,7 @@ impl KarbeatGenerator for MyRetro {
                                 key,
                                 velocity,
                                 self.sample_rate,
-                                self.oscillators.len(),
+                                self.oscillators.len()
                             );
                             for (i, osc) in self.oscillators.iter().enumerate() {
                                 voice.phase[i] = osc.phase_offset.get() as f64;
@@ -280,8 +275,7 @@ impl KarbeatGenerator for MyRetro {
     }
 
     fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
-            .unwrap_or(0.0)
+        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
     }
 
     fn apply_automation(&mut self, id: u32, value: f32) {
@@ -292,7 +286,7 @@ impl KarbeatGenerator for MyRetro {
         self.auto_clear_automation(karbeat_utils::hash::FNV_OFFSET, id);
     }
 
-    fn default_parameters(&self) -> indexmap::IndexMap<u32, f32> {
+    fn default_parameters(&self) -> HashMap<u32, f32> {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
             .map(|spec| (spec.id, spec.default_value))
@@ -303,16 +297,27 @@ impl KarbeatGenerator for MyRetro {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
-    fn static_parameter_specs() -> Vec<ParameterSpec>
-    where
-        Self: Sized,
-    {
+    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized {
         Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn category(&self) -> PluginCategory {
+        PluginCategory::Instrument
+    }
+    
+    fn get_state(&self) -> Vec<u8> { Vec::new() }
+    
+    fn set_state(&mut self, _state: &[u8]) {}
+    
+    fn latency_samples(&self) -> u32 { 0 }
+    
+    fn tail_samples(&self) -> u32 { 0 }
+    
+    fn execute_custom_command(&mut self, _command: &str, _payload: &serde_json::Value) -> Option<serde_json::Value> { None }
 }
 
 // ============================================================================

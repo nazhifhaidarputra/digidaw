@@ -1,9 +1,7 @@
+use hashbrown::HashMap;
 use karbeat_dsp::windowing::Windowing;
 use karbeat_macros::{karbeat_plugin, EnumParam};
-use karbeat_plugin_api::{
-    manifest::{Manifestable, PluginManifest},
-    prelude::*,
-};
+use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
 use num_complex::{Complex, Complex32};
 use rustfft::{
@@ -400,7 +398,7 @@ impl KarbeatParametricEQ {
 // DIRECT KARBEAT EFFECT TRAIT
 // ============================================================================
 
-impl KarbeatEffect for KarbeatParametricEQ {
+impl KarbeatPlugin for KarbeatParametricEQ {
     fn name(&self) -> &str {
         "Parametric EQ"
     }
@@ -415,7 +413,7 @@ impl KarbeatEffect for KarbeatParametricEQ {
         }
     }
 
-    fn process(&mut self, buffer: &mut [f32]) {
+    fn process(&mut self, buffer: &mut [f32], _context: &ProcessContext) {
         if self.channels == 0 {
             return;
         }
@@ -483,7 +481,7 @@ impl KarbeatEffect for KarbeatParametricEQ {
         }
     }
 
-    fn default_parameters(&self) -> indexmap::IndexMap<u32, f32> {
+    fn default_parameters(&self) -> HashMap<u32, f32> {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
             .map(|spec| (spec.id, spec.default_value))
@@ -606,6 +604,18 @@ impl KarbeatEffect for KarbeatParametricEQ {
             }
             _ => None,
         }
+    }
+    
+    fn get_state(&self) -> Vec<u8> { Vec::new() }
+    
+    fn set_state(&mut self, _state: &[u8]) {}
+    
+    fn latency_samples(&self) -> u32 { 0 }
+    
+    fn tail_samples(&self) -> u32 { 0 }
+    
+    fn category(&self) -> PluginCategory {
+        PluginCategory::Effect
     }
 }
 

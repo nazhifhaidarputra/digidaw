@@ -17,6 +17,7 @@ smallvec.workspace = true
 serde_json.workspace = true
 heck.workspace = true
 karbeat-plugin-types.workspace = true
+hashbrown.workspace = true
 
 [lints]
 workspace = true
