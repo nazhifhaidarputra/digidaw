@@ -134,7 +134,7 @@ class KarbeatState extends ChangeNotifier {
   double get zoomLevelTick => _zoomLevelTick;
 
   set zoomLevelTick(double value) {
-    _zoomLevelTick = value.clamp(0.1, 10);
+    _zoomLevelTick = value.clamp(0.01, 10);
   }
 
   Set<int> _selectedNoteIds = {};
