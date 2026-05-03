@@ -12,6 +12,18 @@ use crate::types::{PluginCategory, ProcessContext};
 // CONTEXTS & TYPES
 // ============================================================================
 
+/// ## Overview
+/// 
+/// Interface or Trait every plugin should respect.
+/// If you want your plugin to work as intended,
+/// You should implement all the interface
+/// available in this trait
+/// 
+/// ## Note
+/// 
+/// We don't specify a certain way to implement this interface
+/// All the logic used is up to you, and the performance
+/// of the computation is your responsibility
 pub trait KarbeatPlugin: Send + Sync {
     fn name(&self) -> &str;
 

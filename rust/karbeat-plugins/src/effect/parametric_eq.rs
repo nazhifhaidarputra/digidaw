@@ -317,10 +317,6 @@ impl KarbeatParametricEQ {
     }
 }
 
-// ============================================================================
-// DIRECT KARBEAT EFFECT TRAIT
-// ============================================================================
-
 impl KarbeatPlugin for KarbeatParametricEQ {
     fn name(&self) -> &str {
         "Parametric EQ"
