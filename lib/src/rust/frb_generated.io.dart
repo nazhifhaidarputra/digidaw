@@ -14,6 +14,7 @@ import 'api/session.dart';
 import 'api/simple.dart';
 import 'api/track.dart';
 import 'api/transport.dart';
+import 'api/waveform.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -28,8 +29,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.portManager,
   });
 
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_WaveformHandlePtr => wire
+      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandlePtr;
+
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  WaveformHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
+
+  @protected
+  WaveformHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
 
   @protected
   int dco_decode_CastedPrimitive_i_64(dynamic raw);
@@ -41,8 +58,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_CastedPrimitive_usize(dynamic raw);
 
   @protected
-  Map<int, AudioWaveformUiForClip>
-  dco_decode_Map_u_32_audio_waveform_ui_for_clip_None(dynamic raw);
+  Map<int, WaveformHandle>
+  dco_decode_Map_u_32_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle_None(
+    dynamic raw,
+  );
 
   @protected
   Map<int, AudioWaveformUiForSourceList>
@@ -71,6 +90,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
 
   @protected
+  WaveformHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw);
 
   @protected
@@ -93,15 +118,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw);
 
   @protected
-  AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw);
-
-  @protected
   AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
     dynamic raw,
   );
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  WaveformHandle
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
 
   @protected
   AudioWaveformUiForAudioProperties
@@ -183,12 +211,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  List<(int, AudioWaveformUiForClip)>
-  dco_decode_list_record_u_32_audio_waveform_ui_for_clip(dynamic raw);
-
-  @protected
   List<(int, AudioWaveformUiForSourceList)>
   dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+
+  @protected
+  List<(int, WaveformHandle)>
+  dco_decode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    dynamic raw,
+  );
 
   @protected
   List<(int, int)> dco_decode_list_record_u_32_casted_primitive_u_64(
@@ -284,6 +314,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  WaveformHandle?
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
+
+  @protected
   AudioWaveformUiForAudioProperties?
   dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     dynamic raw,
@@ -314,12 +350,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlaybackModeDto dco_decode_playback_mode_dto(dynamic raw);
 
   @protected
-  (int, AudioWaveformUiForClip)
-  dco_decode_record_u_32_audio_waveform_ui_for_clip(dynamic raw);
-
-  @protected
   (int, AudioWaveformUiForSourceList)
   dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+
+  @protected
+  (int, WaveformHandle)
+  dco_decode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    dynamic raw,
+  );
 
   @protected
   (int, int) dco_decode_record_u_32_casted_primitive_u_64(dynamic raw);
@@ -500,6 +538,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  WaveformHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  WaveformHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_CastedPrimitive_i_64(SseDeserializer deserializer);
 
   @protected
@@ -509,8 +559,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer);
 
   @protected
-  Map<int, AudioWaveformUiForClip>
-  sse_decode_Map_u_32_audio_waveform_ui_for_clip_None(
+  Map<int, WaveformHandle>
+  sse_decode_Map_u_32_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle_None(
     SseDeserializer deserializer,
   );
 
@@ -547,6 +597,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  WaveformHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<double> sse_decode_StreamSink_f_32_Sse(
     SseDeserializer deserializer,
   );
@@ -575,17 +631,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
   );
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  WaveformHandle
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   AudioWaveformUiForAudioProperties
@@ -687,14 +744,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
-  List<(int, AudioWaveformUiForClip)>
-  sse_decode_list_record_u_32_audio_waveform_ui_for_clip(
+  List<(int, AudioWaveformUiForSourceList)>
+  sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
   );
 
   @protected
-  List<(int, AudioWaveformUiForSourceList)>
-  sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+  List<(int, WaveformHandle)>
+  sse_decode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
     SseDeserializer deserializer,
   );
 
@@ -816,6 +873,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  WaveformHandle?
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AudioWaveformUiForAudioProperties?
   sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     SseDeserializer deserializer,
@@ -850,14 +913,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlaybackModeDto sse_decode_playback_mode_dto(SseDeserializer deserializer);
 
   @protected
-  (int, AudioWaveformUiForClip)
-  sse_decode_record_u_32_audio_waveform_ui_for_clip(
+  (int, AudioWaveformUiForSourceList)
+  sse_decode_record_u_32_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
   );
 
   @protected
-  (int, AudioWaveformUiForSourceList)
-  sse_decode_record_u_32_audio_waveform_ui_for_source_list(
+  (int, WaveformHandle)
+  sse_decode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
     SseDeserializer deserializer,
   );
 
@@ -1079,6 +1142,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_CastedPrimitive_i_64(int self, SseSerializer serializer);
 
   @protected
@@ -1088,8 +1165,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_Map_u_32_audio_waveform_ui_for_clip_None(
-    Map<int, AudioWaveformUiForClip> self,
+  void
+  sse_encode_Map_u_32_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle_None(
+    Map<int, WaveformHandle> self,
     SseSerializer serializer,
   );
 
@@ -1136,6 +1214,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_f_32_Sse(
     RustStreamSink<double> self,
     SseSerializer serializer,
@@ -1169,12 +1254,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_audio_waveform_ui_for_clip(
-    AudioWaveformUiForClip self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_audio_waveform_ui_for_source_list(
     AudioWaveformUiForSourceList self,
     SseSerializer serializer,
@@ -1182,6 +1261,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
@@ -1304,14 +1390,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_record_u_32_audio_waveform_ui_for_clip(
-    List<(int, AudioWaveformUiForClip)> self,
+  void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
+    List<(int, AudioWaveformUiForSourceList)> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
-    List<(int, AudioWaveformUiForSourceList)> self,
+  void
+  sse_encode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    List<(int, WaveformHandle)> self,
     SseSerializer serializer,
   );
 
@@ -1452,6 +1539,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     AudioWaveformUiForAudioProperties? self,
     SseSerializer serializer,
@@ -1494,14 +1588,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_record_u_32_audio_waveform_ui_for_clip(
-    (int, AudioWaveformUiForClip) self,
+  void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
+    (int, AudioWaveformUiForSourceList) self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
-    (int, AudioWaveformUiForSourceList) self,
+  void
+  sse_encode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    (int, WaveformHandle) self,
     SseSerializer serializer,
   );
 
@@ -1789,4 +1884,38 @@ class RustLibWire implements BaseWire {
   /// The symbols are looked up in [dynamicLibrary].
   RustLibWire(ffi.DynamicLibrary dynamicLibrary)
     : _lookup = dynamicLibrary.lookup;
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_karbeat_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle',
+      );
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandlePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_karbeat_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle',
+      );
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandlePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 }

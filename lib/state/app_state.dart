@@ -130,12 +130,12 @@ class KarbeatState extends ChangeNotifier {
 
   // =========== PIANO ROLL STATE ====================
   PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.grab;
-  double _zoomLevelTick = 1;
+  double _zoomLevelTick = 0.67;
 
   double get zoomLevelTick => _zoomLevelTick;
 
   set zoomLevelTick(double value) {
-    _zoomLevelTick = value.clamp(0.01, 10);
+    _zoomLevelTick = value.clamp(0.01, 5);
   }
 
   Set<int> _selectedNoteIds = {};
@@ -699,7 +699,7 @@ class KarbeatState extends ChangeNotifier {
       sampleRate: sampleRate.value,
       bitPerSample: bpsValue,
       tailHandling: tailHandlingDto,
-      channels: numberOfChannels
+      channels: numberOfChannels,
     );
   }
 

@@ -16,7 +16,6 @@ use karbeat_core::{
     },
     utils::get_waveform_buffer,
 };
-use karbeat_utils::audio_utils::quantize_to_i8;
 use serde::Serialize;
 
 use crate::frb_generated::StreamSink;
@@ -339,14 +338,6 @@ pub struct AudioWaveformUiForAudioProperties {
     pub muted: bool, // this only affects when play stream, not when doing preview sound
 }
 
-pub struct AudioWaveformUiForClip {
-    pub name: String,
-    pub preview_buffer: Vec<i8>,
-    pub sample_rate: u32,
-    pub channels: u16,
-    pub duration: f64,
-}
-
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
     fn from(value: &AudioWaveform) -> Self {
         Self {
@@ -382,46 +373,6 @@ impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
             normalized: value.normalized,
             muted: value.muted,
         }
-    }
-}
-
-impl From<&AudioWaveform> for AudioWaveformUiForClip {
-    fn from(value: &AudioWaveform) -> Self {
-        let preview_buffer: Vec<i8> = get_waveform_buffer(&value.buffer)
-            .map(|slice| {
-                slice
-                    .iter()
-                    .map(|&s| (s.clamp(-1.0, 1.0) * 127.0) as i8)
-                    .collect()
-            })
-            .unwrap_or_default();
-        Self {
-            preview_buffer,
-            name: value.name.clone(),
-            sample_rate: value.sample_rate,
-            channels: value.channels,
-            duration: value.duration,
-        }
-    }
-}
-
-#[frb(ignore)]
-impl AudioWaveformUiForClip {
-    pub fn try_from_audio_waveform_with_target_sample_bin(source_id: u32) -> Result<Self, String> {
-        audio_waveform_api::get_audio_waveform(source_id, |waveform| {
-            let preview_buffer = get_waveform_buffer(&waveform.buffer)
-                .map(|slice| quantize_to_i8(slice))
-                .unwrap_or_default();
-
-            Self {
-                preview_buffer,
-                name: waveform.name.clone(),
-                sample_rate: waveform.sample_rate,
-                channels: waveform.channels,
-                duration: waveform.duration,
-            }
-        })
-        .map_err(|e| e.to_string())
     }
 }
 // ============================================================

@@ -1,11 +1,8 @@
 // rust\src\api\track.rs
 
-use std::collections::HashMap;
-
-use crate::api::project::{AudioWaveformUiForClip, UiClip, UiTrack};
-use karbeat_core::api::{audio_waveform_api, clip_api, track_api};
+use crate::api::project::{UiClip, UiTrack};
+use karbeat_core::api::{clip_api, track_api};
 use karbeat_core::core::project::clip::ResizeEdge;
-use karbeat_core::core::project::AudioSourceId;
 use karbeat_core::shared::id::*;
 
 pub enum UiSourceType {
@@ -43,43 +40,6 @@ impl From<UiResizeEdge> for ResizeEdge {
             UiResizeEdge::Right => ResizeEdge::Right,
         }
     }
-}
-
-pub fn get_audio_waveform_clips_data() -> Result<HashMap<u32, AudioWaveformUiForClip>, String> {
-    audio_waveform_api::get_audio_waveform_clips_data(|id, waveform| {
-        (id.to_u32(), AudioWaveformUiForClip::from(waveform))
-    })
-    .map_err(|e| e.to_string())
-}
-
-pub fn get_audio_waveform_for_clip(audio_source_id: u32) -> Result<AudioWaveformUiForClip, String> {
-    let audio_waveform =
-        audio_waveform_api::get_audio_waveform_for_clip(&AudioSourceId::from(audio_source_id))
-            .map_err(|e| e.to_string())?;
-    let audio_waveform_dto = AudioWaveformUiForClip::from(audio_waveform.as_ref());
-    Ok(audio_waveform_dto)
-}
-
-/// Getter for all audio waveform data for audio only for this specific track
-pub fn get_audio_waveform_for_clip_only_in_specific_track(
-    track_id: u32,
-) -> Result<HashMap<u32, AudioWaveformUiForClip>, String> {
-    let return_map = audio_waveform_api::get_audio_waveform_for_clip_only_in_specific_track(
-        &TrackId::from(track_id),
-        |id, waveform| (id.to_u32(), AudioWaveformUiForClip::from(waveform)),
-    )
-    .ok_or("Can't find any clip")?;
-
-    Ok(return_map)
-}
-
-/// Getter for all audio waveform data for audio in all audio tracks
-pub fn get_audio_waveform_for_clip_all_available_in_tracks(
-) -> Result<HashMap<u32, AudioWaveformUiForClip>, String> {
-    audio_waveform_api::get_audio_waveform_for_clip_all_available_in_tracks(|id, waveform| {
-        (id, AudioWaveformUiForClip::from(waveform))
-    })
-    .map_err(|e| e.to_string())
 }
 
 pub fn create_clip(

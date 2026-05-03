@@ -7,6 +7,7 @@ use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
 use num_complex::{Complex, Complex32};
+use parking_lot::Mutex;
 use rustfft::{num_traits::Zero, Fft, FftPlanner};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -236,6 +237,12 @@ pub struct KarbeatParametricEQ {
     analyzer_idx: usize,
     spectrum_history: Vec<f32>,
     fft_instance: Option<Arc<dyn Fft<f32>>>,
+
+    //////////////////////////////////////////
+    // Shared Memory buffer
+    //////////////////////////////////////////
+    pub magnitude_buffer: Arc<Mutex<Vec<f32>>>,
+    pub spectrum_buffer: Arc<Mutex<Vec<f32>>>,
 }
 
 impl Default for KarbeatParametricEQ {
@@ -261,7 +268,8 @@ impl KarbeatParametricEQ {
         engine.analyzer_buffer = smallvec![0.0; FFT_SIZE];
         engine.analyzer_idx = 0;
         engine.spectrum_history = Vec::new();
-
+        engine.magnitude_buffer = Arc::new(Mutex::new(Vec::new()));
+        engine.spectrum_buffer = Arc::new(Mutex::new(Vec::new()));
         engine
     }
 
@@ -274,6 +282,15 @@ impl KarbeatParametricEQ {
 
     fn handle_side_effects(&mut self, _id: u32) {
         self.update_all_nodes();
+
+        // Compute magnitude ONCE when parameters change, and save it to the shared buffer
+        let response = self.compute_magnitude_response(500);
+        let flat_array: Vec<f32> = response
+            .into_iter()
+            .flat_map(|(freq, db)| [freq, db])
+            .collect();
+            
+        *self.magnitude_buffer.lock() = flat_array;
     }
 
     pub fn compute_magnitude_response(&self, num_points: usize) -> Vec<(f32, f32)> {
@@ -521,7 +538,10 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                     flat_array.push(smoothed_db);
                 }
 
+                // *self.spectrum_buffer.lock() = flat_array.clone();
+
                 Some(json!(flat_array))
+                // None
             }
             _ => None,
         }
@@ -538,6 +558,14 @@ impl KarbeatPlugin for KarbeatParametricEQ {
 
         // (0.05 seconds * sample_rate)
         (self.last_sample_rate * 0.05) as u32
+    }
+
+    fn get_float_buffer(&self, name: &str) -> Option<Arc<Mutex<Vec<f32>>>> {
+        match name {
+            "magnitude" => Some(Arc::clone(&self.magnitude_buffer)),
+            "spectrum" => Some(Arc::clone(&self.spectrum_buffer)),
+            _ => None,
+        }
     }
 
     fn category(&self) -> PluginCategory {

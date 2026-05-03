@@ -15,6 +15,7 @@ import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
+import 'package:karbeat/src/rust/api/waveform.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/state/clip_placement_state.dart';
 import 'package:karbeat/utils/clip_time_utils.dart';
@@ -198,7 +199,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  // FIXME: Make the pivot stay still even in small zoom so that 
+  // FIXME: Make the pivot stay still even in small zoom so that
   // it does not shift the pivot position relative to tick position in the timeline
   void _updateZoom(double newZoom, double focalPointX) {
     final state = ref.read(karbeatStateProvider);
@@ -1948,7 +1949,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
 
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
-    final waveformMapAsync = ref.watch(
+    final waveformMap = ref.watch(
       trackWaveformProvider((trackId: widget.trackId)),
     );
 
@@ -2006,46 +2007,25 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
               ),
             ),
           ),
-          ...waveformMapAsync.when(
-            loading: () => [
-              const Positioned.fill(
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ],
+          ...track.clips.map((clip) {
+            final isSelected =
+                isSelectedTrack && selectedClipIds.contains(clip.id);
 
-            error: (err, _) => [
-              Positioned.fill(
-                child: Center(
-                  child: Text(
-                    "Error loading waveforms",
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ),
-            ],
-
-            data: (waveformMap) {
-              return track.clips.map((clip) {
-                final isSelected =
-                    isSelectedTrack && selectedClipIds.contains(clip.id);
-
-                return _InteractiveClip(
-                  key: ValueKey(clip.id),
-                  clip: clip,
-                  trackId: widget.trackId,
-                  trackType: track.trackType,
-                  zoomLevel: zoomLevel,
-                  height: widget.height,
-                  selectedTool: selectedTool,
-                  isSelected: isSelected,
-                  selectedClipIds: selectedClipIds,
-                  clipDragController: widget.clipDragController,
-                  horizontalScrollController: widget.horizontalScrollController,
-                  waveformMap: waveformMap,
-                );
-              }).toList();
-            },
-          ),
+            return _InteractiveClip(
+              key: ValueKey(clip.id),
+              clip: clip,
+              trackId: widget.trackId,
+              trackType: track.trackType,
+              zoomLevel: zoomLevel,
+              height: widget.height,
+              selectedTool: selectedTool,
+              isSelected: isSelected,
+              selectedClipIds: selectedClipIds,
+              clipDragController: widget.clipDragController,
+              horizontalScrollController: widget.horizontalScrollController,
+              waveformMap: waveformMap,
+            );
+          }).toList(),
         ],
       ),
     );
@@ -2067,7 +2047,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final List<int> selectedClipIds;
   final ClipDragController clipDragController;
   final ScrollController horizontalScrollController;
-  final Map<int, AudioWaveformUiForClip> waveformMap;
+  final Map<int, WaveformHandle> waveformMap;
 
   const _InteractiveClip({
     super.key,
@@ -2552,7 +2532,7 @@ class _ClipRenderer extends ConsumerWidget {
   final bool isSelected;
   final ScrollController scrollController;
   final double clipLeftOffset;
-  final Map<int, AudioWaveformUiForClip> waveformMap;
+  final Map<int, WaveformHandle> waveformMap;
 
   const _ClipRenderer({
     required this.clip,
@@ -2615,8 +2595,8 @@ class _ClipRenderer extends ConsumerWidget {
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
-        final audioData = waveformMap[sourceId];
-        if (audioData == null) {
+        final handle = waveformMap[sourceId];
+        if (handle == null) {
           return const Center(
             child: Text("Loading...", style: TextStyle(fontSize: 8)),
           );
@@ -2626,14 +2606,16 @@ class _ClipRenderer extends ConsumerWidget {
             overrideOffset ??
             clip.offsetStartInTicks(state.tempo, projectSampleRate).toDouble();
 
+        // getSampleRate() is a sync opaque call — zero FFI overhead
         final samplesPerTick =
-            (60.0 / state.tempo) * (audioData.sampleRate / 960.0);
+            (60.0 / state.tempo) * (handle.getSampleRate() / 960.0);
 
         return RepaintBoundary(
           child: CustomPaint(
-            size: Size.infinite, // Fill the clip container
+            size: Size.infinite,
             painter: StereoWaveformClipPainter(
-              samples: audioData.previewBuffer,
+              // Zero-copy: Float32List view directly into Rust-owned Mmap memory
+              samples: createZeroCopyWaveformView(handle),
               color: Colors.white.withAlpha(200),
               zoomLevel: zoomLevel,
               offsetTicks: effectiveOffsetTicks,
@@ -2782,19 +2764,12 @@ class _GridPainter extends CustomPainter {
 }
 
 final trackWaveformProvider =
-    FutureProvider.family<Map<int, AudioWaveformUiForClip>, ({int trackId})>((
-      ref,
-      arg, // Access fields via the record variable
-    ) async {
-      final trackId = arg.trackId;
+    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+      // Re-evaluate whenever the track changes (e.g. clips added/removed)
+      ref.watch(karbeatStateProvider.select((s) => s.tracks[arg.trackId]));
 
-      ref.watch(karbeatStateProvider.select((s) => s.tracks[trackId]));
-
-      final result = await getAudioWaveformForClipOnlyInSpecificTrack(
-        trackId: trackId,
-      );
-
-      return result;
+      // Sync call — no copy, no await; returns Arc handles into Rust memory
+      return getWaveformHandlesForTrack(trackId: arg.trackId);
     });
 
 int computeTargetBin(double zoomLevel) {

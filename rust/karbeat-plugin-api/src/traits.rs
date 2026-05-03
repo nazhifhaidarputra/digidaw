@@ -1,6 +1,7 @@
-use std::{any::Any, fmt::Debug};
+use std::{any::Any, fmt::Debug, sync::Arc};
 
 use hashbrown::HashMap;
+use parking_lot::Mutex;
 
 use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
@@ -51,7 +52,7 @@ pub trait KarbeatPlugin: Send + Sync {
             Vec::new()
         })
     }
-    
+
     /// Set state of plugin when saving plugin state
     fn set_state(&mut self, state: &[u8]) {
         if state.is_empty() {
@@ -83,6 +84,11 @@ pub trait KarbeatPlugin: Send + Sync {
     /// Execute a custom command
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
         None
+    }
+
+    /// Allows the plugin to expose a shared memory buffer by name
+    fn get_float_buffer(&self, _name: &str) -> Option<Arc<Mutex<Vec<f32>>>> {
+        None // Default implementation does nothing
     }
 
     /// An helper to enable downcasting
