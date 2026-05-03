@@ -3,9 +3,7 @@ use indexmap::IndexMap;
 use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
-        mixer::RoutingConnection,
-        plugin::KarbeatPlugin,
-        track::audio_waveform::AudioWaveform,
+        mixer::RoutingConnection, plugin::KarbeatPlugin, track::audio_waveform::AudioWaveform,
         GeneratorId,
     },
     shared::{
@@ -187,6 +185,21 @@ pub enum AudioCommand {
         payload: serde_json::Value,
         request_id: u32,
     },
+
+    //////////////////////////////////////////
+    // Load and Save related commands
+    /////////////////////////////////////////
+    /// Tell a specific plugin to overwrite its internal state
+    SetPluginState {
+        target: PluginTarget,
+        state: Vec<u8>,
+    },
+
+    /// Ask the engine to provide the latest state of a specific plugin
+    QueryPluginState {
+        target: PluginTarget,
+        request_id: u32, // To track the response in the UI
+    },
 }
 
 // ============================================================================
@@ -236,21 +249,28 @@ pub struct EffectParameterSnapshot {
 /// Messages from audio thread to UI thread
 #[derive(Clone, Debug)]
 pub enum AudioFeedback {
-    // --- Generator Feedback ---
+    // Generator Feedback
     /// Single parameter changed (e.g., automation moved it)
     GeneratorParameterChanged(GeneratorParameterUpdate),
     /// Full parameter snapshot in response to query
     GeneratorParameterSnapshot(GeneratorParameterSnapshot),
 
-    // --- Effect Feedback ---
+    // Effect Feedback
     /// Single parameter changed on an effect (e.g., automation moved it)
     EffectParameterChanged(EffectParameterUpdate),
     /// Full parameter snapshot for an effect in response to query
     EffectParameterSnapshot(EffectParameterSnapshot),
 
-    // --- Command Response Feedback
+    // Command Response Feedback
     PluginCommandResponse {
         request_id: u32,
         response: serde_json::Value,
+    },
+
+    /// The engine returning the requested state blob
+    PluginStateSnapshot {
+        target: PluginTarget,
+        state: Vec<u8>,
+        request_id: u32,
     },
 }

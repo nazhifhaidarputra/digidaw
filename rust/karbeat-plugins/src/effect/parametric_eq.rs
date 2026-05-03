@@ -549,7 +549,6 @@ impl KarbeatPlugin for KarbeatParametricEQ {
 
                 for i in 0..(FFT_SIZE / 2) {
                     let mag = fft_input[i].norm() / norm_factor;
-                    // FIX: Clamp the noise floor to -100dB explicitly
                     let db = 20.0 * mag.log10();
                     raw_magnitudes[i] = db.clamp(-100.0, 24.0);
                 }
@@ -605,15 +604,20 @@ impl KarbeatPlugin for KarbeatParametricEQ {
             _ => None,
         }
     }
-    
-    fn get_state(&self) -> Vec<u8> { Vec::new() }
-    
-    fn set_state(&mut self, _state: &[u8]) {}
-    
-    fn latency_samples(&self) -> u32 { 0 }
-    
-    fn tail_samples(&self) -> u32 { 0 }
-    
+
+    fn latency_samples(&self) -> u32 {
+        0
+    }
+
+    fn tail_samples(&self) -> u32 {
+        // IIR filters technically ring forever, but practically hit the noise floor 
+        // in less than a millisecond. We return 0, or a tiny arbitrary safety 
+        // buffer (e.g., 50 milliseconds) to let high-Q bands fully settle.
+        
+        // (0.05 seconds * sample_rate)
+        (self.last_sample_rate * 0.05) as u32
+    }
+
     fn category(&self) -> PluginCategory {
         PluginCategory::Effect
     }

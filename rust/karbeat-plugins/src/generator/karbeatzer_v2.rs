@@ -348,20 +348,31 @@ impl KarbeatPlugin for KarbeatzerV2 {
     {
         Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
-    
+
     fn category(&self) -> PluginCategory {
         PluginCategory::Instrument
     }
-    
-    fn get_state(&self) -> Vec<u8> { Vec::new() }
-    
-    fn set_state(&mut self, _state: &[u8]) {}
-    
-    fn latency_samples(&self) -> u32 { 0 }
-    
-    fn tail_samples(&self) -> u32 { 0 }
-    
-    fn execute_custom_command(&mut self, _command: &str, _payload: &serde_json::Value) -> Option<serde_json::Value> { None }
+
+    fn latency_samples(&self) -> u32 {
+        0
+    }
+
+    fn tail_samples(&self) -> u32 {
+        let release_ms = self.amp_envelope.release_ms.get();
+        let tail_in_samples = (release_ms / 1000.0) * self.sample_rate;
+
+        // Add a tiny safety buffer (e.g., 64 samples) to guarantee the
+        // envelope has definitively hit absolute 0.0 before the engine culls it.
+        (tail_in_samples as u32) + 64
+    }
+
+    fn execute_custom_command(
+        &mut self,
+        _command: &str,
+        _payload: &serde_json::Value,
+    ) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 // ============================================================================

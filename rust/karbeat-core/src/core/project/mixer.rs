@@ -141,6 +141,8 @@ pub enum MixerChannelParams {
 pub struct EffectInstance {
     pub id: EffectId,
     pub instance: Arc<PluginInstance>,
+    #[serde(default)]
+    pub plugin_state: Vec<u8>,
 }
 
 impl EffectInstance {
@@ -148,6 +150,7 @@ impl EffectInstance {
         Self {
             id,
             instance: Arc::new(instance),
+            plugin_state: Vec::new(),
         }
     }
 }

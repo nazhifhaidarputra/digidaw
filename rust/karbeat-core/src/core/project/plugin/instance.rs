@@ -25,6 +25,9 @@ pub struct PluginInstance {
     pub bypass: bool,
     /// Plugin parameters for persistence (Param ID -> Value)
     pub parameters: HashMap<u32, f32>,
+
+    #[serde(default)]
+    pub plugin_state: Vec<u8>,
 }
 
 impl PluginInstance {
@@ -35,6 +38,7 @@ impl PluginInstance {
             name: name.to_string(),
             bypass: false,
             parameters: HashMap::new(),
+            plugin_state: Vec::new(),
         }
     }
 
@@ -45,6 +49,7 @@ impl PluginInstance {
             name: name.to_string(),
             bypass: false,
             parameters: HashMap::new(),
+            plugin_state: Vec::new(),
         }
     }
 
@@ -55,6 +60,7 @@ impl PluginInstance {
             name: name.to_string(),
             bypass: false,
             parameters,
+            plugin_state: Vec::new(),
         }
     }
 }

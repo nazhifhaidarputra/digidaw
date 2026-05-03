@@ -91,7 +91,7 @@ impl MyRetro {
         sample_rate: f32,
         channels: usize,
         voice: &mut SynthVoice,
-        buffer: &mut [f32]
+        buffer: &mut [f32],
     ) {
         buffer.fill(0.0);
 
@@ -120,7 +120,13 @@ impl MyRetro {
 
                 // Extract 1 sample frame
                 let mut osc_output = [0.0; 2];
-                osc.output_wave(&mut osc_output, sample_rate as u32, 2, base_freq, &mut phase);
+                osc.output_wave(
+                    &mut osc_output,
+                    sample_rate as u32,
+                    2,
+                    base_freq,
+                    &mut phase,
+                );
 
                 voice.phase[i] = phase;
 
@@ -211,7 +217,7 @@ impl KarbeatPlugin for MyRetro {
                         *sample_rate,
                         *channels,
                         voice,
-                        scratch_slice
+                        scratch_slice,
                     );
 
                     // Mix the voice scratch buffer into the main output
@@ -227,9 +233,7 @@ impl KarbeatPlugin for MyRetro {
             }
 
             // Handle MIDI events at this exact frame
-            while
-                event_idx < midi_events.len() &&
-                midi_events[event_idx].sample_offset == end_frame
+            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
             {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
@@ -238,7 +242,7 @@ impl KarbeatPlugin for MyRetro {
                                 key,
                                 velocity,
                                 self.sample_rate,
-                                self.oscillators.len()
+                                self.oscillators.len(),
                             );
                             for (i, osc) in self.oscillators.iter().enumerate() {
                                 voice.phase[i] = osc.phase_offset.get() as f64;
@@ -275,7 +279,8 @@ impl KarbeatPlugin for MyRetro {
     }
 
     fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
+        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
+            .unwrap_or(0.0)
     }
 
     fn apply_automation(&mut self, id: u32, value: f32) {
@@ -297,7 +302,10 @@ impl KarbeatPlugin for MyRetro {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
-    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized {
+    fn static_parameter_specs() -> Vec<ParameterSpec>
+    where
+        Self: Sized,
+    {
         Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
@@ -308,16 +316,27 @@ impl KarbeatPlugin for MyRetro {
     fn category(&self) -> PluginCategory {
         PluginCategory::Instrument
     }
-    
-    fn get_state(&self) -> Vec<u8> { Vec::new() }
-    
-    fn set_state(&mut self, _state: &[u8]) {}
-    
-    fn latency_samples(&self) -> u32 { 0 }
-    
-    fn tail_samples(&self) -> u32 { 0 }
-    
-    fn execute_custom_command(&mut self, _command: &str, _payload: &serde_json::Value) -> Option<serde_json::Value> { None }
+
+    fn latency_samples(&self) -> u32 {
+        0
+    }
+
+    fn tail_samples(&self) -> u32 {
+        let release_ms = self.amp_envelope.release_ms.get();
+        let tail_in_samples = (release_ms / 1000.0) * self.sample_rate;
+
+        // Add a tiny safety buffer (e.g., 64 samples) to guarantee the
+        // envelope has definitively hit absolute 0.0 before the engine culls it.
+        (tail_in_samples as u32) + 64
+    }
+
+    fn execute_custom_command(
+        &mut self,
+        _command: &str,
+        _payload: &serde_json::Value,
+    ) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 // ============================================================================
