@@ -94,6 +94,44 @@ impl Default for PatternPlaybackState {
     }
 }
 
+/// Simple delay ring buffer for Plugin Delay Compensation (PDC)
+#[derive(Clone, Default)]
+pub struct DelayLine {
+    buffer: Vec<f32>,
+    write_pos: usize,
+    delay_samples: usize,
+}
+
+impl DelayLine {
+    pub fn set_delay(&mut self, delay_samples: usize, channels: usize) {
+        let required_len = delay_samples * channels;
+        if self.delay_samples != delay_samples || self.buffer.len() != required_len {
+            self.delay_samples = delay_samples;
+            self.buffer.resize(required_len, 0.0);
+            self.buffer.fill(0.0);
+            self.write_pos = 0;
+        }
+    }
+
+    #[inline(always)]
+    pub fn process_block(&mut self, buffer: &mut [f32], channels: usize) {
+        if self.delay_samples == 0 {
+            return;
+        }
+
+        let buf_len = self.buffer.len();
+        for i in (0..buffer.len()).step_by(channels) {
+            for c in 0..channels {
+                let delay_idx = self.write_pos + c;
+                let out = self.buffer[delay_idx];
+                self.buffer[delay_idx] = buffer[i + c];
+                buffer[i + c] = out;
+            }
+            self.write_pos = (self.write_pos + channels) % buf_len;
+        }
+    }
+}
+
 pub struct AudioEngine {
     // Comms
     state_consumer: Output<AudioRenderState>,
@@ -156,6 +194,13 @@ pub struct AudioEngine {
     master_tail: u32,
     /// Cleared every frame; tracks which nodes received audio this block
     node_has_signal: HashMap<RoutingNode, bool>,
+
+    // ======================================
+    // Plugin Delay Compensation (PDC)
+    // ======================================
+    compensation_delays: HashMap<RoutingNode, u32>,
+    track_delay_lines: HashMap<TrackId, DelayLine>,
+    bus_delay_lines: HashMap<BusId, DelayLine>,
 }
 
 /// Lightweight voice reference - the actual plugin lives in AudioPluginState
@@ -286,6 +331,9 @@ impl AudioEngine {
             bus_tails: HashMap::new(),
             master_tail: 0,
             node_has_signal: HashMap::new(),
+            compensation_delays: HashMap::new(),
+            track_delay_lines: HashMap::new(),
+            bus_delay_lines: HashMap::new(),
         }
     }
 
@@ -294,6 +342,7 @@ impl AudioEngine {
     }
 
     pub fn process(&mut self, output_buffer: &mut [f32]) {
+        let mut pdc_dirty = false;
         // Sync graph state (transport no longer comes via triple buffer)
         if self.state_consumer.update() {
             let new_state = self.state_consumer.read().clone();
@@ -302,11 +351,19 @@ impl AudioEngine {
             self.cached_routing_order = new_state.graph.mixer_state.get_routing_order();
 
             self.current_state = new_state;
+            pdc_dirty = true;
         }
 
         // Process Commands (Play, Stop, Seek)
         while let Ok(cmd) = self.command_consumer.pop() {
-            self.process_command(cmd);
+            if self.process_command(cmd) { // Make process_command return bool
+                pdc_dirty = true;
+            }
+        }
+
+        // Fire recalculation if topology changed
+        if pdc_dirty {
+            self.recalculate_latencies();
         }
 
         // Clear Buffer
@@ -511,7 +568,6 @@ impl AudioEngine {
         let gen_voice = &mut self.active_generators[voice_idx];
         gen_voice.active = true;
 
-
         Self::schedule_pattern_notes_raw(
             &mut gen_voice.midi_events,
             &pattern.notes,
@@ -579,7 +635,9 @@ impl AudioEngine {
         }
     }
 
-    fn process_command(&mut self, cmd: AudioCommand) {
+    /// Process incoming commands from command queue buffer
+    fn process_command(&mut self, cmd: AudioCommand) -> bool{
+        let mut pdc_dirty = false;
         match cmd {
             AudioCommand::PlayOneShot(waveform) => {
                 self.preview_voices.clear();
@@ -619,7 +677,7 @@ impl AudioEngine {
                 self.song_state.playhead_samples = samples;
                 self.recalculate_beat_bar();
                 self.song_state.last_emitted_samples = self.song_state.playhead_samples;
-                self.emit_current_playback_position(); 
+                self.emit_current_playback_position();
             }
             AudioCommand::PlayPreviewNote {
                 note_key,
@@ -687,6 +745,7 @@ impl AudioEngine {
                         plugin,
                     },
                 );
+                pdc_dirty = true;
                 log::info!(
                     "[AudioEngine] Added generator {:?} for track {:?}",
                     generator_id,
@@ -698,6 +757,7 @@ impl AudioEngine {
                 self.plugin_state.remove_generator(id_index);
                 // Also remove any active voice referencing it
                 self.active_generators.retain(|v| v.id != generator_id);
+                pdc_dirty = true;
                 log::info!("[AudioEngine] Removed generator {:?}", generator_id);
             }
             AudioCommand::SetGeneratorParameter {
@@ -938,6 +998,8 @@ impl AudioEngine {
                     "[AudioEngine] Received routing update with {} connections",
                     routing.len()
                 );
+
+                pdc_dirty = true;
             }
             AudioCommand::QueryTrackEffectParameters {
                 track_id,
@@ -1329,6 +1391,8 @@ impl AudioEngine {
                 }
             }
         }
+
+        pdc_dirty
     }
 
     /// Recalculates current Beat and Bar based on playhead_samples
@@ -1449,9 +1513,8 @@ impl AudioEngine {
     }
 
     fn cleanup_finished_voices(&mut self, frame_count: usize) {
-       // Generators stay alive (persistent), just clear their MIDI events for the next frame
+        // Generators stay alive (persistent), just clear their MIDI events for the next frame
         for gen_voice in self.active_generators.iter_mut() {
-            
             // DYNAMICALLY UPDATE PLAYING KEYS based on what just happened in this audio block
             for event in &gen_voice.midi_events {
                 match event.data {
@@ -1775,6 +1838,10 @@ impl AudioEngine {
                 &track_effect_ctx,
             );
 
+            if let Some(delay_line) = self.track_delay_lines.get_mut(&track_id) {
+                delay_line.process_block(&mut self.mix_buffer, channels);
+            }
+
             // Route the track signal to destinations based on routing matrix
             let track_routes: Vec<_> = routing
                 .iter()
@@ -1942,6 +2009,11 @@ impl AudioEngine {
                     for effect in effects.iter_mut() {
                         effect.plugin.process(&mut self.mix_buffer, &bus_effect_ctx);
                     }
+                }
+
+                // Apply PDC on Bus
+                if let Some(delay_line) = self.bus_delay_lines.get_mut(bus_id) {
+                    delay_line.process_block(&mut self.mix_buffer, channels);
                 }
 
                 // Apply volume and pan (volume is stored in dB)
@@ -2775,7 +2847,6 @@ impl AudioEngine {
             // Clamp note-off to clip boundary if it would extend past the clip end
             let effective_end = abs_end.min(clip_end);
 
-
             // Schedule NoteOn if it falls within the buffer
             if abs_start >= buffer_start && abs_start < buffer_end {
                 events.push(MidiEvent {
@@ -2812,7 +2883,6 @@ impl AudioEngine {
         for note in notes {
             let note_start = ((note.start_tick as f32) * samples_per_tick) as u32;
             let note_end = note_start + (((note.duration as f32) * samples_per_tick) as u32);
-
 
             if note_start >= buffer_start && note_start < buffer_end {
                 events.push(MidiEvent {
@@ -3021,6 +3091,103 @@ impl AudioEngine {
                 out_iter.next();
             }
         }
+    }
+
+    fn recalculate_latencies(&mut self) {
+        let mut internal_latency: HashMap<RoutingNode, u32> = HashMap::new();
+
+        // Calculate internal latencies for tracks
+        for track in self.current_state.graph.tracks.as_ref() {
+            let mut lat = 0;
+            if let Some(gen) = &track.generator {
+                if let Some(instance) = self.plugin_state.get_generator(gen.id.to_u32() as usize) {
+                    lat += instance.plugin.latency_samples();
+                }
+            }
+            if let Some(effects) = self
+                .plugin_state
+                .get_track_effects(track.id.to_u32() as usize)
+            {
+                for e in effects {
+                    lat += e.plugin.latency_samples();
+                }
+            }
+            internal_latency.insert(RoutingNode::Track(track.id), lat);
+        }
+
+        // Calculate internal latencies for bus channels
+        for bus_id in self.current_state.graph.mixer_state.buses.keys() {
+            let mut lat = 0;
+            if let Some(effects) = self.plugin_state.get_bus_effects(bus_id.to_u32() as usize) {
+                for e in effects {
+                    lat += e.plugin.latency_samples();
+                }
+            }
+            internal_latency.insert(RoutingNode::Bus(*bus_id), lat);
+        }
+
+        // Calculate latencies for Master
+        let mut master_lat = 0;
+        for e in &self.plugin_state.master_effects {
+            master_lat += e.plugin.latency_samples();
+        }
+        internal_latency.insert(RoutingNode::Master, master_lat);
+
+        // Calculate Path Latencies (from Node to Output)
+        let mut path_latency: HashMap<RoutingNode, u32> = HashMap::new();
+        path_latency.insert(RoutingNode::Master, master_lat);
+
+        // Process buses in REVERSE routing order (from master backwards)
+        for node in self.cached_routing_order.iter().rev() {
+            if let RoutingNode::Bus(_) = node {
+                let my_internal = internal_latency.get(node).copied().unwrap_or(0);
+                let mut max_dest_path = 0;
+                for route in &self.current_state.graph.mixer_state.routing {
+                    if route.source == *node {
+                        max_dest_path = max_dest_path
+                            .max(path_latency.get(&route.destination).copied().unwrap_or(0));
+                    }
+                }
+                path_latency.insert(*node, my_internal + max_dest_path);
+            }
+        }
+
+        // Process tracks
+        for track in self.current_state.graph.tracks.as_ref() {
+            let node = RoutingNode::Track(track.id);
+            let my_internal = internal_latency.get(&node).copied().unwrap_or(0);
+            let mut max_dest_path = 0;
+            for route in &self.current_state.graph.mixer_state.routing {
+                if route.source == node {
+                    max_dest_path = max_dest_path
+                        .max(path_latency.get(&route.destination).copied().unwrap_or(0));
+                }
+            }
+            path_latency.insert(node, my_internal + max_dest_path);
+        }
+
+        // Find max system latency and allocate Delay Lines
+        let max_system_latency = path_latency.values().copied().max().unwrap_or(0);
+        let channels = self.num_channels as usize;
+
+        for (node, path_lat) in &path_latency {
+            let comp = max_system_latency - path_lat;
+            self.compensation_delays.insert(*node, comp);
+            
+            match node {
+                RoutingNode::Track(id) => {
+                    let dl = self.track_delay_lines.entry(*id).or_insert_with(DelayLine::default);
+                    dl.set_delay(comp as usize, channels);
+                }
+                RoutingNode::Bus(id) => {
+                    let dl = self.bus_delay_lines.entry(*id).or_insert_with(DelayLine::default);
+                    dl.set_delay(comp as usize, channels);
+                }
+                RoutingNode::Master => {} // Master has no compensation delay
+            }
+        }
+        
+        log::info!("[PDC] Recalculated Latencies. Max System Latency: {} samples", max_system_latency);
     }
 }
 
