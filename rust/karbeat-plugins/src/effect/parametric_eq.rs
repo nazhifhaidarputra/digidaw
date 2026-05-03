@@ -1,47 +1,21 @@
 use hashbrown::HashMap;
+use karbeat_dsp::filter::{
+    BiquadCoefficients,
+    BiquadFilterType,
+    FilterMode,
+    SingleBiquadFilterStage,
+};
 use karbeat_dsp::windowing::Windowing;
-use karbeat_macros::{karbeat_plugin, EnumParam};
+use karbeat_macros::{ karbeat_plugin, EnumParam };
 use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
-use num_complex::{Complex, Complex32};
-use rustfft::{
-    num_traits::{Float, Zero},
-    Fft, FftPlanner,
-};
-use serde_json::{json, Value};
-use smallvec::{smallvec, SmallVec};
-use std::{any::Any, sync::Arc};
+use num_complex::{ Complex, Complex32 };
+use rustfft::{ num_traits::Zero, Fft, FftPlanner };
+use serde_json::{ json, Value };
+use smallvec::{ smallvec, SmallVec };
+use std::{ any::Any, sync::Arc };
 
-/// Maximum number of cascaded biquad stages per band (order 0..3 = 1..4 stages)
-const MAX_ORDER: usize = 8;
 const FFT_SIZE: usize = 4096;
-
-#[derive(Clone, Copy, Debug, PartialEq, Default, EnumParam)]
-pub enum FilterType {
-    #[default]
-    Peaking = 0,
-    LowShelf = 1,
-    HighShelf = 2,
-    LowPass = 3,
-    HighPass = 4,
-    BandPass = 5,
-    Notch = 6,
-}
-
-impl From<f32> for FilterType {
-    fn from(v: f32) -> Self {
-        match v.round() as i32 {
-            0 => FilterType::Peaking,
-            1 => FilterType::LowShelf,
-            2 => FilterType::HighShelf,
-            3 => FilterType::LowPass,
-            4 => FilterType::HighPass,
-            5 => FilterType::BandPass,
-            6 => FilterType::Notch,
-            _ => FilterType::Peaking,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Default, EnumParam)]
 pub enum FilterSlope {
@@ -82,7 +56,15 @@ pub struct KarbeatParametricEQFilterNode {
     )]
     pub freq: f32,
 
-    #[param(id = "gain", name = "Gain", group = "Band", min = -24.0, max = 24.0, default = 0.0, step = 0.1)]
+    #[param(
+        id = "gain",
+        name = "Gain",
+        group = "Band",
+        min = -24.0,
+        max = 24.0,
+        default = 0.0,
+        step = 0.1
+    )]
     pub gain: f32,
 
     #[param(
@@ -100,23 +82,18 @@ pub struct KarbeatParametricEQFilterNode {
     pub active: bool,
 
     #[param(id = "type", name = "Type", group = "Band", default = 0.0)]
-    pub filter_type: FilterType,
+    pub filter_type: BiquadFilterType,
 
     #[param(id = "slope", name = "Slope", group = "Band", default = 0.0)]
     pub order: FilterSlope,
 
-    // Internal Runtime Coefficients
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
+    last_computed_hash: u64,
 
-    // Cascaded biquad state
-    x1: Vec<[f32; MAX_ORDER]>,
-    x2: Vec<[f32; MAX_ORDER]>,
-    y1: Vec<[f32; MAX_ORDER]>,
-    y2: Vec<[f32; MAX_ORDER]>,
+    // Internal: cached biquad coefficients computed from current params
+    coeff: BiquadCoefficients,
+
+    // Internal: per-channel cascaded biquad state
+    channels: Vec<SingleBiquadFilterStage>,
 }
 
 impl KarbeatParametricEQFilterNode {
@@ -134,178 +111,95 @@ impl KarbeatParametricEQFilterNode {
         node.order.group = group_name;
 
         if band_idx == 0 {
-            node.filter_type
-                .set_base(FilterType::LowShelf as i32 as f32);
+            node.filter_type.set_base(BiquadFilterType::LowShelf as i32 as f32);
         } else if band_idx == 7 {
-            node.filter_type
-                .set_base(FilterType::HighShelf as i32 as f32);
+            node.filter_type.set_base(BiquadFilterType::HighShelf as i32 as f32);
         }
 
-        node.x1 = vec![[0.0; MAX_ORDER]; 2];
-        node.x2 = vec![[0.0; MAX_ORDER]; 2];
-        node.y1 = vec![[0.0; MAX_ORDER]; 2];
-        node.y2 = vec![[0.0; MAX_ORDER]; 2];
+        // Initialize with 2 channels and 1 cascade stage (Db12 default)
+        node.channels = vec![SingleBiquadFilterStage::new(1); 2];
+        node.coeff = BiquadCoefficients::default();
 
         node.update_coefficients(48000.0);
         node
     }
 
+    /// Expands or shrinks per-channel state to match the given channel count.
+    /// Preserves the current cascade stage count.
     pub fn ensure_channels(&mut self, channels: usize) {
-        if self.x1.len() != channels {
-            self.x1.resize(channels, [0.0; MAX_ORDER]);
-            self.x2.resize(channels, [0.0; MAX_ORDER]);
-            self.y1.resize(channels, [0.0; MAX_ORDER]);
-            self.y2.resize(channels, [0.0; MAX_ORDER]);
+        if self.channels.len() != channels {
+            let num_stages = (self.order.get() as usize) + 1;
+            self.channels.resize_with(channels, || SingleBiquadFilterStage::new(num_stages));
         }
     }
 
+    /// Recomputes biquad coefficients from current parameter values.
+    /// Also resizes cascade stages on each channel if the order changed.
     pub fn update_coefficients(&mut self, sample_rate: f32) {
         if sample_rate <= 0.0 {
             return;
         }
 
-        let freq = self.freq.get();
-        let q = self.q.get();
-        let gain = self.gain.get();
+        // Create a simple hash or checksum of the current parameters
+        // to avoid recalculating if nothing actually changed.
+        let current_state = (
+            self.freq.get().to_bits(),
+            self.gain.get().to_bits(),
+            self.q.get().to_bits(),
+            self.active.get() as u8,
+            self.filter_type.get() as usize,
+            self.order.get() as usize,
+            sample_rate.to_bits(),
+        );
 
-        let w0 = (2.0 * std::f32::consts::PI * freq) / sample_rate;
-        let cos_w0 = w0.cos();
-        let sin_w0 = w0.sin();
-        let alpha = sin_w0 / (2.0 * q);
-        let a = (10.0_f32).powf(gain / 40.0);
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(&current_state, &mut hasher);
+        let current_hash = std::hash::Hasher::finish(&hasher);
 
-        let (b0_raw, b1_raw, b2_raw, a0_raw, a1_raw, a2_raw) = match self.filter_type.get() {
-            FilterType::Peaking => {
-                let alpha_peak = sin_w0 / (2.0 * q);
-                (
-                    1.0 + alpha_peak * a,
-                    -2.0 * cos_w0,
-                    1.0 - alpha_peak * a,
-                    1.0 + alpha_peak / a,
-                    -2.0 * cos_w0,
-                    1.0 - alpha_peak / a,
-                )
-            }
-            FilterType::LowShelf => {
-                let sqrt_a = a.sqrt();
-                let alpha_s = sin_w0 / (2.0 * q);
-                (
-                    a * (a + 1.0 - (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha_s),
-                    2.0 * a * (a - 1.0 - (a + 1.0) * cos_w0),
-                    a * (a + 1.0 - (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha_s),
-                    a + 1.0 + (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha_s,
-                    -2.0 * (a - 1.0 + (a + 1.0) * cos_w0),
-                    a + 1.0 + (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha_s,
-                )
-            }
-            FilterType::HighShelf => {
-                let sqrt_a = a.sqrt();
-                let alpha_s = sin_w0 / (2.0 * q);
-                (
-                    a * (a + 1.0 + (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha_s),
-                    -2.0 * a * (a - 1.0 + (a + 1.0) * cos_w0),
-                    a * (a + 1.0 + (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha_s),
-                    a + 1.0 - (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha_s,
-                    2.0 * (a - 1.0 - (a + 1.0) * cos_w0),
-                    a + 1.0 - (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha_s,
-                )
-            }
-            FilterType::LowPass => (
-                (1.0 - cos_w0) / 2.0,
-                1.0 - cos_w0,
-                (1.0 - cos_w0) / 2.0,
-                1.0 + alpha,
-                -2.0 * cos_w0,
-                1.0 - alpha,
-            ),
-            FilterType::HighPass => (
-                (1.0 + cos_w0) / 2.0,
-                -(1.0 + cos_w0),
-                (1.0 + cos_w0) / 2.0,
-                1.0 + alpha,
-                -2.0 * cos_w0,
-                1.0 - alpha,
-            ),
-            FilterType::BandPass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha),
-            FilterType::Notch => (
-                1.0,
-                -2.0 * cos_w0,
-                1.0,
-                1.0 + alpha,
-                -2.0 * cos_w0,
-                1.0 - alpha,
-            ),
-        };
+        if self.last_computed_hash == current_hash {
+            return; // Skip expensive math, nothing changed!
+        }
+        self.last_computed_hash = current_hash;
 
-        let inv_a0 = 1.0 / a0_raw;
-        self.b0 = b0_raw * inv_a0;
-        self.b1 = b1_raw * inv_a0;
-        self.b2 = b2_raw * inv_a0;
-        self.a1 = a1_raw * inv_a0;
-        self.a2 = a2_raw * inv_a0;
+        let num_stages = (self.order.get() as usize) + 1;
+        for ch in &mut self.channels {
+            ch.resize_cascades(num_stages);
+        }
+
+        self.coeff = self.filter_type
+            .get()
+            .get_coefficients(self.freq.get(), self.q.get(), self.gain.get(), sample_rate);
     }
 
+    /// Processes a single sample for a given channel through all cascaded stages.
+    /// Returns the input unchanged if the band is inactive or its type is Off.
     pub fn process_sample(&mut self, sample: f32, channel: usize) -> f32 {
-        if !self.active.get() || channel >= self.x1.len() {
+        if !self.active.get() || self.filter_type.get().is_off() {
             return sample;
         }
 
-        let num_stages = (self.order.get() as usize + 1).min(MAX_ORDER);
-        let mut signal = sample;
-
-        for stage in 0..num_stages {
-            let x0 = signal;
-            let y0 = self.b0 * x0
-                + self.b1 * self.x1[channel][stage]
-                + self.b2 * self.x2[channel][stage]
-                - self.a1 * self.y1[channel][stage]
-                - self.a2 * self.y2[channel][stage];
-
-            self.x2[channel][stage] = self.x1[channel][stage];
-            self.x1[channel][stage] = x0;
-            self.y2[channel][stage] = self.y1[channel][stage];
-            self.y1[channel][stage] = y0;
-
-            signal = y0;
+        match self.channels.get_mut(channel) {
+            Some(ch) => ch.process(sample, &self.coeff),
+            None => sample,
         }
-        signal
     }
 
+    /// Clears all delay-line history across every channel and cascade stage.
     pub fn reset_state(&mut self) {
-        for channel in 0..self.x1.len() {
-            self.x1[channel] = [0.0; MAX_ORDER];
-            self.x2[channel] = [0.0; MAX_ORDER];
-            self.y1[channel] = [0.0; MAX_ORDER];
-            self.y2[channel] = [0.0; MAX_ORDER];
+        for ch in &mut self.channels {
+            ch.reset_state();
         }
     }
 
+    /// Returns the magnitude response in dB at the given frequency.
+    /// Returns 0.0 if the band is inactive.
     pub fn magnitude_db_at(&self, freq: f32, sample_rate: f32) -> f32 {
         if !self.active.get() {
             return 0.0;
         }
 
-        let w = (2.0 * std::f32::consts::PI * freq) / sample_rate;
-        let cos_w = w.cos();
-        let cos_2w = (2.0 * w).cos();
-        let sin_w = w.sin();
-        let sin_2w = (2.0 * w).sin();
-
-        let num_re = self.b0 + self.b1 * cos_w + self.b2 * cos_2w;
-        let num_im = -(self.b1 * sin_w + self.b2 * sin_2w);
-        let num_mag_sq = num_re * num_re + num_im * num_im;
-
-        let den_re = 1.0 + self.a1 * cos_w + self.a2 * cos_2w;
-        let den_im = -(self.a1 * sin_w + self.a2 * sin_2w);
-        let den_mag_sq = den_re * den_re + den_im * den_im;
-
-        if den_mag_sq < 1e-20 {
-            return 0.0;
-        }
-
-        let single_stage_db = 10.0 * (num_mag_sq / den_mag_sq).max(1e-20).log10();
-        let num_stages = (self.order.get() as usize as f32) + 1.0;
-        single_stage_db * num_stages
+        let num_stages = (self.order.get() as usize) + 1;
+        self.coeff.magnitude_db_at(freq, sample_rate, num_stages)
     }
 }
 
@@ -319,7 +213,15 @@ pub struct KarbeatParametricEQ {
     #[nested(prefix = "band")]
     pub nodes: Vec<KarbeatParametricEQFilterNode>,
 
-    #[param(id = "base_gain", name = "Base Gain", group = "Master", min = -60.0, max = 24.0, default = 0.0, step = 0.1)]
+    #[param(
+        id = "base_gain",
+        name = "Base Gain",
+        group = "Master",
+        min = -60.0,
+        max = 24.0,
+        default = 0.0,
+        step = 0.1
+    )]
     pub base_gain: f32,
 
     last_sample_rate: f32,
@@ -445,7 +347,7 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                 self.analyzer_buffer.resize(FFT_SIZE, 0.0);
             }
 
-            self.analyzer_buffer[self.analyzer_idx] = mono_mix / self.channels as f32;
+            self.analyzer_buffer[self.analyzer_idx] = mono_mix / (self.channels as f32);
             self.analyzer_idx = (self.analyzer_idx + 1) % FFT_SIZE;
         }
     }
@@ -465,8 +367,7 @@ impl KarbeatPlugin for KarbeatParametricEQ {
     }
 
     fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
-            .unwrap_or(0.0)
+        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
     }
 
     fn apply_automation(&mut self, id: u32, value: f32) {
@@ -492,10 +393,7 @@ impl KarbeatPlugin for KarbeatParametricEQ {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
-    fn static_parameter_specs() -> Vec<ParameterSpec>
-    where
-        Self: Sized,
-    {
+    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized {
         Self::new().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
@@ -513,12 +411,12 @@ impl KarbeatPlugin for KarbeatParametricEQ {
 
                 let response = self.compute_magnitude_response(num_points);
 
-                let json_response: Vec<Value> = response
+                let flat_array: Vec<f32> = response
                     .into_iter()
-                    .map(|(freq, db)| json!({ "frequency": freq, "magnitude_db": db }))
+                    .flat_map(|(freq, db)| [freq, db])
                     .collect();
 
-                Some(json!(json_response))
+                Some(json!(flat_array))
             }
             "GET_SPECTRUM" => {
                 let num_points = payload
@@ -526,8 +424,9 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(100) as usize;
 
-                let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> =
-                    smallvec![Complex::zero(); FFT_SIZE];
+                let mut fft_input: SmallVec<
+                    [Complex32; FFT_SIZE]
+                > = smallvec![Complex::zero(); FFT_SIZE];
                 for i in 0..FFT_SIZE {
                     // Read backwards from current idx to get sequential chronological data
                     let idx = (self.analyzer_idx + i) % FFT_SIZE;
@@ -547,7 +446,7 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                 let mut raw_magnitudes = vec![0.0; FFT_SIZE / 2];
                 let norm_factor = (FFT_SIZE as f32) / 2.0;
 
-                for i in 0..(FFT_SIZE / 2) {
+                for i in 0..FFT_SIZE / 2 {
                     let mag = fft_input[i].norm() / norm_factor;
                     let db = 20.0 * mag.log10();
                     raw_magnitudes[i] = db.clamp(-100.0, 24.0);
@@ -556,35 +455,51 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                 if self.spectrum_history.len() != num_points {
                     self.spectrum_history = vec![-100.0; num_points];
                 }
-                let min_freq = 20.0;
-                let max_freq = 20000.0;
+                let min_freq: f32 = 20.0;
+                let max_freq: f32 = 20000.0;
                 let log_min = min_freq.log10();
                 let log_max = max_freq.log10();
 
-                let mut json_response = Vec::with_capacity(num_points);
+                // Pre-allocate the flat array (size = points * 2)
+                let mut flat_array = Vec::with_capacity(num_points * 2);
 
                 for i in 0..num_points {
                     let t = (i as f32) / ((num_points - 1).max(1) as f32);
                     let target_freq = (10.0_f32).powf(log_min + t * (log_max - log_min));
 
                     let bin_exact =
-                        target_freq * (FFT_SIZE as f32) / self.last_sample_rate.max(1.0);
-                    let bin_idx = bin_exact.round() as usize;
+                        (target_freq * (FFT_SIZE as f32)) / self.last_sample_rate.max(1.0);
 
                     let mut current_db = -100.0;
-                    if bin_idx > 0 && bin_idx < raw_magnitudes.len() {
-                        // Max pooling over nearby bins prevents skipping spikes at high frequencies
-                        let pool_radius = (bin_exact * 0.02).max(1.0) as usize;
-                        let start = bin_idx.saturating_sub(pool_radius);
-                        let end = (bin_idx + pool_radius).min(raw_magnitudes.len() - 1);
+                    if bin_exact >= 1.0 && (bin_exact as usize) < raw_magnitudes.len() - 1 {
+                        let pool_radius = (bin_exact * 0.02).floor() as usize;
+                        if pool_radius < 1 {
+                            // LOW FREQUENCIES: Fractional Interpolation
+                            // This turns the "flat staircase" into a beautiful smooth curve
+                            let bin_floor = bin_exact.floor() as usize;
+                            let bin_ceil = bin_exact.ceil() as usize;
+                            let frac = bin_exact.fract();
 
-                        for b in start..=end {
-                            if raw_magnitudes[b] > current_db {
-                                current_db = raw_magnitudes[b];
+                            let mag_floor = raw_magnitudes[bin_floor];
+                            let mag_ceil = raw_magnitudes[bin_ceil];
+
+                            // LERP the decibel values
+                            current_db = mag_floor + (mag_ceil - mag_floor) * frac;
+                        } else {
+                            // HIGH FREQUENCIES: Max-Pooling
+                            // Your existing logic to catch peaks that might slip between requested UI points
+                            let bin_idx = bin_exact.round() as usize;
+                            let start = bin_idx.saturating_sub(pool_radius);
+                            let end = (bin_idx + pool_radius).min(raw_magnitudes.len() - 1);
+
+                            for b in start..=end {
+                                if raw_magnitudes[b] > current_db {
+                                    current_db = raw_magnitudes[b];
+                                }
                             }
                         }
                     }
-
+                    
                     // Apply Temporal Smoothing (Fast Attack, Slow Release)
                     let prev_db = self.spectrum_history[i];
                     let smoothed_db = if current_db > prev_db {
@@ -594,12 +509,12 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                     };
                     self.spectrum_history[i] = smoothed_db;
 
-                    json_response
-                        .push(json!({ "frequency": target_freq, "magnitude_db": smoothed_db }));
+                    // Push directly into the flat array
+                    flat_array.push(target_freq);
+                    flat_array.push(smoothed_db);
                 }
 
-                // log::debug!("Send some Spectrum response");
-                Some(json!(json_response))
+                Some(json!(flat_array))
             }
             _ => None,
         }
@@ -610,10 +525,10 @@ impl KarbeatPlugin for KarbeatParametricEQ {
     }
 
     fn tail_samples(&self) -> u32 {
-        // IIR filters technically ring forever, but practically hit the noise floor 
-        // in less than a millisecond. We return 0, or a tiny arbitrary safety 
+        // IIR filters technically ring forever, but practically hit the noise floor
+        // in less than a millisecond. We return 0, or a tiny arbitrary safety
         // buffer (e.g., 50 milliseconds) to let high-Q bands fully settle.
-        
+
         // (0.05 seconds * sample_rate)
         (self.last_sample_rate * 0.05) as u32
     }
