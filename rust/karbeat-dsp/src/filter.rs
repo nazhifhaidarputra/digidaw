@@ -3,6 +3,7 @@
 
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_types::{EnumParam, Param};
+use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
 use wide::f32x4;
 
@@ -22,7 +23,7 @@ pub trait FilterMode: Copy + Default + PartialEq + EnumParam {
 }
 
 /// Options of Simple filter often used (LPF, HPF, and BPF)
-#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam, Deserialize, Serialize)]
 #[repr(usize)]
 pub enum SimpleFilterMode {
     #[default]
@@ -43,7 +44,7 @@ impl From<f32> for SimpleFilterMode {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam, Deserialize, Serialize)]
 #[repr(usize)]
 pub enum BiquadFilterType {
     #[default]
@@ -535,17 +536,17 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
             return;
         }
 
-       let freq = self.freq.get().clamp(20.0, self.sample_rate / 2.1); // Nyquist safety
+        let freq = self.freq.get().clamp(20.0, self.sample_rate / 2.1); // Nyquist safety
         let q = self.q.get().max(0.01);
         let gain = self.gain.get();
         let cascades = self.cascades.get();
 
         // 🚀 THE FIX: Only do the math if the parameters actually changed!
         if self.last_filter_type == filter_mode
-            && (self.last_freq - freq).abs() < 0.001 
-            && (self.last_gain - gain).abs() < 0.001 
-            && (self.last_q - q).abs() < 0.001 
-            && (self.last_cascades - cascades).abs() < 0.001 
+            && (self.last_freq - freq).abs() < 0.001
+            && (self.last_gain - gain).abs() < 0.001
+            && (self.last_q - q).abs() < 0.001
+            && (self.last_cascades - cascades).abs() < 0.001
         {
             return; // Skip the expensive math!
         }

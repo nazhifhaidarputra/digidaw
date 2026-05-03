@@ -1,4 +1,5 @@
 use dasp::Frame;
+use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
 
 // Import your universal parameter types and macros
@@ -9,7 +10,7 @@ use karbeat_plugin_types::parameter::Param;
 // WAVEFORM ENUM
 // ============================================================================
 
-#[derive(Clone, Debug, Copy, PartialEq, Default, EnumParam)]
+#[derive(Clone, Debug, Copy, PartialEq, Default, EnumParam, Deserialize, Serialize)]
 #[repr(usize)]
 pub enum Waveform {
     #[default]

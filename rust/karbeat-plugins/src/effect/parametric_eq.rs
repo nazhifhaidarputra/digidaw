@@ -1,23 +1,21 @@
 use hashbrown::HashMap;
 use karbeat_dsp::filter::{
-    BiquadCoefficients,
-    BiquadFilterType,
-    FilterMode,
-    SingleBiquadFilterStage,
+    BiquadCoefficients, BiquadFilterType, FilterMode, SingleBiquadFilterStage,
 };
 use karbeat_dsp::windowing::Windowing;
-use karbeat_macros::{ karbeat_plugin, EnumParam };
+use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
-use num_complex::{ Complex, Complex32 };
-use rustfft::{ num_traits::Zero, Fft, FftPlanner };
-use serde_json::{ json, Value };
-use smallvec::{ smallvec, SmallVec };
-use std::{ any::Any, sync::Arc };
+use num_complex::{Complex, Complex32};
+use rustfft::{num_traits::Zero, Fft, FftPlanner};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use smallvec::{smallvec, SmallVec};
+use std::{any::Any, sync::Arc};
 
 const FFT_SIZE: usize = 4096;
 
-#[derive(Clone, Copy, Debug, PartialEq, Default, EnumParam)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, EnumParam, Deserialize, Serialize)]
 pub enum FilterSlope {
     #[default]
     Db12 = 0, // 1 stage
@@ -111,9 +109,11 @@ impl KarbeatParametricEQFilterNode {
         node.order.group = group_name;
 
         if band_idx == 0 {
-            node.filter_type.set_base(BiquadFilterType::LowShelf as i32 as f32);
+            node.filter_type
+                .set_base(BiquadFilterType::LowShelf as i32 as f32);
         } else if band_idx == 7 {
-            node.filter_type.set_base(BiquadFilterType::HighShelf as i32 as f32);
+            node.filter_type
+                .set_base(BiquadFilterType::HighShelf as i32 as f32);
         }
 
         // Initialize with 2 channels and 1 cascade stage (Db12 default)
@@ -129,7 +129,8 @@ impl KarbeatParametricEQFilterNode {
     pub fn ensure_channels(&mut self, channels: usize) {
         if self.channels.len() != channels {
             let num_stages = (self.order.get() as usize) + 1;
-            self.channels.resize_with(channels, || SingleBiquadFilterStage::new(num_stages));
+            self.channels
+                .resize_with(channels, || SingleBiquadFilterStage::new(num_stages));
         }
     }
 
@@ -166,9 +167,12 @@ impl KarbeatParametricEQFilterNode {
             ch.resize_cascades(num_stages);
         }
 
-        self.coeff = self.filter_type
-            .get()
-            .get_coefficients(self.freq.get(), self.q.get(), self.gain.get(), sample_rate);
+        self.coeff = self.filter_type.get().get_coefficients(
+            self.freq.get(),
+            self.q.get(),
+            self.gain.get(),
+            sample_rate,
+        );
     }
 
     /// Processes a single sample for a given channel through all cascaded stages.
@@ -367,7 +371,8 @@ impl KarbeatPlugin for KarbeatParametricEQ {
     }
 
     fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
+        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
+            .unwrap_or(0.0)
     }
 
     fn apply_automation(&mut self, id: u32, value: f32) {
@@ -393,7 +398,10 @@ impl KarbeatPlugin for KarbeatParametricEQ {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
-    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized {
+    fn static_parameter_specs() -> Vec<ParameterSpec>
+    where
+        Self: Sized,
+    {
         Self::new().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
@@ -424,9 +432,8 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(100) as usize;
 
-                let mut fft_input: SmallVec<
-                    [Complex32; FFT_SIZE]
-                > = smallvec![Complex::zero(); FFT_SIZE];
+                let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> =
+                    smallvec![Complex::zero(); FFT_SIZE];
                 for i in 0..FFT_SIZE {
                     // Read backwards from current idx to get sequential chronological data
                     let idx = (self.analyzer_idx + i) % FFT_SIZE;
@@ -499,7 +506,7 @@ impl KarbeatPlugin for KarbeatParametricEQ {
                             }
                         }
                     }
-                    
+
                     // Apply Temporal Smoothing (Fast Attack, Slow Release)
                     let prev_db = self.spectrum_history[i];
                     let smoothed_db = if current_db > prev_db {
