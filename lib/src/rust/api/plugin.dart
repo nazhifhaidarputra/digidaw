@@ -202,15 +202,8 @@ Future<int> executeRealtimePluginCommand({
 Stream<UiPluginCommandResponse> createPluginMessageStream() =>
     RustLib.instance.api.crateApiPluginCreatePluginMessageStream();
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Arc < Mutex < Vec < f32 > > >>>
-abstract class ArcMutexVecF32 implements RustOpaqueInterface {}
-
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>>
 abstract class PluginBufferHandle implements RustOpaqueInterface {
-  ArcMutexVecF32 get field0;
-
-  set field0(ArcMutexVecF32 field0);
-
   /// Reads the current buffer state directly into a Dart Float32List.
   /// This bypasses JSON entirely and takes less than a microsecond.
   Float32List read();

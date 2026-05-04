@@ -12,6 +12,7 @@ use crate::{
     context::ctx,
 };
 
+#[allow(unused)]
 fn host_has_output_device(host: &cpal::Host) -> bool {
     host.output_devices()
         .map(|mut devices| devices.next().is_some())
@@ -184,15 +185,30 @@ pub fn start_audio_stream(
     };
     log::info!("Output device: {}", device_name);
 
+    // Ask the OS for its preferred/native audio configuration
+    let default_config = device.default_output_config()
+        .context("no default output config available")?;
+    let native_sample_rate = default_config.sample_rate();
+
     let supported_configs_range = device
         .supported_output_configs()
         .map_err(|e| anyhow!("error querying configs: {e}"))?;
 
+    // Find a config that supports F32, 2 Channels, AND the OS's native sample rate
     let supported_config = supported_configs_range
         .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
-        .next()
-        .map(|c| c.with_max_sample_rate())
-        .context("device does not support f32 samples")?;
+        .find(|c| c.min_sample_rate() <= native_sample_rate && c.max_sample_rate() >= native_sample_rate)
+        .map(|c| c.with_sample_rate(native_sample_rate))
+        // Fallback: If native rate isn't found in F32, try forcing a standard 48000 Hz
+        .or_else(|| {
+            device.supported_output_configs().ok()?.find(|c| {
+                c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2
+            }).map(|c| {
+                let clamped_rate = 48000.clamp(c.min_sample_rate(), c.max_sample_rate());
+                c.with_sample_rate(clamped_rate)
+            })
+        })
+        .context("device does not support f32 samples with 2 channels")?;
 
     // This prevents PipeWire/JACK from resizing the buffer dynamically.
     let buffer_size = match supported_config.buffer_size() {

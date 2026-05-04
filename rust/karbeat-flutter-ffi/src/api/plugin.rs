@@ -8,12 +8,12 @@ use karbeat_core::plugin_types::ParameterValueType;
 use karbeat_core::shared::id::*;
 use karbeat_plugins::registry::PluginInfo;
 use karbeat_utils::parser::FromPluginCommand;
-use parking_lot::Mutex;
+pub use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::Duration;
 
 #[frb(opaque)]
-pub struct PluginBufferHandle(pub Arc<Mutex<Vec<f32>>>);
+pub struct PluginBufferHandle(Arc<Mutex<Vec<f32>>>);
 
 impl PluginBufferHandle {
     /// Reads the current buffer state directly into a Dart Float32List.
