@@ -12,6 +12,12 @@ use crate::{
     context::ctx,
 };
 
+fn host_has_output_device(host: &cpal::Host) -> bool {
+    host.output_devices()
+        .map(|mut devices| devices.next().is_some())
+        .unwrap_or(false)
+}
+
 struct AudioContext {
     engine: AudioEngine,
     producer: rtrb::Producer<f32>,
@@ -88,19 +94,28 @@ macro_rules! run_stream {
 /// - Other platforms: default host
 fn set_host() -> cpal::Host {
     #[allow(unused_assignments)]
+    #[allow(unused_mut)]
     let mut host = cpal::default_host();
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
-            host = asio_host;
-            log::info!("Connected to ASIO Host");
-        } else if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
-            host = wasapi_host;
-            log::info!("Connected to WASAPI Host");
+          if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
+            if host_has_output_device(&asio_host) {
+                log::info!("Connected to ASIO Host");
+                return asio_host;
+            } else {
+                log::warn!("ASIO host found but no output devices were available; falling back to WASAPI");
+            }
         } else {
-            log::warn!("Neither ASIO nor WASAPI available, falling back to default host");
+            log::warn!("ASIO host not available; falling back to WASAPI");
         }
+
+        if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
+            log::info!("Connected to WASAPI Host");
+            return wasapi_host;
+        }
+
+        log::warn!("WASAPI not available; falling back to default host");
     }
 
     #[cfg(target_os = "android")]
