@@ -32,6 +32,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_ArcMutexVecF32Ptr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_PluginBufferHandlePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle;
+
+  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_WaveformHandlePtr => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle;
 
@@ -39,8 +47,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  ArcMutexVecF32
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    dynamic raw,
+  );
+
+  @protected
+  PluginBufferHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    dynamic raw,
+  );
+
+  @protected
   WaveformHandle
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
+
+  @protected
+  PluginBufferHandle
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    dynamic raw,
+  );
+
+  @protected
+  PluginBufferHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
     dynamic raw,
   );
 
@@ -90,6 +122,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
+
+  @protected
+  ArcMutexVecF32
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    dynamic raw,
+  );
+
+  @protected
+  PluginBufferHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    dynamic raw,
+  );
 
   @protected
   WaveformHandle
@@ -199,6 +243,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
   @protected
   Int8List dco_decode_list_prim_i_8_strict(dynamic raw);
@@ -540,8 +587,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  ArcMutexVecF32
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PluginBufferHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   WaveformHandle
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PluginBufferHandle
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PluginBufferHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
     SseDeserializer deserializer,
   );
 
@@ -595,6 +666,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ArcMutexVecF32
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PluginBufferHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
     SseDeserializer deserializer,
   );
 
@@ -732,6 +815,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
 
   @protected
   Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer);
@@ -1145,8 +1231,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    ArcMutexVecF32 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    PluginBufferHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     WaveformHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    PluginBufferHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    PluginBufferHandle self,
     SseSerializer serializer,
   );
 
@@ -1212,6 +1326,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_u_32_ui_track_None(
     Map<int, UiTrack> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    ArcMutexVecF32 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    PluginBufferHandle self,
     SseSerializer serializer,
   );
 
@@ -1367,6 +1495,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_parameter_spec_dto(
     List<ParameterSpecDTO> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
     SseSerializer serializer,
   );
 
@@ -1879,6 +2013,38 @@ class RustLibWire implements BaseWire {
   RustLibWire.fromExternalLibrary(ExternalLibrary lib);
 
   void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+        ptr,
+      );
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+        ptr,
+      );
+
+  void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     int ptr,
   ) => wasmModule
@@ -1901,6 +2067,26 @@ external RustLibWasmModule get wasmModule;
 @JS()
 @anonymous
 extension type RustLibWasmModule._(JSObject _) implements JSObject {
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerArcMutexVecf32(
+    int ptr,
+  );
+
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    int ptr,
+  );
+
   external void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     int ptr,

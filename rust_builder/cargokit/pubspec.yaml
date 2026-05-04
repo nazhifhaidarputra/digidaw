@@ -7,4 +7,4 @@ environment:
 
 dependencies:
   build_tool:
-    path: C:/Users/progr/Documents/New folder/karbeat/rust_builder/cargokit/build_tool
+    path: ./build_tool

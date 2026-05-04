@@ -28,8 +28,8 @@ packages:
   build_tool:
     dependency: "direct main"
     description:
-      path: "C:/Users/progr/Documents/New folder/karbeat/rust_builder/cargokit/build_tool"
-      relative: false
+      path: build_tool
+      relative: true
     source: path
     version: "1.0.0"
   collection:

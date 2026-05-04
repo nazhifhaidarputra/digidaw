@@ -372,8 +372,8 @@ class KarbeatState extends ChangeNotifier {
   double get horizontalZoomLevel => _horizontalZoomLevel;
 
   /// Min: 1 sample/px (each sample tick visible). Max: 1k ticks/px.
-  static const double _minZoom = 1.0;
-  static const double _maxZoom = 1000.0;
+  static const double _minZoom = 0.01;
+  static const double _maxZoom = 500.0;
 
   set horizontalZoomLevel(double val) {
     final clamped = val.clamp(_minZoom, _maxZoom);
