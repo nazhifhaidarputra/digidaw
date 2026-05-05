@@ -24,7 +24,7 @@ pub fn init_app() {
 pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, _res: *mut std::ffi::c_void) -> jni::sys::jint {
     log::info!("JNI_OnLoad Triggered in Rust");
 
-    // 1. Upgrade the JavaVM pointer to a safe JNIEnv using the closure API
+    // Upgrade the JavaVM pointer to a safe JNIEnv using the closure API
     let _outcome = vm.with_top_local_frame(|env| -> Result<(), jni::errors::Error> {
         
         // You can safely use the `env` inside this block.
@@ -57,16 +57,16 @@ pub unsafe extern "C" fn Java_com_example_karbeat_MainActivity_initRust(
         
         let vm = env.get_java_vm()?;
 
-        // 1. Upgrade the temporary Local Reference to a permanent Global Reference
+        // Upgrade the temporary Local Reference to a permanent Global Reference
         let global_context = env.new_global_ref(&context)?;
         
-        // 2. Store it statically so it lives forever (ignoring errors if it's already set)
+        // Store it statically so it lives forever (ignoring errors if it's already set)
         let _ = ANDROID_CONTEXT.set(global_context);
 
-        // 3. Extract the raw pointer from our safely stored Global Reference
+        // Extract the raw pointer from our safely stored Global Reference
         let global_context_raw = ANDROID_CONTEXT.get().unwrap().as_obj().as_raw();
 
-        // 4. Pass the global pointer to ndk-context
+        // Pass the global pointer to ndk-context
         ndk_context::initialize_android_context(
             vm.get_raw() as *mut std::ffi::c_void,
             global_context_raw as *mut std::ffi::c_void,

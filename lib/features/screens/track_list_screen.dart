@@ -34,11 +34,12 @@ class TrackListScreen extends ConsumerWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final parentHeight = constraints.maxHeight;
+        final parentWidth = constraints.maxWidth;
         if (parentHeight.isInfinite) return const SizedBox();
 
         final calculatedHeight = parentHeight * 0.15;
         final double itemHeight = calculatedHeight.clamp(60.0, 150.0);
-        const double headerWidth = 220.0;
+        final double headerWidth = parentWidth > 600 ? 220.0 : parentWidth * 0.35;
 
         return Builder(
           builder: (context) {
@@ -199,8 +200,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  // FIXME: Make the pivot stay still even in small zoom so that
-  // it does not shift the pivot position relative to tick position in the timeline
   void _updateZoom(double newZoom, double focalPointX) {
     final state = ref.read(karbeatStateProvider);
     final oldZoom = state.horizontalZoomLevel;
@@ -246,13 +245,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     // the scrollbar exactly to the edge of the content when zooming out.
     double newTimelineWidth = math.max(contentWidth, requiredWindowWidth);
 
-    // 3. Update the state immediately
+    // Update the state immediately
     state.horizontalZoomLevel = clampedZoom;
     setState(() {
       _timelineWidth = newTimelineWidth;
     });
 
-    // 4. Synchronous Jump
+    // Synchronous Jump
     // Because we are using UnclampedNeverScrollableScrollPhysics, this jump will
     // bypass Flutter's 1-frame layout boundary check, guaranteeing a flawless pivot.
     if (controller.hasClients) {
@@ -494,138 +493,141 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           height: 36,
           color: Colors.grey.shade900,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              const Text(
-                "Snap to Grid",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(width: 8),
-              DropdownButton<GridSize>(
-                value: ref.watch(
-                  karbeatStateProvider.select((s) => s.gridSize),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                const Text(
+                  "Snap to Grid",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
                 ),
-                dropdownColor: Colors.grey.shade800,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                underline: const SizedBox(),
-                items: GridSize.values.map((size) {
-                  String label = "";
-                  switch (size) {
-                    case GridSize.full:
-                      label = "1/1";
-                      break;
-                    case GridSize.half:
-                      label = "1/2";
-                      break;
-                    case GridSize.third:
-                      label = "1/3";
-                      break;
-                    case GridSize.quarter:
-                      label = "1/4";
-                      break;
-                    case GridSize.sixth:
-                      label = "1/6";
-                      break;
-                    case GridSize.eighth:
-                      label = "1/8";
-                      break;
-                    case GridSize.sixteenth:
-                      label = "1/16";
-                      break;
-                    case GridSize.thirtysecond:
-                      label = "1/32";
-                      break;
-                    case GridSize.sixtyfourth:
-                      label = "1/64";
-                      break;
-                    case GridSize.oneBar:
-                      label = "1 Bar";
-                      break;
-                    case GridSize.twoBeat:
-                      label = "2 Beats";
-                      break;
-                    case GridSize.infinity:
-                      label = "None";
-                      break;
-                  }
-                  return DropdownMenuItem<GridSize>(
-                    value: size,
-                    child: Text(label),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    ref.read(karbeatStateProvider).setGridSize(val);
-                  }
-                },
-              ),
-              const SizedBox(width: 16),
-              const Text(
-                "Move Step",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(width: 8),
-              DropdownButton<MusicalBeatSize>(
-                value: ref.watch(
-                  karbeatStateProvider.select(
-                    (s) => s.horizontalClipShiftSizeDenom,
+                const SizedBox(width: 8),
+                DropdownButton<GridSize>(
+                  value: ref.watch(
+                    karbeatStateProvider.select((s) => s.gridSize),
                   ),
+                  dropdownColor: Colors.grey.shade800,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  underline: const SizedBox(),
+                  items: GridSize.values.map((size) {
+                    String label = "";
+                    switch (size) {
+                      case GridSize.full:
+                        label = "1/1";
+                        break;
+                      case GridSize.half:
+                        label = "1/2";
+                        break;
+                      case GridSize.third:
+                        label = "1/3";
+                        break;
+                      case GridSize.quarter:
+                        label = "1/4";
+                        break;
+                      case GridSize.sixth:
+                        label = "1/6";
+                        break;
+                      case GridSize.eighth:
+                        label = "1/8";
+                        break;
+                      case GridSize.sixteenth:
+                        label = "1/16";
+                        break;
+                      case GridSize.thirtysecond:
+                        label = "1/32";
+                        break;
+                      case GridSize.sixtyfourth:
+                        label = "1/64";
+                        break;
+                      case GridSize.oneBar:
+                        label = "1 Bar";
+                        break;
+                      case GridSize.twoBeat:
+                        label = "2 Beats";
+                        break;
+                      case GridSize.infinity:
+                        label = "None";
+                        break;
+                    }
+                    return DropdownMenuItem<GridSize>(
+                      value: size,
+                      child: Text(label),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      ref.read(karbeatStateProvider).setGridSize(val);
+                    }
+                  },
                 ),
-                dropdownColor: Colors.grey.shade800,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                underline: const SizedBox(),
-                items: MusicalBeatSize.values.map((size) {
-                  String label = "";
-                  switch (size) {
-                    case MusicalBeatSize.four:
-                      label = "1 Bar";
-                      break;
-                    case MusicalBeatSize.three:
-                      label = "3 Beats";
-                      break;
-                    case MusicalBeatSize.two:
-                      label = "2 Beats";
-                      break;
-                    case MusicalBeatSize.one:
-                      label = "1 Beat";
-                      break;
-                    case MusicalBeatSize.half:
-                      label = "1/2 Step";
-                      break;
-                    case MusicalBeatSize.quarter:
-                      label = "1/4 Step";
-                      break;
-                    case MusicalBeatSize.eighth:
-                      label = "1/8 Step";
-                      break;
-                    case MusicalBeatSize.sixteenth:
-                      label = "1/16 Step";
-                      break;
-                    case MusicalBeatSize.thirtysecond:
-                      label = "1/32 Step";
-                      break;
-                    case MusicalBeatSize.sixtyfourth:
-                      label = "1/64 Step";
-                      break;
-                    case MusicalBeatSize.none:
-                      label = "None";
-                      break;
-                  }
-                  return DropdownMenuItem<MusicalBeatSize>(
-                    value: size,
-                    child: Text(label),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    ref
-                            .read(karbeatStateProvider)
-                            .horizontalClipShiftSizeDenom =
-                        val;
-                  }
-                },
-              ),
-            ],
+                const SizedBox(width: 16),
+                const Text(
+                  "Move Step",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const SizedBox(width: 8),
+                DropdownButton<MusicalBeatSize>(
+                  value: ref.watch(
+                    karbeatStateProvider.select(
+                      (s) => s.horizontalClipShiftSizeDenom,
+                    ),
+                  ),
+                  dropdownColor: Colors.grey.shade800,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  underline: const SizedBox(),
+                  items: MusicalBeatSize.values.map((size) {
+                    String label = "";
+                    switch (size) {
+                      case MusicalBeatSize.four:
+                        label = "1 Bar";
+                        break;
+                      case MusicalBeatSize.three:
+                        label = "3 Beats";
+                        break;
+                      case MusicalBeatSize.two:
+                        label = "2 Beats";
+                        break;
+                      case MusicalBeatSize.one:
+                        label = "1 Beat";
+                        break;
+                      case MusicalBeatSize.half:
+                        label = "1/2 Step";
+                        break;
+                      case MusicalBeatSize.quarter:
+                        label = "1/4 Step";
+                        break;
+                      case MusicalBeatSize.eighth:
+                        label = "1/8 Step";
+                        break;
+                      case MusicalBeatSize.sixteenth:
+                        label = "1/16 Step";
+                        break;
+                      case MusicalBeatSize.thirtysecond:
+                        label = "1/32 Step";
+                        break;
+                      case MusicalBeatSize.sixtyfourth:
+                        label = "1/64 Step";
+                        break;
+                      case MusicalBeatSize.none:
+                        label = "None";
+                        break;
+                    }
+                    return DropdownMenuItem<MusicalBeatSize>(
+                      value: size,
+                      child: Text(label),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      ref
+                              .read(karbeatStateProvider)
+                              .horizontalClipShiftSizeDenom =
+                          val;
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         ),
         Expanded(

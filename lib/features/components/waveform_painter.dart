@@ -6,6 +6,8 @@ import 'dart:ffi' as ffi;
 
 import 'package:karbeat/src/rust/api/waveform.dart'; 
 
+/// Create Float32List of waveform buffer 
+/// from raw pointer to the waveform buffer at the Rust memory
 Float32List createZeroCopyWaveformView(WaveformHandle handle) {
   final ptrAddress = handle.getPointer();
   final len = handle.getLen();

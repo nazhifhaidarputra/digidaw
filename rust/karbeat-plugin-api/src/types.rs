@@ -28,4 +28,5 @@ pub struct ProcessContext<'a> {
     pub is_playing: bool,
     pub sample_position: u64,
     pub midi_events: &'a [MidiEvent],
+    pub aux_buffer: Option<&'a [f32]>,
 }
