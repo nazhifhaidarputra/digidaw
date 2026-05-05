@@ -44,6 +44,8 @@ dependencies:
   window_manager: ^0.5.1
   flutter_material_design_icons: ^3.0.0+7447
   flutter_svg: ^2.2.4
+  auto_size_text: ^3.0.0
+  multi_split_view: ^3.6.1
 
 dev_dependencies:
   flutter_test:

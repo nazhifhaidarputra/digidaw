@@ -1,14 +1,13 @@
-// use karbeat_core::{init_engine, init_logger};
-
+#[cfg(target_os="android")] 
 use once_cell::sync::OnceCell;
 
+#[cfg(target_os="android")]
 use jni::{objects::JObject, refs::Global};
 
 use crate::{init_engine, init_logger};
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
-    // Default utilities - feel free to customize
     flutter_rust_bridge::setup_default_user_utils();
     init_logger();
     init_engine();
@@ -64,7 +63,7 @@ pub unsafe extern "C" fn Java_com_example_karbeat_MainActivity_initRust(
         let _ = ANDROID_CONTEXT.set(global_context);
 
         // Extract the raw pointer from our safely stored Global Reference
-        let global_context_raw = ANDROID_CONTEXT.get().unwrap().as_obj().as_raw();
+        let global_context_raw = ANDROID_CONTEXT.get().unwrap().as_raw();
 
         // Pass the global pointer to ndk-context
         ndk_context::initialize_android_context(
