@@ -51,10 +51,8 @@ impl From<TransportFeedback> for UiTransportFeedback {
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
     audio_api::get_audio_source(AudioSourceId::from(id), |waveform| {
-        //TODO: Add dynamic downsampling to send this to the frontend side for smaller memory footprint
-        // downsample(waveform.buffer)
-        AudioWaveformUiForAudioProperties::from(waveform)
-    })
+        AudioWaveformUiForAudioProperties::try_from(waveform).ok()
+    })?
 }
 
 /// ACTION: Play the sound via the Engine

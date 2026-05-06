@@ -1276,6 +1276,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               dividerPainter: DividerPainters.grooved1(
                 color: Colors.grey.shade800,
                 highlightedColor: Colors.cyanAccent,
+                thickness: 1,
               ),
             ),
             child: MultiSplitView(
