@@ -21,6 +21,7 @@ use crate::{
         },
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
+            SidechainRouteId,
         },
     },
     commands::{
@@ -169,6 +170,7 @@ pub struct AudioEngine {
     bus_temp_buffer: Vec<f32>,
 
     /// Cached routing order (updated only when state changes, not every callback)
+    /// This routing is a unified Directed Acyclic Graph for all tracks and buses
     cached_routing_order: Vec<RoutingNode>,
 
     /// Song playback vs Pattern playback
@@ -201,6 +203,9 @@ pub struct AudioEngine {
     compensation_delays: HashMap<RoutingNode, u32>,
     track_delay_lines: HashMap<TrackId, DelayLine>,
     bus_delay_lines: HashMap<BusId, DelayLine>,
+
+    // =============== Auxiliary/Sidechain buffer
+    aux_buffers: HashMap<SidechainRouteId, Vec<f32>>,
 }
 
 /// Lightweight voice reference - the actual plugin lives in AudioPluginState
@@ -334,6 +339,7 @@ impl AudioEngine {
             compensation_delays: HashMap::new(),
             track_delay_lines: HashMap::new(),
             bus_delay_lines: HashMap::new(),
+            aux_buffers: HashMap::new(),
         }
     }
 
@@ -356,7 +362,8 @@ impl AudioEngine {
 
         // Process Commands (Play, Stop, Seek)
         while let Ok(cmd) = self.command_consumer.pop() {
-            if self.process_command(cmd) { // Make process_command return bool
+            if self.process_command(cmd) {
+                // Make process_command return bool
                 pdc_dirty = true;
             }
         }
@@ -636,7 +643,7 @@ impl AudioEngine {
     }
 
     /// Process incoming commands from command queue buffer
-    fn process_command(&mut self, cmd: AudioCommand) -> bool{
+    fn process_command(&mut self, cmd: AudioCommand) -> bool {
         let mut pdc_dirty = false;
         match cmd {
             AudioCommand::PlayOneShot(waveform) => {
@@ -1691,6 +1698,14 @@ impl AudioEngine {
             buf.fill(0.0);
         }
 
+        // Ensure aux (sidechain) buffers are properly sized and cleared
+        for (_aux_id, buf) in self.aux_buffers.iter_mut() {
+            if buf.len() != buf_len {
+                buf.resize(buf_len, 0.0);
+            }
+            buf.fill(0.0);
+        }
+
         // Check for solo state
         let is_any_solo = self
             .current_state
@@ -1703,436 +1718,445 @@ impl AudioEngine {
         // Get routing info
         let routing = &self.current_state.graph.mixer_state.routing;
 
-        // ==== Phase 1: Render all tracks and route to destinations ====
-        for track in self.current_state.graph.tracks.iter() {
-            let track_id = track.id;
-
-            let default_channel = Arc::new(MixerChannel::default());
-
-            let mut channel = self
-                .current_state
-                .graph
-                .mixer_state
-                .channels
-                .get(&track_id)
-                .cloned()
-                .unwrap_or(default_channel);
-
-            let channel_mut = Arc::make_mut(&mut channel);
-
-            // Check mute/solo
-            if channel_mut.mute {
-                continue;
-            }
-            if is_any_solo && !channel_mut.solo {
-                continue;
-            }
-
-            // Ensure mix_buffer is sized correctly
-            if self.mix_buffer.len() != buf_len {
-                self.mix_buffer.resize(buf_len, 0.0);
-            }
-            self.mix_buffer.fill(0.0);
-
-            let mut has_signal = false;
-
-            // Generator Voice - use plugin_state directly (no lock!)
-            if let Some(gen_voice) = self
-                .active_generators
-                .iter()
-                .find(|g| g.track_id == track_id && g.active)
-            {
-                let gen_id = gen_voice.id;
-                let events = &gen_voice.midi_events;
-                let param_events = &gen_voice.automation_events;
-
-                if let Some(gen_instance) = self
-                    .plugin_state
-                    .get_generator_mut(gen_id.to_u32() as usize)
-                {
-                    // CONSUME AUTOMATION
-                    for ev in param_events {
-                        #[allow(irrefutable_let_patterns)]
-                        if let GeneratorAutomationEvent::PluginParam { param_id, value } = ev {
-                            gen_instance.plugin.apply_automation(*param_id, *value);
-                        }
-                    }
-                    // PROCESS AUDIO
-                    // Build context for the generator — MIDI events are passed via ProcessContext
-                    let gen_ctx = ProcessContext {
-                        bpm,
-                        time_sig_numerator: 4,
-                        time_sig_denominator: 4,
-                        is_playing,
-                        sample_position,
-                        midi_events: events,
-                    };
-                    gen_instance.plugin.process(&mut self.mix_buffer, &gen_ctx);
-                    has_signal = true;
-                }
-            }
-
-            // Audio Voice
-            if Self::render_oneshots(
-                &mut self.active_oneshots,
-                self.sample_rate,
-                track_id,
-                &mut self.mix_buffer,
-                channels,
-            ) {
-                has_signal = true;
-            }
-
-            // track tail handling
-            let track_effects_tail = self
-                .plugin_state
-                .get_track_effects(track_id.to_u32() as usize)
-                .map(|effects| {
-                    effects
-                        .iter()
-                        .map(|e| e.plugin.tail_samples())
-                        .max()
-                        .unwrap_or(0)
-                })
-                .unwrap_or(0);
-
-            if has_signal {
-                self.track_tails.insert(track_id, track_effects_tail);
-            } else {
-                let current_tail = self.track_tails.get(&track_id).copied().unwrap_or(0);
-                if current_tail > 0 {
-                    let new_tail = current_tail.saturating_sub(buf_len as u32);
-                    self.track_tails.insert(track_id, new_tail);
-                    if new_tail == 0 {
-                        if let Some(effects) = self
-                            .plugin_state
-                            .get_track_effects_mut(track_id.to_u32() as usize)
-                        {
-                            effects.iter_mut().for_each(|e| e.plugin.reset());
-                        }
-                        continue;
-                    }
-                    // has_signal = true;
-                } else {
-                    continue;
-                }
-            }
-
-            // Apply track mixer channel (volume/pan/phase) and effects
-            // Effects receive an empty MIDI slice — track routing is audio-only at this stage
-            let track_effect_ctx = ProcessContext {
-                bpm,
-                time_sig_numerator: 4,
-                time_sig_denominator: 4,
-                is_playing,
-                sample_position,
-                midi_events: &[],
-            };
-            Self::apply_mixer_channel_with_effects(
-                channel_mut,
-                &mut self.plugin_state.track_effects,
-                &self.track_automation_events,
-                track_id,
-                &mut self.mix_buffer,
-                channels,
-                &track_effect_ctx,
-            );
-
-            if let Some(delay_line) = self.track_delay_lines.get_mut(&track_id) {
-                delay_line.process_block(&mut self.mix_buffer, channels);
-            }
-
-            // Route the track signal to destinations based on routing matrix
-            let track_routes: Vec<_> = routing
-                .iter()
-                .filter(|c| c.source == RoutingNode::Track(track_id))
-                .collect();
-
-            if track_routes.is_empty() {
-                self.node_has_signal.insert(RoutingNode::Master, true);
-                apply_simd_mix(output, &self.mix_buffer);
-            } else {
-                // Route to each destination with appropriate send level
-                for conn in track_routes {
-                    self.node_has_signal.insert(conn.destination, true);
-                    match conn.destination {
-                        RoutingNode::Master => {
-                            apply_simd_mix_gain(output, &self.mix_buffer, conn.send_level);
-                        }
-                        RoutingNode::Bus(bus_id) => {
-                            if let Some(bus_buf) = self.bus_buffers.get_mut(&bus_id) {
-                                apply_simd_mix_gain(bus_buf, &self.mix_buffer, conn.send_level);
-                            }
-                        }
-                        RoutingNode::Track(_) => {
-                            // Invalid: can't route to a track
-                        }
-                    }
-                }
-            }
-        }
-
-        // ==== Phase 2: Process buses in topological order ====
-        // Use cached routing order (computed only on state update, not every callback)
+        // Iterate through tracks, buses, and master in topological order
         for node in self.cached_routing_order.clone().iter() {
-            if let RoutingNode::Bus(bus_id) = node {
-                // Copy bus audio to temp buffer (avoid clone allocation)
-                let bus_buf = match self.bus_buffers.get(bus_id) {
-                    Some(buf) => buf,
-                    None => {
+            match node {
+                RoutingNode::Track(track_id) => {
+                    let default_channel = Arc::new(MixerChannel::default());
+
+                    let mut channel = self
+                        .current_state
+                        .graph
+                        .mixer_state
+                        .channels
+                        .get(track_id)
+                        .cloned()
+                        .unwrap_or(default_channel);
+
+                    let channel_mut = Arc::make_mut(&mut channel);
+
+                    // Check mute/solo
+                    if channel_mut.mute {
                         continue;
                     }
-                };
-
-                // Resize temp buffer if needed and copy
-                if self.bus_temp_buffer.len() != buf_len {
-                    self.bus_temp_buffer.resize(buf_len, 0.0);
-                }
-                self.bus_temp_buffer.copy_from_slice(bus_buf);
-
-                // Get bus channel settings
-                let bus_channel = self
-                    .current_state
-                    .graph
-                    .mixer_state
-                    .buses
-                    .get_mut(bus_id)
-                    .map(|b| Arc::make_mut(b));
-
-                let Some(bus_settings) = bus_channel else {
-                    continue;
-                };
-
-                // Skip if muted
-                if bus_settings.channel.mute {
-                    continue;
-                }
-
-                // ================= Bus Tail Handling ===================
-                let mut bus_has_signal = self
-                    .node_has_signal
-                    .get(&RoutingNode::Bus(*bus_id))
-                    .copied()
-                    .unwrap_or(false);
-                let bus_effects_tail = self
-                    .plugin_state
-                    .get_bus_effects(bus_id.to_u32() as usize)
-                    .map(|effects| {
-                        effects
-                            .iter()
-                            .map(|e| e.plugin.tail_samples())
-                            .max()
-                            .unwrap_or(0)
-                    })
-                    .unwrap_or(0);
-                if bus_has_signal {
-                    self.bus_tails.insert(*bus_id, bus_effects_tail);
-                } else {
-                    let current_tail = self.bus_tails.get(bus_id).copied().unwrap_or(0);
-                    if current_tail > 0 {
-                        let new_tail = current_tail.saturating_sub(buf_len as u32);
-                        self.bus_tails.insert(*bus_id, new_tail);
-                        if new_tail == 0 {
-                            if let Some(effects) = self
-                                .plugin_state
-                                .get_bus_effects_mut(bus_id.to_u32() as usize)
-                            {
-                                effects.iter_mut().for_each(|e| e.plugin.reset());
-                            }
-                            continue;
-                        }
-                        // Tail is ringing, keep bus alive
-                        bus_has_signal = true;
-                    } else {
-                        // Since it has no input signal, no tail -> skip processing
+                    if is_any_solo && !channel_mut.solo {
                         continue;
                     }
-                }
 
-                // Copy to mix_buffer for processing
-                if self.mix_buffer.len() != buf_len {
-                    self.mix_buffer.resize(buf_len, 0.0);
-                }
-                self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
+                    // Ensure mix_buffer is sized correctly
+                    if self.mix_buffer.len() != buf_len {
+                        self.mix_buffer.resize(buf_len, 0.0);
+                    }
+                    self.mix_buffer.fill(0.0);
 
-                let bus_volume = &mut bus_settings.channel.volume;
-                let bus_pan = &mut bus_settings.channel.pan;
+                    let mut has_signal = false;
 
-                // CONSUME BUS AUTOMATION
-                if let Some((_, auto_events)) = self
-                    .bus_automation_events
-                    .iter()
-                    .find(|(id, _)| *id == *bus_id)
-                {
-                    for event in auto_events {
-                        match event {
-                            BusAutomationEvent::Volume(v) => {
-                                bus_volume.apply_automation(*v);
-                            }
-                            BusAutomationEvent::Pan(v) => {
-                                bus_pan.apply_automation(*v);
-                            }
-                            BusAutomationEvent::PluginParam {
-                                effect_id,
-                                param_id,
-                                value,
-                            } => {
-                                if let Some(effects) = self
-                                    .plugin_state
-                                    .get_bus_effects_mut(bus_id.to_u32() as usize)
+                    // Generator Voice - use plugin_state directly (no lock!)
+                    if let Some(gen_voice) = self
+                        .active_generators
+                        .iter()
+                        .find(|g| g.track_id == *track_id && g.active)
+                    {
+                        let gen_id = gen_voice.id;
+                        let events = &gen_voice.midi_events;
+                        let param_events = &gen_voice.automation_events;
+
+                        if let Some(gen_instance) = self
+                            .plugin_state
+                            .get_generator_mut(gen_id.to_u32() as usize)
+                        {
+                            // CONSUME AUTOMATION
+                            for ev in param_events {
+                                #[allow(irrefutable_let_patterns)]
+                                if let GeneratorAutomationEvent::PluginParam { param_id, value } =
+                                    ev
                                 {
-                                    if let Some(effect) =
-                                        effects.iter_mut().find(|e| e.id == *effect_id)
-                                    {
-                                        effect.plugin.set_parameter(*param_id, *value);
-                                    }
+                                    gen_instance.plugin.apply_automation(*param_id, *value);
                                 }
                             }
+                            // PROCESS AUDIO
+                            // Build context for the generator — MIDI events are passed via ProcessContext
+                            let gen_ctx = ProcessContext {
+                                bpm,
+                                time_sig_numerator: 4,
+                                time_sig_denominator: 4,
+                                is_playing,
+                                sample_position,
+                                midi_events: events,
+                                aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
+                            };
+                            gen_instance.plugin.process(&mut self.mix_buffer, &gen_ctx);
+                            has_signal = true;
                         }
                     }
-                }
 
-                // Apply bus effects
-                if let Some(effects) = self
-                    .plugin_state
-                    .get_bus_effects_mut(bus_id.to_u32() as usize)
-                {
-                    // Bus effects receive no MIDI — pure audio processing
-                    let bus_effect_ctx = ProcessContext {
+                    // Audio Voice
+                    if Self::render_oneshots(
+                        &mut self.active_oneshots,
+                        self.sample_rate,
+                        *track_id,
+                        &mut self.mix_buffer,
+                        channels,
+                    ) {
+                        has_signal = true;
+                    }
+
+                    // track tail handling
+                    let track_effects_tail = self
+                        .plugin_state
+                        .get_track_effects(track_id.to_u32() as usize)
+                        .map(|effects| {
+                            effects
+                                .iter()
+                                .map(|e| e.plugin.tail_samples())
+                                .max()
+                                .unwrap_or(0)
+                        })
+                        .unwrap_or(0);
+
+                    if has_signal {
+                        self.track_tails.insert(*track_id, track_effects_tail);
+                    } else {
+                        let current_tail = self.track_tails.get(track_id).copied().unwrap_or(0);
+                        if current_tail > 0 {
+                            let new_tail = current_tail.saturating_sub(buf_len as u32);
+                            self.track_tails.insert(*track_id, new_tail);
+                            if new_tail == 0 {
+                                if let Some(effects) = self
+                                    .plugin_state
+                                    .get_track_effects_mut(track_id.to_u32() as usize)
+                                {
+                                    effects.iter_mut().for_each(|e| e.plugin.reset());
+                                }
+                                continue;
+                            }
+                            // has_signal = true;
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    // Apply track mixer channel (volume/pan/phase) and effects
+                    // Effects receive an empty MIDI slice — track routing is audio-only at this stage
+                    let track_effect_ctx = ProcessContext {
                         bpm,
                         time_sig_numerator: 4,
                         time_sig_denominator: 4,
                         is_playing,
                         sample_position,
                         midi_events: &[],
+                        aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
                     };
-                    for effect in effects.iter_mut() {
-                        effect.plugin.process(&mut self.mix_buffer, &bus_effect_ctx);
-                    }
-                }
+                    Self::apply_mixer_channel_with_effects(
+                        channel_mut,
+                        &mut self.plugin_state.track_effects,
+                        &self.track_automation_events,
+                        *track_id,
+                        &mut self.mix_buffer,
+                        channels,
+                        &track_effect_ctx,
+                    );
 
-                // Apply PDC on Bus
-                if let Some(delay_line) = self.bus_delay_lines.get_mut(bus_id) {
-                    delay_line.process_block(&mut self.mix_buffer, channels);
-                }
-
-                // Apply volume and pan (volume is stored in dB)
-                let volume = db_to_linear(bus_volume.get());
-                let pan = bus_pan.get();
-                let (left_gain, right_gain) = if channels == 2 {
-                    let p = (pan + 1.0) * 0.5;
-                    ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
-                } else {
-                    (volume, volume)
-                };
-
-                if channels == 2 {
-                    let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
-                    let mut iter = self.mix_buffer.chunks_exact_mut(4);
-
-                    for chunk in iter.by_ref() {
-                        let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                        v *= gain_v;
-                        chunk.copy_from_slice(&v.to_array());
+                    if let Some(delay_line) = self.track_delay_lines.get_mut(track_id) {
+                        delay_line.process_block(&mut self.mix_buffer, channels);
                     }
 
-                    // Remainder will be 0 or 2 floats (1 stereo frame)
-                    for chunk in iter.into_remainder().chunks_exact_mut(2) {
-                        chunk[0] *= left_gain;
-                        chunk[1] *= right_gain;
-                    }
-                } else {
-                    let gain_v = f32x4::splat(left_gain);
-                    let mut iter = self.mix_buffer.chunks_exact_mut(4);
+                    // Route the track signal to destinations based on routing matrix
+                    let track_routes: Vec<_> = routing
+                        .iter()
+                        .filter(|c| c.source == RoutingNode::Track(*track_id))
+                        .collect();
 
-                    for chunk in iter.by_ref() {
-                        let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                        v *= gain_v;
-                        chunk.copy_from_slice(&v.to_array());
-                    }
-
-                    for s in iter.into_remainder() {
-                        *s *= left_gain;
-                    }
-                }
-
-                // Route bus output to destinations
-                let bus_routes: Vec<_> = routing
-                    .iter()
-                    .filter(|c| c.source == RoutingNode::Bus(*bus_id))
-                    .collect();
-
-                for conn in bus_routes {
-                    self.node_has_signal.insert(conn.destination, true);
-                    match conn.destination {
-                        RoutingNode::Master => {
-                            apply_simd_mix_gain(output, &self.mix_buffer, conn.send_level);
-                        }
-                        RoutingNode::Bus(dest_bus_id) => {
-                            if let Some(dest_buf) = self.bus_buffers.get_mut(&dest_bus_id) {
-                                apply_simd_mix_gain(dest_buf, &self.mix_buffer, conn.send_level);
+                    if track_routes.is_empty() {
+                        self.node_has_signal.insert(RoutingNode::Master, true);
+                        apply_simd_mix(output, &self.mix_buffer);
+                    } else {
+                        // Route to each destination with appropriate send level
+                        for conn in track_routes {
+                            self.node_has_signal.insert(conn.destination, true);
+                            match conn.destination {
+                                RoutingNode::Master => {
+                                    apply_simd_mix_gain(output, &self.mix_buffer, conn.send_level);
+                                }
+                                RoutingNode::Bus(bus_id) => {
+                                    if let Some(bus_buf) = self.bus_buffers.get_mut(&bus_id) {
+                                        apply_simd_mix_gain(
+                                            bus_buf,
+                                            &self.mix_buffer,
+                                            conn.send_level,
+                                        );
+                                    }
+                                }
+                                RoutingNode::Track(_) => {
+                                    // Invalid: can't route to a track
+                                }
                             }
                         }
-                        RoutingNode::Track(_) => {}
+                    }
+                }
+                RoutingNode::Bus(bus_id) => {
+                    let bus_buf = match self.bus_buffers.get(bus_id) {
+                        Some(buf) => buf,
+                        None => {
+                            continue;
+                        }
+                    };
+
+                    // Resize temp buffer if needed and copy
+                    if self.bus_temp_buffer.len() != buf_len {
+                        self.bus_temp_buffer.resize(buf_len, 0.0);
+                    }
+                    self.bus_temp_buffer.copy_from_slice(bus_buf);
+
+                    // Get bus channel settings
+                    let bus_channel = self
+                        .current_state
+                        .graph
+                        .mixer_state
+                        .buses
+                        .get_mut(bus_id)
+                        .map(|b| Arc::make_mut(b));
+
+                    let Some(bus_settings) = bus_channel else {
+                        continue;
+                    };
+
+                    // Skip if muted
+                    if bus_settings.channel.mute {
+                        continue;
+                    }
+
+                    // ================= Bus Tail Handling ===================
+                    let mut bus_has_signal = self
+                        .node_has_signal
+                        .get(&RoutingNode::Bus(*bus_id))
+                        .copied()
+                        .unwrap_or(false);
+                    let bus_effects_tail = self
+                        .plugin_state
+                        .get_bus_effects(bus_id.to_u32() as usize)
+                        .map(|effects| {
+                            effects
+                                .iter()
+                                .map(|e| e.plugin.tail_samples())
+                                .max()
+                                .unwrap_or(0)
+                        })
+                        .unwrap_or(0);
+                    if bus_has_signal {
+                        self.bus_tails.insert(*bus_id, bus_effects_tail);
+                    } else {
+                        let current_tail = self.bus_tails.get(bus_id).copied().unwrap_or(0);
+                        if current_tail > 0 {
+                            let new_tail = current_tail.saturating_sub(buf_len as u32);
+                            self.bus_tails.insert(*bus_id, new_tail);
+                            if new_tail == 0 {
+                                if let Some(effects) = self
+                                    .plugin_state
+                                    .get_bus_effects_mut(bus_id.to_u32() as usize)
+                                {
+                                    effects.iter_mut().for_each(|e| e.plugin.reset());
+                                }
+                                continue;
+                            }
+                            // Tail is ringing, keep bus alive
+                            bus_has_signal = true;
+                        } else {
+                            // Since it has no input signal, no tail -> skip processing
+                            continue;
+                        }
+                    }
+
+                    // Copy to mix_buffer for processing
+                    if self.mix_buffer.len() != buf_len {
+                        self.mix_buffer.resize(buf_len, 0.0);
+                    }
+                    self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
+
+                    let bus_volume = &mut bus_settings.channel.volume;
+                    let bus_pan = &mut bus_settings.channel.pan;
+
+                    // CONSUME BUS AUTOMATION
+                    if let Some((_, auto_events)) = self
+                        .bus_automation_events
+                        .iter()
+                        .find(|(id, _)| *id == *bus_id)
+                    {
+                        for event in auto_events {
+                            match event {
+                                BusAutomationEvent::Volume(v) => {
+                                    bus_volume.apply_automation(*v);
+                                }
+                                BusAutomationEvent::Pan(v) => {
+                                    bus_pan.apply_automation(*v);
+                                }
+                                BusAutomationEvent::PluginParam {
+                                    effect_id,
+                                    param_id,
+                                    value,
+                                } => {
+                                    if let Some(effects) = self
+                                        .plugin_state
+                                        .get_bus_effects_mut(bus_id.to_u32() as usize)
+                                    {
+                                        if let Some(effect) =
+                                            effects.iter_mut().find(|e| e.id == *effect_id)
+                                        {
+                                            effect.plugin.set_parameter(*param_id, *value);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Apply bus effects
+                    if let Some(effects) = self
+                        .plugin_state
+                        .get_bus_effects_mut(bus_id.to_u32() as usize)
+                    {
+                        // Bus effects receive no MIDI — pure audio processing
+                        let bus_effect_ctx = ProcessContext {
+                            bpm,
+                            time_sig_numerator: 4,
+                            time_sig_denominator: 4,
+                            is_playing,
+                            sample_position,
+                            midi_events: &[],
+                            aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
+                        };
+                        for effect in effects.iter_mut() {
+                            effect.plugin.process(&mut self.mix_buffer, &bus_effect_ctx);
+                        }
+                    }
+
+                    // Apply PDC on Bus
+                    if let Some(delay_line) = self.bus_delay_lines.get_mut(bus_id) {
+                        delay_line.process_block(&mut self.mix_buffer, channels);
+                    }
+
+                    // Apply volume and pan (volume is stored in dB)
+                    let volume = db_to_linear(bus_volume.get());
+                    let pan = bus_pan.get();
+                    let (left_gain, right_gain) = if channels == 2 {
+                        let p = (pan + 1.0) * 0.5;
+                        ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
+                    } else {
+                        (volume, volume)
+                    };
+
+                    if channels == 2 {
+                        let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
+                        let mut iter = self.mix_buffer.chunks_exact_mut(4);
+
+                        for chunk in iter.by_ref() {
+                            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                            v *= gain_v;
+                            chunk.copy_from_slice(&v.to_array());
+                        }
+
+                        // Remainder will be 0 or 2 floats (1 stereo frame)
+                        for chunk in iter.into_remainder().chunks_exact_mut(2) {
+                            chunk[0] *= left_gain;
+                            chunk[1] *= right_gain;
+                        }
+                    } else {
+                        let gain_v = f32x4::splat(left_gain);
+                        let mut iter = self.mix_buffer.chunks_exact_mut(4);
+
+                        for chunk in iter.by_ref() {
+                            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                            v *= gain_v;
+                            chunk.copy_from_slice(&v.to_array());
+                        }
+
+                        for s in iter.into_remainder() {
+                            *s *= left_gain;
+                        }
+                    }
+
+                    // Route bus output to destinations
+                    let bus_routes: Vec<_> = routing
+                        .iter()
+                        .filter(|c| c.source == RoutingNode::Bus(*bus_id))
+                        .collect();
+
+                    for conn in bus_routes {
+                        self.node_has_signal.insert(conn.destination, true);
+                        match conn.destination {
+                            RoutingNode::Master => {
+                                apply_simd_mix_gain(output, &self.mix_buffer, conn.send_level);
+                            }
+                            RoutingNode::Bus(dest_bus_id) => {
+                                if let Some(dest_buf) = self.bus_buffers.get_mut(&dest_bus_id) {
+                                    apply_simd_mix_gain(
+                                        dest_buf,
+                                        &self.mix_buffer,
+                                        conn.send_level,
+                                    );
+                                }
+                            }
+                            RoutingNode::Track(_) => {}
+                        }
+                    }
+                }
+                RoutingNode::Master => {
+                    // TAIL HANDLING
+                    let master_has_signal = self
+                        .node_has_signal
+                        .get(&RoutingNode::Master)
+                        .copied()
+                        .unwrap_or(false);
+                    let master_effects_tail = self
+                        .plugin_state
+                        .master_effects
+                        .iter()
+                        .map(|e| e.plugin.tail_samples())
+                        .max()
+                        .unwrap_or(0);
+
+                    if master_has_signal {
+                        self.master_tail = master_effects_tail;
+                    } else {
+                        if self.master_tail > 0 {
+                            self.master_tail = self.master_tail.saturating_sub(buf_len as u32);
+                            // If the tail becomes 0, then master has finally gone silent!
+                            if self.master_tail == 0 {
+                                self.plugin_state
+                                    .master_effects
+                                    .iter_mut()
+                                    .for_each(|e| e.plugin.reset());
+                            }
+                        }
+                    }
+
+                    if master_has_signal || self.master_tail > 0 {
+                        let master_effect_ctx = ProcessContext {
+                            bpm,
+                            time_sig_numerator: 4,
+                            time_sig_denominator: 4,
+                            is_playing,
+                            sample_position,
+                            midi_events: &[],
+                            aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
+                        };
+                        let mut master_bus =
+                            self.current_state.graph.mixer_state.master_bus.clone();
+                        let master_bus_mut = Arc::make_mut(&mut master_bus);
+                        Self::apply_master_bus_with_effects(
+                            master_bus_mut,
+                            &mut self.plugin_state.master_effects,
+                            &self.master_automation_events,
+                            output,
+                            channels,
+                            &master_effect_ctx,
+                        );
+                    } else {
+                        // output silent buffer
+                        output.fill(0.0);
                     }
                 }
             }
-        }
-
-        // ==== Phase 3: Apply master bus effects ====
-        // Master effects receive no MIDI — pure audio processing
-
-        // TAIL HANDLING
-        let master_has_signal = self
-            .node_has_signal
-            .get(&RoutingNode::Master)
-            .copied()
-            .unwrap_or(false);
-        let master_effects_tail = self
-            .plugin_state
-            .master_effects
-            .iter()
-            .map(|e| e.plugin.tail_samples())
-            .max()
-            .unwrap_or(0);
-
-        if master_has_signal {
-            self.master_tail = master_effects_tail;
-        } else {
-            if self.master_tail > 0 {
-                self.master_tail = self.master_tail.saturating_sub(buf_len as u32);
-                // If the tail becomes 0, then master has finally gone silent!
-                if self.master_tail == 0 {
-                    self.plugin_state
-                        .master_effects
-                        .iter_mut()
-                        .for_each(|e| e.plugin.reset());
-                }
-            }
-        }
-
-        if master_has_signal || self.master_tail > 0 {
-            let master_effect_ctx = ProcessContext {
-                bpm,
-                time_sig_numerator: 4,
-                time_sig_denominator: 4,
-                is_playing,
-                sample_position,
-                midi_events: &[],
-            };
-            let mut master_bus = self.current_state.graph.mixer_state.master_bus.clone();
-            let master_bus_mut = Arc::make_mut(&mut master_bus);
-            Self::apply_master_bus_with_effects(
-                master_bus_mut,
-                &mut self.plugin_state.master_effects,
-                &self.master_automation_events,
-                output,
-                channels,
-                &master_effect_ctx,
-            );
-        } else {
-            // output silent buffer
-            output.fill(0.0);
         }
     }
 
@@ -3173,21 +3197,30 @@ impl AudioEngine {
         for (node, path_lat) in &path_latency {
             let comp = max_system_latency - path_lat;
             self.compensation_delays.insert(*node, comp);
-            
+
             match node {
                 RoutingNode::Track(id) => {
-                    let dl = self.track_delay_lines.entry(*id).or_insert_with(DelayLine::default);
+                    let dl = self
+                        .track_delay_lines
+                        .entry(*id)
+                        .or_insert_with(DelayLine::default);
                     dl.set_delay(comp as usize, channels);
                 }
                 RoutingNode::Bus(id) => {
-                    let dl = self.bus_delay_lines.entry(*id).or_insert_with(DelayLine::default);
+                    let dl = self
+                        .bus_delay_lines
+                        .entry(*id)
+                        .or_insert_with(DelayLine::default);
                     dl.set_delay(comp as usize, channels);
                 }
                 RoutingNode::Master => {} // Master has no compensation delay
             }
         }
-        
-        log::info!("[PDC] Recalculated Latencies. Max System Latency: {} samples", max_system_latency);
+
+        log::info!(
+            "[PDC] Recalculated Latencies. Max System Latency: {} samples",
+            max_system_latency
+        );
     }
 }
 

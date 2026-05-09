@@ -6,6 +6,8 @@ import 'dart:ffi' as ffi;
 
 import 'package:karbeat/src/rust/api/waveform.dart'; 
 
+/// Create Float32List of waveform buffer 
+/// from raw pointer to the waveform buffer at the Rust memory
 Float32List createZeroCopyWaveformView(WaveformHandle handle) {
   final ptrAddress = handle.getPointer();
   final len = handle.getLen();
@@ -31,8 +33,8 @@ const double _kI8Scale = 1.0 / 127.0;
 // =============================================================================
 
 class StereoWaveformPainter extends CustomPainter {
-  /// Quantized i8 interleaved stereo samples: [L, R, L, R, ...]
-  final Int8List samples;
+  /// Zero-copy Float32List interleaved stereo samples: [L, R, L, R, ...]
+  final Float32List samples;
   final Color color;
   final double strokeWidth;
 
@@ -101,8 +103,9 @@ class StereoWaveformPainter extends CustomPainter {
         final int sampleIdx = i * 2;
         if (sampleIdx + 1 >= samples.length) break;
 
-        final double l = samples[sampleIdx] * _kI8Scale;
-        final double r = samples[sampleIdx + 1] * _kI8Scale;
+        // REMOVED `* _kI8Scale` - we are using raw f32 floats now!
+        final double l = samples[sampleIdx];
+        final double r = samples[sampleIdx + 1];
 
         if (!hasData) {
           lMin = l;
@@ -154,7 +157,6 @@ class StereoWaveformPainter extends CustomPainter {
         oldDelegate.color != color;
   }
 }
-
 // =============================================================================
 // 3. StereoWaveformClipPainter  (Timeline Clips — main optimization target)
 // =============================================================================

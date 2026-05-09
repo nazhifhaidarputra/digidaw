@@ -12,6 +12,7 @@ use karbeat_core::{
 };
 
 pub use karbeat_core::core::project::AudioWaveform;
+use serde::Serialize;
 
 /// ======================================
 /// WaveformHandle
@@ -20,6 +21,7 @@ pub use karbeat_core::core::project::AudioWaveform;
 /// sync methods to build a zero-copy Float32List view — no FFI serialization
 /// of the audio buffer is performed.
 /// ======================================
+#[derive(Debug, Serialize, Clone)]
 #[frb(opaque)]
 pub struct WaveformHandle(Arc<AudioWaveform>);
 

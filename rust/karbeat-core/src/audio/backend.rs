@@ -273,7 +273,7 @@ pub fn start_audio_stream(
         initial_state,
     );
 
-    let ring_buffer_capacity = 4096;
+    let ring_buffer_capacity = 8192;
     let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
 
     let engine_block_size = 512;
