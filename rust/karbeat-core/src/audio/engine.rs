@@ -31,7 +31,7 @@ use crate::{
         automation::AutomationTarget,
         mixer::{MixerChannel, RoutingNode},
         plugin::{MidiEvent, MidiMessage, ProcessContext},
-        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
+        AudioWaveform, Clip, GeneratorId, GeneratorInstance, DawSource, AudioTrack, Pattern,
         PatternId, TrackId,
     },
     shared::id::*,
@@ -2530,7 +2530,7 @@ impl AudioEngine {
         }
     }
 
-    fn process_track(&mut self, track: &KarbeatTrack, start_time: u32, end_time: u32) {
+    fn process_track(&mut self, track: &AudioTrack, start_time: u32, end_time: u32) {
         let track_id = track.id;
 
         let mut gen_voice_idx = None;
@@ -2589,7 +2589,7 @@ impl AudioEngine {
             };
 
             match &clip.source {
-                KarbeatSource::Audio(source_id) => {
+                DawSource::Audio(source_id) => {
                     let waveform_opt = self
                         .current_state
                         .graph
@@ -2601,7 +2601,7 @@ impl AudioEngine {
                         self.prepare_audio_voice(track.id, &clip, &waveform, start_time, end_time);
                     }
                 }
-                KarbeatSource::Midi(id) => {
+                DawSource::Midi(id) => {
                     let fresh_pattern = self.current_state.graph.patterns.get(id);
 
                     if let Some(pattern) = fresh_pattern {

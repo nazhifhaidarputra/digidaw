@@ -43,7 +43,7 @@ class TrackListScreen extends ConsumerWidget {
         return Builder(
           builder: (context) {
             final trackIdsStr = ref.watch(
-              karbeatStateProvider.select((s) {
+              globalStateProvider.select((s) {
                 final keys = s.tracks.keys.toList()..sort();
                 return keys.join(',');
               }),
@@ -128,7 +128,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
 
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     _activeSampleRate = state.hardwareConfig.sampleRate > 0
         ? state.hardwareConfig.sampleRate
         : 44100;
@@ -202,7 +202,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   // FIXME: Make the pivot stay still even in small zoom so that
   // it does not shift the pivot position relative to tick position in the timeline
   void _updateZoom(double newZoom, double focalPointX) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final oldZoom = state.horizontalZoomLevel;
 
     final clampedZoom = newZoom.clamp(1.0, 1000.0);
@@ -265,7 +265,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     Offset localPosition, {
     bool isDrag = false,
   }) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     double scrollX = 0;
     if (_trackContentController.hasClients) {
       scrollX = _trackContentController.offset;
@@ -338,7 +338,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   /// Confirms the range selection and selects all clips within the time range
-  void _confirmRangeSelect(KarbeatState state) {
+  void _confirmRangeSelect(GlobalAppState state) {
     if (!_isRangeSelecting ||
         _rangeSelectStart == null ||
         _rangeSelectEnd == null ||
@@ -403,7 +403,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   /// Helper method to build the cut helper line
-  Widget _buildCutHelperLine(BuildContext context, KarbeatState state) {
+  Widget _buildCutHelperLine(BuildContext context, GlobalAppState state) {
     if (_mousePos == null || state.selectedTool != ToolSelection.slice) {
       return const SizedBox();
     }
@@ -455,18 +455,18 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     // Calculate total height to ensure both lists have exactly same extent
     // +1 for the Add Button row
     final int itemCount = widget.trackIds.length + 1;
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
     );
     final selectedTool = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedTool),
+      globalStateProvider.select((s) => s.selectedTool),
     );
     final horizontalZoom = ref.watch(
-      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
+      globalStateProvider.select((s) => s.horizontalZoomLevel),
     );
     final selectedClipIds = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedClipIds),
+      globalStateProvider.select((s) => s.selectedClipIds),
     );
     final currentTimelineWidth = _timelineWidth;
     final bool isZooming = _isCtrlPressed || selectedTool == ToolSelection.zoom;
@@ -502,9 +502,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ),
               const SizedBox(width: 8),
               DropdownButton<GridSize>(
-                value: ref.watch(
-                  karbeatStateProvider.select((s) => s.gridSize),
-                ),
+                value: ref.watch(globalStateProvider.select((s) => s.gridSize)),
                 dropdownColor: Colors.grey.shade800,
                 style: const TextStyle(color: Colors.white, fontSize: 12),
                 underline: const SizedBox(),
@@ -555,7 +553,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 }).toList(),
                 onChanged: (val) {
                   if (val != null) {
-                    ref.read(karbeatStateProvider).setGridSize(val);
+                    ref.read(globalStateProvider).setGridSize(val);
                   }
                 },
               ),
@@ -567,7 +565,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               const SizedBox(width: 8),
               DropdownButton<MusicalBeatSize>(
                 value: ref.watch(
-                  karbeatStateProvider.select(
+                  globalStateProvider.select(
                     (s) => s.horizontalClipShiftSizeDenom,
                   ),
                 ),
@@ -618,9 +616,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 }).toList(),
                 onChanged: (val) {
                   if (val != null) {
-                    ref
-                            .read(karbeatStateProvider)
-                            .horizontalClipShiftSizeDenom =
+                    ref.read(globalStateProvider).horizontalClipShiftSizeDenom =
                         val;
                   }
                 },
@@ -699,7 +695,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                           if (event.buttons == kSecondaryButton) {
                             _lastRightClickPos = event.localPosition;
                             // Clear selection on right-click of empty space to prep for pasting
-                            ref.read(karbeatStateProvider).deselectAllClips();
+                            ref.read(globalStateProvider).deselectAllClips();
                             setState(() {});
                           }
                         },
@@ -707,7 +703,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                           if (event is PointerScrollEvent) {
                             if (_isCtrlPressed) {
                               final currentZoom = ref
-                                  .read(karbeatStateProvider)
+                                  .read(globalStateProvider)
                                   .horizontalZoomLevel;
                               final double multiplier = event.scrollDelta.dy > 0
                                   ? 0.9
@@ -741,7 +737,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                             }
                             if (selectedTool == ToolSelection.zoom) {
                               final currentZoom = ref
-                                  .read(karbeatStateProvider)
+                                  .read(globalStateProvider)
                                   .horizontalZoomLevel;
                               final double multiplier = details.delta.dy > 0
                                   ? 0.9
@@ -883,7 +879,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                                     }
                                                     final currentState = ref
                                                         .read(
-                                                          karbeatStateProvider,
+                                                          globalStateProvider,
                                                         );
 
                                                     // 1. Calculate Target Track
@@ -997,7 +993,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                                         ),
                                                       );
                                                     } else if (result.isOk()) {
-                                                      KarbeatLogger.info(
+                                                      AppLogger.info(
                                                         "Paste clip",
                                                       );
 
@@ -1076,7 +1072,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     zoomLevel: horizontalZoom,
                     sampleSelector: (pos) => pos.ticks,
                     onSeek: (int newTicks) {
-                      final state = ref.read(karbeatStateProvider);
+                      final state = ref.read(globalStateProvider);
                       final tempo = state.tempo;
                       final safeTicks = newTicks < 0 ? 0 : newTicks;
                       final sampleRate = state.hardwareConfig.sampleRate > 0
@@ -1087,7 +1083,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                               .round();
                       state.seekTo(samples);
 
-                      KarbeatLogger.info("Seeking to: $samples samples");
+                      AppLogger.info("Seeking to: $samples samples");
                     },
                   ),
                 ),
@@ -1146,7 +1142,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       title: "Copy",
                       icon: Icons.copy,
                       onTap: () async {
-                        KarbeatLogger.info("Copy clips");
+                        AppLogger.info("Copy clips");
                         final trackId = state.selectedTrackId;
                         if (trackId == null) return;
                         final result = await state.copySelectedClips(
@@ -1169,7 +1165,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       title: "Cut",
                       icon: Icons.cut,
                       onTap: () async {
-                        KarbeatLogger.info("Cut clips");
+                        AppLogger.info("Cut clips");
                         final trackId = state.selectedTrackId;
                         if (trackId == null) return;
                         final result = await state.cutSelectedClips(
@@ -1194,7 +1190,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       icon: Icons.delete,
                       isDestructive: true,
                       onTap: () async {
-                        KarbeatLogger.info("Delete clips");
+                        AppLogger.info("Delete clips");
                         state.deleteSelectedClips();
                         state.deselectAllClips();
                       },
@@ -1236,7 +1232,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     double absoluteX = (_mousePos!.dx + scrollX).clamp(0, double.infinity);
 
     // Convert X Pixels -> Ticks
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final zoomLevel = state.horizontalZoomLevel;
     double ticks = absoluteX * zoomLevel;
 
@@ -1272,7 +1268,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       scrollX = _trackContentController.offset;
     }
 
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     double absoluteX = _mousePos!.dx + scrollX;
     if (absoluteX < 0) absoluteX = 0;
 
@@ -1413,7 +1409,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
-              ref.read(karbeatStateProvider).addAudioTrack();
+              ref.read(globalStateProvider).addAudioTrack();
             },
             child: const Row(
               children: [
@@ -1443,7 +1439,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   void _showGeneratorBrowser(BuildContext context) {
-    final availablePlugins = ref.read(karbeatStateProvider).availableGenerators;
+    final availablePlugins = ref.read(globalStateProvider).availableGenerators;
 
     showDialog(
       context: context,
@@ -1525,7 +1521,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     return InkWell(
       onTap: () {
         Navigator.pop(ctx);
-        ref.read(karbeatStateProvider).addMidiTrackWithGeneratorId(plugin.id);
+        ref.read(globalStateProvider).addMidiTrackWithGeneratorId(plugin.id);
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -1586,7 +1582,7 @@ class _TrackHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds this specific header if the track's name/color/type changes
     final track = ref.watch(
-      karbeatStateProvider.select((s) => s.tracks[trackId]),
+      globalStateProvider.select((s) => s.tracks[trackId]),
     );
 
     if (track == null) return const SizedBox();
@@ -1637,7 +1633,7 @@ class _TrackHeader extends ConsumerWidget {
           icon: Icons.edit,
           onTap: () {
             // Replace with your actual rename logic via app_state
-            KarbeatLogger.info("Rename track requested for ID: ${track.id}");
+            AppLogger.info("Rename track requested for ID: ${track.id}");
           },
         ),
         KarbeatContextAction(
@@ -1645,7 +1641,7 @@ class _TrackHeader extends ConsumerWidget {
           icon: Icons.arrow_upward,
           onTap: () {
             // Replace with actual move up logic
-            KarbeatLogger.info("Move Up requested for track ID: ${track.id}");
+            AppLogger.info("Move Up requested for track ID: ${track.id}");
           },
         ),
         KarbeatContextAction(
@@ -1653,7 +1649,7 @@ class _TrackHeader extends ConsumerWidget {
           icon: Icons.arrow_downward,
           onTap: () {
             // Replace with actual move down logic
-            KarbeatLogger.info("Move Down requested for track ID: ${track.id}");
+            AppLogger.info("Move Down requested for track ID: ${track.id}");
           },
         ),
         KarbeatContextAction(
@@ -1662,7 +1658,7 @@ class _TrackHeader extends ConsumerWidget {
           isDestructive: true,
           onTap: () {
             // Replace with actual delete logic via app_state
-            KarbeatLogger.info("Delete track requested for ID: ${track.id}");
+            AppLogger.info("Delete track requested for ID: ${track.id}");
           },
         ),
       ],
@@ -1750,9 +1746,9 @@ class _TimelineRuler extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Read state for drawing
     final zoomLevel = ref.watch(
-      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
+      globalStateProvider.select((s) => s.horizontalZoomLevel),
     );
-    final tempo = ref.watch(karbeatStateProvider.select((s) => s.tempo));
+    final tempo = ref.watch(globalStateProvider.select((s) => s.tempo));
     final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
 
     return RepaintBoundary(
@@ -1911,7 +1907,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
     required double localDx,
     required double zoomLevel,
   }) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     int startTime = (localDx * zoomLevel).round();
 
     if (state.snapToGrid) {
@@ -1925,23 +1921,23 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
   Widget build(BuildContext context) {
     // Listen to Zoom Level (Global)
     final zoomLevel = ref.watch(
-      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
+      globalStateProvider.select((s) => s.horizontalZoomLevel),
     );
 
-    final gridSize = ref.watch(karbeatStateProvider.select((s) => s.gridSize));
-    final tempo = ref.watch(karbeatStateProvider.select((s) => s.tempo));
+    final gridSize = ref.watch(globalStateProvider.select((s) => s.gridSize));
+    final tempo = ref.watch(globalStateProvider.select((s) => s.tempo));
 
     // Listen to Track Data
     final track = ref.watch(
-      karbeatStateProvider.select((s) => s.tracks[widget.trackId]),
+      globalStateProvider.select((s) => s.tracks[widget.trackId]),
     );
 
     final isSelectedTrack = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedTrackId == widget.trackId),
+      globalStateProvider.select((s) => s.selectedTrackId == widget.trackId),
     );
 
     final trackSelectedClipIdsStr = ref.watch(
-      karbeatStateProvider.select((s) {
+      globalStateProvider.select((s) {
         if (s.selectedTrackId != widget.trackId) return '';
         return s.selectedClipIds.join(',');
       }),
@@ -1954,7 +1950,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
     );
 
     final selectedTool = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedTool),
+      globalStateProvider.select((s) => s.selectedTool),
     );
 
     final selectedClipIds = trackSelectedClipIdsStr.isEmpty
@@ -1990,7 +1986,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
                       zoomLevel: zoomLevel,
                     );
                   } else {
-                    ref.read(karbeatStateProvider).deselectAllClips();
+                    ref.read(globalStateProvider).deselectAllClips();
                   }
                 },
                 child: RepaintBoundary(
@@ -2116,7 +2112,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   }
 
   void _syncModel() {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final bpm = state.tempo;
     final sr = state.hardwareConfig.sampleRate;
     // Convert to tick-equivalent for rendering on the tick-based timeline
@@ -2204,7 +2200,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
               onTapUp: (details) async {
                 if (widget.selectedTool == ToolSelection.delete) {
-                  final state = ref.read(karbeatStateProvider);
+                  final state = ref.read(globalStateProvider);
                   // If this clip is selected and there are multiple selections, batch delete
                   if (widget.isSelected && widget.selectedClipIds.length > 1) {
                     state.deleteSelectedClips();
@@ -2212,7 +2208,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                     state.deleteClip(widget.trackId, widget.clip.id);
                   }
                 } else if (widget.selectedTool == ToolSelection.select) {
-                  final state = ref.read(karbeatStateProvider);
+                  final state = ref.read(globalStateProvider);
                   // Get tap position for panel positioning
                   final renderBox = context.findRenderObject() as RenderBox?;
                   final tapPosition =
@@ -2246,14 +2242,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   }
                 } else if (widget.selectedTool == ToolSelection.pointer) {
                   ref
-                      .read(karbeatStateProvider)
+                      .read(globalStateProvider)
                       .selectClip(
                         trackId: widget.trackId,
                         clipId: widget.clip.id,
                       );
                 } else if (widget.selectedTool == ToolSelection.slice) {
                   // Calculate absolute position on the timeline (in native clip units)
-                  final state = ref.read(karbeatStateProvider);
+                  final state = ref.read(globalStateProvider);
                   int cutPoint;
                   if (widget.clip.isSampleBased) {
                     // For audio clips: convert pixel→tick→sample
@@ -2313,7 +2309,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 }
 
                 // If the user starts dragging an UNSELECTED clip, select it first!
-                final state = ref.read(karbeatStateProvider);
+                final state = ref.read(globalStateProvider);
                 if (!widget.isSelected) {
                   state.selectClip(
                     trackId: widget.trackId,
@@ -2364,7 +2360,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               onPanUpdate: (details) {
                 if (_currentAction == _DragAction.none) return;
 
-                final state = ref.read(karbeatStateProvider);
+                final state = ref.read(globalStateProvider);
                 final currentSelectedIds = state.selectedClipIds;
                 final track = state.tracks[widget.trackId];
                 if (track == null) return;
@@ -2436,7 +2432,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               onPanEnd: (_) {
                 if (_currentAction == _DragAction.none) return;
 
-                final state = ref.read(karbeatStateProvider);
+                final state = ref.read(globalStateProvider);
                 final currentSelectedIds = state.selectedClipIds;
 
                 int? newTrackId;
@@ -2501,7 +2497,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 color: Colors.cyanAccent.withAlpha(47),
                 zoomLevel: widget.zoomLevel,
                 projectSampleRate: ref
-                    .read(karbeatStateProvider)
+                    .read(globalStateProvider)
                     .hardwareConfig
                     .sampleRate,
                 overrideOffset: _visualOffset.toDouble(),
@@ -2591,7 +2587,7 @@ class _ClipRenderer extends ConsumerWidget {
   }
 
   Widget _buildContent(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(karbeatStateProvider);
+    final state = ref.watch(globalStateProvider);
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
@@ -2766,7 +2762,7 @@ class _GridPainter extends CustomPainter {
 final trackWaveformProvider =
     Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
       // Re-evaluate whenever the track changes (e.g. clips added/removed)
-      ref.watch(karbeatStateProvider.select((s) => s.tracks[arg.trackId]));
+      ref.watch(globalStateProvider.select((s) => s.tracks[arg.trackId]));
 
       // Sync call — no copy, no await; returns Arc handles into Rust memory
       return getWaveformHandlesForTrack(trackId: arg.trackId);
@@ -2785,7 +2781,7 @@ int computeTargetBin(double zoomLevel) {
 }
 
 /// Snaps a tick value to the nearest grid line based on the global state
-int _snapTick(int ticks, KarbeatState state) {
+int _snapTick(int ticks, GlobalAppState state) {
   if (!state.snapToGrid) return ticks;
 
   final gridSize = state.gridSize;
@@ -2803,7 +2799,7 @@ int _snapTick(int ticks, KarbeatState state) {
 
 /// Snaps an absolute tick value to the nearest global step boundary.
 /// Used for the cut tool, where the cut point should land on a step grid line.
-int _snapClipShiftTick(int ticks, KarbeatState state) {
+int _snapClipShiftTick(int ticks, GlobalAppState state) {
   final step = state.horizontalClipShiftSizeDenom;
   if (step == MusicalBeatSize.none) return ticks;
 
@@ -2817,7 +2813,7 @@ int _snapClipShiftTick(int ticks, KarbeatState state) {
 /// Unlike [_snapClipShiftTick], this does NOT clamp to global grid boundaries.
 /// The clip jumps in step-size increments from its initial starting position:
 ///   new_position = initial_start + round(delta / step) * step
-int _snapDeltaToStep(int deltaInTicks, KarbeatState state) {
+int _snapDeltaToStep(int deltaInTicks, GlobalAppState state) {
   final step = state.horizontalClipShiftSizeDenom;
   if (step == MusicalBeatSize.none) return deltaInTicks;
 
@@ -2851,7 +2847,7 @@ class _GroupedBatchOverlay extends ConsumerWidget {
       builder: (context, child) {
         if (!clipDragController.isActive) return const SizedBox();
 
-        final state = ref.read(karbeatStateProvider);
+        final state = ref.read(globalStateProvider);
         final selectedClipIds = state.selectedClipIds;
         final selectedTrackId = state.selectedTrackId;
 

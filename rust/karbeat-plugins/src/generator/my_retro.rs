@@ -150,7 +150,7 @@ impl MyRetro {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
-impl KarbeatPlugin for MyRetro {
+impl AudioPlugin for MyRetro {
     fn name(&self) -> &str {
         "My Retro"
     }

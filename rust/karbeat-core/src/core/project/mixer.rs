@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::{
     commands::AudioCommand,
     context::{ctx, utils::send_audio_command},
-    core::project::{plugin::KarbeatPlugin, ApplicationState, PluginInstance, TrackId},
+    core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
     shared::{BusId, EffectId},
 };
 
@@ -201,7 +201,7 @@ impl MixerChannel {
     pub fn add_effect(
         &mut self,
         effect_registry_id: u32,
-    ) -> anyhow::Result<(Box<dyn KarbeatPlugin + Send + Sync>, String, EffectId)> {
+    ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
         let (effect_plugin, effect_name, default_params) = {

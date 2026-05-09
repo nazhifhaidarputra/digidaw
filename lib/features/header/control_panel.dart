@@ -196,7 +196,7 @@ class DefaultControlPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(karbeatStateProvider);
+    final state = ref.watch(globalStateProvider);
     final builder = ControlPanelBuilder();
 
     // 1. Screen Navigation Dropdown
@@ -205,7 +205,7 @@ class DefaultControlPanel extends ConsumerWidget {
         name: _getViewName(state.currentView),
         icon: _getViewIcon(state.currentView),
         color: Colors.cyanAccent,
-        onSelected: (view) => ref.read(karbeatStateProvider).navigateTo(view),
+        onSelected: (view) => ref.read(globalStateProvider).navigateTo(view),
         items: const [
           PopupMenuItem(
             value: WorkspaceView.trackList,
@@ -251,7 +251,7 @@ class DefaultControlPanel extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           StreamBuilder(
-            stream: ref.read(karbeatStateProvider).positionStream,
+            stream: ref.read(globalStateProvider).positionStream,
             builder: (context, asyncSnapshot) {
               final pos = asyncSnapshot.data;
 
@@ -269,7 +269,7 @@ class DefaultControlPanel extends ConsumerWidget {
                       playbackMode: const PlaybackModeDto.song(),
                     );
                   } catch (e) {
-                    KarbeatLogger.error("Failed to toggle playback: $e");
+                    AppLogger.error("Failed to toggle playback: $e");
                   }
                 },
               );
@@ -279,14 +279,14 @@ class DefaultControlPanel extends ConsumerWidget {
             name: "Stop",
             icon: Icons.stop,
             color: Colors.redAccent,
-            onTap: () => ref.read(karbeatStateProvider).stop(),
+            onTap: () => ref.read(globalStateProvider).stop(),
           ),
           ControlPanelToolbarItem(
             name: "Loop",
             icon: Icons.loop,
             color: Colors.orangeAccent,
             isActive: state.isLooping,
-            onTap: () => ref.read(karbeatStateProvider).toggleLoop(),
+            onTap: () => ref.read(globalStateProvider).toggleLoop(),
           ),
         ],
       ),
@@ -300,7 +300,7 @@ class DefaultControlPanel extends ConsumerWidget {
             icon: Icons.grid_on,
             color: Colors.blueAccent,
             isActive: state.snapToGrid,
-            onTap: () => ref.read(karbeatStateProvider).toggleSnapToGrid(),
+            onTap: () => ref.read(globalStateProvider).toggleSnapToGrid(),
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
@@ -308,7 +308,7 @@ class DefaultControlPanel extends ConsumerWidget {
             icon: MdiIcons.metronome,
             color: Colors.blueAccent,
             isActive: state.isMetronomeActive,
-            onTap: () => ref.read(karbeatStateProvider).toggleMetronomeActive(),
+            onTap: () => ref.read(globalStateProvider).toggleMetronomeActive(),
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
@@ -317,7 +317,7 @@ class DefaultControlPanel extends ConsumerWidget {
             color: Colors.deepPurpleAccent,
             isActive: state.showFloatingMidiKeyboard,
             onTap: () =>
-                ref.read(karbeatStateProvider).toggleFloatingMidiKeyboard(),
+                ref.read(globalStateProvider).toggleFloatingMidiKeyboard(),
           ),
         ],
       ),
@@ -337,7 +337,7 @@ class DefaultControlPanel extends ConsumerWidget {
         color: state.selectedTool == ToolSelection.delete
             ? Colors.red
             : Colors.blueAccent,
-        onSelected: (tool) => ref.read(karbeatStateProvider).selectTool(tool),
+        onSelected: (tool) => ref.read(globalStateProvider).selectTool(tool),
         items: const [
           PopupMenuItem(
             value: ToolSelection.pointer,
@@ -485,7 +485,7 @@ class DefaultControlPanel extends ConsumerWidget {
       ),
       child: IntrinsicHeight(
         child: StreamBuilder<UiTransportFeedback>(
-          stream: ref.read(karbeatStateProvider).positionStream,
+          stream: ref.read(globalStateProvider).positionStream,
           builder: (context, asyncSnapshot) {
             final pos = asyncSnapshot.data;
             final bar = pos?.bar ?? 0;
@@ -545,7 +545,7 @@ class BpmControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bpm = ref.watch(karbeatStateProvider.select((s) => s.tempo));
+    final bpm = ref.watch(globalStateProvider.select((s) => s.tempo));
 
     return FineGrainedInputWrapper<double>(
       value: bpm,
@@ -603,6 +603,6 @@ class BpmControl extends ConsumerWidget {
 
   void _updateBpm(WidgetRef ref, double newBpm) {
     final clamped = newBpm.clamp(10.0, 999.0);
-    ref.read(karbeatStateProvider).setBpm(clamped);
+    ref.read(globalStateProvider).setBpm(clamped);
   }
 }

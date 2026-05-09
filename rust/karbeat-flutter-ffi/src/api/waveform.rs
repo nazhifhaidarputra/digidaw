@@ -4,7 +4,7 @@ use flutter_rust_bridge::frb;
 use karbeat_core::{
     core::{
         file_manager::audio_loader::AudioLoader,
-        project::{KarbeatSource, TrackType},
+        project::{DawSource, TrackType},
     },
     lock::get_app_read,
     shared::{AudioSourceId, TrackId},
@@ -86,7 +86,7 @@ pub fn get_waveform_handles_for_track(track_id: u32) -> HashMap<u32, WaveformHan
     let mut map = HashMap::new();
 
     for clip in track.clips() {
-        if let KarbeatSource::Audio(source_id) = clip.source {
+        if let DawSource::Audio(source_id) = clip.source {
             // Skip duplicates — a source may appear in multiple clips
             if map.contains_key(&source_id.to_u32()) {
                 continue;

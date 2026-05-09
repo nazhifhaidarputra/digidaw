@@ -43,7 +43,7 @@ impl From<f32> for FilterSlope {
 
 #[derive(Clone)]
 #[karbeat_plugin]
-pub struct KarbeatParametricEQFilterNode {
+pub struct DigiParametricEQFilterNode {
     #[param(
         id = "freq",
         name = "Frequency",
@@ -95,7 +95,7 @@ pub struct KarbeatParametricEQFilterNode {
     channels: Vec<SingleBiquadFilterStage>,
 }
 
-impl KarbeatParametricEQFilterNode {
+impl DigiParametricEQFilterNode {
     pub fn new(band_idx: usize, default_freq: f32) -> Self {
         let mut node = Self::base_default();
 
@@ -214,9 +214,9 @@ impl KarbeatParametricEQFilterNode {
 
 #[derive(Clone)]
 #[karbeat_plugin]
-pub struct KarbeatParametricEQ {
+pub struct DigiParametricEQ {
     #[nested(prefix = "band")]
-    pub nodes: Vec<KarbeatParametricEQFilterNode>,
+    pub nodes: Vec<DigiParametricEQFilterNode>,
 
     #[param(
         id = "base_gain",
@@ -245,19 +245,19 @@ pub struct KarbeatParametricEQ {
     pub spectrum_buffer: Arc<Mutex<Vec<f32>>>,
 }
 
-impl Default for KarbeatParametricEQ {
+impl Default for DigiParametricEQ {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl KarbeatParametricEQ {
+impl DigiParametricEQ {
     pub fn new() -> Self {
         let mut engine = Self::base_default();
 
         let default_freqs = [60.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0];
         for (i, &f) in default_freqs.iter().enumerate() {
-            engine.nodes.push(KarbeatParametricEQFilterNode::new(i, f));
+            engine.nodes.push(DigiParametricEQFilterNode::new(i, f));
         }
 
         engine.last_sample_rate = 48000.0;
@@ -317,7 +317,7 @@ impl KarbeatParametricEQ {
     }
 }
 
-impl KarbeatPlugin for KarbeatParametricEQ {
+impl AudioPlugin for DigiParametricEQ {
     fn name(&self) -> &str {
         "Parametric EQ"
     }
@@ -569,19 +569,19 @@ impl KarbeatPlugin for KarbeatParametricEQ {
     }
 }
 
-impl Manifestable for KarbeatParametricEQ {
+impl Manifestable for DigiParametricEQ {
     fn build_manifest() -> PluginManifest {
         PluginManifest {
             id: 0, // Set to your global plugin ID
-            name: "Karbeat Parametric EQ".into(),
-            internal_type: "KarbeatParametricEQ".into(),
+            name: "Digi Parametric EQ".into(),
+            internal_type: "DigiParametricEQ".into(),
             is_synth: false,
             parameters: Self::static_parameter_specs(),
         }
     }
 }
 
-impl AudioPluginBuilder for KarbeatParametricEQ {
+impl AudioPluginBuilder for DigiParametricEQ {
     fn build() -> Self {
         Self::new()
     }

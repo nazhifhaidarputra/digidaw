@@ -10,9 +10,9 @@ use karbeat_core::{
     core::project::{
         clip::Clip,
         generator::{GeneratorInstance, GeneratorInstanceType},
-        track::{audio_waveform::AudioWaveform, KarbeatTrack, TrackType},
+        track::{audio_waveform::AudioWaveform, AudioTrack, TrackType},
         transport::TransportState,
-        AudioHardwareConfig, KarbeatSource, ProjectMetadata,
+        AudioHardwareConfig, DawSource, ProjectMetadata,
     },
     utils::get_waveform_buffer,
 };
@@ -204,8 +204,8 @@ impl From<UiTransportState> for TransportState {
     }
 }
 
-impl From<&KarbeatTrack> for UiTrack {
-    fn from(value: &KarbeatTrack) -> Self {
+impl From<&AudioTrack> for UiTrack {
+    fn from(value: &AudioTrack) -> Self {
         let generator_id = value
             .generator
             .as_ref()
@@ -291,10 +291,10 @@ impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
         let source = match &value.source {
-            KarbeatSource::Audio(source_id) => UiClipSource::Audio {
+            DawSource::Audio(source_id) => UiClipSource::Audio {
                 source_id: source_id.to_u32(),
             },
-            KarbeatSource::Midi(pattern_id) => UiClipSource::Midi {
+            DawSource::Midi(pattern_id) => UiClipSource::Midi {
                 pattern_id: pattern_id.to_u32(),
             },
             _ => UiClipSource::None,

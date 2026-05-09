@@ -177,7 +177,7 @@ impl KarbeatzerV2 {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
-impl KarbeatPlugin for KarbeatzerV2 {
+impl AudioPlugin for KarbeatzerV2 {
     fn name(&self) -> &str {
         "Karbeatzer V2"
     }

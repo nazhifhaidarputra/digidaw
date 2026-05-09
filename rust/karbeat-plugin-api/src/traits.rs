@@ -24,7 +24,7 @@ use crate::types::{PluginCategory, ProcessContext};
 /// We don't specify a certain way to implement this interface
 /// All the logic used is up to you, and the performance
 /// of the computation is your responsibility
-pub trait KarbeatPlugin: Send + Sync {
+pub trait AudioPlugin: Send + Sync {
     fn name(&self) -> &str;
 
     /// Tells the host what kind of plugin this is for track routing
@@ -107,7 +107,7 @@ pub trait KarbeatPlugin: Send + Sync {
     fn as_any(&self) -> &dyn Any;
 }
 
-impl Debug for dyn KarbeatPlugin + Send + Sync {
+impl Debug for dyn AudioPlugin + Send + Sync {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("KarbeatPlugin")
             .field("name", &self.name())
