@@ -132,6 +132,11 @@ Future<void> changeTrackColor({
   newColor: newColor,
 );
 
+/// Delete a track from the timeline. This function returns a string which will be
+/// "audio", "midi", or "automation"
+Future<String> deleteTrack({required int trackId}) =>
+    RustLib.instance.api.crateApiTrackDeleteTrack(trackId: trackId);
+
 enum UiResizeEdge { left, right }
 
 enum UiSourceType { audio, midi }

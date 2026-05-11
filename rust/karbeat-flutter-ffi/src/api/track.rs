@@ -203,3 +203,16 @@ pub fn change_track_color(track_id: u32, new_color: &str) -> Result<(), String> 
     track_api::change_track_color(TrackId::from(track_id), new_color).map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Delete a track from the timeline. This function returns a string which will be
+/// "audio", "midi", or "automation"
+pub fn delete_track(track_id: u32) -> Result<String, String> {
+    let removed_track_type = track_api::delete_track(track_id.into()).map_err(|e| e.to_string())?;
+    let type_string = match removed_track_type {
+        karbeat_core::core::project::TrackType::Audio => "audio",
+        karbeat_core::core::project::TrackType::Midi => "midi",
+        karbeat_core::core::project::TrackType::Automation => "automation",
+    };
+
+    Ok(type_string.into())
+}

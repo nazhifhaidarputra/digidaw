@@ -52,6 +52,8 @@ pub enum TrackType {
     Automation,
 }
 
+pub type RemovedTrackType = TrackType;
+
 impl std::str::FromStr for TrackType {
     type Err = String;
 
@@ -450,7 +452,8 @@ impl ApplicationState {
     }
 
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
-    pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<()> {
+    pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
+        let mut deleted_track_type = RemovedTrackType::Audio;
         // Get the generator ID before removing the track
         let generator_id = self
             .tracks
@@ -471,6 +474,7 @@ impl ApplicationState {
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
             self.generator_pool.shift_remove(&gen_id);
+            deleted_track_type = RemovedTrackType::Midi;
         }
 
         // Remove all automation lanes for this track
@@ -478,6 +482,6 @@ impl ApplicationState {
 
         self.update_max_sample_index();
 
-        Ok(())
+        Ok(deleted_track_type)
     }
 }

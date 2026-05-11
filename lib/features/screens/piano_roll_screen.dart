@@ -532,7 +532,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                         child: ContextMenuWrapper(
                                           title: "Actions",
                                           actions: [
-                                            KarbeatContextAction(
+                                            DawContextAction(
                                               title: "Paste",
                                               icon: Icons.paste,
                                               onTap: () {
@@ -742,7 +742,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                           if (selectedNoteIds.isNotEmpty)
                             FloatingContextPanel(
                               actions: [
-                                KarbeatContextAction(
+                                DawContextAction(
                                   title: "Delete",
                                   onTap: () {
                                     ref
@@ -756,7 +756,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                         .clearNoteSelection();
                                   },
                                 ),
-                                KarbeatContextAction(
+                                DawContextAction(
                                   title: "Copy",
                                   onTap: () async {
                                     if (widget.patternId == null) {
@@ -771,7 +771,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     // we do not clear because every DAW do this
                                   },
                                 ),
-                                KarbeatContextAction(
+                                DawContextAction(
                                   title: "Cut",
                                   onTap: () async {
                                     if (widget.patternId == null) {

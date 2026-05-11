@@ -54,7 +54,6 @@ class DawToolbarMenuGroupFactory {
   static Future<void> _updateWindowTitle(String filePath) async {
     // Only attempt to change the window title on desktop OS
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      // Extract just the file name from the full path (e.g., "MySong.karbeat")
       final fileName = filePath.split(RegExp(r'[/\\]')).last;
 
       try {

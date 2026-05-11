@@ -817,7 +817,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                             child: ContextMenuWrapper(
                               title: "Track Options",
                               actions: [
-                                KarbeatContextAction(
+                                DawContextAction(
                                   title: "Paste",
                                   icon: Icons.paste,
                                   onTap: () async {
@@ -921,7 +921,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                   }
                                   return IgnorePointer(
                                     ignoring: isPlacing,
-                                    child: KarbeatTrackSlot(
+                                    child: AudioTrackSlot(
                                       trackId: widget.trackIds[index],
                                       height: widget.itemHeight,
                                       horizontalScrollController:
@@ -1026,7 +1026,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         if (selectedClipIds.isNotEmpty)
           FloatingContextPanel(
             actions: [
-              KarbeatContextAction(
+              DawContextAction(
                 title: "Copy",
                 icon: Icons.copy,
                 onTap: () async {
@@ -1046,7 +1046,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   }
                 },
               ),
-              KarbeatContextAction(
+              DawContextAction(
                 title: "Cut",
                 icon: Icons.cut,
                 onTap: () async {
@@ -1067,7 +1067,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   }
                 },
               ),
-              KarbeatContextAction(
+              DawContextAction(
                 title: "Delete",
                 icon: Icons.delete,
                 isDestructive: true,
@@ -1537,15 +1537,47 @@ class _TrackHeader extends ConsumerWidget {
         ],
       ),
       actions: [
-        KarbeatContextAction(
+        DawContextAction(
           title: "Rename",
           icon: Icons.edit,
           onTap: () {
-            // Replace with your actual rename logic via app_state
-            AppLogger.info("Rename track requested for ID: ${track.id}");
+            final textController = TextEditingController(text: track.name);
+            
+            showDialog<String>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text("Rename Track"),
+                content: TextField(
+                  controller: textController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: "New track name",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (value) {
+                    Navigator.pop(ctx, value);
+                  },
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Cancel"),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, textController.text),
+                    child: const Text("Rename"),
+                  ),
+                ],
+              ),
+            ).then((newName) {
+              if (newName != null && newName.trim().isNotEmpty && newName != track.name) {
+                AppLogger.info("Rename track requested for ID: ${track.id} with name [${newName.trim()}]");
+                ref.read(globalStateProvider).changeTrackName(trackId, newName.trim());
+              }
+            });
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
           title: "Move Up",
           icon: Icons.arrow_upward,
           onTap: () {
@@ -1553,7 +1585,7 @@ class _TrackHeader extends ConsumerWidget {
             AppLogger.info("Move Up requested for track ID: ${track.id}");
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
           title: "Move Down",
           icon: Icons.arrow_downward,
           onTap: () {
@@ -1561,13 +1593,13 @@ class _TrackHeader extends ConsumerWidget {
             AppLogger.info("Move Down requested for track ID: ${track.id}");
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
           title: "Delete Track",
           icon: Icons.delete,
           isDestructive: true,
           onTap: () {
-            // Replace with actual delete logic via app_state
             AppLogger.info("Delete track requested for ID: ${track.id}");
+            ref.read(globalStateProvider).deleteTrack(trackId);
           },
         ),
       ],
@@ -1790,14 +1822,14 @@ class _TimelineRulerPainter extends CustomPainter {
   }
 }
 
-class KarbeatTrackSlot extends ConsumerStatefulWidget {
+class AudioTrackSlot extends ConsumerStatefulWidget {
   final int trackId;
   final double height;
   final ScrollController horizontalScrollController;
   final int sampleRate;
   final ClipDragController clipDragController;
 
-  const KarbeatTrackSlot({
+  const AudioTrackSlot({
     super.key,
     required this.trackId,
     required this.height,
@@ -1807,10 +1839,10 @@ class KarbeatTrackSlot extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<KarbeatTrackSlot> createState() => _KarbeatTrackSlotState();
+  ConsumerState<AudioTrackSlot> createState() => _AudioTrackSlotState();
 }
 
-class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
+class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   void _handleEmptySpaceClick({
     required BuildContext context,
     required double localDx,

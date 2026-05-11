@@ -221,7 +221,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
     return ContextMenuWrapper(
       title: parameterName,
       actions: [
-        KarbeatContextAction(
+        DawContextAction(
           title: "Type in value...",
           icon: Icons.keyboard,
           onTap: () {
@@ -237,7 +237,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
             );
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
           title: "Reset to default",
           icon: Icons.refresh,
           onTap: () {
@@ -245,7 +245,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
           },
         ),
         if (onAddAutomation != null)
-          KarbeatContextAction(
+          DawContextAction(
             title: "Create automation clip",
             icon: Icons.show_chart,
             onTap: onAddAutomation!,

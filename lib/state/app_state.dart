@@ -739,6 +739,57 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
+  Future<Result<void>> deleteTrack(int trackId) async {
+    try {
+      final deletedTrackType = await track_api.deleteTrack(trackId: trackId);
+      notifyCustomBackendChange(() async {
+        await syncTracksState();
+        switch (deletedTrackType) {
+          case "audio":
+            break;
+          case "midi":
+            await syncGeneratorList();
+            break;
+          case "automation":
+            // Automation deletion is not removable from this API. it will be deleted on separate
+            // dedicated API to remove automation lane of a track, general bus, master bus, or project param automation.
+            break;
+        }
+      });
+
+      return Result.ok(null);
+    } catch (e) {
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> changeTrackName(int trackId, String newName) async {
+    final originalTrack = _tracks[trackId];
+    if (originalTrack == null) {
+      return Result.error(Exception("Track not found"));
+    }
+
+    final oldName = originalTrack.name;
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = _copyWithTrack(originalTrack, name: newName);
+    notifyListeners();
+
+    try {
+      await track_api.changeTrackName(trackId: trackId, newName: newName);
+
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to change track name: $e");
+      if (_tracks.containsKey(trackId)) {
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(originalTrack, name: oldName);
+        notifyListeners();
+      }
+
+      return Result.error(Exception("$e"));
+    }
+  }
+
   Future<Result<void>> addEffectToMixerChannel(
     int channelId,
     int registryId,
@@ -808,7 +859,7 @@ class GlobalAppState extends ChangeNotifier {
   //   } catch (e) {
   //     log("Failed to toggle play: $e");
   //     _pendingPlayRequest = false;
-  //     return Result.error(Exception("$e"));
+  //     return Result.error(Exception("$e"));a
   //   }
   // }
 
@@ -1536,11 +1587,15 @@ class GlobalAppState extends ChangeNotifier {
   // ============= PLACEMENT MODE LOGIC =================
   // Placement logic moved to ClipPlacementNotifier
 
-  UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
+  UiTrack _copyWithTrack(
+    UiTrack original, {
+    List<UiClip>? clips,
+    String? name,
+  }) {
     return UiTrack(
       id: original.id,
       color: original.color, // Fixed: use original color instead of #FFFFFF
-      name: original.name,
+      name: name ?? original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,
       generatorId: original.generatorId, // Forward generator ID
