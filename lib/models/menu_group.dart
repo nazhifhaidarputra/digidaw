@@ -58,7 +58,7 @@ class DawToolbarMenuGroupFactory {
       final fileName = filePath.split(RegExp(r'[/\\]')).last;
 
       try {
-        await windowManager.setTitle('Digidaw — $fileName');
+        await windowManager.setTitle('DigiDAW — $fileName');
       } catch (e) {
         debugPrint("Failed to set window title: $e");
       }
