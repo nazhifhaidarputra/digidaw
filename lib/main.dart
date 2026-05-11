@@ -18,7 +18,7 @@ Future<void> main() async {
     await windowManager.ensureInitialized();
     
     // Set the initial title
-    await windowManager.setTitle('Karbeat — Untitled');
+    await windowManager.setTitle('DigiDAW — Untitled');
 
     await windowManager.setMinimumSize(const Size(1000, 600));
   await windowManager.setAspectRatio(16 / 9);

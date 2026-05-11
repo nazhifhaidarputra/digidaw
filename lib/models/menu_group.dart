@@ -72,7 +72,7 @@ class DawToolbarMenuGroupFactory {
   ) async {
     final path = await FilePicker.platform.saveFile(
       dialogTitle: 'Save Project As...',
-      fileName: 'untitled.karbeat',
+      fileName: 'untitled.dgdaw',
       type: FileType.custom,
       allowedExtensions: ['karbeat', 'dgdaw'],
     );
@@ -114,7 +114,7 @@ class DawToolbarMenuGroupFactory {
           // Safely update window title back to default
           if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
             try {
-              await windowManager.setTitle('Digidaw — Untitled');
+              await windowManager.setTitle('DigiDAW — Untitled');
             } catch (e) {
               debugPrint("Failed to set window title: $e");
             }
