@@ -46,6 +46,7 @@ dependencies:
   flutter_svg: ^2.2.4
   auto_size_text: ^3.0.0
   multi_split_view: ^3.6.1
+  flex_color_picker: ^3.8.0
 
 dev_dependencies:
   flutter_test:

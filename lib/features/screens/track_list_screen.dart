@@ -1487,6 +1487,56 @@ class _TrackHeader extends ConsumerWidget {
     }
   }
 
+  Future<Color?> _showColorPickerDialog(BuildContext context, Color currentColor) {
+
+    return showDialog<Color>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text("Select Track Color"),
+          content: SingleChildScrollView(
+            child: Wrap(
+              spacing: 12.0,
+              runSpacing: 12.0,
+              children: dawColors.map((color) {
+                final isSelected = currentColor.toARGB32() == color.toARGB32();
+                return GestureDetector(
+                  onTap: () => Navigator.of(ctx).pop(color),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? Colors.white : Colors.transparent,
+                        width: isSelected ? 3 : 0,
+                      ),
+                      boxShadow: [
+                        if (isSelected)
+                          BoxShadow(
+                            color: color.withAlpha(100),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          )
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text("Cancel"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds this specific header if the track's name/color/type changes
@@ -1542,7 +1592,7 @@ class _TrackHeader extends ConsumerWidget {
           icon: Icons.edit,
           onTap: () {
             final textController = TextEditingController(text: track.name);
-            
+
             showDialog<String>(
               context: context,
               builder: (ctx) => AlertDialog(
@@ -1570,9 +1620,29 @@ class _TrackHeader extends ConsumerWidget {
                 ],
               ),
             ).then((newName) {
-              if (newName != null && newName.trim().isNotEmpty && newName != track.name) {
-                AppLogger.info("Rename track requested for ID: ${track.id} with name [${newName.trim()}]");
-                ref.read(globalStateProvider).changeTrackName(trackId, newName.trim());
+              if (newName != null &&
+                  newName.trim().isNotEmpty &&
+                  newName != track.name) {
+                AppLogger.info(
+                  "Rename track requested for ID: ${track.id} with name [${newName.trim()}]",
+                );
+                ref
+                    .read(globalStateProvider)
+                    .changeTrackName(trackId, newName.trim());
+              }
+            });
+          },
+        ),
+        DawContextAction(
+          title: "Change Color",
+          icon: Icons.color_lens,
+          onTap: () {
+            final currentColor = track.color.toColor();
+            
+            _showColorPickerDialog(context, currentColor).then((selectedColor) {
+              if (selectedColor != null && selectedColor.toARGB32() != currentColor.toARGB32()) {
+                AppLogger.info("Change color requested for track ID: ${track.id}");
+                ref.read(globalStateProvider).changeTrackColor(trackId, selectedColor);
               }
             });
           },
@@ -1953,6 +2023,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
               clip: clip,
               trackId: widget.trackId,
               trackType: track.trackType,
+              color: track.color.toColor(),
               zoomLevel: zoomLevel,
               height: widget.height,
               selectedTool: selectedTool,
@@ -1977,6 +2048,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final UiClip clip;
   final int trackId;
   final UiTrackType trackType;
+  final Color color;
   final double zoomLevel;
   final double height;
   final ToolSelection selectedTool;
@@ -1994,6 +2066,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
     required this.zoomLevel,
     required this.height,
     required this.selectedTool,
+    required this.color,
     required this.isSelected,
     required this.selectedClipIds,
     required this.clipDragController,
@@ -2435,7 +2508,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               child: _ClipRenderer(
                 clip: widget.clip,
                 trackType: widget.trackType,
-                color: Colors.cyanAccent.withAlpha(47),
+                color: widget.color,
                 zoomLevel: widget.zoomLevel,
                 projectSampleRate: ref
                     .read(globalStateProvider)
@@ -2488,11 +2561,11 @@ class _ClipRenderer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       decoration: BoxDecoration(
-        color: color,
+        color: color.withAlpha(100),
         borderRadius: BorderRadius.circular(4),
         border: isSelected
             ? Border.all(color: Colors.white, width: 2)
-            : Border.all(color: color.withAlpha(16), width: 1),
+            : Border.all(color: color.withAlpha(150), width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(3),
@@ -2547,13 +2620,17 @@ class _ClipRenderer extends ConsumerWidget {
         final samplesPerTick =
             (60.0 / state.tempo) * (handle.getSampleRate() / 960.0);
 
+        final waveformColor = color.computeLuminance() > 0.5
+            ? Colors.black.withAlpha(180) // Dark waveform for light tracks
+            : Colors.white.withAlpha(200);
+
         return RepaintBoundary(
           child: CustomPaint(
             size: Size.infinite,
             painter: StereoWaveformClipPainter(
               // Zero-copy: Float32List view directly into Rust-owned Mmap memory
               samples: createZeroCopyWaveformView(handle),
-              color: Colors.white.withAlpha(200),
+              color: waveformColor,
               zoomLevel: zoomLevel,
               offsetTicks: effectiveOffsetTicks,
               strokeWidth: 1.0,
