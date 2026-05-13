@@ -3,7 +3,6 @@
 // ============================================================================
 
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_types::parameter::Param;
 use serde::{Deserialize, Serialize};
 
 /// A common trait for any envelope settings struct.

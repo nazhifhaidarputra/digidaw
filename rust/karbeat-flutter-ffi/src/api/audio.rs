@@ -137,10 +137,6 @@ pub fn play_preview_note_generator(
         return Err("Note velocity must be between 0 and 100".to_string());
     }
 
-    if is_on {
-        log::info!("Playing note {}", note_key);
-    }
-
     audio_api::play_preview_note_generator(
         GeneratorId::from(generator_id),
         note_key as u8,

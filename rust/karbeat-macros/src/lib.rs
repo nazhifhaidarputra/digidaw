@@ -240,7 +240,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             if is_param {
                 let orig_ty = &field.ty;
-                let new_ty: Type = syn::parse_quote!(Param<#orig_ty>);
+                let new_ty: Type = syn::parse_quote!(::karbeat_plugin_types::Param<#orig_ty>);
                 field.ty = new_ty;
             }
 

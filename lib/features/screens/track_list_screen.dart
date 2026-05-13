@@ -272,11 +272,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  void _handleTimelineGesture(
-    BuildContext context,
-    Offset localPosition, {
-    bool isDrag = false,
-  }) {
+  void _handleTimelineGesture(BuildContext context, Offset localPosition) {
     final state = ref.read(globalStateProvider);
     double scrollX = 0;
     if (_trackContentController.hasClients) {
@@ -520,6 +516,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   case GridSize.infinity:
                     label = "None";
                     break;
+                  case GridSize.twelfth:
+                    label = "1/12";
+                    break;
                 }
                 return DropdownMenuItem<GridSize>(
                   value: size,
@@ -580,6 +579,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     break;
                   case MusicalBeatSize.none:
                     label = "None";
+                    break;
+                  case MusicalBeatSize.third:
+                    label = "1/3 Step";
+                    break;
+                  case MusicalBeatSize.sixth:
+                    label = "1/6 Step";
+                    break;
+                  case MusicalBeatSize.twelfth:
+                    label = "1/12 Step";
                     break;
                 }
                 return DropdownMenuItem<MusicalBeatSize>(
@@ -1487,8 +1495,10 @@ class _TrackHeader extends ConsumerWidget {
     }
   }
 
-  Future<Color?> _showColorPickerDialog(BuildContext context, Color currentColor) {
-
+  Future<Color?> _showColorPickerDialog(
+    BuildContext context,
+    Color currentColor,
+  ) {
     return showDialog<Color>(
       context: context,
       builder: (ctx) {
@@ -1518,7 +1528,7 @@ class _TrackHeader extends ConsumerWidget {
                             color: color.withAlpha(100),
                             blurRadius: 8,
                             spreadRadius: 2,
-                          )
+                          ),
                       ],
                     ),
                   ),
@@ -1638,11 +1648,16 @@ class _TrackHeader extends ConsumerWidget {
           icon: Icons.color_lens,
           onTap: () {
             final currentColor = track.color.toColor();
-            
+
             _showColorPickerDialog(context, currentColor).then((selectedColor) {
-              if (selectedColor != null && selectedColor.toARGB32() != currentColor.toARGB32()) {
-                AppLogger.info("Change color requested for track ID: ${track.id}");
-                ref.read(globalStateProvider).changeTrackColor(trackId, selectedColor);
+              if (selectedColor != null &&
+                  selectedColor.toARGB32() != currentColor.toARGB32()) {
+                AppLogger.info(
+                  "Change color requested for track ID: ${track.id}",
+                );
+                ref
+                    .read(globalStateProvider)
+                    .changeTrackColor(trackId, selectedColor);
               }
             });
           },

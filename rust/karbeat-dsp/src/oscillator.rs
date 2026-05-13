@@ -4,7 +4,6 @@ use std::f64::consts::TAU;
 
 // Import your universal parameter types and macros
 use karbeat_macros::{karbeat_plugin, EnumParam};
-use karbeat_plugin_types::parameter::Param;
 
 // ============================================================================
 // WAVEFORM ENUM

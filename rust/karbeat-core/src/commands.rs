@@ -75,56 +75,43 @@ pub enum AudioCommand {
     // =========================================================================
     // Effect Plugin Commands
     // =========================================================================
-    /// Add an effect to a track's effect chain
-    AddTrackEffect {
-        track_id: TrackId,
+    /// Add an effect to the target's effect chain
+    AddEffect {
+        target: EffectTarget,
         effect_id: EffectId,
         effect: Box<dyn AudioPlugin + Send + Sync>,
     },
-    /// Remove an effect from a track's effect chain
-    RemoveTrackEffect {
-        track_id: TrackId,
+    /// Remove an effect from the target's effect chain
+    RemoveEffect {
+        target: EffectTarget,
         effect_id: EffectId,
     },
-    /// Set a parameter on a track effect
-    SetTrackEffectParameter {
-        track_id: TrackId,
+    /// Set a parameter on a target effect
+    SetEffectParameter {
+        target: EffectTarget,
         effect_id: EffectId,
         param_id: u32,
         value: f32,
     },
-    /// Request parameter feedback for a track effect (triggers EffectParameterSnapshot response)
-    QueryTrackEffectParameters {
-        track_id: TrackId,
+    /// Request parameter feedback for a target effect (triggers EffectParameterSnapshot response)
+    QueryEffectParameters {
+        target: EffectTarget,
         effect_id: EffectId,
     },
 
-    // ======================================================
-    // Master Effect Command
-    // ======================================================
-    /// Add an effect to the master bus
-    AddMasterEffect {
-        effect_id: EffectId,
-        effect: Box<dyn AudioPlugin + Send + Sync>,
-    },
-    /// Remove an effect from the master bus
-    RemoveMasterEffect {
-        effect_id: EffectId,
-    },
-    /// Set a parameter on a master effect
-    SetMasterEffectParameter {
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
-    /// Request parameter feedback for a master effect (triggers EffectParameterSnapshot response)
-    QueryMasterEffectParameters {
-        effect_id: EffectId,
-    },
 
-    // =========================================================================
+
+    QueryEffectPluginBox {
+        target: EffectTarget,
+        effect_id: EffectId,
+    },
+    QueryGeneratorPluginBox {
+        generator_id: GeneratorId,
+    },
+    
+    // =====================================================
     // Bus Commands
-    // =========================================================================
+    // =====================================================
     /// Create a new mixer bus on the audio thread
     AddBus {
         bus_id: BusId,
@@ -141,29 +128,7 @@ pub enum AudioCommand {
         pan: Option<f32>,
         mute: Option<bool>,
     },
-    /// Add effect to a bus
-    AddBusEffect {
-        bus_id: BusId,
-        effect_id: EffectId,
-        effect: Box<dyn AudioPlugin + Send + Sync>,
-    },
-    /// Remove effect from a bus
-    RemoveBusEffect {
-        bus_id: BusId,
-        effect_id: EffectId,
-    },
-    /// Set a bus effect parameter
-    SetBusEffectParameter {
-        bus_id: BusId,
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
-    /// Request parameter feedback for a bus effect (triggers EffectParameterSnapshot response)
-    QueryBusEffectParameters {
-        bus_id: BusId,
-        effect_id: EffectId,
-    },
+
     /// Update the routing matrix (sync from main thread)
     UpdateRouting {
         routing: Vec<RoutingConnection>,

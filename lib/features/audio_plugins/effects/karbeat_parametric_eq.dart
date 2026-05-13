@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 import 'package:karbeat/features/audio_plugins/effects/abstract_effect_screen.dart';
+import 'package:karbeat/features/components/plugin_parameter_widget.dart';
 import 'package:karbeat/models/payload.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/features/components/fine_grained_input.dart';
@@ -495,6 +496,11 @@ class KarbeatParametricEqState
     final pDef = p?.defaultValue ?? 0.0;
     final pStep = p?.step ?? 0.1;
     final pName = p?.name ?? 'Gain';
+    // the fallback ID is not an invalid ID because at the Rust side, the ID is represented by u32.
+    // this will probably crash app if we did not handle it gracefully
+    final pId = p?.id ?? -1;
+    final pValue = p?.value ?? 0.0;
+
     return Container(
       width: 80,
       padding: const EdgeInsets.all(8),
@@ -512,30 +518,16 @@ class KarbeatParametricEqState
           Expanded(
             child: RotatedBox(
               quarterTurns: 3,
-              child: SliderTheme(
-                data: SliderThemeData(
-                  trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 8,
-                  ),
-                ),
-                child: ParameterInteractionWrapper<double>(
-                  value: masterGain,
-                  min: pMin,
-                  max: pMax,
-                  step: pStep,
-                  onChanged: _updateMasterGain,
-                  parameterName: pName,
-                  defaultValue: pDef,
-                  child: Slider(
-                    value: masterGain.clamp(pMin, pMax),
-                    min: pMin,
-                    max: pMax,
-                    activeColor: Colors.white,
-                    onChanged: _updateMasterGain,
-                    allowedInteraction: SliderInteraction.slideThumb,
-                  ),
-                ),
+              child: DawFloatParam(
+                paramId: pId,
+                name: pName,
+                value: pValue,
+                min: pMin,
+                max: pMax,
+                defaultValue: pDef,
+                step: pStep,
+                suffix: "dB",
+                onChanged: _updateMasterGain,
               ),
             ),
           ),
@@ -681,7 +673,6 @@ class KarbeatParametricEqState
               band.freq,
               "band$i/freq", // Matches backend dynamic path
               (v) => _updateBandParam(i, 0, v),
-              isLog: true,
               suffix: "Hz",
               parameterName: "Frequency",
             ),
@@ -761,7 +752,6 @@ class KarbeatParametricEqState
     double val,
     String paramPath,
     ValueChanged<double> onChanged, {
-    bool isLog = false,
     String suffix = "",
     String parameterName = "",
   }) {
@@ -776,54 +766,22 @@ class KarbeatParametricEqState
     final pMin = p?.min ?? 0.0;
     final pMax = p?.max ?? 1.0;
     final pDef = p?.defaultValue ?? 0.0;
-    final pStep = p?.step ?? (isLog ? 1.0 : 0.1);
-    final pName = p?.name ?? label;
+    final pStep = p?.step ?? 0.1;
+    final pId = p?.id ?? -1;
 
-    // Calculate clamped bounds for the slider.
-    // Guard: clamp to a strictly positive value before log() to avoid -Infinity
-    // being passed into Slider when pMin is 0 (e.g. fallback path).
-    final safeMin = isLog ? pMin.clamp(1e-6, double.infinity) : pMin;
-    final safeMax = isLog ? pMax.clamp(1e-6, double.infinity) : pMax;
-    final safeVal = isLog ? val.clamp(1e-6, double.infinity) : val;
-    final actualMin = isLog ? log(safeMin) / ln10 : safeMin;
-    final actualMax = isLog ? log(safeMax) / ln10 : safeMax;
-    final clampedVal = (isLog ? log(safeVal) / ln10 : safeVal).clamp(
-      actualMin,
-      actualMax,
-    );
-
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 9)),
-        SliderTheme(
-          data: SliderThemeData(
-            trackHeight: 2,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
-          ),
-          child: ParameterInteractionWrapper<double>(
-            value: val,
-            min: pMin,
-            max: pMax,
-            step: pStep,
-            onChanged: onChanged,
-            parameterName: pName,
-            defaultValue: pDef,
-            child: Slider(
-              value: clampedVal,
-              min: actualMin,
-              max: actualMax,
-              onChanged: (newVal) =>
-                  onChanged(isLog ? pow(10, newVal).toDouble() : newVal),
-              allowedInteraction: SliderInteraction.slideThumb,
-            ),
-          ),
-        ),
-        Text(
-          "${val >= 1000 ? '${(val / 1000).toStringAsFixed(1)}k' : val.toStringAsFixed(1)}$suffix",
-          style: const TextStyle(color: Colors.white, fontSize: 9),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: DawFloatParam(
+        paramId: pId,
+        name: label,
+        value: val,
+        min: pMin,
+        max: pMax,
+        defaultValue: pDef,
+        step: pStep,
+        suffix: suffix,
+        onChanged: onChanged,
+      ),
     );
   }
 }

@@ -127,14 +127,6 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     return (960.0 * 4.0 / denom.value).round();
   }
 
-  // Helper to convert int back to GridSize for the setter
-  GridSize _intToGridSize(int val) {
-    return GridSize.values.firstWhere(
-      (e) => e.value == val.toDouble(),
-      orElse: () => GridSize.quarter, // Default fallback
-    );
-  }
-
   void _handleBrushAdd(Offset localPos) {
     final state = ref.read(globalStateProvider);
     final gridDenom = state.pianoRollGridDenom;
@@ -214,14 +206,46 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _brushDeleteNoteIds.clear();
   }
 
+  void _handleHorizontalAutoScroll(double globalX) {
+    const double edgeThreshold = 50.0;
+    const double maxSpeed = 14.0;
+
+    // Width of the piano-key sidebar so we can compute the grid's screen rect
+    final double gridLeft = _keyWidth; // same constant used for SizedBox width
+    final double screenWidth = MediaQuery.of(context).size.width;
+
+    double dx = 0;
+    if (globalX < gridLeft + edgeThreshold) {
+      // Near / past left edge — scroll left, faster the closer to the edge
+      final ratio = ((gridLeft + edgeThreshold) - globalX) / edgeThreshold;
+      dx = -maxSpeed * ratio.clamp(0.0, 1.0);
+    } else if (globalX > screenWidth - edgeThreshold) {
+      // Near / past right edge — scroll right
+      final ratio = (globalX - (screenWidth - edgeThreshold)) / edgeThreshold;
+      dx = maxSpeed * ratio.clamp(0.0, 1.0);
+    }
+
+    if (dx != 0) {
+      if (_gridHorizontalController.hasClients) {
+        _gridHorizontalController.jumpTo(
+          (_gridHorizontalController.offset + dx).clamp(
+            0.0,
+            _gridHorizontalController.position.maxScrollExtent,
+          ),
+        );
+      }
+    }
+  }
+
   void _handleAutoScroll(Offset globalPos, Size screenSize) {
     const double edgeThreshold = 40.0;
     const double scrollSpeed = 10.0;
+    final double gridLeft = _keyWidth;
 
     double dx = 0;
     double dy = 0;
 
-    if (globalPos.dx < edgeThreshold) {
+    if (globalPos.dx < gridLeft + edgeThreshold) {
       dx = -scrollSpeed;
     } else if (globalPos.dx > screenSize.width - edgeThreshold) {
       dx = scrollSpeed;
@@ -377,8 +401,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                 onGridDenomChanged: (val) {
                   if (val != null) {
                     setState(() {
-                      ref.read(globalStateProvider).pianoRollGridDenom =
-                          _intToGridSize(val);
+                      ref.read(globalStateProvider).pianoRollGridDenom = val;
                     });
                   }
                 },
@@ -500,9 +523,23 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       setState(() {
                                         _selectionEnd = event.localPosition;
                                       });
+
+                                      _handleHorizontalAutoScroll(
+                                        event.position.dx, // global X
+                                      );
+
+                                      // Also handle vertical auto-scroll for selection
+                                      final screenSize = MediaQuery.of(
+                                        context,
+                                      ).size;
+                                      _handleAutoScroll(
+                                        event.position, // global Offset
+                                        screenSize,
+                                      );
                                     }
                                   },
                                   onPointerUp: (event) {
+                                    _stopAutoScroll();
                                     if (isInteracting) {
                                       setState(() => isInteracting = false);
                                     }
@@ -620,6 +657,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                         globalPos,
                                                         screenSize,
                                                       );
+                                                      _handleHorizontalAutoScroll(
+                                                        globalPos.dx,
+                                                      );
                                                     }
                                                   },
                                                   onDragEnd: () {
@@ -667,6 +707,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       _handleAutoScroll(
                                                         globalPos,
                                                         screenSize,
+                                                      );
+                                                      _handleHorizontalAutoScroll(
+                                                        globalPos.dx,
                                                       );
                                                     }
                                                   },
@@ -833,7 +876,7 @@ class _PianoRollToolbar extends ConsumerWidget {
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final GridSize gridDenom;
-  final ValueChanged<int?> onGridDenomChanged;
+  final ValueChanged<GridSize?> onGridDenomChanged;
 
   const _PianoRollToolbar({
     required this.patternId,
@@ -965,19 +1008,59 @@ class _PianoRollToolbar extends ConsumerWidget {
             const SizedBox(width: 8),
 
             // Grid dropdown
-            DropdownButton<int>(
-              value: gridDenom.value.toInt(),
+            DropdownButton<GridSize>(
+              value: gridDenom,
               dropdownColor: Colors.grey.shade800,
               style: const TextStyle(color: Colors.white, fontSize: 12),
               underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(value: 1, child: Text("1/1")),
-                DropdownMenuItem(value: 2, child: Text("1/2")),
-                DropdownMenuItem(value: 4, child: Text("1/4")),
-                DropdownMenuItem(value: 8, child: Text("1/8")),
-                DropdownMenuItem(value: 16, child: Text("1/16")),
-                DropdownMenuItem(value: 32, child: Text("1/32")),
-              ],
+              items: GridSize.values.map((element) {
+                String label = "";
+                switch (element) {
+                  case GridSize.oneBar:
+                    label = "4 Beats";
+                    break;
+                  case GridSize.twoBeat:
+                    label = "2 Beats";
+                    break;
+                  case GridSize.full:
+                    label = "1 Beat";
+                    break;
+                  case GridSize.half:
+                    label = "1/2 Beat";
+                    break;
+                  case GridSize.third:
+                    label = "1/3 Beat";
+                    break;
+                  case GridSize.quarter:
+                    label = "1/4 Beat";
+                    break;
+                  case GridSize.sixth:
+                    label = "1/6 Beat";
+                    break;
+                  case GridSize.eighth:
+                    label = "1/8 Beat";
+                  case GridSize.twelfth:
+                    label = "1/12 Beat";
+                    break;
+                  case GridSize.sixteenth:
+                    label = "1/16 Beat";
+                    break;
+                  case GridSize.thirtysecond:
+                    label = "1/32 Beat";
+                    break;
+                  case GridSize.sixtyfourth:
+                    label = "1/64 Beat";
+                    break;
+                  case GridSize.infinity:
+                    label = "None";
+                    break;
+                }
+
+                return DropdownMenuItem<GridSize>(
+                  value: element, // Set the value to the enum itself
+                  child: Text(label),
+                );
+              }).toList(),
               onChanged: onGridDenomChanged,
             ),
             const SizedBox(width: 8),
@@ -1302,7 +1385,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
               final localPos = renderBox.globalToLocal(details.globalPosition);
 
               // Hit test edge for resizing
-              const edgeThreshold = 10.0;
+              const edgeThreshold = 3.0;
 
               setState(() {
                 if (localPos.dx > _localWidth - edgeThreshold) {

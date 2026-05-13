@@ -2,7 +2,7 @@
 //! Can be used for things such as Equalizer or Compressor
 
 use karbeat_macros::{karbeat_plugin, EnumParam};
-use karbeat_plugin_types::{EnumParam, Param};
+use karbeat_plugin_types::{EnumParam};
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
 use wide::f32x4;

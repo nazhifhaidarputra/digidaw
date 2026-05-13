@@ -32,7 +32,7 @@ use crate::{
         automation::AutomationTarget,
         mixer::{MixerChannel, RoutingNode},
         plugin::{MidiEvent, MidiMessage, ProcessContext},
-        AudioWaveform, Clip, GeneratorId, GeneratorInstance, DawSource, AudioTrack, Pattern,
+        AudioTrack, AudioWaveform, Clip, DawSource, GeneratorId, GeneratorInstance, Pattern,
         PatternId, TrackId,
     },
     shared::id::*,
@@ -804,56 +804,111 @@ impl AudioEngine {
                 // Since they are also needs to be updated to reflect this change.
                 // However because the logic in FFI assume that this is handled, we don't have to do it
             }
-            AudioCommand::AddTrackEffect {
-                track_id,
+            AudioCommand::AddEffect {
+                target,
                 effect_id,
                 mut effect,
             } => {
-                // Prepare the effect
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 effect.prepare(
                     self.sample_rate as f32,
                     self.num_channels as usize,
                     buf_size,
                 );
-
-                self.plugin_state.add_track_effect(
-                    track_id.to_u32() as usize,
-                    AudioEffectInstance {
-                        id: effect_id,
-                        plugin: effect,
-                    },
-                );
-                log::info!("[AudioEngine] Added effect to track {:?}", track_id);
-            }
-            AudioCommand::RemoveTrackEffect {
-                track_id,
-                effect_id,
-            } => {
-                if let Some(effects) = self
-                    .plugin_state
-                    .get_track_effects_mut(track_id.to_u32() as usize)
-                {
-                    if let Some(effect) = effects.iter().position(|e| e.id == effect_id) {
-                        effects.remove(effect);
+                let instance = AudioEffectInstance {
+                    id: effect_id,
+                    plugin: effect,
+                };
+                match target {
+                    EffectTarget::Track(track_id) => {
+                        self.plugin_state
+                            .add_track_effect(track_id.to_u32() as usize, instance);
+                        log::info!("[AudioEngine] Added effect to track {:?}", track_id);
+                    }
+                    EffectTarget::Bus(bus_id) => {
+                        self.plugin_state
+                            .add_bus_effect(bus_id.to_u32() as usize, instance);
+                        log::info!(
+                            "[AudioEngine] Added effect {:?} to bus {:?}",
+                            effect_id,
+                            bus_id
+                        );
+                    }
+                    EffectTarget::Master => {
+                        self.plugin_state.master_effects.push(instance);
+                        log::info!("[AudioEngine] Added effect {:?} to master", effect_id);
                     }
                 }
             }
-            AudioCommand::SetTrackEffectParameter {
-                track_id,
+            AudioCommand::RemoveEffect { target, effect_id } => match target {
+                EffectTarget::Track(track_id) => {
+                    if let Some(effects) = self
+                        .plugin_state
+                        .get_track_effects_mut(track_id.to_u32() as usize)
+                    {
+                        if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
+                            effects.remove(pos);
+                        }
+                    }
+                }
+                EffectTarget::Bus(bus_id) => {
+                    if let Some(effects) = self
+                        .plugin_state
+                        .get_bus_effects_mut(bus_id.to_u32() as usize)
+                    {
+                        if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
+                            effects.remove(pos);
+                        }
+                    }
+                }
+                EffectTarget::Master => {
+                    if let Some(pos) = self
+                        .plugin_state
+                        .master_effects
+                        .iter()
+                        .position(|e| e.id == effect_id)
+                    {
+                        self.plugin_state.master_effects.remove(pos);
+                    }
+                }
+            },
+            AudioCommand::SetEffectParameter {
+                target,
                 effect_id,
                 param_id,
                 value,
-            } => {
-                if let Some(effects) = self
-                    .plugin_state
-                    .get_track_effects_mut(track_id.to_u32() as usize)
-                {
-                    if let Some(effect) = effects.iter().position(|e| e.id == effect_id) {
-                        effects[effect].plugin.set_parameter(param_id, value);
+            } => match target {
+                EffectTarget::Track(track_id) => {
+                    if let Some(effects) = self
+                        .plugin_state
+                        .get_track_effects_mut(track_id.to_u32() as usize)
+                    {
+                        if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                            effect.plugin.set_parameter(param_id, value);
+                        }
                     }
                 }
-            }
+                EffectTarget::Bus(bus_id) => {
+                    if let Some(effects) = self
+                        .plugin_state
+                        .get_bus_effects_mut(bus_id.to_u32() as usize)
+                    {
+                        if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                            effect.plugin.set_parameter(param_id, value);
+                        }
+                    }
+                }
+                EffectTarget::Master => {
+                    if let Some(effect) = self
+                        .plugin_state
+                        .master_effects
+                        .iter_mut()
+                        .find(|e| e.id == effect_id)
+                    {
+                        effect.plugin.set_parameter(param_id, value);
+                    }
+                }
+            },
             AudioCommand::QueryGeneratorParameters { generator_id } => {
                 // Get all parameter values from the generator and send back
                 if let Some(gen_instance) = self
@@ -877,47 +932,7 @@ impl AudioEngine {
                         .push(AudioFeedback::GeneratorParameterSnapshot(snapshot));
                 }
             }
-            AudioCommand::AddMasterEffect {
-                effect_id,
-                mut effect,
-            } => {
-                let buf_size = self.current_state.graph.buffer_size;
-                effect.prepare(
-                    self.sample_rate as f32,
-                    self.num_channels as usize,
-                    buf_size,
-                );
-                self.plugin_state.master_effects.push(AudioEffectInstance {
-                    id: effect_id,
-                    plugin: effect,
-                });
-            }
-            AudioCommand::RemoveMasterEffect { effect_id } => {
-                if let Some(effects) = self
-                    .plugin_state
-                    .master_effects
-                    .iter()
-                    .position(|e| e.id == effect_id)
-                {
-                    self.plugin_state.master_effects.remove(effects);
-                }
-            }
-            AudioCommand::SetMasterEffectParameter {
-                effect_id,
-                param_id,
-                value,
-            } => {
-                if let Some(effects) = self
-                    .plugin_state
-                    .master_effects
-                    .iter()
-                    .position(|e| e.id == effect_id)
-                {
-                    self.plugin_state.master_effects[effects]
-                        .plugin
-                        .set_parameter(param_id, value);
-                }
-            }
+
             AudioCommand::AddBus { bus_id, name } => {
                 // Initialize bus buffer and effects chain
                 let id_index = bus_id.to_u32() as usize;
@@ -948,56 +963,7 @@ impl AudioEngine {
                     mute
                 );
             }
-            AudioCommand::AddBusEffect {
-                bus_id,
-                effect_id,
-                mut effect,
-            } => {
-                let buf_size = self.current_state.graph.buffer_size.max(512);
-                effect.prepare(
-                    self.sample_rate as f32,
-                    self.num_channels as usize,
-                    buf_size,
-                );
 
-                self.plugin_state.add_bus_effect(
-                    bus_id.to_u32() as usize,
-                    AudioEffectInstance {
-                        id: effect_id,
-                        plugin: effect,
-                    },
-                );
-                log::info!(
-                    "[AudioEngine] Added effect {:?} to bus {:?}",
-                    effect_id,
-                    bus_id
-                );
-            }
-            AudioCommand::RemoveBusEffect { bus_id, effect_id } => {
-                if let Some(effects) = self
-                    .plugin_state
-                    .get_bus_effects_mut(bus_id.to_u32() as usize)
-                {
-                    if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
-                        effects.remove(pos);
-                    }
-                }
-            }
-            AudioCommand::SetBusEffectParameter {
-                bus_id,
-                effect_id,
-                param_id,
-                value,
-            } => {
-                if let Some(effects) = self
-                    .plugin_state
-                    .get_bus_effects_mut(bus_id.to_u32() as usize)
-                {
-                    if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
-                        effect.plugin.set_parameter(param_id, value);
-                    }
-                }
-            }
             AudioCommand::UpdateRouting { routing } => {
                 // Routing is stored in mixer_state and synced via triple buffer
                 // Log for debugging
@@ -1008,40 +974,24 @@ impl AudioEngine {
 
                 pdc_dirty = true;
             }
-            AudioCommand::QueryTrackEffectParameters {
-                track_id,
-                effect_id,
-            } => {
-                if let Some(effects) = self
-                    .plugin_state
-                    .get_track_effects(track_id.to_u32() as usize)
-                {
-                    if let Some(effect_instance) = effects.iter().find(|e| e.id == effect_id) {
-                        let specs = effect_instance.plugin.get_parameter_specs();
-                        let parameters: Vec<(u32, f32)> = specs
-                            .iter()
-                            .map(|spec| (spec.id, effect_instance.plugin.get_parameter(spec.id)))
-                            .collect();
+            AudioCommand::QueryEffectParameters { target, effect_id } => {
+                let effect_instance_opt = match &target {
+                    EffectTarget::Track(track_id) => self
+                        .plugin_state
+                        .get_track_effects(track_id.to_u32() as usize)
+                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id)),
+                    EffectTarget::Bus(bus_id) => self
+                        .plugin_state
+                        .get_bus_effects(bus_id.to_u32() as usize)
+                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id)),
+                    EffectTarget::Master => self
+                        .plugin_state
+                        .master_effects
+                        .iter()
+                        .find(|e| e.id == effect_id),
+                };
 
-                        let snapshot = EffectParameterSnapshot {
-                            target: EffectTarget::Track(track_id),
-                            effect_id,
-                            parameters,
-                        };
-
-                        let _ = self
-                            .feedback_producer
-                            .push(AudioFeedback::EffectParameterSnapshot(snapshot));
-                    }
-                }
-            }
-            AudioCommand::QueryMasterEffectParameters { effect_id } => {
-                if let Some(effect_instance) = self
-                    .plugin_state
-                    .master_effects
-                    .iter()
-                    .find(|e| e.id == effect_id)
-                {
+                if let Some(effect_instance) = effect_instance_opt {
                     let specs = effect_instance.plugin.get_parameter_specs();
                     let parameters: Vec<(u32, f32)> = specs
                         .iter()
@@ -1049,7 +999,7 @@ impl AudioEngine {
                         .collect();
 
                     let snapshot = EffectParameterSnapshot {
-                        target: EffectTarget::Master,
+                        target,
                         effect_id,
                         parameters,
                     };
@@ -1057,27 +1007,6 @@ impl AudioEngine {
                     let _ = self
                         .feedback_producer
                         .push(AudioFeedback::EffectParameterSnapshot(snapshot));
-                }
-            }
-            AudioCommand::QueryBusEffectParameters { bus_id, effect_id } => {
-                if let Some(effects) = self.plugin_state.get_bus_effects(bus_id.to_u32() as usize) {
-                    if let Some(effect_instance) = effects.iter().find(|e| e.id == effect_id) {
-                        let specs = effect_instance.plugin.get_parameter_specs();
-                        let parameters: Vec<(u32, f32)> = specs
-                            .iter()
-                            .map(|spec| (spec.id, effect_instance.plugin.get_parameter(spec.id)))
-                            .collect();
-
-                        let snapshot = EffectParameterSnapshot {
-                            target: EffectTarget::Bus(bus_id),
-                            effect_id,
-                            parameters,
-                        };
-
-                        let _ = self
-                            .feedback_producer
-                            .push(AudioFeedback::EffectParameterSnapshot(snapshot));
-                    }
                 }
             }
             AudioCommand::PreparePlugin {
@@ -1396,6 +1325,11 @@ impl AudioEngine {
                             request_id,
                         });
                 }
+            }
+
+            AudioCommand::QueryEffectPluginBox { .. }
+            | AudioCommand::QueryGeneratorPluginBox { .. } => {
+                // Not implemented in audio thread yet
             }
         }
 

@@ -6,21 +6,21 @@ use parking_lot::Mutex;
 use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
 
-use crate::types::{PluginCategory, ProcessContext};
+use crate::types::{PluginCategory, ProcessContext, ZeroCopyBuffer};
 
 // ============================================================================
 // CONTEXTS & TYPES
 // ============================================================================
 
 /// ## Overview
-/// 
+///
 /// Interface or Trait every plugin should respect.
 /// If you want your plugin to work as intended,
 /// You should implement all the interface
 /// available in this trait
-/// 
+///
 /// ## Note
-/// 
+///
 /// We don't specify a certain way to implement this interface
 /// All the logic used is up to you, and the performance
 /// of the computation is your responsibility
@@ -99,7 +99,7 @@ pub trait AudioPlugin: Send + Sync {
     }
 
     /// Allows the plugin to expose a shared memory buffer by name
-    fn get_float_buffer(&self, _name: &str) -> Option<Arc<Mutex<Vec<f32>>>> {
+    fn get_zero_copy_buffer(&self, _name: &str) -> Option<ZeroCopyBuffer> {
         None // Default implementation does nothing
     }
 

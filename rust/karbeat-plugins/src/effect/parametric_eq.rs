@@ -289,7 +289,7 @@ impl DigiParametricEQ {
             .into_iter()
             .flat_map(|(freq, db)| [freq, db])
             .collect();
-            
+
         *self.magnitude_buffer.lock() = flat_array;
     }
 
@@ -556,10 +556,20 @@ impl AudioPlugin for DigiParametricEQ {
         (self.last_sample_rate * 0.05) as u32
     }
 
-    fn get_float_buffer(&self, name: &str) -> Option<Arc<Mutex<Vec<f32>>>> {
+    fn get_zero_copy_buffer(&self, name: &str) -> Option<ZeroCopyBuffer> {
         match name {
-            "magnitude" => Some(Arc::clone(&self.magnitude_buffer)),
-            "spectrum" => Some(Arc::clone(&self.spectrum_buffer)),
+            "magnitude" => {
+                let data = self.magnitude_buffer.lock();
+                let slice: &[f32] = data.as_slice();
+                let boxed = slice.to_vec().into_boxed_slice();
+                Some(ZeroCopyBuffer::Float32(Arc::new(boxed)))
+            }
+            "spectrum" => {
+                let data = self.spectrum_buffer.lock();
+                let slice: &[f32] = data.as_slice();
+                let boxed = slice.to_vec().into_boxed_slice();
+                Some(ZeroCopyBuffer::Float32(Arc::new(boxed)))
+            }
             _ => None,
         }
     }
