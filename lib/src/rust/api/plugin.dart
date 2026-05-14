@@ -7,11 +7,13 @@ import '../frb_generated.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'plugins/opaque.dart';
 import 'project.dart';
 part 'plugin.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `hash`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
+// These functions have error during generation (see debug logs or enable `stop_on_error: true` for more details): `query_live_plugin_zero_copy_buf`
 
 /// Get all available generators with their registry IDs (preferred for UI)
 Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds() =>
@@ -201,6 +203,14 @@ Future<int> executeRealtimePluginCommand({
 /// automatically when Flutter closes the stream (sink returns an error).
 Stream<UiPluginCommandResponse> createPluginMessageStream() =>
     RustLib.instance.api.crateApiPluginCreatePluginMessageStream();
+
+/// Opens a stream that continuously polls the audio→UI feedback channel and
+/// forwards any requested `ZeroCopyBuffer` handles to Flutter.
+///
+/// The polling thread runs at ~16ms intervals (≈60fps). It terminates
+/// automatically when Flutter closes the stream.
+Stream<UiZeroCopyBufferResponse> createZeroCopyBufferStream() =>
+    RustLib.instance.api.crateApiPluginCreateZeroCopyBufferStream();
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>>
 abstract class PluginBufferHandle implements RustOpaqueInterface {
@@ -433,4 +443,27 @@ sealed class UiPluginTarget with _$UiPluginTarget {
   /// An effect on the master bus
   const factory UiPluginTarget.masterEffect(int field0) =
       UiPluginTarget_MasterEffect;
+}
+
+/// A response message arriving from the audio thread containing the zero-copy buffer.
+/// Dart uses the `request_id` to correlate with the original command sent via `query_zero_copy_buffer`.
+class UiZeroCopyBufferResponse {
+  final int requestId;
+
+  /// The opaque handle that Dart can use to read raw memory.
+  /// It is `None` if the plugin did not recognize the buffer name.
+  final ZeroCopyHandle? handle;
+
+  const UiZeroCopyBufferResponse({required this.requestId, this.handle});
+
+  @override
+  int get hashCode => requestId.hashCode ^ handle.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiZeroCopyBufferResponse &&
+          runtimeType == other.runtimeType &&
+          requestId == other.requestId &&
+          handle == other.handle;
 }

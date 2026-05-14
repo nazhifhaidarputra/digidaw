@@ -429,7 +429,7 @@ pub struct BiquadFilter<T: FilterMode + 'static> {
     )]
     pub q: f32,
 
-    #[param(id = "active", name = "Active", group = "Filter", default = 1.0)]
+    #[param(id = "active", name = "Active", group = "Filter", default = true)]
     pub active: bool,
 
     #[param(id = "type", name = "Type", group = "Filter", default = 0.0)]

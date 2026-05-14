@@ -1,7 +1,6 @@
-use std::{any::Any, fmt::Debug, sync::Arc};
+use std::{any::Any, fmt::Debug};
 
 use hashbrown::HashMap;
-use parking_lot::Mutex;
 
 use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;

@@ -14,10 +14,7 @@ use crate::{
     lock::{get_app_read, get_plugin_registry_read},
 };
 use indexmap::IndexMap;
-use karbeat_utils::define_id;
 use karbeat_utils::math::is_power_of_two;
-
-define_id!(SidechainRouteId);
 
 // =============================================================================
 // Audio Thread Owned Plugin State

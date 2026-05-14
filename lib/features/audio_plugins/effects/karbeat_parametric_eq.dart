@@ -8,7 +8,6 @@ import 'package:karbeat/features/audio_plugins/effects/abstract_effect_screen.da
 import 'package:karbeat/features/components/plugin_parameter_widget.dart';
 import 'package:karbeat/models/payload.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
-import 'package:karbeat/features/components/fine_grained_input.dart';
 
 /// Math helpers for Logarithmic Frequency Mapping
 const double minFreq = 20.0;
@@ -244,7 +243,7 @@ class KarbeatParametricEqState
   }
 
   void _initBandsFromParameters() {
-    // 1. Determine how many bands the API actually provided by scanning the paths
+    // Determine how many bands the API actually provided by scanning the paths
     int maxBandIndex = -1;
     for (final p in parameters) {
       final match = RegExp(r'band(\d+)/').firstMatch(p.path);
@@ -254,7 +253,7 @@ class KarbeatParametricEqState
       }
     }
 
-    // 2. Create the exact number of bands (fallback to 8 if none found)
+    // Create the exact number of bands (fallback to 8 if none found)
     final numBands = maxBandIndex >= 0 ? maxBandIndex + 1 : 8;
 
     // Initialize with generic safe defaults
@@ -269,7 +268,7 @@ class KarbeatParametricEqState
       ),
     );
 
-    // 3. Immediately apply the actual API values from the parameters list
+    // Immediately apply the actual API values from the parameters list
     _applyParametersToState();
   }
 

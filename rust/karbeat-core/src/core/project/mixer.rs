@@ -12,8 +12,8 @@ use thiserror::Error;
 use crate::{
     commands::AudioCommand,
     context::{ctx, utils::send_audio_command},
-    core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
-    shared::{BusId, EffectId},
+    core::project::{ApplicationState, PluginInstance, TrackId, plugin::AudioPlugin},
+    shared::{BusId, EffectId, SidechainRouteId},
 };
 
 // =============================================================================
@@ -26,6 +26,7 @@ pub enum RoutingNode {
     Track(TrackId),
     Bus(BusId),
     Master,
+    PluginSidechain(SidechainRouteId),
 }
 
 /// A routing connection in the matrix

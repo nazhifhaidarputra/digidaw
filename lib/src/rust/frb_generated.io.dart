@@ -199,6 +199,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<UiZeroCopyBufferResponse>
+  dco_decode_StreamSink_ui_zero_copy_buffer_response_Sse(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -218,6 +222,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   WaveformHandle
   dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ZeroCopyHandle
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     dynamic raw,
   );
 
@@ -408,6 +418,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   WaveformHandle?
   dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ZeroCopyHandle?
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     dynamic raw,
   );
 
@@ -615,6 +631,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiTransportState dco_decode_ui_transport_state(dynamic raw);
 
   @protected
+  UiZeroCopyBufferResponse dco_decode_ui_zero_copy_buffer_response(dynamic raw);
+
+  @protected
   void dco_decode_unit(dynamic raw);
 
   @protected
@@ -780,6 +799,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<UiZeroCopyBufferResponse>
+  sse_decode_StreamSink_ui_zero_copy_buffer_response_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -799,6 +824,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   WaveformHandle
   sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ZeroCopyHandle
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     SseDeserializer deserializer,
   );
 
@@ -1033,6 +1064,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   WaveformHandle?
   sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ZeroCopyHandle?
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     SseDeserializer deserializer,
   );
 
@@ -1282,6 +1319,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiTransportState sse_decode_ui_transport_state(SseDeserializer deserializer);
 
   @protected
+  UiZeroCopyBufferResponse sse_decode_ui_zero_copy_buffer_response(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
@@ -1481,6 +1523,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_zero_copy_buffer_response_Sse(
+    RustStreamSink<UiZeroCopyBufferResponse> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
@@ -1503,6 +1551,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     WaveformHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    ZeroCopyHandle self,
     SseSerializer serializer,
   );
 
@@ -1783,6 +1838,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     WaveformHandle? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    ZeroCopyHandle? self,
     SseSerializer serializer,
   );
 
@@ -2096,6 +2158,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_transport_state(
     UiTransportState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_zero_copy_buffer_response(
+    UiZeroCopyBufferResponse self,
     SseSerializer serializer,
   );
 

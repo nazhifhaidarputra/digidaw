@@ -130,6 +130,7 @@ impl From<&RoutingNode> for UiRoutingNode {
             RoutingNode::Track(id) => UiRoutingNode::Track(id.to_u32()),
             RoutingNode::Bus(id) => UiRoutingNode::Bus(id.to_u32()),
             RoutingNode::Master => UiRoutingNode::Master,
+            RoutingNode::PluginSidechain(sidechain_route_id) => todo!(),
         }
     }
 }

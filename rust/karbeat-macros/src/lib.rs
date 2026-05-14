@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(dead_code)]
 
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{ collections::HashMap, fs, path::PathBuf };
 
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Fields, ItemImpl, Lit, LitStr, Type, parse_macro_input};
+use quote::{ format_ident, quote };
+use syn::{ Data, DeriveInput, Fields, ItemImpl, Lit, LitStr, Type, parse_macro_input };
 
 #[proc_macro_derive(EnumParam)]
 pub fn derive_enum_param(input: TokenStream) -> TokenStream {
@@ -20,27 +20,29 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
     let variants: Vec<_> = data_enum.variants.into_iter().collect();
 
     // Extract variant identifiers and strings for use in generated code
-    let variant_idents: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
-    let variant_strings: Vec<_> = variants.iter().map(|v| v.ident.to_string()).collect();
+    let variant_idents: Vec<_> = variants
+        .iter()
+        .map(|v| v.ident.clone())
+        .collect();
+    let variant_strings: Vec<_> = variants
+        .iter()
+        .map(|v| v.ident.to_string())
+        .collect();
 
     // Fallback to the first variant if #[default] is missing
     let mut default_variant = variants
         .first()
         .expect("Enum must have at least one variant")
-        .ident
-        .clone();
+        .ident.clone();
     for variant in &variants {
-        if variant
-            .attrs
-            .iter()
-            .any(|attr| attr.path().is_ident("default"))
-        {
+        if variant.attrs.iter().any(|attr| attr.path().is_ident("default")) {
             default_variant = variant.ident.clone();
             break;
         }
     }
 
-    let expanded = quote! {
+    let expanded =
+        quote! {
         impl ::karbeat_plugin_types::parameter::EnumParam for #name {
             #[inline(always)]
             fn to_index(self) -> usize {
@@ -103,8 +105,9 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut params = Vec::new();
     let mut nested_fields: Vec<(syn::Ident, bool, String)> = Vec::new();
     let mut used_ids: HashMap<String, syn::Ident> = HashMap::new();
-    if let Data::Struct(data_struct) = &mut ast.data
-        && let Fields::Named(fields) = &mut data_struct.fields
+    if
+        let Data::Struct(data_struct) = &mut ast.data &&
+        let Fields::Named(fields) = &mut data_struct.fields
     {
         for field in fields.named.iter_mut() {
             let field_ident = field.ident.clone().unwrap();
@@ -125,61 +128,66 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let mut p_step = 0.0;
 
                     let res = attr.parse_nested_meta(|meta| {
-                            if meta.path.is_ident("id") {
-                                let value = meta.value()?.parse::<Lit>()?;
-                                if let Lit::Str(lit_str) = value {
-                                    p_id_str = lit_str.value();
+                        if meta.path.is_ident("id") {
+                            let value = meta.value()?.parse::<Lit>()?;
+                            if let Lit::Str(lit_str) = value {
+                                p_id_str = lit_str.value();
 
-                                    // Local string collision check!
-                                    if let Some(existing_field) = used_ids.get(&p_id_str) {
-                                        return Err(syn::Error::new_spanned(
+                                // Local string collision check!
+                                if let Some(existing_field) = used_ids.get(&p_id_str) {
+                                    return Err(
+                                        syn::Error::new_spanned(
                                             &lit_str,
-                                            format!("Parameter ID collision! Local ID `{}` is already used by field `{}`.", p_id_str, existing_field)
-                                        ));
-                                    }
-                                    used_ids.insert(p_id_str.clone(), field_ident.clone());
+                                            format!(
+                                                "Parameter ID collision! Local ID `{}` is already used by field `{}`.",
+                                                p_id_str,
+                                                existing_field
+                                            )
+                                        )
+                                    );
                                 }
-                            } else if meta.path.is_ident("name") {
-                                let value = meta.value()?.parse::<Lit>()?;
-                                if let Lit::Str(lit_str) = value {
-                                    p_name = lit_str.value();
-                                }
-                            } else if meta.path.is_ident("group") {
-                                let value = meta.value()?.parse::<Lit>()?;
-                                if let Lit::Str(lit_str) = value {
-                                    p_group = lit_str.value();
-                                }
-                            } else if meta.path.is_ident("min") {
-                                let value = meta.value()?.parse::<Lit>()?;
-                                if let Lit::Float(lit_float) = value {
-                                    p_min = lit_float.base10_parse()?;
-                                }
-                            } else if meta.path.is_ident("max") {
-                                let value = meta.value()?.parse::<Lit>()?;
-                                if let Lit::Float(lit_float) = value {
-                                    p_max = lit_float.base10_parse()?;
-                                }
-                            } else if meta.path.is_ident("default") {
-                                let value = meta.value()?.parse::<Lit>()?;
-                                if let Lit::Float(lit_float) = value {
-                                    p_default = lit_float.base10_parse()?;
-                                }
-                            }  else if meta.path.is_ident("step") {
-                                let value = meta.value()?.parse::<Lit>()?;
-                                if let Lit::Float(lit_float) = value {
-                                    p_step = lit_float.base10_parse()?;
-                                }
+                                used_ids.insert(p_id_str.clone(), field_ident.clone());
                             }
-                            else {
-                                return Err(
-                                    syn::Error::new_spanned(
-                                        &meta.path,
-                                        format!("{:?} is not a valid parameter", meta.path)
-                                    )
-                                );
+                        } else if meta.path.is_ident("name") {
+                            let value = meta.value()?.parse::<Lit>()?;
+                            if let Lit::Str(lit_str) = value {
+                                p_name = lit_str.value();
                             }
-                            Ok(())
-                        });
+                        } else if meta.path.is_ident("group") {
+                            let value = meta.value()?.parse::<Lit>()?;
+                            if let Lit::Str(lit_str) = value {
+                                p_group = lit_str.value();
+                            }
+                        } else if meta.path.is_ident("min") {
+                            let value = meta.value()?.parse::<Lit>()?;
+                            if let Lit::Float(lit_float) = value {
+                                p_min = lit_float.base10_parse()?;
+                            }
+                        } else if meta.path.is_ident("max") {
+                            let value = meta.value()?.parse::<Lit>()?;
+                            if let Lit::Float(lit_float) = value {
+                                p_max = lit_float.base10_parse()?;
+                            }
+                        } else if meta.path.is_ident("default") {
+                            let value = meta.value()?.parse::<Lit>()?;
+                            if let Lit::Float(lit_float) = value {
+                                p_default = lit_float.base10_parse()?;
+                            }
+                        } else if meta.path.is_ident("step") {
+                            let value = meta.value()?.parse::<Lit>()?;
+                            if let Lit::Float(lit_float) = value {
+                                p_step = lit_float.base10_parse()?;
+                            }
+                        } else {
+                            return Err(
+                                syn::Error::new_spanned(
+                                    &meta.path,
+                                    format!("{:?} is not a valid parameter", meta.path)
+                                )
+                            );
+                        }
+                        Ok(())
+                    });
 
                     if let Err(e) = res {
                         macro_error = Some(e);
@@ -202,8 +210,9 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     // Parse prefix attribute if provided
                     let _ = attr.parse_nested_meta(|meta| {
-                        if meta.path.is_ident("prefix")
-                            && let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()?
+                        if
+                            meta.path.is_ident("prefix") &&
+                            let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()?
                         {
                             n_prefix = lit_str.value();
                         }
@@ -249,9 +258,9 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             // Remove the custom attributes so the Rust compiler doesn't panic
-            field
-                .attrs
-                .retain(|attr| !attr.path().is_ident("param") && !attr.path().is_ident("nested"));
+            field.attrs.retain(
+                |attr| !attr.path().is_ident("param") && !attr.path().is_ident("nested")
+            );
         }
     }
 
@@ -264,12 +273,12 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let set_match_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        quote! {
-            if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                self.#field.set_base(value);
-                return true;
+            quote! {
+                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                    self.#field.set_base(value);
+                    return true;
+                }
             }
-        }
     });
 
     let nested_set_stmts = nested_fields.iter().map(|(f, is_iterable, prefix)| {
@@ -296,9 +305,34 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let get_match_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        quote! {
-            if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                return Some(self.#field.get_base().to_f32());
+        let ty = &p.original_type;
+        
+        let type_ident = if let syn::Type::Path(type_path) = ty {
+            type_path.path.segments.last().map(|s| s.ident.to_string()).unwrap_or_default()
+        } else {
+            "".to_string()
+        };
+
+        if type_ident == "f32" {
+            quote! {
+                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                    return Some(self.#field.get_base());
+                }
+            }
+        } else if type_ident == "bool" {
+            quote! {
+                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                    return Some(if self.#field.get_base() { 1.0 } else { 0.0 });
+                }
+            }
+        } else {
+            quote! {
+                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                    // EnumParam trait requires `to_index()` which we can cast to f32
+                    return Some(
+                        <#ty as ::karbeat_plugin_types::parameter::EnumParam>::to_index(self.#field.get_base()) as f32
+                    );
+                }
             }
         }
     });
@@ -430,9 +464,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut default_field_inits = Vec::new();
 
-    if let Data::Struct(data_struct) = &ast.data
-        && let Fields::Named(fields) = &data_struct.fields
-    {
+    if let Data::Struct(data_struct) = &ast.data && let Fields::Named(fields) = &data_struct.fields {
         for field in fields.named.iter() {
             let field_ident = field.ident.as_ref().unwrap();
 
@@ -448,40 +480,53 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let ty = &p.original_type;
 
                 // Convert the AST Type to a string to check what it is
-                let ty_str = quote!(#ty).to_string().replace(" ", "");
+                let type_ident = if let syn::Type::Path(type_path) = ty {
+                    type_path.path.segments.last().map(|s| s.ident.to_string()).unwrap_or_default()
+                } else {
+                    "".to_string()
+                };
 
                 let local_hash = quote! { ::karbeat_utils::hash::hash_str(#id) };
 
-                let param_init = if ty_str == "f32" {
+                let param_init = if type_ident == "f32" {
                     quote! {
                         ::karbeat_plugin_types::parameter::Param::new_f32(#local_hash, #name, #group, #default_val, #min, #max, #step)
                     }
-                } else if ty_str == "bool" {
+                } else if type_ident == "bool" {
+                    let default_bool = default_val >= 0.5;
                     quote! {
-                        ::karbeat_plugin_types::parameter::Param::new_bool(#local_hash, #name, #group, #default_val > 0.5)
+                        ::karbeat_plugin_types::parameter::Param::new_bool(#local_hash, #name, #group, #default_bool)
                     }
                 } else {
+                    let default_idx = default_val as usize;
                     quote! {
-                        ::karbeat_plugin_types::parameter::Param::new_enum(
-                            #local_hash, #name, #group,
-                            <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_val as usize)
+                        ::karbeat_plugin_types::parameter::Param::<#ty>::new_enum(
+                            #local_hash, 
+                            #name, 
+                            #group, 
+                            <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_idx)
                         )
                     }
                 };
 
-                default_field_inits.push(quote! {
+                default_field_inits.push(
+                    quote! {
                     #field_ident: #param_init
-                });
+                }
+                );
             } else {
                 // For #[nested] or standard fields, fallback to standard default
-                default_field_inits.push(quote! {
+                default_field_inits.push(
+                    quote! {
                     #field_ident: std::default::Default::default()
-                });
+                }
+                );
             }
         }
     }
 
-    let expanded = quote! {
+    let expanded =
+        quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         #ast
 
@@ -493,8 +538,6 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
        impl #impl_generics #struct_name #ty_generics #where_clause {
             /// Creates an instance with all `#[param]` fields initialized to their macro defaults.
             pub fn base_default() -> Self {
-                // Compile-time type check to ensure the field types (including generics like T)
-                // implement the required traits. Zero runtime overhead.
                 fn assert_implements_param_type<TypeToCheck: ::karbeat_plugin_types::parameter::ParamType>() {}
                 #(#type_assertions)*
 
@@ -582,16 +625,15 @@ pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStrea
     let item_impl = parse_macro_input!(item as ItemImpl);
 
     let generics = &item_impl.generics;
-    let trait_path = &item_impl
-        .trait_
+    let trait_path = &item_impl.trait_
         .as_ref()
-        .expect("This macro must be applied to a trait implementation")
-        .1;
+        .expect("This macro must be applied to a trait implementation").1;
     let self_ty = &item_impl.self_ty;
     let items = &item_impl.items;
 
     // Generate the boilerplate methods using their AutoParams implementation
-    let injected_code = quote! {
+    let injected_code =
+        quote! {
         fn set_custom_parameter(&mut self, prefix_hash:u32, id: u32, value: f32) {
             self.auto_set_parameter(prefix_hash, id, value);
             #side_effect_call
@@ -625,7 +667,8 @@ pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStrea
     };
 
     // Rebuild the impl block: Original User Methods + Injected Boilerplate
-    let expanded = quote! {
+    let expanded =
+        quote! {
         impl #generics #trait_path for #self_ty {
             // Keep the user's manual process(), name(), prepare(), etc.
             #(#items)*
@@ -646,10 +689,11 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 
     let (impl_generics, ty_generics, where_clause) = input_derive.generics.split_for_impl();
     let fields = match &input_derive.data {
-        Data::Struct(data_struct) => match &data_struct.fields {
-            Fields::Named(fields_named) => &fields_named.named,
-            _ => panic!("AutoParams can only be derived on structs with named fields"),
-        },
+        Data::Struct(data_struct) =>
+            match &data_struct.fields {
+                Fields::Named(fields_named) => &fields_named.named,
+                _ => panic!("AutoParams can only be derived on structs with named fields"),
+            }
         _ => panic!("AutoParams can only be derived on structs"),
     };
 
@@ -662,9 +706,10 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
         if !is_nested {
             let mut is_valid_param = false;
 
-            if let Type::Path(type_path) = &field.ty
-                && let Some(segment) = type_path.path.segments.last()
-                && segment.ident == "Param"
+            if
+                let Type::Path(type_path) = &field.ty &&
+                let Some(segment) = type_path.path.segments.last() &&
+                segment.ident == "Param"
             {
                 is_valid_param = true;
             }
@@ -676,9 +721,7 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                     field.ident.as_ref().unwrap()
                 );
 
-                return syn::Error::new_spanned(&field.ty, error_msg)
-                    .to_compile_error()
-                    .into();
+                return syn::Error::new_spanned(&field.ty, error_msg).to_compile_error().into();
             }
 
             // Default the ID string to the exact field name
@@ -688,9 +731,11 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
             for attr in &field.attrs {
                 if attr.path().is_ident("param") {
                     let _ = attr.parse_nested_meta(|meta| {
-                        if meta.path.is_ident("id")
-                            && let Ok(syn::Lit::Str(lit_str)) =
-                                meta.value().and_then(|v| v.parse::<syn::Lit>())
+                        if
+                            meta.path.is_ident("id") &&
+                            let Ok(syn::Lit::Str(lit_str)) = meta
+                                .value()
+                                .and_then(|v| v.parse::<syn::Lit>())
                         {
                             id_str = lit_str.value();
                         }
@@ -755,7 +800,8 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
         }
     });
 
-    let expanded = quote! {
+    let expanded =
+        quote! {
         const _: () = {
             // Hygienically target the specific traits
             use ::karbeat_plugin_types::*;
@@ -817,7 +863,8 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                 }
 
                 let json_data = fs::read_to_string(&path).unwrap();
-                let manifest: serde_json::Value = serde_json::from_str(&json_data)
+                let manifest: serde_json::Value = serde_json
+                    ::from_str(&json_data)
                     .unwrap_or_else(|_| panic!("Invalid JSON in {:?}", path));
 
                 let id = manifest["id"].as_u64().expect("Missing id") as u32;
@@ -832,9 +879,11 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                 let const_prefix = if is_synth { "GEN_" } else { "EFF_" };
                 let const_ident = format_ident!("{}{}", const_prefix, shouty_name);
 
-                associated_constants.push(quote! {
+                associated_constants.push(
+                    quote! {
                     pub const #const_ident: u32 = #id;
-                });
+                }
+                );
 
                 let mut param_tokens = Vec::new();
                 if let Some(params) = manifest["parameters"].as_array() {
@@ -857,7 +906,8 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                             quote! { vec![] }
                         };
 
-                        param_tokens.push(quote! {
+                        param_tokens.push(
+                            quote! {
                             karbeat_plugin_types::ParameterSpec {
                                 id: #p_id,
                                 name: #p_name.to_string(),
@@ -869,16 +919,20 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                                 value_type: karbeat_plugin_types::ParamType::#val_type_ident,
                                 choices: #choices_tokens,
                             }
-                        });
+                        }
+                        );
                     }
                 }
 
                 let abs_path_str = path.to_str().unwrap();
-                file_trackers.push(quote! {
+                file_trackers.push(
+                    quote! {
                     const _: &[u8] = include_bytes!(#abs_path_str);
-                });
+                }
+                );
 
-                let insert_stmt = quote! {
+                let insert_stmt =
+                    quote! {
                     let specs = vec![ #(#param_tokens),* ];
                     let factory: Box<dyn Fn() -> Box<_> + Send + Sync> = Box::new(|| Box::new( <#internal_ident>::build() ));
 
@@ -890,15 +944,19 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                 };
 
                 if is_synth {
-                    generator_inserts.push(quote! {
+                    generator_inserts.push(
+                        quote! {
                         #insert_stmt
                         registry.generators.insert(#id, registered);
-                    });
+                    }
+                    );
                 } else {
-                    effect_inserts.push(quote! {
+                    effect_inserts.push(
+                        quote! {
                         #insert_stmt
                         registry.effects.insert(#id, registered);
-                    });
+                    }
+                    );
                 }
             }
         }
@@ -908,7 +966,8 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
     process_directory(&effects_path, false);
 
     // 2. Assemble the final output, now including the constants!
-    let expanded = quote! {
+    let expanded =
+        quote! {
         // Automatically inject the compiled constants
         #(#associated_constants)*
 
