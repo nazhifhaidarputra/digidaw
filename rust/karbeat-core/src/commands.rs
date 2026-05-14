@@ -1,4 +1,5 @@
 use indexmap::IndexMap;
+use karbeat_plugin_api::types::ZeroCopyBuffer;
 
 use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
@@ -101,12 +102,11 @@ pub enum AudioCommand {
 
 
 
-    QueryEffectPluginBox {
-        target: EffectTarget,
-        effect_id: EffectId,
-    },
-    QueryGeneratorPluginBox {
-        generator_id: GeneratorId,
+    /// Request a ZeroCopyBuffer from a specific plugin
+    QueryZeroCopyBuffer {
+        target: PluginTarget,
+        name: String,
+        request_id: u32,
     },
     
     // =====================================================
@@ -237,5 +237,10 @@ pub enum AudioFeedback {
         target: PluginTarget,
         state: Vec<u8>,
         request_id: u32,
+    },
+
+    ZeroCopyBufferResponse {
+        request_id: u32,
+        buffer: Option<ZeroCopyBuffer>, // Wrap it in your opaque type
     },
 }

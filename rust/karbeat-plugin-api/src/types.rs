@@ -35,7 +35,7 @@ pub struct ProcessContext<'a> {
 
 
 /// Zero copy buffer used for FFI interoperability
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ZeroCopyBuffer {
     Float32(Arc<Box<[f32]>>),
     Uint8(Arc<Box<[u8]>>),

@@ -7,7 +7,6 @@ use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
 use num_complex::{Complex, Complex32};
-use parking_lot::Mutex;
 use rustfft::{num_traits::Zero, Fft, FftPlanner};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -241,8 +240,8 @@ pub struct DigiParametricEQ {
     //////////////////////////////////////////
     // Shared Memory buffer
     //////////////////////////////////////////
-    pub magnitude_buffer: Arc<Mutex<Vec<f32>>>,
-    pub spectrum_buffer: Arc<Mutex<Vec<f32>>>,
+    pub magnitude_buffer: Arc<Box<[f32]>>,
+    pub spectrum_buffer: Arc<Box<[f32]>>,
 }
 
 impl Default for DigiParametricEQ {
@@ -268,8 +267,8 @@ impl DigiParametricEQ {
         engine.analyzer_buffer = smallvec![0.0; FFT_SIZE];
         engine.analyzer_idx = 0;
         engine.spectrum_history = Vec::new();
-        engine.magnitude_buffer = Arc::new(Mutex::new(Vec::new()));
-        engine.spectrum_buffer = Arc::new(Mutex::new(Vec::new()));
+        engine.magnitude_buffer = Arc::new(Box::new([]));
+        engine.spectrum_buffer = Arc::new(Box::new([]));
         engine
     }
 
@@ -290,7 +289,7 @@ impl DigiParametricEQ {
             .flat_map(|(freq, db)| [freq, db])
             .collect();
 
-        *self.magnitude_buffer.lock() = flat_array;
+        self.magnitude_buffer = Arc::new(flat_array.into_boxed_slice());
     }
 
     pub fn compute_magnitude_response(&self, num_points: usize) -> Vec<(f32, f32)> {
@@ -534,7 +533,7 @@ impl AudioPlugin for DigiParametricEQ {
                     flat_array.push(smoothed_db);
                 }
 
-                // *self.spectrum_buffer.lock() = flat_array.clone();
+                self.spectrum_buffer = Arc::new(flat_array.clone().into_boxed_slice());
 
                 Some(json!(flat_array))
                 // None
@@ -559,16 +558,10 @@ impl AudioPlugin for DigiParametricEQ {
     fn get_zero_copy_buffer(&self, name: &str) -> Option<ZeroCopyBuffer> {
         match name {
             "magnitude" => {
-                let data = self.magnitude_buffer.lock();
-                let slice: &[f32] = data.as_slice();
-                let boxed = slice.to_vec().into_boxed_slice();
-                Some(ZeroCopyBuffer::Float32(Arc::new(boxed)))
+                Some(ZeroCopyBuffer::Float32(self.magnitude_buffer.clone()))
             }
             "spectrum" => {
-                let data = self.spectrum_buffer.lock();
-                let slice: &[f32] = data.as_slice();
-                let boxed = slice.to_vec().into_boxed_slice();
-                Some(ZeroCopyBuffer::Float32(Arc::new(boxed)))
+                Some(ZeroCopyBuffer::Float32(self.spectrum_buffer.clone()))
             }
             _ => None,
         }

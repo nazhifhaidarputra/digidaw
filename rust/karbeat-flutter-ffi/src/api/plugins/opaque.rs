@@ -1,7 +1,5 @@
 use flutter_rust_bridge::frb;
-use karbeat_plugin_api::types::{BufferDataType, ZeroCopyBuffer};
-
-use crate::api::plugin::UiPluginTarget;
+pub use karbeat_plugin_api::types::{BufferDataType, ZeroCopyBuffer};
 
 #[frb(opaque)]
 pub struct ZeroCopyHandle {
@@ -26,7 +24,7 @@ impl ZeroCopyHandle {
             ZeroCopyBuffer::Int32(b) => b.as_ptr() as usize,
         }
     }
-    /// Gets the number of elements (NOT bytes, making Dart's job easier)
+    /// Gets the number of elements
     #[frb(sync)]
     pub fn length_elements(&self) -> usize {
         match &self.buffer {
@@ -35,12 +33,4 @@ impl ZeroCopyHandle {
             ZeroCopyBuffer::Int32(b) => b.len(),
         }
     }
-}
-/// The universal FFI fetch function
-pub fn get_zero_copy_buffer(target: UiPluginTarget, name: String) -> Option<ZeroCopyHandle> {
-    // let plugin = get_plugin_instance(&target)?;
-    // let buffer = plugin.get_zero_copy_buffer(&name)?;
-    Some(ZeroCopyHandle {
-        buffer: ZeroCopyBuffer::Float32(std::sync::Arc::new(Box::new([1.0_f32, 2.0_f32, 3.0_f32]))),
-    })
 }

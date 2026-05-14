@@ -1327,10 +1327,38 @@ impl AudioEngine {
                 }
             }
 
-            AudioCommand::QueryEffectPluginBox { .. }
-            | AudioCommand::QueryGeneratorPluginBox { .. } => {
-                // Not implemented in audio thread yet
+            AudioCommand::QueryZeroCopyBuffer {target, name, request_id}  => {
+                let buffer_opt = match target {
+                    PluginTarget::Generator(id) => self
+                        .plugin_state
+                        .get_generator(id.to_u32() as usize)
+                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
+                    PluginTarget::TrackEffect(track_id, effect_id) => self
+                        .plugin_state
+                        .get_track_effects(track_id.to_u32() as usize)
+                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id))
+                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
+                    PluginTarget::BusEffect(bus_id, effect_id) => self
+                        .plugin_state
+                        .get_bus_effects(bus_id.to_u32() as usize)
+                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id))
+                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
+                    PluginTarget::MasterEffect(effect_id) => self
+                        .plugin_state
+                        .master_effects
+                        .iter()
+                        .find(|e| e.id == effect_id)
+                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
+                };
+
+                let _ = self
+                    .feedback_producer
+                    .push(AudioFeedback::ZeroCopyBufferResponse {
+                        request_id,
+                        buffer: buffer_opt,
+                    });
             }
+            
         }
 
         pdc_dirty
@@ -3155,6 +3183,14 @@ impl AudioEngine {
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency
         );
+    }
+
+    fn get_plugin_box_gen(gen_id: GeneratorId) {
+
+    }
+
+    fn get_plugin_box_effect(target: EffectTarget, effect_id: EffectId) {
+
     }
 }
 

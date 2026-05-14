@@ -2,7 +2,7 @@
 //! Can be used for things such as Equalizer or Compressor
 
 use karbeat_macros::{karbeat_plugin, EnumParam};
-use karbeat_plugin_types::{EnumParam};
+use karbeat_plugin_types::EnumParam;
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
 use wide::f32x4;
@@ -621,5 +621,99 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
         let num_stages = self.cascades.get().max(1.0) as usize;
         self.coeff
             .magnitude_db_at(freq, self.sample_rate, num_stages)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_biquad_coefficient_math() {
+        let filter_mode = BiquadFilterType::LowPass;
+        let freq = 1000.0;
+        let q = 0.707;
+        let gain = 0.0;
+        let sample_rate = 44100.0;
+
+        let coeffs = filter_mode.get_coefficients(freq, q, gain, sample_rate);
+
+        // Ensure coefficients are calculated and not NaNs
+        assert!(!coeffs.b0.is_nan());
+        assert!(!coeffs.b1.is_nan());
+        assert!(!coeffs.b2.is_nan());
+        assert!(!coeffs.a1.is_nan());
+        assert!(!coeffs.a2.is_nan());
+
+        // For a lowpass filter, response at DC (freq -> 0) should be around 0 dB (gain of 1.0)
+        let mag_db_dc = coeffs.magnitude_db_at(10.0, sample_rate, 1);
+        assert!(mag_db_dc.abs() < 0.1); // ~0 dB at low frequency
+
+        // Response above cutoff should be lower
+        let mag_db_high = coeffs.magnitude_db_at(10000.0, sample_rate, 1);
+        assert!(mag_db_high < -10.0); // significantly attenuated
+    }
+
+    #[test]
+    fn test_biquad_simd_and_scalar_fallback() {
+        let mut filter = BiquadFilter::<BiquadFilterType>::default();
+        // Set to 6 channels to test SIMD (4 channels) + Scalar (2 channels)
+        filter.prepare(6, 44100);
+        filter.active.set_base(1.0);
+        filter
+            .filter_type
+            .set_base(BiquadFilterType::LowPass as usize as f32);
+        filter.freq.set_base(1000.0);
+        filter.q.set_base(0.707);
+        filter.cascades.set_base(1.0);
+
+        filter.calculate_coefficients();
+
+        let mut frame = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        filter.process_frame(&mut frame);
+
+        // Output should not be 1.0 anymore since it's filtered
+        // Also it should not be NaN
+        for sample in frame.iter() {
+            assert!(!sample.is_nan());
+            assert!(*sample != 1.0);
+        }
+
+        // Since input is same for all channels, and all channels use same filter,
+        // the SIMD channels and Scalar channels should have the exact same output.
+        let val_simd = frame[0];
+        let val_scalar = frame[4];
+        assert!((val_simd - val_scalar).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_biquad_state_reset() {
+        let mut filter = BiquadFilter::<BiquadFilterType>::default();
+        filter.prepare(2, 44100);
+        filter.active.set_base(1.0);
+        filter
+            .filter_type
+            .set_base(BiquadFilterType::LowPass as usize as f32);
+        filter.freq.set_base(1000.0);
+        filter.cascades.set_base(1.0);
+
+        filter.calculate_coefficients();
+
+        // Feed an impulse to change state
+        let mut frame = [1.0, 1.0];
+        filter.process_frame(&mut frame);
+
+        // State should now be non-zero
+        let x1: [f32; 4] = filter.wide_stage.stages[0].x1.into();
+        assert!(x1[0] != 0.0);
+
+        // Reset state
+        filter.reset_state();
+
+        // State should be zero
+        let x1_reset: [f32; 4] = filter.wide_stage.stages[0].x1.into();
+        let y1_reset: [f32; 4] = filter.wide_stage.stages[0].y1.into();
+        assert_eq!(x1_reset[0], 0.0);
+        assert_eq!(y1_reset[0], 0.0);
     }
 }
