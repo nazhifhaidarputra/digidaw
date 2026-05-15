@@ -290,11 +290,11 @@ pub enum UiClipSource {
 impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
-        let source = match &value.source {
-            DawSource::Audio(source_id) => UiClipSource::Audio {
+        let source = match value.source.as_ref() {
+            Some(DawSource::Audio(source_id)) => UiClipSource::Audio {
                 source_id: source_id.to_u32(),
             },
-            DawSource::Midi(pattern_id) => UiClipSource::Midi {
+            Some(DawSource::Midi(pattern_id)) => UiClipSource::Midi {
                 pattern_id: pattern_id.to_u32(),
             },
             _ => UiClipSource::None,

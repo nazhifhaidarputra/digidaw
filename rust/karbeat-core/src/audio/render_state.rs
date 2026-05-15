@@ -155,7 +155,7 @@ impl AudioPluginState {
 /// Contains only the data needed for real-time interpolation.
 #[derive(Clone, Debug)]
 pub struct AudioAutomationLane {
-    pub target: AutomationTarget,
+    pub target: Option<AutomationTarget>,
     pub points: Vec<AutomationPoint>,
     pub enabled: bool,
     pub min: f32,

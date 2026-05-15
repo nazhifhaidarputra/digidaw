@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:ffi' as ffi;
 
 import 'package:flutter/material.dart';
 import 'dart:math';
@@ -86,7 +86,7 @@ class KarbeatParametricEqState
   // ======================================
 
   /// Subscription to the plugin command response stream.
-  StreamSubscription<plugin_api.UiPluginCommandResponse>? _pluginStreamSub;
+  StreamSubscription<plugin_api.UiZeroCopyBufferResponse>? _zeroCopyStreamSub;
 
   /// request_id of the most recently dispatched GET_MAGNITUDE_RESPONSE command.
   /// Responses are matched by ID so stale replies are ignored.
@@ -95,7 +95,7 @@ class KarbeatParametricEqState
   /// request_id of the most recently dispatched GET_SPECTRUM command.
   int? _spectrumRequestId;
 
-  /// Timer that re-fires GET_SPECTRUM at ~30 FPS to drive the analyzer.
+  /// Timer that re-fires GET_SPECTRUM at a FPS to drive the analyzer.
   Timer? _spectrumPollTimer;
 
   final List<Color> _bandColors = [
@@ -116,11 +116,8 @@ class KarbeatParametricEqState
   void initState() {
     super.initState();
     _initBandsFromParameters();
-
-    // Open the real-time plugin command stream once and subscribe.
-    // All GET_MAGNITUDE_RESPONSE and GET_SPECTRUM replies arrive here.
-    _pluginStreamSub = plugin_api.createPluginMessageStream().listen(
-      _onPluginMessage,
+    _zeroCopyStreamSub = plugin_api.createZeroCopyBufferStream().listen(
+      _onZeroCopyMessage,
     );
 
     // Request the initial magnitude response after the first frame so that
@@ -129,16 +126,16 @@ class KarbeatParametricEqState
       (_) => _sendMagnitudeRequest(),
     );
 
-    // Re-fire GET_SPECTRUM at ~30 FPS to drive the real-time spectrum analyzer.
+    // Re-fire GET_SPECTRUM at ~60 FPS to drive the real-time spectrum analyzer.
     _spectrumPollTimer = Timer.periodic(
-      const Duration(milliseconds: 33),
+      const Duration(milliseconds: 16),
       (_) => _sendSpectrumRequest(),
     );
   }
 
   @override
   void dispose() {
-    _pluginStreamSub?.cancel();
+    _zeroCopyStreamSub?.cancel();
     _spectrumPollTimer?.cancel();
     super.dispose();
   }
@@ -163,7 +160,6 @@ class KarbeatParametricEqState
         effectId: eid,
       );
     } else {
-      // UiEffectTarget_Master
       return plugin_api.UiPluginTarget.masterEffect(eid);
     }
   }
@@ -172,10 +168,9 @@ class KarbeatParametricEqState
   /// The response arrives via [_onPluginMessage].
   void _sendMagnitudeRequest() {
     plugin_api
-        .executeRealtimePluginCommand(
+        .queryLivePluginZeroCopyBuf(
           target: _toPluginTarget(),
-          command: 'GET_MAGNITUDE_RESPONSE',
-          payloadJson: jsonEncode({'num_points': 500}),
+          name: 'magnitude',
         )
         .then((id) {
           _magnitudeRequestId = id;
@@ -189,10 +184,9 @@ class KarbeatParametricEqState
   /// Fired at ~30 FPS by [_spectrumPollTimer].
   void _sendSpectrumRequest() {
     plugin_api
-        .executeRealtimePluginCommand(
+        .queryLivePluginZeroCopyBuf(
           target: _toPluginTarget(),
-          command: 'GET_SPECTRUM',
-          payloadJson: jsonEncode({'num_points': 300}),
+          name: 'spectrum',
         )
         .then((id) {
           _spectrumRequestId = id;
@@ -202,25 +196,36 @@ class KarbeatParametricEqState
         });
   }
 
-  /// Routes incoming plugin command responses to the correct state field.
-  /// Only the most-recently-issued request ID is accepted to discard stale data.
-  void _onPluginMessage(plugin_api.UiPluginCommandResponse msg) {
+  /// Routes incoming zero-copy buffer responses to the correct state field.
+  /// Converts the raw memory pointer instantly to a Float32List.
+  void _onZeroCopyMessage(plugin_api.UiZeroCopyBufferResponse msg) {
     if (!mounted) return;
 
     if (msg.requestId == _magnitudeRequestId ||
         msg.requestId == _spectrumRequestId) {
-      // Decode the flat JSON array: [freq0, db0, freq1, db1, ...]
-      final List<dynamic> rawList = jsonDecode(msg.responseJson);
+      
+      final handle = msg.handle;
+      if (handle == null) return;
+
+      // Bridge the raw memory pointer directly to a Dart TypedData list
+      final address = handle.memoryAddress();
+      final length = handle.lengthElements();
+      
+      final ptr = ffi.Pointer<ffi.Float>.fromAddress(address);
+      final rawList = ptr.asTypedList(length);
+
       final List<CurvePoint> parsedPoints = [];
 
-      // Iterate by 2 to extract the pairs
+      // Iterate by 2 to extract the pairs [freq, db]
       for (int i = 0; i < rawList.length; i += 2) {
-        parsedPoints.add(
-          CurvePoint(
-            frequency: (rawList[i] as num).toDouble(),
-            magnitudeDb: (rawList[i + 1] as num).toDouble(),
-          ),
-        );
+        if (i + 1 < rawList.length) {
+          parsedPoints.add(
+            CurvePoint(
+              frequency: rawList[i].toDouble(),
+              magnitudeDb: rawList[i + 1].toDouble(),
+            ),
+          );
+        }
       }
 
       if (msg.requestId == _magnitudeRequestId) {

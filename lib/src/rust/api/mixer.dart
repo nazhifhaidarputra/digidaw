@@ -124,6 +124,14 @@ Future<void> addEffectToBus({required int busId, required int registryId}) =>
 Future<void> renameBus({required int busId, required String newName}) =>
     RustLib.instance.api.crateApiMixerRenameBus(busId: busId, newName: newName);
 
+Future<List<UiRoutingConnection>> getChannelDestinations({
+  required bool isBus,
+  required int channelId,
+}) => RustLib.instance.api.crateApiMixerGetChannelDestinations(
+  isBus: isBus,
+  channelId: channelId,
+);
+
 /// Set routing: source → destination with send level.
 Future<void> setRouting({
   required UiRoutingNode source,
@@ -452,4 +460,5 @@ sealed class UiRoutingNode with _$UiRoutingNode {
   const factory UiRoutingNode.track(int field0) = UiRoutingNode_Track;
   const factory UiRoutingNode.bus(int field0) = UiRoutingNode_Bus;
   const factory UiRoutingNode.master() = UiRoutingNode_Master;
+  const factory UiRoutingNode.pluginSidechain() = UiRoutingNode_PluginSidechain;
 }

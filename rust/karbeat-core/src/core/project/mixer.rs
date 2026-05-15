@@ -62,6 +62,7 @@ impl RoutingConnection {
 
 /// A mixer bus with its own channel strip
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct MixerBus {
     pub id: BusId,
     pub name: String,
@@ -139,6 +140,7 @@ pub enum MixerChannelParams {
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(default)]
 pub struct EffectInstance {
     pub id: EffectId,
     pub instance: Arc<PluginInstance>,
@@ -157,6 +159,7 @@ impl EffectInstance {
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(default)]
 pub struct MixerState {
     /// Per-track mixer channels (volume, pan, effects)
     pub channels: IndexMap<TrackId, Arc<MixerChannel>>,
@@ -171,6 +174,7 @@ pub struct MixerState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct MixerChannel {
     pub volume: Param<f32>, //dB
     pub pan: Param<f32>,    // -1.0 to 1.0

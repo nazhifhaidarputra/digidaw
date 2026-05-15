@@ -13,7 +13,6 @@ part 'plugin.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `hash`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
-// These functions have error during generation (see debug logs or enable `stop_on_error: true` for more details): `query_live_plugin_zero_copy_buf`
 
 /// Get all available generators with their registry IDs (preferred for UI)
 Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds() =>
@@ -203,6 +202,22 @@ Future<int> executeRealtimePluginCommand({
 /// automatically when Flutter closes the stream (sink returns an error).
 Stream<UiPluginCommandResponse> createPluginMessageStream() =>
     RustLib.instance.api.crateApiPluginCreatePluginMessageStream();
+
+/// Dispatches a request to the audio thread to fetch a zero-copy buffer from a live plugin.
+///
+/// # Parameters
+/// - `target`: Which plugin instance to target.
+/// - `name`: The requested buffer name (e.g., `"magnitude"` or `"spectrum"`).
+///
+/// # Returns
+/// `Ok(request_id)` — correlate this with `UiZeroCopyBufferResponse.request_id` in the stream.
+Future<int> queryLivePluginZeroCopyBuf({
+  required UiPluginTarget target,
+  required String name,
+}) => RustLib.instance.api.crateApiPluginQueryLivePluginZeroCopyBuf(
+  target: target,
+  name: name,
+);
 
 /// Opens a stream that continuously polls the audio→UI feedback channel and
 /// forwards any requested `ZeroCopyBuffer` handles to Flutter.

@@ -130,12 +130,13 @@ impl AutomationPoint {
 /// An automation lane that controls a single parameter.
 ///
 /// Lives in `ApplicationState::automation_pool` and is serialized with the project.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct AutomationLane {
     pub id: AutomationId,
     /// What this lane controls
-    pub target: AutomationTarget,
-    /// Human-readable label (e.g. "Volume", "Filter Cutoff")
+    pub target: Option<AutomationTarget>,
+    /// Human-readable label (e.g. "Volume", "Filter Cutoff")w
     pub label: String,
     /// Automation points sorted by time
     pub points: Vec<AutomationPoint>,
@@ -161,7 +162,7 @@ impl AutomationLane {
     ) -> Self {
         Self {
             id,
-            target,
+            target: Some(target),
             label: label.into(),
             points: Vec::new(),
             enabled: true,

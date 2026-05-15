@@ -236,6 +236,7 @@ pub struct DigiParametricEQ {
     analyzer_idx: usize,
     spectrum_history: Vec<f32>,
     fft_instance: Option<Arc<dyn Fft<f32>>>,
+    samples_since_last_fft: usize,
 
     //////////////////////////////////////////
     // Shared Memory buffer
@@ -269,6 +270,7 @@ impl DigiParametricEQ {
         engine.spectrum_history = Vec::new();
         engine.magnitude_buffer = Arc::new(Box::new([]));
         engine.spectrum_buffer = Arc::new(Box::new([]));
+        engine.handle_side_effects(0);
         engine
     }
 
@@ -314,6 +316,95 @@ impl DigiParametricEQ {
 
         result
     }
+
+    fn compute_and_update_spectrum(&mut self) {
+        let num_points = 300;
+        
+        let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> = smallvec![Complex::zero(); FFT_SIZE];
+        for i in 0..FFT_SIZE {
+            // Read backwards from current idx to get sequential chronological data
+            let idx = (self.analyzer_idx + i) % FFT_SIZE;
+            let sample = self.analyzer_buffer[idx];
+
+            // Hann window to prevent spectral leakage
+            let window_func = Windowing::Hann;
+            let windowed_sample = window_func.apply_single_sample(sample, i, FFT_SIZE);
+
+            fft_input[i] = Complex::new(windowed_sample, 0.0);
+        }
+
+        if let Some(fft) = &self.fft_instance {
+            fft.process(&mut fft_input);
+        }
+
+        let mut raw_magnitudes = vec![0.0; FFT_SIZE / 2];
+        let norm_factor = (FFT_SIZE as f32) / 2.0;
+
+        for i in 0..FFT_SIZE / 2 {
+            let mag = fft_input[i].norm() / norm_factor;
+            let db = 20.0 * mag.log10();
+            raw_magnitudes[i] = db.clamp(-100.0, 24.0);
+        }
+
+        if self.spectrum_history.len() != num_points {
+            self.spectrum_history = vec![-100.0; num_points];
+        }
+        
+        let min_freq: f32 = 20.0;
+        let max_freq: f32 = 20000.0;
+        let log_min = min_freq.log10();
+        let log_max = max_freq.log10();
+
+        // Pre-allocate the flat array (size = points * 2)
+        let mut flat_array = Vec::with_capacity(num_points * 2);
+
+        for i in 0..num_points {
+            let t = (i as f32) / ((num_points - 1).max(1) as f32);
+            let target_freq = (10.0_f32).powf(log_min + t * (log_max - log_min));
+            let bin_exact = (target_freq * (FFT_SIZE as f32)) / self.last_sample_rate.max(1.0);
+
+            let mut current_db = -100.0;
+            if bin_exact >= 1.0 && (bin_exact as usize) < raw_magnitudes.len() - 1 {
+                let pool_radius = (bin_exact * 0.02).floor() as usize;
+                if pool_radius < 1 {
+                    let bin_floor = bin_exact.floor() as usize;
+                    let bin_ceil = bin_exact.ceil() as usize;
+                    let frac = bin_exact.fract();
+
+                    let mag_floor = raw_magnitudes[bin_floor];
+                    let mag_ceil = raw_magnitudes[bin_ceil];
+
+                    current_db = mag_floor + (mag_ceil - mag_floor) * frac;
+                } else {
+                    let bin_idx = bin_exact.round() as usize;
+                    let start = bin_idx.saturating_sub(pool_radius);
+                    let end = (bin_idx + pool_radius).min(raw_magnitudes.len() - 1);
+
+                    for b in start..=end {
+                        if raw_magnitudes[b] > current_db {
+                            current_db = raw_magnitudes[b];
+                        }
+                    }
+                }
+            }
+
+            // Apply Temporal Smoothing (Fast Attack, Slow Release)
+            let prev_db = self.spectrum_history[i];
+            let smoothed_db = if current_db > prev_db {
+                current_db * 0.8 + prev_db * 0.2
+            } else {
+                current_db * 0.1 + prev_db * 0.9
+            };
+            self.spectrum_history[i] = smoothed_db;
+
+            // Push directly into the flat array
+            flat_array.push(target_freq);
+            flat_array.push(smoothed_db);
+        }
+
+        // Commit to shared zero-copy memory pointer instantly
+        self.spectrum_buffer = Arc::new(flat_array.into_boxed_slice());
+    }
 }
 
 impl AudioPlugin for DigiParametricEQ {
@@ -328,6 +419,7 @@ impl AudioPlugin for DigiParametricEQ {
             self.last_sample_rate = sample_rate;
             self.channels = channels;
             self.update_all_nodes();
+            self.handle_side_effects(0);
         }
     }
 
@@ -366,6 +458,12 @@ impl AudioPlugin for DigiParametricEQ {
             self.analyzer_buffer[self.analyzer_idx] = mono_mix / (self.channels as f32);
             self.analyzer_idx = (self.analyzer_idx + 1) % FFT_SIZE;
         }
+
+        self.samples_since_last_fft += buffer.len() / self.channels;
+        if self.samples_since_last_fft >= 1600 {
+            self.samples_since_last_fft = 0;
+            self.compute_and_update_spectrum();
+        }
     }
 
     fn reset(&mut self) {
@@ -374,6 +472,8 @@ impl AudioPlugin for DigiParametricEQ {
         }
         self.analyzer_buffer.fill(0.0);
         self.spectrum_history.fill(-100.0);
+
+        self.compute_and_update_spectrum();
     }
 
     fn set_parameter(&mut self, id: u32, value: f32) {
@@ -424,119 +524,10 @@ impl AudioPlugin for DigiParametricEQ {
     fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
         match command {
             "GET_MAGNITUDE_RESPONSE" => {
-                let num_points = payload
-                    .get("num_points")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(100) as usize;
-
+                let num_points = payload.get("num_points").and_then(|v| v.as_u64()).unwrap_or(100) as usize;
                 let response = self.compute_magnitude_response(num_points);
-
-                let flat_array: Vec<f32> = response
-                    .into_iter()
-                    .flat_map(|(freq, db)| [freq, db])
-                    .collect();
-
+                let flat_array: Vec<f32> = response.into_iter().flat_map(|(freq, db)| [freq, db]).collect();
                 Some(json!(flat_array))
-            }
-            "GET_SPECTRUM" => {
-                let num_points = payload
-                    .get("num_points")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(100) as usize;
-
-                let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> =
-                    smallvec![Complex::zero(); FFT_SIZE];
-                for i in 0..FFT_SIZE {
-                    // Read backwards from current idx to get sequential chronological data
-                    let idx = (self.analyzer_idx + i) % FFT_SIZE;
-                    let sample = self.analyzer_buffer[idx];
-
-                    // Hann window to prevent spectral leakage
-                    let window_func = Windowing::Hann;
-                    let windowed_sample = window_func.apply_single_sample(sample, i, FFT_SIZE);
-
-                    fft_input[i] = Complex::new(windowed_sample, 0.0);
-                }
-
-                if let Some(fft) = &self.fft_instance {
-                    fft.process(&mut fft_input);
-                }
-
-                let mut raw_magnitudes = vec![0.0; FFT_SIZE / 2];
-                let norm_factor = (FFT_SIZE as f32) / 2.0;
-
-                for i in 0..FFT_SIZE / 2 {
-                    let mag = fft_input[i].norm() / norm_factor;
-                    let db = 20.0 * mag.log10();
-                    raw_magnitudes[i] = db.clamp(-100.0, 24.0);
-                }
-
-                if self.spectrum_history.len() != num_points {
-                    self.spectrum_history = vec![-100.0; num_points];
-                }
-                let min_freq: f32 = 20.0;
-                let max_freq: f32 = 20000.0;
-                let log_min = min_freq.log10();
-                let log_max = max_freq.log10();
-
-                // Pre-allocate the flat array (size = points * 2)
-                let mut flat_array = Vec::with_capacity(num_points * 2);
-
-                for i in 0..num_points {
-                    let t = (i as f32) / ((num_points - 1).max(1) as f32);
-                    let target_freq = (10.0_f32).powf(log_min + t * (log_max - log_min));
-
-                    let bin_exact =
-                        (target_freq * (FFT_SIZE as f32)) / self.last_sample_rate.max(1.0);
-
-                    let mut current_db = -100.0;
-                    if bin_exact >= 1.0 && (bin_exact as usize) < raw_magnitudes.len() - 1 {
-                        let pool_radius = (bin_exact * 0.02).floor() as usize;
-                        if pool_radius < 1 {
-                            // LOW FREQUENCIES: Fractional Interpolation
-                            // This turns the "flat staircase" into a beautiful smooth curve
-                            let bin_floor = bin_exact.floor() as usize;
-                            let bin_ceil = bin_exact.ceil() as usize;
-                            let frac = bin_exact.fract();
-
-                            let mag_floor = raw_magnitudes[bin_floor];
-                            let mag_ceil = raw_magnitudes[bin_ceil];
-
-                            // LERP the decibel values
-                            current_db = mag_floor + (mag_ceil - mag_floor) * frac;
-                        } else {
-                            // HIGH FREQUENCIES: Max-Pooling
-                            // Your existing logic to catch peaks that might slip between requested UI points
-                            let bin_idx = bin_exact.round() as usize;
-                            let start = bin_idx.saturating_sub(pool_radius);
-                            let end = (bin_idx + pool_radius).min(raw_magnitudes.len() - 1);
-
-                            for b in start..=end {
-                                if raw_magnitudes[b] > current_db {
-                                    current_db = raw_magnitudes[b];
-                                }
-                            }
-                        }
-                    }
-
-                    // Apply Temporal Smoothing (Fast Attack, Slow Release)
-                    let prev_db = self.spectrum_history[i];
-                    let smoothed_db = if current_db > prev_db {
-                        current_db * 0.8 + prev_db * 0.2
-                    } else {
-                        current_db * 0.1 + prev_db * 0.9
-                    };
-                    self.spectrum_history[i] = smoothed_db;
-
-                    // Push directly into the flat array
-                    flat_array.push(target_freq);
-                    flat_array.push(smoothed_db);
-                }
-
-                self.spectrum_buffer = Arc::new(flat_array.clone().into_boxed_slice());
-
-                Some(json!(flat_array))
-                // None
             }
             _ => None,
         }
