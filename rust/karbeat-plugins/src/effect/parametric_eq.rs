@@ -4,7 +4,6 @@ use karbeat_dsp::filter::{
 use karbeat_dsp::windowing::Windowing;
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
-use karbeat_plugin_types::*;
 use num_complex::{Complex, Complex32};
 use rustfft::{num_traits::Zero, Fft, FftPlanner};
 use serde::{Deserialize, Serialize};

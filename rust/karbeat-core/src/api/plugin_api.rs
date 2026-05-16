@@ -15,10 +15,7 @@ use crate::{
     shared::id::*,
 };
 
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 // ============================================================================
 // PARAMETER ID RESOLVER
@@ -166,11 +163,7 @@ where
             let result: Vec<T> = specs
                 .into_iter()
                 .map(|p| {
-                    let value = plugin_instance
-                        .parameters
-                        .get(&p.id)
-                        .copied()
-                        .unwrap_or(p.default_value as f32);
+                    let value = p.default_value as f32;
                     mapper(p, value)
                 })
                 .collect();
@@ -196,7 +189,7 @@ where
 {
     let app = get_app_read();
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match target {
+    let (plugin_name, plugin_registry_id) = match target {
         EffectTarget::Track(track_id) => {
             let channel = app
                 .mixer
@@ -208,11 +201,7 @@ where
                 .iter()
                 .find(|e| e.id == *effect_id)
                 .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
         EffectTarget::Bus(bus_id) => {
             let bus = app
@@ -226,11 +215,7 @@ where
                 .iter()
                 .find(|e| e.id == *effect_id)
                 .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
         EffectTarget::Master => {
             let effect = app
@@ -240,11 +225,7 @@ where
                 .iter()
                 .find(|e| e.id == *effect_id)
                 .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
     };
 
@@ -262,10 +243,7 @@ where
         let result: Vec<T> = specs
             .into_iter()
             .map(|p| {
-                let value = plugin_parameters
-                    .get(&p.id)
-                    .copied()
-                    .unwrap_or(p.default_value as f32);
+                let value = p.default_value as f32;
                 mapper(p, value)
             })
             .collect();
@@ -292,43 +270,22 @@ pub fn set_generator_parameter(
         });
     }
 
-    {
-        let mut app = get_app_write();
-        if let Some(generator_arc) = app.generator_pool.get_mut(generator_id) {
-            let generator = Arc::make_mut(generator_arc);
-            if let GeneratorInstanceType::Plugin(plugin_instance) = &mut generator.instance_type {
-                plugin_instance.parameters.insert(param_id, value);
-            }
-        }
-    }
-
-    crate::context::utils::broadcast_state_change();
     Ok(())
 }
 
+pub fn set_generator_parameter_to_default(
+    _generator_id: &GeneratorId,
+    _param_id: impl IntoParamId,
+) {
+}
+
 pub fn get_generator_parameter(
-    generator_id: &GeneratorId,
-    param_id: impl IntoParamId,
+    _generator_id: &GeneratorId,
+    _param_id: impl IntoParamId,
 ) -> Result<f32, String> {
-    let param_id = param_id.into_id();
-    let app = get_app_read();
-
-    let generator_arc = app
-        .generator_pool
-        .get(generator_id)
-        .ok_or_else(|| format!("Generator {} not found", generator_id.0))?;
-
-    let generator = generator_arc.as_ref();
-
-    if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
-        plugin_instance
-            .parameters
-            .get(&param_id)
-            .copied()
-            .ok_or_else(|| format!("Parameter {} not found", param_id))
-    } else {
-        Err("Generator is not a plugin type".to_string())
-    }
+    // Parameter tracking has been moved entirely to the audio thread.
+    // If Dart needs the value, it should fetch it from the audio thread parameter snapshot.
+    Err("ApplicationState no longer tracks parameters in real-time".to_string())
 }
 
 pub fn set_effect_parameter(
@@ -347,44 +304,6 @@ pub fn set_effect_parameter(
         });
     }
 
-    {
-        let mut app = get_app_write();
-
-        match target {
-            EffectTarget::Track(track_id) => {
-                if let Some(channel_arc) = app.mixer.channels.get_mut(track_id) {
-                    let channel = Arc::make_mut(channel_arc);
-                    if let Some(effect) = channel.effects.iter_mut().find(|e| e.id == *effect_id) {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            EffectTarget::Bus(bus_id) => {
-                if let Some(bus_arc) = app.mixer.buses.get_mut(bus_id) {
-                    let bus_mut = Arc::make_mut(bus_arc);
-                    if let Some(effect) = bus_mut
-                        .channel
-                        .effects
-                        .iter_mut()
-                        .find(|e| e.id == *effect_id)
-                    {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            EffectTarget::Master => {
-                let master = Arc::make_mut(&mut app.mixer.master_bus);
-                if let Some(effect) = master.effects.iter_mut().find(|e| e.id == *effect_id) {
-                    let plugin = Arc::make_mut(&mut effect.instance);
-                    plugin.parameters.insert(param_id, value);
-                }
-            }
-        }
-    }
-
-    crate::context::utils::broadcast_state_change();
     Ok(())
 }
 
@@ -413,75 +332,7 @@ pub fn query_effect_parameters(target: &EffectTarget, effect_id: &EffectId) -> R
     }
 }
 
-pub fn sync_generator_parameters_from_audio<I, P>(items: I)
-where
-    I: IntoIterator<Item = (GeneratorId, P)>,
-    P: IntoIterator<Item = (u32, f32)>,
-{
-    let mut app = get_app_write();
-
-    for (gen_id, params) in items {
-        if let Some(generator_arc) = app.generator_pool.get_mut(&gen_id) {
-            let generator = Arc::make_mut(generator_arc);
-            if let GeneratorInstanceType::Plugin(ref mut plugin_instance) = generator.instance_type
-            {
-                for (param_id, value) in params {
-                    plugin_instance.parameters.insert(param_id, value);
-                }
-            }
-        }
-    }
-}
-
-pub fn sync_effect_parameters_from_audio<I, P>(items: I)
-where
-    I: IntoIterator<Item = (EffectTarget, EffectId, P)>,
-    P: IntoIterator<Item = (u32, f32)>,
-{
-    let mut app = get_app_write();
-
-    for (target, effect_id, params) in items {
-        match target {
-            EffectTarget::Master => {
-                let master = Arc::make_mut(&mut app.mixer.master_bus);
-                if let Some(effect) = master.effects.iter_mut().find(|e| e.id == effect_id) {
-                    let plugin = Arc::make_mut(&mut effect.instance);
-                    for (param_id, value) in params {
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            EffectTarget::Track(track_id) => {
-                if let Some(channel_arc) = app.mixer.channels.get_mut(&track_id) {
-                    let channel = Arc::make_mut(channel_arc);
-                    if let Some(effect) = channel.effects.iter_mut().find(|e| e.id == effect_id) {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        for (param_id, value) in params {
-                            plugin.parameters.insert(param_id, value);
-                        }
-                    }
-                }
-            }
-            EffectTarget::Bus(bus_id) => {
-                if let Some(bus) = app.mixer.buses.get_mut(&bus_id) {
-                    let bus_mut = Arc::make_mut(bus);
-                    if let Some(effect) = bus_mut
-                        .channel
-                        .effects
-                        .iter_mut()
-                        .find(|e| e.id == effect_id)
-                    {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        for (param_id, value) in params {
-                            plugin.parameters.insert(param_id, value);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
+// Syncing parameters to state is no longer done in real-time.
 pub fn execute_plugin_command_generator(
     gen_registry_id: u32,
     command: &str,
@@ -510,7 +361,7 @@ pub fn execute_effect_instance_command(
 ) -> Result<serde_json::Value, String> {
     let app = get_app_read();
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match target {
+    let (plugin_name, plugin_registry_id, plugin_state) = match target {
         EffectTarget::Track(track_id) => {
             let channel = app
                 .mixer
@@ -525,7 +376,7 @@ pub fn execute_effect_instance_command(
             (
                 effect.instance.name.clone(),
                 effect.instance.registry_id,
-                effect.instance.parameters.clone(),
+                effect.instance.plugin_state.clone(),
             )
         }
         EffectTarget::Bus(bus_id) => {
@@ -543,7 +394,7 @@ pub fn execute_effect_instance_command(
             (
                 effect.instance.name.clone(),
                 effect.instance.registry_id,
-                effect.instance.parameters.clone(),
+                effect.instance.plugin_state.clone(),
             )
         }
         EffectTarget::Master => {
@@ -557,7 +408,7 @@ pub fn execute_effect_instance_command(
             (
                 effect.instance.name.clone(),
                 effect.instance.registry_id,
-                effect.instance.parameters.clone(),
+                effect.instance.plugin_state.clone(),
             )
         }
     };
@@ -572,8 +423,8 @@ pub fn execute_effect_instance_command(
     })
     .ok_or_else(|| format!("Effect '{}' not found in registry", plugin_name))?;
 
-    for (&param_id, &value) in &plugin_parameters {
-        temp_plugin.set_parameter(param_id, value);
+    if !plugin_state.is_empty() {
+        temp_plugin.set_state(&plugin_state);
     }
 
     temp_plugin
@@ -593,8 +444,8 @@ pub fn execute_generator_instance_command(
         .get(generator_id)
         .ok_or_else(|| format!("Generator {} not found", generator_id.0))?;
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match &gen_arc.instance_type {
-        GeneratorInstanceType::Plugin(p) => (p.name.clone(), p.registry_id, p.parameters.clone()),
+    let (plugin_name, plugin_registry_id, plugin_state) = match &gen_arc.instance_type {
+        GeneratorInstanceType::Plugin(p) => (p.name.clone(), p.registry_id, p.plugin_state.clone()),
         _ => {
             return Err("Generator is not a plugin".into());
         }
@@ -610,8 +461,8 @@ pub fn execute_generator_instance_command(
     })
     .ok_or_else(|| format!("Generator '{}' not found in registry", plugin_name))?;
 
-    for (&param_id, &value) in &plugin_parameters {
-        temp_plugin.set_parameter(param_id, value);
+    if !plugin_state.is_empty() {
+        temp_plugin.set_state(&plugin_state);
     }
 
     temp_plugin

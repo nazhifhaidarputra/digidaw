@@ -10,7 +10,6 @@ import 'api/audio.dart';
 import 'api/mixer.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
-import 'api/plugins/eq.dart';
 import 'api/plugins/opaque.dart';
 import 'api/project.dart';
 import 'api/serialization.dart';
@@ -132,9 +131,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   Map<int, AudioWaveformUiForSourceList>
   dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
-
-  @protected
-  Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw);
 
   @protected
   Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw);
@@ -329,9 +325,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw);
-
-  @protected
   List<(int, UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw);
 
   @protected
@@ -389,11 +382,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
-
-  @protected
-  List<UiResponseCurvePoint> dco_decode_list_ui_response_curve_point(
-    dynamic raw,
-  );
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
@@ -468,9 +456,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, int, int) dco_decode_record_u_32_casted_primitive_u_64_u_8(dynamic raw);
-
-  @protected
-  (int, double) dco_decode_record_u_32_f_32(dynamic raw);
 
   @protected
   (int, UiBus) dco_decode_record_u_32_ui_bus(dynamic raw);
@@ -609,9 +594,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiResizeEdge dco_decode_ui_resize_edge(dynamic raw);
 
   @protected
-  UiResponseCurvePoint dco_decode_ui_response_curve_point(dynamic raw);
-
-  @protected
   UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
 
   @protected
@@ -724,9 +706,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
     SseDeserializer deserializer,
   );
-
-  @protected
-  Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer);
 
   @protected
   Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(SseDeserializer deserializer);
@@ -951,11 +930,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<(int, double)> sse_decode_list_record_u_32_f_32(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   List<(int, UiBus)> sse_decode_list_record_u_32_ui_bus(
     SseDeserializer deserializer,
   );
@@ -1029,11 +1003,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<UiResponseCurvePoint> sse_decode_list_ui_response_curve_point(
     SseDeserializer deserializer,
   );
 
@@ -1124,9 +1093,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, int, int) sse_decode_record_u_32_casted_primitive_u_64_u_8(
     SseDeserializer deserializer,
   );
-
-  @protected
-  (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
 
   @protected
   (int, UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer);
@@ -1291,11 +1257,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiResizeEdge sse_decode_ui_resize_edge(SseDeserializer deserializer);
 
   @protected
-  UiResponseCurvePoint sse_decode_ui_response_curve_point(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   UiRoutingConnection sse_decode_ui_routing_connection(
     SseDeserializer deserializer,
   );
@@ -1426,12 +1387,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
     Map<int, AudioWaveformUiForSourceList> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_Map_u_32_f_32_None(
-    Map<int, double> self,
     SseSerializer serializer,
   );
 
@@ -1706,12 +1661,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_record_u_32_f_32(
-    List<(int, double)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_record_u_32_ui_bus(
     List<(int, UiBus)> self,
     SseSerializer serializer,
@@ -1799,12 +1748,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_plugin_parameter(
     List<UiPluginParameter> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_response_curve_point(
-    List<UiResponseCurvePoint> self,
     SseSerializer serializer,
   );
 
@@ -1908,12 +1851,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_casted_primitive_u_64_u_8(
     (int, int, int) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_f_32(
-    (int, double) self,
     SseSerializer serializer,
   );
 
@@ -2126,12 +2063,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_resize_edge(UiResizeEdge self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_response_curve_point(
-    UiResponseCurvePoint self,
-    SseSerializer serializer,
-  );
 
   @protected
   void sse_encode_ui_routing_connection(

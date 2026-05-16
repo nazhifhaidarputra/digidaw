@@ -237,16 +237,11 @@ class UiBus {
 class UiEffectInstance {
   final int id;
   final String name;
-  final Map<int, double> parameters;
 
-  const UiEffectInstance({
-    required this.id,
-    required this.name,
-    required this.parameters,
-  });
+  const UiEffectInstance({required this.id, required this.name});
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -254,8 +249,7 @@ class UiEffectInstance {
       other is UiEffectInstance &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          name == other.name &&
-          parameters == other.parameters;
+          name == other.name;
 }
 
 class UiEffectSummary {

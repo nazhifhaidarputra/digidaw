@@ -80,21 +80,8 @@ Future<void> queryGeneratorParameters({required int generatorId}) => RustLib
 Future<List<UiGeneratorParameterSnapshot>> pollGeneratorParameterFeedback() =>
     RustLib.instance.api.crateApiPluginPollGeneratorParameterFeedback();
 
-/// Sync parameter values from audio thread to stored parameters.
-Future<void> syncGeneratorParametersFromAudio({
-  required List<UiGeneratorParameterSnapshot> snapshots,
-}) => RustLib.instance.api.crateApiPluginSyncGeneratorParametersFromAudio(
-  snapshots: snapshots,
-);
-
 Future<List<UiEffectParameterSnapshot>> pollEffectParameterFeedback() =>
     RustLib.instance.api.crateApiPluginPollEffectParameterFeedback();
-
-Future<void> syncEffectParametersFromAudio({
-  required List<UiEffectParameterSnapshot> snapshots,
-}) => RustLib.instance.api.crateApiPluginSyncEffectParametersFromAudio(
-  snapshots: snapshots,
-);
 
 Future<List<UiPluginParameter>> getEffectParameterSpecs({
   required UiEffectTarget target,

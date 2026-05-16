@@ -279,18 +279,6 @@ pub fn poll_generator_parameter_feedback() -> Vec<UiGeneratorParameterSnapshot> 
     })
 }
 
-/// Sync parameter values from audio thread to stored parameters.
-pub fn sync_generator_parameters_from_audio(snapshots: &[UiGeneratorParameterSnapshot]) {
-    let items = snapshots.iter().map(|snapshot| {
-        let params = snapshot
-            .parameters
-            .iter()
-            .map(|p| (p.param_id, p.value))
-            .collect::<Vec<_>>();
-        (GeneratorId::from(snapshot.generator_id), params)
-    });
-    plugin_api::sync_generator_parameters_from_audio(items);
-}
 
 // Do the same for effect plugin
 pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
@@ -306,21 +294,6 @@ pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
     })
 }
 
-pub fn sync_effect_parameters_from_audio(snapshots: &[UiEffectParameterSnapshot]) {
-    let items = snapshots.iter().map(|snapshot| {
-        let params = snapshot
-            .parameters
-            .iter()
-            .map(|p| (p.param_id, p.value))
-            .collect::<Vec<_>>();
-        (
-            snapshot.target.clone().into(),
-            EffectId::from(snapshot.effect_id),
-            params,
-        )
-    });
-    plugin_api::sync_effect_parameters_from_audio(items);
-}
 
 // ============================================================================
 // EFFECT PARAMETER API

@@ -369,22 +369,14 @@ class UiPluginInstance {
   /// Whether this plugin is bypassed
   final bool bypass;
 
-  /// Plugin parameters for persistence (Param ID -> Value)
-  final Map<int, double> parameters;
-
   const UiPluginInstance({
     required this.registryId,
     required this.name,
     required this.bypass,
-    required this.parameters,
   });
 
   @override
-  int get hashCode =>
-      registryId.hashCode ^
-      name.hashCode ^
-      bypass.hashCode ^
-      parameters.hashCode;
+  int get hashCode => registryId.hashCode ^ name.hashCode ^ bypass.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -393,8 +385,7 @@ class UiPluginInstance {
           runtimeType == other.runtimeType &&
           registryId == other.registryId &&
           name == other.name &&
-          bypass == other.bypass &&
-          parameters == other.parameters;
+          bypass == other.bypass;
 }
 
 class UiProjectMetadata {

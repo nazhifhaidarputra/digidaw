@@ -326,13 +326,11 @@ impl ApplicationState {
         let track_id = TrackId::next(&mut self.track_counter);
 
         // Create the plugin via registry using ID
-        let (generator_plugin, generator_name, default_params) = {
+        let (generator_plugin, generator_name) = {
             let registry = ctx().plugin_registry.read();
 
             if let Some((generator_box, name)) = registry.create_generator_by_id(registry_id) {
-                // Get default parameters BEFORE sending to audio thread
-                let params = generator_box.default_parameters();
-                (generator_box, name, params)
+                (generator_box, name)
             } else {
                 let message = format!("Generator with ID {} not found in registry", registry_id);
                 log::error!("{}", message);
@@ -352,9 +350,9 @@ impl ApplicationState {
             });
         }
 
-        // Create plugin instance descriptor with registry ID and default parameters
+        // Create plugin instance descriptor with registry ID
         let plugin_instance =
-            PluginInstance::new_with_params(registry_id, &generator_name, default_params);
+            PluginInstance::new_with_id(registry_id, &generator_name);
 
         let generator = GeneratorInstance {
             id: gen_id,

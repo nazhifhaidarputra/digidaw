@@ -4,7 +4,7 @@
 //! as a component or building block for
 //! DSP implementation
 
-use karbeat_macros::{EnumParam, karbeat_plugin};
+use karbeat_macros::{karbeat_plugin, EnumParam};
 use serde::{Deserialize, Serialize};
 
 /// Standard compressor DSP Module with lookahead delay
@@ -351,25 +351,67 @@ pub enum DynamicsMode {
 pub struct DynamicsProcessor {
     #[param(id = "mode", name = "Mode", default = 0.0)]
     pub mode: DynamicsMode,
-    #[param(id = "attack", name = "Attack", default = 5, min = 1, max = 1000, step = 1)]
+    #[param(
+        id = "attack",
+        name = "Attack",
+        default = 5,
+        min = 1,
+        max = 1000,
+        step = 1
+    )]
     pub attack_ms: i32,
-    #[param(id = "release", name = "Release", default = 100, min = 1, max = 2000, step = 1)]
+    #[param(
+        id = "release",
+        name = "Release",
+        default = 100,
+        min = 1,
+        max = 2000,
+        step = 1
+    )]
     pub release_ms: i32,
-    #[param(id = "ratio", name = "Ratio", default = 4.0, min = 1.0, max = 100.0, step = 0.1)]
+    #[param(
+        id = "ratio",
+        name = "Ratio",
+        default = 4.0,
+        min = 1.0,
+        max = 100.0,
+        step = 0.1
+    )]
     pub ratio: f64,
     #[param(id = "threshold", name = "Threshold", default = 0.0, min = -80.0, max = 24.0, step = 0.1)]
     pub threshold: f64, // In dB
-    #[param(id = "delay", name = "Delay", default = 0, min = 0, max = 100, step = 1)]
+    #[param(
+        id = "delay",
+        name = "Delay",
+        default = 0,
+        min = 0,
+        max = 100,
+        step = 1
+    )]
     pub delay_ms: i32, // Lookahead delay applied to the MAIN input
-    #[param(id = "knee", name = "Knee", default = 6.0, min = 0.0, max = 24.0, step = 0.1)]
+    #[param(
+        id = "knee",
+        name = "Knee",
+        default = 6.0,
+        min = 0.0,
+        max = 24.0,
+        step = 0.1
+    )]
     pub knee: f64, // In dB
     #[param(id = "makeup_gain", name = "MakeUp Gain", default = 0.0, min = -24.0, max = 24.0, step = 0.1)]
     pub makeup_gain: f64, // In dB
-    #[param(id = "wetness", name = "Wetness", default = 1.0, min = 0.0, max = 1.0, step = 0.01)]
+    #[param(
+        id = "wetness",
+        name = "Wetness",
+        default = 1.0,
+        min = 0.0,
+        max = 1.0,
+        step = 0.01
+    )]
     pub wetness: f64, // 0.0 to 1.0
 
     sample_rate: f64,
-    envelope_db: f64,       // Tracks the smoothed gain reduction (positive value = reduction)
+    envelope_db: f64, // Tracks the smoothed gain reduction (positive value = reduction)
     delay_buffer: Vec<f64>, // Ring buffer for lookahead (stores main input)
     delay_index: usize,
 }
@@ -424,8 +466,8 @@ impl DynamicsProcessor {
         // 2. Gain Computer
         let lower_knee = threshold - knee / 2.0;
         let upper_knee = threshold + knee / 2.0;
-        
-        let gain_reduction_target_db= match mode {
+
+        let gain_reduction_target_db = match mode {
             DynamicsMode::Compressor => {
                 let overshoot = if knee > 0.0 && det_db > lower_knee && det_db < upper_knee {
                     (det_db - lower_knee).powi(2) / (2.0 * knee)

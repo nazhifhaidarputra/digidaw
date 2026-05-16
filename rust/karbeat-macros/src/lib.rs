@@ -500,7 +500,6 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         ::karbeat_plugin_types::parameter::Param::new_f64(#local_hash, #name, #group, #default_val, #min, #max, #step)
                     }
                 } else if type_ident == "i32" {
-                    // <--- ADD THIS BLOCK
                     let default_i32 = default_val as i32;
                     let min_i32 = min as i32;
                     let max_i32 = max as i32;
@@ -1073,5 +1072,12 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
         item_impl.items.push(syn::ImplItem::Fn(method));
     }
 
-    quote::quote!(#item_impl).into()
+    let expanded = quote::quote! {
+        const _: () = {
+            use ::karbeat_plugin_types::parameter::AutoParams;
+            #item_impl
+        };
+    };
+
+    expanded.into()
 }

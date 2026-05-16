@@ -6,7 +6,6 @@
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
-use karbeat_plugin_types::*;
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
 /// It has strictly two oscillators, making it a simple 8-bit retro sound.
@@ -126,6 +125,7 @@ impl MyRetro {
 
             for (i, osc) in oscillators.iter().enumerate() {
                 let mut phase = voice.phase[i];
+                let mut filter_state = voice.filter_state[i];
 
                 // Extract 1 sample frame
                 let mut osc_output = [0.0; 2];
@@ -135,6 +135,7 @@ impl MyRetro {
                     2,
                     base_freq,
                     &mut phase,
+                    &mut filter_state,
                 );
 
                 voice.phase[i] = phase;
@@ -257,6 +258,7 @@ impl AudioPlugin for MyRetro {
                             );
                             for (i, osc) in self.oscillators.iter().enumerate() {
                                 voice.phase[i] = osc.phase_offset.get() as f64;
+                                voice.filter_state[i] = 0.0;
                             }
                             self.active_voices.push(voice);
                         } else {

@@ -261,11 +261,15 @@ pub struct Param<T: ParamType> {
     pub name: String,
     pub group: String,
 
+    default_value: T,
+
     /// The value set by the user via the UI (no automation applied)
     base_value: T,
 
     /// The actual value used by the DSP thread (base_value + automation)
     current_value: T,
+
+    is_automated: bool,
 
     pub bounds: ParamBounds<T>,
 }
@@ -289,8 +293,21 @@ impl<T: ParamType> Param<T> {
         self.base_value = clamped;
 
         // If no automation is currently overriding it, update current_value immediately.
-        // TODO: Add `is_automated` flag
-        self.current_value = clamped;
+        if !self.is_automated { 
+            self.current_value = clamped;
+        }
+    }
+
+    pub fn is_automated(&self) -> bool {
+        self.is_automated
+    }
+
+    pub fn enable_automation(&mut self) {
+        self.is_automated = true;
+    }
+
+    pub fn disable_automation(&mut self) {
+        self.is_automated = false;
     }
 
     pub fn set_base_from_f64(&mut self, raw_value: f64) {
@@ -298,8 +315,9 @@ impl<T: ParamType> Param<T> {
         self.base_value = clamped;
 
         // If no automation is currently overriding it, update current_value immediately.
-        // TODO: Add `is_automated` flag
-        self.current_value = clamped;
+        if !self.is_automated {
+            self.current_value = clamped;
+        }
     }
 
     /// Apply an automation frame from the sequencer.
@@ -374,9 +392,11 @@ impl Param<f32> {
             id,
             name: name.to_owned(),
             group: group.to_owned(),
+            default_value: default.clamp(min, max),
             base_value: default.clamp(min, max),
             current_value: default.clamp(min, max),
             bounds: ParamBounds::Continuous { min, max, step },
+            is_automated: false,
         }
     }
 }
@@ -395,9 +415,11 @@ impl Param<f64> {
             id,
             name: name.to_owned(),
             group: group.to_owned(),
+            default_value: default.clamp(min, max),
             base_value: default.clamp(min, max),
             current_value: default.clamp(min, max),
             bounds: ParamBounds::Continuous { min, max, step },
+            is_automated: false,
         }
     }
 }
@@ -416,9 +438,11 @@ impl Param<i32> {
             id,
             name: name.to_owned(),
             group: group.to_owned(),
+            default_value: default.clamp(min, max),
             base_value: default.clamp(min, max),
             current_value: default.clamp(min, max),
             bounds: ParamBounds::Discrete { min, max, step },
+            is_automated: false,
         }
     }
 }
@@ -429,9 +453,11 @@ impl Param<bool> {
             id,
             name: name.to_owned(),
             group: group.to_owned(),
+            default_value: default,
             base_value: default,
             current_value: default,
             bounds: ParamBounds::Toggle,
+            is_automated: false,
         }
     }
 }
@@ -442,12 +468,14 @@ impl Param<usize> {
             id,
             name: name.to_string(),
             group: group.to_owned(),
+            default_value: default,
             base_value: default,
             current_value: default,
             bounds: ParamBounds::Choice {
                 count: labels.len(),
                 labels: labels.iter().map(|s| s.to_string()).collect(),
             },
+            is_automated: false,
         }
     }
 }
@@ -459,12 +487,14 @@ impl<T: EnumParam> Param<T> {
             id,
             name: name.to_owned(),
             group: group.to_owned(),
+            default_value: default,
             base_value: default,
             current_value: default,
             bounds: ParamBounds::Choice {
                 count: T::variants().len(),
                 labels: T::variants().iter().map(|s| s.to_string()).collect(),
             },
+            is_automated: false,
         }
     }
 }

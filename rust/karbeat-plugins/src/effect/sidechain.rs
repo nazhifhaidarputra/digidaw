@@ -1,7 +1,6 @@
 use karbeat_dsp::compressor::SidechainCompressor;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
-use karbeat_plugin_types::AutoParams;
 
 /// An audio FX to do sidechain compressing,
 /// Meaning that the compression is influenced
@@ -51,6 +50,4 @@ impl AudioPlugin for DigidawSidechainCompressor {
             buffer[i] = self.compressor.process_sample(main_sample, sc_sample);
         }
     }
-
-
 }

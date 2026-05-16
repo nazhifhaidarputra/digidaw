@@ -177,7 +177,6 @@ impl From<&MixerState> for UiMixerState {
 pub struct UiEffectInstance {
     pub id: u32,
     pub name: String,
-    pub parameters: HashMap<u32, f32>,
 }
 
 impl From<&EffectInstance> for UiEffectInstance {
@@ -185,7 +184,6 @@ impl From<&EffectInstance> for UiEffectInstance {
         Self {
             id: value.id.to_u32(),
             name: value.instance.name.clone(),
-            parameters: value.instance.parameters.clone().into_iter().collect(),
         }
     }
 }

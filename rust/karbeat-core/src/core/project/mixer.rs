@@ -144,8 +144,6 @@ pub enum MixerChannelParams {
 pub struct EffectInstance {
     pub id: EffectId,
     pub instance: Arc<PluginInstance>,
-    #[serde(default)]
-    pub plugin_state: Vec<u8>,
 }
 
 impl EffectInstance {
@@ -153,7 +151,6 @@ impl EffectInstance {
         Self {
             id,
             instance: Arc::new(instance),
-            plugin_state: Vec::new(),
         }
     }
 }
@@ -209,7 +206,7 @@ impl MixerChannel {
     ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
-        let (effect_plugin, effect_name, default_params) = {
+        let (effect_plugin, effect_name, _default_params) = {
             let registry = ctx().plugin_registry.read();
             if let Some((effect_box, name)) = registry.create_effect_by_id(effect_registry_id) {
                 let default_params = effect_box.default_parameters();
@@ -228,7 +225,7 @@ impl MixerChannel {
         };
 
         let plugin_instance =
-            PluginInstance::new_with_params(effect_registry_id, &effect_name, default_params);
+            PluginInstance::new_with_id(effect_registry_id, &effect_name);
 
         let effect_instance = EffectInstance::new(effect_id, plugin_instance);
         self.effects.push(effect_instance);

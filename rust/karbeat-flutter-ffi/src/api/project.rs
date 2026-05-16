@@ -420,8 +420,6 @@ pub struct UiPluginInstance {
     pub name: String,
     /// Whether this plugin is bypassed
     pub bypass: bool,
-    /// Plugin parameters for persistence (Param ID -> Value)
-    pub parameters: HashMap<u32, f32>,
 }
 
 impl From<PluginInstance> for UiPluginInstance {
@@ -430,7 +428,6 @@ impl From<PluginInstance> for UiPluginInstance {
             registry_id: value.registry_id,
             name: value.name,
             bypass: value.bypass,
-            parameters: value.parameters.into_iter().collect(),
         }
     }
 }

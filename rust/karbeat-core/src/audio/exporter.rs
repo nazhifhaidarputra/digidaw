@@ -83,8 +83,7 @@ where
     // Hydrate the Engine (Load fresh plugin clones)
     let registry = ctx().plugin_registry.read();
 
-    let mut generators: IndexMap<GeneratorId, Box<dyn AudioPlugin + Send + Sync>> =
-        IndexMap::new();
+    let mut generators: IndexMap<GeneratorId, Box<dyn AudioPlugin + Send + Sync>> = IndexMap::new();
     let mut track_effects: IndexMap<
         TrackId,
         IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>,
@@ -102,8 +101,8 @@ where
             if let Some((mut plugin, _)) =
                 registry.create_generator_by_id(plugin_instance.registry_id)
             {
-                for (&param_id, &val) in &plugin_instance.parameters {
-                    plugin.set_parameter(param_id, val);
+                for spec in &plugin_instance.parameter_specs {
+                    plugin.set_parameter(spec.id, spec.value as f32);
                 }
                 generators.insert(*gen_id, plugin);
             }
@@ -116,8 +115,8 @@ where
         for effect in &channel.effects {
             if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
             {
-                for (&param_id, &val) in &effect.instance.parameters {
-                    plugin.set_parameter(param_id, val);
+                for spec in &effect.instance.parameter_specs {
+                    plugin.set_parameter(spec.id, spec.value as f32);
                 }
                 track_chain.insert(effect.id, plugin);
             }
@@ -133,8 +132,8 @@ where
         for effect in &bus.channel.effects {
             if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
             {
-                for (&param_id, &val) in &effect.instance.parameters {
-                    plugin.set_parameter(param_id, val);
+                for spec in &effect.instance.parameter_specs {
+                    plugin.set_parameter(spec.id, spec.value as f32);
                 }
                 bus_chain.insert(effect.id, plugin);
             }
@@ -147,8 +146,8 @@ where
     // Instantiate Master Effects
     for effect in &app_state.mixer.master_bus.effects {
         if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id) {
-            for (&param_id, &val) in &effect.instance.parameters {
-                plugin.set_parameter(param_id, val);
+            for spec in &effect.instance.parameter_specs {
+                plugin.set_parameter(spec.id, spec.value as f32);
             }
             master_effects.insert(effect.id, plugin);
         }
@@ -295,17 +294,20 @@ where
     if matches!(tail_handling, TailHandling::LeaveRemainder) {
         log::info!("Calculating exact plugin tail (LeaveRemainder)...");
 
-        // We must stop the transport first! This triggers the engine's internal 
-        // "stop_all_active_generators" logic which queues NoteOffs, 
+        // We must stop the transport first! This triggers the engine's internal
+        // "stop_all_active_generators" logic which queues NoteOffs,
         // effectively starting the final ADSR release phase.
         cmd_producer
             .push(AudioCommand::SetPlaying(false))
             .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-            
+
         // Process one empty block just to let the engine digest the SetPlaying(false) command
         // and initialize the track_tails in its internal state.
         offline_engine.process(&mut mix_buffer[..block_size * channels as usize]);
-        if tx.send(mix_buffer[..block_size * channels as usize].to_vec()).is_err() {
+        if tx
+            .send(mix_buffer[..block_size * channels as usize].to_vec())
+            .is_err()
+        {
             return Ok(());
         }
 
@@ -335,14 +337,13 @@ where
         // 4. Check Generators (for internal synth ADSR release tails)
         for gen in plugin_state.generators.iter() {
             if let Some(ref gen_instance) = gen {
-
                 let tail = gen_instance.plugin.tail_samples();
-                // Synths often return u32::MAX for infinite sustain until NoteOff. 
-                // Since we just sent a NoteOff by stopping transport, we clamp this 
-                // to a reasonable default if it hasn't properly 
+                // Synths often return u32::MAX for infinite sustain until NoteOff.
+                // Since we just sent a NoteOff by stopping transport, we clamp this
+                // to a reasonable default if it hasn't properly
                 // calculated a finite release tail yet.
                 if tail == u32::MAX {
-                    max_tail_samples = max_tail_samples.max(sample_rate * 20); 
+                    max_tail_samples = max_tail_samples.max(sample_rate * 20);
                 } else {
                     max_tail_samples = max_tail_samples.max(tail);
                 }
@@ -356,7 +357,7 @@ where
 
         // Now simply render exactly that many samples!
         let mut tail_processed = 0;
-        
+
         while tail_processed < max_tail_samples {
             let remaining = max_tail_samples - tail_processed;
             let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
@@ -364,7 +365,7 @@ where
 
             let active_slice = &mut mix_buffer[..samples_to_process];
 
-            // Because transport is stopped, the engine will just pull from 
+            // Because transport is stopped, the engine will just pull from
             // the ringing effects and fading synths without advancing the sequencer.
             offline_engine.process(active_slice);
 
