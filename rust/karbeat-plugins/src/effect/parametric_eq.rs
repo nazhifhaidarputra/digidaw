@@ -110,10 +110,10 @@ impl DigiParametricEQFilterNode {
 
         if band_idx == 0 {
             node.filter_type
-                .set_base(BiquadFilterType::LowShelf as i32 as f32);
+                .set_base(BiquadFilterType::LowShelf);
         } else if band_idx == 7 {
             node.filter_type
-                .set_base(BiquadFilterType::HighShelf as i32 as f32);
+                .set_base(BiquadFilterType::HighShelf);
         }
 
         // Initialize with 2 channels and 1 cascade stage (Db12 default)
@@ -502,7 +502,7 @@ impl AudioPlugin for DigiParametricEQ {
     fn default_parameters(&self) -> HashMap<u32, f32> {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
-            .map(|spec| (spec.id, spec.default_value))
+            .map(|spec| (spec.id, spec.default_value as f32))
             .collect()
     }
 

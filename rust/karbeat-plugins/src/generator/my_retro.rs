@@ -53,7 +53,7 @@ pub struct MyRetro {
         min = 432.0,
         max = 448.0,
         default = 440.0,
-        step = 1.0,
+        step = 1.0
     )]
     pub base_freq: f32,
 
@@ -69,11 +69,11 @@ impl Default for MyRetro {
 
         // Override specific nested logic for the two oscillators safely
         let mut osc1 = Oscillator::new("Oscillator 1");
-        osc1.waveform.set_base(Waveform::Square as usize as f32);
+        osc1.waveform.set_base(Waveform::Square);
         osc1.mix.set_base(1.0);
 
         let mut osc2 = Oscillator::new("Oscillator 2");
-        osc2.waveform.set_base(Waveform::Square as usize as f32);
+        osc2.waveform.set_base(Waveform::Square);
         osc2.detune.set_base(-12.0);
         osc2.mix.set_base(0.8);
 
@@ -230,7 +230,7 @@ impl AudioPlugin for MyRetro {
                         *channels,
                         voice,
                         scratch_slice,
-                        self.base_freq.get()
+                        self.base_freq.get(),
                     );
 
                     // Mix the voice scratch buffer into the main output
@@ -307,7 +307,7 @@ impl AudioPlugin for MyRetro {
     fn default_parameters(&self) -> HashMap<u32, f32> {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
-            .map(|spec| (spec.id, spec.default_value))
+            .map(|spec| (spec.id, spec.default_value as f32))
             .collect()
     }
 

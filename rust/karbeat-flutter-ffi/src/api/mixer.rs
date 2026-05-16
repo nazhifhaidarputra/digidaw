@@ -285,11 +285,11 @@ impl From<&ParameterSpec> for ParameterSpecDTO {
             id: spec.id,
             name: spec.name.clone(),
             group: spec.group.clone(),
-            value: spec.value,
-            min: spec.min,
-            max: spec.max,
-            default_value: spec.default_value,
-            step: spec.step,
+            value: spec.value as f32,
+            min: spec.min as f32,
+            max: spec.max as f32,
+            default_value: spec.default_value as f32,
+            step: spec.step as f32,
             value_type: spec.value_type.into(), // Automatically uses the enum mapping above
             choices: spec.choices.clone(),
         }
@@ -547,7 +547,6 @@ pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
 pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
     mixer_api::rename_bus(BusId::from(bus_id), &new_name).map_err(|e| e.to_string())
 }
-
 
 // ======================================
 // ROUTING APIs

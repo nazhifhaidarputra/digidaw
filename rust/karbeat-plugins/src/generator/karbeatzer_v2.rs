@@ -64,20 +64,14 @@ impl Default for KarbeatzerV2 {
         ];
 
         // Setup some nice default starting values
-        engine.oscillators[0]
-            .waveform
-            .set_base(Waveform::Saw as usize as f32);
+        engine.oscillators[0].waveform.set_base(Waveform::Saw);
         engine.oscillators[0].mix.set_base(1.0);
 
-        engine.oscillators[1]
-            .waveform
-            .set_base(Waveform::Square as usize as f32);
+        engine.oscillators[1].waveform.set_base(Waveform::Square);
         engine.oscillators[1].detune.set_base(0.1);
         engine.oscillators[1].mix.set_base(0.5);
 
-        engine.oscillators[2]
-            .waveform
-            .set_base(Waveform::Sine as usize as f32);
+        engine.oscillators[2].waveform.set_base(Waveform::Sine);
         engine.oscillators[2].detune.set_base(-12.0);
         engine.oscillators[2].mix.set_base(0.3);
 
@@ -339,7 +333,7 @@ impl AudioPlugin for KarbeatzerV2 {
     fn default_parameters(&self) -> HashMap<u32, f32> {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
-            .map(|spec| (spec.id, spec.default_value))
+            .map(|spec| (spec.id, spec.default_value as f32))
             .collect()
     }
 

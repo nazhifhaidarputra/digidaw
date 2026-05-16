@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(dead_code)]
 
-use std::{ collections::HashMap, fs, path::PathBuf };
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
-use quote::{ format_ident, quote };
-use syn::{ Data, DeriveInput, Fields, ItemImpl, Lit, LitStr, Type, parse_macro_input };
+use quote::{format_ident, quote};
+use syn::{Data, DeriveInput, Fields, Lit, LitStr, Type, parse_macro_input};
 
 #[proc_macro_derive(EnumParam)]
 pub fn derive_enum_param(input: TokenStream) -> TokenStream {
@@ -20,29 +20,27 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
     let variants: Vec<_> = data_enum.variants.into_iter().collect();
 
     // Extract variant identifiers and strings for use in generated code
-    let variant_idents: Vec<_> = variants
-        .iter()
-        .map(|v| v.ident.clone())
-        .collect();
-    let variant_strings: Vec<_> = variants
-        .iter()
-        .map(|v| v.ident.to_string())
-        .collect();
+    let variant_idents: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
+    let variant_strings: Vec<_> = variants.iter().map(|v| v.ident.to_string()).collect();
 
     // Fallback to the first variant if #[default] is missing
     let mut default_variant = variants
         .first()
         .expect("Enum must have at least one variant")
-        .ident.clone();
+        .ident
+        .clone();
     for variant in &variants {
-        if variant.attrs.iter().any(|attr| attr.path().is_ident("default")) {
+        if variant
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("default"))
+        {
             default_variant = variant.ident.clone();
             break;
         }
     }
 
-    let expanded =
-        quote! {
+    let expanded = quote! {
         impl ::karbeat_plugin_types::parameter::EnumParam for #name {
             #[inline(always)]
             fn to_index(self) -> usize {
@@ -77,10 +75,10 @@ struct ParamDef {
     id_str: String,
     name: String,
     group: String,
-    min: f32,
-    max: f32,
-    step: f32,
-    default: f32,
+    min: f64,
+    max: f64,
+    step: f64,
+    default: f64,
 }
 
 /// # Overview
@@ -105,9 +103,8 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut params = Vec::new();
     let mut nested_fields: Vec<(syn::Ident, bool, String)> = Vec::new();
     let mut used_ids: HashMap<String, syn::Ident> = HashMap::new();
-    if
-        let Data::Struct(data_struct) = &mut ast.data &&
-        let Fields::Named(fields) = &mut data_struct.fields
+    if let Data::Struct(data_struct) = &mut ast.data
+        && let Fields::Named(fields) = &mut data_struct.fields
     {
         for field in fields.named.iter_mut() {
             let field_ident = field.ident.clone().unwrap();
@@ -210,9 +207,8 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     // Parse prefix attribute if provided
                     let _ = attr.parse_nested_meta(|meta| {
-                        if
-                            meta.path.is_ident("prefix") &&
-                            let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()?
+                        if meta.path.is_ident("prefix")
+                            && let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()?
                         {
                             n_prefix = lit_str.value();
                         }
@@ -258,9 +254,9 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             // Remove the custom attributes so the Rust compiler doesn't panic
-            field.attrs.retain(
-                |attr| !attr.path().is_ident("param") && !attr.path().is_ident("nested")
-            );
+            field
+                .attrs
+                .retain(|attr| !attr.path().is_ident("param") && !attr.path().is_ident("nested"));
         }
     }
 
@@ -273,12 +269,18 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let set_match_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-            quote! {
-                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                    self.#field.set_base(value);
-                    return true;
+        let ty = &p.original_type;
+        quote! {
+            if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                let any_val = &value as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<#ty>() {
+                    self.#field.set_base(*v);
+                } else {
+                    self.#field.set_base_from_f64(value.to_f64());
                 }
+                return true;
             }
+        }
     });
 
     let nested_set_stmts = nested_fields.iter().map(|(f, is_iterable, prefix)| {
@@ -305,33 +307,15 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let get_match_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
-        let ty = &p.original_type;
-        
-        let type_ident = if let syn::Type::Path(type_path) = ty {
-            type_path.path.segments.last().map(|s| s.ident.to_string()).unwrap_or_default()
-        } else {
-            "".to_string()
-        };
 
-        if type_ident == "f32" {
-            quote! {
-                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                    return Some(self.#field.get_base());
-                }
-            }
-        } else if type_ident == "bool" {
-            quote! {
-                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                    return Some(if self.#field.get_base() { 1.0 } else { 0.0 });
-                }
-            }
-        } else {
-            quote! {
-                if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                    // EnumParam trait requires `to_index()` which we can cast to f32
-                    return Some(
-                        <#ty as ::karbeat_plugin_types::parameter::EnumParam>::to_index(self.#field.get_base()) as f32
-                    );
+        quote! {
+            if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                let val = self.#field.get_base();
+                let any_val = &val as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<V>() {
+                    return ::core::option::Option::Some(*v);
+                } else {
+                    return ::core::option::Option::Some(V::from_f64(val.to_f64()));
                 }
             }
         }
@@ -361,9 +345,15 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let apply_auto_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
+        let ty = &p.original_type;
         quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                self.#field.apply_automation(value);
+                let any_val = &value as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<#ty>() {
+                    self.#field.apply_automation(*v);
+                } else {
+                    self.#field.apply_automation_from_f64(value.to_f64());
+                }
                 return true;
             }
         }
@@ -464,7 +454,9 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut default_field_inits = Vec::new();
 
-    if let Data::Struct(data_struct) = &ast.data && let Fields::Named(fields) = &data_struct.fields {
+    if let Data::Struct(data_struct) = &ast.data
+        && let Fields::Named(fields) = &data_struct.fields
+    {
         for field in fields.named.iter() {
             let field_ident = field.ident.as_ref().unwrap();
 
@@ -481,7 +473,12 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 // Convert the AST Type to a string to check what it is
                 let type_ident = if let syn::Type::Path(type_path) = ty {
-                    type_path.path.segments.last().map(|s| s.ident.to_string()).unwrap_or_default()
+                    type_path
+                        .path
+                        .segments
+                        .last()
+                        .map(|s| s.ident.to_string())
+                        .unwrap_or_default()
                 } else {
                     "".to_string()
                 };
@@ -489,8 +486,28 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let local_hash = quote! { ::karbeat_utils::hash::hash_str(#id) };
 
                 let param_init = if type_ident == "f32" {
+                    // Cast to f32 BEFORE quote! so it generates the `f32` literal suffix natively
+                    let default_f32 = default_val as f32;
+                    let min_f32 = min as f32;
+                    let max_f32 = max as f32;
+                    let step_f32 = step as f32;
+
                     quote! {
-                        ::karbeat_plugin_types::parameter::Param::new_f32(#local_hash, #name, #group, #default_val, #min, #max, #step)
+                        ::karbeat_plugin_types::parameter::Param::new_f32(#local_hash, #name, #group, #default_f32, #min_f32, #max_f32, #step_f32)
+                    }
+                } else if type_ident == "f64" {
+                    quote! {
+                        ::karbeat_plugin_types::parameter::Param::new_f64(#local_hash, #name, #group, #default_val, #min, #max, #step)
+                    }
+                } 
+                else if type_ident == "i32" { // <--- ADD THIS BLOCK
+                    let default_i32 = default_val as i32;
+                    let min_i32 = min as i32;
+                    let max_i32 = max as i32;
+                    let step_i32 = step as i32;
+                    
+                    quote! {
+                        ::karbeat_plugin_types::parameter::Param::new_i32(#local_hash, #name, #group, #default_i32, #min_i32, #max_i32, #step_i32)
                     }
                 } else if type_ident == "bool" {
                     let default_bool = default_val >= 0.5;
@@ -501,32 +518,27 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let default_idx = default_val as usize;
                     quote! {
                         ::karbeat_plugin_types::parameter::Param::<#ty>::new_enum(
-                            #local_hash, 
-                            #name, 
-                            #group, 
+                            #local_hash,
+                            #name,
+                            #group,
                             <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_idx)
                         )
                     }
                 };
 
-                default_field_inits.push(
-                    quote! {
+                default_field_inits.push(quote! {
                     #field_ident: #param_init
-                }
-                );
+                });
             } else {
                 // For #[nested] or standard fields, fallback to standard default
-                default_field_inits.push(
-                    quote! {
+                default_field_inits.push(quote! {
                     #field_ident: std::default::Default::default()
-                }
-                );
+                });
             }
         }
     }
 
-    let expanded =
-        quote! {
+    let expanded = quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         #ast
 
@@ -550,19 +562,19 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
         const _: () = {
             use karbeat_plugin_types::*;
             impl #impl_generics AutoParams for #struct_name #ty_generics #where_clause {
-                fn auto_set_parameter(&mut self, prefix_hash: u32, id: u32, value: f32) -> bool {
+                fn auto_set_parameter<V: ::karbeat_plugin_types::parameter::ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool {
                     #(#set_match_arms)*
                     #(#nested_set_stmts)*
                     false
                 }
 
-                fn auto_get_parameter(&self, prefix_hash: u32, id: u32) -> Option<f32> {
+                fn auto_get_parameter<V: ::karbeat_plugin_types::parameter::ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V> {
                     #(#get_match_arms)*
                     #(#nested_get_stmts)*
                     None
                 }
 
-                fn auto_apply_automation(&mut self, prefix_hash: u32, id: u32, value: f32) -> bool {
+                fn auto_apply_automation<V: ::karbeat_plugin_types::parameter::ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool {
                     #(#apply_auto_arms)*
                     #(#nested_apply_stmts)*
                     false
@@ -586,101 +598,6 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Inject auto implementation for parameter routing
-///
-/// ## Attributes
-/// To inject side effect for any value modification, you
-/// are able to inject it by specifying a side effect function
-/// in the struct implementation
-///
-/// For example:
-///
-/// ```rust, ignore
-/// impl WavetableSynthEngine {
-///     pub fn side_effect_func(&mut self) {
-///         do_something()
-///     }
-/// }
-///
-/// #[inject_plugin_routing(side_effect_func)]
-/// impl RawSynthEngine for WavetableSynthEngine {
-///     fn process() {
-///         // ...
-///     }
-/// }
-/// ```
-///
-/// With this, it will generate the implementation for parameter routing together with provided side effect
-#[proc_macro_attribute]
-pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Check if the user provided a side-effect function (e.g., #[inject_plugin_routing(handle_side_effects)])
-    let mut side_effect_call = quote! {};
-    if !attr.is_empty() {
-        let ident = syn::parse_macro_input!(attr as syn::Ident);
-        // If they provided a function name, we generate the call: `self.function_name(id);`
-        side_effect_call = quote! { self.#ident(id); };
-    }
-
-    // Parse the trait impl block the user wrote
-    let item_impl = parse_macro_input!(item as ItemImpl);
-
-    let generics = &item_impl.generics;
-    let trait_path = &item_impl.trait_
-        .as_ref()
-        .expect("This macro must be applied to a trait implementation").1;
-    let self_ty = &item_impl.self_ty;
-    let items = &item_impl.items;
-
-    // Generate the boilerplate methods using their AutoParams implementation
-    let injected_code =
-        quote! {
-        fn set_custom_parameter(&mut self, prefix_hash:u32, id: u32, value: f32) {
-            self.auto_set_parameter(prefix_hash, id, value);
-            #side_effect_call
-        }
-
-        fn get_custom_parameter(&self, prefix_hash:u32, id: u32) -> Option<f32> {
-            self.auto_get_parameter(prefix_hash, id)
-        }
-
-        fn apply_automation(&mut self,prefix_hash:u32, id: u32, value: f32) {
-            self.auto_apply_automation(prefix_hash, id, value);
-            #side_effect_call
-        }
-
-        fn clear_automation(&mut self, prefix_hash:u32, id: u32) {
-            self.auto_clear_automation(prefix_hash, id);
-            #side_effect_call
-        }
-
-        fn get_parameter_specs(&self) -> Vec<karbeat_plugin_types::ParameterSpec> {
-            self.auto_get_parameter_specs()
-        }
-
-        fn custom_default_parameters() -> std::collections::HashMap<u32, f32> where Self: Sized {
-            let mut map = std::collections::HashMap::new();
-            for spec in Self::default().auto_get_parameter_specs() {
-                map.insert(spec.id, spec.default_value);
-            }
-            map
-        }
-    };
-
-    // Rebuild the impl block: Original User Methods + Injected Boilerplate
-    let expanded =
-        quote! {
-        impl #generics #trait_path for #self_ty {
-            // Keep the user's manual process(), name(), prepare(), etc.
-            #(#items)*
-
-            // Inject the magic
-            #injected_code
-        }
-    };
-
-    TokenStream::from(expanded)
-}
-
 #[proc_macro_derive(AutoParams, attributes(skip, param))]
 pub fn derive_auto_params(input: TokenStream) -> TokenStream {
     let input_derive = parse_macro_input!(input as DeriveInput);
@@ -689,15 +606,14 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 
     let (impl_generics, ty_generics, where_clause) = input_derive.generics.split_for_impl();
     let fields = match &input_derive.data {
-        Data::Struct(data_struct) =>
-            match &data_struct.fields {
-                Fields::Named(fields_named) => &fields_named.named,
-                _ => panic!("AutoParams can only be derived on structs with named fields"),
-            }
+        Data::Struct(data_struct) => match &data_struct.fields {
+            Fields::Named(fields_named) => &fields_named.named,
+            _ => panic!("AutoParams can only be derived on structs with named fields"),
+        },
         _ => panic!("AutoParams can only be derived on structs"),
     };
 
-    // We now store a tuple of (Field, StringID)
+    // We now store a tuple of (Field, StringID, InnerType)
     let mut param_fields = Vec::new();
 
     for field in fields.iter() {
@@ -705,13 +621,18 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 
         if !is_nested {
             let mut is_valid_param = false;
+            let mut inner_ty = None;
 
-            if
-                let Type::Path(type_path) = &field.ty &&
-                let Some(segment) = type_path.path.segments.last() &&
-                segment.ident == "Param"
+            if let Type::Path(type_path) = &field.ty
+                && let Some(segment) = type_path.path.segments.last()
+                && segment.ident == "Param"
             {
                 is_valid_param = true;
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(ty)) = args.args.first() {
+                        inner_ty = Some(ty.clone());
+                    }
+                }
             }
 
             if !is_valid_param {
@@ -721,7 +642,9 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                     field.ident.as_ref().unwrap()
                 );
 
-                return syn::Error::new_spanned(&field.ty, error_msg).to_compile_error().into();
+                return syn::Error::new_spanned(&field.ty, error_msg)
+                    .to_compile_error()
+                    .into();
             }
 
             // Default the ID string to the exact field name
@@ -731,11 +654,9 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
             for attr in &field.attrs {
                 if attr.path().is_ident("param") {
                     let _ = attr.parse_nested_meta(|meta| {
-                        if
-                            meta.path.is_ident("id") &&
-                            let Ok(syn::Lit::Str(lit_str)) = meta
-                                .value()
-                                .and_then(|v| v.parse::<syn::Lit>())
+                        if meta.path.is_ident("id")
+                            && let Ok(syn::Lit::Str(lit_str)) =
+                                meta.value().and_then(|v| v.parse::<syn::Lit>())
                         {
                             id_str = lit_str.value();
                         }
@@ -744,41 +665,59 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                 }
             }
 
-            param_fields.push((field, id_str));
+            param_fields.push((field, id_str, inner_ty));
         }
     }
 
     // Fully qualify paths to ensure absolute hygiene
-    let get_arms = param_fields.iter().map(|(f, id_str)| {
+    let get_arms = param_fields.iter().map(|(f, id_str, _)| {
         let fname = &f.ident;
         quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                return ::core::option::Option::Some(self.#fname.get_base().to_f32());
+                let val = self.#fname.get_base();
+                let any_val = &val as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<V>() {
+                    return ::core::option::Option::Some(*v);
+                } else {
+                    return ::core::option::Option::Some(V::from_f64(val.to_f64()));
+                }
             }
         }
     });
 
-    let set_arms = param_fields.iter().map(|(f, id_str)| {
+    let set_arms = param_fields.iter().map(|(f, id_str, inner_ty)| {
         let fname = &f.ident;
+        let ty = inner_ty.as_ref().unwrap();
         quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                self.#fname.set_base(value);
+                let any_val = &value as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<#ty>() {
+                    self.#fname.set_base(*v);
+                } else {
+                    self.#fname.set_base_from_f64(value.to_f64());
+                }
                 return true;
             }
         }
     });
 
-    let apply_arms = param_fields.iter().map(|(f, id_str)| {
+    let apply_arms = param_fields.iter().map(|(f, id_str, inner_ty)| {
         let fname = &f.ident;
+        let ty = inner_ty.as_ref().unwrap();
         quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
-                self.#fname.apply_automation(value);
+                let any_val = &value as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<#ty>() {
+                    self.#fname.apply_automation(*v);
+                } else {
+                    self.#fname.apply_automation_from_f64(value.to_f64());
+                }
                 return true;
             }
         }
     });
 
-    let clear_arms = param_fields.iter().map(|(f, id_str)| {
+    let clear_arms = param_fields.iter().map(|(f, id_str, _)| {
         let fname = &f.ident;
         quote! {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
@@ -788,7 +727,7 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
         }
     });
 
-    let spec_arms = param_fields.iter().map(|(f, id_str)| {
+    let spec_arms = param_fields.iter().map(|(f, id_str, _)| {
         let fname = &f.ident;
         quote! {
             {
@@ -800,23 +739,22 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
         }
     });
 
-    let expanded =
-        quote! {
+    let expanded = quote! {
         const _: () = {
             // Hygienically target the specific traits
             use ::karbeat_plugin_types::*;
             impl #impl_generics ::karbeat_plugin_types::parameter::AutoParams for #name #ty_generics #where_clause {
-                fn auto_get_parameter(&self, prefix_hash: u32, id: u32) -> ::core::option::Option<f32> {
+                fn auto_get_parameter<V: ::karbeat_plugin_types::parameter::ParamType>(&self, prefix_hash: u32, id: u32) -> ::core::option::Option<V> {
                     #(#get_arms)*
                     ::core::option::Option::None
                 }
 
-                fn auto_set_parameter(&mut self, prefix_hash: u32, id: u32, value: f32) -> bool {
+                fn auto_set_parameter<V: ::karbeat_plugin_types::parameter::ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool {
                     #(#set_arms)*
                     false
                 }
 
-                fn auto_apply_automation(&mut self, prefix_hash: u32, id: u32, value: f32) -> bool {
+                fn auto_apply_automation<V: ::karbeat_plugin_types::parameter::ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool {
                     #(#apply_arms)*
                     false
                 }
@@ -863,8 +801,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                 }
 
                 let json_data = fs::read_to_string(&path).unwrap();
-                let manifest: serde_json::Value = serde_json
-                    ::from_str(&json_data)
+                let manifest: serde_json::Value = serde_json::from_str(&json_data)
                     .unwrap_or_else(|_| panic!("Invalid JSON in {:?}", path));
 
                 let id = manifest["id"].as_u64().expect("Missing id") as u32;
@@ -879,11 +816,9 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                 let const_prefix = if is_synth { "GEN_" } else { "EFF_" };
                 let const_ident = format_ident!("{}{}", const_prefix, shouty_name);
 
-                associated_constants.push(
-                    quote! {
+                associated_constants.push(quote! {
                     pub const #const_ident: u32 = #id;
-                }
-                );
+                });
 
                 let mut param_tokens = Vec::new();
                 if let Some(params) = manifest["parameters"].as_array() {
@@ -906,8 +841,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                             quote! { vec![] }
                         };
 
-                        param_tokens.push(
-                            quote! {
+                        param_tokens.push(quote! {
                             karbeat_plugin_types::ParameterSpec {
                                 id: #p_id,
                                 name: #p_name.to_string(),
@@ -919,20 +853,16 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                                 value_type: karbeat_plugin_types::ParamType::#val_type_ident,
                                 choices: #choices_tokens,
                             }
-                        }
-                        );
+                        });
                     }
                 }
 
                 let abs_path_str = path.to_str().unwrap();
-                file_trackers.push(
-                    quote! {
+                file_trackers.push(quote! {
                     const _: &[u8] = include_bytes!(#abs_path_str);
-                }
-                );
+                });
 
-                let insert_stmt =
-                    quote! {
+                let insert_stmt = quote! {
                     let specs = vec![ #(#param_tokens),* ];
                     let factory: Box<dyn Fn() -> Box<_> + Send + Sync> = Box::new(|| Box::new( <#internal_ident>::build() ));
 
@@ -944,19 +874,15 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                 };
 
                 if is_synth {
-                    generator_inserts.push(
-                        quote! {
+                    generator_inserts.push(quote! {
                         #insert_stmt
                         registry.generators.insert(#id, registered);
-                    }
-                    );
+                    });
                 } else {
-                    effect_inserts.push(
-                        quote! {
+                    effect_inserts.push(quote! {
                         #insert_stmt
                         registry.effects.insert(#id, registered);
-                    }
-                    );
+                    });
                 }
             }
         }
@@ -966,8 +892,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
     process_directory(&effects_path, false);
 
     // 2. Assemble the final output, now including the constants!
-    let expanded =
-        quote! {
+    let expanded = quote! {
         // Automatically inject the compiled constants
         #(#associated_constants)*
 

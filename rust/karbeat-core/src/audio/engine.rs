@@ -145,6 +145,8 @@ pub struct AudioEngine {
     bpm: f32,
     sample_rate: u32,
     num_channels: u16,
+    time_sig_numerator: u8,
+    time_sig_denominator: u8,
 
     song_state: SongPlaybackState,
     pattern_state: PatternPlaybackState,
@@ -341,6 +343,8 @@ impl AudioEngine {
             bus_delay_lines: HashMap::new(),
             aux_buffers: HashMap::new(),
             sidechain_delay_lines: HashMap::new(),
+            time_sig_numerator: 4,
+            time_sig_denominator: 4,
         }
     }
 
@@ -350,7 +354,6 @@ impl AudioEngine {
 
     pub fn process(&mut self, output_buffer: &mut [f32]) {
         let mut pdc_dirty = false;
-        // Sync graph state (transport no longer comes via triple buffer)
         if self.state_consumer.update() {
             let new_state = self.state_consumer.read().clone();
 
@@ -364,7 +367,6 @@ impl AudioEngine {
         // Process Commands (Play, Stop, Seek)
         while let Ok(cmd) = self.command_consumer.pop() {
             if self.process_command(cmd) {
-                // Make process_command return bool
                 pdc_dirty = true;
             }
         }
@@ -1357,11 +1359,13 @@ impl AudioEngine {
             bar: self.song_state.current_bar,
             tempo: self.bpm,
             sample_rate: self.current_state.graph.sample_rate,
+
             // Transport state
             is_playing,
             is_looping: self.song_state.is_looping,
             is_recording: self.song_state.is_recording,
             is_pattern_playing: self.pattern_state.is_playing,
+
             // Pattern position (independent)
             is_pattern_mode,
             pattern_samples: self.pattern_state.playhead_samples,
@@ -1641,8 +1645,8 @@ impl AudioEngine {
                             // Build context for the generator — MIDI events are passed via ProcessContext
                             let gen_ctx = ProcessContext {
                                 bpm,
-                                time_sig_numerator: 4,
-                                time_sig_denominator: 4,
+                                time_sig_numerator: self.time_sig_numerator,
+                                time_sig_denominator: self.time_sig_denominator,
                                 is_playing,
                                 sample_position,
                                 midi_events: events,
@@ -1876,7 +1880,7 @@ impl AudioEngine {
                                         if let Some(effect) =
                                             effects.iter_mut().find(|e| e.id == *effect_id)
                                         {
-                                            effect.plugin.set_parameter(*param_id, *value);
+                                            effect.plugin.apply_automation(*param_id, *value);
                                         }
                                     }
                                 }
@@ -2275,7 +2279,7 @@ impl AudioEngine {
         master_automation_events: &[MasterAutomationEvent],
         buffer: &mut [f32],
         channels: usize,
-        process_ctx: &ProcessContext<'a>, // <-- Add 'a
+        process_ctx: &ProcessContext<'a>,
         aux_buffers: &'a HashMap<SidechainRouteId, Vec<f32>>,
     ) {
         let master_volume = &mut master_bus.volume;

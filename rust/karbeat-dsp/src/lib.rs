@@ -1,3 +1,4 @@
+pub mod compressor;
 pub mod bit_crush;
 pub mod chorus;
 pub mod envelope;

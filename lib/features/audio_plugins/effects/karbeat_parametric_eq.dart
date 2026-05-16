@@ -126,9 +126,9 @@ class KarbeatParametricEqState
       (_) => _sendMagnitudeRequest(),
     );
 
-    // Re-fire GET_SPECTRUM at ~60 FPS to drive the real-time spectrum analyzer.
+    // Re-fire GET_SPECTRUM at ~30 FPS to drive the real-time spectrum analyzer.
     _spectrumPollTimer = Timer.periodic(
-      const Duration(milliseconds: 16),
+      const Duration(milliseconds: 33),
       (_) => _sendSpectrumRequest(),
     );
   }
@@ -184,10 +184,7 @@ class KarbeatParametricEqState
   /// Fired at ~30 FPS by [_spectrumPollTimer].
   void _sendSpectrumRequest() {
     plugin_api
-        .queryLivePluginZeroCopyBuf(
-          target: _toPluginTarget(),
-          name: 'spectrum',
-        )
+        .queryLivePluginZeroCopyBuf(target: _toPluginTarget(), name: 'spectrum')
         .then((id) {
           _spectrumRequestId = id;
         })
@@ -203,14 +200,13 @@ class KarbeatParametricEqState
 
     if (msg.requestId == _magnitudeRequestId ||
         msg.requestId == _spectrumRequestId) {
-      
       final handle = msg.handle;
       if (handle == null) return;
 
       // Bridge the raw memory pointer directly to a Dart TypedData list
       final address = handle.memoryAddress();
       final length = handle.lengthElements();
-      
+
       final ptr = ffi.Pointer<ffi.Float>.fromAddress(address);
       final rawList = ptr.asTypedList(length);
 
@@ -562,7 +558,6 @@ class KarbeatParametricEqState
     final slopeChoices = slopeParam?.choices ?? [];
 
     return Container(
-      width: 100,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
@@ -573,179 +568,181 @@ class KarbeatParametricEqState
         ),
       ),
       child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Band Header + Active Toggle
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color,
+        child: IntrinsicWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Band Header + Active Toggle
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      "B${i + 1}",
-                      style: TextStyle(
-                        color: band.active ? Colors.white70 : Colors.white30,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                      const SizedBox(width: 3),
+                      Text(
+                        "B${i + 1}",
+                        style: TextStyle(
+                          color: band.active ? Colors.white70 : Colors.white30,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                // Compact toggle
-                SizedBox(
-                  width: 32,
-                  height: 20,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: Switch(
-                      value: band.active,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      activeThumbColor: color,
-                      onChanged: (val) =>
-                          _updateBandParam(i, 3, val ? 1.0 : 0.0),
-                    ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-
-            // Type Dropdown (compact)
-            SizedBox(
-              height: 28,
-              child: PopupMenuButton<int>(
-                initialValue: band.filterType,
-                padding: EdgeInsets.zero,
-                color: Colors.grey.shade800,
-                onSelected: (val) => _updateBandParam(i, 4, val.toDouble()),
-                itemBuilder: (context) => List.generate(
-                  filterChoices.length,
-                  (idx) => PopupMenuItem<int>(
-                    value: idx,
-                    height: 32,
-                    child: Text(
-                      filterChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
+                  // Compact toggle
+                  SizedBox(
+                    width: 32,
+                    height: 20,
+                    child: FittedBox(
+                      fit: BoxFit.contain,
+                      child: Switch(
+                        value: band.active,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        activeThumbColor: color,
+                        onChanged: (val) =>
+                            _updateBandParam(i, 3, val ? 1.0 : 0.0),
                       ),
                     ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
+                ],
+              ),
+          
+              // Type Dropdown (compact)
+              SizedBox(
+                height: 28,
+                child: PopupMenuButton<int>(
+                  initialValue: band.filterType,
+                  padding: EdgeInsets.zero,
+                  color: Colors.grey.shade800,
+                  onSelected: (val) => _updateBandParam(i, 4, val.toDouble()),
+                  itemBuilder: (context) => List.generate(
+                    filterChoices.length,
+                    (idx) => PopupMenuItem<int>(
+                      value: idx,
+                      height: 32,
                       child: Text(
-                        filterChoices.isNotEmpty &&
-                                band.filterType < filterChoices.length
-                            ? filterChoices[band.filterType]
-                            : "",
+                        filterChoices[idx],
                         style: const TextStyle(
-                          color: Colors.white54,
+                          color: Colors.white70,
                           fontSize: 9,
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 2),
-
-            // Parameter controls
-            _buildParamControl(
-              "Freq",
-              band.freq,
-              "band$i/freq", // Matches backend dynamic path
-              (v) => _updateBandParam(i, 0, v),
-              suffix: "Hz",
-              parameterName: "Frequency",
-            ),
-            _buildParamControl(
-              "Gain",
-              band.gain,
-              "band$i/gain", // Matches backend dynamic path
-              (v) => _updateBandParam(i, 1, v),
-              suffix: "dB",
-              parameterName: "Gain",
-            ),
-            _buildParamControl(
-              "Q",
-              band.q,
-              "band$i/q", // Matches backend dynamic path
-              (v) => _updateBandParam(i, 2, v),
-              suffix: "",
-              parameterName: "Q Bandwidth",
-            ),
-
-            // Slope dropdown
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 28,
-              child: PopupMenuButton<int>(
-                initialValue: band.order,
-                padding: EdgeInsets.zero,
-                color: Colors.grey.shade800,
-                onSelected: (val) => _updateBandParam(i, 5, val.toDouble()),
-                itemBuilder: (context) => List.generate(
-                  slopeChoices.length,
-                  (idx) => PopupMenuItem<int>(
-                    value: idx,
-                    height: 32,
-                    child: Text(
-                      slopeChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
                       ),
                     ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        slopeChoices.isNotEmpty &&
-                                band.order < slopeChoices.length
-                            ? slopeChoices[band.order]
-                            : "",
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 9,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          filterChoices.isNotEmpty &&
+                                  band.filterType < filterChoices.length
+                              ? filterChoices[band.filterType]
+                              : "",
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 9,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
-                  ],
+                      const Icon(
+                        Icons.arrow_drop_down,
+                        size: 12,
+                        color: Colors.white54,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+          
+              const SizedBox(height: 2),
+          
+              // Parameter controls
+              _buildParamControl(
+                "Freq",
+                band.freq,
+                "band$i/freq", // Matches backend dynamic path
+                (v) => _updateBandParam(i, 0, v),
+                suffix: "Hz",
+                parameterName: "Frequency",
+              ),
+              _buildParamControl(
+                "Gain",
+                band.gain,
+                "band$i/gain", // Matches backend dynamic path
+                (v) => _updateBandParam(i, 1, v),
+                suffix: "dB",
+                parameterName: "Gain",
+              ),
+              _buildParamControl(
+                "Q",
+                band.q,
+                "band$i/q", // Matches backend dynamic path
+                (v) => _updateBandParam(i, 2, v),
+                suffix: "",
+                parameterName: "Q Bandwidth",
+              ),
+          
+              // Slope dropdown
+              const SizedBox(height: 4),
+              SizedBox(
+                height: 28,
+                child: PopupMenuButton<int>(
+                  initialValue: band.order,
+                  padding: EdgeInsets.zero,
+                  color: Colors.grey.shade800,
+                  onSelected: (val) => _updateBandParam(i, 5, val.toDouble()),
+                  itemBuilder: (context) => List.generate(
+                    slopeChoices.length,
+                    (idx) => PopupMenuItem<int>(
+                      value: idx,
+                      height: 32,
+                      child: Text(
+                        slopeChoices[idx],
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          slopeChoices.isNotEmpty &&
+                                  band.order < slopeChoices.length
+                              ? slopeChoices[band.order]
+                              : "",
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 9,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_drop_down,
+                        size: 12,
+                        color: Colors.white54,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
