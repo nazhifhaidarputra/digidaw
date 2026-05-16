@@ -499,13 +499,13 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         ::karbeat_plugin_types::parameter::Param::new_f64(#local_hash, #name, #group, #default_val, #min, #max, #step)
                     }
-                } 
-                else if type_ident == "i32" { // <--- ADD THIS BLOCK
+                } else if type_ident == "i32" {
+                    // <--- ADD THIS BLOCK
                     let default_i32 = default_val as i32;
                     let min_i32 = min as i32;
                     let max_i32 = max as i32;
                     let step_i32 = step as i32;
-                    
+
                     quote! {
                         ::karbeat_plugin_types::parameter::Param::new_i32(#local_hash, #name, #group, #default_i32, #min_i32, #max_i32, #step_i32)
                     }
@@ -538,14 +538,23 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
+    // Conditionally generate the enum only if there are parameters
+    let enum_definition = if params.is_empty() {
+        quote! {}
+    } else {
+        quote! {
+            #[repr(u32)]
+            pub enum #enum_name {
+                #(#enum_variants),*
+            }
+        }
+    };
+
     let expanded = quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         #ast
 
-        #[repr(u32)]
-        pub enum #enum_name {
-            #(#enum_variants),*
-        }
+        #enum_definition
 
        impl #impl_generics #struct_name #ty_generics #where_clause {
             /// Creates an instance with all `#[param]` fields initialized to their macro defaults.
@@ -911,4 +920,158 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
+pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
+    let mut on_change_expr: Option<proc_macro2::TokenStream> = None;
+
+    if !args.is_empty() {
+        let meta_parser = syn::meta::parser(|meta| {
+            if meta.path.is_ident("on_change") {
+                let lit: syn::LitStr = meta.value()?.parse()?;
+                let expr: syn::Expr = lit.parse()?;
+                on_change_expr = Some(quote::quote!(#expr));
+                Ok(())
+            } else {
+                Err(meta.error("unsupported property"))
+            }
+        });
+        syn::parse_macro_input!(args with meta_parser);
+    }
+
+    let mut item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
+    let self_ty = &item_impl.self_ty;
+
+    // Check if methods are already implemented
+    let mut has_set_parameter = false;
+    let mut has_get_parameter = false;
+    let mut has_apply_automation = false;
+    let mut has_clear_automation = false;
+    let mut has_default_parameters = false;
+    let mut has_get_parameter_specs = false;
+    let mut has_static_parameter_specs = false;
+    let mut has_as_any = false;
+
+    for item in &item_impl.items {
+        if let syn::ImplItem::Fn(method) = item {
+            let name = &method.sig.ident;
+            if name == "set_parameter" {
+                has_set_parameter = true;
+            }
+            if name == "get_parameter" {
+                has_get_parameter = true;
+            }
+            if name == "apply_automation" {
+                has_apply_automation = true;
+            }
+            if name == "clear_automation" {
+                has_clear_automation = true;
+            }
+            if name == "default_parameters" {
+                has_default_parameters = true;
+            }
+            if name == "get_parameter_specs" {
+                has_get_parameter_specs = true;
+            }
+            if name == "static_parameter_specs" {
+                has_static_parameter_specs = true;
+            }
+            if name == "as_any" {
+                has_as_any = true;
+            }
+        }
+    }
+
+    let on_change = if let Some(expr) = on_change_expr {
+        quote::quote! { #expr; }
+    } else {
+        quote::quote! {}
+    };
+
+    if !has_set_parameter {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn set_parameter(&mut self, id: u32, value: f32) {
+                if self.auto_set_parameter(::karbeat_utils::hash::FNV_OFFSET, id, value) {
+                    #on_change
+                }
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_get_parameter {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn get_parameter(&self, id: u32) -> f32 {
+                self.auto_get_parameter(::karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_apply_automation {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn apply_automation(&mut self, id: u32, value: f32) {
+                if self.auto_apply_automation(::karbeat_utils::hash::FNV_OFFSET, id, value) {
+                    #on_change
+                }
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_clear_automation {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn clear_automation(&mut self, id: u32) {
+                if self.auto_clear_automation(::karbeat_utils::hash::FNV_OFFSET, id) {
+                    #on_change
+                }
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_default_parameters {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn default_parameters(&self) -> ::hashbrown::HashMap<u32, f32> {
+                self.auto_get_parameter_specs(::karbeat_utils::hash::FNV_OFFSET, "")
+                    .into_iter()
+                    .map(|spec| (spec.id, spec.default_value as f32))
+                    .collect()
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_get_parameter_specs {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn get_parameter_specs(&self) -> Vec<::karbeat_plugin_types::ParameterSpec> {
+                self.auto_get_parameter_specs(::karbeat_utils::hash::FNV_OFFSET, "")
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_static_parameter_specs {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn static_parameter_specs() -> Vec<::karbeat_plugin_types::ParameterSpec>
+            where
+                Self: Sized,
+            {
+                <#self_ty>::default().auto_get_parameter_specs(::karbeat_utils::hash::FNV_OFFSET, "")
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_as_any {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn as_any(&self) -> &dyn ::std::any::Any {
+                self
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    quote::quote!(#item_impl).into()
 }

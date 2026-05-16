@@ -1,4 +1,3 @@
-use hashbrown::HashMap;
 use karbeat_dsp::filter::{
     BiquadCoefficients, BiquadFilterType, FilterMode, SingleBiquadFilterStage,
 };
@@ -11,7 +10,7 @@ use rustfft::{num_traits::Zero, Fft, FftPlanner};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use smallvec::{smallvec, SmallVec};
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 const FFT_SIZE: usize = 4096;
 
@@ -109,11 +108,9 @@ impl DigiParametricEQFilterNode {
         node.order.group = group_name;
 
         if band_idx == 0 {
-            node.filter_type
-                .set_base(BiquadFilterType::LowShelf);
+            node.filter_type.set_base(BiquadFilterType::LowShelf);
         } else if band_idx == 7 {
-            node.filter_type
-                .set_base(BiquadFilterType::HighShelf);
+            node.filter_type.set_base(BiquadFilterType::HighShelf);
         }
 
         // Initialize with 2 channels and 1 cascade stage (Db12 default)
@@ -319,7 +316,7 @@ impl DigiParametricEQ {
 
     fn compute_and_update_spectrum(&mut self) {
         let num_points = 300;
-        
+
         let mut fft_input: SmallVec<[Complex32; FFT_SIZE]> = smallvec![Complex::zero(); FFT_SIZE];
         for i in 0..FFT_SIZE {
             // Read backwards from current idx to get sequential chronological data
@@ -349,7 +346,7 @@ impl DigiParametricEQ {
         if self.spectrum_history.len() != num_points {
             self.spectrum_history = vec![-100.0; num_points];
         }
-        
+
         let min_freq: f32 = 20.0;
         let max_freq: f32 = 20000.0;
         let log_min = min_freq.log10();
@@ -407,6 +404,7 @@ impl DigiParametricEQ {
     }
 }
 
+#[karbeat_macros::auto_param(on_change = "self.handle_side_effects(id)")]
 impl AudioPlugin for DigiParametricEQ {
     fn name(&self) -> &str {
         "Parametric EQ"
@@ -476,57 +474,18 @@ impl AudioPlugin for DigiParametricEQ {
         self.compute_and_update_spectrum();
     }
 
-    fn set_parameter(&mut self, id: u32, value: f32) {
-        if self.auto_set_parameter(karbeat_utils::hash::FNV_OFFSET, id, value) {
-            self.handle_side_effects(id);
-        }
-    }
-
-    fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
-            .unwrap_or(0.0)
-    }
-
-    fn apply_automation(&mut self, id: u32, value: f32) {
-        if self.auto_apply_automation(karbeat_utils::hash::FNV_OFFSET, id, value) {
-            self.handle_side_effects(id);
-        }
-    }
-
-    fn clear_automation(&mut self, id: u32) {
-        if self.auto_clear_automation(karbeat_utils::hash::FNV_OFFSET, id) {
-            self.handle_side_effects(id);
-        }
-    }
-
-    fn default_parameters(&self) -> HashMap<u32, f32> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-            .into_iter()
-            .map(|spec| (spec.id, spec.default_value as f32))
-            .collect()
-    }
-
-    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-    }
-
-    fn static_parameter_specs() -> Vec<ParameterSpec>
-    where
-        Self: Sized,
-    {
-        Self::new().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
         match command {
             "GET_MAGNITUDE_RESPONSE" => {
-                let num_points = payload.get("num_points").and_then(|v| v.as_u64()).unwrap_or(100) as usize;
+                let num_points = payload
+                    .get("num_points")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100) as usize;
                 let response = self.compute_magnitude_response(num_points);
-                let flat_array: Vec<f32> = response.into_iter().flat_map(|(freq, db)| [freq, db]).collect();
+                let flat_array: Vec<f32> = response
+                    .into_iter()
+                    .flat_map(|(freq, db)| [freq, db])
+                    .collect();
                 Some(json!(flat_array))
             }
             _ => None,
@@ -548,12 +507,8 @@ impl AudioPlugin for DigiParametricEQ {
 
     fn get_zero_copy_buffer(&self, name: &str) -> Option<ZeroCopyBuffer> {
         match name {
-            "magnitude" => {
-                Some(ZeroCopyBuffer::Float32(self.magnitude_buffer.clone()))
-            }
-            "spectrum" => {
-                Some(ZeroCopyBuffer::Float32(self.spectrum_buffer.clone()))
-            }
+            "magnitude" => Some(ZeroCopyBuffer::Float32(self.magnitude_buffer.clone())),
+            "spectrum" => Some(ZeroCopyBuffer::Float32(self.spectrum_buffer.clone())),
             _ => None,
         }
     }

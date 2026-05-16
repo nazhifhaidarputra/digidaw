@@ -3,9 +3,6 @@
 // Author: Haidar Wibowo
 // ====================================================
 
-use std::any::Any;
-
-use hashbrown::HashMap;
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
@@ -162,6 +159,7 @@ impl MyRetro {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
+#[karbeat_macros::auto_param]
 impl AudioPlugin for MyRetro {
     fn name(&self) -> &str {
         "My Retro"
@@ -285,45 +283,6 @@ impl AudioPlugin for MyRetro {
         }
 
         self.active_voices.retain(|v| v.is_active);
-    }
-
-    fn set_parameter(&mut self, id: u32, value: f32) {
-        self.auto_set_parameter(karbeat_utils::hash::FNV_OFFSET, id, value);
-    }
-
-    fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
-            .unwrap_or(0.0)
-    }
-
-    fn apply_automation(&mut self, id: u32, value: f32) {
-        self.auto_apply_automation(karbeat_utils::hash::FNV_OFFSET, id, value);
-    }
-
-    fn clear_automation(&mut self, id: u32) {
-        self.auto_clear_automation(karbeat_utils::hash::FNV_OFFSET, id);
-    }
-
-    fn default_parameters(&self) -> HashMap<u32, f32> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-            .into_iter()
-            .map(|spec| (spec.id, spec.default_value as f32))
-            .collect()
-    }
-
-    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-    }
-
-    fn static_parameter_specs() -> Vec<ParameterSpec>
-    where
-        Self: Sized,
-    {
-        Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn category(&self) -> PluginCategory {
