@@ -93,12 +93,9 @@ class DawFloatParam extends StatelessWidget {
             ),
           );
           if (sliderWidth != null) {
-            return SizedBox(
-              width: sliderWidth!,
-              child: sliderWithTheme,
-            );
+            return SizedBox(width: sliderWidth!, child: sliderWithTheme);
           }
-          return Expanded(child: sliderWithTheme);
+          return sliderWithTheme;
         }(),
       ],
     );
