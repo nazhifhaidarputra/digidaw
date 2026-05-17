@@ -16,7 +16,7 @@ class DawFloatParam extends StatelessWidget {
   final String suffix;
   final ValueChanged<double> onChanged;
   final SliderInteraction sliderInteraction;
-  final double sliderWidth;
+  final double? sliderWidth;
 
   const DawFloatParam({
     super.key,
@@ -30,7 +30,7 @@ class DawFloatParam extends StatelessWidget {
     this.suffix = '',
     required this.onChanged,
     this.sliderInteraction = SliderInteraction.slideThumb,
-    this.sliderWidth = 85,
+    this.sliderWidth,
   });
 
   @override
@@ -60,9 +60,8 @@ class DawFloatParam extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        SizedBox(
-          width: sliderWidth,
-          child: SliderTheme(
+        () {
+          final sliderWithTheme = SliderTheme(
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: Colors.cyanAccent,
               inactiveTrackColor: Colors.grey.shade700,
@@ -92,8 +91,15 @@ class DawFloatParam extends StatelessWidget {
                 allowedInteraction: sliderInteraction,
               ),
             ),
-          ),
-        ),
+          );
+          if (sliderWidth != null) {
+            return SizedBox(
+              width: sliderWidth!,
+              child: sliderWithTheme,
+            );
+          }
+          return Expanded(child: sliderWithTheme);
+        }(),
       ],
     );
   }

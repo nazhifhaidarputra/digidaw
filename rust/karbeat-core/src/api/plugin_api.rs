@@ -11,7 +11,7 @@ use crate::{
         generator::GeneratorInstanceType, mixer::EffectInstance, GeneratorId, GeneratorInstance,
         TrackId,
     },
-    lock::{get_app_read, get_app_write, get_plugin_registry_read},
+    lock::{get_app_read, get_plugin_registry_read},
     shared::id::*,
 };
 
@@ -87,7 +87,11 @@ pub fn get_effect<M, U>(track_id: &TrackId, effect_id: &EffectId, mapper: M) -> 
 where
     M: FnOnce(&EffectInstance) -> U,
 {
-    let app = get_app_read();
+    let app: parking_lot::lock_api::RwLockReadGuard<
+        '_,
+        parking_lot::RawRwLock,
+        crate::core::project::ApplicationState,
+    > = get_app_read();
 
     let channel = app.mixer.channels.get(track_id)?;
 

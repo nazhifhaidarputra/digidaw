@@ -3168,7 +3168,7 @@ fn wire__crate__api__project__export_project_flutter_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_output_path = <String>::sse_decode(&mut deserializer);
             let api_sample_rate = <u32>::sse_decode(&mut deserializer);
-            let api_bit_per_sample = <u16>::sse_decode(&mut deserializer);
+            let api_bit_depth = <crate::api::project::BitDepthDTO>::sse_decode(&mut deserializer);
             let api_channels = <u16>::sse_decode(&mut deserializer);
             let api_tail_handling =
                 <crate::api::project::TailHandlingDTO>::sse_decode(&mut deserializer);
@@ -3181,7 +3181,7 @@ fn wire__crate__api__project__export_project_flutter_impl(
                 let output_ok = crate::api::project::export_project_flutter(
                     api_output_path,
                     api_sample_rate,
-                    api_bit_per_sample,
+                    api_bit_depth,
                     api_channels,
                     api_tail_handling,
                     api_progress_sink,
@@ -6769,6 +6769,26 @@ impl SseDecode for crate::api::project::AudioWaveformUiForSourceList {
     }
 }
 
+impl SseDecode for crate::api::project::BitDepthDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_field0 = <u16>::sse_decode(deserializer);
+                return crate::api::project::BitDepthDTO::BitPerSample(var_field0);
+            }
+            1 => {
+                let mut var_field0 = <u16>::sse_decode(deserializer);
+                return crate::api::project::BitDepthDTO::BitPerSecond(var_field0);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8806,6 +8826,33 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::AudioWaveformUiForSo
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::BitDepthDTO {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::project::BitDepthDTO::BitPerSample(field0) => {
+                [0.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::project::BitDepthDTO::BitPerSecond(field0) => {
+                [1.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::BitDepthDTO
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::BitDepthDTO>
+    for crate::api::project::BitDepthDTO
+{
+    fn into_into_dart(self) -> crate::api::project::BitDepthDTO {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::plugin::KarbeatPluginType {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -10085,6 +10132,25 @@ impl SseEncode for crate::api::project::AudioWaveformUiForSourceList {
         <String>::sse_encode(self.name, serializer);
         <bool>::sse_encode(self.muted, serializer);
         <u32>::sse_encode(self.sample_rate, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::BitDepthDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::project::BitDepthDTO::BitPerSample(field0) => {
+                <i32>::sse_encode(0, serializer);
+                <u16>::sse_encode(field0, serializer);
+            }
+            crate::api::project::BitDepthDTO::BitPerSecond(field0) => {
+                <i32>::sse_encode(1, serializer);
+                <u16>::sse_encode(field0, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/export_audio.dart';
@@ -678,7 +677,7 @@ class GlobalAppState extends ChangeNotifier {
     required String soundfileName,
     required SupportedAudioFormat format,
     required SampleRate sampleRate,
-    BitPerSample? bitPerSample,
+    BitDepthDTO? bitDepth,
     numberOfChannels = 2,
     int? bitrate,
     required TailHandling tailHandling,
@@ -687,9 +686,7 @@ class GlobalAppState extends ChangeNotifier {
     final ext = format.name.toLowerCase();
     final fullPath = "$path/$soundfileName.$ext";
 
-    final bpsValue = bitPerSample != null
-        ? int.parse(bitPerSample.name.substring(1))
-        : 16;
+    final bitDepthProper = bitDepth ?? BitDepthDTO_BitPerSample(8);
 
     final tailHandlingDto = switch (tailHandling) {
       TailHandling.cutRemainder => TailHandlingDTO.cutRemaining,
@@ -699,7 +696,7 @@ class GlobalAppState extends ChangeNotifier {
     yield* project_api.exportProjectFlutter(
       outputPath: fullPath,
       sampleRate: sampleRate.value,
-      bitPerSample: bpsValue,
+      bitDepth: bitDepthProper,
       tailHandling: tailHandlingDto,
       channels: numberOfChannels,
     );
@@ -805,17 +802,17 @@ class GlobalAppState extends ChangeNotifier {
     _tracks[trackId] = _copyWithTrack(originalTrack, color: colorStr);
     notifyListeners();
 
-      try {
-        await track_api.changeTrackColor(trackId: trackId, newColor: colorStr);
-        return Result.ok(null);
-      } catch (e) {
-        if (_tracks.containsKey(trackId)) {
+    try {
+      await track_api.changeTrackColor(trackId: trackId, newColor: colorStr);
+      return Result.ok(null);
+    } catch (e) {
+      if (_tracks.containsKey(trackId)) {
         _tracks = Map.from(_tracks);
         _tracks[trackId] = _copyWithTrack(originalTrack, color: oldColorStr);
         notifyListeners();
       }
       return Result.error(Exception("$e"));
-      }
+    }
   }
 
   Future<Result<void>> addEffectToMixerChannel(
@@ -1623,7 +1620,9 @@ class GlobalAppState extends ChangeNotifier {
   }) {
     return UiTrack(
       id: original.id,
-      color: color ?? original.color, // Fixed: use original color instead of #FFFFFF
+      color:
+          color ??
+          original.color, // Fixed: use original color instead of #FFFFFF
       name: name ?? original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,

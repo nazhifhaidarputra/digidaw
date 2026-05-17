@@ -1,18 +1,14 @@
-use indexmap::IndexMap;
-use karbeat_plugin_api::traits::AudioPlugin;
 use rtrb::RingBuffer;
 use thiserror::Error;
 
 use crate::{
     audio::{
-        engine::AudioEngine,
         render_state::AudioRenderState,
         writer::{AudioFormat, AudioWriter},
     },
     commands::AudioCommand,
-    context::ctx,
-    core::project::{ApplicationState, GeneratorId, TrackId},
-    shared::id::*,
+    context::utils::send_audio_command,
+    core::project::ApplicationState,
 };
 
 #[derive(Debug, Clone, Error)]
@@ -68,100 +64,21 @@ where
     let (pos_producer, mut _pos_consumer) = RingBuffer::new(1024);
     let (feedback_producer, mut _feedback_consumer) = RingBuffer::new(1024);
 
-    // Instantiate the Headless Audio Engine
-    let mut offline_engine = AudioEngine::new(
-        state_out,
-        cmd_consumer,
-        pos_producer,
-        feedback_producer,
-        sample_rate,
-        channels,
-        app_state.transport.bpm,
-        render_state.clone(),
-    );
+    // Create a oneshot channel to receive the cloned engine
+    let (engine_tx, engine_rx) = std::sync::mpsc::channel();
 
-    // Hydrate the Engine (Load fresh plugin clones)
-    let registry = ctx().plugin_registry.read();
+    // Send audio command to get a copy of Audio Engine from live engine
+    send_audio_command(AudioCommand::QueryAudioEngine {
+        state_consumer: state_out,
+        command_consumer: cmd_consumer,
+        position_producer: pos_producer,
+        feedback_producer: feedback_producer,
+        response_tx: engine_tx,
+    });
 
-    let mut generators: IndexMap<GeneratorId, Box<dyn AudioPlugin + Send + Sync>> = IndexMap::new();
-    let mut track_effects: IndexMap<
-        TrackId,
-        IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>,
-    > = IndexMap::new();
-    let mut bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>> =
-        IndexMap::new();
-    let mut master_effects: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>> =
-        IndexMap::new();
-
-    // Instantiate Generators
-    for (gen_id, gen_arc) in &app_state.generator_pool {
-        if let crate::core::project::GeneratorInstanceType::Plugin(plugin_instance) =
-            &gen_arc.instance_type
-        {
-            if let Some((mut plugin, _)) =
-                registry.create_generator_by_id(plugin_instance.registry_id)
-            {
-                for spec in &plugin_instance.parameter_specs {
-                    plugin.set_parameter(spec.id, spec.value as f32);
-                }
-                generators.insert(*gen_id, plugin);
-            }
-        }
-    }
-
-    // Instantiate Track Effects
-    for (track_id, channel) in &app_state.mixer.channels {
-        let mut track_chain = IndexMap::new();
-        for effect in &channel.effects {
-            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
-            {
-                for spec in &effect.instance.parameter_specs {
-                    plugin.set_parameter(spec.id, spec.value as f32);
-                }
-                track_chain.insert(effect.id, plugin);
-            }
-        }
-        if !track_chain.is_empty() {
-            track_effects.insert(*track_id, track_chain);
-        }
-    }
-
-    // Instantiate Bus Effects
-    for (bus_id, bus) in &app_state.mixer.buses {
-        let mut bus_chain = IndexMap::new();
-        for effect in &bus.channel.effects {
-            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
-            {
-                for spec in &effect.instance.parameter_specs {
-                    plugin.set_parameter(spec.id, spec.value as f32);
-                }
-                bus_chain.insert(effect.id, plugin);
-            }
-        }
-        if !bus_chain.is_empty() {
-            bus_effects.insert(*bus_id, bus_chain);
-        }
-    }
-
-    // Instantiate Master Effects
-    for effect in &app_state.mixer.master_bus.effects {
-        if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id) {
-            for spec in &effect.instance.parameter_specs {
-                plugin.set_parameter(spec.id, spec.value as f32);
-            }
-            master_effects.insert(effect.id, plugin);
-        }
-    }
-
-    // Send Setup Commands to the Engine
-    cmd_producer
-        .push(AudioCommand::PreparePlugin {
-            generators,
-            track_effects,
-            bus_effects,
-            master_effects,
-        })
-        .map_err(|_| AudioExportError::new("Engine", "Failed to send PreparePlugin command"))?;
+    let mut offline_engine = *engine_rx.recv().map_err(|_| {
+        AudioExportError::new("QueryEngineReceiver", "Failed to received offline engine")
+    })?;
 
     cmd_producer
         .push(AudioCommand::SetPlaybackMode(
@@ -303,9 +220,9 @@ where
 
         // Process one empty block just to let the engine digest the SetPlaying(false) command
         // and initialize the track_tails in its internal state.
-        offline_engine.process(&mut mix_buffer[..block_size * channels as usize]);
+        offline_engine.process(&mut mix_buffer[..block_size * (channels as usize)]);
         if tx
-            .send(mix_buffer[..block_size * channels as usize].to_vec())
+            .send(mix_buffer[..block_size * (channels as usize)].to_vec())
             .is_err()
         {
             return Ok(());

@@ -4,20 +4,18 @@ use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
-use karbeat_core::audio::writer::BitPerSample;
-use karbeat_core::core::project::{ApplicationState, PluginInstance};
-use karbeat_core::{
-    core::project::{
-        clip::Clip,
-        generator::{GeneratorInstance, GeneratorInstanceType},
-        track::{audio_waveform::AudioWaveform, AudioTrack, TrackType},
-        transport::TransportState,
-        AudioHardwareConfig, DawSource, ProjectMetadata,
-    },
+use karbeat_core::audio::writer::BitDepth;
+use karbeat_core::core::project::{
+    clip::Clip,
+    generator::{GeneratorInstance, GeneratorInstanceType},
+    track::{audio_waveform::AudioWaveform, AudioTrack, TrackType},
+    transport::TransportState,
+    AudioHardwareConfig, DawSource, ProjectMetadata,
 };
+use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use serde::Serialize;
 
-use crate::api::waveform::{WaveformHandle, get_waveform_handle};
+use crate::api::waveform::{get_waveform_handle, WaveformHandle};
 use crate::frb_generated::StreamSink;
 
 pub enum UiTrackType {
@@ -349,33 +347,6 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
     }
 }
 
-// impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
-//     fn from(value: &AudioWaveform) -> Self {
-//         let preview_buffer: Vec<i8> = get_waveform_buffer(&value.buffer)
-//             .map(|slice| {
-//                 slice
-//                     .iter()
-//                     .map(|&s| (s.clamp(-1.0, 1.0) * 127.0) as i8)
-//                     .collect()
-//             })
-//             .unwrap_or_default();
-//         Self {
-//             file_path: value.file_path.display().to_string(),
-//             name: value.name.clone(),
-//             sample_rate: value.sample_rate,
-//             channels: value.channels,
-//             duration: value.duration,
-//             root_note: value.root_note,
-//             fine_tune: value.fine_tune,
-//             trim_start: value.trim_start,
-//             trim_end: value.trim_end,
-//             is_looping: value.is_looping,
-//             normalized: value.normalized,
-//             muted: value.muted,
-//         }
-//     }
-// }
-
 impl TryFrom<&AudioWaveform> for AudioWaveformUiForAudioProperties {
     type Error = String;
 
@@ -384,7 +355,8 @@ impl TryFrom<&AudioWaveform> for AudioWaveformUiForAudioProperties {
             return Err(String::from("This audio waveform does not have an ID"));
         };
         log::debug!("Can get source id");
-        let waveform_handle = get_waveform_handle(id.to_u32()).ok_or("Cannot get this waveform handle")?;
+        let waveform_handle =
+            get_waveform_handle(id.to_u32()).ok_or("Cannot get this waveform handle")?;
         log::debug!("Can get waveform handle");
         Ok(Self {
             id: Some(id.to_u32()),
@@ -402,7 +374,6 @@ impl TryFrom<&AudioWaveform> for AudioWaveformUiForAudioProperties {
             normalized: value.normalized,
             muted: value.muted,
         })
-
     }
 }
 // ============================================================
@@ -494,6 +465,28 @@ impl From<TailHandlingDTO> for TailHandling {
     }
 }
 
+pub enum BitDepthDTO {
+    BitPerSample(u16),
+    BitPerSecond(u16),
+}
+
+impl TryFrom<BitDepthDTO> for BitDepth {
+    type Error = String;
+
+    fn try_from(value: BitDepthDTO) -> Result<Self, Self::Error> {
+        let bit_depth = match value {
+            BitDepthDTO::BitPerSample(bps) => {
+                BitDepth::try_new_bits_per_sample(bps).map_err(|e| e.to_string())
+            }
+            BitDepthDTO::BitPerSecond(bps) => {
+                BitDepth::try_new_bits_per_secs(bps).map_err(|e| e.to_string())
+            }
+        };
+
+        bit_depth
+    }
+}
+
 // ============================ APIs ==================================
 
 /// Get the current project metadata state from the backend
@@ -553,19 +546,17 @@ pub fn get_max_sample_index() -> Result<u32, String> {
 pub fn export_project_flutter(
     output_path: String,
     sample_rate: u32,
-    bit_per_sample: u16,
+    bit_depth: BitDepthDTO,
     channels: u16,
     tail_handling: TailHandlingDTO,
     progress_sink: StreamSink<f32>,
 ) -> Result<(), String> {
-    let bps: BitPerSample = bit_per_sample
-        .try_into()
-        .map_err(|e: karbeat_core::audio::writer::BitPerSampleError| e.to_string())?;
+    let bit_depth_typed = bit_depth.try_into()?;
 
     project_api::export_project(
         &output_path,
         sample_rate,
-        bps,
+        bit_depth_typed,
         channels as u32,
         tail_handling.into(),
         |progress| {

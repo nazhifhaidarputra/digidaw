@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::{
     commands::AudioCommand,
     context::{ctx, utils::send_audio_command},
-    core::project::{ApplicationState, PluginInstance, TrackId, plugin::AudioPlugin},
+    core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
     shared::{BusId, EffectId, SidechainRouteId},
 };
 
@@ -224,8 +224,7 @@ impl MixerChannel {
             }
         };
 
-        let plugin_instance =
-            PluginInstance::new_with_id(effect_registry_id, &effect_name);
+        let plugin_instance = PluginInstance::new_with_id(effect_registry_id, &effect_name);
 
         let effect_instance = EffectInstance::new(effect_id, plugin_instance);
         self.effects.push(effect_instance);

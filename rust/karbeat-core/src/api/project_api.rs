@@ -9,7 +9,7 @@ use crate::audio::exporter::{
     export_project as export_project_internal, AudioExportError, TailHandling,
 };
 
-use crate::audio::writer::{create_writer, AudioFormat, BitPerSample};
+use crate::audio::writer::{create_writer, AudioFormat, BitDepth};
 use crate::commands::{AudioCommand, AudioFeedback};
 use crate::context::utils::{broadcast_state_change, send_audio_command};
 use crate::core::file_manager::project_loader::{load_daw_project, save_daw_project};
@@ -273,7 +273,7 @@ where
 pub fn export_project<F>(
     output_path: &String,
     sample_rate: u32,
-    bit_per_sample: BitPerSample,
+    bit_depth: BitDepth,
     channels: u32,
     tail_handling: TailHandling,
     progress_callback: F,
@@ -287,7 +287,7 @@ where
 
     // 1. Construct the AudioFormat object once
     let audio_format = AudioFormat {
-        bit_per_sample,
+        bit_depth,
         sample_rate,
         channels: channels as u16,
     };

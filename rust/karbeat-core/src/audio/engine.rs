@@ -348,6 +348,66 @@ impl AudioEngine {
         }
     }
 
+    /// Creates a perfect replica of the current engine state for offline rendering.
+    /// Replaces the communication channels with the provided ones for the new thread.
+    pub fn clone_for_export(
+        &self,
+        state_consumer: Output<AudioRenderState>,
+        command_consumer: Consumer<AudioCommand>,
+        position_producer: Producer<TransportFeedback>,
+        feedback_producer: Producer<AudioFeedback>,
+    ) -> Self {
+        Self {
+            state_consumer,
+            command_consumer,
+            position_producer,
+            feedback_producer,
+            current_state: self.current_state.clone(),
+
+            bpm: self.bpm,
+            sample_rate: self.sample_rate,
+            num_channels: self.num_channels,
+            time_sig_numerator: self.time_sig_numerator,
+            time_sig_denominator: self.time_sig_denominator,
+
+            song_state: self.song_state.clone(),
+            pattern_state: self.pattern_state.clone(),
+
+            // Clear active voices so the export starts fresh without hanging MIDI notes
+            active_generators: Vec::with_capacity(32),
+            active_oneshots: Vec::with_capacity(16),
+            preview_voices: Vec::with_capacity(4),
+
+            // Deep clone the plugins to preserve their internal states!
+            plugin_state: self.plugin_state.clone(),
+
+            mix_buffer: self.mix_buffer.clone(),
+            bus_buffers: self.bus_buffers.clone(),
+            bus_temp_buffer: self.bus_temp_buffer.clone(),
+            cached_routing_order: self.cached_routing_order.clone(),
+            playback_mode: self.playback_mode,
+
+            // Clear active automation for a clean render
+            track_automation_events: SmallVec::new(),
+            bus_automation_events: SmallVec::new(),
+            master_automation_events: SmallVec::new(),
+
+            metronome_state: MetronomeState::default(),
+
+            // Keep delay states intact! This guarantees exact tail behavior.
+            track_tails: self.track_tails.clone(),
+            bus_tails: self.bus_tails.clone(),
+            master_tail: self.master_tail,
+            node_has_signal: HashMap::new(),
+
+            compensation_delays: self.compensation_delays.clone(),
+            track_delay_lines: self.track_delay_lines.clone(),
+            bus_delay_lines: self.bus_delay_lines.clone(),
+            aux_buffers: self.aux_buffers.clone(),
+            sidechain_delay_lines: self.sidechain_delay_lines.clone(),
+        }
+    }
+
     pub fn plugin_state(&self) -> &AudioPluginState {
         &self.plugin_state
     }
@@ -1258,6 +1318,23 @@ impl AudioEngine {
                         request_id,
                         buffer: buffer_opt,
                     });
+            }
+            AudioCommand::QueryAudioEngine {
+                state_consumer,
+                command_consumer,
+                position_producer,
+                feedback_producer,
+                response_tx,
+            } => {
+                let cloned_engine = self.clone_for_export(
+                    state_consumer,
+                    command_consumer,
+                    position_producer,
+                    feedback_producer,
+                );
+
+                // Fire the fully hydrated engine back to the export thread
+                let _ = response_tx.send(Box::new(cloned_engine));
             }
         }
 

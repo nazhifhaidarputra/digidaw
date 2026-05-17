@@ -416,7 +416,7 @@ abstract class RustLibApi extends BaseApi {
   Stream<double> crateApiProjectExportProjectFlutter({
     required String outputPath,
     required int sampleRate,
-    required int bitPerSample,
+    required BitDepthDTO bitDepth,
     required int channels,
     required TailHandlingDTO tailHandling,
   });
@@ -3337,7 +3337,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Stream<double> crateApiProjectExportProjectFlutter({
     required String outputPath,
     required int sampleRate,
-    required int bitPerSample,
+    required BitDepthDTO bitDepth,
     required int channels,
     required TailHandlingDTO tailHandling,
   }) {
@@ -3348,7 +3348,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(outputPath, serializer);
           sse_encode_u_32(sampleRate, serializer);
-          sse_encode_u_16(bitPerSample, serializer);
+          sse_encode_box_autoadd_bit_depth_dto(bitDepth, serializer);
           sse_encode_u_16(channels, serializer);
           sse_encode_tail_handling_dto(tailHandling, serializer);
           sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
@@ -3362,7 +3362,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argValues: [
           outputPath,
           sampleRate,
-          bitPerSample,
+          bitDepth,
           channels,
           tailHandling,
           progressSink,
@@ -3379,7 +3379,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: [
           "outputPath",
           "sampleRate",
-          "bitPerSample",
+          "bitDepth",
           "channels",
           "tailHandling",
           "progressSink",
@@ -6751,6 +6751,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BitDepthDTO dco_decode_bit_depth_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return BitDepthDTO_BitPerSample(dco_decode_u_16(raw[1]));
+      case 1:
+        return BitDepthDTO_BitPerSecond(dco_decode_u_16(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -6787,6 +6800,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
       raw,
     );
+  }
+
+  @protected
+  BitDepthDTO dco_decode_box_autoadd_bit_depth_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_bit_depth_dto(raw);
   }
 
   @protected
@@ -8323,6 +8342,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BitDepthDTO sse_decode_bit_depth_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_u_16(deserializer);
+        return BitDepthDTO_BitPerSample(var_field0);
+      case 1:
+        var var_field0 = sse_decode_u_16(deserializer);
+        return BitDepthDTO_BitPerSecond(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
@@ -8359,6 +8395,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
       deserializer,
     ));
+  }
+
+  @protected
+  BitDepthDTO sse_decode_box_autoadd_bit_depth_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_bit_depth_dto(deserializer));
   }
 
   @protected
@@ -10274,6 +10318,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_bit_depth_dto(BitDepthDTO self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case BitDepthDTO_BitPerSample(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_16(field0, serializer);
+      case BitDepthDTO_BitPerSecond(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_16(field0, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
@@ -10316,6 +10373,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self,
       serializer,
     );
+  }
+
+  @protected
+  void sse_encode_box_autoadd_bit_depth_dto(
+    BitDepthDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bit_depth_dto(self, serializer);
   }
 
   @protected

@@ -351,8 +351,7 @@ impl ApplicationState {
         }
 
         // Create plugin instance descriptor with registry ID
-        let plugin_instance =
-            PluginInstance::new_with_id(registry_id, &generator_name);
+        let plugin_instance = PluginInstance::new_with_id(registry_id, &generator_name);
 
         let generator = GeneratorInstance {
             id: gen_id,

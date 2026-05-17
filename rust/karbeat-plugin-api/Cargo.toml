@@ -20,6 +20,7 @@ karbeat-plugin-types.workspace = true
 hashbrown.workspace = true
 rmp-serde.workspace = true
 parking_lot.workspace = true
+dyn-clone = "1.0.20"
 
 [lints]
 workspace = true

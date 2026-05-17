@@ -209,6 +209,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BitDepthDTO dco_decode_bit_depth_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -228,6 +231,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     dynamic raw,
   );
+
+  @protected
+  BitDepthDTO dco_decode_box_autoadd_bit_depth_dto(dynamic raw);
 
   @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
@@ -794,6 +800,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BitDepthDTO sse_decode_bit_depth_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -811,6 +820,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ZeroCopyHandle
   sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BitDepthDTO sse_decode_box_autoadd_bit_depth_dto(
     SseDeserializer deserializer,
   );
 
@@ -1495,6 +1509,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_bit_depth_dto(BitDepthDTO self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -1515,6 +1532,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     ZeroCopyHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_bit_depth_dto(
+    BitDepthDTO self,
     SseSerializer serializer,
   );
 

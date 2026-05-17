@@ -1,4 +1,4 @@
-use super::{AudioFormat, AudioWriter};
+use super::{AudioFormat, AudioWriter, BitDepth};
 use anyhow::{Context, Result};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use std::{fs::File, io::BufWriter, path::Path};
@@ -11,7 +11,12 @@ pub struct WavAudioWriter {
 
 impl WavAudioWriter {
     pub fn new(path: &Path, format: AudioFormat) -> Result<Self> {
-        let bits_per_sample = format.bit_per_sample.as_u16();
+        let bits_per_sample = match format.bit_depth {
+            BitDepth::BitPerSample(bps) => bps.as_u16(),
+            BitDepth::BitPerSecond(_) => {
+                anyhow::bail!("BitPerSecond is not supported for WAV format")
+            }
+        };
 
         let sample_format = if bits_per_sample == 32 {
             SampleFormat::Float

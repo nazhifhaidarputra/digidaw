@@ -11,7 +11,7 @@ import 'pattern.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -85,13 +85,13 @@ Future<int> getMaxSampleIndex() =>
 Stream<double> exportProjectFlutter({
   required String outputPath,
   required int sampleRate,
-  required int bitPerSample,
+  required BitDepthDTO bitDepth,
   required int channels,
   required TailHandlingDTO tailHandling,
 }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
   outputPath: outputPath,
   sampleRate: sampleRate,
-  bitPerSample: bitPerSample,
+  bitDepth: bitDepth,
   channels: channels,
   tailHandling: tailHandling,
 );
@@ -178,6 +178,14 @@ class AudioWaveformUiForSourceList {
           name == other.name &&
           muted == other.muted &&
           sampleRate == other.sampleRate;
+}
+
+@freezed
+sealed class BitDepthDTO with _$BitDepthDTO {
+  const BitDepthDTO._();
+
+  const factory BitDepthDTO.bitPerSample(int field0) = BitDepthDTO_BitPerSample;
+  const factory BitDepthDTO.bitPerSecond(int field0) = BitDepthDTO_BitPerSecond;
 }
 
 enum TailHandlingDTO { cutRemaining, leaveRemaining, wrapRemaining }

@@ -6,6 +6,7 @@ use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
 
 use crate::types::{PluginCategory, ProcessContext, ZeroCopyBuffer};
+use dyn_clone::{clone_trait_object, DynClone};
 
 // ============================================================================
 // CONTEXTS & TYPES
@@ -23,7 +24,7 @@ use crate::types::{PluginCategory, ProcessContext, ZeroCopyBuffer};
 /// We don't specify a certain way to implement this interface
 /// All the logic used is up to you, and the performance
 /// of the computation is your responsibility
-pub trait AudioPlugin: Send + Sync {
+pub trait AudioPlugin: DynClone + Send + Sync {
     fn name(&self) -> &str;
 
     /// Tells the host what kind of plugin this is for track routing
@@ -120,3 +121,5 @@ pub trait AudioPluginBuilder {
     /// Creates a fresh, default instance of the plugin.
     fn build() -> Self;
 }
+
+clone_trait_object!(AudioPlugin);

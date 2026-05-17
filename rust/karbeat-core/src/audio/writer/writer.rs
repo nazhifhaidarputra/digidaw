@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use derive_builder::Builder;
-use std::path::Path;
+use std::{error::Error, path::Path};
 
 use crate::audio::writer::wav;
 
@@ -44,12 +44,72 @@ impl TryFrom<u16> for BitPerSample {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+#[repr(u32)]
+pub enum BitPerSecond {
+    Kbps128 = 128,
+    Kbps160 = 160,
+    Kbps192 = 192,
+    Kbps256 = 256,
+    Kbps320 = 320,
+}
+
+impl BitPerSecond {
+    pub fn as_kbps(self) -> u32 {
+        self as u32
+    }
+}
+
+#[derive(Debug)]
+pub struct BitPerSecondError;
+
+impl std::fmt::Display for BitPerSecondError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Not a valid BitPerSecond value")
+    }
+}
+
+impl std::error::Error for BitPerSecondError {}
+
+impl TryFrom<u16> for BitPerSecond {
+    type Error = BitPerSecondError;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        match value {
+            128 => Ok(BitPerSecond::Kbps128),
+            160 => Ok(BitPerSecond::Kbps160),
+            192 => Ok(BitPerSecond::Kbps192),
+            256 => Ok(BitPerSecond::Kbps256),
+            320 => Ok(BitPerSecond::Kbps320),
+            _ => Err(BitPerSecondError),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum BitDepth {
+    BitPerSample(BitPerSample),
+    BitPerSecond(BitPerSecond),
+}
+
+impl BitDepth {
+    pub fn try_new_bits_per_sample(bps: u16) -> Result<BitDepth, Box<dyn Error>> {
+        let bits_per_sample: BitPerSample = bps.try_into()?;
+        Ok(BitDepth::BitPerSample(bits_per_sample))
+    }
+
+    pub fn try_new_bits_per_secs(bps: u16) -> Result<BitDepth, Box<dyn Error>> {
+        let bits_per_sec: BitPerSecond = bps.try_into()?;
+        Ok(BitDepth::BitPerSecond(bits_per_sec))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Builder)]
 /// Standard definition for audio metadata required by all encoders
 pub struct AudioFormat {
     pub sample_rate: u32,
     pub channels: u16,
-    pub bit_per_sample: BitPerSample,
+    pub bit_depth: BitDepth,
 }
 /// The common trait implemented by all format-specific writers
 pub trait AudioWriter: Send {

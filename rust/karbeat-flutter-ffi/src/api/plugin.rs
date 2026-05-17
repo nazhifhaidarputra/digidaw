@@ -279,7 +279,6 @@ pub fn poll_generator_parameter_feedback() -> Vec<UiGeneratorParameterSnapshot> 
     })
 }
 
-
 // Do the same for effect plugin
 pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
     plugin_api::poll_effect_parameter_feedback(|target, effect_id, parameters| {
@@ -293,7 +292,6 @@ pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
         }
     })
 }
-
 
 // ============================================================================
 // EFFECT PARAMETER API

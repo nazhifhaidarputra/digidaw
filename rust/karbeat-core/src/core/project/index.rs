@@ -402,13 +402,12 @@ impl ApplicationState {
 
     /// Remove all automation lanes that reference a track (used when deleting tracks).
     pub fn remove_automation_lanes_for_track(&mut self, track_id: TrackId) {
-        self.automation_pool
-            .retain(|_, lane| {
-                if let Some(l_target) = &lane.target {
-                    !l_target.references_track(track_id)
-                } else {
-                    false
-                }
-            });
+        self.automation_pool.retain(|_, lane| {
+            if let Some(l_target) = &lane.target {
+                !l_target.references_track(track_id)
+            } else {
+                false
+            }
+        });
     }
 }

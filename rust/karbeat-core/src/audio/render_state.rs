@@ -21,12 +21,14 @@ use karbeat_utils::math::is_power_of_two;
 // =============================================================================
 
 /// A generator plugin instance owned by the audio thread
+#[derive(Clone)]
 pub struct AudioGeneratorInstance {
     pub id: GeneratorId,
     pub track_id: TrackId,
     pub plugin: Box<dyn AudioPlugin + Send + Sync>,
 }
 
+#[derive(Clone)]
 pub struct AudioEffectInstance {
     pub id: EffectId,
     pub plugin: Box<dyn AudioPlugin + Send + Sync>,
@@ -34,7 +36,7 @@ pub struct AudioEffectInstance {
 
 /// Audio thread's owned plugin instances - NO locks required for access
 /// This is managed via AudioCommand, NOT cloned from ApplicationState
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct AudioPluginState {
     /// Generator plugins stored as an arena. Index = GeneratorId as usize.
     /// `Option` allows us to "remove" generators without shifting the indices of others.
@@ -338,21 +340,20 @@ pub fn broadcast_plugin_state_loading() {
 
                 // iterate through effects
                 // Use filter_map here because the inner registry lookup can fail (return None)
-                let effects_map: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>> =
-                    mix_chan
-                        .effects
-                        .iter()
-                        .filter_map(|eff| {
-                            let effect_id = eff.id;
-                            let eff_instance = eff.instance.as_ref();
+                let effects_map: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>> = mix_chan
+                    .effects
+                    .iter()
+                    .filter_map(|eff| {
+                        let effect_id = eff.id;
+                        let eff_instance = eff.instance.as_ref();
 
-                            // Get the effect from registry.
-                            // We map the result to a tuple (effect_id, plugin_box) if successful.
-                            registry
-                                .create_effect_by_id(eff_instance.registry_id)
-                                .map(|(plugin_box, _)| (effect_id, plugin_box))
-                        })
-                        .collect();
+                        // Get the effect from registry.
+                        // We map the result to a tuple (effect_id, plugin_box) if successful.
+                        registry
+                            .create_effect_by_id(eff_instance.registry_id)
+                            .map(|(plugin_box, _)| (effect_id, plugin_box))
+                    })
+                    .collect();
 
                 // Return the tuple for the outer IndexMap
                 (track_id.to_owned(), effects_map)

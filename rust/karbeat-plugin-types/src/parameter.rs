@@ -293,7 +293,7 @@ impl<T: ParamType> Param<T> {
         self.base_value = clamped;
 
         // If no automation is currently overriding it, update current_value immediately.
-        if !self.is_automated { 
+        if !self.is_automated {
             self.current_value = clamped;
         }
     }

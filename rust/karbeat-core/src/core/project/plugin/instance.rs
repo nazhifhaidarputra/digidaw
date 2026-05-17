@@ -36,7 +36,7 @@ impl PartialEq for PluginInstance {
             && self.name == other.name
             && self.bypass == other.bypass
             && self.plugin_state == other.plugin_state
-            // Note: We ignore parameter_specs for equality checks because they are just metadata
+        // Note: We ignore parameter_specs for equality checks because they are just metadata
     }
 }
 
