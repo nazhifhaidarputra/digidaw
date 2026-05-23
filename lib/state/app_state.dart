@@ -693,12 +693,38 @@ class GlobalAppState extends ChangeNotifier {
       TailHandling.leaveRemainder => TailHandlingDTO.leaveRemaining,
       TailHandling.wrapRemainder => TailHandlingDTO.wrapRemaining,
     };
+
+    final AudioExportConfigDTO config;
+    switch (format) {
+      case SupportedAudioFormat.wav:
+        config = AudioExportConfigDTO.wav(
+          WavExportConfigDTO(
+            sampleRate: sampleRate.value,
+            channels: numberOfChannels,
+            bitDepth: bitDepthProper,
+          ),
+        );
+        break;
+      case SupportedAudioFormat.mp3:
+        config = AudioExportConfigDTO.mp3(
+          Mp3ExportConfigDTO(
+            sampleRate: sampleRate.value,
+            channels: numberOfChannels,
+            bitRate: bitDepthProper,
+          ),
+        );
+        break;
+      case SupportedAudioFormat.ogg:
+        // TODO: Handle this case.
+        return;
+      case SupportedAudioFormat.flac:
+        // TODO: Handle this case.
+        return;
+    }
     yield* project_api.exportProjectFlutter(
       outputPath: fullPath,
-      sampleRate: sampleRate.value,
-      bitDepth: bitDepthProper,
+      config: config,
       tailHandling: tailHandlingDto,
-      channels: numberOfChannels,
     );
   }
 

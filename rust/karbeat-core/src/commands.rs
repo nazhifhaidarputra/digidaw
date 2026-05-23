@@ -164,6 +164,8 @@ pub enum AudioCommand {
         request_id: u32, // To track the response in the UI
     },
 
+    /// Ask the engine to get the copied version of the latest engine snapshot
+    /// This is only used when exporting project into a soundfile
     QueryAudioEngine {
         state_consumer: triple_buffer::Output<crate::audio::render_state::AudioRenderState>,
         command_consumer: rtrb::Consumer<AudioCommand>,

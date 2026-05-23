@@ -12,6 +12,298 @@ part of 'project.dart';
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
+mixin _$AudioExportConfigDTO {
+
+ Object get field0;
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AudioExportConfigDTO&&const DeepCollectionEquality().equals(other.field0, field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(field0));
+
+@override
+String toString() {
+  return 'AudioExportConfigDTO(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+class $AudioExportConfigDTOCopyWith<$Res>  {
+$AudioExportConfigDTOCopyWith(AudioExportConfigDTO _, $Res Function(AudioExportConfigDTO) __);
+}
+
+
+/// Adds pattern-matching-related methods to [AudioExportConfigDTO].
+extension AudioExportConfigDTOPatterns on AudioExportConfigDTO {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( AudioExportConfigDTO_Wav value)?  wav,TResult Function( AudioExportConfigDTO_Mp3 value)?  mp3,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case AudioExportConfigDTO_Wav() when wav != null:
+return wav(_that);case AudioExportConfigDTO_Mp3() when mp3 != null:
+return mp3(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( AudioExportConfigDTO_Wav value)  wav,required TResult Function( AudioExportConfigDTO_Mp3 value)  mp3,}){
+final _that = this;
+switch (_that) {
+case AudioExportConfigDTO_Wav():
+return wav(_that);case AudioExportConfigDTO_Mp3():
+return mp3(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( AudioExportConfigDTO_Wav value)?  wav,TResult? Function( AudioExportConfigDTO_Mp3 value)?  mp3,}){
+final _that = this;
+switch (_that) {
+case AudioExportConfigDTO_Wav() when wav != null:
+return wav(_that);case AudioExportConfigDTO_Mp3() when mp3 != null:
+return mp3(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( WavExportConfigDTO field0)?  wav,TResult Function( Mp3ExportConfigDTO field0)?  mp3,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case AudioExportConfigDTO_Wav() when wav != null:
+return wav(_that.field0);case AudioExportConfigDTO_Mp3() when mp3 != null:
+return mp3(_that.field0);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( WavExportConfigDTO field0)  wav,required TResult Function( Mp3ExportConfigDTO field0)  mp3,}) {final _that = this;
+switch (_that) {
+case AudioExportConfigDTO_Wav():
+return wav(_that.field0);case AudioExportConfigDTO_Mp3():
+return mp3(_that.field0);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( WavExportConfigDTO field0)?  wav,TResult? Function( Mp3ExportConfigDTO field0)?  mp3,}) {final _that = this;
+switch (_that) {
+case AudioExportConfigDTO_Wav() when wav != null:
+return wav(_that.field0);case AudioExportConfigDTO_Mp3() when mp3 != null:
+return mp3(_that.field0);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class AudioExportConfigDTO_Wav extends AudioExportConfigDTO {
+  const AudioExportConfigDTO_Wav(this.field0): super._();
+  
+
+@override final  WavExportConfigDTO field0;
+
+/// Create a copy of AudioExportConfigDTO
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AudioExportConfigDTO_WavCopyWith<AudioExportConfigDTO_Wav> get copyWith => _$AudioExportConfigDTO_WavCopyWithImpl<AudioExportConfigDTO_Wav>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AudioExportConfigDTO_Wav&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'AudioExportConfigDTO.wav(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AudioExportConfigDTO_WavCopyWith<$Res> implements $AudioExportConfigDTOCopyWith<$Res> {
+  factory $AudioExportConfigDTO_WavCopyWith(AudioExportConfigDTO_Wav value, $Res Function(AudioExportConfigDTO_Wav) _then) = _$AudioExportConfigDTO_WavCopyWithImpl;
+@useResult
+$Res call({
+ WavExportConfigDTO field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$AudioExportConfigDTO_WavCopyWithImpl<$Res>
+    implements $AudioExportConfigDTO_WavCopyWith<$Res> {
+  _$AudioExportConfigDTO_WavCopyWithImpl(this._self, this._then);
+
+  final AudioExportConfigDTO_Wav _self;
+  final $Res Function(AudioExportConfigDTO_Wav) _then;
+
+/// Create a copy of AudioExportConfigDTO
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(AudioExportConfigDTO_Wav(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as WavExportConfigDTO,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class AudioExportConfigDTO_Mp3 extends AudioExportConfigDTO {
+  const AudioExportConfigDTO_Mp3(this.field0): super._();
+  
+
+@override final  Mp3ExportConfigDTO field0;
+
+/// Create a copy of AudioExportConfigDTO
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AudioExportConfigDTO_Mp3CopyWith<AudioExportConfigDTO_Mp3> get copyWith => _$AudioExportConfigDTO_Mp3CopyWithImpl<AudioExportConfigDTO_Mp3>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AudioExportConfigDTO_Mp3&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'AudioExportConfigDTO.mp3(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AudioExportConfigDTO_Mp3CopyWith<$Res> implements $AudioExportConfigDTOCopyWith<$Res> {
+  factory $AudioExportConfigDTO_Mp3CopyWith(AudioExportConfigDTO_Mp3 value, $Res Function(AudioExportConfigDTO_Mp3) _then) = _$AudioExportConfigDTO_Mp3CopyWithImpl;
+@useResult
+$Res call({
+ Mp3ExportConfigDTO field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$AudioExportConfigDTO_Mp3CopyWithImpl<$Res>
+    implements $AudioExportConfigDTO_Mp3CopyWith<$Res> {
+  _$AudioExportConfigDTO_Mp3CopyWithImpl(this._self, this._then);
+
+  final AudioExportConfigDTO_Mp3 _self;
+  final $Res Function(AudioExportConfigDTO_Mp3) _then;
+
+/// Create a copy of AudioExportConfigDTO
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(AudioExportConfigDTO_Mp3(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as Mp3ExportConfigDTO,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$BitDepthDTO {
 
  int get field0;

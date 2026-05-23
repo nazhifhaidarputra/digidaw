@@ -204,6 +204,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AudioExportConfigDTO dco_decode_audio_export_config_dto(dynamic raw);
+
+  @protected
   AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
     dynamic raw,
   );
@@ -233,13 +236,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  BitDepthDTO dco_decode_box_autoadd_bit_depth_dto(dynamic raw);
+  AudioExportConfigDTO dco_decode_box_autoadd_audio_export_config_dto(
+    dynamic raw,
+  );
 
   @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
+
+  @protected
+  Mp3ExportConfigDTO dco_decode_box_autoadd_mp_3_export_config_dto(dynamic raw);
 
   @protected
   PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw);
@@ -270,6 +278,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
+
+  @protected
+  WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -391,6 +402,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
+
+  @protected
+  Mp3ExportConfigDTO dco_decode_mp_3_export_config_dto(dynamic raw);
 
   @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
@@ -630,6 +644,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_usize(dynamic raw);
 
   @protected
+  WavExportConfigDTO dco_decode_wav_export_config_dto(dynamic raw);
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
@@ -795,6 +812,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AudioExportConfigDTO sse_decode_audio_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
   );
@@ -824,7 +846,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  BitDepthDTO sse_decode_box_autoadd_bit_depth_dto(
+  AudioExportConfigDTO sse_decode_box_autoadd_audio_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -833,6 +855,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  Mp3ExportConfigDTO sse_decode_box_autoadd_mp_3_export_config_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlaybackModeDto sse_decode_box_autoadd_playback_mode_dto(
@@ -875,6 +902,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode sse_decode_box_autoadd_ui_routing_node(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -1022,6 +1054,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Mp3ExportConfigDTO sse_decode_mp_3_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -1307,6 +1344,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
+  WavExportConfigDTO sse_decode_wav_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -1503,6 +1545,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_audio_export_config_dto(
+    AudioExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_audio_waveform_ui_for_source_list(
     AudioWaveformUiForSourceList self,
     SseSerializer serializer,
@@ -1536,8 +1584,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_box_autoadd_bit_depth_dto(
-    BitDepthDTO self,
+  void sse_encode_box_autoadd_audio_export_config_dto(
+    AudioExportConfigDTO self,
     SseSerializer serializer,
   );
 
@@ -1546,6 +1594,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_mp_3_export_config_dto(
+    Mp3ExportConfigDTO self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_playback_mode_dto(
@@ -1598,6 +1652,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_routing_node(
     UiRoutingNode self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_wav_export_config_dto(
+    WavExportConfigDTO self,
     SseSerializer serializer,
   );
 
@@ -1777,6 +1837,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_routing_connection(
     List<UiRoutingConnection> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_mp_3_export_config_dto(
+    Mp3ExportConfigDTO self,
     SseSerializer serializer,
   );
 
@@ -2128,6 +2194,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_wav_export_config_dto(
+    WavExportConfigDTO self,
+    SseSerializer serializer,
+  );
 }
 
 // Section: wire_class

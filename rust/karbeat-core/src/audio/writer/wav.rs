@@ -1,16 +1,16 @@
-use super::{AudioFormat, AudioWriter, BitDepth};
+
+use super::{WavAudioWriterConfig, AudioWriter, BitDepth};
 use anyhow::{Context, Result};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use std::{fs::File, io::BufWriter, path::Path};
 
 pub struct WavAudioWriter {
-    // Wrapped in an Option so we can consume it in finalize()
     writer: Option<WavWriter<BufWriter<File>>>,
     spec: WavSpec,
 }
 
 impl WavAudioWriter {
-    pub fn new(path: &Path, format: AudioFormat) -> Result<Self> {
+    pub fn new(path: &Path, format: WavAudioWriterConfig) -> Result<Self> {
         let bits_per_sample = match format.bit_depth {
             BitDepth::BitPerSample(bps) => bps.as_u16(),
             BitDepth::BitPerSecond(_) => {

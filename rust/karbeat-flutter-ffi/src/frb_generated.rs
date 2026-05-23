@@ -3167,9 +3167,8 @@ fn wire__crate__api__project__export_project_flutter_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_output_path = <String>::sse_decode(&mut deserializer);
-            let api_sample_rate = <u32>::sse_decode(&mut deserializer);
-            let api_bit_depth = <crate::api::project::BitDepthDTO>::sse_decode(&mut deserializer);
-            let api_channels = <u16>::sse_decode(&mut deserializer);
+            let api_config =
+                <crate::api::project::AudioExportConfigDTO>::sse_decode(&mut deserializer);
             let api_tail_handling =
                 <crate::api::project::TailHandlingDTO>::sse_decode(&mut deserializer);
             let api_progress_sink =
@@ -3180,9 +3179,7 @@ fn wire__crate__api__project__export_project_flutter_impl(
             transform_result_sse::<_, String>((move || {
                 let output_ok = crate::api::project::export_project_flutter(
                     api_output_path,
-                    api_sample_rate,
-                    api_bit_depth,
-                    api_channels,
+                    api_config,
                     api_tail_handling,
                     api_progress_sink,
                 )?;
@@ -6755,6 +6752,28 @@ impl SseDecode for String {
     }
 }
 
+impl SseDecode for crate::api::project::AudioExportConfigDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_field0 =
+                    <crate::api::project::WavExportConfigDTO>::sse_decode(deserializer);
+                return crate::api::project::AudioExportConfigDTO::Wav(var_field0);
+            }
+            1 => {
+                let mut var_field0 =
+                    <crate::api::project::Mp3ExportConfigDTO>::sse_decode(deserializer);
+                return crate::api::project::AudioExportConfigDTO::Mp3(var_field0);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for crate::api::project::AudioWaveformUiForSourceList {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7185,6 +7204,20 @@ impl SseDecode for Vec<crate::api::mixer::UiRoutingConnection> {
             ));
         }
         return ans_;
+    }
+}
+
+impl SseDecode for crate::api::project::Mp3ExportConfigDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_sampleRate = <u32>::sse_decode(deserializer);
+        let mut var_channels = <u8>::sse_decode(deserializer);
+        let mut var_bitRate = <crate::api::project::BitDepthDTO>::sse_decode(deserializer);
+        return crate::api::project::Mp3ExportConfigDTO {
+            sample_rate: var_sampleRate,
+            channels: var_channels,
+            bit_rate: var_bitRate,
+        };
     }
 }
 
@@ -8282,6 +8315,20 @@ impl SseDecode for usize {
     }
 }
 
+impl SseDecode for crate::api::project::WavExportConfigDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_sampleRate = <u32>::sse_decode(deserializer);
+        let mut var_channels = <u8>::sse_decode(deserializer);
+        let mut var_bitDepth = <crate::api::project::BitDepthDTO>::sse_decode(deserializer);
+        return crate::api::project::WavExportConfigDTO {
+            sample_rate: var_sampleRate,
+            channels: var_channels,
+            bit_depth: var_bitDepth,
+        };
+    }
+}
+
 fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
@@ -8804,6 +8851,33 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<ZeroCopyHandle>> for ZeroCopyH
 }
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::AudioExportConfigDTO {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::project::AudioExportConfigDTO::Wav(field0) => {
+                [0.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::project::AudioExportConfigDTO::Mp3(field0) => {
+                [1.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::AudioExportConfigDTO
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::AudioExportConfigDTO>
+    for crate::api::project::AudioExportConfigDTO
+{
+    fn into_into_dart(self) -> crate::api::project::AudioExportConfigDTO {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::AudioWaveformUiForSourceList {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -8870,6 +8944,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::KarbeatPluginType>
     for crate::api::plugin::KarbeatPluginType
 {
     fn into_into_dart(self) -> crate::api::plugin::KarbeatPluginType {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::Mp3ExportConfigDTO {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.sample_rate.into_into_dart().into_dart(),
+            self.channels.into_into_dart().into_dart(),
+            self.bit_rate.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::Mp3ExportConfigDTO
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::Mp3ExportConfigDTO>
+    for crate::api::project::Mp3ExportConfigDTO
+{
+    fn into_into_dart(self) -> crate::api::project::Mp3ExportConfigDTO {
         self
     }
 }
@@ -9891,6 +9987,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiZeroCopyBufferRespo
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::WavExportConfigDTO {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.sample_rate.into_into_dart().into_dart(),
+            self.channels.into_into_dart().into_dart(),
+            self.bit_depth.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::WavExportConfigDTO
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::WavExportConfigDTO>
+    for crate::api::project::WavExportConfigDTO
+{
+    fn into_into_dart(self) -> crate::api::project::WavExportConfigDTO {
+        self
+    }
+}
 
 impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10123,6 +10241,25 @@ impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<u8>>::sse_encode(self.into_bytes(), serializer);
+    }
+}
+
+impl SseEncode for crate::api::project::AudioExportConfigDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::project::AudioExportConfigDTO::Wav(field0) => {
+                <i32>::sse_encode(0, serializer);
+                <crate::api::project::WavExportConfigDTO>::sse_encode(field0, serializer);
+            }
+            crate::api::project::AudioExportConfigDTO::Mp3(field0) => {
+                <i32>::sse_encode(1, serializer);
+                <crate::api::project::Mp3ExportConfigDTO>::sse_encode(field0, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 
@@ -10478,6 +10615,15 @@ impl SseEncode for Vec<crate::api::mixer::UiRoutingConnection> {
         for item in self {
             <crate::api::mixer::UiRoutingConnection>::sse_encode(item, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::project::Mp3ExportConfigDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.sample_rate, serializer);
+        <u8>::sse_encode(self.channels, serializer);
+        <crate::api::project::BitDepthDTO>::sse_encode(self.bit_rate, serializer);
     }
 }
 
@@ -11363,6 +11509,15 @@ impl SseEncode for usize {
             .cursor
             .write_u64::<NativeEndian>(self as _)
             .unwrap();
+    }
+}
+
+impl SseEncode for crate::api::project::WavExportConfigDTO {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.sample_rate, serializer);
+        <u8>::sse_encode(self.channels, serializer);
+        <crate::api::project::BitDepthDTO>::sse_encode(self.bit_depth, serializer);
     }
 }
 

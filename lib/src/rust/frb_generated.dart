@@ -415,9 +415,7 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<double> crateApiProjectExportProjectFlutter({
     required String outputPath,
-    required int sampleRate,
-    required BitDepthDTO bitDepth,
-    required int channels,
+    required AudioExportConfigDTO config,
     required TailHandlingDTO tailHandling,
   });
 
@@ -3336,9 +3334,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Stream<double> crateApiProjectExportProjectFlutter({
     required String outputPath,
-    required int sampleRate,
-    required BitDepthDTO bitDepth,
-    required int channels,
+    required AudioExportConfigDTO config,
     required TailHandlingDTO tailHandling,
   }) {
     final progressSink = RustStreamSink<double>();
@@ -3347,9 +3343,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(outputPath, serializer);
-          sse_encode_u_32(sampleRate, serializer);
-          sse_encode_box_autoadd_bit_depth_dto(bitDepth, serializer);
-          sse_encode_u_16(channels, serializer);
+          sse_encode_box_autoadd_audio_export_config_dto(config, serializer);
           sse_encode_tail_handling_dto(tailHandling, serializer);
           sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
           return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 73)!;
@@ -3359,14 +3353,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiProjectExportProjectFlutterConstMeta,
-        argValues: [
-          outputPath,
-          sampleRate,
-          bitDepth,
-          channels,
-          tailHandling,
-          progressSink,
-        ],
+        argValues: [outputPath, config, tailHandling, progressSink],
         apiImpl: this,
       ),
     );
@@ -3376,14 +3363,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiProjectExportProjectFlutterConstMeta =>
       const TaskConstMeta(
         debugName: "export_project_flutter",
-        argNames: [
-          "outputPath",
-          "sampleRate",
-          "bitDepth",
-          "channels",
-          "tailHandling",
-          "progressSink",
-        ],
+        argNames: ["outputPath", "config", "tailHandling", "progressSink"],
       );
 
   @override
@@ -6736,6 +6716,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AudioExportConfigDTO dco_decode_audio_export_config_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return AudioExportConfigDTO_Wav(
+          dco_decode_box_autoadd_wav_export_config_dto(raw[1]),
+        );
+      case 1:
+        return AudioExportConfigDTO_Mp3(
+          dco_decode_box_autoadd_mp_3_export_config_dto(raw[1]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
   AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
     dynamic raw,
   ) {
@@ -6803,9 +6800,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  BitDepthDTO dco_decode_box_autoadd_bit_depth_dto(dynamic raw) {
+  AudioExportConfigDTO dco_decode_box_autoadd_audio_export_config_dto(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_bit_depth_dto(raw);
+    return dco_decode_audio_export_config_dto(raw);
   }
 
   @protected
@@ -6818,6 +6817,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double dco_decode_box_autoadd_f_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  Mp3ExportConfigDTO dco_decode_box_autoadd_mp_3_export_config_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_mp_3_export_config_dto(raw);
   }
 
   @protected
@@ -6878,6 +6885,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_ui_routing_node(raw);
+  }
+
+  @protected
+  WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_wav_export_config_dto(raw);
   }
 
   @protected
@@ -7129,6 +7142,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (raw as List<dynamic>)
         .map(dco_decode_ui_routing_connection)
         .toList();
+  }
+
+  @protected
+  Mp3ExportConfigDTO dco_decode_mp_3_export_config_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return Mp3ExportConfigDTO(
+      sampleRate: dco_decode_u_32(arr[0]),
+      channels: dco_decode_u_8(arr[1]),
+      bitRate: dco_decode_bit_depth_dto(arr[2]),
+    );
   }
 
   @protected
@@ -8000,6 +8026,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WavExportConfigDTO dco_decode_wav_export_config_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return WavExportConfigDTO(
+      sampleRate: dco_decode_u_32(arr[0]),
+      channels: dco_decode_u_8(arr[1]),
+      bitDepth: dco_decode_bit_depth_dto(arr[2]),
+    );
+  }
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
@@ -8327,6 +8366,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AudioExportConfigDTO sse_decode_audio_export_config_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_box_autoadd_wav_export_config_dto(
+          deserializer,
+        );
+        return AudioExportConfigDTO_Wav(var_field0);
+      case 1:
+        var var_field0 = sse_decode_box_autoadd_mp_3_export_config_dto(
+          deserializer,
+        );
+        return AudioExportConfigDTO_Mp3(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
   AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
   ) {
@@ -8398,11 +8460,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  BitDepthDTO sse_decode_box_autoadd_bit_depth_dto(
+  AudioExportConfigDTO sse_decode_box_autoadd_audio_export_config_dto(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_bit_depth_dto(deserializer));
+    return (sse_decode_audio_export_config_dto(deserializer));
   }
 
   @protected
@@ -8415,6 +8477,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_f_32(deserializer));
+  }
+
+  @protected
+  Mp3ExportConfigDTO sse_decode_box_autoadd_mp_3_export_config_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_mp_3_export_config_dto(deserializer));
   }
 
   @protected
@@ -8489,6 +8559,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_ui_routing_node(deserializer));
+  }
+
+  @protected
+  WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_wav_export_config_dto(deserializer));
   }
 
   @protected
@@ -8893,6 +8971,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_ui_routing_connection(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  Mp3ExportConfigDTO sse_decode_mp_3_export_config_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_channels = sse_decode_u_8(deserializer);
+    var var_bitRate = sse_decode_bit_depth_dto(deserializer);
+    return Mp3ExportConfigDTO(
+      sampleRate: var_sampleRate,
+      channels: var_channels,
+      bitRate: var_bitRate,
+    );
   }
 
   @protected
@@ -9901,6 +9994,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WavExportConfigDTO sse_decode_wav_export_config_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_channels = sse_decode_u_8(deserializer);
+    var var_bitDepth = sse_decode_bit_depth_dto(deserializer);
+    return WavExportConfigDTO(
+      sampleRate: var_sampleRate,
+      channels: var_channels,
+      bitDepth: var_bitDepth,
+    );
+  }
+
+  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -10307,6 +10415,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_audio_export_config_dto(
+    AudioExportConfigDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case AudioExportConfigDTO_Wav(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_box_autoadd_wav_export_config_dto(field0, serializer);
+      case AudioExportConfigDTO_Mp3(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_box_autoadd_mp_3_export_config_dto(field0, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_audio_waveform_ui_for_source_list(
     AudioWaveformUiForSourceList self,
     SseSerializer serializer,
@@ -10376,12 +10500,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_bit_depth_dto(
-    BitDepthDTO self,
+  void sse_encode_box_autoadd_audio_export_config_dto(
+    AudioExportConfigDTO self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bit_depth_dto(self, serializer);
+    sse_encode_audio_export_config_dto(self, serializer);
   }
 
   @protected
@@ -10394,6 +10518,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_mp_3_export_config_dto(
+    Mp3ExportConfigDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_mp_3_export_config_dto(self, serializer);
   }
 
   @protected
@@ -10478,6 +10611,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_ui_routing_node(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_wav_export_config_dto(
+    WavExportConfigDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_wav_export_config_dto(self, serializer);
   }
 
   @protected
@@ -10843,6 +10985,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_ui_routing_connection(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_mp_3_export_config_dto(
+    Mp3ExportConfigDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_u_8(self.channels, serializer);
+    sse_encode_bit_depth_dto(self.bitRate, serializer);
   }
 
   @protected
@@ -11700,6 +11853,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
+  void sse_encode_wav_export_config_dto(
+    WavExportConfigDTO self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_u_8(self.channels, serializer);
+    sse_encode_bit_depth_dto(self.bitDepth, serializer);
   }
 }
 

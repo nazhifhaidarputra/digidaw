@@ -1,10 +1,11 @@
 use rtrb::RingBuffer;
 use thiserror::Error;
+use triple_buffer::TripleBuffer;
 
 use crate::{
     audio::{
         render_state::AudioRenderState,
-        writer::{AudioFormat, AudioWriter},
+        writer::{AudioExportConfig, AudioWriter, create_writer},
     },
     commands::AudioCommand,
     context::utils::send_audio_command,
@@ -41,8 +42,7 @@ pub enum TailHandling {
 pub fn export_project<F>(
     app_state: &ApplicationState,
     output_path: &str,
-    audio_format: AudioFormat,
-    mut writer: impl AudioWriter + 'static,
+    config: AudioExportConfig,
     tail_handling: TailHandling,
     mut progress_callback: F,
 ) -> Result<(), AudioExportError>
@@ -50,16 +50,21 @@ where
     F: FnMut(f32) -> bool,
 {
     log::info!("Starting offline render to: {}", output_path);
+    let path = std::path::Path::new(output_path);
 
-    let sample_rate = audio_format.sample_rate;
-    let channels = audio_format.channels; // Stereo
+    let sample_rate = config.sample_rate();
+    let channels = config.channels() as usize;
     let block_size = 4096; // Faster offline rendering
+
+    let mut writer = create_writer(path, config).map_err(|e| {
+        AudioExportError::new("WriterInit", format!("Failed to create writer: {}", e))
+    })?;
 
     // Create a static snapshot of the Render State
     let render_state = AudioRenderState::from(app_state);
 
     // Set up Dummy Communication Channels
-    let (mut _state_in, state_out) = triple_buffer::TripleBuffer::new(&render_state).split();
+    let (mut _state_in, state_out) = TripleBuffer::new(&render_state).split();
     let (mut cmd_producer, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
     let (pos_producer, mut _pos_consumer) = RingBuffer::new(1024);
     let (feedback_producer, mut _feedback_consumer) = RingBuffer::new(1024);
@@ -232,26 +237,23 @@ where
         let mut max_tail_samples: u32 = 0;
 
         let plugin_state = offline_engine.plugin_state();
-        // 1. Check Master Effects
+        
         for effect in &plugin_state.master_effects {
             max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
         }
 
-        // 2. Check Bus Effects
         for bus_chain in plugin_state.bus_effects.iter() {
             for effect in bus_chain.iter() {
                 max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
             }
         }
 
-        // 3. Check Track Effects
         for track_chain in plugin_state.track_effects.iter() {
             for effect in track_chain.iter() {
                 max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
             }
         }
 
-        // 4. Check Generators (for internal synth ADSR release tails)
         for gen in plugin_state.generators.iter() {
             if let Some(ref gen_instance) = gen {
                 let tail = gen_instance.plugin.tail_samples();
