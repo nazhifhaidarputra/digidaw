@@ -4,7 +4,6 @@ use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
-use karbeat_core::audio::writer::mp3::Mp3AudioWriterConfig;
 use karbeat_core::audio::writer::{AudioExportConfig, BitDepth, WavAudioWriterConfig};
 use karbeat_core::core::project::{
     clip::Clip,

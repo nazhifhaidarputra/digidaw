@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write};
+use std::{fs::File, io::Write, mem::MaybeUninit, slice};
 
 use crate::audio::writer::{ AudioWriter, BitDepth };
 use mp3lame_encoder::{ Bitrate, Builder, DualPcm, Encoder, FlushNoGap, Id3Tag, Quality };
@@ -17,14 +17,14 @@ impl TryFrom<BitDepth> for mp3lame_encoder::Bitrate {
     fn try_from(value: BitDepth) -> Result<Self, Self::Error> {
         match value {
             BitDepth::BitPerSample(_) => {
-                return Err(anyhow::anyhow!("MP3 used Bit/seconds, not Bit/samples"));
+                return Err(anyhow::anyhow!("MP3 used Bit/second, not Bit/sample"));
             }
             BitDepth::BitPerSecond(bit_per_second) => {
                 let lame_encoder = match bit_per_second {
                     super::BitPerSecond::Kbps128 => mp3lame_encoder::Bitrate::Kbps128,
                     super::BitPerSecond::Kbps160 => mp3lame_encoder::Bitrate::Kbps160,
                     super::BitPerSecond::Kbps192 => mp3lame_encoder::Bitrate::Kbps192,
-                    super::BitPerSecond::Kbps256 => mp3lame_encoder::Birtate::Kbps256,
+                    super::BitPerSecond::Kbps256 => mp3lame_encoder::Bitrate::Kbps256,
                     super::BitPerSecond::Kbps320 => mp3lame_encoder::Bitrate::Kbps320,
                 };
 
@@ -59,8 +59,8 @@ impl Mp3AudioWriter {
         output_path: impl Into<String>,
         config: Mp3AudioWriterConfig<'_>,
     ) -> anyhow::Result<Self> {
-        let mut builder = Builder::new().ok_or(
-            anyhow::anyhow!("Error creating Mp3 Writer Builder")
+        let mut builder = Builder::new().ok_or_else(
+            || anyhow::anyhow!("Error creating Mp3 Writer Builder")
         )?;
         builder
             .set_num_channels(config.num_channels)
@@ -133,7 +133,7 @@ impl AudioWriter for Mp3AudioWriter {
     }
 
     fn finalize(&mut self) -> anyhow::Result<()> {
-        // 1. Flush any remaining data from the encoder without gaps
+        // Flush any remaining data from the encoder without gaps
         self.mp3_out_buffer.reserve(mp3lame_encoder::max_required_buffer_size(0));
         let encoded_size = self.encoder
             .flush::<FlushNoGap>(self.mp3_out_buffer.spare_capacity_mut())
@@ -144,22 +144,22 @@ impl AudioWriter for Mp3AudioWriter {
             self.mp3_out_buffer.set_len(new_len);
         }
 
-        // 2. Open output file for the final write
+        // Open output file for the final write
         let mut file = File::create(&self.output_path).with_context(||
             format!("Failed to create output file: {}", self.output_path)
         )?;
 
-        // 3. Insert VBR/LAME tags and write the actual file
+        // Insert VBR/LAME tags and write the actual file
         if self.encoder.lame_tag_size() > 0 {
             let id3v2_tag_boundary = self.encoder.id3v2_tag_size();
-            let mut lame_tag = [core::mem::MaybeUninit::uninit(); 1024];
+            let mut lame_tag = [MaybeUninit::uninit(); 1024];
 
             let lame_tag_size = self.encoder
                 .lame_tag_encode(&mut lame_tag)
                 .ok_or_else(|| anyhow::anyhow!("Failed to encode LAME tag because it is empty"))?;
 
             let lame_tag_slice = unsafe {
-                core::slice::from_raw_parts(lame_tag.as_ptr() as *const u8, lame_tag_size.get())
+                slice::from_raw_parts(lame_tag.as_ptr() as *const u8, lame_tag_size.get())
             };
 
             // Splice the file together: [ID3v2] -> [Lame Tag] -> [Audio Data]

@@ -21,7 +21,7 @@ use crate::shared::id::{AutomationId, BusId, EffectId, TrackId};
 ///
 /// Each lane targets exactly one parameter on one thing (mixer channel,
 /// generator, or effect slot).
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AutomationTarget {
     /// A parameter on the track's generator plugin
     TrackGeneratorPluginParam {
@@ -130,7 +130,7 @@ impl AutomationPoint {
 /// An automation lane that controls a single parameter.
 ///
 /// Lives in `ApplicationState::automation_pool` and is serialized with the project.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default,)]
 #[serde(default)]
 pub struct AutomationLane {
     pub id: AutomationId,
