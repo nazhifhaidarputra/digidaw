@@ -3146,15 +3146,16 @@ fn wire__crate__api__plugin__execute_realtime_plugin_command_impl(
     )
 }
 fn wire__crate__api__project__export_project_flutter_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "export_project_flutter",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -3176,15 +3177,17 @@ fn wire__crate__api__project__export_project_flutter_impl(
                     &mut deserializer,
                 );
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let output_ok = crate::api::project::export_project_flutter(
-                    api_output_path,
-                    api_config,
-                    api_tail_handling,
-                    api_progress_sink,
-                )?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::project::export_project_flutter(
+                        api_output_path,
+                        api_config,
+                        api_tail_handling,
+                        api_progress_sink,
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -8433,6 +8436,12 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        73 => wire__crate__api__project__export_project_flutter_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         74 => wire__crate__api__audio__get_audio_config_impl(port, ptr, rust_vec_len, data_len),
         75 => wire__crate__api__audio__get_audio_properties_impl(port, ptr, rust_vec_len, data_len),
         76 => {
@@ -8752,7 +8761,6 @@ fn pde_ffi_dispatcher_sync_impl(
 36 => wire__crate__api__plugins__opaque__ZeroCopyHandle_memory_address_impl(ptr, rust_vec_len, data_len),
 45 => wire__crate__api__project__audio_hardware_config_new_impl(ptr, rust_vec_len, data_len),
 46 => wire__crate__api__project__audio_hardware_config_new_with_param_impl(ptr, rust_vec_len, data_len),
-73 => wire__crate__api__project__export_project_flutter_impl(ptr, rust_vec_len, data_len),
 108 => wire__crate__api__waveform__get_waveform_handle_impl(ptr, rust_vec_len, data_len),
 109 => wire__crate__api__waveform__get_waveform_handles_for_track_impl(ptr, rust_vec_len, data_len),
 126 => wire__crate__api__project__project_metadata_new_impl(ptr, rust_vec_len, data_len),

@@ -560,7 +560,7 @@ pub fn get_max_sample_index() -> Result<u32, String> {
 }
 
 /// Export project to flutter. also report progress via StreamSink
-#[frb(sync)]
+#[frb]
 pub fn export_project_flutter(
     output_path: String,
     config: AudioExportConfigDTO,

@@ -258,7 +258,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 _buildDropdown<SupportedAudioFormat>(
                                   value: _selectedFormat,
                                   // items: SupportedAudioFormat.values,
-                                  items: const [SupportedAudioFormat.wav],
+                                  items: const [
+                                    SupportedAudioFormat.wav,
+                                    SupportedAudioFormat.mp3,
+                                  ],
                                   itemLabel: (f) => f.name.toUpperCase(),
                                   onChanged: (val) => setState(() {
                                     _selectedFormat = val!;

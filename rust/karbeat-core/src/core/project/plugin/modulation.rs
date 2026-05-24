@@ -1,4 +1,4 @@
-use crate::{audio::event::PluginTarget, core::project::automation::AutomationTarget};
+use crate::{ audio::event::PluginTarget, core::project::automation::AutomationTarget };
 
 #[derive(Clone, Debug)]
 pub enum ModulationEvent {
@@ -15,7 +15,7 @@ pub enum ModulationEvent {
         target: AutomationTarget,
     },
     /// Driven by a mathematical oscillator (LFO)
-    Lfo {
+    LFO {
         rate_hz: f32,
         depth: f32,
         base_value: f32,

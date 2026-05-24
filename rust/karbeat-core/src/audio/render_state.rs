@@ -6,7 +6,7 @@ use crate::{
     commands::AudioCommand,
     context::utils::send_audio_command,
     core::project::{
-        automation::{ AutomationPoint, AutomationTarget, CurveType },
+        automation::{ AutomationPoint, CurveType },
         mixer::MixerState,
         plugin::AudioPlugin,
         track::{ midi::Pattern, AudioTrack },

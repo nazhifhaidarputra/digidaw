@@ -3338,23 +3338,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required TailHandlingDTO tailHandling,
   }) {
     final progressSink = RustStreamSink<double>();
-    handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(outputPath, serializer);
-          sse_encode_box_autoadd_audio_export_config_dto(config, serializer);
-          sse_encode_tail_handling_dto(tailHandling, serializer);
-          sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 73)!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_String(outputPath, serializer);
+            sse_encode_box_autoadd_audio_export_config_dto(config, serializer);
+            sse_encode_tail_handling_dto(tailHandling, serializer);
+            sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 73,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_String,
+          ),
+          constMeta: kCrateApiProjectExportProjectFlutterConstMeta,
+          argValues: [outputPath, config, tailHandling, progressSink],
+          apiImpl: this,
         ),
-        constMeta: kCrateApiProjectExportProjectFlutterConstMeta,
-        argValues: [outputPath, config, tailHandling, progressSink],
-        apiImpl: this,
       ),
     );
     return progressSink.stream;

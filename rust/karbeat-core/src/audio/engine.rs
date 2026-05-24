@@ -3185,7 +3185,7 @@ impl AudioEngine {
                         self.queue_parameter_change(&target, value);
                     }
                 }
-                ModulationEvent::Lfo {
+                ModulationEvent::LFO {
                     rate_hz,
                     depth,
                     base_value,
