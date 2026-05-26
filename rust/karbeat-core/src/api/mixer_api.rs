@@ -3,7 +3,11 @@ use std::sync::Arc;
 use karbeat_plugin_types::ParameterSpec;
 
 use crate::{
-    context::utils::broadcast_state_change,
+    commands::{AudioCommand, AudioFeedback, MixerChannelSnapshot, MixerChannelTarget},
+    context::{
+        ctx,
+        utils::{broadcast_state_change, send_audio_command},
+    },
     core::project::{
         mixer::{
             EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState,
@@ -164,30 +168,62 @@ where
         .collect()
 }
 
-pub fn set_master_bus_params(params: &[MixerChannelParams]) -> anyhow::Result<()> {
-    {
-        let mut app = get_app_write();
-        app.mixer
-            .set_params_master_bus(params)
-            .map_err(|e| anyhow::anyhow!(e.message))?;
-    }
-    broadcast_state_change();
-    Ok(())
+// ======================================
+// Mixer Channel DSP Parameter Commands
+// ======================================
+
+/// Push a single DSP parameter change for a mixer channel into the audio thread
+/// via the ring buffer. The audio thread is the sole owner of these values;
+/// AppState is only updated during save_project.
+pub fn set_mixer_channel_param(target: MixerChannelTarget, param: MixerChannelParams) {
+    send_audio_command(AudioCommand::SetMixerChannelParameter { target, param });
 }
 
-pub fn set_mixer_channel_params(
-    track_id: TrackId,
-    params: &[MixerChannelParams],
-) -> anyhow::Result<()> {
-    {
-        let mut app = get_app_write();
-        app.mixer
-            .set_params_mixer_channel(&track_id, params)
-            .map_err(|e| anyhow::anyhow!(e.message))?;
-    }
-    broadcast_state_change();
-    Ok(())
+/// Ask the audio thread to emit a full MixerChannelSnapshot for the given
+/// channel. Poll the result with `poll_mixer_channel_feedback`.
+pub fn query_mixer_channel(target: MixerChannelTarget) {
+    send_audio_command(AudioCommand::QueryMixerChannel { target });
 }
+
+/// Drain all pending `MixerChannelSnapshot` messages from the shared feedback
+/// buffer and map each one through the provided `mapper` closure.
+///
+/// This follows the exact same pattern as `poll_generator_parameter_feedback`
+/// in `plugin_api`. The FFI layer spawns a polling thread that calls this
+/// at ~60 fps and forwards results to Flutter via a `StreamSink`.
+///
+/// Unrelated feedback messages are kept in the pending buffer so other
+/// pollers (plugin parameters, etc.) can still consume them.
+pub fn poll_mixer_channel_feedback<T, F>(mut mapper: F) -> Vec<T>
+where
+    F: FnMut(MixerChannelSnapshot) -> T,
+{
+    let mut results = Vec::new();
+    // All pollers share the same pending buffer that lives on DawContext
+    let mut pending = ctx().pending_feedback.lock();
+
+    // Drain the live ring buffer into the shared pending store first
+    if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
+        while let Ok(feedback) = consumer.pop() {
+            pending.push(feedback);
+        }
+    }
+
+    // Extract only MixerChannelSnapshot entries; leave everything else intact
+    pending.retain(|feedback| match feedback {
+        AudioFeedback::MixerChannelSnapshot(snap) => {
+            results.push(mapper(snap.clone()));
+            false // consumed
+        }
+        _ => true,
+    });
+
+    results
+}
+
+// ======================================
+// Effect Chain (structural, still AppState-backed)
+// ======================================
 
 pub fn add_effect_to_mixer_channel_by_id(
     track_id: TrackId,
@@ -247,15 +283,6 @@ pub fn delete_bus(bus_id: BusId) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
         app.mixer.remove_bus(bus_id)?;
-    }
-    broadcast_state_change();
-    Ok(())
-}
-
-pub fn set_bus_params(bus_id: BusId, params: &[MixerChannelParams]) -> anyhow::Result<()> {
-    {
-        let mut app = get_app_write();
-        app.mixer.set_params_bus(&bus_id, params)?;
     }
     broadcast_state_change();
     Ok(())

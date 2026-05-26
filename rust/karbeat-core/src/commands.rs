@@ -4,7 +4,9 @@ use karbeat_plugin_api::types::ZeroCopyBuffer;
 use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
-        mixer::RoutingConnection, plugin::AudioPlugin, track::audio_waveform::AudioWaveform,
+        mixer::{MixerChannelParams, RoutingConnection},
+        plugin::AudioPlugin,
+        track::audio_waveform::AudioWaveform,
         GeneratorId,
     },
     shared::{
@@ -108,6 +110,23 @@ pub enum AudioCommand {
     },
 
     // =====================================================
+    // Mixer Channel Parameter Commands
+    // =====================================================
+    /// Set a single DSP parameter on a mixer channel (track, bus, or master).
+    /// The audio thread is the sole owner of these values; AppState is only
+    /// written back during save_project.
+    SetMixerChannelParameter {
+        target: MixerChannelTarget,
+        param: MixerChannelParams,
+    },
+
+    /// Request a full snapshot of a mixer channel's current DSP state.
+    /// The audio thread responds with AudioFeedback::MixerChannelSnapshot.
+    QueryMixerChannel {
+        target: MixerChannelTarget,
+    },
+
+    // =====================================================
     // Bus Commands
     // =====================================================
     /// Create a new mixer bus on the audio thread
@@ -119,24 +138,25 @@ pub enum AudioCommand {
     RemoveBus {
         bus_id: BusId,
     },
-    /// Set bus channel parameters (volume, pan, mute)
-    SetBusParams {
-        bus_id: BusId,
-        volume: Option<f32>,
-        pan: Option<f32>,
-        mute: Option<bool>,
-    },
 
-    /// Update the routing matrix (sync from main thread)
+    /// Update the routing matrix directly on the audio thread.
+    /// This bypasses the triple-buffer; routing is owned by the ring-buffer path.
     UpdateRouting {
         routing: Vec<RoutingConnection>,
     },
-    /// Prepare all of plugins from ApplicationState to AudioEngine (upon loading project)
+    /// Prepare all plugins and seed the audio thread's mixer channel state.
+    /// Called on project load / new project to fully hydrate the audio thread.
     PreparePlugin {
         track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
         master_effects: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>,
         bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
         generators: IndexMap<GeneratorId, Box<dyn AudioPlugin + Send + Sync>>,
+        /// Initial DSP values for every track channel (volume, pan, mute, solo, inverted_phase)
+        track_channels: IndexMap<TrackId, MixerChannelSeed>,
+        /// Initial DSP values for every bus channel
+        bus_channels: IndexMap<BusId, MixerChannelSeed>,
+        /// Initial DSP values for the master channel
+        master_channel: MixerChannelSeed,
     },
     SetMetronomeActive(bool),
 
@@ -179,6 +199,33 @@ pub enum AudioCommand {
 // Audio → UI Feedback Messages
 // ============================================================================
 
+// ======================================
+// MixerChannelTarget
+// ======================================
+
+/// Identifies which mixer channel a command or snapshot applies to.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MixerChannelTarget {
+    Track(TrackId),
+    Bus(BusId),
+    Master,
+}
+
+/// Lightweight plain-value snapshot used to seed the audio thread's mixer
+/// state on project load, and written back to AppState during save_project.
+#[derive(Clone, Debug, Default)]
+pub struct MixerChannelSeed {
+    pub volume: f32,
+    pub pan: f32,
+    pub mute: bool,
+    pub solo: bool,
+    pub inverted_phase: bool,
+}
+
+// ======================================
+// EffectTarget
+// ======================================
+
 /// Specifies the location of an effect to ensure precise UI syncing
 #[derive(Clone, Debug)]
 pub enum EffectTarget {
@@ -219,6 +266,18 @@ pub struct EffectParameterSnapshot {
     pub parameters: Vec<(u32, f32)>, // (param_id, value) pairs
 }
 
+/// Full DSP state snapshot of a single mixer channel.
+/// Sent by the audio thread in response to QueryMixerChannel.
+#[derive(Clone, Debug)]
+pub struct MixerChannelSnapshot {
+    pub target: MixerChannelTarget,
+    pub volume: f32,
+    pub pan: f32,
+    pub mute: bool,
+    pub solo: bool,
+    pub inverted_phase: bool,
+}
+
 /// Messages from audio thread to UI thread
 #[derive(Clone, Debug)]
 pub enum AudioFeedback {
@@ -233,6 +292,12 @@ pub enum AudioFeedback {
     EffectParameterChanged(EffectParameterUpdate),
     /// Full parameter snapshot for an effect in response to query
     EffectParameterSnapshot(EffectParameterSnapshot),
+
+    // ======================================
+    // Mixer Channel Feedback
+    // ======================================
+    /// Full DSP state snapshot for a mixer channel (response to QueryMixerChannel)
+    MixerChannelSnapshot(MixerChannelSnapshot),
 
     // Command Response Feedback
     PluginCommandResponse {

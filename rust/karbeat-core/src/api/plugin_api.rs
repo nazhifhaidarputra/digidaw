@@ -1,7 +1,7 @@
 use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
-use parking_lot::Mutex;
+
 
 use crate::{
     audio::event::PluginTarget,
@@ -474,7 +474,7 @@ pub fn execute_generator_instance_command(
         .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))
 }
 
-static PENDING_FEEDBACK: Mutex<Vec<AudioFeedback>> = Mutex::new(Vec::new());
+
 
 // ============================================================================
 // Real-time Plugin Command Channel
@@ -536,7 +536,7 @@ where
     F: FnMut(u32, serde_json::Value) -> T,
 {
     let mut results = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain the live feedback consumer into the shared pending buffer first
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
@@ -567,7 +567,7 @@ where
     F: FnMut(GeneratorId, Vec<(u32, f32)>) -> T,
 {
     let mut snapshots = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain context queues
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
@@ -599,7 +599,7 @@ where
     F: FnMut(EffectTarget, EffectId, Vec<(u32, f32)>) -> T,
 {
     let mut snapshots = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain context queues
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
@@ -677,7 +677,7 @@ where
     F: FnMut(u32, Option<ZeroCopyBuffer>) -> T,
 {
     let mut results = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain the live feedback consumer into the shared pending buffer first
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {

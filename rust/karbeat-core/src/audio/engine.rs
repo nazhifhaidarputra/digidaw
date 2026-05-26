@@ -9,7 +9,7 @@ use dasp::slice;
 use hashbrown::HashMap;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
-use std::{cell::Cell, sync::Arc};
+use std::cell::Cell;
 use triple_buffer::Output;
 use wide::f32x4;
 
@@ -25,11 +25,11 @@ use crate::{
     },
     commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
-        GeneratorParameterSnapshot,
+        GeneratorParameterSnapshot, MixerChannelSnapshot, MixerChannelTarget,
     },
     core::project::{
         automation::AutomationTarget,
-        mixer::{MixerChannel, RoutingNode},
+        mixer::{MixerChannel, MixerChannelParams, RoutingConnection, RoutingNode},
         plugin::{modulation::ModulationEvent, MidiEvent, MidiMessage, ProcessContext},
         AudioTrack, AudioWaveform, Clip, DawSource, GeneratorId, GeneratorInstance, Pattern,
         PatternId, TrackId,
@@ -158,6 +158,10 @@ pub struct AudioEngine {
 
     // Audio thread's owned plugins - NO locks required
     plugin_state: AudioPluginState,
+
+    // Audio-thread-owned mixer channel DSP state.
+    // Updated via SetMixerChannelParameter commands; queried via QueryMixerChannel.
+    mixer_state: AudioMixerState,
 
     // Real-time Command Queue (UI → Audio)
     command_consumer: Consumer<AudioCommand>,
@@ -301,6 +305,154 @@ impl Default for MetronomeState {
     }
 }
 
+// =============================================================================
+// Audio Thread Mixer Channel State
+// =============================================================================
+
+/// DSP parameter values for a single mixer channel, owned exclusively by the
+/// audio thread. Volume is stored in dB (same units as MixerChannel).
+#[derive(Clone, Debug)]
+pub struct AudioMixerChannelValues {
+    pub volume: f32,
+    pub pan: f32,
+    pub mute: bool,
+    pub solo: bool,
+    pub inverted_phase: bool,
+}
+
+impl Default for AudioMixerChannelValues {
+    fn default() -> Self {
+        Self {
+            volume: 0.0, // 0 dB = unity gain
+            pan: 0.0,
+            mute: false,
+            solo: false,
+            inverted_phase: false,
+        }
+    }
+}
+
+impl AudioMixerChannelValues {
+    /// Construct a temporary MixerChannel for use in existing DSP functions.
+    /// The returned channel has no effects — only volume/pan/flags are set.
+    pub fn to_mixer_channel(&self) -> MixerChannel {
+        let mut ch = MixerChannel::default();
+        ch.volume.set_base(self.volume);
+        ch.pan.set_base(self.pan);
+        ch.mute = self.mute;
+        ch.solo = self.solo;
+        ch.inverted_phase = self.inverted_phase;
+        ch
+    }
+}
+
+/// Audio-thread-owned collection of mixer channel DSP values.
+/// Updated exclusively via AudioCommand::SetMixerChannelParameter.
+#[derive(Clone, Debug, Default)]
+pub struct AudioMixerState {
+    pub track_channels: HashMap<TrackId, AudioMixerChannelValues>,
+    pub bus_channels: HashMap<BusId, AudioMixerChannelValues>,
+    pub master: AudioMixerChannelValues,
+}
+
+impl AudioMixerState {
+    /// Apply a MixerChannelParams mutation to the target channel.
+    pub fn apply(&mut self, target: &MixerChannelTarget, param: &MixerChannelParams) {
+        let values = match target {
+            MixerChannelTarget::Track(id) => self.track_channels.entry(*id).or_default(),
+            MixerChannelTarget::Bus(id) => self.bus_channels.entry(*id).or_default(),
+            MixerChannelTarget::Master => &mut self.master,
+        };
+        match param {
+            MixerChannelParams::Volume(v) => values.volume = *v,
+            MixerChannelParams::Pan(v) => values.pan = *v,
+            MixerChannelParams::Mute(v) => values.mute = *v,
+            MixerChannelParams::Solo(v) => values.solo = *v,
+            MixerChannelParams::InvertedPhase(v) => values.inverted_phase = *v,
+        }
+    }
+
+    /// Return a snapshot of the target channel's current values.
+    pub fn snapshot(&self, target: MixerChannelTarget) -> MixerChannelSnapshot {
+        let values = match &target {
+            MixerChannelTarget::Track(id) => {
+                self.track_channels.get(id).cloned().unwrap_or_default()
+            }
+            MixerChannelTarget::Bus(id) => self.bus_channels.get(id).cloned().unwrap_or_default(),
+            MixerChannelTarget::Master => self.master.clone(),
+        };
+        MixerChannelSnapshot {
+            target,
+            volume: values.volume,
+            pan: values.pan,
+            mute: values.mute,
+            solo: values.solo,
+            inverted_phase: values.inverted_phase,
+        }
+    }
+}
+
+// =============================================================================
+// Routing Order Helper
+// =============================================================================
+
+/// Compute a topologically sorted routing order (sources → buses → master)
+/// from plain routing data and known track/bus IDs.
+///
+/// This replicates MixerState::get_routing_order without needing the full
+/// MixerState on the audio thread.
+pub fn compute_routing_order(
+    track_ids: impl Iterator<Item = TrackId>,
+    bus_ids: impl Iterator<Item = BusId>,
+    routing: &[RoutingConnection],
+) -> Vec<RoutingNode> {
+    use std::collections::HashMap as StdMap;
+    use std::collections::VecDeque;
+
+    let bus_ids_vec: Vec<BusId> = bus_ids.collect();
+
+    // All tracks come first
+    let mut order: Vec<RoutingNode> = track_ids.map(RoutingNode::Track).collect();
+
+    // Kahn's topological sort for buses
+    let mut in_degree: StdMap<BusId, usize> = bus_ids_vec.iter().map(|&id| (id, 0)).collect();
+    let mut adj: StdMap<BusId, Vec<BusId>> = bus_ids_vec.iter().map(|&id| (id, vec![])).collect();
+
+    for conn in routing {
+        if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination) {
+            if let Some(neighbors) = adj.get_mut(&src) {
+                neighbors.push(dst);
+            }
+            if let Some(deg) = in_degree.get_mut(&dst) {
+                *deg += 1;
+            }
+        }
+    }
+
+    let mut queue: VecDeque<BusId> = in_degree
+        .iter()
+        .filter(|(_, &deg)| deg == 0)
+        .map(|(&id, _)| id)
+        .collect();
+
+    while let Some(bus_id) = queue.pop_front() {
+        order.push(RoutingNode::Bus(bus_id));
+        if let Some(neighbors) = adj.get(&bus_id) {
+            for &neighbor in neighbors {
+                if let Some(deg) = in_degree.get_mut(&neighbor) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        queue.push_back(neighbor);
+                    }
+                }
+            }
+        }
+    }
+
+    order.push(RoutingNode::Master);
+    order
+}
+
 impl AudioEngine {
     pub fn new(
         state_consumer: Output<AudioRenderState>,
@@ -328,6 +480,7 @@ impl AudioEngine {
             active_oneshots: Vec::with_capacity(16),
             preview_voices: Vec::with_capacity(4),
             plugin_state: AudioPluginState::default(),
+            mixer_state: AudioMixerState::default(),
             mix_buffer,
             bus_buffers: HashMap::new(),
             bus_temp_buffer: Vec::with_capacity(2048),
@@ -385,6 +538,9 @@ impl AudioEngine {
             // Deep clone the plugins to preserve their internal states!
             plugin_state: self.plugin_state.clone(),
 
+            // Clone mixer channel state so export starts with the same values
+            mixer_state: self.mixer_state.clone(),
+
             mix_buffer: self.mix_buffer.clone(),
             bus_buffers: self.bus_buffers.clone(),
             bus_temp_buffer: self.bus_temp_buffer.clone(),
@@ -422,8 +578,14 @@ impl AudioEngine {
         if self.state_consumer.update() {
             let new_state = self.state_consumer.read().clone();
 
-            // Update cached routing order only when state changes (not every callback)
-            self.cached_routing_order = new_state.graph.mixer_state.get_routing_order();
+            // Routing order is recomputed from the triple-buffer routing snapshot.
+            // Note: once UpdateRouting arrives via ring buffer it will overwrite
+            // self.current_state.graph.routing AND recompute cached_routing_order there.
+            // The triple-buffer path here handles the initial state on project load.
+            let track_ids = new_state.graph.tracks.iter().map(|t| t.id);
+            let bus_ids = new_state.graph.bus_ids.iter().copied();
+            self.cached_routing_order =
+                compute_routing_order(track_ids, bus_ids, &new_state.graph.routing);
 
             self.current_state = new_state;
             pdc_dirty = true;
@@ -1034,6 +1196,23 @@ impl AudioEngine {
                 }
             }
 
+            AudioCommand::SetMixerChannelParameter { target, param } => {
+                // Audio thread is sole owner of mixer channel DSP values
+                self.mixer_state.apply(&target, &param);
+                log::debug!(
+                    "[AudioEngine] SetMixerChannelParameter: {:?} — {:?}",
+                    target,
+                    param
+                );
+            }
+            AudioCommand::QueryMixerChannel { target } => {
+                let snapshot = self.mixer_state.snapshot(target);
+                // Push to the shared feedback ring buffer — the FFI layer polls it
+                // via poll_mixer_channel_feedback(), exactly like plugin parameters.
+                let _ = self
+                    .feedback_producer
+                    .push(AudioFeedback::MixerChannelSnapshot(snapshot));
+            }
             AudioCommand::AddBus { bus_id, name } => {
                 // Initialize bus buffer and effects chain
                 let id_index = bus_id.to_u32() as usize;
@@ -1045,34 +1224,21 @@ impl AudioEngine {
                 let id_index = bus_id.to_u32() as usize;
                 self.plugin_state.remove_bus(id_index);
                 self.bus_buffers.remove(&bus_id);
+                // Also remove from mixer state
+                self.mixer_state.bus_channels.remove(&bus_id);
                 log::info!("[AudioEngine] Removed bus {:?}", bus_id);
             }
-            AudioCommand::SetBusParams {
-                bus_id,
-                volume,
-                pan,
-                mute,
-            } => {
-                // Bus params are stored in current_state.graph.mixer_state
-                // They get synced via triple buffer, so we don't need to do
-                // anything special here. Log for debugging.
-                log::debug!(
-                    "[AudioEngine] SetBusParams for {:?}: vol={:?}, pan={:?}, mute={:?}",
-                    bus_id,
-                    volume,
-                    pan,
-                    mute
-                );
-            }
-
             AudioCommand::UpdateRouting { routing } => {
-                // Routing is stored in mixer_state and synced via triple buffer
-                // Log for debugging
+                // Routing is now directly owned by the audio thread — update and
+                // recompute the cached order immediately.
+                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
+                let bus_ids = self.bus_buffers.keys().copied();
+                self.cached_routing_order = compute_routing_order(track_ids, bus_ids, &routing);
+                self.current_state.graph.routing = routing;
                 log::info!(
-                    "[AudioEngine] Received routing update with {} connections",
-                    routing.len()
+                    "[AudioEngine] UpdateRouting: {} connections",
+                    self.current_state.graph.routing.len()
                 );
-
                 pdc_dirty = true;
             }
             AudioCommand::QueryEffectParameters { target, effect_id } => {
@@ -1103,6 +1269,9 @@ impl AudioEngine {
                 master_effects,
                 bus_effects,
                 generators,
+                track_channels,
+                bus_channels,
+                master_channel,
             } => {
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 let sample_rate = self.sample_rate as f32;
@@ -1118,6 +1287,43 @@ impl AudioEngine {
                 self.track_tails.clear();
                 self.bus_tails.clear();
                 self.master_tail = 0;
+
+                // =========================================================
+                // Seed audio-thread mixer channel state from project values
+                // =========================================================
+                self.mixer_state = AudioMixerState::default();
+
+                for (track_id, seed) in &track_channels {
+                    self.mixer_state.track_channels.insert(
+                        *track_id,
+                        AudioMixerChannelValues {
+                            volume: seed.volume,
+                            pan: seed.pan,
+                            mute: seed.mute,
+                            solo: seed.solo,
+                            inverted_phase: seed.inverted_phase,
+                        },
+                    );
+                }
+                for (bus_id, seed) in &bus_channels {
+                    self.mixer_state.bus_channels.insert(
+                        *bus_id,
+                        AudioMixerChannelValues {
+                            volume: seed.volume,
+                            pan: seed.pan,
+                            mute: seed.mute,
+                            solo: seed.solo,
+                            inverted_phase: seed.inverted_phase,
+                        },
+                    );
+                }
+                self.mixer_state.master = AudioMixerChannelValues {
+                    volume: master_channel.volume,
+                    pan: master_channel.pan,
+                    mute: master_channel.mute,
+                    solo: master_channel.solo,
+                    inverted_phase: master_channel.inverted_phase,
+                };
 
                 // Batch load Generators
                 for (gen_id, mut plugin) in generators.into_iter() {
@@ -1176,9 +1382,9 @@ impl AudioEngine {
                     }
                 }
 
-                // Ensure all buses present in the mixer state have buffers allocated,
+                // Ensure all buses present in the graph have buffers allocated,
                 // even if they don't have any effects loaded on them yet.
-                for &bus_id in self.current_state.graph.mixer_state.buses.keys() {
+                for &bus_id in &self.current_state.graph.bus_ids {
                     if !self.bus_buffers.contains_key(&bus_id) {
                         self.plugin_state.add_bus(bus_id.to_u32() as usize);
                         self.bus_buffers.insert(bus_id, Vec::new());
@@ -1196,6 +1402,7 @@ impl AudioEngine {
 
                 log::info!("[AudioEngine] Prepared all plugins for the newly loaded project.");
             }
+
             AudioCommand::SetMetronomeActive(active) => {
                 self.metronome_state.is_active = active;
                 log::info!("[AudioEngine] Metronome Active: {}", active);
@@ -1653,33 +1860,24 @@ impl AudioEngine {
         }
 
         // Check for solo state
-        let is_any_solo = self
-            .current_state
-            .graph
-            .mixer_state
-            .channels
-            .values()
-            .any(|ch| ch.solo);
+        let is_any_solo = self.mixer_state.track_channels.values().any(|ch| ch.solo);
 
         // Get routing info
-        let routing = &self.current_state.graph.mixer_state.routing;
+        let routing = self.current_state.graph.routing.clone();
 
         // Iterate through tracks, buses, and master in topological order
         for node in self.cached_routing_order.clone().iter() {
             match node {
                 RoutingNode::Track(track_id) => {
-                    let default_channel = Arc::new(MixerChannel::default());
-
-                    let mut channel = self
-                        .current_state
-                        .graph
+                    // Read channel DSP values from audio-thread-owned mixer state
+                    let channel_values = self
                         .mixer_state
-                        .channels
+                        .track_channels
                         .get(track_id)
                         .cloned()
-                        .unwrap_or(default_channel);
-
-                    let channel_mut = Arc::make_mut(&mut channel);
+                        .unwrap_or_default();
+                    let mut channel = channel_values.to_mixer_channel();
+                    let channel_mut = &mut channel;
 
                     // Check mute/solo
                     if channel_mut.mute {
@@ -1868,21 +2066,18 @@ impl AudioEngine {
                     }
                     self.bus_temp_buffer.copy_from_slice(bus_buf);
 
-                    // Get bus channel settings
-                    let bus_channel = self
-                        .current_state
-                        .graph
+                    // Get bus channel settings from audio-thread-owned mixer state
+                    let bus_values = self
                         .mixer_state
-                        .buses
-                        .get_mut(bus_id)
-                        .map(|b| Arc::make_mut(b));
-
-                    let Some(bus_settings) = bus_channel else {
-                        continue;
-                    };
+                        .bus_channels
+                        .get(bus_id)
+                        .cloned()
+                        .unwrap_or_default();
+                    let mut bus_channel_temp = bus_values.to_mixer_channel();
+                    let bus_settings_channel = &mut bus_channel_temp;
 
                     // Skip if muted
-                    if bus_settings.channel.mute {
+                    if bus_settings_channel.mute {
                         continue;
                     }
 
@@ -1933,8 +2128,8 @@ impl AudioEngine {
                     }
                     self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
 
-                    let bus_volume = &mut bus_settings.channel.volume;
-                    let bus_pan = &mut bus_settings.channel.pan;
+                    let bus_volume = &mut bus_settings_channel.volume;
+                    let bus_pan = &mut bus_settings_channel.pan;
 
                     // CONSUME BUS AUTOMATION
                     if let Some((_, auto_events)) = self
@@ -2078,9 +2273,8 @@ impl AudioEngine {
                             midi_events: &[],
                             aux_buffer: Cell::new(None),
                         };
-                        let mut master_bus =
-                            self.current_state.graph.mixer_state.master_bus.clone();
-                        let master_bus_mut = Arc::make_mut(&mut master_bus);
+                        let mut master_channel = self.mixer_state.master.to_mixer_channel();
+                        let master_bus_mut = &mut master_channel;
                         Self::apply_master_bus_with_effects(
                             master_bus_mut,
                             &mut self.plugin_state.master_effects,
@@ -2935,7 +3129,7 @@ impl AudioEngine {
         }
 
         // Calculate internal latencies for bus channels
-        for bus_id in self.current_state.graph.mixer_state.buses.keys() {
+        for bus_id in self.bus_buffers.keys() {
             let mut lat = 0;
             if let Some(effects) = self.plugin_state.get_bus_effects(bus_id.to_u32() as usize) {
                 for e in effects {
@@ -2961,7 +3155,7 @@ impl AudioEngine {
             if let RoutingNode::Bus(_) = node {
                 let my_internal = internal_latency.get(node).copied().unwrap_or(0);
                 let mut max_dest_path = 0;
-                for route in &self.current_state.graph.mixer_state.routing {
+                for route in &self.current_state.graph.routing {
                     if route.source == *node {
                         max_dest_path = max_dest_path
                             .max(path_latency.get(&route.destination).copied().unwrap_or(0));
@@ -2976,7 +3170,7 @@ impl AudioEngine {
             let node = RoutingNode::Track(track.id);
             let my_internal = internal_latency.get(&node).copied().unwrap_or(0);
             let mut max_dest_path = 0;
-            for route in &self.current_state.graph.mixer_state.routing {
+            for route in &self.current_state.graph.routing {
                 if route.source == node {
                     max_dest_path = max_dest_path
                         .max(path_latency.get(&route.destination).copied().unwrap_or(0));
@@ -3028,7 +3222,7 @@ impl AudioEngine {
 
     /// This is just underlying logic behind [`queue_parameter_change`] but
     /// without directly bringing the entire mutable reference of self.
-    /// 
+    ///
     /// Call this if you don't want to fight the borrow checker
     fn queue_parameter_change_no_self_ref(
         target: &AutomationTarget,

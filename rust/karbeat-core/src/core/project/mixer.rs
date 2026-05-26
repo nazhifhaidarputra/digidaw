@@ -249,75 +249,6 @@ impl MixerChannel {
 }
 
 impl MixerState {
-    /// Set params of mixer channel besides the effect
-    pub fn set_params_mixer_channel(
-        &mut self,
-        track_id: &TrackId,
-        params: &[MixerChannelParams],
-    ) -> Result<Arc<MixerChannel>, MixerSetParamError> {
-        let mixer_channel_arc = self
-            .channels
-            .get_mut(track_id)
-            .ok_or_else(|| MixerSetParamError::new(*track_id, "Cannot find the mixer channel"))?;
-
-        let channel = Arc::make_mut(mixer_channel_arc);
-
-        // Check what we are going to change
-        for param in params.iter() {
-            match param {
-                MixerChannelParams::Volume(value) => {
-                    // channel.volume = *value;
-                    channel.volume.set_base(*value);
-                }
-                MixerChannelParams::Pan(value) => {
-                    // channel.pan = *value;
-                    channel.pan.set_base(*value);
-                }
-                MixerChannelParams::Mute(value) => {
-                    channel.mute = *value;
-                }
-                MixerChannelParams::InvertedPhase(value) => {
-                    channel.inverted_phase = *value;
-                }
-                MixerChannelParams::Solo(value) => {
-                    channel.solo = *value;
-                }
-            }
-        }
-
-        Ok(mixer_channel_arc.clone())
-    }
-
-    // set the master bus params
-    pub fn set_params_master_bus(
-        &mut self,
-        params: &[MixerChannelParams],
-    ) -> Result<Arc<MixerChannel>, MixerSetParamError> {
-        let channel = Arc::make_mut(&mut self.master_bus);
-
-        for param in params.iter() {
-            match param {
-                MixerChannelParams::Volume(value) => {
-                    channel.volume.set_base(*value);
-                }
-                MixerChannelParams::Pan(value) => {
-                    channel.pan.set_base(*value);
-                }
-                MixerChannelParams::Mute(value) => {
-                    channel.mute = *value;
-                }
-                MixerChannelParams::InvertedPhase(value) => {
-                    channel.inverted_phase = *value;
-                }
-                MixerChannelParams::Solo(value) => {
-                    channel.solo = *value;
-                }
-            }
-        }
-
-        Ok(self.master_bus.clone())
-    }
-
     /// Add an effect descriptor to a mixer channel by its registry ID.
     pub fn add_effect_descriptor_by_id(
         &mut self,
@@ -467,41 +398,6 @@ impl MixerState {
     /// Get a mutable reference to a bus
     pub fn get_bus_mut(&mut self, bus_id: &BusId) -> Option<&mut Arc<MixerBus>> {
         self.buses.get_mut(bus_id)
-    }
-
-    /// Set bus channel parameters
-    pub fn set_params_bus(
-        &mut self,
-        bus_id: &BusId,
-        params: &[MixerChannelParams],
-    ) -> anyhow::Result<Arc<MixerBus>> {
-        let bus_arc = self
-            .buses
-            .get_mut(bus_id)
-            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
-
-        let bus = Arc::make_mut(bus_arc);
-        for param in params.iter() {
-            match param {
-                MixerChannelParams::Volume(value) => {
-                    bus.channel.volume.set_base(*value);
-                }
-                MixerChannelParams::Pan(value) => {
-                    bus.channel.pan.set_base(*value);
-                }
-                MixerChannelParams::Mute(value) => {
-                    bus.channel.mute = *value;
-                }
-                MixerChannelParams::InvertedPhase(value) => {
-                    bus.channel.inverted_phase = *value;
-                }
-                MixerChannelParams::Solo(value) => {
-                    bus.channel.solo = *value;
-                }
-            }
-        }
-
-        Ok(bus_arc.clone())
     }
 
     pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {

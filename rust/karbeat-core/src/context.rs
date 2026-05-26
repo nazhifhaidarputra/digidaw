@@ -17,21 +17,10 @@ use crate::{
 };
 use karbeat_plugins::registry::PluginRegistry;
 
-// MixerParamEvent: FFI-friendly event pushed to Flutter when a mixer param changes
-#[derive(Clone, Debug)]
-pub struct MixerParamEvent {
-    /// Track ID. `u32::MAX` means master bus.
-    pub track_id: u32,
-    pub volume: Option<f32>,
-    pub pan: Option<f32>,
-    pub mute: Option<bool>,
-    pub solo: Option<bool>,
-}
-
 /// Centralized application context containing all shared state.
 ///
 /// Access via the [`ctx()`] function to get a reference to the global instance.
-pub struct DawContext<'a> {
+pub struct DawContext {
     /// Main application state (UI/editing source of truth)
     pub app_state: Arc<RwLock<ApplicationState>>,
 
@@ -59,11 +48,11 @@ pub struct DawContext<'a> {
     /// Plugin factory registry
     pub plugin_registry: RwLock<PluginRegistry>,
 
-    /// Mixer parameter event stream sink (Rust → Flutter)
-    pub mixer_event_sink: Mutex<Option<Box<dyn Fn(MixerParamEvent) + Send + Sync + 'a>>>,
+    /// Shared pending feedback buffer for all modules to poll (Rust → Flutter)
+    pub pending_feedback: Mutex<Vec<AudioFeedback>>,
 }
 
-impl<'a> DawContext<'a> {
+impl DawContext {
     fn new() -> Self {
         Self {
             app_state: Arc::new(RwLock::new(ApplicationState::default())),
@@ -75,7 +64,7 @@ impl<'a> DawContext<'a> {
             stream_guard: Mutex::new(None),
             position_consumer: Mutex::new(None),
             plugin_registry: RwLock::new(PluginRegistry::new_with_defaults()),
-            mixer_event_sink: Mutex::new(None),
+            pending_feedback: Mutex::new(Vec::new()),
         }
     }
 }
@@ -93,7 +82,7 @@ static CONTEXT: Lazy<DawContext> = Lazy::new(DawContext::new);
 /// let app = ctx().app_state.read();
 /// ```
 #[inline]
-pub fn ctx() -> &'static DawContext<'static> {
+pub fn ctx() -> &'static DawContext {
     &CONTEXT
 }
 

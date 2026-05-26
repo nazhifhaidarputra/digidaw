@@ -13,6 +13,7 @@ import 'api/serialization.dart';
 import 'api/session.dart';
 import 'api/track.dart';
 import 'api/transport.dart';
+import 'api/utils.dart';
 import 'api/waveform.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -183,8 +184,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw);
 
   @protected
-  RustStreamSink<UiMixerParamEvent>
-  dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw);
+  RustStreamSink<UiMixerChannelSnapshot>
+  dco_decode_StreamSink_ui_mixer_channel_snapshot_Sse(dynamic raw);
 
   @protected
   RustStreamSink<UiPluginCommandResponse>
@@ -264,6 +265,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
+
+  @protected
+  UiMixerChannelParams dco_decode_box_autoadd_ui_mixer_channel_params(
+    dynamic raw,
+  );
+
+  @protected
+  UiMixerChannelTarget dco_decode_box_autoadd_ui_mixer_channel_target(
+    dynamic raw,
+  );
 
   @protected
   UiParamId dco_decode_box_autoadd_ui_param_id(dynamic raw);
@@ -380,11 +391,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<UiGeneratorParameterSnapshot>
   dco_decode_list_ui_generator_parameter_snapshot(dynamic raw);
-
-  @protected
-  List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(
-    dynamic raw,
-  );
 
   @protected
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
@@ -570,7 +576,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw);
 
   @protected
-  UiMixerParamEvent dco_decode_ui_mixer_param_event(dynamic raw);
+  UiMixerChannelSnapshot dco_decode_ui_mixer_channel_snapshot(dynamic raw);
+
+  @protected
+  UiMixerChannelTarget dco_decode_ui_mixer_channel_target(dynamic raw);
 
   @protected
   UiMixerState dco_decode_ui_mixer_state(dynamic raw);
@@ -787,8 +796,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<UiMixerParamEvent>
-  sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer);
+  RustStreamSink<UiMixerChannelSnapshot>
+  sse_decode_StreamSink_ui_mixer_channel_snapshot_Sse(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RustStreamSink<UiPluginCommandResponse>
@@ -882,6 +893,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelParams sse_decode_box_autoadd_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelTarget sse_decode_box_autoadd_ui_mixer_channel_target(
     SseDeserializer deserializer,
   );
 
@@ -1026,11 +1047,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<UiGeneratorParameterSnapshot>
   sse_decode_list_ui_generator_parameter_snapshot(SseDeserializer deserializer);
-
-  @protected
-  List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(
-    SseDeserializer deserializer,
-  );
 
   @protected
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
@@ -1256,7 +1272,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  UiMixerParamEvent sse_decode_ui_mixer_param_event(
+  UiMixerChannelSnapshot sse_decode_ui_mixer_channel_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelTarget sse_decode_ui_mixer_channel_target(
     SseDeserializer deserializer,
   );
 
@@ -1516,8 +1537,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_StreamSink_ui_mixer_param_event_Sse(
-    RustStreamSink<UiMixerParamEvent> self,
+  void sse_encode_StreamSink_ui_mixer_channel_snapshot_Sse(
+    RustStreamSink<UiMixerChannelSnapshot> self,
     SseSerializer serializer,
   );
 
@@ -1626,6 +1647,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_mixer_channel(
     UiMixerChannel self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_mixer_channel_params(
+    UiMixerChannelParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_mixer_channel_target(
+    UiMixerChannelTarget self,
     SseSerializer serializer,
   );
 
@@ -1802,12 +1835,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_generator_parameter_snapshot(
     List<UiGeneratorParameterSnapshot> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ui_mixer_channel_params(
-    List<UiMixerChannelParams> self,
     SseSerializer serializer,
   );
 
@@ -2086,8 +2113,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_ui_mixer_param_event(
-    UiMixerParamEvent self,
+  void sse_encode_ui_mixer_channel_snapshot(
+    UiMixerChannelSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_mixer_channel_target(
+    UiMixerChannelTarget self,
     SseSerializer serializer,
   );
 
