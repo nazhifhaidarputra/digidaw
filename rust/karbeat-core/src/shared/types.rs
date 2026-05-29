@@ -70,11 +70,11 @@ macro_rules! define_bounded_newtype {
 }
 
 define_bounded_newtype!(
-    #[derive(Clone, Debug, Copy, PartialEq, PartialOrd)]
+    #[derive(Clone, Debug, Copy, PartialEq, PartialOrd, Default)]
     pub struct FractionF32(f32), min: -1.0, max: 1.0
 );
 
 define_bounded_newtype!(
-    #[derive(Clone, Debug, Copy, PartialEq, PartialOrd)]
+    #[derive(Clone, Debug, Copy, PartialEq, PartialOrd, Default)]
     pub struct RatioF32(f32), min: 0.0, max: 1.0
 );

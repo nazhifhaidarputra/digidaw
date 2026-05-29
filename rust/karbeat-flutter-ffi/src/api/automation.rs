@@ -296,3 +296,95 @@ pub fn add_automation_lane(
         Err(e) => Err(e.to_string()),
     }
 }
+
+/// Fetch all automation lanes across all targets
+pub fn get_automations_lanes_all() -> Vec<AutomationLaneDto> {
+    automation_api::get_automations_lanes_all(|lane| AutomationLaneDto::from(lane))
+}
+
+pub fn add_automation_lane_for_track(
+    track_id: u32,
+    target: AutomationTargetDto,
+    label: &str,
+    min: f32,
+    max: f32,
+    default_value: f32
+) -> Result<AutomationLaneDto, String> {
+    match
+        automation_api::add_automation_lane_for_track(
+            track_id.into(),
+            target.into(),
+            label,
+            min,
+            max,
+            default_value
+        )
+    {
+        Ok(arc_lane) => {
+            let lane_dto = AutomationLaneDto::from(arc_lane.as_ref());
+            Ok(lane_dto)
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+pub fn add_automation_lane_for_bus(
+    bus_id: u32,
+    target: AutomationTargetDto,
+    label: &str,
+    min: f32,
+    max: f32,
+    default_value: f32
+) -> Result<AutomationLaneDto, String> {
+    match
+        automation_api::add_automation_lane_for_bus(
+            bus_id.into(),
+            target.into(),
+            label,
+            min,
+            max,
+            default_value
+        )
+    {
+        Ok(arc_lane) => {
+            let lane_dto = AutomationLaneDto::from(arc_lane.as_ref());
+            Ok(lane_dto)
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+// pub fn remove_automation_lane(automation_id: u32) -> Result<(), String> {
+//     automation_api::remove_automation_lane(automation_id.into()).map_err(|e| e.to_string())
+// }
+
+pub fn add_new_automation_point(
+    automation_id: u32,
+    time_ticks: u32,
+    value: f32
+) -> Result<AutomationPointDto, String> {
+    automation_api
+        ::add_new_automation_point(automation_id.into(), time_ticks, value)
+        .map(|point| point.into())
+        .map_err(|e| e.to_string())
+}
+
+pub fn remove_automation_point(automation_id: u32, index: usize) -> Result<(), String> {
+    automation_api::remove_automation_point(automation_id.into(), index).map_err(|e| e.to_string())
+}
+
+pub fn update_automation_point(
+    automation_id: u32,
+    index: usize,
+    time_ticks: u32,
+    value: f32,
+    tension: f32
+) -> Result<usize, String> {
+    automation_api
+        ::update_automation_point(automation_id.into(), index, time_ticks, value, tension)
+        .map_err(|e| e.to_string())
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Modulation API
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱

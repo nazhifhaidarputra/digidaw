@@ -4,14 +4,10 @@ use karbeat_plugin_api::types::ZeroCopyBuffer;
 use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
-        mixer::{MixerChannelParams, RoutingConnection},
-        plugin::AudioPlugin,
-        track::audio_waveform::AudioWaveform,
-        GeneratorId,
+        GeneratorId, ModulationLink, ModulationSource, mixer::{MixerChannelParams, RoutingConnection}, plugin::AudioPlugin, track::audio_waveform::AudioWaveform
     },
     shared::{
-        id::{BusId, EffectId, TrackId},
-        PatternId,
+        ModulationId, PatternId, id::*
     },
 };
 
@@ -193,6 +189,24 @@ pub enum AudioCommand {
         feedback_producer: rtrb::Producer<crate::commands::AudioFeedback>,
         response_tx: std::sync::mpsc::Sender<Box<crate::audio::engine::AudioEngine>>,
     },
+
+    /// Spawn a new generator in the DSP thread (e.g., an LFO)
+    AddModulationSource {
+        id: ModulationId,
+        source: ModulationSource,
+    },
+    RemoveModulationSource(ModulationId),
+
+    /// Plug a cable from a Generator to a Target
+    AddModulationLink {
+        id: ModulationLinkId,
+        link: ModulationLink,
+    },
+    UpdateModulationLinkDepth {
+        id: ModulationLinkId,
+        depth: f32,
+    },
+    RemoveModulationLink(ModulationLinkId),
 }
 
 // ============================================================================

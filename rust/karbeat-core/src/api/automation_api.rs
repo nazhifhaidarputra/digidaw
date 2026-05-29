@@ -2,9 +2,12 @@ use std::sync::Arc;
 
 use crate::{
     context::utils::broadcast_state_change,
-    core::project::automation::{ AutomationLane, AutomationPoint, AutomationTarget },
+    core::project::{
+        ModulationEvent,
+        automation::{ AutomationLane, AutomationPoint, AutomationTarget },
+    },
     lock::{ get_app_read, get_app_write },
-    shared::{ AutomationId, BusId, ModulationId, TrackId },
+    shared::{ AutomationId, BusId, ModulationId, ModulationLinkId, TrackId },
 };
 
 /// Get all automations lane for all types
@@ -27,22 +30,16 @@ pub fn add_automation_lane_for_track(
     max: f32,
     default_value: f32
 ) -> anyhow::Result<Arc<AutomationLane>> {
-    let lane = {
+    let (lane, _link_id) = {
         let mut app = get_app_write();
-        let (lane_id, _mod_id) = app.add_automation_lane_for_track(
+        app.add_automation_lane_for_track(
             track_id,
             target,
             label,
             min,
             max,
             default_value
-        )?;
-
-        // Fetch and clone the Arc from the pool before dropping the lock
-        app.automation_pool
-            .get(&lane_id)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Lane not found immediately after creation"))?
+        )?
     };
 
     broadcast_state_change();
@@ -61,19 +58,8 @@ pub fn add_automation_lane(
 ) -> anyhow::Result<Arc<AutomationLane>> {
     let lane = {
         let mut app = get_app_write();
-        let (lane_id, _mod_id) = app.add_automation_lane(
-            target,
-            label,
-            min,
-            max,
-            default_value
-        )?;
-
-        // Fetch and clone the Arc from the pool before dropping the lock
-        app.automation_pool
-            .get(&lane_id)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Lane not found immediately after creation"))?
+        let (lane, _mod_id) = app.add_automation_lane(target, label, min, max, default_value)?;
+        lane
     };
 
     broadcast_state_change();
@@ -93,7 +79,7 @@ pub fn add_automation_lane_for_bus(
 ) -> anyhow::Result<Arc<AutomationLane>> {
     let lane = {
         let mut app = get_app_write();
-        let (lane_id, _mod_id) = app.add_automation_lane_for_bus(
+        let (lane, _mod_id) = app.add_automation_lane_for_bus(
             bus_id,
             target,
             label,
@@ -102,10 +88,7 @@ pub fn add_automation_lane_for_bus(
             default_value
         )?;
 
-        app.automation_pool
-            .get(&lane_id)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Lane not found immediately after creation"))?
+        lane
     };
 
     broadcast_state_change();
@@ -115,15 +98,15 @@ pub fn add_automation_lane_for_bus(
     Ok(lane)
 }
 
-pub fn remove_automation_lane(automation_id: AutomationId) -> anyhow::Result<()> {
-    {
-        let mut app = get_app_write();
-        app.remove_automation_lane(automation_id)?;
-    }
+// pub fn remove_automation_lane(automation_id: AutomationId) -> anyhow::Result<()> {
+//     {
+//         let mut app = get_app_write();
+//         app.remove_automation_lane(automation_id)?;
+//     }
 
-    broadcast_state_change();
-    Ok(())
-}
+//     broadcast_state_change();
+//     Ok(())
+// }
 
 pub fn add_new_automation_point(
     automation_id: AutomationId,
@@ -156,12 +139,19 @@ pub fn update_automation_point(
     automation_id: AutomationId,
     index: usize,
     time_ticks: u32,
-    value: f32
+    value: f32,
+    tension: f32
 ) -> anyhow::Result<usize> {
     let new_index = {
         let mut app = get_app_write();
 
-        let (_, new_index) = app.update_automation_point(automation_id, index, time_ticks, value)?;
+        let (_, new_index) = app.update_automation_point(
+            automation_id,
+            index,
+            time_ticks,
+            value,
+            tension
+        )?;
         new_index
     };
 
@@ -171,7 +161,7 @@ pub fn update_automation_point(
 
 pub fn get_automation_lanes_for_track(
     track_id: TrackId
-) -> Vec<(ModulationId, AutomationId, Arc<AutomationLane>)> {
+) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
     let lanes = {
         let app = get_app_read();
         app.get_automation_lanes_for_track(track_id)
@@ -182,7 +172,32 @@ pub fn get_automation_lanes_for_track(
 
 pub fn get_automation_lanes_for_bus(
     bus_id: BusId
-) -> Vec<(ModulationId, AutomationId, Arc<AutomationLane>)> {
+) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
     let app = get_app_read();
     app.get_automation_lanes_for_bus(bus_id)
 }
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Modulation API
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Get all modulations in the project
+pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> Vec<(Id, T)>
+    where F: Fn(&ModulationId, &ModulationEvent) -> (Id, T)
+{
+    let app = get_app_read();
+    app.modulation_pool
+        .iter()
+        .map(|(id, modulation)| f(id, modulation))
+        .collect()
+}
+
+// pub fn link_this_param_to_controller(source: ModulationEvent) -> anyhow::Result<ModulationLinkId> {
+//     // let id = {
+//     //     let mut app = get_app_write();
+//     //     app.add_modulation(source)
+//     // }?;
+
+//     // broadcast_state_change();
+//     // Ok(id)
+// }

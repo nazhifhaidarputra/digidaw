@@ -3,8 +3,6 @@
 // This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 // You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-/* src/audio/engine.rs */
-
 use dasp::slice;
 use hashbrown::HashMap;
 use rtrb::{ Consumer, Producer };
@@ -16,11 +14,7 @@ use wide::f32x4;
 use crate::{
     audio::{
         event::{
-            BusAutomationEvent,
-            GeneratorAutomationEvent,
-            MasterAutomationEvent,
             PluginTarget,
-            TrackAutomationEvent,
             TransportFeedback,
         },
         render_state::{
@@ -145,6 +139,23 @@ impl DelayLine {
     }
 }
 
+#[derive(Clone)]
+pub struct LiveLfo {
+    pub rate_hz: f32,
+    pub phase: f32, // Ticks from 0.0 to 1.0
+}
+
+#[derive(Clone)]
+pub enum LiveModulationSource {
+    LFO(LiveLfo),
+    Automation {
+        lane_id: AutomationId,
+    },
+    PeakController {
+        source: PluginTarget,
+    }, // E.g., holds an envelope follower
+}
+
 pub struct AudioEngine {
     // Comms
     state_consumer: Output<AudioRenderState>,
@@ -197,9 +208,9 @@ pub struct AudioEngine {
     // =========================
     // Automation and Modulations
     // =========================
-    track_automation_events: SmallVec<[(TrackId, Vec<TrackAutomationEvent>); 4]>,
-    bus_automation_events: SmallVec<[(BusId, Vec<BusAutomationEvent>); 4]>,
-    master_automation_events: SmallVec<[MasterAutomationEvent; 4]>,
+
+    active_sources: HashMap<ModulationId, (LiveModulationSource, f32)>,
+    active_links: Vec<ModulationLink>,
 
     /// Tracks the continuous phase of active LFOs
     lfo_phases: HashMap<AutomationTarget, f32>,
@@ -236,7 +247,7 @@ pub struct GeneratorVoice {
     pub track_id: TrackId,
     // Events queued for the CURRENT buffer block only
     pub midi_events: SmallVec<[MidiEvent; 4]>,
-    pub automation_events: SmallVec<[GeneratorAutomationEvent; 4]>,
+    // pub automation_events: SmallVec<[GeneratorAutomationEvent; 4]>,
     // Track if this generator is persistent or temporary
     pub active: bool,
     pub playing_keys: Vec<u8>,
@@ -252,7 +263,7 @@ impl GeneratorVoice {
             id,
             track_id,
             midi_events: SmallVec::new(),
-            automation_events: SmallVec::new(),
+            // automation_events: SmallVec::new(),
             active,
             playing_keys: Vec::new(),
             tail_remaining: None,
@@ -493,7 +504,7 @@ impl AudioEngine {
         initial_bpm: f32,
         initial_state: AudioRenderState
     ) -> Self {
-        let mix_buffer = Vec::with_capacity(2048);
+        let mix_buffer = Vec::with_capacity(4096);
         Self {
             state_consumer,
             command_consumer,
@@ -512,12 +523,9 @@ impl AudioEngine {
             mixer_state: AudioMixerState::default(),
             mix_buffer,
             bus_buffers: HashMap::new(),
-            bus_temp_buffer: Vec::with_capacity(2048),
+            bus_temp_buffer: Vec::with_capacity(4096),
             cached_routing_order: Vec::new(),
             playback_mode: PlaybackMode::Song,
-            track_automation_events: SmallVec::new(),
-            bus_automation_events: SmallVec::new(),
-            master_automation_events: SmallVec::new(),
             metronome_state: MetronomeState::default(),
             track_tails: HashMap::new(),
             bus_tails: HashMap::new(),
@@ -531,6 +539,8 @@ impl AudioEngine {
             time_sig_numerator: 4,
             time_sig_denominator: 4,
             lfo_phases: HashMap::new(),
+            active_sources: HashMap::new(),
+            active_links: Vec::new(),
         }
     }
 
@@ -576,11 +586,6 @@ impl AudioEngine {
             cached_routing_order: self.cached_routing_order.clone(),
             playback_mode: self.playback_mode,
 
-            // Clear active automation for a clean render
-            track_automation_events: SmallVec::new(),
-            bus_automation_events: SmallVec::new(),
-            master_automation_events: SmallVec::new(),
-
             metronome_state: MetronomeState::default(),
 
             // Keep delay states intact! This guarantees exact tail behavior.
@@ -595,6 +600,8 @@ impl AudioEngine {
             aux_buffers: self.aux_buffers.clone(),
             sidechain_delay_lines: self.sidechain_delay_lines.clone(),
             lfo_phases: self.lfo_phases.clone(),
+            active_sources: self.active_sources.clone(),
+            active_links: self.active_links.clone(),
         }
     }
 
@@ -857,7 +864,6 @@ impl AudioEngine {
         self.song_state.is_playing = false;
         self.pattern_state.is_playing = false;
         self.stop_all_active_generators();
-        self.stop_all_automation_events();
         self.reset_playhead();
     }
 
@@ -867,12 +873,6 @@ impl AudioEngine {
             &mut self.plugin_state,
             self.sample_rate
         );
-    }
-
-    fn stop_all_automation_events(&mut self) {
-        self.track_automation_events.clear();
-        self.bus_automation_events.clear();
-        self.master_automation_events.clear();
     }
 
     fn stop_all_active_generators_impl(
@@ -1512,6 +1512,36 @@ impl AudioEngine {
                 // Fire the fully hydrated engine back to the export thread
                 let _ = response_tx.send(Box::new(cloned_engine));
             }
+            AudioCommand::AddModulationSource { id, source } => {
+                let live_source = match source {
+                    crate::core::project::ModulationSource::LFO { rate_hz } => {
+                        LiveModulationSource::LFO(LiveLfo { rate_hz, phase: 0.0 })
+                    }
+                    crate::core::project::ModulationSource::Automation { lane_id } => {
+                        LiveModulationSource::Automation { lane_id }
+                    }
+                    crate::core::project::ModulationSource::PeakController { source } => {
+                        LiveModulationSource::PeakController { source }
+                    }
+                };
+                self.active_sources.insert(id, (live_source, 0.0));
+                log::info!("[AudioEngine] Added Modulation Source {:?}", id);
+            },
+            AudioCommand::RemoveModulationSource(modulation_id) => {
+                self.active_sources.remove(&modulation_id);
+                log::info!("[AudioEngine] Removed Modulation Source {:?}", modulation_id);
+            },
+            AudioCommand::AddModulationLink { link , ..} => {
+                self.active_links.push(link);
+            },
+            AudioCommand::UpdateModulationLinkDepth { id, depth } => {
+                if let Some(link) = self.active_links.iter_mut().find(|l| l.id == id) {
+                    link.depth = depth;
+                }
+            },
+            AudioCommand::RemoveModulationLink(modulation_link_id) => {
+                self.active_links.retain(|l| l.id != modulation_link_id);
+            },
         }
 
         pdc_dirty
@@ -1652,7 +1682,7 @@ impl AudioEngine {
 
             // Now it's safe to clear events for the next block
             gen_voice.midi_events.clear();
-            gen_voice.automation_events.clear();
+            // gen_voice.automation_events.clear();
 
             // SAFE TAIL HANDLING
             if gen_voice.playing_keys.is_empty() {
@@ -1695,10 +1725,6 @@ impl AudioEngine {
         }
 
         self.active_generators.retain(|g| g.active);
-
-        self.track_automation_events.iter_mut().for_each(|(_, v)| v.clear());
-        self.bus_automation_events.iter_mut().for_each(|(_, v)| v.clear());
-        self.master_automation_events.clear();
 
         self.active_oneshots.clear();
     }
@@ -1849,24 +1875,12 @@ impl AudioEngine {
                     {
                         let gen_id = gen_voice.id;
                         let events = &gen_voice.midi_events;
-                        let param_events = &gen_voice.automation_events;
 
                         if
                             let Some(gen_instance) = self.plugin_state.get_generator_mut(
                                 gen_id.to_u32() as usize
                             )
                         {
-                            // CONSUME AUTOMATION
-                            for ev in param_events {
-                                #[allow(irrefutable_let_patterns)]
-                                if
-                                    let GeneratorAutomationEvent::PluginParam { param_id, value } =
-                                        ev
-                                {
-                                    gen_instance.plugin.apply_automation(*param_id, *value);
-                                }
-                            }
-
                             let sidechain_id = SidechainRouteId::Generator(gen_id);
                             let aux = self.aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
                             // PROCESS AUDIO
@@ -1948,7 +1962,6 @@ impl AudioEngine {
                     Self::apply_mixer_channel_with_effects(
                         channel_mut,
                         &mut self.plugin_state.track_effects,
-                        &self.track_automation_events,
                         *track_id,
                         &mut self.mix_buffer,
                         channels,
@@ -2077,38 +2090,6 @@ impl AudioEngine {
                     let bus_volume = &mut bus_settings_channel.volume;
                     let bus_pan = &mut bus_settings_channel.pan;
 
-                    // CONSUME BUS AUTOMATION
-                    if
-                        let Some((_, auto_events)) = self.bus_automation_events
-                            .iter()
-                            .find(|(id, _)| *id == *bus_id)
-                    {
-                        for event in auto_events {
-                            match event {
-                                BusAutomationEvent::Volume(v) => {
-                                    bus_volume.apply_automation(*v);
-                                }
-                                BusAutomationEvent::Pan(v) => {
-                                    bus_pan.apply_automation(*v);
-                                }
-                                BusAutomationEvent::PluginParam { effect_id, param_id, value } => {
-                                    if
-                                        let Some(effects) = self.plugin_state.get_bus_effects_mut(
-                                            bus_id.to_u32() as usize
-                                        )
-                                    {
-                                        if
-                                            let Some(effect) = effects
-                                                .iter_mut()
-                                                .find(|e| e.id == *effect_id)
-                                        {
-                                            effect.plugin.apply_automation(*param_id, *value);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
 
                     // Apply bus effects
                     if
@@ -2219,7 +2200,6 @@ impl AudioEngine {
                         Self::apply_master_bus_with_effects(
                             master_bus_mut,
                             &mut self.plugin_state.master_effects,
-                            &self.master_automation_events,
                             output,
                             channels,
                             &master_effect_ctx,
@@ -2239,60 +2219,6 @@ impl AudioEngine {
                                 self.sidechain_delay_lines.get_mut(sidechain_route_id)
                         {
                             delay_line.process_block(aux_buf, channels);
-                        }
-                    }
-                }
-            }
-
-            // ==================================================
-            // Process Modulation Events (Peak controller modulation)
-            // ==================================================
-
-            let active_modulations = self.current_state.graph.modulation_events.clone();
-
-            for (_m_id, modulation) in active_modulations {
-                if
-                    let ModulationEvent::PeakController { source, target, depth, base_value } =
-                        modulation
-                {
-                    // Check if the current RoutingNode owns the source plugin
-                    let owns_source = match (&node, &source) {
-                        (RoutingNode::Track(t_id), PluginTarget::TrackEffect(p_t_id, _)) => {
-                            t_id == p_t_id
-                        }
-                        (RoutingNode::Bus(b_id), PluginTarget::BusEffect(p_b_id, _)) => {
-                            b_id == p_b_id
-                        }
-                        (RoutingNode::Master, PluginTarget::MasterEffect(_)) => true,
-                        _ => false,
-                    };
-
-                    if owns_source {
-                        // The source plugin just finished processing!
-                        // We can now safely grab its control buffer.
-                        if
-                            let Some(
-                                karbeat_plugin_api::prelude::ZeroCopyBuffer::Float32(control_buf),
-                            ) = self
-                                .get_plugin(&source)
-                                .and_then(|p| p.get_zero_copy_buffer("control"))
-                        {
-                            let peak = control_buf.first().copied().unwrap_or(0.0);
-
-                            // Map the output
-                            let modulated_value = (base_value + peak * depth).clamp(0.0, 1.0);
-
-                            // Queue it up! The target plugin will automatically consume this
-                            // value when its turn comes up later in the topological loop.
-                            Self::queue_parameter_change_no_self_ref(
-                                &target,
-                                modulated_value,
-                                &mut self.track_automation_events,
-                                &mut self.active_generators,
-                                &mut self.bus_automation_events,
-                                &mut self.master_automation_events,
-                                &mut self.bpm
-                            );
                         }
                     }
                 }
@@ -2472,7 +2398,6 @@ impl AudioEngine {
     fn apply_mixer_channel_with_effects<'a>(
         mixer_channel: &mut MixerChannel,
         track_effects: &mut Vec<Vec<AudioEffectInstance>>,
-        track_automation_events: &[(TrackId, Vec<TrackAutomationEvent>)],
         track_id: TrackId,
         buffer: &mut [f32],
         channels: usize,
@@ -2483,30 +2408,6 @@ impl AudioEngine {
         let track_volume = &mut mixer_channel.volume;
         let track_pan = &mut mixer_channel.pan;
 
-        // CONSUME TRACK AUTOMATION
-        if
-            let Some((_, auto_events)) = track_automation_events
-                .iter()
-                .find(|(id, _)| *id == track_id)
-        {
-            for event in auto_events {
-                match event {
-                    TrackAutomationEvent::Volume(v) => {
-                        track_volume.apply_automation(*v);
-                    }
-                    TrackAutomationEvent::Pan(v) => {
-                        track_pan.apply_automation(*v);
-                    }
-                    TrackAutomationEvent::PluginParam { effect_id, param_id, value } => {
-                        if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
-                            if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                                effect.plugin.apply_automation(*param_id, *value);
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // ==== SIMD Phase Inversion ====
         if mixer_channel.inverted_phase {
@@ -2542,7 +2443,6 @@ impl AudioEngine {
     fn apply_master_bus_with_effects<'a>(
         master_bus: &mut MixerChannel,
         master_effects: &mut [AudioEffectInstance],
-        master_automation_events: &[MasterAutomationEvent],
         buffer: &mut [f32],
         channels: usize,
         process_ctx: &ProcessContext<'a>,
@@ -2550,23 +2450,6 @@ impl AudioEngine {
     ) {
         let master_volume = &mut master_bus.volume;
         let master_pan = &mut master_bus.pan;
-
-        // CONSUME MASTER AUTOMATION
-        for event in master_automation_events {
-            match event {
-                MasterAutomationEvent::Volume(v) => {
-                    master_volume.apply_automation(*v);
-                }
-                MasterAutomationEvent::Pan(v) => {
-                    master_pan.apply_automation(*v);
-                }
-                MasterAutomationEvent::PluginParam { effect_id, param_id, value } => {
-                    if let Some(effect) = master_effects.iter_mut().find(|e| e.id == *effect_id) {
-                        effect.plugin.apply_automation(*param_id, *value);
-                    }
-                }
-            }
-        }
 
         // ==== SIMD Phase Inversion ====
         if master_bus.inverted_phase {
@@ -3133,117 +3016,152 @@ impl AudioEngine {
         );
     }
 
-    /// This is just underlying logic behind [`queue_parameter_change`] but
-    /// without directly bringing the entire mutable reference of self.
-    ///
-    /// Call this if you don't want to fight the borrow checker
-    fn queue_parameter_change_no_self_ref(
-        target: &AutomationTarget,
-        value: f32,
-        track_automation_events: &mut SmallVec<[(TrackId, Vec<TrackAutomationEvent>); 4]>,
-        active_generators: &mut Vec<GeneratorVoice>,
-        bus_automation_events: &mut SmallVec<[(BusId, Vec<BusAutomationEvent>); 4]>,
-        master_automation_events: &mut SmallVec<[MasterAutomationEvent; 4]>,
-        bpm: &mut f32
-    ) {
+    fn evaluate_pre_block_modulations(&mut self, buffer_size: usize) {
+        let tempo = self.bpm;
+        if tempo <= 0.0 {
+            return;
+        }
+
+        let sample_rate = self.sample_rate as f32;
+        let samples_per_beat = (60.0 / tempo) * sample_rate;
+        let samples_per_tick = samples_per_beat / 960.0;
+        let current_tick = ((self.song_state.playhead_samples as f64) /
+            (samples_per_tick as f64)) as u32;
+
+        // 1. Extract Peak Controller Data First (Bypasses borrow checker limits)
+        let mut peak_updates = Vec::new();
+        for (id, (source, _)) in self.active_sources.iter() {
+            if let LiveModulationSource::PeakController { source: p_tgt } = source {
+                // Fetch zero copy buffer from the end of the LAST block (1 block latency)
+                if
+                    let Some(karbeat_plugin_api::prelude::ZeroCopyBuffer::Float32(control_buf)) =
+                        self.get_plugin(p_tgt).and_then(|p| p.get_zero_copy_buffer("control"))
+                {
+                    peak_updates.push((*id, control_buf.first().copied().unwrap_or(0.0)));
+                }
+            }
+        }
+        for (id, val) in peak_updates {
+            if let Some((_, current_output)) = self.active_sources.get_mut(&id) {
+                *current_output = val;
+            }
+        }
+
+        // 2. Tick LFOs and Automation Lanes
+        for (_, (source, current_output)) in self.active_sources.iter_mut() {
+            match source {
+                LiveModulationSource::LFO(lfo) => {
+                    let phase_inc = (lfo.rate_hz * (buffer_size as f32)) / sample_rate;
+                    lfo.phase = (lfo.phase + phase_inc).fract();
+                    *current_output = (lfo.phase * std::f32::consts::TAU).sin();
+                }
+                LiveModulationSource::Automation { lane_id } => {
+                    if let Some(lane) = self.current_state.graph.automation_lanes.get(lane_id) {
+                        *current_output = lane.value_at_ticks(current_tick);
+                    }
+                }
+                LiveModulationSource::PeakController { .. } => {} // Already handled above
+            }
+        }
+
+        // 3. Sum the Cables
+        let mut parameter_accumulators: HashMap<AutomationTarget, f32> = HashMap::new();
+
+        for link in &self.active_links {
+            if let Some((_, generator_output)) = self.active_sources.get(&link.source_id) {
+                let modulation_delta = generator_output * link.depth;
+                *parameter_accumulators.entry(link.target.clone()).or_insert(link.base_value) +=
+                    modulation_delta;
+            }
+        }
+
+        // 4. Apply the Math instantly!
+        for (target, final_value) in parameter_accumulators {
+            self.apply_parameter_change(&target, final_value);
+        }
+    }
+
+    fn apply_parameter_change(&mut self, target: &AutomationTarget, final_value: f32) {
         match target {
             AutomationTarget::Track { track_id, mix_target } => {
                 match mix_target {
                     automation::MixerChannelParamTarget::Volume => {
-                        let pos = track_automation_events
-                            .iter()
-                            .position(|(id, _)| id == track_id)
-                            .unwrap_or_else(|| {
-                                let idx = track_automation_events.len();
-                                track_automation_events.push((*track_id, Vec::new()));
-                                idx
-                            });
-                        track_automation_events[pos].1.push(TrackAutomationEvent::Volume(value));
+                        if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
+                            ch.volume = final_value;
+                        }
                     }
                     automation::MixerChannelParamTarget::Pan => {
-                        let pos = track_automation_events
-                            .iter()
-                            .position(|(id, _)| id == track_id)
-                            .unwrap_or_else(|| {
-                                let idx = track_automation_events.len();
-                                track_automation_events.push((*track_id, Vec::new()));
-                                idx
-                            });
-                        track_automation_events[pos].1.push(TrackAutomationEvent::Pan(value));
+                        if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
+                            ch.pan = final_value;
+                        }
                     }
                     automation::MixerChannelParamTarget::Plugin { effect_id, target } => {
                         match target {
                             EffectAutomationTarget::Mix => todo!(),
                             EffectAutomationTarget::PluginParam { param_id } => {
-                                let pos = track_automation_events
-                                    .iter()
-                                    .position(|(id, _)| id == track_id)
-                                    .unwrap_or_else(|| {
-                                        let idx = track_automation_events.len();
-                                        track_automation_events.push((*track_id, Vec::new()));
-                                        idx
-                                    });
-                                track_automation_events[pos].1.push(
-                                    TrackAutomationEvent::PluginParam {
-                                        effect_id: *effect_id,
-                                        param_id: *param_id,
-                                        value,
+                                if
+                                    let Some(effects) = self.plugin_state.get_track_effects_mut(
+                                        track_id.to_u32() as usize
+                                    )
+                                {
+                                    if
+                                        let Some(e) = effects
+                                            .iter_mut()
+                                            .find(|e| e.id == *effect_id)
+                                    {
+                                        e.plugin.apply_automation(*param_id, final_value);
                                     }
-                                );
+                                }
                             }
                         }
                     }
                 }
             }
             AutomationTarget::TrackGeneratorPluginParam { track_id, param_id } => {
-                if let Some(voice) = active_generators.iter_mut().find(|v| v.track_id == *track_id) {
-                    voice.automation_events.push(GeneratorAutomationEvent::PluginParam {
-                        param_id: *param_id,
-                        value,
-                    });
+                if
+                    let Some(gen_id) = self.current_state.graph.tracks
+                        .iter()
+                        .find(|t| t.id == *track_id)
+                        .and_then(|t| t.generator.as_ref().map(|g| g.id))
+                {
+                    if
+                        let Some(inst) = self.plugin_state.get_generator_mut(
+                            gen_id.to_u32() as usize
+                        )
+                    {
+                        inst.plugin.apply_automation(*param_id, final_value);
+                    }
                 }
             }
             AutomationTarget::Bus { bus_id, mix_target } => {
                 match mix_target {
                     automation::MixerChannelParamTarget::Volume => {
-                        let pos = bus_automation_events
-                            .iter()
-                            .position(|(id, _)| id == bus_id)
-                            .unwrap_or_else(|| {
-                                let idx = bus_automation_events.len();
-                                bus_automation_events.push((*bus_id, Vec::new()));
-                                idx
-                            });
-                        bus_automation_events[pos].1.push(BusAutomationEvent::Volume(value));
+                        if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
+                            ch.volume = final_value;
+                        }
                     }
                     automation::MixerChannelParamTarget::Pan => {
-                        let pos = bus_automation_events
-                            .iter()
-                            .position(|(id, _)| id == bus_id)
-                            .unwrap_or_else(|| {
-                                let idx = bus_automation_events.len();
-                                bus_automation_events.push((*bus_id, Vec::new()));
-                                idx
-                            });
-                        bus_automation_events[pos].1.push(BusAutomationEvent::Pan(value));
+                        if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
+                            ch.pan = final_value;
+                        }
                     }
                     automation::MixerChannelParamTarget::Plugin { effect_id, target } => {
                         match target {
                             EffectAutomationTarget::Mix => todo!(),
                             EffectAutomationTarget::PluginParam { param_id } => {
-                                let pos = bus_automation_events
-                                    .iter()
-                                    .position(|(id, _)| id == bus_id)
-                                    .unwrap_or_else(|| {
-                                        let idx = bus_automation_events.len();
-                                        bus_automation_events.push((*bus_id, Vec::new()));
-                                        idx
-                                    });
-                                bus_automation_events[pos].1.push(BusAutomationEvent::PluginParam {
-                                    effect_id: *effect_id,
-                                    param_id: *param_id,
-                                    value,
-                                });
+                                if
+                                    let Some(effects) = self.plugin_state.get_bus_effects_mut(
+                                        bus_id.to_u32() as usize
+                                    )
+                                {
+                                    if
+                                        let Some(e) = effects
+                                            .iter_mut()
+                                            .find(|e| e.id == *effect_id)
+                                    {
+                                        e.plugin.apply_automation(*param_id, final_value);
+                                    }
+                                }
                             }
                         }
                     }
@@ -3251,86 +3169,30 @@ impl AudioEngine {
             }
             AutomationTarget::Master(mix_target) => {
                 match mix_target {
-                    automation::MixerChannelParamTarget::Volume =>
-                        master_automation_events.push(MasterAutomationEvent::Volume(value)),
-                    automation::MixerChannelParamTarget::Pan =>
-                        master_automation_events.push(MasterAutomationEvent::Pan(value)),
+                    automation::MixerChannelParamTarget::Volume => {
+                        self.mixer_state.master.volume = final_value;
+                    }
+                    automation::MixerChannelParamTarget::Pan => {
+                        self.mixer_state.master.pan = final_value;
+                    }
                     automation::MixerChannelParamTarget::Plugin { effect_id, target } => {
                         match target {
                             EffectAutomationTarget::Mix => todo!(),
-                            EffectAutomationTarget::PluginParam { param_id } =>
-                                master_automation_events.push(MasterAutomationEvent::PluginParam {
-                                    effect_id: *effect_id,
-                                    param_id: *param_id,
-                                    value,
-                                }),
+                            EffectAutomationTarget::PluginParam { param_id } => {
+                                if
+                                    let Some(e) = self.plugin_state.master_effects
+                                        .iter_mut()
+                                        .find(|e| e.id == *effect_id)
+                                {
+                                    e.plugin.apply_automation(*param_id, final_value);
+                                }
+                            }
                         }
                     }
                 }
             }
             AutomationTarget::TempoBpm => {
-                *bpm = value;
-            }
-            // _ => {}
-        }
-    }
-
-    /// Centralized routing to push a parameter change into the correct queue
-    fn queue_parameter_change(&mut self, target: &AutomationTarget, value: f32) {
-        Self::queue_parameter_change_no_self_ref(
-            target,
-            value,
-            &mut self.track_automation_events,
-            &mut self.active_generators,
-            &mut self.bus_automation_events,
-            &mut self.master_automation_events,
-            &mut self.bpm
-        );
-    }
-
-    fn evaluate_pre_block_modulations(&mut self, buffer_size: usize) {
-        let tempo = self.bpm;
-        if tempo <= 0.0 {
-            return;
-        }
-
-        let samples_per_beat = (60.0 / tempo) * (self.sample_rate as f32);
-        let samples_per_tick = samples_per_beat / 960.0;
-        let current_tick = ((self.song_state.playhead_samples as f64) /
-            (samples_per_tick as f64)) as u32;
-
-        // Assume your AudioGraphState now holds a `modulations: Vec<ModulationEvent>`
-        let active_modulations = self.current_state.graph.modulation_events.clone();
-
-        for (_mod_id, modulation) in active_modulations {
-            match modulation {
-                ModulationEvent::Automation { lane_id, target } => {
-                    // Extract the value from the automation lane at the current tick
-                    if
-                        let Some(lane) = self.current_state.graph.automation_lanes.get(
-                            &AutomationId::from(lane_id)
-                        )
-                    {
-                        let value = lane.value_at_ticks(current_tick);
-                        self.queue_parameter_change(&target, value);
-                    }
-                }
-                ModulationEvent::LFO { rate_hz, depth, base_value, target } => {
-                    // Calculate LFO advancement based on buffer time
-                    let phase_inc = (rate_hz * (buffer_size as f32)) / (self.sample_rate as f32);
-
-                    let phase = self.lfo_phases.entry(target.clone()).or_insert(0.0);
-                    let lfo_val = (*phase * std::f32::consts::TAU).sin(); // Standard Sine LFO
-
-                    *phase = (*phase + phase_inc).fract();
-
-                    // Apply Depth and Base
-                    let final_val = base_value + lfo_val * depth;
-                    self.queue_parameter_change(&target, final_val);
-                }
-                ModulationEvent::PeakController { .. } => {
-                    // Ignored here! Peak Controllers are audio-driven and must be evaluated topologically
-                }
+                self.bpm = final_value;
             }
         }
     }

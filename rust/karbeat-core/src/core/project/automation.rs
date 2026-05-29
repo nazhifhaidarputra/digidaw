@@ -101,7 +101,8 @@ pub enum AutomationCurveType {
 ///
 /// Values are stored in normalized form (0.0–1.0). The lane's `min`/`max`
 /// fields define the mapping to the actual parameter range.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct AutomationPoint {
     /// Position in ticks (relative to project start)
     pub time_ticks: u32,
@@ -197,7 +198,7 @@ impl AutomationLane {
     }
 
     /// Update a point at the given index.
-    pub fn update_point(&mut self, index: usize, time_ticks: u32, value: f32) -> Option<usize> {
+    pub fn update_point(&mut self, index: usize, time_ticks: u32, value: f32, tension: f32) -> Option<usize> {
         if index >= self.points.len() {
             return None;
         }
@@ -206,6 +207,7 @@ impl AutomationLane {
 
         point.time_ticks = time_ticks;
         point.value = value;
+        point.tension = tension.into();
 
         let new_index = match self
             .points

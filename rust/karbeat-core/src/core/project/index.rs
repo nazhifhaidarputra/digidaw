@@ -13,11 +13,9 @@ pub use super::plugin::{ AudioPlugin };
 pub use super::track::{ audio_waveform::AudioWaveform, midi::Pattern, AudioTrack };
 pub use super::transport::TransportState;
 
+use crate::core::project::{ ModulationLink, ModulationSource };
 use crate::core::project::plugin::modulation::ModulationEvent;
-use crate::core::project::{
-    automation::{ AutomationLane, AutomationPoint, AutomationTarget },
-    mixer::MixerState,
-};
+use crate::core::project::{ automation::{ AutomationLane }, mixer::MixerState };
 
 pub use crate::shared::*;
 
@@ -54,6 +52,14 @@ pub struct ApplicationState {
 
     pub modulation_pool: HashMap<ModulationId, ModulationEvent>,
     pub modulation_counter: u32,
+
+    // The Generators (LFOs, Macro Knobs, Peak Controllers)
+    pub modulation_sources: HashMap<ModulationId, ModulationSource>,
+    pub modulation_src_counter: u32,
+
+    // The Cables (Connects a Source to a Target)
+    pub modulation_links: HashMap<ModulationLinkId, ModulationLink>,
+    pub modulation_link_counter: u32,
 
     // Counter for clips
     pub clip_counter: u32,
@@ -230,274 +236,5 @@ impl ApplicationState {
     /// reset current application state to default
     pub fn new_blank_project(&mut self) {
         *self = ApplicationState::default();
-    }
-
-    // =========================================================================
-    // Automation Pool Management
-    // =========================================================================
-
-    /// Add an automation lane to the pool.
-    pub fn add_automation_lane(
-        &mut self,
-        target: AutomationTarget,
-        label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32
-    ) -> anyhow::Result<(AutomationId, ModulationId)> {
-        if self.modulation_pool.values().any(|m| m.target() == &target) {
-            return Err(anyhow!("A modulation mapping for this target already exists"));
-        }
-
-        let lane_id = AutomationId::next(&mut self.automation_counter);
-        let lane = AutomationLane::new(lane_id, label, min, max, default_value);
-        self.automation_pool.insert(lane_id, Arc::new(lane));
-
-        let mod_id = ModulationId::next(&mut self.modulation_counter);
-        let mod_event = ModulationEvent::Automation {
-            lane_id,
-            target,
-        };
-        self.modulation_pool.insert(mod_id, mod_event);
-
-        log::info!("Added automation lane {:?} mapped via mod {:?}", lane_id, mod_id);
-        Ok((lane_id, mod_id))
-    }
-
-    /// Add an automation lane specifically validated for a Track target.
-    pub fn add_automation_lane_for_track(
-        &mut self,
-        track_id: TrackId,
-        target: AutomationTarget,
-        label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32
-    ) -> anyhow::Result<(AutomationId, ModulationId)> {
-        if !target.references_track(track_id) {
-            return Err(anyhow!("Target does not reference the specified track"));
-        }
-        self.add_automation_lane(target, label, min, max, default_value)
-    }
-
-    // Get all Modulations AND their associated Automation Lanes for a specific Track.
-    pub fn get_automation_lanes_for_track(
-        &self,
-        track_id: TrackId
-    ) -> Vec<(ModulationId, AutomationId, Arc<AutomationLane>)> {
-        self.modulation_pool
-            .iter()
-            .filter_map(|(mod_id, m_event)| {
-                if m_event.target().references_track(track_id) {
-                    if let ModulationEvent::Automation { lane_id, .. } = m_event {
-                        if let Some(lane) = self.automation_pool.get(lane_id) {
-                            return Some((*mod_id, *lane_id, lane.clone()));
-                        }
-                    }
-                }
-                None
-            })
-            .collect()
-    }
-
-    /// Completely remove all Modulations and orphaned Automation Lanes for a Track.
-    pub fn remove_modulations_for_track(&mut self, track_id: TrackId) {
-        let mut orphaned_lanes = Vec::new();
-
-        self.modulation_pool.retain(|_, m| {
-            let references = m.target().references_track(track_id);
-            if references {
-                // If it's an automation routing, mark the pure data lane for deletion too
-                if let ModulationEvent::Automation { lane_id, .. } = m {
-                    orphaned_lanes.push(*lane_id);
-                }
-            }
-            !references // Keep it if it DOES NOT reference the track
-        });
-
-        // Clean up the pure data lanes so we don't leak memory
-        for lane_id in orphaned_lanes {
-            self.automation_pool.shift_remove(&lane_id);
-        }
-    }
-
-    /// Add a Host LFO to control a parameter
-    pub fn add_lfo_modulation(
-        &mut self,
-        target: AutomationTarget,
-        rate_hz: f32,
-        depth: f32,
-        base_value: f32
-    ) -> anyhow::Result<ModulationId> {
-        if self.modulation_pool.values().any(|m| m.target() == &target) {
-            return Err(anyhow!("A modulation mapping for this target already exists"));
-        }
-
-        let mod_id = ModulationId::next(&mut self.modulation_counter);
-        let mod_event = ModulationEvent::LFO {
-            rate_hz,
-            depth,
-            base_value,
-            target,
-        };
-        self.modulation_pool.insert(mod_id, mod_event);
-
-        log::info!("Added LFO modulation {:?}", mod_id);
-        Ok(mod_id)
-    }
-
-    /// Remove an automation lane from the pool by its ID.
-    pub fn remove_automation_lane(&mut self, lane_id: AutomationId) -> anyhow::Result<()> {
-        if self.automation_pool.shift_remove(&lane_id).is_none() {
-            return Err(anyhow!("Automation lane {:?} not found", lane_id));
-        }
-
-        // Find and remove the modulation event that was routing this lane
-        self.modulation_pool.retain(|_, m| {
-            if let ModulationEvent::Automation { lane_id: linked_lane_id, .. } = m {
-                *linked_lane_id != lane_id
-            } else {
-                true
-            }
-        });
-
-        log::info!("Removed automation lane {:?}", lane_id);
-        Ok(())
-    }
-
-    /// Get all modulations that reference a specific track.
-    pub fn get_modulations_for_track(
-        &self,
-        track_id: TrackId
-    ) -> Vec<(&ModulationId, &ModulationEvent)> {
-        self.modulation_pool
-            .iter()
-            .filter(|(_, m)| m.target().references_track(track_id))
-            .collect()
-    }
-
-    /// Add an automation lane specifically validated for a Bus target.
-    pub fn add_automation_lane_for_bus(
-        &mut self,
-        bus_id: BusId,
-        target: AutomationTarget,
-        label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32
-    ) -> anyhow::Result<(AutomationId, ModulationId)> {
-        if !target.references_bus(bus_id) {
-            return Err(anyhow!("Target does not reference the specified bus"));
-        }
-        self.add_automation_lane(target, label, min, max, default_value)
-    }
-
-    /// Get all Modulations AND their associated Automation Lanes for a specific Bus.
-    pub fn get_automation_lanes_for_bus(
-        &self,
-        bus_id: BusId
-    ) -> Vec<(ModulationId, AutomationId, Arc<AutomationLane>)> {
-        self.modulation_pool
-            .iter()
-            .filter_map(|(mod_id, m_event)| {
-                if m_event.target().references_bus(bus_id) {
-                    if let ModulationEvent::Automation { lane_id, .. } = m_event {
-                        if let Some(lane) = self.automation_pool.get(lane_id) {
-                            return Some((mod_id.to_owned(), lane_id.to_owned(), lane.clone()));
-                        }
-                    }
-                }
-                None
-            })
-            .collect()
-    }
-
-    /// Completely remove all Modulations and orphaned Automation Lanes for a Bus.
-    pub fn remove_modulations_for_bus(&mut self, bus_id: BusId) {
-        let mut orphaned_lanes = Vec::new();
-
-        self.modulation_pool.retain(|_, m| {
-            let references = m.target().references_bus(bus_id);
-            if references {
-                if let ModulationEvent::Automation { lane_id, .. } = m {
-                    orphaned_lanes.push(*lane_id);
-                }
-            }
-            !references
-        });
-
-        for lane_id in orphaned_lanes {
-            self.automation_pool.shift_remove(&lane_id);
-        }
-    }
-
-    /// Add an automation point to a lane.
-    pub fn add_automation_point(
-        &mut self,
-        lane_id: AutomationId,
-        time_ticks: u32,
-        value: f32
-    ) -> anyhow::Result<()> {
-        let lane_arc = self.automation_pool
-            .get_mut(&lane_id)
-            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-
-        let lane = Arc::make_mut(lane_arc);
-        let point = AutomationPoint::with_curve(
-            time_ticks,
-            value,
-            super::AutomationCurveType::Linear,
-            lane.min,
-            lane.max
-        );
-        lane.add_point(point);
-        Ok(())
-    }
-
-    /// Remove an automation point from a lane by its index.
-    pub fn remove_automation_point(
-        &mut self,
-        lane_id: AutomationId,
-        point_index: usize
-    ) -> anyhow::Result<AutomationPoint> {
-        let lane_arc = self.automation_pool
-            .get_mut(&lane_id)
-            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-
-        let lane = Arc::make_mut(lane_arc);
-        lane.remove_point(point_index).ok_or_else(|| {
-            anyhow!(
-                "Point index {} out of bounds (lane has {} points)",
-                point_index,
-                lane.points.len()
-            )
-        })
-    }
-
-    /// Update an automation point (move in time and/or value).
-    /// returns (old_index, new_index)
-    pub fn update_automation_point(
-        &mut self,
-        lane_id: AutomationId,
-        point_index: usize,
-        time_ticks: u32,
-        value: f32
-    ) -> anyhow::Result<(usize, usize)> {
-        let lane_arc = self.automation_pool
-            .get_mut(&lane_id)
-            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-
-        let lane = Arc::make_mut(lane_arc);
-        match lane.update_point(point_index, time_ticks, value) {
-            Some(new_index) => Ok((point_index, new_index)),
-            None =>
-                Err(
-                    anyhow!(
-                        "Point index {} out of bounds (lane has {} points)",
-                        point_index,
-                        lane.points.len()
-                    )
-                ),
-        }
     }
 }
