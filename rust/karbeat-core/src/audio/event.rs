@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::shared::id::*;
 
 /// Transport feedback struct sent from the audio thread to Flutter.
@@ -72,7 +74,7 @@ pub enum AudioSourceAutomationEvent {
     Volume(f32),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PluginTarget {
     Generator(GeneratorId),
     TrackEffect(TrackId, EffectId),

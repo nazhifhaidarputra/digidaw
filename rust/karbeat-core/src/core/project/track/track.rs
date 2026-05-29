@@ -1,13 +1,11 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use karbeat_plugin_types::ParamBounds;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     commands::AudioCommand,
     context::ctx,
     core::project::{
-        automation::{AutomationLane, AutomationTarget},
         clip::ClipTimeUnit,
         mixer::MixerChannel,
         ApplicationState, Clip, DawSource, GeneratorInstance, GeneratorInstanceType,
@@ -15,7 +13,7 @@ use crate::{
     },
     shared::{
         id::{ClipId, TrackId},
-        BusId, GeneratorId,
+        GeneratorId,
     },
 };
 use karbeat_utils::color::Color;
@@ -388,103 +386,6 @@ impl ApplicationState {
         Ok(track_arc)
     }
 
-    pub fn add_new_automation_track_from_bus(
-        &mut self,
-        bus_id: BusId,
-        automation_target: AutomationTarget,
-    ) -> anyhow::Result<Arc<AutomationLane>> {
-        let track_id = TrackId::next(&mut self.track_counter);
-
-        // Find the Bus
-        let bus = self
-            .get_mixer_state()
-            .buses
-            .get(&bus_id)
-            .ok_or_else(|| anyhow::anyhow!("Cannot find the mixer bus"))?;
-
-        let (current_value, min, max) = match &automation_target {
-            AutomationTarget::BusVolume(_) => {
-                let curr_value = bus.channel.volume.get_base();
-                let (min_val, max_val) = {
-                    if let ParamBounds::Continuous { min, max, .. } = bus.channel.volume.bounds {
-                        (min, max)
-                    } else {
-                        (-60.0, 6.0)
-                    }
-                };
-                (curr_value, min_val, max_val)
-            }
-            AutomationTarget::BusPan(_) => {
-                let curr_value = bus.channel.pan.get_base();
-                let (min_val, max_val) = {
-                    if let ParamBounds::Continuous { min, max, .. } = bus.channel.pan.bounds {
-                        (min, max)
-                    } else {
-                        (-60.0, 6.0)
-                    }
-                };
-                (curr_value, min_val, max_val)
-            }
-            AutomationTarget::BusPluginParam { .. } => (0.5, 0.0, 1.0), // Standard fallback for plugins
-            _ => {
-                return Err(anyhow::anyhow!("Not an Bus Target"));
-            }
-        };
-
-        // Create a descriptive label for the track
-        let label = match &automation_target {
-            AutomationTarget::BusVolume(_) => format!("{} - Volume", bus.name),
-            AutomationTarget::BusPan(_) => format!("{} - Pan", bus.name),
-            AutomationTarget::BusPluginParam { .. } => format!("{} - Plugin", bus.name),
-            _ => bus.name.clone(),
-        };
-
-        // Initiate the points in the first and last max sample index with the current value
-        // Fallback to ~4 seconds if the project is completely empty
-        let end_sample = self.max_sample_index.max(
-            (self.audio_config.sample_rate * 4) / ((self.transport.bpm * 60.0).floor() as u32),
-        );
-
-        let new_automation_lane = self.add_automation_lane_return_lane(
-            automation_target,
-            label.clone(),
-            min,
-            max,
-            current_value,
-        )?;
-
-        let track_order = self.tracks.len();
-        // Create an automation track explicitly for the timeline (because it is a Bus target)
-        let mut new_track = AudioTrack {
-            track_type: TrackType::Automation,
-            id: track_id,
-            name: label.clone(),
-            color: Color::new_from_rgb(150, 150, 150),
-            order_idx: track_order,
-            ..Default::default()
-        };
-
-        // Assign it to the AutomationId by creating an empty clip spanning the project timeline
-        let automation_clip = Clip {
-            id: ClipId::next(&mut self.clip_counter),
-            name: label,
-            source: Some(DawSource::Automation(new_automation_lane.id)),
-            time: ClipTimeUnit::Ticks {
-                start_time: 0,
-                loop_length: end_sample,
-                offset_start: 0,
-            },
-        };
-
-        // Add the clip using your existing validation (which correctly allows Automation clips on Automation tracks)
-        new_track.add_clip(automation_clip)?;
-
-        // Finally, add the dedicated track into the timeline's main collection
-        self.tracks.insert(track_id, Arc::new(new_track));
-
-        Ok(new_automation_lane)
-    }
-
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
     pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
         let mut deleted_track_type = RemovedTrackType::Audio;
@@ -512,7 +413,7 @@ impl ApplicationState {
         }
 
         // Remove all automation lanes for this track
-        self.remove_automation_lanes_for_track(track_id);
+        self.remove_modulations_for_track(track_id);
 
         self.update_max_sample_index();
 

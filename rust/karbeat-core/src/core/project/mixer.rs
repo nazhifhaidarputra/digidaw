@@ -1,8 +1,8 @@
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use karbeat_plugin_types::{Param, ParameterSpec};
 use smallvec::SmallVec;
 use std::{
-    collections::{HashMap, HashSet},
     sync::Arc,
 };
 
@@ -533,6 +533,7 @@ impl MixerState {
             adj.insert(*bus_id, Vec::new());
         }
 
+
         for conn in &self.routing {
             if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)
             {
@@ -662,9 +663,9 @@ impl ApplicationState {
 /// Helper to find cycle using DFS
 fn find_cycle(
     node: BusId,
-    adj: &HashMap<BusId, Vec<BusId>>,
-    visited: &mut HashSet<BusId>,
-    rec_stack: &mut HashSet<BusId>,
+    adj: &hashbrown::HashMap<BusId, Vec<BusId>>,
+    visited: &mut hashbrown::HashSet<BusId>,
+    rec_stack: &mut hashbrown::HashSet<BusId>,
 ) -> bool {
     visited.insert(node);
     rec_stack.insert(node);

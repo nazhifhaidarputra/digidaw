@@ -1,6 +1,8 @@
-use crate::{ audio::event::PluginTarget, core::project::automation::AutomationTarget };
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+use crate::{ audio::event::PluginTarget, core::project::automation::AutomationTarget, shared::AutomationId };
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ModulationEvent {
     /// Driven by the audio output of a specific plugin (e.g., Peak Controller)
     PeakController {
@@ -11,7 +13,7 @@ pub enum ModulationEvent {
     },
     /// Driven by a timeline automation lane
     Automation {
-        lane_id: u32,
+        lane_id: AutomationId,
         target: AutomationTarget,
     },
     /// Driven by a mathematical oscillator (LFO)
@@ -21,4 +23,14 @@ pub enum ModulationEvent {
         base_value: f32,
         target: AutomationTarget,
     },
+}
+
+impl ModulationEvent {
+    pub fn target(&self) -> &AutomationTarget {
+        match self {
+            ModulationEvent::PeakController { target, ..} => target,
+            ModulationEvent::Automation {target, .. } => target,
+            ModulationEvent::LFO { target, ..} => target,
+        }
+    }
 }
