@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi' as ffi;
 
 import 'package:flutter/material.dart';
@@ -122,9 +123,19 @@ class KarbeatParametricEqState
 
     // Request the initial magnitude response after the first frame so that
     // the widget.target and widget.effectId are fully bound.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _sendMagnitudeRequest(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sendMagnitudeRequest();
+      plugin_api.executeRealtimePluginCommand(
+        target: _toPluginTarget(),
+        command: 'SET_SPECTRUM_ACTIVE',
+        payloadJson: jsonEncode({'active': true}),
+      );
+      plugin_api.executeRealtimePluginCommand(
+        target: _toPluginTarget(),
+        command: 'SET_MAGNITUDE_ACTIVE',
+        payloadJson: jsonEncode({'active': true}),
+      );
+    });
 
     // Re-fire GET_SPECTRUM at ~30 FPS to drive the real-time spectrum analyzer.
     _spectrumPollTimer = Timer.periodic(
@@ -135,6 +146,18 @@ class KarbeatParametricEqState
 
   @override
   void dispose() {
+    plugin_api.executeRealtimePluginCommand(
+      target: _toPluginTarget(),
+      command: 'SET_SPECTRUM_ACTIVE',
+      payloadJson: jsonEncode({'active': false}),
+    );
+
+    plugin_api.executeRealtimePluginCommand(
+      target: _toPluginTarget(),
+      command: 'SET_MAGNITUDE_ACTIVE',
+      payloadJson: jsonEncode({'active': false}),
+    );
+
     _zeroCopyStreamSub?.cancel();
     _spectrumPollTimer?.cancel();
     super.dispose();

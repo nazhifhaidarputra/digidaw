@@ -12,11 +12,11 @@ class DawPerformanceMonitor extends StatefulWidget {
 
 class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
   static const int maxDataPoints = 100;
-  
+
   // Rolling queues for the line graph
   final Queue<double> _dspHistory = Queue<double>();
   final Queue<double> _cpuHistory = Queue<double>();
-  
+
   double _currentRamMb = 0.0;
   double _totalRamMb = 0.0;
   double _currentDsp = 0.0;
@@ -41,7 +41,7 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
         // Advance the rolling graph
         _dspHistory.removeFirst();
         _dspHistory.add(metrics.dspHeadroom.clamp(0.0, 100.0));
-        
+
         _cpuHistory.removeFirst();
         _cpuHistory.add(metrics.osCpuUsage.clamp(0.0, 100.0));
       });
@@ -50,52 +50,58 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
 
   @override
   void dispose() {
-    _monitorSub?.cancel(); // This drops the sink, automatically terminating the Rust thread!
+    _monitorSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 200,
-      height: 60,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.black87,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade800),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "DSP: ${_currentDsp.toStringAsFixed(1)}%",
-                style: TextStyle(
-                  color: _currentDsp > 85 ? Colors.redAccent : Colors.cyanAccent,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              Text(
-                "RAM: ${(_currentRamMb / 1024).toStringAsFixed(1)} GB / ${(_totalRamMb / 1024).toStringAsFixed(1)} GB",
-                style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: CustomPaint(
-              size: const Size(double.infinity, double.infinity),
-              painter: _RollingGraphPainter(
-                dspData: _dspHistory.toList(),
-                cpuData: _cpuHistory.toList(),
+    return AspectRatio(
+      aspectRatio: 3.5, // Width will always be 3.5x the height
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.grey.shade800),
+        ),
+        child: Column(
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  Text(
+                    "DSP: ${_currentDsp.toStringAsFixed(1)}%",
+                    style: TextStyle(
+                      color: _currentDsp > 85 ? Colors.redAccent : Colors.cyanAccent,
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    "RAM: ${(_currentRamMb / 1024).toStringAsFixed(1)} GB / ${(_totalRamMb / 1024).toStringAsFixed(1)} GB",
+                    style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace'),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Expanded(
+              child: ClipRect(
+                child: CustomPaint(
+                  size: const Size(double.infinity, double.infinity),
+                  painter: _RollingGraphPainter(
+                    dspData: _dspHistory.toList(),
+                    cpuData: _cpuHistory.toList(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -129,7 +135,7 @@ class _RollingGraphPainter extends CustomPainter {
 
     for (int i = 0; i < dspData.length; i++) {
       final x = i * stepX;
-      
+
       // Map 0-100% to Y coordinates (inverted so 100% is at the top)
       final dspY = height - ((dspData[i] / 100.0) * height);
       final cpuY = height - ((cpuData[i] / 100.0) * height);

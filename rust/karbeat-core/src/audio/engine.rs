@@ -3028,11 +3028,10 @@ impl AudioEngine {
         let current_tick = ((self.song_state.playhead_samples as f64) /
             (samples_per_tick as f64)) as u32;
 
-        // 1. Extract Peak Controller Data First (Bypasses borrow checker limits)
+        // Extract Peak Controller Data First (Bypasses borrow checker limits)
         let mut peak_updates = Vec::new();
         for (id, (source, _)) in self.active_sources.iter() {
             if let LiveModulationSource::PeakController { source: p_tgt } = source {
-                // Fetch zero copy buffer from the end of the LAST block (1 block latency)
                 if
                     let Some(karbeat_plugin_api::prelude::ZeroCopyBuffer::Float32(control_buf)) =
                         self.get_plugin(p_tgt).and_then(|p| p.get_zero_copy_buffer("control"))
@@ -3047,7 +3046,7 @@ impl AudioEngine {
             }
         }
 
-        // 2. Tick LFOs and Automation Lanes
+        // Tick LFOs and Automation Lanes
         for (_, (source, current_output)) in self.active_sources.iter_mut() {
             match source {
                 LiveModulationSource::LFO(lfo) => {
@@ -3064,7 +3063,7 @@ impl AudioEngine {
             }
         }
 
-        // 3. Sum the Cables
+        // Sum the Cables
         let mut parameter_accumulators: HashMap<AutomationTarget, f32> = HashMap::new();
 
         for link in &self.active_links {
@@ -3075,7 +3074,6 @@ impl AudioEngine {
             }
         }
 
-        // 4. Apply the Math instantly!
         for (target, final_value) in parameter_accumulators {
             self.apply_parameter_change(&target, final_value);
         }

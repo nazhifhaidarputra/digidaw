@@ -220,9 +220,8 @@ pub fn start_audio_stream(
     // This prevents PipeWire/JACK from resizing the buffer dynamically.
     let buffer_size = match supported_config.buffer_size() {
         cpal::SupportedBufferSize::Range { min, max } => {
-            // Request 512 frames (good balance of latency vs stability)
             // Clamp it to ensure we don't request something invalid
-            let desired = 512;
+            let desired = 1024;
             cpal::BufferSize::Fixed(desired.clamp(*min, *max))
         }
         cpal::SupportedBufferSize::Unknown => cpal::BufferSize::Default,
@@ -260,7 +259,7 @@ pub fn start_audio_stream(
 
     // Create feedback ring buffer (Audio → UI for parameter updates)
     let (feedback_producer, feedback_consumer) =
-        RingBuffer::<crate::commands::AudioFeedback>::new(256);
+        RingBuffer::<crate::commands::AudioFeedback>::new(512);
     *ctx().feedback_consumer.lock() = Some(feedback_consumer);
 
     // Read initial BPM from app state for the audio engine
@@ -283,7 +282,7 @@ pub fn start_audio_stream(
     let ring_buffer_capacity = 8192;
     let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
 
-    let engine_block_size = 512;
+    let engine_block_size = 1024;
     let staging_buffer = vec![0.0; engine_block_size * channels];
 
     let audio_ctx = AudioContext {

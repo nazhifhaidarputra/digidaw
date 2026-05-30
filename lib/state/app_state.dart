@@ -573,6 +573,8 @@ class GlobalAppState extends ChangeNotifier {
       final newState = await mixer_api.getMixerState();
       _mixerState = newState;
       notifyListeners();
+
+      queryAllMixerChannels();
     } catch (e) {
       AppLogger.error("Failed to sync mixer state: $e");
     }
@@ -583,6 +585,12 @@ class GlobalAppState extends ChangeNotifier {
       final newBuses = await mixer_api.getBuses();
       _mixerState = _mixerState.copyWith(buses: newBuses);
       notifyListeners();
+
+      for (final busId in newBuses.keys) {
+        mixer_api.queryMixerChannel(
+          target: mixer_api.UiMixerChannelTarget.bus(busId),
+        );
+      }
     } catch (e) {
       AppLogger.error("Failedto sync mixer bus: $e");
     }
@@ -597,6 +605,9 @@ class GlobalAppState extends ChangeNotifier {
       newChannels[trackId] = updatedChannel;
       _mixerState = _mixerState.copyWith(channels: newChannels);
       notifyListeners();
+      mixer_api.queryMixerChannel(
+        target: mixer_api.UiMixerChannelTarget.track(trackId),
+      );
     } catch (e) {
       AppLogger.error("Error syncing mixer channel $trackId: $e");
     }
@@ -607,6 +618,9 @@ class GlobalAppState extends ChangeNotifier {
       final updatedMaster = await mixer_api.getMasterBus();
       _mixerState = _mixerState.copyWith(masterBus: updatedMaster);
       notifyListeners();
+      mixer_api.queryMixerChannel(
+        target: const mixer_api.UiMixerChannelTarget.master(),
+      );
     } catch (e) {
       AppLogger.error("Failed to sync master bus: $e");
     }

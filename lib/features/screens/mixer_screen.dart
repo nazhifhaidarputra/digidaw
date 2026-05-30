@@ -45,7 +45,6 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final state = ref.read(globalStateProvider);
       await state.syncMixerState();
-      state.queryAllMixerChannels();
     });
   }
 
