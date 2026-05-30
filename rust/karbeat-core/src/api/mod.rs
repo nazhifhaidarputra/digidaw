@@ -4,13 +4,13 @@ pub mod automation_api;
 pub mod clip_api;
 pub mod clipboard_api;
 pub mod mixer_api;
+pub mod monitor_api;
 pub mod note_api;
 pub mod pattern_api;
 pub mod plugin_api;
 pub mod project_api;
 pub mod track_api;
 pub mod transport_api;
-pub mod monitor_api;
 
 use crate::{
     context::utils::broadcast_state_change,

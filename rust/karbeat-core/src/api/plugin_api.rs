@@ -2,7 +2,6 @@ use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 
-
 use crate::{
     audio::event::PluginTarget,
     commands::{AudioCommand, AudioFeedback, EffectTarget},
@@ -473,8 +472,6 @@ pub fn execute_generator_instance_command(
         .execute_custom_command(command, payload_value)
         .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))
 }
-
-
 
 // ============================================================================
 // Real-time Plugin Command Channel

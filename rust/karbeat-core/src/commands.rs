@@ -4,11 +4,12 @@ use karbeat_plugin_api::types::ZeroCopyBuffer;
 use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
-        GeneratorId, ModulationLink, ModulationSource, mixer::{MixerChannelParams, RoutingConnection}, plugin::AudioPlugin, track::audio_waveform::AudioWaveform
+        mixer::{MixerChannelParams, RoutingConnection},
+        plugin::AudioPlugin,
+        track::audio_waveform::AudioWaveform,
+        GeneratorId, ModulationLink, ModulationSource,
     },
-    shared::{
-        ModulationId, PatternId, id::*
-    },
+    shared::{id::*, ModulationId, PatternId},
 };
 
 pub enum AudioCommand {

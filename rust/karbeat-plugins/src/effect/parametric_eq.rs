@@ -1,23 +1,20 @@
 use karbeat_dsp::filter::{
-    BiquadCoefficients,
-    BiquadFilterType,
-    FilterMode,
-    SingleBiquadFilterStage,
+    BiquadCoefficients, BiquadFilterType, FilterMode, SingleBiquadFilterStage,
 };
 
-use karbeat_macros::{ karbeat_plugin, EnumParam };
+use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
-use num_complex::{ Complex, Complex32 };
-use rustfft::{ num_traits::Zero, Fft, FftPlanner };
-use serde::{ Deserialize, Serialize };
-use serde_json::{ json, Value };
-use smallvec::{ smallvec, SmallVec };
+use num_complex::{Complex, Complex32};
+use rustfft::{num_traits::Zero, Fft, FftPlanner};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use smallvec::{smallvec, SmallVec};
 use std::sync::Arc;
 
 const FFT_SIZE: usize = 4096;
 /// 20.0 / ln(10.0) — used for fast dB conversion: dB = FAST_DB_SCALE * ln(x)
 const FAST_DB_SCALE: f32 = 8.685_889_6; // 20.0 / LN_10
-// const LN_10: f32 = std::f32::consts::LN_10;
+                                        // const LN_10: f32 = std::f32::consts::LN_10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Default, EnumParam, Deserialize, Serialize)]
 pub enum FilterSlope {
@@ -131,7 +128,8 @@ impl DigiParametricEQFilterNode {
     pub fn ensure_channels(&mut self, channels: usize) {
         if self.channels.len() != channels {
             let num_stages = (self.order.get() as usize) + 1;
-            self.channels.resize_with(channels, || SingleBiquadFilterStage::new(num_stages));
+            self.channels
+                .resize_with(channels, || SingleBiquadFilterStage::new(num_stages));
         }
     }
 
@@ -168,9 +166,12 @@ impl DigiParametricEQFilterNode {
             ch.resize_cascades(num_stages);
         }
 
-        self.coeff = self.filter_type
-            .get()
-            .get_coefficients(self.freq.get(), self.q.get(), self.gain.get(), sample_rate);
+        self.coeff = self.filter_type.get().get_coefficients(
+            self.freq.get(),
+            self.q.get(),
+            self.gain.get(),
+            sample_rate,
+        );
     }
 
     /// Processes a single sample for a given channel through all cascaded stages.
@@ -367,7 +368,10 @@ impl DigiParametricEQ {
         engine.analyzer_buffer = smallvec![0.0; FFT_SIZE];
         engine.analyzer_idx = 0;
         engine.spectrum_history = vec![-100.0f32; Self::SPECTRUM_POINTS].into_boxed_slice();
-        engine.tables = Some(Box::new(AnalyzerTables::build(Self::SPECTRUM_POINTS, 48000.0)));
+        engine.tables = Some(Box::new(AnalyzerTables::build(
+            Self::SPECTRUM_POINTS,
+            48000.0,
+        )));
         engine.scratch = Box::new(AnalyzerScratch::new());
         engine.magnitude_buffer = Arc::new(Box::new([]));
         engine.spectrum_buffer = Arc::new(Box::new([]));
@@ -389,7 +393,7 @@ impl DigiParametricEQ {
         if self.enable_magnitude_curve {
             self.magnitude_buffer = Arc::new(
                 self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS)
-                    .into_boxed_slice()
+                    .into_boxed_slice(),
             );
         }
     }
@@ -427,9 +431,7 @@ impl DigiParametricEQ {
 
     pub fn compute_magnitude_response(&self, num_points: usize) -> Vec<(f32, f32)> {
         let flat = self.compute_magnitude_response_flat(num_points);
-        flat.chunks_exact(2)
-            .map(|c| (c[0], c[1]))
-            .collect()
+        flat.chunks_exact(2).map(|c| (c[0], c[1])).collect()
     }
 
     /// Runs the FFT analyzer and updates `spectrum_buffer`.
@@ -467,9 +469,10 @@ impl DigiParametricEQ {
                 t
             }
             None => {
-                self.tables = Some(
-                    Box::new(AnalyzerTables::build(Self::SPECTRUM_POINTS, self.last_sample_rate))
-                );
+                self.tables = Some(Box::new(AnalyzerTables::build(
+                    Self::SPECTRUM_POINTS,
+                    self.last_sample_rate,
+                )));
                 self.tables.as_mut().unwrap()
             }
         };
@@ -538,7 +541,10 @@ impl DigiParametricEQ {
                 let start = bin_floor.saturating_sub(pool_radius);
                 let end = (bin_floor + pool_radius).min(half_bins - 1);
                 // fold is auto-vectorizable; avoids repeated bounds checks vs explicit loop
-                raw_db[start..=end].iter().copied().fold(-100.0f32, f32::max)
+                raw_db[start..=end]
+                    .iter()
+                    .copied()
+                    .fold(-100.0f32, f32::max)
             } else {
                 lerp_db
             };
@@ -627,11 +633,13 @@ impl AudioPlugin for DigiParametricEQ {
             self.last_sample_rate = sample_rate;
             self.channels = channels;
             // Rebuild precomputed tables for the new sample rate
-            self.tables = Some(Box::new(AnalyzerTables::build(Self::SPECTRUM_POINTS, sample_rate)));
+            self.tables = Some(Box::new(AnalyzerTables::build(
+                Self::SPECTRUM_POINTS,
+                sample_rate,
+            )));
             // Ensure spectrum_history has the right length
             if self.spectrum_history.len() != Self::SPECTRUM_POINTS {
-                self.spectrum_history =
-                    vec![-100.0f32; Self::SPECTRUM_POINTS].into_boxed_slice();
+                self.spectrum_history = vec![-100.0f32; Self::SPECTRUM_POINTS].into_boxed_slice();
             }
             self.update_all_nodes();
             self.handle_side_effects(0);
@@ -639,7 +647,9 @@ impl AudioPlugin for DigiParametricEQ {
     }
 
     fn process(&mut self, buffer: &mut [f32], _context: &ProcessContext) {
-       if self.channels == 0 || buffer.is_empty() { return; }
+        if self.channels == 0 || buffer.is_empty() {
+            return;
+        }
         let num_frames = buffer.len() / self.channels;
         self.process_dsp(buffer);
         if self.enable_spectrum_analyzer {
@@ -677,12 +687,12 @@ impl AudioPlugin for DigiParametricEQ {
             "SET_MAGNITUDE_ACTIVE" => {
                 if let Some(active) = payload.get("active").and_then(|v| v.as_bool()) {
                     self.enable_magnitude_curve = active;
-                    
+
                     // If the UI was just opened, calculate it immediately so it's ready!
                     if active {
                         self.magnitude_buffer = Arc::new(
                             self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS)
-                                .into_boxed_slice()
+                                .into_boxed_slice(),
                         );
                     }
                 }

@@ -6,10 +6,8 @@ use crate::{
     commands::AudioCommand,
     context::ctx,
     core::project::{
-        clip::ClipTimeUnit,
-        mixer::MixerChannel,
-        ApplicationState, Clip, DawSource, GeneratorInstance, GeneratorInstanceType,
-        PluginInstance,
+        clip::ClipTimeUnit, mixer::MixerChannel, ApplicationState, Clip, DawSource,
+        GeneratorInstance, GeneratorInstanceType, PluginInstance,
     },
     shared::{
         id::{ClipId, TrackId},

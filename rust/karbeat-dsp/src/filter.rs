@@ -35,8 +35,13 @@ const DEFAULT_CASCADES: usize = 8;
 // ▱▱▱▱▱ Traits ▱▱▱▱▱
 
 pub trait FilterMode: Copy + Default + PartialEq + EnumParam {
-    fn get_coefficients(&self, freq: f32, q: f32, gain: f32, sample_rate: f32)
-        -> BiquadCoefficients;
+    fn get_coefficients(
+        &self,
+        freq: f32,
+        q: f32,
+        gain: f32,
+        sample_rate: f32,
+    ) -> BiquadCoefficients;
     fn is_off(&self) -> bool;
 }
 
@@ -96,18 +101,36 @@ impl From<f32> for BiquadFilterType {
 
 impl FilterMode for SimpleFilterMode {
     #[inline]
-    fn is_off(&self) -> bool { *self == Self::Off }
+    fn is_off(&self) -> bool {
+        *self == Self::Off
+    }
 
     fn get_coefficients(&self, freq: f32, q: f32, _gain: f32, sr: f32) -> BiquadCoefficients {
-        if self.is_off() { return BiquadCoefficients::BYPASS; }
-        let w0    = std::f32::consts::TAU * freq / sr;
+        if self.is_off() {
+            return BiquadCoefficients::BYPASS;
+        }
+        let w0 = std::f32::consts::TAU * freq / sr;
         let alpha = w0.sin() / (2.0 * q);
         let cos_w = w0.cos();
         let (b0, b1, b2, a0, a1, a2) = match self {
-            Self::LowPass  => ((1.0-cos_w)/2.0,  1.0-cos_w, (1.0-cos_w)/2.0, 1.0+alpha, -2.0*cos_w, 1.0-alpha),
-            Self::HighPass => ((1.0+cos_w)/2.0, -(1.0+cos_w),(1.0+cos_w)/2.0, 1.0+alpha, -2.0*cos_w, 1.0-alpha),
-            Self::BandPass => (alpha, 0.0, -alpha, 1.0+alpha, -2.0*cos_w, 1.0-alpha),
-            Self::Off      => unreachable!(),
+            Self::LowPass => (
+                (1.0 - cos_w) / 2.0,
+                1.0 - cos_w,
+                (1.0 - cos_w) / 2.0,
+                1.0 + alpha,
+                -2.0 * cos_w,
+                1.0 - alpha,
+            ),
+            Self::HighPass => (
+                (1.0 + cos_w) / 2.0,
+                -(1.0 + cos_w),
+                (1.0 + cos_w) / 2.0,
+                1.0 + alpha,
+                -2.0 * cos_w,
+                1.0 - alpha,
+            ),
+            Self::BandPass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w, 1.0 - alpha),
+            Self::Off => unreachable!(),
         };
         BiquadCoefficients::from_raw(b0, b1, b2, a0, a1, a2)
     }
@@ -115,35 +138,76 @@ impl FilterMode for SimpleFilterMode {
 
 impl FilterMode for BiquadFilterType {
     #[inline]
-    fn is_off(&self) -> bool { *self == Self::Off }
+    fn is_off(&self) -> bool {
+        *self == Self::Off
+    }
 
     fn get_coefficients(&self, freq: f32, q: f32, gain: f32, sr: f32) -> BiquadCoefficients {
-        if self.is_off() { return BiquadCoefficients::BYPASS; }
-        let a     = (10.0f32).powf(gain / 40.0);
-        let w0    = std::f32::consts::TAU * freq / sr;
+        if self.is_off() {
+            return BiquadCoefficients::BYPASS;
+        }
+        let a = (10.0f32).powf(gain / 40.0);
+        let w0 = std::f32::consts::TAU * freq / sr;
         let alpha = w0.sin() / (2.0 * q);
         let cos_w = w0.cos();
-        let sq_a  = a.sqrt();
+        let sq_a = a.sqrt();
         let (b0, b1, b2, a0, a1, a2) = match self {
             Self::Peaking => (
-                1.0 + alpha * a, -2.0*cos_w, 1.0 - alpha * a,
-                1.0 + alpha / a, -2.0*cos_w, 1.0 - alpha / a,
+                1.0 + alpha * a,
+                -2.0 * cos_w,
+                1.0 - alpha * a,
+                1.0 + alpha / a,
+                -2.0 * cos_w,
+                1.0 - alpha / a,
             ),
             Self::LowShelf => {
                 let t = 2.0 * sq_a * alpha;
-                (a*(a+1.0-(a-1.0)*cos_w+t),  2.0*a*(a-1.0-(a+1.0)*cos_w), a*(a+1.0-(a-1.0)*cos_w-t),
-                    a+1.0+(a-1.0)*cos_w+t,  -2.0*(a-1.0+(a+1.0)*cos_w),   a+1.0+(a-1.0)*cos_w-t)
+                (
+                    a * (a + 1.0 - (a - 1.0) * cos_w + t),
+                    2.0 * a * (a - 1.0 - (a + 1.0) * cos_w),
+                    a * (a + 1.0 - (a - 1.0) * cos_w - t),
+                    a + 1.0 + (a - 1.0) * cos_w + t,
+                    -2.0 * (a - 1.0 + (a + 1.0) * cos_w),
+                    a + 1.0 + (a - 1.0) * cos_w - t,
+                )
             }
             Self::HighShelf => {
                 let t = 2.0 * sq_a * alpha;
-                (a*(a+1.0+(a-1.0)*cos_w+t), -2.0*a*(a-1.0+(a+1.0)*cos_w), a*(a+1.0+(a-1.0)*cos_w-t),
-                    a+1.0-(a-1.0)*cos_w+t,   2.0*(a-1.0-(a+1.0)*cos_w),   a+1.0-(a-1.0)*cos_w-t)
+                (
+                    a * (a + 1.0 + (a - 1.0) * cos_w + t),
+                    -2.0 * a * (a - 1.0 + (a + 1.0) * cos_w),
+                    a * (a + 1.0 + (a - 1.0) * cos_w - t),
+                    a + 1.0 - (a - 1.0) * cos_w + t,
+                    2.0 * (a - 1.0 - (a + 1.0) * cos_w),
+                    a + 1.0 - (a - 1.0) * cos_w - t,
+                )
             }
-            Self::LowPass  => ((1.0-cos_w)/2.0,  1.0-cos_w, (1.0-cos_w)/2.0, 1.0+alpha, -2.0*cos_w, 1.0-alpha),
-            Self::HighPass => ((1.0+cos_w)/2.0, -(1.0+cos_w),(1.0+cos_w)/2.0, 1.0+alpha, -2.0*cos_w, 1.0-alpha),
-            Self::BandPass => (alpha, 0.0, -alpha, 1.0+alpha, -2.0*cos_w, 1.0-alpha),
-            Self::Notch    => (1.0, -2.0*cos_w, 1.0, 1.0+alpha, -2.0*cos_w, 1.0-alpha),
-            Self::Off      => unreachable!(),
+            Self::LowPass => (
+                (1.0 - cos_w) / 2.0,
+                1.0 - cos_w,
+                (1.0 - cos_w) / 2.0,
+                1.0 + alpha,
+                -2.0 * cos_w,
+                1.0 - alpha,
+            ),
+            Self::HighPass => (
+                (1.0 + cos_w) / 2.0,
+                -(1.0 + cos_w),
+                (1.0 + cos_w) / 2.0,
+                1.0 + alpha,
+                -2.0 * cos_w,
+                1.0 - alpha,
+            ),
+            Self::BandPass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w, 1.0 - alpha),
+            Self::Notch => (
+                1.0,
+                -2.0 * cos_w,
+                1.0,
+                1.0 + alpha,
+                -2.0 * cos_w,
+                1.0 - alpha,
+            ),
+            Self::Off => unreachable!(),
         };
         BiquadCoefficients::from_raw(b0, b1, b2, a0, a1, a2)
     }
@@ -163,12 +227,24 @@ pub struct BiquadCoefficients {
 
 impl BiquadCoefficients {
     /// Identity / bypass: passes signal unchanged.
-    pub const BYPASS: Self = Self { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 };
+    pub const BYPASS: Self = Self {
+        b0: 1.0,
+        b1: 0.0,
+        b2: 0.0,
+        a1: 0.0,
+        a2: 0.0,
+    };
 
     #[inline]
     fn from_raw(b0: f32, b1: f32, b2: f32, a0: f32, a1: f32, a2: f32) -> Self {
         let inv = 1.0 / a0;
-        Self { b0: b0*inv, b1: b1*inv, b2: b2*inv, a1: a1*inv, a2: a2*inv }
+        Self {
+            b0: b0 * inv,
+            b1: b1 * inv,
+            b2: b2 * inv,
+            a1: a1 * inv,
+            a2: a2 * inv,
+        }
     }
 
     /// Scalar magnitude response at one frequency.
@@ -182,8 +258,13 @@ impl BiquadCoefficients {
         let den_re = 1.0 + self.a1 * cos_w + self.a2 * cos_2w;
         let den_im = -(self.a1 * sin_w + self.a2 * sin_2w);
         let den_sq = den_re * den_re + den_im * den_im;
-        if den_sq < 1e-20 { return 0.0; }
-        let db = 10.0 * ((num_re*num_re + num_im*num_im) / den_sq).max(1e-20).log10();
+        if den_sq < 1e-20 {
+            return 0.0;
+        }
+        let db = 10.0
+            * ((num_re * num_re + num_im * num_im) / den_sq)
+                .max(1e-20)
+                .log10();
         db * num_stages as f32
     }
 
@@ -192,7 +273,13 @@ impl BiquadCoefficients {
     /// with the tail handled scalarly.
     ///
     /// This is the recommended API for spectrum/EQ-curve display.
-    pub fn magnitude_db_batch(&self, freqs: &[f32], sample_rate: f32, num_stages: usize, out: &mut [f32]) {
+    pub fn magnitude_db_batch(
+        &self,
+        freqs: &[f32],
+        sample_rate: f32,
+        num_stages: usize,
+        out: &mut [f32],
+    ) {
         assert_eq!(freqs.len(), out.len());
         let scale = std::f32::consts::TAU / sample_rate;
         let ns = num_stages as f32;
@@ -209,8 +296,14 @@ impl BiquadCoefficients {
         while i + 8 <= freqs.len() {
             // Load 8 frequencies and compute w = TAU * f / sr
             let w = f32x8::from([
-                freqs[i]*scale, freqs[i+1]*scale, freqs[i+2]*scale, freqs[i+3]*scale,
-                freqs[i+4]*scale, freqs[i+5]*scale, freqs[i+6]*scale, freqs[i+7]*scale,
+                freqs[i] * scale,
+                freqs[i + 1] * scale,
+                freqs[i + 2] * scale,
+                freqs[i + 3] * scale,
+                freqs[i + 4] * scale,
+                freqs[i + 5] * scale,
+                freqs[i + 6] * scale,
+                freqs[i + 7] * scale,
             ]);
             // cos/sin via wide — these lower to SVML or libm depending on target
             let cos_w = w.cos();
@@ -231,7 +324,7 @@ impl BiquadCoefficients {
             let db_vec = ten * (ratio.max(eps).ln() / f32x8::splat(std::f32::consts::LN_10));
             let db_scaled: [f32; 8] = (db_vec * f32x8::splat(ns)).into();
 
-            out[i..i+8].copy_from_slice(&db_scaled);
+            out[i..i + 8].copy_from_slice(&db_scaled);
             i += 8;
         }
         // Scalar tail
@@ -265,16 +358,24 @@ impl BiquadCoefficientsWide {
     #[inline]
     pub fn from_scalar(c: &BiquadCoefficients) -> Self {
         Self {
-            b0: f32x8::splat(c.b0), b1: f32x8::splat(c.b1), b2: f32x8::splat(c.b2),
-            a1: f32x8::splat(c.a1), a2: f32x8::splat(c.a2),
-            b0_4: f32x4::splat(c.b0), b1_4: f32x4::splat(c.b1), b2_4: f32x4::splat(c.b2),
-            a1_4: f32x4::splat(c.a1), a2_4: f32x4::splat(c.a2),
+            b0: f32x8::splat(c.b0),
+            b1: f32x8::splat(c.b1),
+            b2: f32x8::splat(c.b2),
+            a1: f32x8::splat(c.a1),
+            a2: f32x8::splat(c.a2),
+            b0_4: f32x4::splat(c.b0),
+            b1_4: f32x4::splat(c.b1),
+            b2_4: f32x4::splat(c.b2),
+            a1_4: f32x4::splat(c.a1),
+            a2_4: f32x4::splat(c.a2),
         }
     }
 }
 
 impl Default for BiquadCoefficientsWide {
-    fn default() -> Self { Self::from_scalar(&BiquadCoefficients::BYPASS) }
+    fn default() -> Self {
+        Self::from_scalar(&BiquadCoefficients::BYPASS)
+    }
 }
 
 // ▱▱▱▱ DF2T scalar state (replaces DF1's x1/x2/y1/y2) ▱▱▱▱
@@ -316,7 +417,7 @@ impl BiquadStateWide {
     /// Uses the pre-splatted `f32x4` halves of `BiquadCoefficientsWide`.
     #[inline(always)]
     pub fn process(&mut self, inputs: f32x4, c: &BiquadCoefficientsWide) -> f32x4 {
-        let y  = c.b0_4 * inputs + self.s1;
+        let y = c.b0_4 * inputs + self.s1;
         self.s1 = c.b1_4 * inputs - c.a1_4 * y + self.s2;
         self.s2 = c.b2_4 * inputs - c.a2_4 * y;
         y
@@ -366,7 +467,9 @@ impl BiquadStateCascadeWide {
         self.s2 = [0.0; DEFAULT_CASCADES];
     }
 
-    pub fn num_stages(&self) -> usize { DEFAULT_CASCADES }
+    pub fn num_stages(&self) -> usize {
+        DEFAULT_CASCADES
+    }
 }
 
 // ▱▱▱▱ Wide channel + cascade stage (4ch × 8 stages) ▱▱▱▱
@@ -380,19 +483,28 @@ pub struct SingleBiquadFilterStageWide {
     /// DF2T states: `s1[ch][stage]` — channel-major layout for stride-1 access
     /// when processing a frame (iterate channels, not stages, in the frame loop).
     s1: [[f32; DEFAULT_CASCADES]; 4],
+    /// DF2T states: `s1[ch][stage]` — channel-major layout for stride-1 access
+    /// when processing a frame (iterate channels, not stages, in the frame loop).
     s2: [[f32; DEFAULT_CASCADES]; 4],
     pub num_cascades: usize,
 }
 
 impl Default for SingleBiquadFilterStageWide {
     fn default() -> Self {
-        Self { s1: [[0.0; 8]; 4], s2: [[0.0; 8]; 4], num_cascades: 1 }
+        Self {
+            s1: [[0.0; 8]; 4],
+            s2: [[0.0; 8]; 4],
+            num_cascades: 1,
+        }
     }
 }
 
 impl SingleBiquadFilterStageWide {
     pub fn new(num_cascades: usize) -> Self {
-        Self { num_cascades, ..Default::default() }
+        Self {
+            num_cascades,
+            ..Default::default()
+        }
     }
 
     pub fn resize_cascades(&mut self, n: usize) {
@@ -419,9 +531,9 @@ impl SingleBiquadFilterStageWide {
             let s2 = &mut self.s2[ch];
             for k in 0..n {
                 // DF2T: 3 muls, 2 adds, no branches
-                let y    = c.b0 * x + s1[k];
-                s1[k]    = c.b1 * x - c.a1 * y + s2[k];
-                s2[k]    = c.b2 * x - c.a2 * y;
+                let y = c.b0 * x + s1[k];
+                s1[k] = c.b1 * x - c.a1 * y + s2[k];
+                s2[k] = c.b2 * x - c.a2 * y;
                 x = y;
             }
             outs[ch] = x;
@@ -440,7 +552,9 @@ pub struct SingleBiquadFilterStage {
 
 impl SingleBiquadFilterStage {
     pub fn new(num_cascades: usize) -> Self {
-        Self { stages: smallvec![BiquadState::default(); num_cascades] }
+        Self {
+            stages: smallvec![BiquadState::default(); num_cascades],
+        }
     }
 
     pub fn resize_cascades(&mut self, n: usize) {
@@ -448,12 +562,16 @@ impl SingleBiquadFilterStage {
     }
 
     pub fn reset_state(&mut self) {
-        for s in &mut self.stages { *s = BiquadState::default(); }
+        for s in &mut self.stages {
+            *s = BiquadState::default();
+        }
     }
 
     #[inline(always)]
     pub fn process(&mut self, mut x: f32, c: &BiquadCoefficients) -> f32 {
-        for stage in &mut self.stages { x = stage.process(x, c); }
+        for stage in &mut self.stages {
+            x = stage.process(x, c);
+        }
         x
     }
 }
@@ -463,17 +581,41 @@ impl SingleBiquadFilterStage {
 #[derive(Clone, Debug)]
 #[karbeat_plugin]
 pub struct BiquadFilter<T: FilterMode + 'static> {
-    #[param(id="freq", name="Frequency", group="Filter", min=20.0, max=20000.0, default=1000.0, step=1.0)]
+    #[param(
+        id = "freq",
+        name = "Frequency",
+        group = "Filter",
+        min = 20.0,
+        max = 20000.0,
+        default = 1000.0,
+        step = 1.0
+    )]
     pub freq: f32,
     #[param(id="gain", name="Gain", group="Filter", min=-24.0, max=24.0, default=0.0, step=0.1)]
     pub gain: f32,
-    #[param(id="q", name="Q", group="Filter", min=0.1, max=10.0, default=0.707, step=0.01)]
+    #[param(
+        id = "q",
+        name = "Q",
+        group = "Filter",
+        min = 0.1,
+        max = 10.0,
+        default = 0.707,
+        step = 0.01
+    )]
     pub q: f32,
-    #[param(id="active", name="Active", group="Filter", default=true)]
+    #[param(id = "active", name = "Active", group = "Filter", default = true)]
     pub active: bool,
-    #[param(id="type", name="Type", group="Filter", default=0.0)]
+    #[param(id = "type", name = "Type", group = "Filter", default = 0.0)]
     pub filter_type: T,
-    #[param(id="cascades", name="Order", group="Filter", min=1.0, max=8.0, default=1.0, step=1.0)]
+    #[param(
+        id = "cascades",
+        name = "Order",
+        group = "Filter",
+        min = 1.0,
+        max = 8.0,
+        default = 1.0,
+        step = 1.0
+    )]
     pub cascades: f32,
 
     num_of_channels: u8,
@@ -530,7 +672,8 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
         self.wide_stage.resize_cascades(nc);
         if new_channels > 4 {
             let overflow = new_channels - 4;
-            self.overflow_channels.resize_with(overflow, || SingleBiquadFilterStage::new(nc));
+            self.overflow_channels
+                .resize_with(overflow, || SingleBiquadFilterStage::new(nc));
         } else {
             self.overflow_channels.clear();
         }
@@ -538,49 +681,57 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
 
     pub fn resize_cascades(&mut self, n: usize) {
         self.wide_stage.resize_cascades(n);
-        for ch in &mut self.overflow_channels { ch.resize_cascades(n); }
+        for ch in &mut self.overflow_channels {
+            ch.resize_cascades(n);
+        }
     }
 
     pub fn reset_state(&mut self) {
         self.wide_stage.reset_state();
-        for ch in &mut self.overflow_channels { ch.reset_state(); }
+        for ch in &mut self.overflow_channels {
+            ch.reset_state();
+        }
     }
 
     /// Recalculate coefficients if any parameter has changed.
     /// Call ONCE per block (e.g. before the sample loop in `process_dsp`).
     /// Updates both `self.coeff` (scalar) and `self.coeff_wide` (pre-splatted).
     pub fn calculate_coefficients(&mut self) {
-        if !self.active.get() || self.sample_rate <= 0.0 { return; }
+        if !self.active.get() || self.sample_rate <= 0.0 {
+            return;
+        }
         let ft = self.filter_type.get();
-        if ft.is_off() { return; }
+        if ft.is_off() {
+            return;
+        }
 
         let freq = self.freq.get().clamp(20.0, self.sample_rate / 2.1);
-        let q    = self.q.get().max(0.01);
+        let q = self.q.get().max(0.01);
         let gain = self.gain.get();
         let casc = self.cascades.get();
 
         // Skip expensive math if nothing changed
         if self.last_filter_type == ft
-            && (self.last_freq  - freq).abs() < 0.001
-            && (self.last_gain  - gain).abs() < 0.001
-            && (self.last_q     - q   ).abs() < 0.001
+            && (self.last_freq - freq).abs() < 0.001
+            && (self.last_gain - gain).abs() < 0.001
+            && (self.last_q - q).abs() < 0.001
             && (self.last_cascades - casc).abs() < 0.001
         {
             return;
         }
 
         self.last_filter_type = ft;
-        self.last_freq        = freq;
-        self.last_gain        = gain;
-        self.last_q           = q;
-        self.last_cascades    = casc;
+        self.last_freq = freq;
+        self.last_gain = gain;
+        self.last_q = q;
+        self.last_cascades = casc;
 
         let active_cascades = casc.max(1.0) as usize;
         if self.wide_stage.num_cascades != active_cascades {
             self.resize_cascades(active_cascades);
         }
 
-        self.coeff      = ft.get_coefficients(freq, q, gain, self.sample_rate);
+        self.coeff = ft.get_coefficients(freq, q, gain, self.sample_rate);
         self.coeff_wide = BiquadCoefficientsWide::from_scalar(&self.coeff);
     }
 
@@ -589,9 +740,13 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
     /// Channels 4+: scalar DF2T fallback.
     #[inline(always)]
     pub fn process_frame(&mut self, frame: &mut [f32]) {
-        if !self.active.get() || self.filter_type.get().is_off() { return; }
+        if !self.active.get() || self.filter_type.get().is_off() {
+            return;
+        }
         let n = (self.num_of_channels as usize).min(frame.len());
-        if n == 0 { return; }
+        if n == 0 {
+            return;
+        }
 
         // SIMD path: pack ≤4 channels → process → unpack
         let wide_n = n.min(4);
@@ -602,7 +757,9 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
             if wide_n > 3 { frame[3] } else { 0.0 },
         ]);
         let out: [f32; 4] = self.wide_stage.process(simd_in, &self.coeff).into();
-        for i in 0..wide_n { frame[i] = out[i]; }
+        for i in 0..wide_n {
+            frame[i] = out[i];
+        }
 
         // Scalar overflow: channels 4+
         for (idx, ch) in self.overflow_channels.iter_mut().enumerate() {
@@ -615,7 +772,9 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
 
     /// Magnitude response in dB at a single frequency.
     pub fn magnitude_db_at(&self, freq: f32) -> f32 {
-        if !self.active.get() || self.filter_type.get().is_off() { return 0.0; }
+        if !self.active.get() || self.filter_type.get().is_off() {
+            return 0.0;
+        }
         let n = self.cascades.get().max(1.0) as usize;
         self.coeff.magnitude_db_at(freq, self.sample_rate, n)
     }
@@ -628,7 +787,8 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
             return;
         }
         let n = self.cascades.get().max(1.0) as usize;
-        self.coeff.magnitude_db_batch(freqs, self.sample_rate, n, out);
+        self.coeff
+            .magnitude_db_batch(freqs, self.sample_rate, n, out);
     }
 }
 
@@ -655,8 +815,11 @@ mod tests {
         coeffs.magnitude_db_batch(&freqs, 44100.0, 2, &mut batch_out);
         for (i, &f) in freqs.iter().enumerate() {
             let scalar = coeffs.magnitude_db_at(f, 44100.0, 2);
-            assert!((batch_out[i] - scalar).abs() < 1e-4,
-                "mismatch at freq {f}: batch={} scalar={scalar}", batch_out[i]);
+            assert!(
+                (batch_out[i] - scalar).abs() < 1e-4,
+                "mismatch at freq {f}: batch={} scalar={scalar}",
+                batch_out[i]
+            );
         }
     }
 
@@ -666,15 +829,31 @@ mod tests {
         let c = BiquadFilterType::LowPass.get_coefficients(500.0, 0.707, 0.0, 44100.0);
         let mut df2t = BiquadState::default();
         // Reference DF1 — inline to avoid pulling in old code
-        struct Df1 { x1: f32, x2: f32, y1: f32, y2: f32 }
-        let mut df1 = Df1 { x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0 };
+        struct Df1 {
+            x1: f32,
+            x2: f32,
+            y1: f32,
+            y2: f32,
+        }
+        let mut df1 = Df1 {
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+        };
         let impulse = std::iter::once(1.0f32).chain(std::iter::repeat(0.0f32));
         for x in impulse.take(64) {
-            let y_df1 = c.b0*x + c.b1*df1.x1 + c.b2*df1.x2 - c.a1*df1.y1 - c.a2*df1.y2;
-            df1.x2 = df1.x1; df1.x1 = x; df1.y2 = df1.y1; df1.y1 = y_df1;
+            let y_df1 = c.b0 * x + c.b1 * df1.x1 + c.b2 * df1.x2 - c.a1 * df1.y1 - c.a2 * df1.y2;
+            df1.x2 = df1.x1;
+            df1.x1 = x;
+            df1.y2 = df1.y1;
+            df1.y1 = y_df1;
             let y_df2t = df2t.process(x, &c);
-            assert!((y_df1 - y_df2t).abs() < 1e-5,
-                "DF1={y_df1} DF2T={y_df2t} diff={}", (y_df1-y_df2t).abs());
+            assert!(
+                (y_df1 - y_df2t).abs() < 1e-5,
+                "DF1={y_df1} DF2T={y_df2t} diff={}",
+                (y_df1 - y_df2t).abs()
+            );
         }
     }
 
@@ -690,7 +869,10 @@ mod tests {
         filter.calculate_coefficients();
         let mut frame = [1.0f32; 6];
         filter.process_frame(&mut frame);
-        for s in &frame { assert!(!s.is_nan()); assert!(*s != 1.0); }
+        for s in &frame {
+            assert!(!s.is_nan());
+            assert!(*s != 1.0);
+        }
         // All channels share the same filter → same output
         assert!((frame[0] - frame[4]).abs() < 1e-5);
     }

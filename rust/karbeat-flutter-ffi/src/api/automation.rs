@@ -1,14 +1,10 @@
 use karbeat_core::{
     api::automation_api,
     core::project::{
-        AutomationCurveType,
-        AutomationLane,
-        AutomationPoint,
-        AutomationTarget,
-        EffectAutomationTarget,
-        MixerChannelParamTarget,
+        AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
+        EffectAutomationTarget, MixerChannelParamTarget,
     },
-    shared::{ BusId, EffectId, TrackId },
+    shared::{BusId, EffectId, TrackId},
 };
 
 #[derive(Clone, Debug)]
@@ -61,9 +57,7 @@ pub enum MixerChannelParamTargetDto {
 #[derive(Clone, Debug)]
 pub enum EffectAutomationTargetDto {
     Mix,
-    PluginParam {
-        param_id: u32,
-    },
+    PluginParam { param_id: u32 },
 }
 
 #[derive(Clone, Debug)]
@@ -120,10 +114,7 @@ impl From<AutomationLaneDto> for AutomationLane {
         Self {
             id: l.id.into(),
             label: l.label,
-            points: l.points
-                .into_iter()
-                .map(|p| p.into())
-                .collect(),
+            points: l.points.into_iter().map(|p| p.into()).collect(),
             enabled: l.enabled,
             min: l.min,
             max: l.max,
@@ -137,10 +128,7 @@ impl From<&AutomationLane> for AutomationLaneDto {
         Self {
             id: l.id.into(),
             label: l.label.clone(),
-            points: l.points
-                .iter()
-                .map(|p| p.to_owned().into())
-                .collect(),
+            points: l.points.iter().map(|p| p.to_owned().into()).collect(),
             enabled: l.enabled,
             min: l.min,
             max: l.max,
@@ -153,9 +141,9 @@ impl From<&EffectAutomationTarget> for EffectAutomationTargetDto {
     fn from(target: &EffectAutomationTarget) -> Self {
         match target {
             EffectAutomationTarget::Mix => Self::Mix,
-            EffectAutomationTarget::PluginParam { param_id } => {
-                Self::PluginParam { param_id: *param_id }
-            }
+            EffectAutomationTarget::PluginParam { param_id } => Self::PluginParam {
+                param_id: *param_id,
+            },
         }
     }
 }
@@ -165,11 +153,10 @@ impl From<&MixerChannelParamTarget> for MixerChannelParamTargetDto {
         match target {
             MixerChannelParamTarget::Volume => Self::Volume,
             MixerChannelParamTarget::Pan => Self::Pan,
-            MixerChannelParamTarget::Plugin { effect_id, target } =>
-                Self::Plugin {
-                    effect_id: effect_id.to_u32(),
-                    target: EffectAutomationTargetDto::from(target),
-                },
+            MixerChannelParamTarget::Plugin { effect_id, target } => Self::Plugin {
+                effect_id: effect_id.to_u32(),
+                target: EffectAutomationTargetDto::from(target),
+            },
         }
     }
 }
@@ -183,16 +170,17 @@ impl From<&AutomationTarget> for AutomationTargetDto {
                     param_id: *param_id,
                 }
             }
-            AutomationTarget::Track { track_id, mix_target } =>
-                Self::Track {
-                    track_id: track_id.to_u32(),
-                    mix_target: MixerChannelParamTargetDto::from(mix_target),
-                },
-            AutomationTarget::Bus { bus_id, mix_target } =>
-                Self::Bus {
-                    bus_id: bus_id.to_u32(),
-                    mix_target: MixerChannelParamTargetDto::from(mix_target),
-                },
+            AutomationTarget::Track {
+                track_id,
+                mix_target,
+            } => Self::Track {
+                track_id: track_id.to_u32(),
+                mix_target: MixerChannelParamTargetDto::from(mix_target),
+            },
+            AutomationTarget::Bus { bus_id, mix_target } => Self::Bus {
+                bus_id: bus_id.to_u32(),
+                mix_target: MixerChannelParamTargetDto::from(mix_target),
+            },
             AutomationTarget::Master(mix_target) => {
                 Self::Master(MixerChannelParamTargetDto::from(mix_target))
             }
@@ -219,11 +207,10 @@ impl From<MixerChannelParamTargetDto> for MixerChannelParamTarget {
         match dto {
             MixerChannelParamTargetDto::Volume => Self::Volume,
             MixerChannelParamTargetDto::Pan => Self::Pan,
-            MixerChannelParamTargetDto::Plugin { effect_id, target } =>
-                Self::Plugin {
-                    effect_id: EffectId::from(effect_id),
-                    target: EffectAutomationTarget::from(target),
-                },
+            MixerChannelParamTargetDto::Plugin { effect_id, target } => Self::Plugin {
+                effect_id: EffectId::from(effect_id),
+                target: EffectAutomationTarget::from(target),
+            },
         }
     }
 }
@@ -237,16 +224,17 @@ impl From<AutomationTargetDto> for AutomationTarget {
                     param_id,
                 }
             }
-            AutomationTargetDto::Track { track_id, mix_target } =>
-                Self::Track {
-                    track_id: TrackId::from(track_id),
-                    mix_target: MixerChannelParamTarget::from(mix_target),
-                },
-            AutomationTargetDto::Bus { bus_id, mix_target } =>
-                Self::Bus {
-                    bus_id: BusId::from(bus_id),
-                    mix_target: MixerChannelParamTarget::from(mix_target),
-                },
+            AutomationTargetDto::Track {
+                track_id,
+                mix_target,
+            } => Self::Track {
+                track_id: TrackId::from(track_id),
+                mix_target: MixerChannelParamTarget::from(mix_target),
+            },
+            AutomationTargetDto::Bus { bus_id, mix_target } => Self::Bus {
+                bus_id: BusId::from(bus_id),
+                mix_target: MixerChannelParamTarget::from(mix_target),
+            },
             AutomationTargetDto::Master(mix_target) => {
                 Self::Master(MixerChannelParamTarget::from(mix_target))
             }
@@ -258,8 +246,7 @@ impl From<AutomationTargetDto> for AutomationTarget {
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
 pub fn get_automation_lanes_for_track(track_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
-    automation_api
-        ::get_automation_lanes_for_track(track_id.into())
+    automation_api::get_automation_lanes_for_track(track_id.into())
         .into_iter()
         .map(|(mod_id, automation_id, arc_lane)| {
             let lane = arc_lane.as_ref().into();
@@ -271,8 +258,7 @@ pub fn get_automation_lanes_for_track(track_id: u32) -> Vec<(u32, u32, Automatio
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given bus id
 pub fn get_automation_lanes_for_bus(bus_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
-    automation_api
-        ::get_automation_lanes_for_bus(bus_id.into())
+    automation_api::get_automation_lanes_for_bus(bus_id.into())
         .into_iter()
         .map(|(mod_id, automation_id, arc_lane)| {
             let lane = arc_lane.as_ref().into();
@@ -286,7 +272,7 @@ pub fn add_automation_lane(
     label: &str,
     min: f32,
     max: f32,
-    default_value: f32
+    default_value: f32,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane(target.into(), label, min, max, default_value) {
         Ok(arc_lane) => {
@@ -308,18 +294,16 @@ pub fn add_automation_lane_for_track(
     label: &str,
     min: f32,
     max: f32,
-    default_value: f32
+    default_value: f32,
 ) -> Result<AutomationLaneDto, String> {
-    match
-        automation_api::add_automation_lane_for_track(
-            track_id.into(),
-            target.into(),
-            label,
-            min,
-            max,
-            default_value
-        )
-    {
+    match automation_api::add_automation_lane_for_track(
+        track_id.into(),
+        target.into(),
+        label,
+        min,
+        max,
+        default_value,
+    ) {
         Ok(arc_lane) => {
             let lane_dto = AutomationLaneDto::from(arc_lane.as_ref());
             Ok(lane_dto)
@@ -334,18 +318,16 @@ pub fn add_automation_lane_for_bus(
     label: &str,
     min: f32,
     max: f32,
-    default_value: f32
+    default_value: f32,
 ) -> Result<AutomationLaneDto, String> {
-    match
-        automation_api::add_automation_lane_for_bus(
-            bus_id.into(),
-            target.into(),
-            label,
-            min,
-            max,
-            default_value
-        )
-    {
+    match automation_api::add_automation_lane_for_bus(
+        bus_id.into(),
+        target.into(),
+        label,
+        min,
+        max,
+        default_value,
+    ) {
         Ok(arc_lane) => {
             let lane_dto = AutomationLaneDto::from(arc_lane.as_ref());
             Ok(lane_dto)
@@ -361,10 +343,9 @@ pub fn add_automation_lane_for_bus(
 pub fn add_new_automation_point(
     automation_id: u32,
     time_ticks: u32,
-    value: f32
+    value: f32,
 ) -> Result<AutomationPointDto, String> {
-    automation_api
-        ::add_new_automation_point(automation_id.into(), time_ticks, value)
+    automation_api::add_new_automation_point(automation_id.into(), time_ticks, value)
         .map(|point| point.into())
         .map_err(|e| e.to_string())
 }
@@ -378,10 +359,9 @@ pub fn update_automation_point(
     index: usize,
     time_ticks: u32,
     value: f32,
-    tension: f32
+    tension: f32,
 ) -> Result<usize, String> {
-    automation_api
-        ::update_automation_point(automation_id.into(), index, time_ticks, value, tension)
+    automation_api::update_automation_point(automation_id.into(), index, time_ticks, value, tension)
         .map_err(|e| e.to_string())
 }
 

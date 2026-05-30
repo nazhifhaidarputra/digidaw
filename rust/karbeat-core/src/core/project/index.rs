@@ -1,21 +1,21 @@
-use std::{ cmp::Ordering, sync::Arc };
+use std::{cmp::Ordering, sync::Arc};
 
-use chrono::{ DateTime, Utc };
+use chrono::{DateTime, Utc};
 use hashbrown::HashMap;
 use indexmap::IndexMap;
 
 use anyhow::anyhow;
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 pub use super::clipboard::ClipboardContent;
-pub use super::generator::{ GeneratorInstance };
-pub use super::plugin::{ AudioPlugin };
-pub use super::track::{ audio_waveform::AudioWaveform, midi::Pattern, AudioTrack };
+pub use super::generator::GeneratorInstance;
+pub use super::plugin::AudioPlugin;
+pub use super::track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack};
 pub use super::transport::TransportState;
 
-use crate::core::project::{ ModulationLink, ModulationSource };
 use crate::core::project::plugin::modulation::ModulationEvent;
-use crate::core::project::{ automation::{ AutomationLane }, mixer::MixerState };
+use crate::core::project::{automation::AutomationLane, mixer::MixerState};
+use crate::core::project::{ModulationLink, ModulationSource};
 
 pub use crate::shared::*;
 
@@ -199,7 +199,8 @@ impl ApplicationState {
         // Grab the absolute time context
         let bpm = self.transport.bpm;
         let sample_rate = self.audio_config.sample_rate;
-        self.max_sample_index = self.tracks
+        self.max_sample_index = self
+            .tracks
             .values_mut()
             .map(|t| {
                 let track_mut = Arc::make_mut(t);
@@ -213,7 +214,7 @@ impl ApplicationState {
     /// Deletes an audio source and removes all clips referencing it.
     pub fn remove_audio_source(
         &mut self,
-        source_id: AudioSourceId
+        source_id: AudioSourceId,
     ) -> anyhow::Result<AudioSourceId> {
         // we check whether the source exists
         let library = Arc::make_mut(&mut self.asset_library);

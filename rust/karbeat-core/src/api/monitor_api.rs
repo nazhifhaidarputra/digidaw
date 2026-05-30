@@ -1,4 +1,4 @@
-pub use sysinfo::{ System, CpuRefreshKind, MemoryRefreshKind };
+pub use sysinfo::{CpuRefreshKind, MemoryRefreshKind, System};
 
 use crate::audio::engine::get_current_dsp_load;
 #[derive(Clone, Debug)]
@@ -11,9 +11,8 @@ pub struct PerformanceMetrics {
 
 pub fn init_sys() -> System {
     System::new_with_specifics(
-        sysinfo::RefreshKind
-            ::everything()
-            .with_memory(MemoryRefreshKind::everything().without_swap())
+        sysinfo::RefreshKind::everything()
+            .with_memory(MemoryRefreshKind::everything().without_swap()),
     )
 }
 

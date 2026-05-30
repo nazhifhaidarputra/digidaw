@@ -1,6 +1,5 @@
 use flutter_rust_bridge::frb;
 
-
 /// Helper function to acquire u32 ID from string
 /// using FNV1a hash functions
 #[frb(sync)]

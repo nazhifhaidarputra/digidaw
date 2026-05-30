@@ -9495,7 +9495,9 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::KarbeatPluginType>
 impl flutter_rust_bridge::IntoDart for crate::api::automation::MixerChannelParamTargetDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
-            crate::api::automation::MixerChannelParamTargetDto::Volume => [0.into_dart()].into_dart(),
+            crate::api::automation::MixerChannelParamTargetDto::Volume => {
+                [0.into_dart()].into_dart()
+            }
             crate::api::automation::MixerChannelParamTargetDto::Pan => [1.into_dart()].into_dart(),
             crate::api::automation::MixerChannelParamTargetDto::Plugin { effect_id, target } => [
                 2.into_dart(),
@@ -10969,16 +10971,22 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
             } => {
                 <i32>::sse_encode(1, serializer);
                 <u32>::sse_encode(track_id, serializer);
-                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(mix_target, serializer);
+                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
+                    mix_target, serializer,
+                );
             }
             crate::api::automation::AutomationTargetDto::Bus { bus_id, mix_target } => {
                 <i32>::sse_encode(2, serializer);
                 <u32>::sse_encode(bus_id, serializer);
-                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(mix_target, serializer);
+                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
+                    mix_target, serializer,
+                );
             }
             crate::api::automation::AutomationTargetDto::Master(field0) => {
                 <i32>::sse_encode(3, serializer);
-                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(field0, serializer);
+                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
+                    field0, serializer,
+                );
             }
             crate::api::automation::AutomationTargetDto::TempoBpm => {
                 <i32>::sse_encode(4, serializer);

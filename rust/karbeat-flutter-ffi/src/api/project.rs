@@ -496,7 +496,7 @@ pub struct WavExportConfigDTO {
 pub struct Mp3ExportConfigDTO {
     pub sample_rate: u32,
     pub channels: u8,
-    pub bit_rate: BitDepthDTO, 
+    pub bit_rate: BitDepthDTO,
 }
 
 #[derive(Clone)]
@@ -582,7 +582,6 @@ pub fn export_project_flutter(
             let bit_depth: BitDepth = mp3_dto.bit_rate.try_into()?;
             let sample_rate = mp3_dto.sample_rate;
             let channels = mp3_dto.channels;
-            
 
             AudioExportConfig::Mp3 {
                 sample_rate,

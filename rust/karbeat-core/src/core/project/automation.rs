@@ -7,7 +7,10 @@
 use karbeat_dsp::interpolation::lerp;
 use serde::{Deserialize, Serialize};
 
-use crate::shared::{id::{AutomationId, BusId, EffectId, TrackId}, types::FractionF32};
+use crate::shared::{
+    id::{AutomationId, BusId, EffectId, TrackId},
+    types::FractionF32,
+};
 
 // ============================================================================
 // AUTOMATION TARGET
@@ -32,7 +35,7 @@ pub enum AutomationTarget {
 
     Bus {
         bus_id: BusId,
-        mix_target: MixerChannelParamTarget
+        mix_target: MixerChannelParamTarget,
     },
 
     Master(MixerChannelParamTarget),
@@ -47,16 +50,14 @@ pub enum MixerChannelParamTarget {
     Pan,
     Plugin {
         effect_id: EffectId,
-        target: EffectAutomationTarget
-    }
+        target: EffectAutomationTarget,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum EffectAutomationTarget {
     Mix, // NOTE: This is unused for a moment. might use it later
-    PluginParam {
-        param_id: u32
-    }
+    PluginParam { param_id: u32 },
 }
 
 impl AutomationTarget {
@@ -64,7 +65,7 @@ impl AutomationTarget {
     pub fn references_track(&self, id: TrackId) -> bool {
         match self {
             AutomationTarget::TrackGeneratorPluginParam { track_id, .. }
-            | AutomationTarget::Track{track_id, ..}=> *track_id == id,
+            | AutomationTarget::Track { track_id, .. } => *track_id == id,
             _ => false,
         }
     }
@@ -73,7 +74,7 @@ impl AutomationTarget {
     pub fn references_bus(&self, target_bus_id: BusId) -> bool {
         match self {
             AutomationTarget::Bus { bus_id, .. } => *bus_id == target_bus_id,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -120,16 +121,22 @@ impl AutomationPoint {
             time_ticks,
             value: value.clamp(0.0, 1.0),
             curve_type: AutomationCurveType::Linear,
-            tension: 0.0.into()
+            tension: 0.0.into(),
         }
     }
 
-    pub fn with_curve(time_ticks: u32, value: f32, curve_type: AutomationCurveType, min: f32, max: f32) -> Self {
+    pub fn with_curve(
+        time_ticks: u32,
+        value: f32,
+        curve_type: AutomationCurveType,
+        min: f32,
+        max: f32,
+    ) -> Self {
         Self {
             time_ticks,
             value: value.clamp(min, max),
             curve_type,
-            tension: 0.0.into()
+            tension: 0.0.into(),
         }
     }
 }
@@ -141,7 +148,7 @@ impl AutomationPoint {
 /// An automation lane that controls a single parameter.
 ///
 /// Lives in `ApplicationState::automation_pool` and is serialized with the project.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default,)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AutomationLane {
     pub id: AutomationId,
@@ -198,7 +205,13 @@ impl AutomationLane {
     }
 
     /// Update a point at the given index.
-    pub fn update_point(&mut self, index: usize, time_ticks: u32, value: f32, tension: f32) -> Option<usize> {
+    pub fn update_point(
+        &mut self,
+        index: usize,
+        time_ticks: u32,
+        value: f32,
+        tension: f32,
+    ) -> Option<usize> {
         if index >= self.points.len() {
             return None;
         }
@@ -271,7 +284,7 @@ impl AutomationLane {
                 // tension > 0  → ease-out (fast start, slow end)
                 let t_shaped = apply_tension_to_t(t, tension);
                 lerp(t_shaped, p1.value, p2.value)
-            },
+            }
             AutomationCurveType::Exponential => {
                 // Bias the exponent so tension shifts the curve's inflection.
                 // tension = 0  → standard (v1 * (v2/v1)^t)
@@ -284,7 +297,11 @@ impl AutomationLane {
             }
             AutomationCurveType::Step => {
                 let jump_at = 0.5 + tension * 0.5; // maps [-1,1] → [0,1]
-                if t < jump_at { p1.value } else { p2.value }
+                if t < jump_at {
+                    p1.value
+                } else {
+                    p2.value
+                }
             }
         };
 

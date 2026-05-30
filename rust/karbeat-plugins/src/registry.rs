@@ -65,11 +65,15 @@ impl PluginRegistry {
         let mut registry = Self::new();
 
         // Karbeatzer V2 - our main synth
-        registry.register_generator("synth_karbeatzer_v2","Karbeatzer V2", || Box::new(KarbeatzerV2::build()));
+        registry.register_generator("synth_karbeatzer_v2", "Karbeatzer V2", || {
+            Box::new(KarbeatzerV2::build())
+        });
         registry.register_generator("synth_my_retro", "My Retro", || Box::new(MyRetro::build()));
 
         // Parametric EQ
-        registry.register_effect("effect_param_eq", "Parametric EQ", || Box::new(DigiParametricEQ::build()));
+        registry.register_effect("effect_param_eq", "Parametric EQ", || {
+            Box::new(DigiParametricEQ::build())
+        });
 
         registry
     }
@@ -98,7 +102,7 @@ impl PluginRegistry {
 
     /// Register a new effect plugin factory.
     /// Returns the assigned registry ID.
-    pub fn register_effect<F>(&mut self, id_str: &str,  name: &str, factory: F) -> u32
+    pub fn register_effect<F>(&mut self, id_str: &str, name: &str, factory: F) -> u32
     where
         F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
     {
@@ -161,7 +165,10 @@ impl PluginRegistry {
     }
 
     /// Get cached parameter specs for a generator by registry ID from string
-    pub fn get_generator_parameter_specs_by_id_str(&self, id_str: &str) -> Option<Vec<ParameterSpec>> {
+    pub fn get_generator_parameter_specs_by_id_str(
+        &self,
+        id_str: &str,
+    ) -> Option<Vec<ParameterSpec>> {
         let id = hash_str(id_str);
         self.generators
             .get(&id)
@@ -258,7 +265,7 @@ impl PluginRegistry {
         self.effects.get(&id).map(|reg| reg.name.clone())
     }
 
-     /// Get a generator's name by its ID
+    /// Get a generator's name by its ID
     pub fn get_generator_name_from_id_str(&self, id_str: &str) -> Option<String> {
         let id = hash_str(id_str);
         self.generators.get(&id).map(|reg| reg.name.clone())

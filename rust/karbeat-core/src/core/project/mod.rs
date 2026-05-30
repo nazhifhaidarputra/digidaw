@@ -10,12 +10,12 @@ pub mod plugin;
 pub mod track;
 pub mod transport;
 
-pub use index::*;
-pub use mixer::*;
-pub use transport::*;
+pub use automation::*;
 pub use clip::*;
 pub use clipboard::*;
 pub use generator::*;
+pub use index::*;
+pub use mixer::*;
 pub use plugin::*;
 pub use track::*;
-pub use automation::*;
+pub use transport::*;

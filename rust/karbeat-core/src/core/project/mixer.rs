@@ -2,9 +2,7 @@ use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use karbeat_plugin_types::{Param, ParameterSpec};
 use smallvec::SmallVec;
-use std::{
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -532,7 +530,6 @@ impl MixerState {
         for bus_id in self.buses.keys() {
             adj.insert(*bus_id, Vec::new());
         }
-
 
         for conn in &self.routing {
             if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)

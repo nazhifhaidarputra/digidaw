@@ -18,7 +18,7 @@ impl From<PerformanceMetrics> for PerformanceMetricsDTO {
             os_cpu_usage: value.os_cpu_usage,
             ram_usage_mb: value.ram_usage_mb,
             total_ram_mb: value.total_ram_mb,
-            dsp_headroom: value.dsp_headroom
+            dsp_headroom: value.dsp_headroom,
         }
     }
 }
@@ -36,7 +36,7 @@ pub fn start_performance_monitor(sink: StreamSink<PerformanceMetricsDTO>) {
             let metrics_dto = metrics.into();
             if sink.add(metrics_dto).is_err() {
                 log::info!("Performance monitor stream closed.");
-                break; 
+                break;
             }
 
             thread::sleep(Duration::from_millis(33));

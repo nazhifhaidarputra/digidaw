@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow};
-use serde::{ Deserialize, Serialize };
+use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     audio::event::PluginTarget,
-    core::project::{ ApplicationState, AutomationCurveType, AutomationLane, AutomationPoint, automation::AutomationTarget },
-    shared::{ AutomationId, BusId, ModulationId, ModulationLinkId, TrackId },
+    core::project::{
+        automation::AutomationTarget, ApplicationState, AutomationCurveType, AutomationLane,
+        AutomationPoint,
+    },
+    shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -34,25 +37,19 @@ pub enum ModulationEvent {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ModulationSource {
-    PeakController {
-        source: PluginTarget,
-    },
-    Automation {
-        lane_id: AutomationId,
-    },
-    LFO {
-        rate_hz: f32,
-    },
+    PeakController { source: PluginTarget },
+    Automation { lane_id: AutomationId },
+    LFO { rate_hz: f32 },
     // Future: Envelope, MacroKnob, StepSequencer, etc.
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ModulationLink {
     pub id: ModulationLinkId,
-    pub source_id: ModulationId, // Which LFO/Macro is driving this?
+    pub source_id: ModulationId,  // Which LFO/Macro is driving this?
     pub target: AutomationTarget, // What parameter is being turned?
-    pub depth: f32, // How much is it turning? (-1.0 to 1.0)
-    pub base_value: f32, // The center point of the parameter
+    pub depth: f32,               // How much is it turning? (-1.0 to 1.0)
+    pub base_value: f32,          // The center point of the parameter
 }
 
 impl ModulationEvent {
@@ -66,7 +63,7 @@ impl ModulationEvent {
 }
 
 impl ApplicationState {
- // =========================================================================
+    // =========================================================================
     // MODULATION ROUTING (The Generic Master Methods)
     // =========================================================================
 
@@ -81,7 +78,8 @@ impl ApplicationState {
     pub fn remove_modulation_source(&mut self, source_id: ModulationId) {
         self.modulation_sources.remove(&source_id);
         // Cascade delete: Remove any cables that were plugged into this source
-        self.modulation_links.retain(|_, link| link.source_id != source_id);
+        self.modulation_links
+            .retain(|_, link| link.source_id != source_id);
     }
 
     /// Connects a Generator to a Parameter
@@ -98,7 +96,8 @@ impl ApplicationState {
         }
 
         // Check if THIS specific source is already linked to THIS specific target.
-        if self.modulation_links
+        if self
+            .modulation_links
             .values()
             .any(|l| l.source_id == source_id && l.target == target)
         {
@@ -117,8 +116,12 @@ impl ApplicationState {
         };
 
         self.modulation_links.insert(link_id, link);
-        log::info!("Successfully linked source {:?} to target via link {:?}", source_id, link_id);
-        
+        log::info!(
+            "Successfully linked source {:?} to target via link {:?}",
+            source_id,
+            link_id
+        );
+
         Ok(link_id)
     }
 
@@ -159,7 +162,11 @@ impl ApplicationState {
         // 3. Connect the Cable (Depth 1.0, Base Value 0.0 for standard 1:1 automation tracking)
         let link_id = self.link_modulation(source_id, target, 1.0, 0.0)?;
 
-        log::info!("Added automation lane {:?} mapped via link {:?}", lane_id, link_id);
+        log::info!(
+            "Added automation lane {:?} mapped via link {:?}",
+            lane_id,
+            link_id
+        );
         Ok((lane, link_id))
     }
 
@@ -188,7 +195,9 @@ impl ApplicationState {
             .values()
             .filter_map(|link| {
                 if link.target.references_track(track_id) {
-                    if let Some(ModulationSource::Automation { lane_id }) = self.modulation_sources.get(&link.source_id) {
+                    if let Some(ModulationSource::Automation { lane_id }) =
+                        self.modulation_sources.get(&link.source_id)
+                    {
                         if let Some(lane) = self.automation_pool.get(lane_id) {
                             return Some((link.id, *lane_id, lane.clone()));
                         }
@@ -207,7 +216,9 @@ impl ApplicationState {
             let references = link.target.references_track(track_id);
 
             if references {
-                if let Some(ModulationSource::Automation { lane_id }) = self.modulation_sources.get(&link.source_id) {
+                if let Some(ModulationSource::Automation { lane_id }) =
+                    self.modulation_sources.get(&link.source_id)
+                {
                     orphaned_lanes.push(*lane_id);
                 }
             }
@@ -245,7 +256,9 @@ impl ApplicationState {
             .values()
             .filter_map(|link| {
                 if link.target.references_bus(bus_id) {
-                    if let Some(ModulationSource::Automation { lane_id }) = self.modulation_sources.get(&link.source_id) {
+                    if let Some(ModulationSource::Automation { lane_id }) =
+                        self.modulation_sources.get(&link.source_id)
+                    {
                         if let Some(lane) = self.automation_pool.get(lane_id) {
                             return Some((link.id, *lane_id, lane.clone()));
                         }
@@ -263,7 +276,9 @@ impl ApplicationState {
         self.modulation_links.retain(|_, link| {
             let references = link.target.references_bus(bus_id);
             if references {
-                if let Some(ModulationSource::Automation { lane_id }) = self.modulation_sources.get(&link.source_id) {
+                if let Some(ModulationSource::Automation { lane_id }) =
+                    self.modulation_sources.get(&link.source_id)
+                {
                     orphaned_lanes.push(*lane_id);
                 }
             }

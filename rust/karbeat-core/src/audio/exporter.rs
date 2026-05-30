@@ -5,7 +5,7 @@ use triple_buffer::TripleBuffer;
 use crate::{
     audio::{
         render_state::AudioRenderState,
-        writer::{AudioExportConfig, AudioWriter, create_writer},
+        writer::{create_writer, AudioExportConfig, AudioWriter},
     },
     commands::AudioCommand,
     context::utils::send_audio_command,
@@ -237,7 +237,7 @@ where
         let mut max_tail_samples: u32 = 0;
 
         let plugin_state = offline_engine.plugin_state();
-        
+
         for effect in &plugin_state.master_effects {
             max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
         }
