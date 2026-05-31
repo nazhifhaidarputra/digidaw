@@ -24,7 +24,7 @@ pub enum AudioSampleMode {
     /// ticks (BPM-dependent, for time-stretched audio, preserved pitch)
     Stretch,
     /// ticks (BPM-dependent, for time-stretched audio, do not preserve pitch)
-    Sampled
+    Resampled
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -109,7 +109,7 @@ impl Default for AudioWaveform {
 
 /// A context struct providing the audio engine with everything it needs 
 /// to render the waveform correctly based on the current sample mode.
-pub struct PlaybackContext<'a> {
+pub struct WaveformPlaybackContext<'a> {
     /// The trimmed, ready-to-read audio buffer slice
     pub buffer: &'a [f32],
     /// Multiplier for the read-pointer speed (e.g., 2.0 = play twice as fast)
@@ -161,7 +161,7 @@ impl AudioWaveform {
 
     /// Abstracts the logic of AudioSampleModes. The audio engine passes the project's
     /// current BPM, and this returns the exact parameters needed to render the audio.
-    pub fn get_playback_context<'a>(&'a self, project_bpm: f32) -> Option<PlaybackContext<'a>> {
+    pub fn get_playback_context<'a>(&'a self, project_bpm: f32) -> Option<WaveformPlaybackContext<'a>> {
         let buffer = self.get_playable_buffer()?;
         
         let (playback_rate, pitch_ratio) = match self.sample_mode {
@@ -175,15 +175,15 @@ impl AudioWaveform {
                 (ratio, 1.0)
             },
             
-            // Sampled: Speeds up/slows down to match project BPM, pitch bends with it 
+            // Resampled: Speeds up/slows down to match project BPM, pitch bends with it 
             // (Classic turntable/tape effect. Engine just reads faster/slower)
-            AudioSampleMode::Sampled => {
+            AudioSampleMode::Resampled => {
                 let ratio = (project_bpm / self.original_bpm.max(1.0)) as f64;
                 (ratio, ratio)
             }
         };
 
-        Some(PlaybackContext {
+        Some(WaveformPlaybackContext {
             buffer,
             playback_rate,
             pitch_ratio,

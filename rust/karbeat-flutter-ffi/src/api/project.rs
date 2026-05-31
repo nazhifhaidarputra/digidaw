@@ -551,7 +551,7 @@ pub fn add_new_audio_track() -> UiTrack {
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
-    track_api::get_tracks(|id, track| (id, UiTrack::from(track))).map_err(|e| e.to_string())
+    track_api::get_tracks_ordered(|id, track| (id, UiTrack::from(track))).map_err(|e| e.to_string())
 }
 
 /// Get the newest max sample index of the project

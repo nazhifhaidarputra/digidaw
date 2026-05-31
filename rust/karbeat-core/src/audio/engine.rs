@@ -26,7 +26,7 @@ use crate::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
         GeneratorParameterSnapshot, MixerChannelSnapshot, MixerChannelTarget,
     },
-    core::project::*,
+    core::project::{audio_waveform::AudioSampleMode, *},
     shared::id::*,
     utils::{apply_simd_mix, apply_simd_mix_gain},
 };
@@ -1979,11 +1979,10 @@ impl AudioEngine {
                     }
 
                     // Audio Voice
-                    if Self::render_oneshots(
-                        &mut self.active_oneshots,
-                        self.sample_rate,
-                        *track_id,
-                        &mut self.mix_buffer,
+                    if self.render_oneshots(
+                        // &mut self.active_oneshots,
+                        // self.sample_rate,
+                        *track_id, // &mut self.mix_buffer,
                         channels,
                     ) {
                         has_signal = true;
@@ -2309,37 +2308,51 @@ impl AudioEngine {
         }
     }
 
-    fn render_oneshots(
+    fn render_oneshots(&mut self, track_id: TrackId, channels: usize) -> bool {
+        Self::render_oneshots_static(
+            &mut self.active_oneshots,
+            self.sample_rate,
+            track_id,
+            &mut self.mix_buffer,
+            channels,
+            self.bpm,
+        )
+    }
+
+    fn render_oneshots_static(
         active_oneshots: &mut [AudioVoice],
         sample_rate: u32,
         track_id: TrackId,
         output: &mut [f32],
         channels: usize,
+        bpm: f32,
     ) -> bool {
         let mut did_render = false;
         let buffer_frames = output.len() / channels;
         let fade_samples = ((sample_rate as f32) * 0.002) as u32;
-        
-        for voice in active_oneshots.iter_mut().filter(|v| v.track_id == track_id) {
+
+        for voice in active_oneshots
+            .iter_mut()
+            .filter(|v| v.track_id == track_id)
+        {
             did_render = true;
             let src_channels = voice.waveform.channels as usize;
-            let step = (voice.waveform.sample_rate as f64) / (sample_rate as f64);
 
-            // Fetch the sliced buffer ONE TIME per block!
-            let Some(buffer) = voice.waveform.get_playable_buffer() else {
+            let Some(context) = voice.waveform.get_playback_context(bpm) else {
                 return false;
             };
 
-            // Look how simple this math gets when bounds are already handled
+            let step = ((voice.waveform.sample_rate as f64) / (sample_rate as f64))
+                * context.playback_rate;
+            let buffer = context.buffer;
+
             let max_len = (buffer.len() / src_channels) as f64;
-            let trim_end = max_len;
-            let start_bound = 0.0;
             let loop_len = max_len;
             let is_looping = voice.waveform.is_looping && loop_len > 0.0;
 
             let mut frames_to_process = buffer_frames.saturating_sub(voice.output_offset_samples);
             if !is_looping {
-                let max_steps = (trim_end - 1.0 - voice.source_read_index) / step;
+                let max_steps = (max_len - 1.0 - voice.source_read_index) / step;
                 if max_steps < 0.0 {
                     frames_to_process = 0;
                 } else {
@@ -2347,80 +2360,30 @@ impl AudioEngine {
                 }
             }
 
-            if frames_to_process == 0 { continue; }
+            if frames_to_process == 0 {
+                continue;
+            }
             did_render = true;
 
             let start_idx = voice.output_offset_samples * channels;
             let end_idx = start_idx + frames_to_process * channels;
             let target_slice = &mut output[start_idx..end_idx];
 
-            let mut frames_written = 0;
-
-            if channels == 2 {
-                let mut iter = target_slice.chunks_exact_mut(4);
-                for chunk in iter.by_ref() {
-                    let elapsed0 = voice.clip_elapsed_samples + frames_written;
-                    let rp0 = get_read_pos(voice.source_read_index, (frames_written as f64) * step, is_looping, trim_end, start_bound, loop_len);
-                    let s0 = sample_waveform_dasp(buffer, rp0, src_channels); // Passes buffer directly
-                    let fade0 = calc_fade(elapsed0, fade_samples, voice.clip_loop_length);
-
-                    let elapsed1 = voice.clip_elapsed_samples + frames_written + 1;
-                    let rp1 = get_read_pos(voice.source_read_index, ((frames_written + 1) as f64) * step, is_looping, trim_end, start_bound, loop_len);
-                    let s1 = sample_waveform_dasp(buffer, rp1, src_channels); // Passes buffer directly
-                    let fade1 = calc_fade(elapsed1, fade_samples, voice.clip_loop_length);
-
-                    let samples = f32x4::new([s0[0], s0[1], s1[0], s1[1]]);
-                    let fades = f32x4::new([fade0, fade0, fade1, fade1]);
-
-                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                    out_v += samples * fades;
-                    chunk.copy_from_slice(&out_v.to_array());
-
-                    frames_written += 2;
-                }
-
-                for chunk in iter.into_remainder().chunks_exact_mut(2) {
-                    let elapsed0 = voice.clip_elapsed_samples + frames_written;
-                    let rp0 = get_read_pos(voice.source_read_index, (frames_written as f64) * step, is_looping, trim_end, start_bound, loop_len);
-                    let s0 = sample_waveform_dasp(buffer, rp0, src_channels); // Passes buffer directly
-                    let fade0 = calc_fade(elapsed0, fade_samples, voice.clip_loop_length);
-
-                    chunk[0] += s0[0] * fade0;
-                    chunk[1] += s0[1] * fade0;
-                    frames_written += 1;
-                }
-            } else {
-                let mut iter = target_slice.chunks_exact_mut(4);
-                for chunk in iter.by_ref() {
-                    let mut s = [0.0; 4];
-                    let mut f = [0.0; 4];
-
-                    for i in 0..4 {
-                        let elapsed = voice.clip_elapsed_samples + frames_written + i;
-                        let rp = get_read_pos(voice.source_read_index, ((frames_written + i) as f64) * step, is_looping, trim_end, start_bound, loop_len);
-                        s[i as usize] = sample_waveform_dasp(buffer, rp, src_channels)[0]; // Passes buffer directly
-                        f[i as usize] = calc_fade(elapsed, fade_samples, voice.clip_loop_length);
-                    }
-
-                    let samples = f32x4::new(s);
-                    let fades = f32x4::new(f);
-                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                    out_v += samples * fades;
-                    chunk.copy_from_slice(&out_v.to_array());
-
-                    frames_written += 4;
-                }
-
-                for chunk in iter.into_remainder().iter_mut() {
-                    let elapsed = voice.clip_elapsed_samples + frames_written;
-                    let rp = get_read_pos(voice.source_read_index, (frames_written as f64) * step, is_looping, trim_end, start_bound, loop_len);
-                    let s0 = sample_waveform_dasp(buffer, rp, src_channels); // Passes buffer directly
-                    let fade0 = calc_fade(elapsed, fade_samples, voice.clip_loop_length);
-
-                    *chunk += s0[0] * fade0;
-                    frames_written += 1;
-                }
-            }
+            render_audio_waveform(
+                &context.mode,
+                buffer,
+                src_channels,
+                target_slice,
+                channels,
+                &mut voice.source_read_index,
+                step,
+                is_looping,
+                loop_len,
+                1.0,
+                Some(&mut voice.clip_elapsed_samples),
+                fade_samples,
+                voice.clip_loop_length,
+            );
         }
         did_render
     }
@@ -2660,42 +2623,44 @@ impl AudioEngine {
 
             let max_len = (buffer.len() / src_channels) as f64;
             let step = (voice.waveform.sample_rate as f64) / (self.sample_rate as f64);
+            let is_looping = voice.waveform.is_looping && max_len > 0.0;
 
-            if channels == 2 {
-                if let Some(out_frames) = slice::to_frame_slice_mut::<&mut [f32], [f32; 2]>(output)
-                {
-                    for i in 0..buffer_frames {
-                        // Position is now perfectly relative to 0
-                        let current_pos_f64 = voice.current_frame; 
-                        
-                        if current_pos_f64 >= max_len - 1.0 {
-                            voice.is_finished = true;
-                            break;
-                        }
-
-                        // Pass the RAW slice, not the waveform
-                        let sample_frame = sample_waveform_dasp(buffer, current_pos_f64, src_channels);
-                        out_frames[i][0] += sample_frame[0] * voice.volume;
-                        out_frames[i][1] += sample_frame[1] * voice.volume;
-
-                        voice.current_frame += step;
-                    }
+            let max_steps = (max_len - 1.0 - voice.current_frame) / step;
+            let frames_to_process = if !is_looping {
+                if max_steps < 0.0 {
+                    0
+                } else {
+                    buffer_frames.min((max_steps.floor() as usize) + 1)
                 }
             } else {
-                for i in 0..buffer_frames {
-                    let current_pos_f64 = voice.current_frame;
-                    
-                    if current_pos_f64 >= max_len - 1.0 {
-                        voice.is_finished = true;
-                        break;
-                    }
+                buffer_frames
+            };
 
-                    // Pass the RAW slice, not the waveform
-                    let sample_frame = sample_waveform_dasp(buffer, current_pos_f64, src_channels);
-                    output[i * channels] += sample_frame[0] * voice.volume;
+            if frames_to_process == 0 {
+                voice.is_finished = true;
+                continue;
+            }
 
-                    voice.current_frame += step;
-                }
+            let target_slice = &mut output[0..(frames_to_process * channels)];
+
+            render_audio_waveform(
+                &voice.waveform.sample_mode,
+                buffer,
+                src_channels,
+                target_slice,
+                channels,
+                &mut voice.current_frame,
+                step,
+                is_looping,
+                max_len,
+                voice.volume,
+                None,
+                0,
+                0,
+            );
+
+            if !is_looping && voice.current_frame >= max_len - 1.0 {
+                voice.is_finished = true;
             }
         }
 
@@ -2751,7 +2716,7 @@ impl AudioEngine {
             waveform: waveform.clone(),
             output_offset_samples: output_offset,
             source_read_index: source_read_idx,
-            start_boundary: 0.0, // Start is always 0 relative to the slice
+            start_boundary: 0.0,   // Start is always 0 relative to the slice
             end_boundary: max_len, // End is always max_len relative to the slice
             clip_elapsed_samples: samples_elapsed,
             clip_loop_length: clip.time.loop_length_raw() as u32,
@@ -3111,61 +3076,63 @@ impl AudioEngine {
         match target {
             AutomationTarget::Track {
                 track_id,
-                mix_target,
-            } => match mix_target {
-                automation::MixerChannelParamTarget::Volume => {
-                    if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                        ch.volume = final_value;
-                    }
-                }
-                automation::MixerChannelParamTarget::Pan => {
-                    if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                        ch.pan = final_value;
-                    }
-                }
-                automation::MixerChannelParamTarget::Plugin { effect_id, target } => match target {
-                    EffectAutomationTarget::Mix => todo!(),
-                    EffectAutomationTarget::PluginParam { param_id } => {
-                        if let Some(effects) = self
+                track_target,
+            } => match track_target {
+                TrackAutomationTarget::Generator { param_id } => {
+                    if let Some(gen_id) = self
+                        .current_state
+                        .graph
+                        .tracks
+                        .iter()
+                        .find(|t| t.id == *track_id)
+                        .and_then(|t| t.generator.as_ref().map(|g| g.id))
+                    {
+                        if let Some(inst) = self
                             .plugin_state
-                            .get_track_effects_mut(track_id.to_u32() as usize)
+                            .get_generator_mut(gen_id.to_u32() as usize)
                         {
-                            if let Some(e) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                                e.plugin.apply_automation(*param_id, final_value);
-                            }
+                            inst.plugin.apply_automation(*param_id, final_value);
                         }
                     }
+                }
+                TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
+                    MixerChannelParamTarget::Volume => {
+                        if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
+                            ch.volume = final_value;
+                        }
+                    }
+                    MixerChannelParamTarget::Pan => {
+                        if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
+                            ch.pan = final_value;
+                        }
+                    }
+                    MixerChannelParamTarget::Plugin { effect_id, target } => match target {
+                        EffectAutomationTarget::Mix => todo!(),
+                        EffectAutomationTarget::PluginParam { param_id } => {
+                            if let Some(effects) = self
+                                .plugin_state
+                                .get_track_effects_mut(track_id.to_u32() as usize)
+                            {
+                                if let Some(e) = effects.iter_mut().find(|e| e.id == *effect_id) {
+                                    e.plugin.apply_automation(*param_id, final_value);
+                                }
+                            }
+                        }
+                    },
                 },
             },
-            AutomationTarget::TrackGeneratorPluginParam { track_id, param_id } => {
-                if let Some(gen_id) = self
-                    .current_state
-                    .graph
-                    .tracks
-                    .iter()
-                    .find(|t| t.id == *track_id)
-                    .and_then(|t| t.generator.as_ref().map(|g| g.id))
-                {
-                    if let Some(inst) = self
-                        .plugin_state
-                        .get_generator_mut(gen_id.to_u32() as usize)
-                    {
-                        inst.plugin.apply_automation(*param_id, final_value);
-                    }
-                }
-            }
             AutomationTarget::Bus { bus_id, mix_target } => match mix_target {
-                automation::MixerChannelParamTarget::Volume => {
+                MixerChannelParamTarget::Volume => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
                         ch.volume = final_value;
                     }
                 }
-                automation::MixerChannelParamTarget::Pan => {
+                MixerChannelParamTarget::Pan => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
                         ch.pan = final_value;
                     }
                 }
-                automation::MixerChannelParamTarget::Plugin { effect_id, target } => match target {
+                MixerChannelParamTarget::Plugin { effect_id, target } => match target {
                     EffectAutomationTarget::Mix => todo!(),
                     EffectAutomationTarget::PluginParam { param_id } => {
                         if let Some(effects) = self
@@ -3180,13 +3147,13 @@ impl AudioEngine {
                 },
             },
             AutomationTarget::Master(mix_target) => match mix_target {
-                automation::MixerChannelParamTarget::Volume => {
+                MixerChannelParamTarget::Volume => {
                     self.mixer_state.master.volume = final_value;
                 }
-                automation::MixerChannelParamTarget::Pan => {
+                MixerChannelParamTarget::Pan => {
                     self.mixer_state.master.pan = final_value;
                 }
-                automation::MixerChannelParamTarget::Plugin { effect_id, target } => match target {
+                MixerChannelParamTarget::Plugin { effect_id, target } => match target {
                     EffectAutomationTarget::Mix => todo!(),
                     EffectAutomationTarget::PluginParam { param_id } => {
                         if let Some(e) = self
@@ -3207,6 +3174,175 @@ impl AudioEngine {
     }
 }
 
+/// Unified entry point to render an audio waveform slice.
+/// Safely delegates to the correct DSP algorithm based on the chosen sample mode.
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn render_audio_waveform(
+    mode: &AudioSampleMode,
+    source_buffer: &[f32],
+    src_channels: usize,
+    target_slice: &mut [f32],
+    target_channels: usize,
+    source_read_index: &mut f64,
+    step: f64,
+    is_looping: bool,
+    loop_len: f64,
+    base_volume: f32,
+    current_elapsed_samples: Option<&mut u32>,
+    fade_samples: u32,
+    clip_loop_length: u32,
+) {
+    match mode {
+        // For default and resampled mode, we use pointer
+        // calculation and hermite interpolation
+        // to read the scratch buffer
+        AudioSampleMode::Default | AudioSampleMode::Resampled => {
+            let mut frames_written = 0;
+            let trim_end = loop_len;
+            let start_bound = 0.0;
+
+            let start_elapsed = current_elapsed_samples.as_ref().map(|v| **v).unwrap_or(0);
+
+            if target_channels == 2 {
+                let mut iter = target_slice.chunks_exact_mut(4);
+                for chunk in iter.by_ref() {
+                    let elapsed0 = start_elapsed + frames_written;
+                    let rp0 = get_read_pos(
+                        *source_read_index,
+                        (frames_written as f64) * step,
+                        is_looping,
+                        trim_end,
+                        start_bound,
+                        loop_len,
+                    );
+                    let s0 = sample_waveform_dasp(source_buffer, rp0, src_channels);
+                    let fade0 = if current_elapsed_samples.is_some() {
+                        calc_fade(elapsed0, fade_samples, clip_loop_length)
+                    } else {
+                        1.0
+                    } * base_volume;
+
+                    let elapsed1 = start_elapsed + frames_written + 1;
+                    let rp1 = get_read_pos(
+                        *source_read_index,
+                        ((frames_written + 1) as f64) * step,
+                        is_looping,
+                        trim_end,
+                        start_bound,
+                        loop_len,
+                    );
+                    let s1 = sample_waveform_dasp(source_buffer, rp1, src_channels);
+                    let fade1 = if current_elapsed_samples.is_some() {
+                        calc_fade(elapsed1, fade_samples, clip_loop_length)
+                    } else {
+                        1.0
+                    } * base_volume;
+
+                    let samples = f32x4::new([s0[0], s0[1], s1[0], s1[1]]);
+                    let fades = f32x4::new([fade0, fade0, fade1, fade1]);
+                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    out_v += samples * fades;
+                    chunk.copy_from_slice(&out_v.to_array());
+
+                    frames_written += 2;
+                }
+
+                for chunk in iter.into_remainder().chunks_exact_mut(2) {
+                    let elapsed0 = start_elapsed + frames_written;
+                    let rp0 = get_read_pos(
+                        *source_read_index,
+                        (frames_written as f64) * step,
+                        is_looping,
+                        trim_end,
+                        start_bound,
+                        loop_len,
+                    );
+                    let s0 = sample_waveform_dasp(source_buffer, rp0, src_channels);
+                    let fade0 = if current_elapsed_samples.is_some() {
+                        calc_fade(elapsed0, fade_samples, clip_loop_length)
+                    } else {
+                        1.0
+                    } * base_volume;
+
+                    chunk[0] += s0[0] * fade0;
+                    chunk[1] += s0[1] * fade0;
+                    frames_written += 1;
+                }
+            } else {
+                let mut iter = target_slice.chunks_exact_mut(4);
+                for chunk in iter.by_ref() {
+                    let mut s = [0.0; 4];
+                    let mut f = [0.0; 4];
+
+                    for i in 0..4 {
+                        let elapsed = start_elapsed + frames_written + i;
+                        let rp = get_read_pos(
+                            *source_read_index,
+                            ((frames_written + i) as f64) * step,
+                            is_looping,
+                            trim_end,
+                            start_bound,
+                            loop_len,
+                        );
+                        s[i as usize] = sample_waveform_dasp(source_buffer, rp, src_channels)[0];
+                        f[i as usize] = if current_elapsed_samples.is_some() {
+                            calc_fade(elapsed, fade_samples, clip_loop_length)
+                        } else {
+                            1.0
+                        } * base_volume;
+                    }
+
+                    let samples = f32x4::new(s);
+                    let fades = f32x4::new(f);
+                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    out_v += samples * fades;
+                    chunk.copy_from_slice(&out_v.to_array());
+
+                    frames_written += 4;
+                }
+
+                for chunk in iter.into_remainder().iter_mut() {
+                    let elapsed = start_elapsed + frames_written;
+                    let rp = get_read_pos(
+                        *source_read_index,
+                        (frames_written as f64) * step,
+                        is_looping,
+                        trim_end,
+                        start_bound,
+                        loop_len,
+                    );
+                    let s0 = sample_waveform_dasp(source_buffer, rp, src_channels);
+                    let fade0 = if current_elapsed_samples.is_some() {
+                        calc_fade(elapsed, fade_samples, clip_loop_length)
+                    } else {
+                        1.0
+                    } * base_volume;
+
+                    *chunk += s0[0] * fade0;
+                    frames_written += 1;
+                }
+            }
+
+            // Advance the read pointer safely
+            *source_read_index = get_read_pos(
+                *source_read_index,
+                (frames_written as f64) * step,
+                is_looping,
+                trim_end,
+                start_bound,
+                loop_len,
+            );
+            if let Some(elapsed) = current_elapsed_samples {
+                *elapsed += frames_written as u32;
+            }
+        }
+        AudioSampleMode::Stretch => {
+            // TODO: Implement WSOLA or Granular Engine logic
+        }
+    }
+}
+
 /// Sample a waveform at a specific position using dasp interpolation.
 /// Handles fallback from 1-channel to 2-channel stereo.
 #[inline]
@@ -3222,7 +3358,11 @@ fn sample_waveform_dasp(buffer: &[f32], pos: f64, src_channels: usize) -> [f32; 
             return [0.0, 0.0];
         }
 
-        let p0 = if idx > 0 { frames[idx - 1] } else { frames[idx] };
+        let p0 = if idx > 0 {
+            frames[idx - 1]
+        } else {
+            frames[idx]
+        };
         let p1 = frames[idx];
         let p2 = if idx + 1 < len { frames[idx + 1] } else { p1 };
         let p3 = if idx + 2 < len { frames[idx + 2] } else { p2 };
@@ -3239,7 +3379,11 @@ fn sample_waveform_dasp(buffer: &[f32], pos: f64, src_channels: usize) -> [f32; 
             return [0.0, 0.0];
         }
 
-        let p0 = if idx > 0 { frames[idx - 1] } else { frames[idx] };
+        let p0 = if idx > 0 {
+            frames[idx - 1]
+        } else {
+            frames[idx]
+        };
         let p1 = frames[idx];
         let p2 = if idx + 1 < len { frames[idx + 1] } else { p1 };
         let p3 = if idx + 2 < len { frames[idx + 2] } else { p2 };

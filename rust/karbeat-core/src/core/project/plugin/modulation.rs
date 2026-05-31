@@ -227,7 +227,7 @@ impl ApplicationState {
 
         // Clean up the pure data lanes so we don't leak memory
         for lane_id in orphaned_lanes {
-            self.automation_pool.shift_remove(&lane_id);
+            self.automation_pool.remove(&lane_id);
         }
     }
 
@@ -286,7 +286,7 @@ impl ApplicationState {
         });
 
         for lane_id in orphaned_lanes {
-            self.automation_pool.shift_remove(&lane_id);
+            self.automation_pool.remove(&lane_id);
         }
     }
 

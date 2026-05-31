@@ -2,7 +2,7 @@ use karbeat_core::{
     api::automation_api,
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
-        EffectAutomationTarget, MixerChannelParamTarget,
+        EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
     },
     shared::{BusId, EffectId, TrackId},
 };
@@ -28,13 +28,9 @@ pub struct AutomationPointDto {
 
 #[derive(Clone, Debug)]
 pub enum AutomationTargetDto {
-    TrackGeneratorPluginParam {
-        track_id: u32,
-        param_id: u32,
-    },
     Track {
         track_id: u32,
-        mix_target: MixerChannelParamTargetDto,
+        track_target: TrackAutomationTargetDto,
     },
     Bus {
         bus_id: u32,
@@ -42,6 +38,12 @@ pub enum AutomationTargetDto {
     },
     Master(MixerChannelParamTargetDto),
     TempoBpm,
+}
+
+#[derive(Clone, Debug)]
+pub enum TrackAutomationTargetDto {
+    Generator { param_id: u32 },
+    MixerChannel(MixerChannelParamTargetDto),
 }
 
 #[derive(Clone, Debug)]
@@ -161,21 +163,41 @@ impl From<&MixerChannelParamTarget> for MixerChannelParamTargetDto {
     }
 }
 
+impl From<&TrackAutomationTarget> for TrackAutomationTargetDto {
+    fn from(target: &TrackAutomationTarget) -> Self {
+        match target {
+            TrackAutomationTarget::Generator { param_id } => Self::Generator {
+                param_id: *param_id,
+            },
+            TrackAutomationTarget::MixerChannel(target) => {
+                Self::MixerChannel(MixerChannelParamTargetDto::from(target))
+            }
+        }
+    }
+}
+
+impl From<TrackAutomationTargetDto> for TrackAutomationTarget {
+    fn from(dto: TrackAutomationTargetDto) -> Self {
+        match dto {
+            TrackAutomationTargetDto::Generator { param_id } => {
+                Self::Generator { param_id }
+            }
+            TrackAutomationTargetDto::MixerChannel(target) => {
+                Self::MixerChannel(MixerChannelParamTarget::from(target))
+            }
+        }
+    }
+}
+
 impl From<&AutomationTarget> for AutomationTargetDto {
     fn from(target: &AutomationTarget) -> Self {
         match target {
-            AutomationTarget::TrackGeneratorPluginParam { track_id, param_id } => {
-                Self::TrackGeneratorPluginParam {
-                    track_id: track_id.to_u32(),
-                    param_id: *param_id,
-                }
-            }
             AutomationTarget::Track {
                 track_id,
-                mix_target,
+                track_target,
             } => Self::Track {
                 track_id: track_id.to_u32(),
-                mix_target: MixerChannelParamTargetDto::from(mix_target),
+                track_target: TrackAutomationTargetDto::from(track_target),
             },
             AutomationTarget::Bus { bus_id, mix_target } => Self::Bus {
                 bus_id: bus_id.to_u32(),
@@ -218,18 +240,12 @@ impl From<MixerChannelParamTargetDto> for MixerChannelParamTarget {
 impl From<AutomationTargetDto> for AutomationTarget {
     fn from(dto: AutomationTargetDto) -> Self {
         match dto {
-            AutomationTargetDto::TrackGeneratorPluginParam { track_id, param_id } => {
-                Self::TrackGeneratorPluginParam {
-                    track_id: TrackId::from(track_id),
-                    param_id,
-                }
-            }
             AutomationTargetDto::Track {
                 track_id,
-                mix_target,
+                track_target,
             } => Self::Track {
                 track_id: TrackId::from(track_id),
-                mix_target: MixerChannelParamTarget::from(mix_target),
+                track_target: TrackAutomationTarget::from(track_target),
             },
             AutomationTargetDto::Bus { bus_id, mix_target } => Self::Bus {
                 bus_id: BusId::from(bus_id),

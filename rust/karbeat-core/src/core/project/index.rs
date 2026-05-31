@@ -2,7 +2,6 @@ use std::{cmp::Ordering, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use hashbrown::HashMap;
-use indexmap::IndexMap;
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
@@ -35,19 +34,19 @@ pub struct ApplicationState {
     pub asset_library: Arc<AssetLibrary>,
 
     // All musical data lives here. The timeline just references these.
-    pub pattern_pool: IndexMap<PatternId, Arc<Pattern>>,
+    pub pattern_pool: HashMap<PatternId, Arc<Pattern>>,
     pub pattern_counter: u32,
 
     // Generator sources
-    pub generator_pool: IndexMap<GeneratorId, Arc<GeneratorInstance>>,
+    pub generator_pool: HashMap<GeneratorId, Arc<GeneratorInstance>>,
     pub generator_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
-    pub tracks: IndexMap<TrackId, Arc<AudioTrack>>,
+    pub tracks: HashMap<TrackId, Arc<AudioTrack>>,
     pub track_counter: u32,
 
     // Automation lanes pool (lives at the same level as tracks/patterns/generators)
-    pub automation_pool: IndexMap<AutomationId, Arc<AutomationLane>>,
+    pub automation_pool: HashMap<AutomationId, Arc<AutomationLane>>,
     pub automation_counter: u32,
 
     pub modulation_pool: HashMap<ModulationId, ModulationEvent>,

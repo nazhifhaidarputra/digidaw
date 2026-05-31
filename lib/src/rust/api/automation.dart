@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'automation.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
@@ -38,6 +38,74 @@ Future<AutomationLaneDto> addAutomationLane({
   min: min,
   max: max,
   defaultValue: defaultValue,
+);
+
+/// Fetch all automation lanes across all targets
+Future<List<AutomationLaneDto>> getAutomationsLanesAll() =>
+    RustLib.instance.api.crateApiAutomationGetAutomationsLanesAll();
+
+Future<AutomationLaneDto> addAutomationLaneForTrack({
+  required int trackId,
+  required AutomationTargetDto target,
+  required String label,
+  required double min,
+  required double max,
+  required double defaultValue,
+}) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForTrack(
+  trackId: trackId,
+  target: target,
+  label: label,
+  min: min,
+  max: max,
+  defaultValue: defaultValue,
+);
+
+Future<AutomationLaneDto> addAutomationLaneForBus({
+  required int busId,
+  required AutomationTargetDto target,
+  required String label,
+  required double min,
+  required double max,
+  required double defaultValue,
+}) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForBus(
+  busId: busId,
+  target: target,
+  label: label,
+  min: min,
+  max: max,
+  defaultValue: defaultValue,
+);
+
+Future<AutomationPointDto> addNewAutomationPoint({
+  required int automationId,
+  required int timeTicks,
+  required double value,
+}) => RustLib.instance.api.crateApiAutomationAddNewAutomationPoint(
+  automationId: automationId,
+  timeTicks: timeTicks,
+  value: value,
+);
+
+Future<void> removeAutomationPoint({
+  required int automationId,
+  required int index,
+}) => RustLib.instance.api.crateApiAutomationRemoveAutomationPoint(
+  automationId: automationId,
+  index: index,
+);
+
+Future<int> updateAutomationPoint({
+  required int automationId,
+  required int index,
+  required int timeTicks,
+  required double value,
+  required double tension,
+}) => RustLib.instance.api.crateApiAutomationUpdateAutomationPoint(
+  automationId: automationId,
+  index: index,
+  timeTicks: timeTicks,
+  value: value,
+  tension: tension,
 );
 
 enum AutomationCurveTypeDto { linear, exponential, step }
@@ -120,19 +188,15 @@ class AutomationPointDto {
 sealed class AutomationTargetDto with _$AutomationTargetDto {
   const AutomationTargetDto._();
 
-  const factory AutomationTargetDto.trackGeneratorPluginParam({
-    required int trackId,
-    required int paramId,
-  }) = AutomationTargetDto_TrackGeneratorPluginParam;
   const factory AutomationTargetDto.track({
     required int trackId,
-    required MixerChannelTargetDto mixTarget,
+    required TrackAutomationTargetDto trackTarget,
   }) = AutomationTargetDto_Track;
   const factory AutomationTargetDto.bus({
     required int busId,
-    required MixerChannelTargetDto mixTarget,
+    required MixerChannelParamTargetDto mixTarget,
   }) = AutomationTargetDto_Bus;
-  const factory AutomationTargetDto.master(MixerChannelTargetDto field0) =
+  const factory AutomationTargetDto.master(MixerChannelParamTargetDto field0) =
       AutomationTargetDto_Master;
   const factory AutomationTargetDto.tempoBpm() = AutomationTargetDto_TempoBpm;
 }
@@ -147,13 +211,26 @@ sealed class EffectAutomationTargetDto with _$EffectAutomationTargetDto {
 }
 
 @freezed
-sealed class MixerChannelTargetDto with _$MixerChannelTargetDto {
-  const MixerChannelTargetDto._();
+sealed class MixerChannelParamTargetDto with _$MixerChannelParamTargetDto {
+  const MixerChannelParamTargetDto._();
 
-  const factory MixerChannelTargetDto.volume() = MixerChannelTargetDto_Volume;
-  const factory MixerChannelTargetDto.pan() = MixerChannelTargetDto_Pan;
-  const factory MixerChannelTargetDto.plugin({
+  const factory MixerChannelParamTargetDto.volume() =
+      MixerChannelParamTargetDto_Volume;
+  const factory MixerChannelParamTargetDto.pan() =
+      MixerChannelParamTargetDto_Pan;
+  const factory MixerChannelParamTargetDto.plugin({
     required int effectId,
     required EffectAutomationTargetDto target,
-  }) = MixerChannelTargetDto_Plugin;
+  }) = MixerChannelParamTargetDto_Plugin;
+}
+
+@freezed
+sealed class TrackAutomationTargetDto with _$TrackAutomationTargetDto {
+  const TrackAutomationTargetDto._();
+
+  const factory TrackAutomationTargetDto.generator({required int paramId}) =
+      TrackAutomationTargetDto_Generator;
+  const factory TrackAutomationTargetDto.mixerChannel(
+    MixerChannelParamTargetDto field0,
+  ) = TrackAutomationTargetDto_MixerChannel;
 }

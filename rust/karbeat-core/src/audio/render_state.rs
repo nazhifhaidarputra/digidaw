@@ -232,7 +232,7 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
     pub tracks: Arc<[Arc<AudioTrack>]>,
-    pub patterns: IndexMap<PatternId, Arc<Pattern>>,
+    pub patterns: HashMap<PatternId, Arc<Pattern>>,
     /// Routing connections — owned and mutated directly by the audio thread
     /// via the UpdateRouting ring-buffer command.
     pub routing: Vec<RoutingConnection>,
@@ -349,6 +349,7 @@ pub fn broadcast_plugin_state_loading() {
                 // iterate through effects
                 // Use filter_map here because the inner registry lookup can fail (return None)
                 let effects_map: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>> = mix_chan
+                    .channel
                     .effects
                     .iter()
                     .filter_map(|eff| {
@@ -428,11 +429,11 @@ pub fn broadcast_plugin_state_loading() {
                 (
                     id,
                     MixerChannelSeed {
-                        volume: arc.volume.get(),
-                        pan: arc.pan.get(),
-                        mute: arc.mute,
-                        solo: arc.solo,
-                        inverted_phase: arc.inverted_phase,
+                        volume: arc.channel.volume.get(),
+                        pan: arc.channel.pan.get(),
+                        mute: arc.channel.mute,
+                        solo: arc.channel.solo,
+                        inverted_phase: arc.channel.inverted_phase,
                     },
                 )
             })

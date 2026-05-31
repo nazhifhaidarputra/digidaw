@@ -482,7 +482,7 @@ class KarbeatParametricEqState
                 border: Border(top: BorderSide(color: Colors.grey.shade800)),
               ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildMasterStrip(),
                   Container(
@@ -732,24 +732,27 @@ class KarbeatParametricEqState
     final pStep = p?.step ?? 0.1;
     final pName = p?.name ?? 'Gain';
     // the fallback ID is not an invalid ID because at the Rust side, the ID is represented by u32.
-    // this will probably crash app if we did not handle it gracefully
+    // this will probably crash the app if we did not handle it gracefully
     final pId = p?.id ?? -1;
     final pValue = p?.value ?? 0.0;
 
     return Container(
       width: 80,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8), // Tighter padding
       child: Column(
         children: [
-          const Text(
-            "MASTER",
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+          const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              "MASTER",
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8), // Reduced gap
           Expanded(
             child: RotatedBox(
               quarterTurns: 3,
@@ -767,9 +770,12 @@ class KarbeatParametricEqState
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            "${masterGain.toStringAsFixed(1)} dB",
-            style: const TextStyle(color: Colors.white54, fontSize: 10),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              "${masterGain.toStringAsFixed(1)} dB",
+              style: const TextStyle(color: Colors.white54, fontSize: 10),
+            ),
           ),
         ],
       ),

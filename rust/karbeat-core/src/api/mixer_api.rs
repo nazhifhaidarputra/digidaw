@@ -10,7 +10,7 @@ use crate::{
     },
     core::project::{
         mixer::{
-            EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState,
+            EffectInstance, BusMixerChannel, MixerChannel, MixerChannelParams, MixerState,
             RoutingConnection, RoutingNode,
         },
         TrackId,
@@ -38,7 +38,7 @@ where
     let channel = mixer_state.channels.get(&track_id);
     channel
         .ok_or_else(|| anyhow::anyhow!("Channel not found"))
-        .map(|c| mapper(c.as_ref()))
+        .map(|c| mapper(&c.channel))
 }
 
 /// Get track channel's parameter specs
@@ -49,7 +49,7 @@ where
 {
     let app = get_app_read();
     let mix_channel = app.mixer.channels.get(track_id)?;
-    Some(mix_channel.get_channel_specs().iter().map(mapper).collect())
+    Some(mix_channel.channel.get_channel_specs().iter().map(mapper).collect())
 }
 
 /// Get bus channel's parameter specs
@@ -103,9 +103,9 @@ where
         .get(&track_id)
         .ok_or_else(|| anyhow::anyhow!("Channel not found"))?;
 
-    let mapped_channel = mixer_mapper(channel.as_ref());
+    let mapped_channel = mixer_mapper(&channel.channel);
 
-    let mapped_effects: C = channel.effects.iter().map(|e| instance_mapper(e)).collect();
+    let mapped_effects: C = channel.channel.effects.iter().map(|e| instance_mapper(e)).collect();
 
     Ok((mapped_channel, mapped_effects))
 }
@@ -132,7 +132,7 @@ where
 /// **GETTER: Fetch all buses**
 pub fn get_buses<C, T, F>(mut mapper: F) -> C
 where
-    F: FnMut(&BusId, &MixerBus) -> T,
+    F: FnMut(&BusId, &BusMixerChannel) -> T,
     C: FromIterator<T>,
 {
     let app = get_app_read();

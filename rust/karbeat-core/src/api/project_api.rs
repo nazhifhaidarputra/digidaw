@@ -66,7 +66,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
             expected_responses += 1;
         }
         for (&track_id, channel) in &app.mixer.channels {
-            for effect in &channel.effects {
+            for effect in &channel.channel.effects {
                 pending_requests.push(PluginTarget::TrackEffect(track_id, effect.id));
                 expected_responses += 1;
             }
@@ -84,8 +84,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
         for effect in &app.mixer.master_bus.effects {
             pending_requests.push(PluginTarget::MasterEffect(effect.id));
             expected_responses += 1;
-        }
-        // Query master channel DSP state
+        }        // Query master channel DSP state
         mixer_channel_targets.push(MixerChannelTarget::Master);
     }
 
@@ -177,7 +176,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                 PluginTarget::TrackEffect(track_id, effect_id) => {
                     if let Some(channel) = app.mixer.channels.get_mut(&track_id) {
                         let ch_mut = Arc::make_mut(channel);
-                        if let Some(effect) = ch_mut.effects.iter_mut().find(|e| e.id == effect_id)
+                        if let Some(effect) = ch_mut.channel.effects.iter_mut().find(|e| e.id == effect_id)
                         {
                             let instance_mut = Arc::make_mut(&mut effect.instance);
                             instance_mut.plugin_state = state_blob;
@@ -251,11 +250,11 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                 MixerChannelTarget::Track(track_id) => {
                     if let Some(channel_arc) = app.mixer.channels.get_mut(&track_id) {
                         let ch = std::sync::Arc::make_mut(channel_arc);
-                        ch.volume.set_base(snap.volume);
-                        ch.pan.set_base(snap.pan);
-                        ch.mute = snap.mute;
-                        ch.solo = snap.solo;
-                        ch.inverted_phase = snap.inverted_phase;
+                        ch.channel.volume.set_base(snap.volume);
+                        ch.channel.pan.set_base(snap.pan);
+                        ch.channel.mute = snap.mute;
+                        ch.channel.solo = snap.solo;
+                        ch.channel.inverted_phase = snap.inverted_phase;
                     }
                 }
                 MixerChannelTarget::Bus(bus_id) => {
@@ -389,7 +388,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     // 2. Hydrate Track Effects
     for (track_id, channel_arc) in &app.mixer.channels {
         let mut track_chain = IndexMap::new();
-        for effect in &channel_arc.effects {
+        for effect in &channel_arc.channel.effects {
             if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
             {
                 if !effect.instance.plugin_state.is_empty() {
@@ -455,11 +454,11 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
             track_channels.insert(
                 track_id,
                 MixerChannelSeed {
-                    volume: channel_arc.volume.get(),
-                    pan: channel_arc.pan.get(),
-                    mute: channel_arc.mute,
-                    solo: channel_arc.solo,
-                    inverted_phase: channel_arc.inverted_phase,
+                    volume: channel_arc.channel.volume.get(),
+                    pan: channel_arc.channel.pan.get(),
+                    mute: channel_arc.channel.mute,
+                    solo: channel_arc.channel.solo,
+                    inverted_phase: channel_arc.channel.inverted_phase,
                 },
             );
         }

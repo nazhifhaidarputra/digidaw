@@ -22,15 +22,9 @@ use crate::shared::{
 /// generator, or effect slot).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AutomationTarget {
-    /// A parameter on the track's generator plugin
-    TrackGeneratorPluginParam {
-        track_id: TrackId,
-        param_id: u32,
-    },
-
     Track {
         track_id: TrackId,
-        mix_target: MixerChannelParamTarget,
+        track_target: TrackAutomationTarget,
     },
 
     Bus {
@@ -42,6 +36,12 @@ pub enum AutomationTarget {
 
     // Global Targets
     TempoBpm,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum TrackAutomationTarget {
+    Generator { param_id: u32 },
+    MixerChannel(MixerChannelParamTarget),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -64,8 +64,7 @@ impl AutomationTarget {
     /// Returns true if this target references the given track ID.
     pub fn references_track(&self, id: TrackId) -> bool {
         match self {
-            AutomationTarget::TrackGeneratorPluginParam { track_id, .. }
-            | AutomationTarget::Track { track_id, .. } => *track_id == id,
+            AutomationTarget::Track { track_id, .. } => *track_id == id,
             _ => false,
         }
     }

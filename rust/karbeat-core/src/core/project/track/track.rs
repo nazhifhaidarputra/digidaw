@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::{collections::BTreeSet, sync::Arc};
 
 use serde::{Deserialize, Serialize};
@@ -6,8 +7,8 @@ use crate::{
     commands::AudioCommand,
     context::ctx,
     core::project::{
-        clip::ClipTimeUnit, mixer::MixerChannel, ApplicationState, Clip, DawSource,
-        GeneratorInstance, GeneratorInstanceType, PluginInstance,
+        clip::ClipTimeUnit, ApplicationState, Clip, DawSource, GeneratorInstance,
+        GeneratorInstanceType, PluginInstance, TrackMixerChannel,
     },
     shared::{
         id::{ClipId, TrackId},
@@ -280,21 +281,62 @@ impl AudioTrack {
 
 impl ApplicationState {
     /// ======================================
-    /// Update Track Order
-    /// Updates the order_idx of a specific track by ID
+    /// Update Track Order (Drag and Drop Support)
+    /// Shifts other tracks to maintain a perfect sequence without gaps or duplicates.
     /// ======================================
     pub fn update_track_order(&mut self, track_id: TrackId, new_idx: usize) -> anyhow::Result<()> {
-        if let Some(track_arc) = self.tracks.get_mut(&track_id) {
-            Arc::make_mut(track_arc).set_order_idx(new_idx);
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("Track {:?} not found", track_id))
+        let mut tracks: Vec<_> = self.tracks.values().cloned().collect();
+        tracks.sort_by_key(|t| t.order_idx);
+
+        // Find the track's current sorted position
+        let current_pos = tracks
+            .iter()
+            .position(|t| t.id == track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+
+        // Clamp the target to prevent out-of-bounds
+        let target_idx = new_idx.min(tracks.len().saturating_sub(1));
+
+        // Move the track in the sorted vector
+        let track = tracks.remove(current_pos);
+        tracks.insert(target_idx, track);
+
+        // Re-apply sequential indices to ALL tracks
+        for (i, t) in tracks.iter().enumerate() {
+            if t.order_idx != i {
+                if let Some(track_arc) = self.tracks.get_mut(&t.id) {
+                    Arc::make_mut(track_arc).set_order_idx(i);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Normalizes track order indices to ensure they are sequential (0, 1, 2, ...)
+    /// Call this after removing tracks or loading a project from disk.
+    pub fn normalize_track_orders(&mut self) {
+        let mut tracks_sorted: Vec<_> = self.tracks.values().cloned().collect();
+        tracks_sorted.sort_by_key(|t| t.order_idx);
+
+        for (new_idx, track) in tracks_sorted.into_iter().enumerate() {
+            if track.order_idx != new_idx {
+                if let Some(t) = self.tracks.get_mut(&track.id) {
+                    Arc::make_mut(t).set_order_idx(new_idx);
+                }
+            }
         }
     }
 
     pub fn add_new_audio_track(&mut self) -> Arc<AudioTrack> {
         let new_track_id = TrackId::next(&mut self.track_counter);
-        let track_order = self.tracks.len();
+        let track_order = self
+            .tracks
+            .values()
+            .map(|t| t.order_idx)
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(0);
         let new_track = AudioTrack {
             track_type: TrackType::Audio,
             id: new_track_id,
@@ -302,13 +344,14 @@ impl ApplicationState {
             order_idx: track_order,
             ..Default::default()
         };
+        
         let track_arc = Arc::new(new_track);
         self.tracks.insert(new_track_id, track_arc.clone());
 
         // Create a corresponding mixer channel and default routing
         self.mixer
             .channels
-            .insert(new_track_id, Arc::new(MixerChannel::default()));
+            .insert(new_track_id, Arc::new(TrackMixerChannel::default()));
         self.mixer.add_track_default_routing(new_track_id);
         track_arc
     }
@@ -356,7 +399,13 @@ impl ApplicationState {
         self.generator_pool
             .insert(gen_id, Arc::new(generator.clone()));
 
-        let track_order = self.tracks.len();
+        let track_order = self
+            .tracks
+            .values()
+            .map(|t| t.order_idx)
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(0);
         let new_track = AudioTrack {
             track_type: TrackType::Midi,
             id: track_id,
@@ -373,7 +422,7 @@ impl ApplicationState {
         // Create a corresponding mixer channel and default routing
         self.mixer
             .channels
-            .insert(track_id, Arc::new(MixerChannel::default()));
+            .insert(track_id, Arc::new(TrackMixerChannel::default()));
         self.mixer.add_track_default_routing(track_id);
 
         log::info!(
@@ -394,19 +443,19 @@ impl ApplicationState {
             .and_then(|t| t.generator.as_ref().map(|g| g.id));
 
         // Remove the track
-        if self.tracks.shift_remove(&track_id).is_none() {
+        if self.tracks.remove(&track_id).is_none() {
             return Err(anyhow::anyhow!("Track {:?} not found", track_id));
         }
 
         // Remove the mixer channel
-        self.mixer.channels.shift_remove(&track_id);
+        self.mixer.channels.remove(&track_id);
 
         // Remove all routing connections for this track
         self.mixer.remove_track_routing(track_id);
 
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
-            self.generator_pool.shift_remove(&gen_id);
+            self.generator_pool.remove(&gen_id);
             deleted_track_type = RemovedTrackType::Midi;
         }
 
@@ -414,7 +463,17 @@ impl ApplicationState {
         self.remove_modulations_for_track(track_id);
 
         self.update_max_sample_index();
+        self.normalize_track_orders();
 
         Ok(deleted_track_type)
+    }
+
+    // Get the track ordered by index
+    pub fn get_track_ordered_by_index(&self) -> Box<[Arc<AudioTrack>]> {
+        self.tracks
+            .values()
+            .sorted_by_key(|t| t.order_idx)
+            .cloned()
+            .collect()
     }
 }

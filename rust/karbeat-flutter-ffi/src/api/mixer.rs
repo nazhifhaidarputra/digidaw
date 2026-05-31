@@ -12,8 +12,8 @@ use crate::frb_generated::StreamSink;
 use karbeat_core::api::mixer_api;
 use karbeat_core::commands::MixerChannelTarget;
 use karbeat_core::core::project::mixer::{
-    EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState, RoutingConnection,
-    RoutingNode,
+    BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
+    RoutingConnection, RoutingNode,
 };
 
 // ======================================
@@ -102,8 +102,8 @@ pub struct UiBus {
     pub channel: UiMixerChannel,
 }
 
-impl From<&MixerBus> for UiBus {
-    fn from(value: &MixerBus) -> Self {
+impl From<&BusMixerChannel> for UiBus {
+    fn from(value: &BusMixerChannel) -> Self {
         Self {
             id: value.id.to_u32(),
             name: value.name.clone(),
@@ -176,7 +176,7 @@ impl From<&MixerState> for UiMixerState {
             channels: value
                 .channels
                 .iter()
-                .map(|(id, channel)| (id.to_u32(), channel.as_ref().into()))
+                .map(|(id, channel)| (id.to_u32(), UiMixerChannel::from(&channel.channel)))
                 .collect(),
             master_bus: value.master_bus.as_ref().into(),
             buses: value

@@ -94,7 +94,7 @@ where
 
     let channel = app.mixer.channels.get(track_id)?;
 
-    let effect = channel.effects.iter().find(|e| e.id == *effect_id)?;
+    let effect = channel.channel.effects.iter().find(|e| e.id == *effect_id)?;
 
     Some(mapper(effect))
 }
@@ -121,7 +121,7 @@ where
 
     let channel = app.mixer.channels.get(track_id)?;
 
-    Some(channel.effects.iter().map(mapper).collect())
+    Some(channel.channel.effects.iter().map(mapper).collect())
 }
 
 pub fn get_master_effects<C, U, M>(mapper: M) -> C
@@ -200,6 +200,7 @@ where
                 .get(track_id)
                 .ok_or_else(|| format!("Track channel {} not found", track_id.0))?;
             let effect = channel
+                .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
@@ -372,6 +373,7 @@ pub fn execute_effect_instance_command(
                 .get(track_id)
                 .ok_or_else(|| format!("Track channel {} not found", track_id.0))?;
             let effect = channel
+                .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)

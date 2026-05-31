@@ -82,6 +82,20 @@ where
         .collect())
 }
 
+/// Get tracks ordered by index (For UI)
+pub fn get_tracks_ordered<C, U, M>(mapper: M) -> anyhow::Result<C>
+where
+    M: Fn(u32, &AudioTrack) -> U,
+    C: FromIterator<U>,
+{
+    let app = get_app_read();
+    Ok(app
+        .get_track_ordered_by_index()
+        .iter()
+        .map(|t| mapper(t.id.into(), t.as_ref()))
+        .collect())
+}
+
 pub fn delete_track(track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
     let deleted_track_type = {
         let mut app = get_app_write();

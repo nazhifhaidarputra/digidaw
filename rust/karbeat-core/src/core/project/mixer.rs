@@ -1,5 +1,4 @@
 use hashbrown::{HashMap, HashSet};
-use indexmap::IndexMap;
 use karbeat_plugin_types::{Param, ParameterSpec};
 use smallvec::SmallVec;
 use std::sync::Arc;
@@ -61,13 +60,21 @@ impl RoutingConnection {
 /// A mixer bus with its own channel strip
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
-pub struct MixerBus {
+pub struct BusMixerChannel {
     pub id: BusId,
     pub name: String,
     pub channel: MixerChannel,
 }
 
-impl Default for MixerBus {
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct TrackMixerChannel {
+    pub id: TrackId,
+    pub name: String,
+    pub channel: MixerChannel,
+}
+
+impl Default for BusMixerChannel {
     fn default() -> Self {
         Self {
             id: BusId::from(0),
@@ -77,7 +84,17 @@ impl Default for MixerBus {
     }
 }
 
-impl MixerBus {
+impl Default for TrackMixerChannel {
+    fn default() -> Self {
+        Self {
+            id: TrackId::from(0),
+            name: String::new(),
+            channel: MixerChannel::default(),
+        }
+    }
+}
+
+impl BusMixerChannel {
     pub fn new(id: BusId, name: &str) -> Self {
         Self {
             id,
@@ -157,11 +174,11 @@ impl EffectInstance {
 #[serde(default)]
 pub struct MixerState {
     /// Per-track mixer channels (volume, pan, effects)
-    pub channels: IndexMap<TrackId, Arc<MixerChannel>>,
+    pub channels: HashMap<TrackId, Arc<TrackMixerChannel>>,
     /// Master bus channel
     pub master_bus: Arc<MixerChannel>,
     /// Named buses for grouping/submixing
-    pub buses: IndexMap<BusId, Arc<MixerBus>>,
+    pub buses: HashMap<BusId, Arc<BusMixerChannel>>,
     /// All routing connections in the matrix
     pub routing: Vec<RoutingConnection>,
     /// Counter for generating bus IDs
@@ -262,7 +279,7 @@ impl MixerState {
         // Clone and modify the channel
         let channel = Arc::make_mut(mixer_channel_arc);
 
-        let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
+        let (effect_plugin, effect_name, effect_id) = channel.channel.add_effect(registry_id)?;
 
         // Push to the audio thread
         send_audio_command(AudioCommand::AddEffect {
@@ -294,7 +311,7 @@ impl MixerState {
 
         // Clone and modify the channel
         let channel = Arc::make_mut(mixer_channel_arc);
-        channel.remove_effect(effect_id)?;
+        channel.channel.remove_effect(effect_id)?;
 
         send_audio_command(AudioCommand::RemoveEffect {
             target: crate::commands::EffectTarget::Track(*track_id),
@@ -317,7 +334,7 @@ impl MixerState {
 
         // Clone and modify the channel
         let channel = Arc::make_mut(&mut mixer_channel_arc);
-        Ok(channel.effects.to_vec())
+        Ok(channel.channel.effects.to_vec())
     }
 
     pub fn add_effect_to_master_bus(&mut self, registry_id: u32) -> anyhow::Result<()> {
@@ -358,7 +375,7 @@ impl MixerState {
     /// Create a new mixer bus and return its ID
     pub fn create_bus(&mut self, name: String) -> BusId {
         let bus_id = BusId::next(&mut self.bus_counter);
-        let bus = MixerBus::new(bus_id, &name);
+        let bus = BusMixerChannel::new(bus_id, &name);
         self.buses.insert(bus_id, Arc::new(bus));
 
         // By default, new buses route to master
@@ -380,7 +397,7 @@ impl MixerState {
         }
 
         // Remove the bus
-        self.buses.shift_remove(&bus_id);
+        self.buses.remove(&bus_id);
 
         // Remove all routing connections involving this bus
         self.routing.retain(|conn| {
@@ -394,7 +411,7 @@ impl MixerState {
     }
 
     /// Get a mutable reference to a bus
-    pub fn get_bus_mut(&mut self, bus_id: &BusId) -> Option<&mut Arc<MixerBus>> {
+    pub fn get_bus_mut(&mut self, bus_id: &BusId) -> Option<&mut Arc<BusMixerChannel>> {
         self.buses.get_mut(bus_id)
     }
 
@@ -638,18 +655,13 @@ impl MixerState {
 
 impl ApplicationState {
     /// Get the mixer of a track ID
-    pub fn get_mixer_from_track(&self, track_id: &TrackId) -> Option<Arc<MixerChannel>> {
+    pub fn get_mixer_from_track(&self, track_id: &TrackId) -> Option<Arc<TrackMixerChannel>> {
         // check if the track exists
         if self.tracks.get(track_id).is_none() {
             return None;
         }
 
-        if let Some(mixer_channel) = self.mixer.channels.get(track_id) {
-            let owned_mixer_chan = mixer_channel.to_owned();
-            Some(owned_mixer_chan)
-        } else {
-            None
-        }
+        self.mixer.channels.get(track_id).cloned()
     }
 
     /// Get the entire mixer state

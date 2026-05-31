@@ -1588,9 +1588,7 @@ class _TrackHeader extends ConsumerWidget {
                 width: 14,
                 height: 14,
                 decoration: BoxDecoration(
-                  color: Color(
-                    int.parse(track.color.substring(1), radix: 16),
-                  ), // Replace with track.color if available
+                  color: track.color.toColor(),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
