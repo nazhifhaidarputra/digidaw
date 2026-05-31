@@ -41,7 +41,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -113329945;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 801082562;
 
 // Section: executor
 
@@ -6885,6 +6885,41 @@ fn wire__crate__api__automation__update_automation_point_impl(
         },
     )
 }
+fn wire__crate__api__track__update_track_order_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_track_order",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_new_idx = <usize>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok =
+                        crate::api::track::update_track_order(api_track_id, api_new_idx)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 
 // Section: related_funcs
 
@@ -8870,6 +8905,7 @@ impl SseDecode for crate::api::project::UiTrack {
         let mut var_trackType = <crate::api::project::UiTrackType>::sse_decode(deserializer);
         let mut var_clips = <Vec<crate::api::project::UiClip>>::sse_decode(deserializer);
         let mut var_generatorId = <Option<u32>>::sse_decode(deserializer);
+        let mut var_orderIdx = <usize>::sse_decode(deserializer);
         return crate::api::project::UiTrack {
             id: var_id,
             name: var_name,
@@ -8877,6 +8913,7 @@ impl SseDecode for crate::api::project::UiTrack {
             track_type: var_trackType,
             clips: var_clips,
             generator_id: var_generatorId,
+            order_idx: var_orderIdx,
         };
     }
 }
@@ -9409,6 +9446,7 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        179 => wire__crate__api__track__update_track_order_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -10833,6 +10871,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::project::UiTrack {
             self.track_type.into_into_dart().into_dart(),
             self.clips.into_into_dart().into_dart(),
             self.generator_id.into_into_dart().into_dart(),
+            self.order_idx.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12611,6 +12650,7 @@ impl SseEncode for crate::api::project::UiTrack {
         <crate::api::project::UiTrackType>::sse_encode(self.track_type, serializer);
         <Vec<crate::api::project::UiClip>>::sse_encode(self.clips, serializer);
         <Option<u32>>::sse_encode(self.generator_id, serializer);
+        <usize>::sse_encode(self.order_idx, serializer);
     }
 }
 

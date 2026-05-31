@@ -76,6 +76,16 @@ impl AutomationTarget {
             _ => false,
         }
     }
+    /// Checks if two targets belong in the same UI accordion/drawer
+    pub fn belongs_to_same_drawer_as(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Track { track_id: id1, .. }, Self::Track { track_id: id2, .. }) => id1 == id2,
+            (Self::Bus { bus_id: id1, .. }, Self::Bus { bus_id: id2, .. }) => id1 == id2,
+            (Self::Master(_), Self::Master(_)) => true,
+            (Self::TempoBpm, Self::TempoBpm) => true,
+            _ => false,
+        }
+    }
 }
 // ============================================================================
 // CURVE TYPES

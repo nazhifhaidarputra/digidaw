@@ -114,6 +114,7 @@ pub struct UiTrack {
     pub track_type: UiTrackType,
     pub clips: Vec<UiClip>,
     pub generator_id: Option<u32>,
+    pub order_idx: usize,
 }
 
 #[derive(Clone, Default)]
@@ -219,6 +220,7 @@ impl From<&AudioTrack> for UiTrack {
                 .map(|c| UiClip::from(c.deref()))
                 .collect(),
             generator_id,
+            order_idx: value.order_idx
         }
     }
 }

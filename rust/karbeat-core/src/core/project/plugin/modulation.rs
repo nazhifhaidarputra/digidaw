@@ -52,6 +52,12 @@ pub struct ModulationLink {
     pub base_value: f32,          // The center point of the parameter
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ModulationLinkForOrderedLaneView {
+    pub order_idx: usize,
+    pub prop: ModulationLink
+}
+
 impl ModulationEvent {
     pub fn target(&self) -> &AutomationTarget {
         match self {
@@ -79,7 +85,7 @@ impl ApplicationState {
         self.modulation_sources.remove(&source_id);
         // Cascade delete: Remove any cables that were plugged into this source
         self.modulation_links
-            .retain(|_, link| link.source_id != source_id);
+            .retain(|_, link| link.prop.source_id != source_id);
     }
 
     /// Connects a Generator to a Parameter
@@ -99,7 +105,7 @@ impl ApplicationState {
         if self
             .modulation_links
             .values()
-            .any(|l| l.source_id == source_id && l.target == target)
+            .any(|l| l.prop.source_id == source_id && l.prop.target == target)
         {
             return Err(anyhow::anyhow!(
                 "This source is already linked to this target"
@@ -107,6 +113,13 @@ impl ApplicationState {
         }
 
         let link_id = ModulationLinkId::next(&mut self.modulation_link_counter);
+
+        let order_idx = self
+            .modulation_links
+            .values()
+            .filter(|l| l.prop.target == target)
+            .count();
+
         let link = ModulationLink {
             id: link_id,
             source_id,
@@ -115,9 +128,14 @@ impl ApplicationState {
             base_value,
         };
 
-        self.modulation_links.insert(link_id, link);
+        let ordered_link = ModulationLinkForOrderedLaneView {
+            order_idx,
+            prop: link,
+        };
+
+        self.modulation_links.insert(link_id, ordered_link);
         log::info!(
-            "Successfully linked source {:?} to target via link {:?}",
+            "Successfully linked source {:?} to target via link2 {:?}",
             source_id,
             link_id
         );
@@ -128,7 +146,7 @@ impl ApplicationState {
     /// Change the depth/amount of a specific connection
     pub fn update_link_depth(&mut self, link_id: ModulationLinkId, new_depth: f32) {
         if let Some(link) = self.modulation_links.get_mut(&link_id) {
-            link.depth = new_depth;
+            link.prop.depth = new_depth;
         }
     }
 
@@ -191,21 +209,24 @@ impl ApplicationState {
         &self,
         track_id: TrackId,
     ) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
-        self.modulation_links
+        let mut lanes: Vec<_> = self.modulation_links
             .values()
             .filter_map(|link| {
-                if link.target.references_track(track_id) {
+                if link.prop.target.references_track(track_id) {
                     if let Some(ModulationSource::Automation { lane_id }) =
-                        self.modulation_sources.get(&link.source_id)
+                        self.modulation_sources.get(&link.prop.source_id)
                     {
                         if let Some(lane) = self.automation_pool.get(lane_id) {
-                            return Some((link.id, *lane_id, lane.clone()));
+                            return Some((link.order_idx, link.prop.id, *lane_id, lane.clone()));
                         }
                     }
                 }
                 None
             })
-            .collect()
+            .collect();
+            
+        lanes.sort_by_key(|item| item.0);
+        lanes.into_iter().map(|item| (item.1, item.2, item.3)).collect()
     }
 
     /// Completely remove all Modulation Links and orphaned Automation Lanes for a Track.
@@ -213,11 +234,11 @@ impl ApplicationState {
         let mut orphaned_lanes = Vec::new();
 
         self.modulation_links.retain(|_, link| {
-            let references = link.target.references_track(track_id);
+            let references = link.prop.target.references_track(track_id);
 
             if references {
                 if let Some(ModulationSource::Automation { lane_id }) =
-                    self.modulation_sources.get(&link.source_id)
+                    self.modulation_sources.get(&link.prop.source_id)
                 {
                     orphaned_lanes.push(*lane_id);
                 }
@@ -252,21 +273,24 @@ impl ApplicationState {
         &self,
         bus_id: BusId,
     ) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
-        self.modulation_links
+        let mut lanes: Vec<_> = self.modulation_links
             .values()
             .filter_map(|link| {
-                if link.target.references_bus(bus_id) {
+                if link.prop.target.references_bus(bus_id) {
                     if let Some(ModulationSource::Automation { lane_id }) =
-                        self.modulation_sources.get(&link.source_id)
+                        self.modulation_sources.get(&link.prop.source_id)
                     {
                         if let Some(lane) = self.automation_pool.get(lane_id) {
-                            return Some((link.id, *lane_id, lane.clone()));
+                            return Some((link.order_idx, link.prop.id, *lane_id, lane.clone()));
                         }
                     }
                 }
                 None
             })
-            .collect()
+            .collect();
+
+        lanes.sort_by_key(|item| item.0);
+        lanes.into_iter().map(|item| (item.1, item.2, item.3)).collect()
     }
 
     /// Completely remove all Modulations and orphaned Automation Lanes for a Bus.
@@ -274,10 +298,10 @@ impl ApplicationState {
         let mut orphaned_lanes = Vec::new();
 
         self.modulation_links.retain(|_, link| {
-            let references = link.target.references_bus(bus_id);
+            let references = link.prop.target.references_bus(bus_id);
             if references {
                 if let Some(ModulationSource::Automation { lane_id }) =
-                    self.modulation_sources.get(&link.source_id)
+                    self.modulation_sources.get(&link.prop.source_id)
                 {
                     orphaned_lanes.push(*lane_id);
                 }
@@ -371,5 +395,50 @@ impl ApplicationState {
                 lane.points.len()
             )),
         }
+    }
+
+    /// ======================================
+    /// Update Modulation Link Order (Drag and Drop UI Support)
+    /// Scopes the sorting strictly to the UI accordion/drawer.
+    /// ======================================
+    pub fn update_link_order(
+        &mut self,
+        link_id: ModulationLinkId,
+        new_idx: usize,
+    ) -> anyhow::Result<()> {
+        // Find the target to determine which UI drawer we are sorting inside
+        let target = self.modulation_links.get(&link_id)
+            .map(|l| l.prop.target.clone())
+            .ok_or_else(|| anyhow::anyhow!("Link {:?} not found", link_id))?;
+
+        // Gather ALL links that live in this exact same UI drawer
+        let mut sibling_links: Vec<_> = self.modulation_links
+            .values()
+            .filter(|l| l.prop.target.belongs_to_same_drawer_as(&target))
+            .cloned()
+            .collect();
+
+        // Sort them by their current UI order
+        sibling_links.sort_by_key(|link| link.order_idx);
+
+        // Find the link's current position among its siblings
+        let current_pos = sibling_links
+            .iter()
+            .position(|link| link.prop.id == link_id)
+            .unwrap();
+
+        // Move the link in the sorted vector
+        let target_idx = new_idx.min(sibling_links.len().saturating_sub(1));
+        let link = sibling_links.remove(current_pos);
+        sibling_links.insert(target_idx, link);
+
+        // Write the new sequential indices back to the global HashMap
+        for (i, sibling) in sibling_links.iter().enumerate() {
+            if let Some(global_link) = self.modulation_links.get_mut(&sibling.prop.id) {
+                global_link.order_idx = i;
+            }
+        }
+
+        Ok(())
     }
 }

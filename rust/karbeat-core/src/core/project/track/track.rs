@@ -280,10 +280,8 @@ impl AudioTrack {
 }
 
 impl ApplicationState {
-    /// ======================================
     /// Update Track Order (Drag and Drop Support)
     /// Shifts other tracks to maintain a perfect sequence without gaps or duplicates.
-    /// ======================================
     pub fn update_track_order(&mut self, track_id: TrackId, new_idx: usize) -> anyhow::Result<()> {
         let mut tracks: Vec<_> = self.tracks.values().cloned().collect();
         tracks.sort_by_key(|t| t.order_idx);

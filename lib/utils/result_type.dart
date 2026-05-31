@@ -61,3 +61,29 @@ final class Error<T> extends Result<T> {
     return error.toString();
   }
 }
+
+/// call a function and handle it in try-catch block.
+/// In the end it will return the explicit Result type
+Result<T> attempt<T>(T Function() fn) {
+  try {
+    return Result.ok(fn());
+  } on Exception catch (e) {
+    return Result.error(e);
+  } catch (e) {
+    return Result.error(Exception(e.toString()));
+  }
+}
+
+/// call an async function and handle it in try-catch block.
+/// In the end it will return the explicit Result type
+Future<Result<T>> attemptAsync<T>(
+  Future<T> Function() fn,
+) async {
+  try {
+    return Result.ok(await fn());
+  } on Exception catch (e) {
+    return Result.error(e);
+  } catch (e) {
+    return Result.error(Exception(e.toString()));
+  }
+}

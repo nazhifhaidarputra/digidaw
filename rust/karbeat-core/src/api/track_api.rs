@@ -104,3 +104,14 @@ pub fn delete_track(track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
     broadcast_state_change();
     Ok(deleted_track_type)
 }
+
+/// Update track order
+pub fn update_track_order(track_id: TrackId, new_idx: usize) -> anyhow::Result<()> {
+    {
+        let mut app = get_app_write();
+        app.update_track_order(track_id, new_idx)?;
+    }
+
+    // broadcast_state_change();
+    Ok(())
+}

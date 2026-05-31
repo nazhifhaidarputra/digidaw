@@ -1690,6 +1690,7 @@ class GlobalAppState extends ChangeNotifier {
       trackType: original.trackType,
       clips: clips ?? original.clips,
       generatorId: original.generatorId, // Forward generator ID
+      orderIdx: original.orderIdx
     );
   }
 

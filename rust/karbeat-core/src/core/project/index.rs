@@ -14,7 +14,7 @@ pub use super::transport::TransportState;
 
 use crate::core::project::plugin::modulation::ModulationEvent;
 use crate::core::project::{automation::AutomationLane, mixer::MixerState};
-use crate::core::project::{ModulationLink, ModulationSource};
+use crate::core::project::{ModulationLinkForOrderedLaneView, ModulationSource};
 
 pub use crate::shared::*;
 
@@ -57,7 +57,7 @@ pub struct ApplicationState {
     pub modulation_src_counter: u32,
 
     // The Cables (Connects a Source to a Target)
-    pub modulation_links: HashMap<ModulationLinkId, ModulationLink>,
+    pub modulation_links: HashMap<ModulationLinkId, ModulationLinkForOrderedLaneView>,
     pub modulation_link_counter: u32,
 
     // Counter for clips

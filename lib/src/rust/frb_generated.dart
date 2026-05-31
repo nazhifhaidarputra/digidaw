@@ -79,7 +79,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -113329945;
+  int get rustContentHash => 801082562;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -829,6 +829,11 @@ abstract class RustLibApi extends BaseApi {
     required int timeTicks,
     required double value,
     required double tension,
+  });
+
+  Future<void> crateApiTrackUpdateTrackOrder({
+    required int trackId,
+    required int newIdx,
   });
 
   RustArcIncrementStrongCountFnType
@@ -6809,6 +6814,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: ["automationId", "index", "timeTicks", "value", "tension"],
       );
 
+  @override
+  Future<void> crateApiTrackUpdateTrackOrder({
+    required int trackId,
+    required int newIdx,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_CastedPrimitive_usize(newIdx, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 179,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTrackUpdateTrackOrderConstMeta,
+        argValues: [trackId, newIdx],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTrackUpdateTrackOrderConstMeta =>
+      const TaskConstMeta(
+        debugName: "update_track_order",
+        argNames: ["trackId", "newIdx"],
+      );
+
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_AudioWaveformUiForAudioProperties => wire
       .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties;
@@ -8597,8 +8637,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiTrack dco_decode_ui_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return UiTrack(
       id: dco_decode_u_32(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -8606,6 +8646,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       trackType: dco_decode_ui_track_type(arr[3]),
       clips: dco_decode_list_ui_clip(arr[4]),
       generatorId: dco_decode_opt_box_autoadd_u_32(arr[5]),
+      orderIdx: dco_decode_CastedPrimitive_usize(arr[6]),
     );
   }
 
@@ -10852,6 +10893,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_trackType = sse_decode_ui_track_type(deserializer);
     var var_clips = sse_decode_list_ui_clip(deserializer);
     var var_generatorId = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_orderIdx = sse_decode_CastedPrimitive_usize(deserializer);
     return UiTrack(
       id: var_id,
       name: var_name,
@@ -10859,6 +10901,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       trackType: var_trackType,
       clips: var_clips,
       generatorId: var_generatorId,
+      orderIdx: var_orderIdx,
     );
   }
 
@@ -13008,6 +13051,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_ui_track_type(self.trackType, serializer);
     sse_encode_list_ui_clip(self.clips, serializer);
     sse_encode_opt_box_autoadd_u_32(self.generatorId, serializer);
+    sse_encode_CastedPrimitive_usize(self.orderIdx, serializer);
   }
 
   @protected

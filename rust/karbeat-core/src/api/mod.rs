@@ -11,6 +11,7 @@ pub mod plugin_api;
 pub mod project_api;
 pub mod track_api;
 pub mod transport_api;
+pub mod error;
 
 use crate::{
     context::utils::broadcast_state_change,
