@@ -2,6 +2,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
+use karbeat_core::audio::backend::AudioDeviceConfig;
 use memmap2::MmapOptions;
 use rtrb::RingBuffer;
 
@@ -67,6 +68,8 @@ pub fn init_engine() {
         AudioRenderState::from(&*app)
     };
 
+    let device_conf = AudioDeviceConfig::default();
+
     log::info!(
         "Init Engine with Buffer Size: {}",
         initial_state.graph.buffer_size
@@ -84,7 +87,7 @@ pub fn init_engine() {
     let mut guard = ctx().command_sender.lock();
     *guard = Some(cmd_prod);
 
-    match start_audio_stream(state_out, cmd_cons, initial_state) {
+    match start_audio_stream(state_out, cmd_cons, initial_state, device_conf) {
         Ok(_) => {
             log::info!("Audio Engine Successfully initialized");
 
