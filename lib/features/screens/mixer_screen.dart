@@ -4,6 +4,7 @@ import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/features/audio_plugins/effects/effect_registry.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
@@ -99,7 +100,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   DawContextAction(
                     title: 'Route to node...',
                     onTap: () {
-                      AppLogger.info("Route to node...");
+                      _showRoutingDialog(context, entry.id, mixerState, state);
                     },
                   ),
                 ],
@@ -278,6 +279,87 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showRoutingDialog(
+    BuildContext context,
+    int trackId,
+    UiMixerState mixerState,
+    dynamic state, // Using dynamic or your GlobalAppState type
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return SimpleDialog(
+          title: Text("Route Track $trackId To..."),
+          backgroundColor: Colors.grey.shade900,
+          titleTextStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          children: [
+            // Option to route to Master
+            SimpleDialogOption(
+              onPressed: () {
+                AppLogger.info("Routing track $trackId to Master");
+                // TODO: Call your state backend to update the routing graph
+                // e.g., state.routeTrackToMaster(trackId);
+                Navigator.pop(ctx);
+              },
+              child: const Row(
+                children: [
+                  Icon(Icons.hub, color: Colors.amber, size: 20),
+                  SizedBox(width: 12),
+                  Text("Master", style: TextStyle(color: Colors.white)),
+                ],
+              ),
+            ),
+
+            if (mixerState.buses.isNotEmpty) ...[
+              const Divider(color: Colors.white24),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Text(
+                  "BUSES",
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              // Dynamically list all available buses
+              ...mixerState.buses.values.map((bus) {
+                return SimpleDialogOption(
+                  onPressed: () {
+                    AppLogger.info("Routing track $trackId to Bus ${bus.id}");
+                    // TODO: Call your state backend to update the routing graph
+                    // e.g., state.routeTrackToBus(trackId, bus.id);
+                    Navigator.pop(ctx);
+                  },
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.settings_input_component,
+                        color: Colors.cyanAccent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        bus.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
         );
       },
     );
@@ -1169,4 +1251,98 @@ class _ToggleButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// Place this anywhere at the bottom of the file
+class _RoutingPainter extends CustomPainter {
+  final List<plugin_api.UiRoutingConnection> routing;
+  final Map<String, GlobalKey> stripKeys;
+  final int? selectedChannelId;
+  final bool isSelectedBus;
+
+  _RoutingPainter({
+    required this.routing,
+    required this.stripKeys,
+    required this.selectedChannelId,
+    required this.isSelectedBus,
+  });
+
+  String? _getNodeKeyString(plugin_api.UiRoutingNode node) {
+    if (node is plugin_api.UiRoutingNode_Track) return 'track_${node.field0}';
+    if (node is plugin_api.UiRoutingNode_Bus) return 'bus_${node.field0}';
+    if (node is plugin_api.UiRoutingNode_Master) return 'master';
+    return null;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final activePaint = Paint()
+      ..color = Colors.cyanAccent.withAlpha(200)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+
+    final inactivePaint = Paint()
+      ..color = Colors.white.withAlpha(20)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    for (final conn in routing) {
+      final srcStr = _getNodeKeyString(conn.source);
+      final dstStr = _getNodeKeyString(conn.destination);
+
+      if (srcStr == null || dstStr == null) continue;
+
+      final srcKey = stripKeys[srcStr];
+      final dstKey = stripKeys[dstStr];
+
+      if (srcKey == null || dstKey == null) continue;
+
+      final srcBox = srcKey.currentContext?.findRenderObject() as RenderBox?;
+      final dstBox = dstKey.currentContext?.findRenderObject() as RenderBox?;
+
+      if (srcBox == null || dstBox == null) continue;
+
+      // Ensure boxes are actually attached to the screen coordinates
+      final srcPos = srcBox.localToGlobal(Offset.zero);
+      final dstPos = dstBox.localToGlobal(Offset.zero);
+
+      // Start from bottom-center of source, go to bottom-center of destination
+      final start = Offset(srcPos.dx + srcBox.size.width / 2, srcPos.dy + srcBox.size.height - 10);
+      final end = Offset(dstPos.dx + dstBox.size.width / 2, dstPos.dy + dstBox.size.height - 10);
+
+      bool isActive = false;
+      if (selectedChannelId != null) {
+        final selectedStr = selectedChannelId == -1
+            ? 'master'
+            : (isSelectedBus ? 'bus_$selectedChannelId' : 'track_$selectedChannelId');
+        if (srcStr == selectedStr || dstStr == selectedStr) {
+          isActive = true;
+        }
+      }
+
+      final path = Path();
+      path.moveTo(start.dx, start.dy);
+      
+      // Draw a hanging curve under the tracks to visualize the cable
+      final distance = (end.dx - start.dx).abs();
+      final drop = 40.0 + (distance * 0.1).clamp(0.0, 80.0); 
+
+      final controlPoint1 = Offset(start.dx, start.dy + drop);
+      final controlPoint2 = Offset(end.dx, end.dy + drop);
+      path.cubicTo(controlPoint1.dx, controlPoint1.dy, controlPoint2.dx, controlPoint2.dy, end.dx, end.dy);
+
+      canvas.drawPath(path, isActive ? activePaint : inactivePaint);
+
+      // Draw a glowing node point at the destination to indicate flow direction
+      if (isActive) {
+        final arrowPaint = Paint()
+          ..color = Colors.cyanAccent.withAlpha(200)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(end, 4, arrowPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RoutingPainter oldDelegate) => true; 
 }
