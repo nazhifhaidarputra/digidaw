@@ -1280,7 +1280,7 @@ impl AudioEngine {
                         .push(AudioFeedback::EffectParameterSnapshot(snapshot));
                 }
             }
-            AudioCommand::PreparePlugin {
+            AudioCommand::HydratePlugin {
                 track_effects,
                 master_effects,
                 bus_effects,

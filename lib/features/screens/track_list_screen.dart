@@ -3018,9 +3018,9 @@ Future<Result<void>> handleUpdateTrackOrder({
   required int newIdx,
 }) async {
   return await attemptAsync(() async {
-    await updateTrackOrder(trackId: trackId, newIdx: newIdx);
-
-    // Success then we try to call sync and update
+    return await updateTrackOrder(trackId: trackId, newIdx: newIdx);
+  }).andThenAsync((_) async {
     await ref.read(globalStateProvider).syncTracksState();
+    return Result.ok(null);
   });
 }

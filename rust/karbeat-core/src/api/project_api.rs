@@ -488,7 +488,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     }
 
     // Send the fully configured plugins to the Live Audio Engine
-    send_audio_command(AudioCommand::PreparePlugin {
+    send_audio_command(AudioCommand::HydratePlugin {
         generators,
         track_effects,
         bus_effects,

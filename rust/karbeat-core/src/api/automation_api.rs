@@ -160,8 +160,9 @@ pub fn get_automation_lanes_for_bus(
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 
 /// Get all modulations in the project
-pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> Vec<(Id, T)>
+pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> std::collections::HashMap<Id, T>
 where
+    Id: std::hash::Hash + std::cmp::Eq,
     F: Fn(&ModulationLinkId, &crate::core::project::ModulationLinkForOrderedLaneView) -> (Id, T),
 {
     let app = get_app_read();

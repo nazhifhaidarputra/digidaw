@@ -95,3 +95,49 @@ Future<Result<T>> attemptAsync<T>(
     return Result.error(Exception(e.toString()));
   }
 }
+
+extension ResultExt<T> on Result<T> {
+  Result<U> map<U>(U Function(T value) fn) {
+    return switch (this) {
+      Ok<T>(value: final value) => Result.ok(fn(value)),
+      Error<T>(error: final error) => Result.error(error),
+    };
+  }
+
+  Result<U> andThen<U>(Result<U> Function(T value) fn) {
+    return switch (this) {
+      Ok<T>(value: final value) => fn(value),
+      Error<T>(error: final error) => Result.error(error),
+    };
+  }
+
+  Result<T> mapErr(Exception Function(Exception error) fn) {
+    return switch (this) {
+      Ok<T>() => this,
+      Error<T>(error: final error) => Result.error(fn(error)),
+    };
+  }
+}
+extension ResultAsyncExt<T> on Future<Result<T>> {
+  Future<Result<U>> andThenAsync<U>(
+    Future<Result<U>> Function(T value) fn,
+  ) async {
+    final result = await this;
+
+    return switch (result) {
+      Ok<T>(value: final value) => await fn(value),
+      Error<T>(error: final error) => Result.error(error),
+    };
+  }
+
+  Future<Result<U>> mapAsync<U>(
+    Future<U> Function(T value) fn,
+  ) async {
+    final result = await this;
+
+    return switch (result) {
+      Ok<T>(value: final value) => Result.ok(await fn(value)),
+      Error<T>(error: final error) => Result.error(error),
+    };
+  }
+}

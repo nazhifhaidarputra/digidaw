@@ -149,7 +149,7 @@ pub enum AudioCommand {
     },
     /// Prepare all plugins and seed the audio thread's mixer channel state.
     /// Called on project load / new project to fully hydrate the audio thread.
-    PreparePlugin {
+    HydratePlugin {
         track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
         master_effects: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>,
         bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
@@ -201,7 +201,6 @@ pub enum AudioCommand {
     // =========================================================================
     // Granular Graph-State Commands (replace the old triple-buffer path)
     // =========================================================================
-
     /// Update the track + pattern snapshot on the audio thread.
     /// Sent whenever tracks are added/removed, clips are edited, patterns
     /// are modified, or BPM changes the max_sample_index.
@@ -219,7 +218,9 @@ pub enum AudioCommand {
     },
 
     /// Remove an automation lane from the audio thread's local graph.
-    RemoveAutomationLane { id: AutomationId },
+    RemoveAutomationLane {
+        id: AutomationId,
+    },
 
     /// Update audio engine config (sample_rate, buffer_size).
     /// Sent when the audio device is reconfigured at runtime.
@@ -231,7 +232,9 @@ pub enum AudioCommand {
     /// Atomically replace the full audio graph state on the engine.
     /// Used exclusively for undo/redo where an arbitrary subset of sub-graphs
     /// may have changed and enumerating diffs would be impractical.
-    ReplaceFullGraph { graph: AudioGraphState },
+    ReplaceFullGraph {
+        graph: AudioGraphState,
+    },
 
     /// Spawn a new generator in the DSP thread (e.g., an LFO)
     AddModulationSource {

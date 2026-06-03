@@ -9,6 +9,7 @@ import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/project.dart' as project_api;
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
@@ -80,6 +81,13 @@ class GlobalAppState extends ChangeNotifier {
 
   List<UiPluginInfo> _availableEffects = [];
   List<UiPluginInfo> get availableEffects => _availableEffects;
+
+  // Store the raw, flat pools from Rust
+  Map<int, ModulationLinkDto> _modulationLinks = {};
+  Map<int, AutomationLaneDto> _automationPool = {};
+
+  Map<int, ModulationLinkDto> get modulationLinks => _modulationLinks;
+  Map<int, AutomationLaneDto> get automationPool => _automationPool;
 
   static final List<DawToolbarMenuGroup> menuGroups = [
     DawToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -494,9 +502,9 @@ class GlobalAppState extends ChangeNotifier {
   Future<void> syncGenerator({required int generatorId}) async {
     try {
       final generator = await getGenerator(generatorId: generatorId);
-      final newMap = Map<int, UiGeneratorInstance>.from(_generators);
-      newMap[generatorId] = generator;
-      _generators = newMap;
+      // final newMap = Map<int, UiGeneratorInstance>.from(_generators);
+      // newMap[generatorId] = generator;
+      _generators[generatorId] = generator;
       notifyListeners();
     } catch (error) {
       AppLogger.error("Failed to sync generator $generatorId: $error");
@@ -630,6 +638,22 @@ class GlobalAppState extends ChangeNotifier {
       final newRouting = await mixer_api.getRoutingMatrix();
       _mixerState = _mixerState.copyWith(routing: newRouting);
     });
+  }
+
+  Future<Result<void>> syncAutomationAndModulationState() async {
+    return await attemptAsync(() async {
+      final (links, lanes) = await (
+        getAllLinkedModulationParams(),
+        getAutomationsLanesAll(),
+      ).wait;
+      _modulationLinks = links;
+      _automationPool = lanes;
+      notifyListeners();
+    });
+  }
+
+  Future<Result<void>> syncModulation(int linkId) async {
+    return await attemptAsync(() async {});
   }
 
   // =============== ACTIONS ===============

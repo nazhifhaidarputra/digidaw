@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use karbeat_core::{
     api::automation_api,
     core::project::{
@@ -372,8 +374,8 @@ pub fn add_automation_lane(
 }
 
 /// Fetch all automation lanes across all targets
-pub fn get_automations_lanes_all() -> Vec<AutomationLaneDto> {
-    automation_api::get_automations_lanes_all(|lane| AutomationLaneDto::from(lane))
+pub fn get_automations_lanes_all() -> HashMap<u32, AutomationLaneDto> {
+    automation_api::get_automations_lanes_all(|lane| (lane.id.into(), AutomationLaneDto::from(lane)))
 }
 
 pub fn add_automation_lane_for_track(
@@ -458,7 +460,7 @@ pub fn update_automation_point(
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 
 /// Get all modulations in the project
-pub fn get_all_linked_modulation_params() -> Vec<(u32, ModulationLinkDto)> {
+pub fn get_all_linked_modulation_params() -> HashMap<u32, ModulationLinkDto> {
     automation_api::get_all_linked_modulation_params(|id, mod_link| (id.to_u32(), mod_link.into()))
 }
 
