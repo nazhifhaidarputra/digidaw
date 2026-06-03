@@ -64,6 +64,9 @@ final class Error<T> extends Result<T> {
 
 /// call a function and handle it in try-catch block.
 /// In the end it will return the explicit Result type
+/// 
+/// Using this lets you define a cleaner
+/// scope in which code will throw an error
 Result<T> attempt<T>(T Function() fn) {
   try {
     return Result.ok(fn());
@@ -76,6 +79,11 @@ Result<T> attempt<T>(T Function() fn) {
 
 /// call an async function and handle it in try-catch block.
 /// In the end it will return the explicit Result type
+/// 
+/// Using this lets you define a cleaner
+/// scope in which code will throw an error (especially
+/// in async case where the code have a chance to get an
+/// error)
 Future<Result<T>> attemptAsync<T>(
   Future<T> Function() fn,
 ) async {

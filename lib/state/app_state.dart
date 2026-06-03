@@ -3,6 +3,7 @@ import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/components/floating_midi_keyboard.dart';
 import 'package:karbeat/models/export_audio.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
@@ -61,12 +62,6 @@ class GlobalAppState extends ChangeNotifier {
   bool _isLooping = false;
   bool _isPatternPlaying = false;
 
-  // ProjectMetadata _metadata = ProjectMetadata(
-  //   name: "Untitled",
-  //   author: "User",
-  //   version: "1.0.0",
-  //   createdAt: 0, // Assuming u64
-  // );
   UiProjectMetadata _metadata = projectMetadataNew();
 
   UiAudioHardwareConfig _hardwareConfig = audioHardwareConfigNew();
@@ -150,14 +145,11 @@ class GlobalAppState extends ChangeNotifier {
   bool snapToGrid = false;
 
   // ================== OTHER STATES ====================
-  bool _showFloatingMidiKeyboard = false;
   bool _showExportPanel = false;
 
   bool get showExportPanel => _showExportPanel;
 
-  // set showExportPanel(bool value) {
-  //   _showExportPanel = value;
-  // }
+  FloatingMidiKeyboardFieldState midiKeyboardState = FloatingMidiKeyboardFieldState(showed: false);
 
   // ================ CONSTRUCTOR ==================
   GlobalAppState() {
@@ -237,7 +229,22 @@ class GlobalAppState extends ChangeNotifier {
   }
 
   void toggleFloatingMidiKeyboard() {
-    _showFloatingMidiKeyboard = !_showFloatingMidiKeyboard;
+    midiKeyboardState.showed = !midiKeyboardState.showed;
+    notifyListeners();
+  }
+
+  void setMidiKeyboardBaseKey(int key) {
+    midiKeyboardState.baseKey = key.clamp(21, 120);
+    notifyListeners();
+  }
+
+  void setMidiKeyboardRange(int range) {
+    midiKeyboardState.keyRange = range.clamp(12, 24);
+    notifyListeners();
+  }
+
+  void setMidiKeyboardGenerator(int? id) {
+    midiKeyboardState.selectedGeneratorId = id;
     notifyListeners();
   }
 
@@ -347,7 +354,7 @@ class GlobalAppState extends ChangeNotifier {
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
   mixer_api.UiMixerState get mixerState => _mixerState;
-  bool get showFloatingMidiKeyboard => _showFloatingMidiKeyboard;
+  bool get showFloatingMidiKeyboard => midiKeyboardState.showed;
 
   // Session state getters (frontend-only)
   int? get selectedTrackId => _selectedTrackId;
