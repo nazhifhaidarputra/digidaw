@@ -24,7 +24,7 @@ pub enum AudioSampleMode {
     /// ticks (BPM-dependent, for time-stretched audio, preserved pitch)
     Stretch,
     /// ticks (BPM-dependent, for time-stretched audio, do not preserve pitch)
-    Resampled
+    Resampled,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -107,14 +107,14 @@ impl Default for AudioWaveform {
     }
 }
 
-/// A context struct providing the audio engine with everything it needs 
+/// A context struct providing the audio engine with everything it needs
 /// to render the waveform correctly based on the current sample mode.
 pub struct WaveformPlaybackContext<'a> {
     /// The trimmed, ready-to-read audio buffer slice
     pub buffer: &'a [f32],
     /// Multiplier for the read-pointer speed (e.g., 2.0 = play twice as fast)
     pub playback_rate: f64,
-    /// Multiplier for the pitch (e.g., 2.0 = one octave up). 
+    /// Multiplier for the pitch (e.g., 2.0 = one octave up).
     /// If playback_rate != pitch_rate, the engine must use a time-stretching algorithm.
     pub pitch_ratio: f64,
     /// The mode, passed along just in case the engine needs algorithmic context
@@ -130,14 +130,14 @@ impl AudioWaveform {
         Ok(())
     }
 
-    /// Returns a strictly valid slice of the audio buffer, cropped exactly to 
+    /// Returns a strictly valid slice of the audio buffer, cropped exactly to
     /// the trim_start and trim_end boundaries.
     pub fn get_playable_buffer<'a>(&'a self) -> Option<&'a [f32]> {
         let raw_buffer = crate::utils::get_waveform_buffer(&self.buffer)?;
         let channels = self.channels as usize;
-        
-        if channels == 0 || raw_buffer.is_empty() { 
-            return None; 
+
+        if channels == 0 || raw_buffer.is_empty() {
+            return None;
         }
 
         let total_frames = raw_buffer.len() / channels;
@@ -161,21 +161,24 @@ impl AudioWaveform {
 
     /// Abstracts the logic of AudioSampleModes. The audio engine passes the project's
     /// current BPM, and this returns the exact parameters needed to render the audio.
-    pub fn get_playback_context<'a>(&'a self, project_bpm: f32) -> Option<WaveformPlaybackContext<'a>> {
+    pub fn get_playback_context<'a>(
+        &'a self,
+        project_bpm: f32,
+    ) -> Option<WaveformPlaybackContext<'a>> {
         let buffer = self.get_playable_buffer()?;
-        
+
         let (playback_rate, pitch_ratio) = match self.sample_mode {
             // Default: Ignores BPM entirely. Plays 1:1 speed, original pitch.
             AudioSampleMode::Default => (1.0, 1.0),
-            
-            // Stretch: Speeds up/slows down to match project BPM, but pitch remains 1.0 
+
+            // Stretch: Speeds up/slows down to match project BPM, but pitch remains 1.0
             // (Engine must use phase vocoder/granular synthesis to accommodate this)
             AudioSampleMode::Stretch => {
                 let ratio = (project_bpm / self.original_bpm.max(1.0)) as f64;
                 (ratio, 1.0)
-            },
-            
-            // Resampled: Speeds up/slows down to match project BPM, pitch bends with it 
+            }
+
+            // Resampled: Speeds up/slows down to match project BPM, pitch bends with it
             // (Classic turntable/tape effect. Engine just reads faster/slower)
             AudioSampleMode::Resampled => {
                 let ratio = (project_bpm / self.original_bpm.max(1.0)) as f64;

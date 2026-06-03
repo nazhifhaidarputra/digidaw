@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use cpal::{
-    OutputCallbackInfo, traits::{DeviceTrait, HostTrait, StreamTrait}
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    OutputCallbackInfo,
 };
 use rtrb::{Consumer, RingBuffer};
 use serde::{Deserialize, Serialize};
@@ -195,16 +196,22 @@ impl Default for AudioDeviceConfig {
 /// Resolve the host based on user preference or OS defaults
 fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
     if let Some(host_name) = preferred_host {
-        if let Some(host_id) = cpal::available_hosts().into_iter().find(|h| h.name() == host_name) {
+        if let Some(host_id) = cpal::available_hosts()
+            .into_iter()
+            .find(|h| h.name() == host_name)
+        {
             if let Ok(host) = cpal::host_from_id(host_id) {
                 log::info!("Connected to user-selected Host: {}", host_name);
                 return host;
             }
         }
-        log::warn!("Requested host '{}' not found or failed to load. Falling back...", host_name);
+        log::warn!(
+            "Requested host '{}' not found or failed to load. Falling back...",
+            host_name
+        );
     }
 
-    set_host() 
+    set_host()
 }
 
 /// Returns a list of available host names on the current OS
@@ -227,14 +234,20 @@ pub fn get_output_devices(host_name: String) -> Result<Vec<AudioDeviceInfo>, any
 
     for dev in host.output_devices()? {
         if let (Ok(id), Ok(desc)) = (dev.id(), dev.description()) {
-            devices.push(AudioDeviceInfo { id: id.to_string(), name: desc.to_string() });
+            devices.push(AudioDeviceInfo {
+                id: id.to_string(),
+                name: desc.to_string(),
+            });
         }
     }
     Ok(devices)
 }
 
 /// Returns the supported sample rates for a specific device on a specific host
-pub fn get_device_sample_rates(host_name: String, device_id: String) -> Result<Vec<u32>, anyhow::Error> {
+pub fn get_device_sample_rates(
+    host_name: String,
+    device_id: String,
+) -> Result<Vec<u32>, anyhow::Error> {
     let host_id = cpal::available_hosts()
         .into_iter()
         .find(|h| h.name() == host_name)
@@ -257,7 +270,7 @@ pub fn get_device_sample_rates(host_name: String, device_id: String) -> Result<V
         rates.push(config.min_sample_rate());
         rates.push(config.max_sample_rate());
     }
-    
+
     rates.sort();
     rates.dedup();
     Ok(rates)
@@ -282,11 +295,9 @@ pub fn start_audio_stream(
 
     let device = if let Some(dev_id) = &config_pref.device_id {
         host.output_devices()?
-            .find(|d| {
-                match d.id() {
-                    Ok(id) => id.to_string() == *dev_id,
-                    Err(_) => false,
-                }
+            .find(|d| match d.id() {
+                Ok(id) => id.to_string() == *dev_id,
+                Err(_) => false,
             })
             .ok_or_else(|| anyhow!("Requested device ID '{}' not found", dev_id))?
     } else {
@@ -306,9 +317,7 @@ pub fn start_audio_stream(
         .context("no default output config available")?;
     let native_sample_rate = default_config.sample_rate();
 
-    let target_sample_rate = config_pref
-        .sample_rate
-        .unwrap_or(native_sample_rate);
+    let target_sample_rate = config_pref.sample_rate.unwrap_or(native_sample_rate);
 
     let supported_configs_range = device
         .supported_output_configs()
@@ -324,10 +333,13 @@ pub fn start_audio_stream(
         .or_else(|| {
             // Fallback: If requested rate fails, force fallback to default native
             log::warn!("Requested sample rate unsupported by device, falling back");
-            device.supported_output_configs().ok()?
+            device
+                .supported_output_configs()
+                .ok()?
                 .find(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
                 .map(|c| {
-                    let clamped = native_sample_rate.clamp(c.min_sample_rate(), c.max_sample_rate());
+                    let clamped =
+                        native_sample_rate.clamp(c.min_sample_rate(), c.max_sample_rate());
                     c.with_sample_rate(clamped)
                 })
         })

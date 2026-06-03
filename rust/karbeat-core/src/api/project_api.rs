@@ -84,7 +84,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
         for effect in &app.mixer.master_bus.effects {
             pending_requests.push(PluginTarget::MasterEffect(effect.id));
             expected_responses += 1;
-        }        // Query master channel DSP state
+        } // Query master channel DSP state
         mixer_channel_targets.push(MixerChannelTarget::Master);
     }
 
@@ -176,7 +176,11 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                 PluginTarget::TrackEffect(track_id, effect_id) => {
                     if let Some(channel) = app.mixer.channels.get_mut(&track_id) {
                         let ch_mut = Arc::make_mut(channel);
-                        if let Some(effect) = ch_mut.channel.effects.iter_mut().find(|e| e.id == effect_id)
+                        if let Some(effect) = ch_mut
+                            .channel
+                            .effects
+                            .iter_mut()
+                            .find(|e| e.id == effect_id)
                         {
                             let instance_mut = Arc::make_mut(&mut effect.instance);
                             instance_mut.plugin_state = state_blob;

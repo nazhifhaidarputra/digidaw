@@ -1010,6 +1010,379 @@ $EffectAutomationTargetDtoCopyWith<$Res> get target {
 }
 
 /// @nodoc
+mixin _$ModulationSourceDto {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ModulationSourceDto);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'ModulationSourceDto()';
+}
+
+
+}
+
+/// @nodoc
+class $ModulationSourceDtoCopyWith<$Res>  {
+$ModulationSourceDtoCopyWith(ModulationSourceDto _, $Res Function(ModulationSourceDto) __);
+}
+
+
+/// Adds pattern-matching-related methods to [ModulationSourceDto].
+extension ModulationSourceDtoPatterns on ModulationSourceDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ModulationSourceDto_PeakController value)?  peakController,TResult Function( ModulationSourceDto_Automation value)?  automation,TResult Function( ModulationSourceDto_Lfo value)?  lfo,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case ModulationSourceDto_PeakController() when peakController != null:
+return peakController(_that);case ModulationSourceDto_Automation() when automation != null:
+return automation(_that);case ModulationSourceDto_Lfo() when lfo != null:
+return lfo(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ModulationSourceDto_PeakController value)  peakController,required TResult Function( ModulationSourceDto_Automation value)  automation,required TResult Function( ModulationSourceDto_Lfo value)  lfo,}){
+final _that = this;
+switch (_that) {
+case ModulationSourceDto_PeakController():
+return peakController(_that);case ModulationSourceDto_Automation():
+return automation(_that);case ModulationSourceDto_Lfo():
+return lfo(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ModulationSourceDto_PeakController value)?  peakController,TResult? Function( ModulationSourceDto_Automation value)?  automation,TResult? Function( ModulationSourceDto_Lfo value)?  lfo,}){
+final _that = this;
+switch (_that) {
+case ModulationSourceDto_PeakController() when peakController != null:
+return peakController(_that);case ModulationSourceDto_Automation() when automation != null:
+return automation(_that);case ModulationSourceDto_Lfo() when lfo != null:
+return lfo(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( UiPluginTarget source)?  peakController,TResult Function( int laneId)?  automation,TResult Function( double rateHz)?  lfo,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case ModulationSourceDto_PeakController() when peakController != null:
+return peakController(_that.source);case ModulationSourceDto_Automation() when automation != null:
+return automation(_that.laneId);case ModulationSourceDto_Lfo() when lfo != null:
+return lfo(_that.rateHz);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( UiPluginTarget source)  peakController,required TResult Function( int laneId)  automation,required TResult Function( double rateHz)  lfo,}) {final _that = this;
+switch (_that) {
+case ModulationSourceDto_PeakController():
+return peakController(_that.source);case ModulationSourceDto_Automation():
+return automation(_that.laneId);case ModulationSourceDto_Lfo():
+return lfo(_that.rateHz);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( UiPluginTarget source)?  peakController,TResult? Function( int laneId)?  automation,TResult? Function( double rateHz)?  lfo,}) {final _that = this;
+switch (_that) {
+case ModulationSourceDto_PeakController() when peakController != null:
+return peakController(_that.source);case ModulationSourceDto_Automation() when automation != null:
+return automation(_that.laneId);case ModulationSourceDto_Lfo() when lfo != null:
+return lfo(_that.rateHz);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class ModulationSourceDto_PeakController extends ModulationSourceDto {
+  const ModulationSourceDto_PeakController({required this.source}): super._();
+  
+
+ final  UiPluginTarget source;
+
+/// Create a copy of ModulationSourceDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ModulationSourceDto_PeakControllerCopyWith<ModulationSourceDto_PeakController> get copyWith => _$ModulationSourceDto_PeakControllerCopyWithImpl<ModulationSourceDto_PeakController>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ModulationSourceDto_PeakController&&(identical(other.source, source) || other.source == source));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,source);
+
+@override
+String toString() {
+  return 'ModulationSourceDto.peakController(source: $source)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ModulationSourceDto_PeakControllerCopyWith<$Res> implements $ModulationSourceDtoCopyWith<$Res> {
+  factory $ModulationSourceDto_PeakControllerCopyWith(ModulationSourceDto_PeakController value, $Res Function(ModulationSourceDto_PeakController) _then) = _$ModulationSourceDto_PeakControllerCopyWithImpl;
+@useResult
+$Res call({
+ UiPluginTarget source
+});
+
+
+$UiPluginTargetCopyWith<$Res> get source;
+
+}
+/// @nodoc
+class _$ModulationSourceDto_PeakControllerCopyWithImpl<$Res>
+    implements $ModulationSourceDto_PeakControllerCopyWith<$Res> {
+  _$ModulationSourceDto_PeakControllerCopyWithImpl(this._self, this._then);
+
+  final ModulationSourceDto_PeakController _self;
+  final $Res Function(ModulationSourceDto_PeakController) _then;
+
+/// Create a copy of ModulationSourceDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? source = null,}) {
+  return _then(ModulationSourceDto_PeakController(
+source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as UiPluginTarget,
+  ));
+}
+
+/// Create a copy of ModulationSourceDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiPluginTargetCopyWith<$Res> get source {
+  
+  return $UiPluginTargetCopyWith<$Res>(_self.source, (value) {
+    return _then(_self.copyWith(source: value));
+  });
+}
+}
+
+/// @nodoc
+
+
+class ModulationSourceDto_Automation extends ModulationSourceDto {
+  const ModulationSourceDto_Automation({required this.laneId}): super._();
+  
+
+ final  int laneId;
+
+/// Create a copy of ModulationSourceDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ModulationSourceDto_AutomationCopyWith<ModulationSourceDto_Automation> get copyWith => _$ModulationSourceDto_AutomationCopyWithImpl<ModulationSourceDto_Automation>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ModulationSourceDto_Automation&&(identical(other.laneId, laneId) || other.laneId == laneId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,laneId);
+
+@override
+String toString() {
+  return 'ModulationSourceDto.automation(laneId: $laneId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ModulationSourceDto_AutomationCopyWith<$Res> implements $ModulationSourceDtoCopyWith<$Res> {
+  factory $ModulationSourceDto_AutomationCopyWith(ModulationSourceDto_Automation value, $Res Function(ModulationSourceDto_Automation) _then) = _$ModulationSourceDto_AutomationCopyWithImpl;
+@useResult
+$Res call({
+ int laneId
+});
+
+
+
+
+}
+/// @nodoc
+class _$ModulationSourceDto_AutomationCopyWithImpl<$Res>
+    implements $ModulationSourceDto_AutomationCopyWith<$Res> {
+  _$ModulationSourceDto_AutomationCopyWithImpl(this._self, this._then);
+
+  final ModulationSourceDto_Automation _self;
+  final $Res Function(ModulationSourceDto_Automation) _then;
+
+/// Create a copy of ModulationSourceDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? laneId = null,}) {
+  return _then(ModulationSourceDto_Automation(
+laneId: null == laneId ? _self.laneId : laneId // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class ModulationSourceDto_Lfo extends ModulationSourceDto {
+  const ModulationSourceDto_Lfo({required this.rateHz}): super._();
+  
+
+ final  double rateHz;
+
+/// Create a copy of ModulationSourceDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ModulationSourceDto_LfoCopyWith<ModulationSourceDto_Lfo> get copyWith => _$ModulationSourceDto_LfoCopyWithImpl<ModulationSourceDto_Lfo>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ModulationSourceDto_Lfo&&(identical(other.rateHz, rateHz) || other.rateHz == rateHz));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,rateHz);
+
+@override
+String toString() {
+  return 'ModulationSourceDto.lfo(rateHz: $rateHz)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ModulationSourceDto_LfoCopyWith<$Res> implements $ModulationSourceDtoCopyWith<$Res> {
+  factory $ModulationSourceDto_LfoCopyWith(ModulationSourceDto_Lfo value, $Res Function(ModulationSourceDto_Lfo) _then) = _$ModulationSourceDto_LfoCopyWithImpl;
+@useResult
+$Res call({
+ double rateHz
+});
+
+
+
+
+}
+/// @nodoc
+class _$ModulationSourceDto_LfoCopyWithImpl<$Res>
+    implements $ModulationSourceDto_LfoCopyWith<$Res> {
+  _$ModulationSourceDto_LfoCopyWithImpl(this._self, this._then);
+
+  final ModulationSourceDto_Lfo _self;
+  final $Res Function(ModulationSourceDto_Lfo) _then;
+
+/// Create a copy of ModulationSourceDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? rateHz = null,}) {
+  return _then(ModulationSourceDto_Lfo(
+rateHz: null == rateHz ? _self.rateHz : rateHz // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$TrackAutomationTargetDto {
 
 

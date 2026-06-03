@@ -94,7 +94,11 @@ where
 
     let channel = app.mixer.channels.get(track_id)?;
 
-    let effect = channel.channel.effects.iter().find(|e| e.id == *effect_id)?;
+    let effect = channel
+        .channel
+        .effects
+        .iter()
+        .find(|e| e.id == *effect_id)?;
 
     Some(mapper(effect))
 }

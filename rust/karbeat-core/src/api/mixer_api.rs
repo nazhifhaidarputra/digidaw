@@ -10,7 +10,7 @@ use crate::{
     },
     core::project::{
         mixer::{
-            EffectInstance, BusMixerChannel, MixerChannel, MixerChannelParams, MixerState,
+            BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
             RoutingConnection, RoutingNode,
         },
         TrackId,
@@ -49,7 +49,14 @@ where
 {
     let app = get_app_read();
     let mix_channel = app.mixer.channels.get(track_id)?;
-    Some(mix_channel.channel.get_channel_specs().iter().map(mapper).collect())
+    Some(
+        mix_channel
+            .channel
+            .get_channel_specs()
+            .iter()
+            .map(mapper)
+            .collect(),
+    )
 }
 
 /// Get bus channel's parameter specs
@@ -105,7 +112,12 @@ where
 
     let mapped_channel = mixer_mapper(&channel.channel);
 
-    let mapped_effects: C = channel.channel.effects.iter().map(|e| instance_mapper(e)).collect();
+    let mapped_effects: C = channel
+        .channel
+        .effects
+        .iter()
+        .map(|e| instance_mapper(e))
+        .collect();
 
     Ok((mapped_channel, mapped_effects))
 }

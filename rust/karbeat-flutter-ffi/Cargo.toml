@@ -15,7 +15,7 @@ karbeat-utils.workspace = true
 
 anyhow.workspace = true
 env_logger.workspace = true
-flutter_rust_bridge = "=2.11.1"
+flutter_rust_bridge = "=2.12.0"
 log.workspace = true
 serde.workspace = true
 thiserror.workspace = true

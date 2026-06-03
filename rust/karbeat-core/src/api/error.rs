@@ -7,7 +7,6 @@ pub enum DawErrorCode {
     InvalidColorFormat,
     IoError,
     InternalError,
-
 }
 
 /// The uniform error struct sent to Flutter
@@ -16,9 +15,9 @@ pub enum DawErrorCode {
 pub struct DawError {
     pub code: DawErrorCode,
     pub reason: String,
-    
+
     // Captures the underlying stack trace or library error for debugging
-    pub cause: Option<String>, 
+    pub cause: Option<String>,
 }
 
 impl From<anyhow::Error> for DawError {

@@ -220,7 +220,7 @@ impl From<&AudioTrack> for UiTrack {
                 .map(|c| UiClip::from(c.deref()))
                 .collect(),
             generator_id,
-            order_idx: value.order_idx
+            order_idx: value.order_idx,
         }
     }
 }

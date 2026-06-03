@@ -55,7 +55,7 @@ pub struct ModulationLink {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ModulationLinkForOrderedLaneView {
     pub order_idx: usize,
-    pub prop: ModulationLink
+    pub prop: ModulationLink,
 }
 
 impl ModulationEvent {
@@ -209,7 +209,8 @@ impl ApplicationState {
         &self,
         track_id: TrackId,
     ) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
-        let mut lanes: Vec<_> = self.modulation_links
+        let mut lanes: Vec<_> = self
+            .modulation_links
             .values()
             .filter_map(|link| {
                 if link.prop.target.references_track(track_id) {
@@ -224,9 +225,12 @@ impl ApplicationState {
                 None
             })
             .collect();
-            
+
         lanes.sort_by_key(|item| item.0);
-        lanes.into_iter().map(|item| (item.1, item.2, item.3)).collect()
+        lanes
+            .into_iter()
+            .map(|item| (item.1, item.2, item.3))
+            .collect()
     }
 
     /// Completely remove all Modulation Links and orphaned Automation Lanes for a Track.
@@ -273,7 +277,8 @@ impl ApplicationState {
         &self,
         bus_id: BusId,
     ) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
-        let mut lanes: Vec<_> = self.modulation_links
+        let mut lanes: Vec<_> = self
+            .modulation_links
             .values()
             .filter_map(|link| {
                 if link.prop.target.references_bus(bus_id) {
@@ -290,7 +295,10 @@ impl ApplicationState {
             .collect();
 
         lanes.sort_by_key(|item| item.0);
-        lanes.into_iter().map(|item| (item.1, item.2, item.3)).collect()
+        lanes
+            .into_iter()
+            .map(|item| (item.1, item.2, item.3))
+            .collect()
     }
 
     /// Completely remove all Modulations and orphaned Automation Lanes for a Bus.
@@ -407,12 +415,15 @@ impl ApplicationState {
         new_idx: usize,
     ) -> anyhow::Result<()> {
         // Find the target to determine which UI drawer we are sorting inside
-        let target = self.modulation_links.get(&link_id)
+        let target = self
+            .modulation_links
+            .get(&link_id)
             .map(|l| l.prop.target.clone())
             .ok_or_else(|| anyhow::anyhow!("Link {:?} not found", link_id))?;
 
         // Gather ALL links that live in this exact same UI drawer
-        let mut sibling_links: Vec<_> = self.modulation_links
+        let mut sibling_links: Vec<_> = self
+            .modulation_links
             .values()
             .filter(|l| l.prop.target.belongs_to_same_drawer_as(&target))
             .cloned()

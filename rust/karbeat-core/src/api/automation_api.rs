@@ -4,7 +4,7 @@ use crate::{
     context::utils::broadcast_state_change,
     core::project::{
         automation::{AutomationLane, AutomationPoint, AutomationTarget},
-        ModulationEvent,
+        ModulationEvent, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource,
     },
     lock::{get_app_read, get_app_write},
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
@@ -168,21 +168,57 @@ pub fn get_automation_lanes_for_bus(
 /// Get all modulations in the project
 pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> Vec<(Id, T)>
 where
-    F: Fn(&ModulationId, &ModulationEvent) -> (Id, T),
+    F: Fn(&ModulationLinkId, &ModulationLinkForOrderedLaneView) -> (Id, T),
 {
     let app = get_app_read();
-    app.modulation_pool
+    app.modulation_links
         .iter()
         .map(|(id, modulation)| f(id, modulation))
         .collect()
 }
 
-// pub fn link_this_param_to_controller(source: ModulationEvent) -> anyhow::Result<ModulationLinkId> {
-//     // let id = {
-//     //     let mut app = get_app_write();
-//     //     app.add_modulation(source)
-//     // }?;
+/// Add generic modulation source
+pub fn add_modulation_source(source: ModulationSource) -> ModulationId {
+    let id = {
+        let mut app = get_app_write();
+        app.add_modulation_source(source)
+    };
 
-//     // broadcast_state_change();
-//     // Ok(id)
-// }
+    broadcast_state_change();
+    id
+}
+
+/// Remove the modulation source. This function also cascade delete all link
+/// with this source
+pub fn remove_modulation_source(mod_id: ModulationId) {
+    {
+        let mut app = get_app_write();
+        let _ = app.remove_modulation_source(mod_id);
+    }
+    broadcast_state_change();
+}
+
+pub fn remove_modulation_link(mod_link_id: ModulationLinkId) {
+    {
+        let mut app = get_app_write();
+        let _ = app.remove_modulation_link(mod_link_id);
+    }
+
+    broadcast_state_change();
+}
+
+/// Link the target param to a modulation source
+pub fn link_this_param_to_controller(
+    source_id: ModulationId,
+    target: AutomationTarget,
+    depth: f32,
+    base_value: f32,
+) -> anyhow::Result<ModulationLinkId> {
+    let id = {
+        let mut app = get_app_write();
+        app.link_modulation(source_id, target, depth, base_value)?
+    };
+
+    broadcast_state_change();
+    Ok(id)
+}

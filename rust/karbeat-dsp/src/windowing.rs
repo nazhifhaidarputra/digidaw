@@ -182,16 +182,20 @@ impl PrecomputedWindow {
         let mut weights = Vec::with_capacity(size);
         if size <= 1 {
             weights.resize(size, 1.0);
-            return Self { weights: weights.into_boxed_slice() };
+            return Self {
+                weights: weights.into_boxed_slice(),
+            };
         }
-        
+
         let n_minus_1 = (size - 1) as f32;
         for i in 0..size {
             let phase = 2.0 * PI * (i as f32) / n_minus_1;
             weights.push(0.5 * (1.0 - phase.cos()));
         }
-        
-        Self { weights: weights.into_boxed_slice() }
+
+        Self {
+            weights: weights.into_boxed_slice(),
+        }
     }
 
     #[inline(always)]
@@ -211,7 +215,11 @@ pub trait ApplyPrecomputedWindow {
 impl ApplyPrecomputedWindow for [f32] {
     #[inline(always)]
     fn apply_precomputed(&mut self, weights: &[f32]) {
-        assert_eq!(self.len(), weights.len(), "Buffer and window size must match");
+        assert_eq!(
+            self.len(),
+            weights.len(),
+            "Buffer and window size must match"
+        );
 
         let mut iter_buf = self.chunks_exact_mut(4);
         let mut iter_wt = weights.chunks_exact(4);
@@ -219,12 +227,16 @@ impl ApplyPrecomputedWindow for [f32] {
         for (chunk, wt) in iter_buf.by_ref().zip(iter_wt.by_ref()) {
             let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
             let w = f32x4::new([wt[0], wt[1], wt[2], wt[3]]);
-            
+
             v *= w;
             chunk.copy_from_slice(&v.to_array());
         }
 
-        for (sample, wt) in iter_buf.into_remainder().iter_mut().zip(iter_wt.remainder()) {
+        for (sample, wt) in iter_buf
+            .into_remainder()
+            .iter_mut()
+            .zip(iter_wt.remainder())
+        {
             *sample *= *wt;
         }
     }
@@ -233,7 +245,11 @@ impl ApplyPrecomputedWindow for [f32] {
 impl ApplyPrecomputedWindow for [[f32; 2]] {
     #[inline(always)]
     fn apply_precomputed(&mut self, weights: &[f32]) {
-        assert_eq!(self.len(), weights.len(), "Buffer and window size must match");
+        assert_eq!(
+            self.len(),
+            weights.len(),
+            "Buffer and window size must match"
+        );
 
         let mut iter_buf = self.chunks_exact_mut(2);
         let mut iter_wt = weights.chunks_exact(2);
@@ -242,9 +258,9 @@ impl ApplyPrecomputedWindow for [[f32; 2]] {
             let mut v = f32x4::new([chunk[0][0], chunk[0][1], chunk[1][0], chunk[1][1]]);
             // Duplicate the weights for L and R channels: [w0, w0, w1, w1]
             let w = f32x4::new([wt[0], wt[0], wt[1], wt[1]]);
-            
+
             v *= w;
-            
+
             let arr = v.to_array();
             chunk[0][0] = arr[0];
             chunk[0][1] = arr[1];
@@ -252,7 +268,11 @@ impl ApplyPrecomputedWindow for [[f32; 2]] {
             chunk[1][1] = arr[3];
         }
 
-        for (frame, wt) in iter_buf.into_remainder().iter_mut().zip(iter_wt.remainder()) {
+        for (frame, wt) in iter_buf
+            .into_remainder()
+            .iter_mut()
+            .zip(iter_wt.remainder())
+        {
             frame[0] *= *wt;
             frame[1] *= *wt;
         }

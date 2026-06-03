@@ -342,7 +342,7 @@ impl ApplicationState {
             order_idx: track_order,
             ..Default::default()
         };
-        
+
         let track_arc = Arc::new(new_track);
         self.tracks.insert(new_track_id, track_arc.clone());
 

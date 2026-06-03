@@ -2,10 +2,13 @@ use karbeat_core::{
     api::automation_api,
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
-        EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
+        EffectAutomationTarget, MixerChannelParamTarget, ModulationLink,
+        ModulationLinkForOrderedLaneView, ModulationSource, TrackAutomationTarget,
     },
     shared::{BusId, EffectId, TrackId},
 };
+
+use crate::api::plugin::UiPluginTarget;
 
 #[derive(Clone, Debug)]
 pub struct AutomationLaneDto {
@@ -67,6 +70,77 @@ pub enum AutomationCurveTypeDto {
     Linear,
     Exponential,
     Step,
+}
+
+pub struct ModulationLinkDto {
+    pub id: u32,
+    pub source_id: u32,              // Which LFO/Macro is driving this?
+    pub target: AutomationTargetDto, // What parameter is being turned?
+    pub depth: f32,                  // How much is it turning? (-1.0 to 1.0)
+    pub base_value: f32,
+    pub order_idx: usize,
+}
+
+pub enum ModulationSourceDto {
+    PeakController { source: UiPluginTarget },
+    Automation { lane_id: u32 },
+    Lfo { rate_hz: f32 },
+}
+
+impl From<&ModulationSource> for ModulationSourceDto {
+    fn from(value: &ModulationSource) -> Self {
+        match value {
+            ModulationSource::PeakController { source } => Self::PeakController {
+                source: source.into(),
+            },
+            ModulationSource::Automation { lane_id } => Self::Automation {
+                lane_id: lane_id.to_u32(),
+            },
+            ModulationSource::LFO { rate_hz } => Self::Lfo { rate_hz: *rate_hz },
+        }
+    }
+}
+
+impl From<ModulationSourceDto> for ModulationSource {
+    fn from(value: ModulationSourceDto) -> Self {
+        match value {
+            ModulationSourceDto::PeakController { source } => Self::PeakController {
+                source: source.into(),
+            },
+            ModulationSourceDto::Automation { lane_id } => Self::Automation {
+                lane_id: lane_id.into(),
+            },
+            ModulationSourceDto::Lfo { rate_hz } => Self::LFO { rate_hz },
+        }
+    }
+}
+
+impl From<&ModulationLinkForOrderedLaneView> for ModulationLinkDto {
+    fn from(value: &ModulationLinkForOrderedLaneView) -> Self {
+        Self {
+            id: value.prop.id.into(),
+            source_id: value.prop.source_id.into(),
+            target: AutomationTargetDto::from(&value.prop.target),
+            depth: value.prop.depth,
+            base_value: value.prop.base_value,
+            order_idx: value.order_idx,
+        }
+    }
+}
+
+impl From<ModulationLinkDto> for ModulationLinkForOrderedLaneView {
+    fn from(value: ModulationLinkDto) -> Self {
+        Self {
+            order_idx: value.order_idx,
+            prop: ModulationLink {
+                id: value.id.into(),
+                source_id: value.source_id.into(),
+                target: value.target.into(),
+                depth: value.depth,
+                base_value: value.base_value,
+            },
+        }
+    }
 }
 
 impl From<AutomationCurveType> for AutomationCurveTypeDto {
@@ -179,9 +253,7 @@ impl From<&TrackAutomationTarget> for TrackAutomationTargetDto {
 impl From<TrackAutomationTargetDto> for TrackAutomationTarget {
     fn from(dto: TrackAutomationTargetDto) -> Self {
         match dto {
-            TrackAutomationTargetDto::Generator { param_id } => {
-                Self::Generator { param_id }
-            }
+            TrackAutomationTargetDto::Generator { param_id } => Self::Generator { param_id },
             TrackAutomationTargetDto::MixerChannel(target) => {
                 Self::MixerChannel(MixerChannelParamTarget::from(target))
             }
@@ -384,3 +456,41 @@ pub fn update_automation_point(
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 // Modulation API
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Get all modulations in the project
+pub fn get_all_linked_modulation_params() -> Vec<(u32, ModulationLinkDto)> {
+    automation_api::get_all_linked_modulation_params(|id, mod_link| (id.to_u32(), mod_link.into()))
+}
+
+/// Add generic modulation source
+pub fn add_modulation_source(source: ModulationSourceDto) -> u32 {
+    automation_api::add_modulation_source(source.into()).to_u32()
+}
+
+/// Remove the modulation source. This function also cascade delete all link
+/// with this source
+pub fn remove_modulation_source(mod_id: u32) {
+    automation_api::remove_modulation_source(mod_id.into());
+}
+
+/// Remove modulation link based on queried modulation link id
+pub fn remove_modulation_link(mod_link_id: u32) {
+    automation_api::remove_modulation_link(mod_link_id.into());
+}
+
+/// Link the target param to a modulation source
+pub fn link_this_param_to_controller(
+    source_id: u32,
+    target: AutomationTargetDto,
+    depth: f32,
+    base_value: f32,
+) -> Result<u32, String> {
+    automation_api::link_this_param_to_controller(
+        source_id.into(),
+        target.into(),
+        depth,
+        base_value,
+    )
+    .map_err(|e| e.to_string())
+    .and_then(|v| Ok(v.to_u32()))
+}
