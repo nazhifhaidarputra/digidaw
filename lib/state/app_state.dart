@@ -103,7 +103,8 @@ class GlobalAppState extends ChangeNotifier {
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
   // Mixer event stream from Rust for automation/backend-initiated changes
-  StreamSubscription<mixer_api.UiMixerChannelSnapshot>? _mixerSnapshotSubscription;
+  StreamSubscription<mixer_api.UiMixerChannelSnapshot>?
+  _mixerSnapshotSubscription;
 
   /// Params currently being touched by the user (trackId, paramName).
   /// Automation events for these params are ignored while touched.
@@ -149,7 +150,8 @@ class GlobalAppState extends ChangeNotifier {
 
   bool get showExportPanel => _showExportPanel;
 
-  FloatingMidiKeyboardFieldState midiKeyboardState = FloatingMidiKeyboardFieldState(showed: false);
+  FloatingMidiKeyboardFieldState midiKeyboardState =
+      FloatingMidiKeyboardFieldState(showed: false);
 
   // ================ CONSTRUCTOR ==================
   GlobalAppState() {
@@ -450,16 +452,6 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  /// Syncs the list of loaded audio files
-  /// Call this when: Adding a file, Removing a file
-  // Future<void> syncAudioSourceList() async {
-  //   final sources = await getAudioSourceList();
-  //   if (sources != null) {
-  //     _audioSources = Map.from(sources);
-  //     notifyListeners();
-  //   }
-  // }
-
   Future<Result<Map<int, AudioWaveformUiForSourceList>?>>
   getLoadedAudioSources() async {
     try {
@@ -631,6 +623,13 @@ class GlobalAppState extends ChangeNotifier {
     } catch (e) {
       AppLogger.error("Failed to sync master bus: $e");
     }
+  }
+
+  Future<void> syncRoutingConnection() async {
+    await attemptAsync(() async {
+      final newRouting = await mixer_api.getRoutingMatrix();
+      _mixerState = _mixerState.copyWith(routing: newRouting);
+    });
   }
 
   // =============== ACTIONS ===============
@@ -1680,7 +1679,7 @@ class GlobalAppState extends ChangeNotifier {
       trackType: original.trackType,
       clips: clips ?? original.clips,
       generatorId: original.generatorId, // Forward generator ID
-      orderIdx: original.orderIdx
+      orderIdx: original.orderIdx,
     );
   }
 
@@ -1794,10 +1793,18 @@ class GlobalAppState extends ChangeNotifier {
       const int masterSentinel = 4294967294;
       final ch = _mixerState.masterBus;
       final updated = mixer_api.UiMixerChannel(
-        volume: _touchedParams.contains((masterSentinel, 'volume')) ? ch.volume : snapshot.volume,
-        pan: _touchedParams.contains((masterSentinel, 'pan')) ? ch.pan : snapshot.pan,
-        mute: _touchedParams.contains((masterSentinel, 'mute')) ? ch.mute : snapshot.mute,
-        solo: _touchedParams.contains((masterSentinel, 'solo')) ? ch.solo : snapshot.solo,
+        volume: _touchedParams.contains((masterSentinel, 'volume'))
+            ? ch.volume
+            : snapshot.volume,
+        pan: _touchedParams.contains((masterSentinel, 'pan'))
+            ? ch.pan
+            : snapshot.pan,
+        mute: _touchedParams.contains((masterSentinel, 'mute'))
+            ? ch.mute
+            : snapshot.mute,
+        solo: _touchedParams.contains((masterSentinel, 'solo'))
+            ? ch.solo
+            : snapshot.solo,
         invertedPhase: snapshot.invertedPhase,
         effects: ch.effects,
       );
@@ -1813,15 +1820,25 @@ class GlobalAppState extends ChangeNotifier {
       if (bus == null) return;
       final ch = bus.channel;
       final updated = mixer_api.UiMixerChannel(
-        volume: _touchedParams.contains((busId, 'volume')) ? ch.volume : snapshot.volume,
+        volume: _touchedParams.contains((busId, 'volume'))
+            ? ch.volume
+            : snapshot.volume,
         pan: _touchedParams.contains((busId, 'pan')) ? ch.pan : snapshot.pan,
-        mute: _touchedParams.contains((busId, 'mute')) ? ch.mute : snapshot.mute,
-        solo: _touchedParams.contains((busId, 'solo')) ? ch.solo : snapshot.solo,
+        mute: _touchedParams.contains((busId, 'mute'))
+            ? ch.mute
+            : snapshot.mute,
+        solo: _touchedParams.contains((busId, 'solo'))
+            ? ch.solo
+            : snapshot.solo,
         invertedPhase: snapshot.invertedPhase,
         effects: ch.effects,
       );
       final newBuses = Map<int, mixer_api.UiBus>.from(_mixerState.buses);
-      newBuses[busId] = mixer_api.UiBus(id: bus.id, name: bus.name, channel: updated);
+      newBuses[busId] = mixer_api.UiBus(
+        id: bus.id,
+        name: bus.name,
+        channel: updated,
+      );
       _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: _mixerState.channels,
         masterBus: _mixerState.masterBus,
@@ -1833,14 +1850,22 @@ class GlobalAppState extends ChangeNotifier {
       final ch = _mixerState.channels[trackId];
       if (ch == null) return;
       final updated = mixer_api.UiMixerChannel(
-        volume: _touchedParams.contains((trackId, 'volume')) ? ch.volume : snapshot.volume,
+        volume: _touchedParams.contains((trackId, 'volume'))
+            ? ch.volume
+            : snapshot.volume,
         pan: _touchedParams.contains((trackId, 'pan')) ? ch.pan : snapshot.pan,
-        mute: _touchedParams.contains((trackId, 'mute')) ? ch.mute : snapshot.mute,
-        solo: _touchedParams.contains((trackId, 'solo')) ? ch.solo : snapshot.solo,
+        mute: _touchedParams.contains((trackId, 'mute'))
+            ? ch.mute
+            : snapshot.mute,
+        solo: _touchedParams.contains((trackId, 'solo'))
+            ? ch.solo
+            : snapshot.solo,
         invertedPhase: snapshot.invertedPhase,
         effects: ch.effects,
       );
-      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(_mixerState.channels);
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
       newChannels[trackId] = updated;
       _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: newChannels,
@@ -1918,7 +1943,9 @@ class GlobalAppState extends ChangeNotifier {
     mixer_api.UiMixerChannelParams param, {
     required bool isMaster,
   }) {
-    final channel = isMaster ? _mixerState.masterBus : _mixerState.channels[trackId];
+    final channel = isMaster
+        ? _mixerState.masterBus
+        : _mixerState.channels[trackId];
     if (channel == null) return;
 
     double volume = channel.volume;
@@ -1941,28 +1968,41 @@ class GlobalAppState extends ChangeNotifier {
     }
 
     final updated = mixer_api.UiMixerChannel(
-      volume: volume, pan: pan, mute: mute, solo: solo,
-      invertedPhase: invertedPhase, effects: channel.effects,
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: invertedPhase,
+      effects: channel.effects,
     );
 
     if (isMaster) {
       _mixerState = mixer_api.UiMixerState.newWithParam(
-        channels: _mixerState.channels, masterBus: updated,
-        buses: _mixerState.buses, routing: _mixerState.routing,
+        channels: _mixerState.channels,
+        masterBus: updated,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
       );
     } else {
-      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(_mixerState.channels);
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
       newChannels[trackId] = updated;
       _mixerState = mixer_api.UiMixerState.newWithParam(
-        channels: newChannels, masterBus: _mixerState.masterBus,
-        buses: _mixerState.buses, routing: _mixerState.routing,
+        channels: newChannels,
+        masterBus: _mixerState.masterBus,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
       );
     }
     notifyListeners();
   }
 
   /// Optimistically apply a single param to a bus channel in local state.
-  void _applyParamToBusChannel(int busId, mixer_api.UiMixerChannelParams param) {
+  void _applyParamToBusChannel(
+    int busId,
+    mixer_api.UiMixerChannelParams param,
+  ) {
     final bus = _mixerState.buses[busId];
     if (bus == null) return;
 
@@ -1987,17 +2027,24 @@ class GlobalAppState extends ChangeNotifier {
     }
 
     final updatedBus = mixer_api.UiBus(
-      id: bus.id, name: bus.name,
+      id: bus.id,
+      name: bus.name,
       channel: mixer_api.UiMixerChannel(
-        volume: volume, pan: pan, mute: mute, solo: solo,
-        invertedPhase: invertedPhase, effects: ch.effects,
+        volume: volume,
+        pan: pan,
+        mute: mute,
+        solo: solo,
+        invertedPhase: invertedPhase,
+        effects: ch.effects,
       ),
     );
     final newBuses = Map<int, mixer_api.UiBus>.from(_mixerState.buses);
     newBuses[busId] = updatedBus;
     _mixerState = mixer_api.UiMixerState.newWithParam(
-      channels: _mixerState.channels, masterBus: _mixerState.masterBus,
-      buses: newBuses, routing: _mixerState.routing,
+      channels: _mixerState.channels,
+      masterBus: _mixerState.masterBus,
+      buses: newBuses,
+      routing: _mixerState.routing,
     );
     notifyListeners();
   }

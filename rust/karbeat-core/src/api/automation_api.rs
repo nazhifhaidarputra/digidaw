@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use crate::{
-    context::utils::broadcast_state_change,
+    commands::AudioCommand,
+    context::utils::{broadcast_automation_lane, send_audio_command},
     core::project::{
         automation::{AutomationLane, AutomationPoint, AutomationTarget},
-        ModulationEvent, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource,
+        ModulationLink, ModulationSource,
     },
     lock::{get_app_read, get_app_write},
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
@@ -37,7 +38,8 @@ pub fn add_automation_lane_for_track(
         app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?
     };
 
-    broadcast_state_change();
+    // Broadcast the new lane to the audio thread by its AutomationId
+    broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
@@ -51,13 +53,12 @@ pub fn add_automation_lane(
     max: f32,
     default_value: f32,
 ) -> anyhow::Result<Arc<AutomationLane>> {
-    let lane = {
+    let (lane, _link_id) = {
         let mut app = get_app_write();
-        let (lane, _mod_id) = app.add_automation_lane(target, label, min, max, default_value)?;
-        lane
+        app.add_automation_lane(target, label, min, max, default_value)?
     };
 
-    broadcast_state_change();
+    broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
@@ -72,15 +73,12 @@ pub fn add_automation_lane_for_bus(
     max: f32,
     default_value: f32,
 ) -> anyhow::Result<Arc<AutomationLane>> {
-    let lane = {
+    let (lane, _link_id) = {
         let mut app = get_app_write();
-        let (lane, _mod_id) =
-            app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?;
-
-        lane
+        app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
     };
 
-    broadcast_state_change();
+    broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
@@ -92,8 +90,8 @@ pub fn add_automation_lane_for_bus(
 //         let mut app = get_app_write();
 //         app.remove_automation_lane(automation_id)?;
 //     }
-
-//     broadcast_state_change();
+//
+//     send_audio_command(AudioCommand::RemoveAutomationLane { id: automation_id });
 //     Ok(())
 // }
 
@@ -109,7 +107,7 @@ pub fn add_new_automation_point(
         point
     };
 
-    broadcast_state_change();
+    broadcast_automation_lane(automation_id);
 
     // TODO: Add history
     Ok(auto_point)
@@ -120,7 +118,7 @@ pub fn remove_automation_point(automation_id: AutomationId, index: usize) -> any
         let mut app = get_app_write();
         app.remove_automation_point(automation_id, index)?;
     }
-    broadcast_state_change();
+    broadcast_automation_lane(automation_id);
     Ok(())
 }
 
@@ -139,19 +137,15 @@ pub fn update_automation_point(
         new_index
     };
 
-    broadcast_state_change();
-    Ok(new_index) // FIXME: update the app.update_autoation_point to return new index
+    broadcast_automation_lane(automation_id);
+    Ok(new_index)
 }
 
 pub fn get_automation_lanes_for_track(
     track_id: TrackId,
 ) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
-    let lanes = {
-        let app = get_app_read();
-        app.get_automation_lanes_for_track(track_id)
-    };
-
-    lanes
+    let app = get_app_read();
+    app.get_automation_lanes_for_track(track_id)
 }
 
 pub fn get_automation_lanes_for_bus(
@@ -168,7 +162,7 @@ pub fn get_automation_lanes_for_bus(
 /// Get all modulations in the project
 pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> Vec<(Id, T)>
 where
-    F: Fn(&ModulationLinkId, &ModulationLinkForOrderedLaneView) -> (Id, T),
+    F: Fn(&ModulationLinkId, &crate::core::project::ModulationLinkForOrderedLaneView) -> (Id, T),
 {
     let app = get_app_read();
     app.modulation_links
@@ -181,10 +175,11 @@ where
 pub fn add_modulation_source(source: ModulationSource) -> ModulationId {
     let id = {
         let mut app = get_app_write();
-        app.add_modulation_source(source)
+        app.add_modulation_source(source.clone())
     };
 
-    broadcast_state_change();
+    // AddModulationSource is already a granular ring-buffer command
+    send_audio_command(AudioCommand::AddModulationSource { id, source });
     id
 }
 
@@ -195,7 +190,7 @@ pub fn remove_modulation_source(mod_id: ModulationId) {
         let mut app = get_app_write();
         let _ = app.remove_modulation_source(mod_id);
     }
-    broadcast_state_change();
+    send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
 }
 
 pub fn remove_modulation_link(mod_link_id: ModulationLinkId) {
@@ -204,7 +199,7 @@ pub fn remove_modulation_link(mod_link_id: ModulationLinkId) {
         let _ = app.remove_modulation_link(mod_link_id);
     }
 
-    broadcast_state_change();
+    send_audio_command(AudioCommand::RemoveModulationLink(mod_link_id));
 }
 
 /// Link the target param to a modulation source
@@ -214,11 +209,23 @@ pub fn link_this_param_to_controller(
     depth: f32,
     base_value: f32,
 ) -> anyhow::Result<ModulationLinkId> {
-    let id = {
+    let (id, link) = {
         let mut app = get_app_write();
-        app.link_modulation(source_id, target, depth, base_value)?
+        let id = app.link_modulation(source_id, target, depth, base_value)?;
+        let link = app
+            .modulation_links
+            .get(&id)
+            .map(|l| ModulationLink {
+                id,
+                source_id: l.prop.source_id,
+                target: l.prop.target.clone(),
+                depth: l.prop.depth,
+                base_value: l.prop.base_value,
+            })
+            .ok_or_else(|| anyhow::anyhow!("Link not found after insertion"))?;
+        (id, link)
     };
 
-    broadcast_state_change();
+    send_audio_command(AudioCommand::AddModulationLink { id, link });
     Ok(id)
 }

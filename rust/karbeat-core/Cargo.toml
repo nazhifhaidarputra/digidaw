@@ -21,7 +21,7 @@ once_cell.workspace = true
 rtrb.workspace = true
 serde.workspace = true
 symphonia.workspace = true
-triple_buffer.workspace = true
+
 thiserror.workspace = true
 smallvec.workspace = true
 hashbrown.workspace = true

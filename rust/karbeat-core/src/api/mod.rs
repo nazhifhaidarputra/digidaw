@@ -14,7 +14,7 @@ pub mod track_api;
 pub mod transport_api;
 
 use crate::{
-    context::utils::broadcast_state_change,
+    context::utils::broadcast_full_graph,
     lock::{get_app_write, get_history_lock},
 };
 
@@ -24,7 +24,7 @@ pub fn undo() -> Result<(), String> {
         let mut app = get_app_write();
         history.undo(&mut app)?;
     }
-    broadcast_state_change();
+    broadcast_full_graph();
     Ok(())
 }
 
@@ -34,6 +34,6 @@ pub fn redo() -> Result<(), String> {
         let mut app = get_app_write();
         history.redo(&mut app)?;
     }
-    broadcast_state_change();
+    broadcast_full_graph();
     Ok(())
 }

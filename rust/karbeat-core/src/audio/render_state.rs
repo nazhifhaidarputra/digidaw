@@ -1,21 +1,15 @@
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 use crate::core::project::plugin::modulation::ModulationEvent;
-use crate::shared::id::*;
-use crate::{
-    commands::AudioCommand,
-    context::utils::send_audio_command,
-    core::project::{
-        automation::{AutomationCurveType, AutomationPoint},
-        mixer::RoutingConnection,
-        plugin::AudioPlugin,
-        track::{midi::Pattern, AudioTrack},
-        ApplicationState, AssetLibrary, GeneratorId, GeneratorInstanceType, TrackId,
-    },
-    lock::{get_app_read, get_plugin_registry_read},
+use crate::core::project::{
+    automation::{AutomationCurveType, AutomationPoint},
+    mixer::RoutingConnection,
+    plugin::AudioPlugin,
+    track::{midi::Pattern, AudioTrack},
+    ApplicationState, AssetLibrary, GeneratorId, TrackId,
 };
+use crate::shared::id::*;
 use hashbrown::HashMap;
-use indexmap::IndexMap;
 use karbeat_utils::math::is_power_of_two;
 
 // =============================================================================
@@ -305,166 +299,4 @@ impl From<&ApplicationState> for AudioRenderState {
             graph: AudioGraphState::from(app),
         }
     }
-}
-
-/// Add current loaded plugin to the audio engine thread when loading a new project
-pub fn broadcast_plugin_state_loading() {
-    let app_state = get_app_read();
-    let registry = get_plugin_registry_read();
-
-    // get current generator
-    let generators: IndexMap<GeneratorId, Box<dyn AudioPlugin + Send + Sync>> = app_state
-        .generator_pool
-        .iter()
-        .filter_map(|(id, arc)| {
-            let generator_instance = arc.deref().to_owned();
-
-            let GeneratorInstanceType::Plugin(instance) = generator_instance.instance_type else {
-                return None;
-            };
-
-            // get box plugin from registry
-
-            let Some((box_plugin, _)) = registry.create_generator_by_id(instance.registry_id)
-            else {
-                return None;
-            };
-
-            Some((id.to_owned(), box_plugin))
-        })
-        .collect();
-
-    // get track effects
-    let mixer_state = app_state.get_mixer_state();
-    let track_chan = &mixer_state.channels;
-
-    // As usual, doing the same thing but for track_channels
-    // Turn it to IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>
-    let track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>> =
-        track_chan
-            .iter()
-            .map(|(track_id, arc_mixer_chan)| {
-                let mix_chan = arc_mixer_chan.deref().to_owned();
-
-                // iterate through effects
-                // Use filter_map here because the inner registry lookup can fail (return None)
-                let effects_map: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>> = mix_chan
-                    .channel
-                    .effects
-                    .iter()
-                    .filter_map(|eff| {
-                        let effect_id = eff.id;
-                        let eff_instance = eff.instance.as_ref();
-
-                        // Get the effect from registry.
-                        // We map the result to a tuple (effect_id, plugin_box) if successful.
-                        registry
-                            .create_effect_by_id(eff_instance.registry_id)
-                            .map(|(plugin_box, _)| (effect_id, plugin_box))
-                    })
-                    .collect();
-
-                // Return the tuple for the outer IndexMap
-                (track_id.to_owned(), effects_map)
-            })
-            .collect();
-
-    // Do the same for bus_channels
-    let bus_chan = &mixer_state.buses;
-
-    let bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>> =
-        bus_chan
-            .iter()
-            .map(|(id, arc_mixer_channel)| {
-                let mix_bus = arc_mixer_channel.deref().to_owned();
-
-                let effect_maps: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>> = mix_bus
-                    .channel
-                    .effects
-                    .iter()
-                    .filter_map(|eff| {
-                        let effect_id = eff.id;
-                        let eff_instance = eff.instance.as_ref();
-
-                        // Get the effect from registry.
-                        // We map the result to a tuple (effect_id, plugin_box) if successful.
-                        registry
-                            .create_effect_by_id(eff_instance.registry_id)
-                            .map(|(plugin_box, _)| (effect_id, plugin_box))
-                    })
-                    .collect();
-
-                (id.to_owned(), effect_maps)
-            })
-            .collect();
-
-    let master_channel = mixer_state.master_bus.as_ref();
-    let master_effects: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>> = master_channel
-        .effects
-        .iter()
-        .filter_map(|eff| {
-            let effect_id = eff.id;
-            let eff_instance = eff.instance.as_ref();
-
-            // Get the effect from registry.
-            // We map the result to a tuple (effect_id, plugin_box) if successful.
-            registry
-                .create_effect_by_id(eff_instance.registry_id)
-                .map(|(plugin_box, _)| (effect_id, plugin_box))
-        })
-        .collect();
-
-    send_audio_command(AudioCommand::PreparePlugin {
-        track_effects,
-        master_effects,
-        bus_effects,
-        generators,
-        // Seed mixer channel state from AppState on initial load
-        track_channels: app_state
-            .mixer
-            .channels
-            .iter()
-            .map(|(&id, arc)| {
-                use crate::commands::MixerChannelSeed;
-                (
-                    id,
-                    MixerChannelSeed {
-                        volume: arc.channel.volume.get(),
-                        pan: arc.channel.pan.get(),
-                        mute: arc.channel.mute,
-                        solo: arc.channel.solo,
-                        inverted_phase: arc.channel.inverted_phase,
-                    },
-                )
-            })
-            .collect(),
-        bus_channels: app_state
-            .mixer
-            .buses
-            .iter()
-            .map(|(&id, arc)| {
-                use crate::commands::MixerChannelSeed;
-                (
-                    id,
-                    MixerChannelSeed {
-                        volume: arc.channel.volume.get(),
-                        pan: arc.channel.pan.get(),
-                        mute: arc.channel.mute,
-                        solo: arc.channel.solo,
-                        inverted_phase: arc.channel.inverted_phase,
-                    },
-                )
-            })
-            .collect(),
-        master_channel: {
-            use crate::commands::MixerChannelSeed;
-            MixerChannelSeed {
-                volume: app_state.mixer.master_bus.volume.get(),
-                pan: app_state.mixer.master_bus.pan.get(),
-                mute: app_state.mixer.master_bus.mute,
-                solo: app_state.mixer.master_bus.solo,
-                inverted_phase: app_state.mixer.master_bus.inverted_phase,
-            }
-        },
-    });
 }

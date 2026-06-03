@@ -1,15 +1,21 @@
+use hashbrown::HashMap;
 use indexmap::IndexMap;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
+use std::sync::Arc;
 
 use crate::{
-    audio::{engine::PlaybackMode, event::PluginTarget},
+    audio::{
+        engine::PlaybackMode,
+        event::PluginTarget,
+        render_state::{AudioAutomationLane, AudioGraphState},
+    },
     core::project::{
         mixer::{MixerChannelParams, RoutingConnection},
         plugin::AudioPlugin,
-        track::audio_waveform::AudioWaveform,
+        track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack},
         GeneratorId, ModulationLink, ModulationSource,
     },
-    shared::{id::*, ModulationId, PatternId},
+    shared::{id::*, AutomationId, ModulationId, PatternId},
 };
 
 pub enum AudioCommand {
@@ -181,15 +187,51 @@ pub enum AudioCommand {
         request_id: u32, // To track the response in the UI
     },
 
-    /// Ask the engine to get the copied version of the latest engine snapshot
-    /// This is only used when exporting project into a soundfile
+    /// Ask the engine to get the copied version of the latest engine snapshot.
+    /// This is only used when exporting a project into a sound file.
+    /// The export engine is cloned from the live engine's own internal state
+    /// (no triple-buffer involved).
     QueryAudioEngine {
-        state_consumer: triple_buffer::Output<crate::audio::render_state::AudioRenderState>,
         command_consumer: rtrb::Consumer<AudioCommand>,
         position_producer: rtrb::Producer<crate::audio::event::TransportFeedback>,
         feedback_producer: rtrb::Producer<crate::commands::AudioFeedback>,
         response_tx: std::sync::mpsc::Sender<Box<crate::audio::engine::AudioEngine>>,
     },
+
+    // =========================================================================
+    // Granular Graph-State Commands (replace the old triple-buffer path)
+    // =========================================================================
+
+    /// Update the track + pattern snapshot on the audio thread.
+    /// Sent whenever tracks are added/removed, clips are edited, patterns
+    /// are modified, or BPM changes the max_sample_index.
+    UpdateTrackGraph {
+        tracks: Arc<[Arc<AudioTrack>]>,
+        patterns: HashMap<PatternId, Arc<Pattern>>,
+        max_sample_index: u32,
+    },
+
+    /// Add or replace a single automation lane on the audio thread.
+    /// Sent on add/remove automation point, lane enable toggle, or lane metadata update.
+    UpdateAutomationLane {
+        id: AutomationId,
+        lane: AudioAutomationLane,
+    },
+
+    /// Remove an automation lane from the audio thread's local graph.
+    RemoveAutomationLane { id: AutomationId },
+
+    /// Update audio engine config (sample_rate, buffer_size).
+    /// Sent when the audio device is reconfigured at runtime.
+    UpdateAudioConfig {
+        sample_rate: u32,
+        buffer_size: usize,
+    },
+
+    /// Atomically replace the full audio graph state on the engine.
+    /// Used exclusively for undo/redo where an arbitrary subset of sub-graphs
+    /// may have changed and enumerating diffs would be impractical.
+    ReplaceFullGraph { graph: AudioGraphState },
 
     /// Spawn a new generator in the DSP thread (e.g., an LFO)
     AddModulationSource {

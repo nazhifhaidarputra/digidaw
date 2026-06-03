@@ -5,10 +5,9 @@ use cpal::{
 };
 use rtrb::{Consumer, RingBuffer};
 use serde::{Deserialize, Serialize};
-use triple_buffer::Output;
 
 use crate::{
-    audio::{engine::AudioEngine, event::TransportFeedback, render_state::AudioRenderState},
+    audio::{engine::AudioEngine, event::TransportFeedback},
     commands::AudioCommand,
     context::ctx,
 };
@@ -276,12 +275,10 @@ pub fn get_device_sample_rates(
     Ok(rates)
 }
 
-/// Start the audio strem by initializing the Command Queue and Audio Engine
-/// and then building the audio stream
+/// Start the audio stream by initializing the Command Queue and Audio Engine
+/// and then building the audio stream.
 pub fn start_audio_stream(
-    mut state_consumer: Output<AudioRenderState>,
     command_consumer: Consumer<AudioCommand>,
-    initial_state: AudioRenderState,
     config_pref: AudioDeviceConfig,
 ) -> Result<()> {
     {
@@ -376,8 +373,6 @@ pub fn start_audio_stream(
         };
     }
 
-    state_consumer.update();
-
     let (pos_producer, pos_consumer) = RingBuffer::<TransportFeedback>::new(100);
 
     // Store Consumer in context
@@ -394,21 +389,23 @@ pub fn start_audio_stream(
         app.transport.bpm
     };
 
+    // Resolved before engine creation so the engine can seed its internal
+    // graph snapshot with the real buffer_size (avoids graph.buffer_size = 0).
+    let engine_block_size = config_pref.buffer_size.unwrap_or(1024) as usize;
+
     let engine = AudioEngine::new(
-        state_consumer,
         command_consumer,
         pos_producer,
         feedback_producer,
         sample_rate,
         channels as u16,
         initial_bpm,
-        initial_state,
+        engine_block_size,
     );
 
     let ring_buffer_capacity = 8192;
     let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
 
-    let engine_block_size = config_pref.buffer_size.unwrap_or(1024) as usize;
     let staging_buffer = vec![0.0; engine_block_size * channels];
 
     let audio_ctx = AudioContext {

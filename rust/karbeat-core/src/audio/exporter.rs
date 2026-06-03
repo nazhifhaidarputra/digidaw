@@ -1,6 +1,5 @@
 use rtrb::RingBuffer;
 use thiserror::Error;
-use triple_buffer::TripleBuffer;
 
 use crate::{
     audio::{
@@ -64,7 +63,6 @@ where
     let render_state = AudioRenderState::from(app_state);
 
     // Set up Dummy Communication Channels
-    let (mut _state_in, state_out) = TripleBuffer::new(&render_state).split();
     let (mut cmd_producer, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
     let (pos_producer, mut _pos_consumer) = RingBuffer::new(1024);
     let (feedback_producer, mut _feedback_consumer) = RingBuffer::new(1024);
@@ -72,9 +70,9 @@ where
     // Create a oneshot channel to receive the cloned engine
     let (engine_tx, engine_rx) = std::sync::mpsc::channel();
 
-    // Send audio command to get a copy of Audio Engine from live engine
+    // Send audio command to get a copy of Audio Engine from live engine.
+    // The engine is cloned from its own internal graph state — no triple-buffer involved.
     send_audio_command(AudioCommand::QueryAudioEngine {
-        state_consumer: state_out,
         command_consumer: cmd_consumer,
         position_producer: pos_producer,
         feedback_producer: feedback_producer,

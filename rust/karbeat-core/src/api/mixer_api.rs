@@ -3,10 +3,12 @@ use std::sync::Arc;
 use karbeat_plugin_types::ParameterSpec;
 
 use crate::{
-    commands::{AudioCommand, AudioFeedback, MixerChannelSnapshot, MixerChannelTarget},
+    commands::{
+        AudioCommand, AudioFeedback, EffectTarget, MixerChannelSnapshot, MixerChannelTarget,
+    },
     context::{
         ctx,
-        utils::{broadcast_state_change, send_audio_command},
+        utils::{get_effect_plugin_box, send_audio_command},
     },
     core::project::{
         mixer::{
@@ -241,12 +243,31 @@ pub fn add_effect_to_mixer_channel_by_id(
     track_id: TrackId,
     registry_id: u32,
 ) -> anyhow::Result<()> {
-    {
+    let effect_id = {
         let mut app = get_app_write();
         app.mixer
             .add_effect_descriptor_by_id(&track_id, registry_id)?;
+        // Retrieve the ID of the freshly-added effect
+        app.mixer
+            .channels
+            .get(&track_id)
+            .and_then(|ch| ch.channel.effects.last())
+            .map(|e| e.id)
+            .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?
+    };
+
+    if let Some(plugin) = get_effect_plugin_box(registry_id) {
+        send_audio_command(AudioCommand::AddEffect {
+            target: EffectTarget::Track(track_id),
+            effect_id,
+            effect: plugin,
+        });
+    } else {
+        log::warn!(
+            "[mixer_api] Could not instantiate effect plugin {:?} for audio thread",
+            registry_id
+        );
     }
-    broadcast_state_change();
     Ok(())
 }
 
@@ -259,16 +280,37 @@ pub fn remove_effect_from_mixer_channel(
         app.mixer
             .remove_effect_by_id(&track_id, effect_instance_id)?;
     }
-    broadcast_state_change();
+    send_audio_command(AudioCommand::RemoveEffect {
+        target: EffectTarget::Track(track_id),
+        effect_id: effect_instance_id,
+    });
     Ok(())
 }
 
 pub fn add_effect_to_master_bus(registry_id: u32) -> anyhow::Result<()> {
-    {
+    let effect_id = {
         let mut app = get_app_write();
         app.mixer.add_effect_to_master_bus(registry_id)?;
+        app.mixer
+            .master_bus
+            .effects
+            .last()
+            .map(|e| e.id)
+            .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?
+    };
+
+    if let Some(plugin) = get_effect_plugin_box(registry_id) {
+        send_audio_command(AudioCommand::AddEffect {
+            target: EffectTarget::Master,
+            effect_id,
+            effect: plugin,
+        });
+    } else {
+        log::warn!(
+            "[mixer_api] Could not instantiate master effect plugin {:?}",
+            registry_id
+        );
     }
-    broadcast_state_change();
     Ok(())
 }
 
@@ -278,16 +320,19 @@ pub fn remove_effect_from_master_bus(effect_instance_id: EffectId) -> anyhow::Re
         app.mixer
             .remove_effect_from_master_bus(effect_instance_id)?;
     }
-    broadcast_state_change();
+    send_audio_command(AudioCommand::RemoveEffect {
+        target: EffectTarget::Master,
+        effect_id: effect_instance_id,
+    });
     Ok(())
 }
 
 pub fn create_bus(name: String) -> BusId {
     let bus_id = {
         let mut app = get_app_write();
-        app.mixer.create_bus(name)
+        app.mixer.create_bus(name.clone())
     };
-    broadcast_state_change();
+    send_audio_command(AudioCommand::AddBus { bus_id, name });
     bus_id
 }
 
@@ -296,16 +341,34 @@ pub fn delete_bus(bus_id: BusId) -> anyhow::Result<()> {
         let mut app = get_app_write();
         app.mixer.remove_bus(bus_id)?;
     }
-    broadcast_state_change();
+    send_audio_command(AudioCommand::RemoveBus { bus_id });
     Ok(())
 }
 
 pub fn add_effect_to_bus(bus_id: BusId, registry_id: u32) -> anyhow::Result<()> {
-    {
+    let effect_id = {
         let mut app = get_app_write();
         app.mixer.add_effect_to_bus(bus_id, registry_id)?;
+        app.mixer
+            .buses
+            .get(&bus_id)
+            .and_then(|b| b.channel.effects.last())
+            .map(|e| e.id)
+            .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?
+    };
+
+    if let Some(plugin) = get_effect_plugin_box(registry_id) {
+        send_audio_command(AudioCommand::AddEffect {
+            target: EffectTarget::Bus(bus_id),
+            effect_id,
+            effect: plugin,
+        });
+    } else {
+        log::warn!(
+            "[mixer_api] Could not instantiate bus effect plugin {:?}",
+            registry_id
+        );
     }
-    broadcast_state_change();
     Ok(())
 }
 
@@ -314,16 +377,17 @@ pub fn rename_bus(bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
         let mut app = get_app_write();
         app.mixer.rename_bus(bus_id, new_name)?;
     }
-    broadcast_state_change();
+    // Bus name is not used in audio DSP — no engine notification needed.
     Ok(())
 }
 
 pub fn set_routing(conn: RoutingConnection) -> anyhow::Result<()> {
-    {
+    let routing = {
         let mut app = get_app_write();
         app.mixer.add_routing(conn)?;
-    }
-    broadcast_state_change();
+        app.mixer.routing.clone()
+    };
+    send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }
 
@@ -332,10 +396,11 @@ pub fn remove_routing(
     destination: RoutingNode,
     is_send: bool,
 ) -> anyhow::Result<()> {
-    {
+    let routing = {
         let mut app = get_app_write();
         app.mixer.remove_routing(source, destination, is_send)?;
-    }
-    broadcast_state_change();
+        app.mixer.routing.clone()
+    };
+    send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }

@@ -12,7 +12,6 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
     time::Instant,
 };
-use triple_buffer::Output;
 use wide::f32x4;
 
 use crate::{
@@ -147,9 +146,13 @@ pub enum LiveModulationSource {
 
 pub struct AudioEngine {
     // Comms
-    state_consumer: Output<AudioRenderState>,
     position_producer: Producer<TransportFeedback>,
     feedback_producer: Producer<AudioFeedback>,
+
+    // ======================================
+    // Graph State (owned by audio thread)
+    // Updated exclusively via ring-buffer commands — no triple-buffer
+    // ======================================
     current_state: AudioRenderState,
 
     // ======================================
@@ -477,18 +480,24 @@ pub fn compute_routing_order(
 
 impl AudioEngine {
     pub fn new(
-        state_consumer: Output<AudioRenderState>,
         command_consumer: Consumer<AudioCommand>,
         position_producer: Producer<TransportFeedback>,
         feedback_producer: Producer<AudioFeedback>,
         sample_rate: u32,
         num_channels: u16,
         initial_bpm: f32,
-        initial_state: AudioRenderState,
+        buffer_size: usize,
     ) -> Self {
+        // Seed the graph snapshot with the real audio config so that
+        // AddGenerator / AddEffect commands that arrive before the first
+        // ReplaceFullGraph have a valid sample_rate and buffer_size to
+        // prepare plugins with, rather than the default 0 / 0.
+        let mut initial_state = AudioRenderState::default();
+        initial_state.graph.sample_rate = sample_rate;
+        initial_state.graph.buffer_size = buffer_size;
+
         let mix_buffer = Vec::with_capacity(4096);
         Self {
-            state_consumer,
             command_consumer,
             position_producer,
             feedback_producer,
@@ -530,13 +539,11 @@ impl AudioEngine {
     /// Replaces the communication channels with the provided ones for the new thread.
     pub fn clone_for_export(
         &self,
-        state_consumer: Output<AudioRenderState>,
         command_consumer: Consumer<AudioCommand>,
         position_producer: Producer<TransportFeedback>,
         feedback_producer: Producer<AudioFeedback>,
     ) -> Self {
         Self {
-            state_consumer,
             command_consumer,
             position_producer,
             feedback_producer,
@@ -594,23 +601,8 @@ impl AudioEngine {
     pub fn process(&mut self, output_buffer: &mut [f32]) {
         let start_time = Instant::now();
         let mut pdc_dirty = false;
-        if self.state_consumer.update() {
-            let new_state = self.state_consumer.read().clone();
 
-            // Routing order is recomputed from the triple-buffer routing snapshot.
-            // Note: once UpdateRouting arrives via ring buffer it will overwrite
-            // self.current_state.graph.routing AND recompute cached_routing_order there.
-            // The triple-buffer path here handles the initial state on project load.
-            let track_ids = new_state.graph.tracks.iter().map(|t| t.id);
-            let bus_ids = new_state.graph.bus_ids.iter().copied();
-            self.cached_routing_order =
-                compute_routing_order(track_ids, bus_ids, &new_state.graph.routing);
-
-            self.current_state = new_state;
-            pdc_dirty = true;
-        }
-
-        // Process Commands (Play, Stop, Seek)
+        // Process Commands (Play, Stop, Seek, Graph updates)
         while let Ok(cmd) = self.command_consumer.pop() {
             if self.process_command(cmd) {
                 pdc_dirty = true;
@@ -1556,14 +1548,13 @@ impl AudioEngine {
                     });
             }
             AudioCommand::QueryAudioEngine {
-                state_consumer,
                 command_consumer,
                 position_producer,
                 feedback_producer,
                 response_tx,
             } => {
+                // Clone the engine using its own internal graph state (no triple-buffer).
                 let cloned_engine = self.clone_for_export(
-                    state_consumer,
                     command_consumer,
                     position_producer,
                     feedback_producer,
@@ -1607,6 +1598,52 @@ impl AudioEngine {
             }
             AudioCommand::RemoveModulationLink(modulation_link_id) => {
                 self.active_links.retain(|l| l.id != modulation_link_id);
+            }
+
+            // ================================================================
+            // Granular Graph-State Updates (replace the old triple-buffer path)
+            // ================================================================
+
+            AudioCommand::UpdateTrackGraph {
+                tracks,
+                patterns,
+                max_sample_index,
+            } => {
+                // Update only the track/pattern/sample-index portion of the local graph.
+                // Routing and automation lanes are untouched by this command.
+                self.current_state.graph.tracks = tracks;
+                self.current_state.graph.patterns = patterns;
+                self.current_state.graph.max_sample_index = max_sample_index;
+                pdc_dirty = true;
+            }
+            AudioCommand::UpdateAutomationLane { id, lane } => {
+                self.current_state.graph.automation_lanes.insert(id, lane);
+            }
+            AudioCommand::RemoveAutomationLane { id } => {
+                self.current_state.graph.automation_lanes.remove(&id);
+            }
+            AudioCommand::UpdateAudioConfig {
+                sample_rate,
+                buffer_size,
+            } => {
+                self.current_state.graph.sample_rate = sample_rate;
+                self.current_state.graph.buffer_size = buffer_size;
+                log::info!(
+                    "[AudioEngine] UpdateAudioConfig: {} Hz, buf {}",
+                    sample_rate,
+                    buffer_size
+                );
+            }
+            AudioCommand::ReplaceFullGraph { graph } => {
+                // Used for undo/redo. Atomically replace the full graph snapshot
+                // and recompute the cached routing order.
+                let track_ids = graph.tracks.iter().map(|t| t.id);
+                let bus_ids = graph.bus_ids.iter().copied();
+                self.cached_routing_order =
+                    compute_routing_order(track_ids, bus_ids, &graph.routing);
+                self.current_state.graph = graph;
+                pdc_dirty = true;
+                log::debug!("[AudioEngine] ReplaceFullGraph applied");
             }
         }
 

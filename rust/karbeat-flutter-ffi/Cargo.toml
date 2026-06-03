@@ -20,7 +20,7 @@ log.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 rtrb.workspace = true
-triple_buffer.workspace = true
+
 karbeat-plugins.workspace = true
 smallvec.workspace = true
 memmap2.workspace = true

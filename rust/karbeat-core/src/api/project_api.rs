@@ -9,7 +9,7 @@ use crate::audio::exporter::{export_project as export_project_internal, TailHand
 
 use crate::audio::writer::AudioExportConfig;
 use crate::commands::{AudioCommand, AudioFeedback, MixerChannelSeed, MixerChannelTarget};
-use crate::context::utils::{broadcast_state_change, send_audio_command};
+use crate::context::utils::{broadcast_full_graph, send_audio_command};
 use crate::core::file_manager::project_loader::{load_daw_project, save_daw_project};
 use crate::core::project::{
     generator::GeneratorInstance, transport::TransportState, ProjectMetadata,
@@ -311,7 +311,7 @@ where
     };
 
     // 4. Fire all necessary sync and loading events to the engine/UI
-    broadcast_state_change();
+    broadcast_full_graph();
     send_audio_command(AudioCommand::SetBPM(bpm));
     let _ = hydrate_live_audio_engine();
 
@@ -351,7 +351,7 @@ pub fn new_blank_project() -> ApplicationState {
     };
 
     // prepare plugin with this new state
-    broadcast_state_change();
+    broadcast_full_graph();
     send_audio_command(AudioCommand::SetBPM(app.transport.bpm));
     let _ = hydrate_live_audio_engine();
 
