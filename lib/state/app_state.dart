@@ -934,23 +934,6 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  // Future<Result<void>> togglePlay() async {
-  //   try {
-  //     final newPlaying = _isPatternPlaying ? !_isPatternPlaying : !_isPlaying;
-
-  //     if (newPlaying) {
-  //       _pendingPlayRequest = true;
-  //     }
-
-  //     await transport_api.setPlaying(val: newPlaying);
-  //     return Result.ok(null);
-  //   } catch (e) {
-  //     log("Failed to toggle play: $e");
-  //     _pendingPlayRequest = false;
-  //     return Result.error(Exception("$e"));a
-  //   }
-  // }
-
   Future<Result<void>> stop() async {
     try {
       await transport_api.stopSongPlayback();

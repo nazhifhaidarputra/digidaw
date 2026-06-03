@@ -15,6 +15,21 @@ class FloatingMidiKeyboard extends ConsumerStatefulWidget {
       _FloatingMidiKeyboardState();
 }
 
+/// State for Floating midi keyboard's properties
+class FloatingMidiKeyboardFieldState {
+  int? selectedGeneratorId;
+
+  int baseKey;
+  int keyRange;
+
+  FloatingMidiKeyboardFieldState({
+    this.selectedGeneratorId,
+    int baseKey = 48,
+    int keyRange = 15,
+  }) : baseKey = baseKey.clamp(21, 120),
+       keyRange = keyRange.clamp(12, 24);
+}
+
 class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   double _x = 100;
   double _y = 100;

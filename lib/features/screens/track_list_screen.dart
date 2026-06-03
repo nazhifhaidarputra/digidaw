@@ -74,6 +74,21 @@ class TrackListScreen extends ConsumerWidget {
   }
 }
 
+class _TrackContainer extends ConsumerStatefulWidget {
+  @override
+  _TrackContainerState createState() {
+    return _TrackContainerState();
+  }
+}
+
+class _TrackContainerState extends ConsumerState<_TrackContainer> {
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    throw UnimplementedError();
+  }
+}
+
 class _SplitTrackView extends ConsumerStatefulWidget {
   final List<int> trackIds;
   final double itemHeight;
@@ -1440,6 +1455,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         ),
       ),
     );
+  }
+
+  Widget _buildBusAutomationLaneSection(BuildContext context, WidgetRef ref) {
+    return Expanded(child: Container());
   }
 
   @override
