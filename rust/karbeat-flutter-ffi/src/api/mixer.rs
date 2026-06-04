@@ -131,6 +131,17 @@ impl From<&RoutingConnection> for UiRoutingConnection {
     }
 }
 
+impl From<UiRoutingConnection> for RoutingConnection {
+    fn from(value: UiRoutingConnection) -> Self {
+        Self {
+            source: value.source.into(),
+            destination: value.destination.into(),
+            send_level: value.send_level,
+            is_send: value.is_send
+        }
+    }
+}
+
 /// UI DTO describing a routing node (Track, Bus, Master).
 #[frb]
 pub enum UiRoutingNode {
@@ -151,11 +162,11 @@ impl From<&RoutingNode> for UiRoutingNode {
     }
 }
 
-impl From<&UiRoutingNode> for RoutingNode {
-    fn from(value: &UiRoutingNode) -> Self {
+impl From<UiRoutingNode> for RoutingNode {
+    fn from(value: UiRoutingNode) -> Self {
         match value {
-            UiRoutingNode::Track(id) => RoutingNode::Track((*id).into()),
-            UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(*id)),
+            UiRoutingNode::Track(id) => RoutingNode::Track(id.into()),
+            UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(id)),
             UiRoutingNode::Master => RoutingNode::Master,
             _ => RoutingNode::Master,
         }
@@ -561,8 +572,8 @@ pub fn set_routing(
     is_send: bool,
 ) -> Result<(), String> {
     let conn = RoutingConnection {
-        source: (&source).into(),
-        destination: (&destination).into(),
+        source: source.into(),
+        destination: destination.into(),
         send_level,
         is_send,
     };
@@ -576,6 +587,12 @@ pub fn remove_routing(
     destination: UiRoutingNode,
     is_send: bool,
 ) -> Result<(), String> {
-    mixer_api::remove_routing((&source).into(), (&destination).into(), is_send)
+    mixer_api::remove_routing(source.into(), destination.into(), is_send)
         .map_err(|e| e.to_string())
+}
+
+pub fn update_routing(
+    conn: UiRoutingConnection
+) -> Result<(), String> {
+    mixer_api::update_routing(conn.into()).map_err(|e| e.to_string())
 }

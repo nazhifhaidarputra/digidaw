@@ -2511,7 +2511,7 @@ impl AudioEngine {
         let tracks = self.current_state.graph.tracks.clone();
 
         for track in tracks.iter() {
-            self.process_track(track.as_ref(), start_time, end_time);
+            self.process_track(track, start_time, end_time);
         }
     }
 

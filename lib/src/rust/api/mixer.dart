@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Opens a stream that continuously polls the audio-thread feedback ring buffer
 /// for `MixerChannelSnapshot` events and forwards them to Flutter.
@@ -160,6 +160,9 @@ Future<void> removeRouting({
   destination: destination,
   isSend: isSend,
 );
+
+Future<void> updateRouting({required UiRoutingConnection conn}) =>
+    RustLib.instance.api.crateApiMixerUpdateRouting(conn: conn);
 
 class ParameterSpecDTO {
   final int id;

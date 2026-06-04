@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
@@ -167,10 +165,10 @@ impl ApplicationState {
         min: f32,
         max: f32,
         default_value: f32,
-    ) -> anyhow::Result<(Arc<AutomationLane>, ModulationLinkId)> {
+    ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         // 1. Create the Lane (Pure Data)
         let lane_id = AutomationId::next(&mut self.automation_counter);
-        let lane = Arc::new(AutomationLane::new(lane_id, label, min, max, default_value));
+        let lane = AutomationLane::new(lane_id, label, min, max, default_value);
         self.automation_pool.insert(lane_id, lane.clone());
 
         // 2. Create the Source Generator
@@ -197,7 +195,7 @@ impl ApplicationState {
         min: f32,
         max: f32,
         default_value: f32,
-    ) -> anyhow::Result<(Arc<AutomationLane>, ModulationLinkId)> {
+    ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_track(track_id) {
             return Err(anyhow!("Target does not reference the specified track"));
         }
@@ -208,7 +206,7 @@ impl ApplicationState {
     pub fn get_automation_lanes_for_track(
         &self,
         track_id: TrackId,
-    ) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
+    ) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
         let mut lanes: Vec<_> = self
             .modulation_links
             .values()
@@ -265,7 +263,7 @@ impl ApplicationState {
         min: f32,
         max: f32,
         default_value: f32,
-    ) -> anyhow::Result<(Arc<AutomationLane>, ModulationLinkId)> {
+    ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_bus(bus_id) {
             return Err(anyhow!("Target does not reference the specified bus"));
         }
@@ -276,7 +274,7 @@ impl ApplicationState {
     pub fn get_automation_lanes_for_bus(
         &self,
         bus_id: BusId,
-    ) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
+    ) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
         let mut lanes: Vec<_> = self
             .modulation_links
             .values()
@@ -344,12 +342,10 @@ impl ApplicationState {
         time_ticks: u32,
         value: f32,
     ) -> anyhow::Result<()> {
-        let lane_arc = self
+        let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-
-        let lane = Arc::make_mut(lane_arc);
         let point = AutomationPoint::with_curve(
             time_ticks,
             value,
@@ -366,12 +362,11 @@ impl ApplicationState {
         lane_id: AutomationId,
         point_index: usize,
     ) -> anyhow::Result<AutomationPoint> {
-        let lane_arc = self
+        let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
-        let lane = Arc::make_mut(lane_arc);
         lane.remove_point(point_index).ok_or_else(|| {
             anyhow!(
                 "Point index {} out of bounds (lane has {} points)",
@@ -389,12 +384,11 @@ impl ApplicationState {
         value: f32,
         tension: f32,
     ) -> anyhow::Result<(usize, usize)> {
-        let lane_arc = self
+        let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
-        let lane = Arc::make_mut(lane_arc);
         match lane.update_point(point_index, time_ticks, value, tension) {
             Some(new_index) => Ok((point_index, new_index)),
             None => Err(anyhow!(

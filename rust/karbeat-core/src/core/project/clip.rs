@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::{cmp::Ordering};
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
@@ -172,9 +172,7 @@ impl ApplicationState {
     pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) -> anyhow::Result<()> {
         // Get the track
         match self.tracks.get_mut(&track_id) {
-            Some(track_arc) => {
-                // COW: Get mutable track
-                let track: &mut super::AudioTrack = Arc::make_mut(track_arc);
+            Some(track) => {
 
                 // Add Clip & Check bounds
                 // We pass the Clip by value. The track takes ownership and wraps it in Arc.
@@ -191,9 +189,8 @@ impl ApplicationState {
         &mut self,
         track_id: TrackId,
         clip_id: ClipId,
-    ) -> anyhow::Result<Arc<Clip>> {
-        let deleted_clip = (if let Some(track_arc) = self.tracks.get_mut(&track_id) {
-            let track = Arc::make_mut(track_arc);
+    ) -> anyhow::Result<Clip> {
+        let deleted_clip = (if let Some(track) = self.tracks.get_mut(&track_id) {
             match track.remove_clip(&clip_id) {
                 Ok(clip) => Ok(clip),
                 Err(e) => Err(e),
@@ -211,7 +208,7 @@ impl ApplicationState {
         self.tracks
             .get(track_id)
             .and_then(|track| track.clips.iter().find(|c| c.id == *clip_id))
-            .map(|arc_clip| (**arc_clip).clone())
+            .map(|clip| (*clip).clone())
     }
 
     /// Move a clip from one track to another (or within the same track) with a new start time.
@@ -226,22 +223,21 @@ impl ApplicationState {
     ) -> Result<Clip, String> {
         // First, extract the clip from the source track
         let clip = {
-            let track_arc = self
+            let track = self
                 .tracks
                 .get_mut(&source_track_id)
                 .ok_or("Source track not found")?;
-            let track = Arc::make_mut(track_arc);
 
-            let clip_arc = track
+            let clip = track
                 .clips
                 .iter()
                 .find(|c| c.id == clip_id)
                 .cloned()
                 .ok_or("Clip not found in source track")?;
 
-            track.clips.remove(&clip_arc);
+            track.clips.remove(&clip);
 
-            (*clip_arc).clone()
+            clip.clone()
         };
 
         // Update the clip's start time (preserving the time unit variant)
@@ -257,11 +253,10 @@ impl ApplicationState {
 
         // Add the clip to the target track
         {
-            let track_arc = self
+            let track = self
                 .tracks
                 .get_mut(&target_track_id)
                 .ok_or("Target track not found")?;
-            let track: &mut super::AudioTrack = Arc::make_mut(track_arc);
 
             track
                 .add_clip(modified_clip.clone())
@@ -279,18 +274,17 @@ impl ApplicationState {
         clip_id: &ClipId,
         cut_point: u64,
     ) -> Result<(Clip, Clip), String> {
-        let track_arc = self.tracks.get_mut(track_id).ok_or("Track not found")?;
-        let track = Arc::make_mut(track_arc);
+        let track = self.tracks.get_mut(track_id).ok_or("Track not found")?;
 
         // Find and remove the old clip
-        let clip_arc = track
+        let clip = track
             .clips
             .iter()
             .find(|c| c.id == *clip_id)
             .cloned()
             .ok_or("Clip not found")?;
 
-        let source_clip = (*clip_arc).clone();
+        let source_clip = clip.clone();
 
         let start = source_clip.time.start_time_raw();
         let length = source_clip.time.loop_length_raw();
@@ -340,9 +334,9 @@ impl ApplicationState {
             }
         }
 
-        track.clips.remove(&clip_arc);
-        track.clips.insert(Arc::new(first_clip.clone()));
-        track.clips.insert(Arc::new(second_clip.clone()));
+        track.clips.remove(&clip);
+        track.clips.insert(first_clip.clone());
+        track.clips.insert(second_clip.clone());
 
         self.update_max_sample_index();
 
@@ -360,20 +354,19 @@ impl ApplicationState {
         edge: ResizeEdge,
         new_time_val: u64,
     ) -> Result<Clip, String> {
-        let track_arc = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
-        let track = Arc::make_mut(track_arc);
+        let track = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
 
         // Find and remove the old clip
-        let clip_arc = track
+        let clip = track
             .clips
             .iter()
             .find(|c| c.id == clip_id)
             .cloned()
             .ok_or("Clip not found")?;
 
-        track.clips.remove(&clip_arc);
+        track.clips.remove(&clip);
 
-        let mut modified_clip = (*clip_arc).clone();
+        let mut modified_clip = clip.clone();
         let old_start = modified_clip.time.start_time_raw();
         let old_length = modified_clip.time.loop_length_raw();
         let old_end = old_start + old_length;
@@ -430,7 +423,7 @@ impl ApplicationState {
         }
 
         // Re-insert the clip
-        track.clips.insert(Arc::new(modified_clip.clone()));
+        track.clips.insert(modified_clip.clone());
 
         self.update_max_sample_index();
         Ok(modified_clip)
@@ -519,13 +512,13 @@ impl ApplicationState {
                     let default_ticks = 4 * 960;
                     let timeline_length = 4 * 960; // 4 beats
 
-                    let pattern = Arc::new(Pattern {
+                    let pattern = Pattern {
                         id: new_pattern_id,
                         name: format!("Pattern {}", new_pattern_id.to_u32()),
                         length_ticks: default_ticks,
                         notes: Vec::new(),
                         next_note_id: 0,
-                    });
+                    };
                     self.pattern_pool.insert(new_pattern_id, pattern);
                     (new_pattern_id, timeline_length)
                 };
@@ -575,16 +568,15 @@ impl ApplicationState {
 
         if source_track_id == target_track_id {
             // Same track: just update start times
-            let track_arc = self
+            let track = self
                 .tracks
                 .get_mut(&source_track_id)
                 .ok_or("Source track not found")?;
-            let track = Arc::make_mut(track_arc);
 
             for clip_id in &clip_ids {
                 if let Some(clip) = track.clips.iter().find(|c| c.id == *clip_id).cloned() {
                     track.clips.remove(&clip);
-                    let mut modified_clip = (*clip).clone();
+                    let mut modified_clip = clip.clone();
                     // Apply delta with clamping to 0
                     let old_start = modified_clip.time.start_time_raw() as i64;
                     let new_start = (old_start + delta).max(0);
@@ -596,7 +588,7 @@ impl ApplicationState {
                             *start_time = new_start as u32;
                         }
                     }
-                    track.clips.insert(Arc::new(modified_clip.clone()));
+                    track.clips.insert(modified_clip.clone());
                     result_clips.push(modified_clip);
                 }
             }
@@ -604,11 +596,10 @@ impl ApplicationState {
             // Cross-track move
             let mut clips_to_move = Vec::new();
             {
-                let source_track = Arc::make_mut(
+                let source_track = 
                     self.tracks
                         .get_mut(&source_track_id)
-                        .ok_or("Source track not found")?,
-                );
+                        .ok_or("Source track not found")?;
 
                 for clip_id in &clip_ids {
                     if let Some(clip) = source_track
@@ -633,13 +624,12 @@ impl ApplicationState {
             }
 
             // Add to target track
-            let target_track = Arc::make_mut(
+            let target_track = 
                 self.tracks
                     .get_mut(&target_track_id)
-                    .ok_or("Target track not found")?,
-            );
+                    .ok_or("Target track not found")?;
             for clip in clips_to_move {
-                let mut modified_clip = (*clip).clone();
+                let mut modified_clip = clip.clone();
                 let old_start = modified_clip.time.start_time_raw() as i64;
                 let new_start = (old_start + delta).max(0);
                 match &mut modified_clip.time {
@@ -666,15 +656,14 @@ impl ApplicationState {
         edge: ResizeEdge,
         delta: i64,
     ) -> Result<Vec<Clip>, String> {
-        let track_arc = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
-        let track = Arc::make_mut(track_arc);
+        let track = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
 
         let mut result_clips = Vec::new();
 
         for clip_id in &clip_ids {
             if let Some(clip) = track.clips.iter().find(|c| c.id == *clip_id).cloned() {
                 track.clips.remove(&clip);
-                let mut modified_clip = (*clip).clone();
+                let mut modified_clip = clip.clone();
 
                 let old_start = modified_clip.time.start_time_raw();
                 let old_length = modified_clip.time.loop_length_raw();
@@ -726,7 +715,7 @@ impl ApplicationState {
                     }
                 }
 
-                track.clips.insert(Arc::new(modified_clip.clone()));
+                track.clips.insert(modified_clip.clone());
                 result_clips.push(modified_clip);
             }
         }
@@ -749,7 +738,7 @@ impl ApplicationState {
             .iter()
             .filter_map(|clip| {
                 if clip_ids.contains(&clip.id) {
-                    Some(clip.as_ref().clone())
+                    Some(clip.clone())
                 } else {
                     None
                 }
@@ -823,8 +812,7 @@ impl ApplicationState {
 
         // Delete them from the track
         let mut deleted_clips = Vec::new();
-        if let Some(track_arc) = self.tracks.get_mut(&source_track_id) {
-            let track = Arc::make_mut(track_arc);
+        if let Some(track) = self.tracks.get_mut(&source_track_id) {
 
             // Collect the Arc references that match the targeted IDs
             let clips_to_remove: Vec<_> = track
@@ -835,9 +823,9 @@ impl ApplicationState {
                 .collect();
 
             // Remove them from the underlying BTreeSet/HashSet
-            for clip_arc in clips_to_remove {
-                if track.clips.remove(&clip_arc) {
-                    deleted_clips.push((*clip_arc).clone());
+            for clip in clips_to_remove {
+                if track.clips.remove(&clip) {
+                    deleted_clips.push(clip.clone());
                 }
             }
         }

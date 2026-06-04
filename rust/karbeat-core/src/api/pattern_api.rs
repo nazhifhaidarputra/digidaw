@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     audio::engine::PlaybackMode,
     commands::AudioCommand,
@@ -8,7 +6,7 @@ use crate::{
     lock::get_app_read,
 };
 
-pub fn get_pattern(pattern_id: &PatternId) -> anyhow::Result<Arc<Pattern>> {
+pub fn get_pattern(pattern_id: &PatternId) -> anyhow::Result<Pattern> {
     let app = get_app_read();
     let pattern_ref = app
         .pattern_pool
@@ -29,9 +27,9 @@ where
     let patterns = app
         .pattern_pool
         .iter()
-        .map(|(&id, pattern_arc)| {
+        .map(|(&id, pattern)| {
             // Let the closure handle exactly what the Item shape looks like
-            mapper(id.into(), pattern_arc.as_ref())
+            mapper(id.into(), pattern)
         })
         .collect::<C>(); // Collect dynamically resolves to type C
 

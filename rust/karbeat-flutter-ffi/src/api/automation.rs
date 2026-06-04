@@ -338,9 +338,9 @@ impl From<AutomationTargetDto> for AutomationTarget {
 pub fn get_automation_lanes_for_track(track_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
     automation_api::get_automation_lanes_for_track(track_id.into())
         .into_iter()
-        .map(|(mod_id, automation_id, arc_lane)| {
-            let lane = arc_lane.as_ref().into();
-            (mod_id.into(), automation_id.into(), lane)
+        .map(|(mod_id, automation_id, lane)| {
+            let lane_dto = (&lane).into();
+            (mod_id.into(), automation_id.into(), lane_dto)
         })
         .collect()
 }
@@ -350,9 +350,9 @@ pub fn get_automation_lanes_for_track(track_id: u32) -> Vec<(u32, u32, Automatio
 pub fn get_automation_lanes_for_bus(bus_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
     automation_api::get_automation_lanes_for_bus(bus_id.into())
         .into_iter()
-        .map(|(mod_id, automation_id, arc_lane)| {
-            let lane = arc_lane.as_ref().into();
-            (mod_id.into(), automation_id.into(), lane)
+        .map(|(mod_id, automation_id, lane)| {
+            let lane_dto = (&lane).into();
+            (mod_id.into(), automation_id.into(), lane_dto)
         })
         .collect()
 }
@@ -365,8 +365,8 @@ pub fn add_automation_lane(
     default_value: f32,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane(target.into(), label, min, max, default_value) {
-        Ok(arc_lane) => {
-            let lane_dto = AutomationLaneDto::from(arc_lane.as_ref());
+        Ok(lane) => {
+            let lane_dto = AutomationLaneDto::from(&lane);
             Ok(lane_dto)
         }
         Err(e) => Err(e.to_string()),
@@ -394,8 +394,8 @@ pub fn add_automation_lane_for_track(
         max,
         default_value,
     ) {
-        Ok(arc_lane) => {
-            let lane_dto = AutomationLaneDto::from(arc_lane.as_ref());
+        Ok(lane) => {
+            let lane_dto = AutomationLaneDto::from(&lane);
             Ok(lane_dto)
         }
         Err(e) => Err(e.to_string()),
@@ -418,8 +418,8 @@ pub fn add_automation_lane_for_bus(
         max,
         default_value,
     ) {
-        Ok(arc_lane) => {
-            let lane_dto = AutomationLaneDto::from(arc_lane.as_ref());
+        Ok(lane) => {
+            let lane_dto = AutomationLaneDto::from(&lane);
             Ok(lane_dto)
         }
         Err(e) => Err(e.to_string()),

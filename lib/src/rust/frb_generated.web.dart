@@ -336,6 +336,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiPluginTarget dco_decode_box_autoadd_ui_plugin_target(dynamic raw);
 
   @protected
+  UiRoutingConnection dco_decode_box_autoadd_ui_routing_connection(dynamic raw);
+
+  @protected
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
 
   @protected
@@ -1080,6 +1083,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginTarget sse_decode_box_autoadd_ui_plugin_target(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiRoutingConnection sse_decode_box_autoadd_ui_routing_connection(
     SseDeserializer deserializer,
   );
 
@@ -1977,6 +1985,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_plugin_target(
     UiPluginTarget self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_routing_connection(
+    UiRoutingConnection self,
     SseSerializer serializer,
   );
 

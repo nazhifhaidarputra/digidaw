@@ -32,7 +32,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
 
     // Clone the app state so we can modify file paths for embedded audio
     let mut saveable_state = app_state.clone();
-    let library = Arc::make_mut(&mut saveable_state.asset_library);
+    let library = &mut saveable_state.asset_library;
 
     zip.add_directory("audio/", stored_options)?;
 
@@ -99,7 +99,7 @@ pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
     let mut app_state: ApplicationState =
         rmp_serde::from_slice(&project_bytes).context("Failed to deserialize project.msgpack")?;
 
-    let library = Arc::make_mut(&mut app_state.asset_library);
+    let library = &mut app_state.asset_library;
     library.source_map.clear();
 
     // Create a persistent cache directory for this session, avoiding randomized file names

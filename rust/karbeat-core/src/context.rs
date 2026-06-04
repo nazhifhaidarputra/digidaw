@@ -78,16 +78,10 @@ pub fn ctx() -> &'static DawContext {
 }
 
 pub mod utils {
-    use std::sync::Arc;
-
     use karbeat_plugin_api::traits::AudioPlugin;
 
     use crate::{
-        audio::render_state::{AudioAutomationLane, AudioGraphState},
-        commands::AudioCommand,
-        context::ctx,
-        lock::get_app_read,
-        shared::id::*,
+        audio::render_state::{AudioAutomationLane, AudioGraphState}, commands::AudioCommand, context::ctx, core::project::AudioTrack, lock::get_app_read, shared::id::*
     };
 
     /// Helper function to send AudioCommand to context's command sender.
@@ -135,12 +129,12 @@ pub mod utils {
     /// Call this whenever tracks, clips, patterns, or max_sample_index change.
     pub fn broadcast_track_graph() {
         let app = get_app_read();
-        let mut tracks_vec: Vec<Arc<crate::core::project::track::AudioTrack>> =
+        let mut tracks_vec: Box<[AudioTrack]> =
             app.tracks.values().cloned().collect();
         tracks_vec.sort_by_key(|t| t.id);
 
         send_audio_command(AudioCommand::UpdateTrackGraph {
-            tracks: Arc::from(tracks_vec),
+            tracks: tracks_vec,
             patterns: app.pattern_pool.clone(),
             max_sample_index: app.max_sample_index,
         });

@@ -41,7 +41,7 @@ where
     Ok(app
         .generator_pool
         .iter()
-        .map(|(&id, gen)| mapper(id.to_u32(), gen.as_ref()))
+        .map(|(&id, gen)| mapper(id.to_u32(), gen))
         .collect())
 }
 
@@ -151,8 +151,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
         for (target, state_blob) in updated_states {
             match target {
                 PluginTarget::Generator(gen_id) => {
-                    if let Some(gen_arc) = app.generator_pool.get_mut(&gen_id) {
-                        let gen_mut = Arc::make_mut(gen_arc);
+                    if let Some(gen_mut) = app.generator_pool.get_mut(&gen_id) {
                         if let GeneratorInstanceType::Plugin(plugin_instance) =
                             &mut gen_mut.instance_type
                         {

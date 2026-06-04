@@ -1,7 +1,6 @@
 use hashbrown::HashMap;
 use indexmap::IndexMap;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
-use std::sync::Arc;
 
 use crate::{
     audio::{
@@ -145,7 +144,7 @@ pub enum AudioCommand {
     /// Update the routing matrix directly on the audio thread.
     /// This bypasses the triple-buffer; routing is owned by the ring-buffer path.
     UpdateRouting {
-        routing: Vec<RoutingConnection>,
+        routing: Box<[RoutingConnection]>,
     },
     /// Prepare all plugins and seed the audio thread's mixer channel state.
     /// Called on project load / new project to fully hydrate the audio thread.
@@ -205,8 +204,8 @@ pub enum AudioCommand {
     /// Sent whenever tracks are added/removed, clips are edited, patterns
     /// are modified, or BPM changes the max_sample_index.
     UpdateTrackGraph {
-        tracks: Arc<[Arc<AudioTrack>]>,
-        patterns: HashMap<PatternId, Arc<Pattern>>,
+        tracks: Box<[AudioTrack]>,
+        patterns: HashMap<PatternId, Pattern>,
         max_sample_index: u32,
     },
 

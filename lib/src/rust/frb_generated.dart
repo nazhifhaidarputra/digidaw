@@ -79,7 +79,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1800648681;
+  int get rustContentHash => 64225539;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -849,6 +849,8 @@ abstract class RustLibApi extends BaseApi {
     required double value,
     required double tension,
   });
+
+  Future<void> crateApiMixerUpdateRouting({required UiRoutingConnection conn});
 
   Future<void> crateApiTrackUpdateTrackOrder({
     required int trackId,
@@ -7002,6 +7004,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiMixerUpdateRouting({required UiRoutingConnection conn}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ui_routing_connection(conn, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 184,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiMixerUpdateRoutingConstMeta,
+        argValues: [conn],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMixerUpdateRoutingConstMeta =>
+      const TaskConstMeta(debugName: "update_routing", argNames: ["conn"]);
+
+  @override
   Future<void> crateApiTrackUpdateTrackOrder({
     required int trackId,
     required int newIdx,
@@ -7015,7 +7045,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 184,
+            funcId: 185,
             port: port_,
           );
         },
@@ -7681,6 +7711,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiPluginTarget dco_decode_box_autoadd_ui_plugin_target(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_ui_plugin_target(raw);
+  }
+
+  @protected
+  UiRoutingConnection dco_decode_box_autoadd_ui_routing_connection(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ui_routing_connection(raw);
   }
 
   @protected
@@ -9707,6 +9745,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_ui_plugin_target(deserializer));
+  }
+
+  @protected
+  UiRoutingConnection sse_decode_box_autoadd_ui_routing_connection(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ui_routing_connection(deserializer));
   }
 
   @protected
@@ -12166,6 +12212,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_ui_plugin_target(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ui_routing_connection(
+    UiRoutingConnection self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_routing_connection(self, serializer);
   }
 
   @protected

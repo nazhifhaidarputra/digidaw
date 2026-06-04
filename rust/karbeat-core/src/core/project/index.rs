@@ -31,22 +31,22 @@ pub struct ApplicationState {
     pub metadata: ProjectMetadata,
     pub mixer: MixerState,
     pub transport: TransportState,
-    pub asset_library: Arc<AssetLibrary>,
+    pub asset_library: AssetLibrary,
 
     // All musical data lives here. The timeline just references these.
-    pub pattern_pool: HashMap<PatternId, Arc<Pattern>>,
+    pub pattern_pool: HashMap<PatternId, Pattern>,
     pub pattern_counter: u32,
 
     // Generator sources
-    pub generator_pool: HashMap<GeneratorId, Arc<GeneratorInstance>>,
+    pub generator_pool: HashMap<GeneratorId, GeneratorInstance>,
     pub generator_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
-    pub tracks: HashMap<TrackId, Arc<AudioTrack>>,
+    pub tracks: HashMap<TrackId, AudioTrack>,
     pub track_counter: u32,
 
     // Automation lanes pool (lives at the same level as tracks/patterns/generators)
-    pub automation_pool: HashMap<AutomationId, Arc<AutomationLane>>,
+    pub automation_pool: HashMap<AutomationId, AutomationLane>,
     pub automation_counter: u32,
 
     pub modulation_pool: HashMap<ModulationId, ModulationEvent>,
@@ -201,8 +201,7 @@ impl ApplicationState {
         self.max_sample_index = self
             .tracks
             .values_mut()
-            .map(|t| {
-                let track_mut = Arc::make_mut(t);
+            .map(|track_mut| {
                 track_mut.update_max_sample_index(bpm, sample_rate);
                 track_mut.max_sample_index
             })
@@ -216,15 +215,14 @@ impl ApplicationState {
         source_id: AudioSourceId,
     ) -> anyhow::Result<AudioSourceId> {
         // we check whether the source exists
-        let library = Arc::make_mut(&mut self.asset_library);
+        let library = &mut self.asset_library;
 
         if library.source_map.remove(&source_id).is_none() {
             return Err(anyhow!("Source does not exist"));
         }
 
         // cascade delete
-        for track_arc in self.tracks.values_mut() {
-            let track = Arc::make_mut(track_arc);
+        for track in self.tracks.values_mut() {
             track.remove_clip_by_source_id(source_id, false);
         }
 

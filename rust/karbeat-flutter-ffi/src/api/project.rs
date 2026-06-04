@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{collections::HashMap};
 
 use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
@@ -41,13 +41,13 @@ impl From<ApplicationState> for UiApplicationState {
         let tracks: HashMap<u32, UiTrack> = value
             .tracks
             .iter()
-            .map(|(id, track)| (id.to_u32(), UiTrack::from(track.as_ref())))
+            .map(|(id, track)| (id.to_u32(), UiTrack::from(track)))
             .collect();
 
         let generators: HashMap<u32, UiGeneratorInstance> = value
             .generator_pool
             .iter()
-            .map(|(id, gen)| (id.to_u32(), UiGeneratorInstance::from(gen.as_ref())))
+            .map(|(id, gen)| (id.to_u32(), UiGeneratorInstance::from(gen)))
             .collect();
 
         let patterns: HashMap<u32, crate::api::pattern::UiPattern> = value
@@ -56,7 +56,7 @@ impl From<ApplicationState> for UiApplicationState {
             .map(|(id, pat)| {
                 (
                     id.to_u32(),
-                    crate::api::pattern::UiPattern::from(pat.as_ref()),
+                    crate::api::pattern::UiPattern::from(pat),
                 )
             })
             .collect();
@@ -217,7 +217,7 @@ impl From<&AudioTrack> for UiTrack {
             clips: value
                 .clips_to_vec()
                 .iter()
-                .map(|c| UiClip::from(c.deref()))
+                .map(|c| UiClip::from(c))
                 .collect(),
             generator_id,
             order_idx: value.order_idx,
@@ -544,9 +544,9 @@ pub fn add_audio_source(file_path: &str) -> Result<u32, String> {
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
 pub fn add_new_audio_track() -> UiTrack {
-    let arc_track = { track_api::add_new_audio_track() };
+    let track = { track_api::add_new_audio_track() };
     log::info!("[add_new_track] successfully added new track");
-    UiTrack::from(arc_track.as_ref())
+    UiTrack::from(&track)
 }
 
 /// Get all tracks on the session/project.

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     commands::AudioCommand,
     context::utils::{broadcast_automation_lane, send_audio_command},
@@ -21,7 +19,7 @@ where
 
     app.automation_pool
         .values()
-        .map(|a| mapper(a.as_ref()))
+        .map(|a| mapper(a))
         .collect()
 }
 
@@ -32,7 +30,7 @@ pub fn add_automation_lane_for_track(
     min: f32,
     max: f32,
     default_value: f32,
-) -> anyhow::Result<Arc<AutomationLane>> {
+) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
         let mut app = get_app_write();
         app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?
@@ -52,7 +50,7 @@ pub fn add_automation_lane(
     min: f32,
     max: f32,
     default_value: f32,
-) -> anyhow::Result<Arc<AutomationLane>> {
+) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
         let mut app = get_app_write();
         app.add_automation_lane(target, label, min, max, default_value)?
@@ -72,7 +70,7 @@ pub fn add_automation_lane_for_bus(
     min: f32,
     max: f32,
     default_value: f32,
-) -> anyhow::Result<Arc<AutomationLane>> {
+) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
         let mut app = get_app_write();
         app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
@@ -143,14 +141,14 @@ pub fn update_automation_point(
 
 pub fn get_automation_lanes_for_track(
     track_id: TrackId,
-) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
+) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
     let app = get_app_read();
     app.get_automation_lanes_for_track(track_id)
 }
 
 pub fn get_automation_lanes_for_bus(
     bus_id: BusId,
-) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
+) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
     let app = get_app_read();
     app.get_automation_lanes_for_bus(bus_id)
 }

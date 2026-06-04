@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::core::project::plugin::modulation::ModulationEvent;
 use crate::core::project::{
     automation::{AutomationCurveType, AutomationPoint},
@@ -225,14 +223,14 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
 /// Structural State: Tracks, Patterns, Routing, Assets (Heavy, changes rarely)
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
-    pub tracks: Arc<[Arc<AudioTrack>]>,
-    pub patterns: HashMap<PatternId, Arc<Pattern>>,
+    pub tracks: Box<[AudioTrack]>,
+    pub patterns: HashMap<PatternId, Pattern>,
     /// Routing connections — owned and mutated directly by the audio thread
     /// via the UpdateRouting ring-buffer command.
-    pub routing: Vec<RoutingConnection>,
+    pub routing: Box<[RoutingConnection]>,
     /// IDs of all active buses — used for buffer allocation in PreparePlugin.
     pub bus_ids: Vec<BusId>,
-    pub asset_library: Arc<AssetLibrary>,
+    pub asset_library: AssetLibrary,
     /// Automation lanes for real-time parameter modulation
     pub automation_lanes: HashMap<AutomationId, AudioAutomationLane>,
     pub max_sample_index: u32,
@@ -244,7 +242,7 @@ pub struct AudioGraphState {
 
 impl From<&ApplicationState> for AudioGraphState {
     fn from(app: &ApplicationState) -> Self {
-        let mut tracks_vec: Vec<Arc<AudioTrack>> = app.tracks.values().cloned().collect();
+        let mut tracks_vec: Vec<AudioTrack> = app.tracks.values().cloned().collect();
         tracks_vec.sort_by_key(|t| t.id);
 
         let modulation_events = app.modulation_pool.clone();
@@ -267,9 +265,9 @@ impl From<&ApplicationState> for AudioGraphState {
         // modulation_events.extend(app.modulations.clone());
 
         Self {
-            tracks: Arc::from(tracks_vec),
+            tracks: tracks_vec.into_boxed_slice(),
             patterns: app.pattern_pool.clone(),
-            routing: app.mixer.routing.clone(),
+            routing: app.mixer.routing.clone().into_boxed_slice(),
             bus_ids: app.mixer.buses.keys().copied().collect(),
             asset_library: app.asset_library.clone(),
             automation_lanes,

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     core::project::{ApplicationState, Clip, ClipId, Note, NoteId, TrackId},
     shared::id::*,
@@ -107,7 +105,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 let index = p
                     .notes
                     .iter()
@@ -122,7 +120,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 p.restore_note(note.clone()).map_err(|e| e.to_string())?;
             }
             ProjectAction::MoveNote {
@@ -137,7 +135,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 let index = p
                     .notes
                     .iter()
@@ -156,7 +154,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 let index = p
                     .notes
                     .iter()
@@ -195,12 +193,12 @@ impl HistoryManager {
                 track_id, old_clip, ..
             } => {
                 // Inverse: Restore the old clip state
-                let track_arc = app.tracks.get_mut(track_id).ok_or("Track not found")?;
-                let track = Arc::make_mut(track_arc);
+                let track = app.tracks.get_mut(track_id).ok_or("Track not found")?;
+                // let track = Arc::make_mut(track_arc);
 
                 // Remove current clip and insert old clip
                 track.clips.retain(|c| c.id != old_clip.id);
-                track.clips.insert(Arc::new(old_clip.clone()));
+                track.clips.insert(old_clip.clone());
                 app.update_max_sample_index();
             }
         }
@@ -219,7 +217,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 p.restore_note(note.clone()).map_err(|e| e.to_string())?;
             }
             ProjectAction::DeleteNote { pattern_id, note } => {
@@ -227,7 +225,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 let index = p
                     .notes
                     .iter()
@@ -246,7 +244,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 let index = p
                     .notes
                     .iter()
@@ -265,7 +263,7 @@ impl HistoryManager {
                     .pattern_pool
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
-                let p = Arc::make_mut(pattern);
+                let p = pattern;
                 let index = p
                     .notes
                     .iter()
@@ -281,8 +279,7 @@ impl HistoryManager {
                 }
             }
             ProjectAction::AddClip { track_id, clip } => {
-                let track = app.tracks.get_mut(track_id).ok_or("Track not found")?;
-                let t = Arc::make_mut(track);
+                let t = app.tracks.get_mut(track_id).ok_or("Track not found")?;
                 t.add_clip(clip.clone()).map_err(|e| e.to_string())?;
             }
             ProjectAction::DeleteClip { track_id, clip } => {
@@ -304,12 +301,11 @@ impl HistoryManager {
                 track_id, new_clip, ..
             } => {
                 // Forward: Apply the new clip state
-                let track_arc = app.tracks.get_mut(track_id).ok_or("Track not found")?;
-                let track = Arc::make_mut(track_arc);
+                let track = app.tracks.get_mut(track_id).ok_or("Track not found")?;
 
                 // Remove old clip and insert new clip
                 track.clips.retain(|c| c.id != new_clip.id);
-                track.clips.insert(Arc::new(new_clip.clone()));
+                track.clips.insert(new_clip.clone());
                 app.update_max_sample_index();
             }
         }

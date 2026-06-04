@@ -52,15 +52,35 @@ Future<Result<void>> removeRouting(
   });
 }
 
-Future<Result<void>> removeBus(GlobalAppState state, {
-  required int busId
+Future<Result<void>> removeBus(
+  GlobalAppState state, {
+  required int busId,
 }) async {
   return await attemptAsync(() async {
     await mixer_api.deleteBus(busId: busId);
     // TODO: Add optimistic update before syncing
-    
-    return state.notifyCustomBackendChange(() async {
-      (state.syncBuses(), state.syncRoutingConnection()).wait;
-    });
+
+    (state.syncBuses(), state.syncRoutingConnection()).wait;
+  });
+}
+
+Future<Result<void>> updateRoutingCall(
+  GlobalAppState state, {
+  required UiRoutingNode src,
+  required UiRoutingNode dest,
+  required double sendLvl,
+  required bool isSend,
+}) async {
+  return await attemptAsync(() async {
+    await mixer_api.updateRouting(
+      conn: UiRoutingConnection(
+        source: src,
+        destination: dest,
+        sendLevel: sendLvl,
+        isSend: isSend,
+      ),
+    );
+
+    return await state.syncRoutingConnection();
   });
 }

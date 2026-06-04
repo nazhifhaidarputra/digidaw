@@ -44,7 +44,7 @@ where
     C: FromIterator<U>,
 {
     let app = get_app_read();
-    let track = app.tracks.get(track_id)?.as_ref();
+    let track = app.tracks.get(track_id)?;
 
     let TrackType::Audio = track.track_type else {
         return Some(std::iter::empty().collect()); // Return empty since it is not a audio track

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -37,7 +35,7 @@ impl ApplicationState {
         // Ensure the inner instance knows its ID
         let instance = GeneratorInstance { id, instance_type };
 
-        self.generator_pool.insert(id, Arc::new(instance));
+        self.generator_pool.insert(id, instance);
         id
     }
 
@@ -47,8 +45,7 @@ impl ApplicationState {
             return None;
         }
 
-        for track_arc in self.tracks.values_mut() {
-            let track = Arc::make_mut(track_arc);
+        for track in self.tracks.values_mut() {
             track.remove_clip_by_source_id(generator_id, true);
         }
 

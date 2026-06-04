@@ -385,7 +385,7 @@ pub fn set_routing(conn: RoutingConnection) -> anyhow::Result<()> {
     let routing = {
         let mut app = get_app_write();
         app.mixer.add_routing(conn)?;
-        app.mixer.routing.clone()
+        app.mixer.routing.clone().into_boxed_slice()
     };
     send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
@@ -399,7 +399,18 @@ pub fn remove_routing(
     let routing = {
         let mut app = get_app_write();
         app.mixer.remove_routing(source, destination, is_send)?;
-        app.mixer.routing.clone()
+        app.mixer.routing.clone().into_boxed_slice()
+    };
+    send_audio_command(AudioCommand::UpdateRouting { routing });
+    Ok(())
+}
+
+pub fn update_routing(
+    conn: RoutingConnection
+) -> anyhow::Result<()> {
+    let routing = {
+        let mut app = get_app_write();
+        app.mixer.update_routing(conn)?
     };
     send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())

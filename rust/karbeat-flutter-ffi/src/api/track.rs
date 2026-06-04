@@ -131,7 +131,7 @@ pub fn slice_clip(
 pub fn add_midi_track_with_generator_id(registry_id: u32) -> Result<UiTrack, String> {
     let res =
         track_api::add_midi_track_with_generator_id(registry_id).map_err(|e| e.to_string())?;
-    Ok(UiTrack::from(res.as_ref()))
+    Ok(UiTrack::from(&res))
 }
 
 pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {

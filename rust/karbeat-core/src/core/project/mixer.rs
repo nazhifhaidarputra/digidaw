@@ -508,11 +508,6 @@ impl MixerState {
             return Err(anyhow::anyhow!("Routing would create a cycle"));
         }
 
-        // Sync routing to audio thread
-        send_audio_command(AudioCommand::UpdateRouting {
-            routing: self.routing.clone(),
-        });
-
         Ok(())
     }
 
@@ -531,11 +526,6 @@ impl MixerState {
         if self.routing.len() == original_len {
             return Err(anyhow::anyhow!("Routing connection not found"));
         }
-
-        // Sync routing to audio thread
-        send_audio_command(AudioCommand::UpdateRouting {
-            routing: self.routing.clone(),
-        });
 
         Ok(())
     }
@@ -650,6 +640,60 @@ impl MixerState {
     pub fn remove_track_routing(&mut self, track_id: TrackId) {
         self.routing
             .retain(|c| c.source != RoutingNode::Track(track_id));
+    }
+
+    pub fn update_routing(&mut self, connection: RoutingConnection) -> anyhow::Result<Box<[RoutingConnection]>> {
+        if connection.source == RoutingNode::Master {
+            return Err(anyhow::anyhow!("Master cannot be a routing source"));
+        }
+
+        if matches!(connection.destination, RoutingNode::Track(_)) {
+            return Err(anyhow::anyhow!("Tracks cannot be routing destinations"));
+        }
+
+        // Backup the connections we might overwrite in case we need to revert a cycle
+        let mut backed_up_connections = Vec::new();
+
+        if !connection.is_send {
+            // MAIN OUTPUT ENFORCEMENT: A source can only have exactly ONE main output.
+            // Remove any existing main output for this specific source.
+            self.routing.retain(|c| {
+                if c.source == connection.source && !c.is_send {
+                    backed_up_connections.push(c.clone());
+                    false // Remove it
+                } else {
+                    true // Keep it
+                }
+            });
+        } else {
+            // SEND ENFORCEMENT: A source can have multiple sends, but only ONE per destination.
+            // Find and remove the existing send to this exact destination so we can replace its level.
+            self.routing.retain(|c| {
+                if c.source == connection.source 
+                    && c.destination == connection.destination 
+                    && c.is_send 
+                {
+                    backed_up_connections.push(c.clone());
+                    false // Remove it
+                } else {
+                    true // Keep it
+                }
+            });
+        }
+
+        // Add the new or updated connection
+        self.routing.push(connection.clone());
+
+        // Cycle Detection: Check if this new graph topology breaks the DAG
+        if self.has_routing_cycle() {
+            // Revert changes
+            self.routing.pop(); // Remove the bad connection we just pushed
+            self.routing.extend(backed_up_connections); // Restore the old ones
+            
+            return Err(anyhow::anyhow!("Routing would create a feedback cycle"));
+        }
+        
+        Ok(self.routing.clone().into_boxed_slice())
     }
 }
 

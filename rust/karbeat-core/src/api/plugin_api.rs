@@ -78,7 +78,7 @@ where
 
     let generator_arc = app.generator_pool.get(generator_id)?;
 
-    let generator = generator_arc.as_ref();
+    let generator = generator_arc;
     Some(mapper(generator))
 }
 
@@ -153,7 +153,7 @@ where
         .get(generator_id)
         .ok_or_else(|| format!("Generator {} not found", generator_id.0))?;
 
-    let generator = generator_arc.as_ref();
+    let generator = generator_arc;
 
     if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
         let registry = get_plugin_registry_read();

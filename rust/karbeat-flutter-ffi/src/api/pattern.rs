@@ -58,8 +58,8 @@ impl From<&Pattern> for UiPattern {
 
 pub fn get_pattern(pattern_id: u32) -> Result<UiPattern, String> {
     let pattern_id = PatternId::from(pattern_id);
-    let pattern_arc = pattern_api::get_pattern(&pattern_id).map_err(|e| e.to_string())?;
-    let pattern_ui = UiPattern::from(pattern_arc.as_ref());
+    let pattern = pattern_api::get_pattern(&pattern_id).map_err(|e| e.to_string())?;
+    let pattern_ui = UiPattern::from(&pattern);
     Ok(pattern_ui)
 }
 

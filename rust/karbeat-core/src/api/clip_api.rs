@@ -3,7 +3,6 @@ use crate::core::history::ProjectAction;
 use crate::core::project::clip::{Clip, ClipSourceType, ResizeEdge};
 use crate::lock::{get_app_read, get_app_write, get_history_lock};
 use crate::shared::id::*;
-use std::sync::Arc;
 
 pub fn get_clip<T, F>(track_id: TrackId, clip_id: ClipId, mapper: F) -> anyhow::Result<T>
 where
@@ -20,7 +19,7 @@ where
         .get_clip(&clip_id)
         .ok_or_else(|| anyhow::anyhow!("Clip {:?} not found in track {:?}", clip_id, track_id))?;
 
-    Ok(mapper(clip.as_ref()))
+    Ok(mapper(&clip))
 }
 
 pub fn add_clip(
@@ -49,7 +48,7 @@ pub fn add_clip(
     Ok(clip)
 }
 
-pub fn delete_clip(track_id: TrackId, clip_id: ClipId) -> anyhow::Result<Arc<Clip>> {
+pub fn delete_clip(track_id: TrackId, clip_id: ClipId) -> anyhow::Result<Clip> {
     // 1. Mutate state
     let deleted_clip = {
         let mut app = get_app_write();
@@ -61,7 +60,7 @@ pub fn delete_clip(track_id: TrackId, clip_id: ClipId) -> anyhow::Result<Arc<Cli
         let mut history = get_history_lock();
         history.push(ProjectAction::DeleteClip {
             track_id,
-            clip: (*deleted_clip).clone(),
+            clip: deleted_clip.clone(),
         });
     }
 
@@ -188,10 +187,10 @@ pub fn batch_delete_clips(track_id: TrackId, clip_ids: Vec<ClipId>) -> anyhow::R
     {
         let mut app = get_app_write();
         for clip_id in clip_ids {
-            if let Ok(deleted_clip_arc) = app.delete_clip_from_track(track_id, clip_id) {
+            if let Ok(deleted_clip) = app.delete_clip_from_track(track_id, clip_id) {
                 deleted_actions.push(ProjectAction::DeleteClip {
                     track_id,
-                    clip: (*deleted_clip_arc).clone(),
+                    clip: deleted_clip.clone(),
                 });
             }
         }

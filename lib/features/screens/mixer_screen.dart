@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/features/audio_plugins/effects/effect_registry.dart';
-import 'package:karbeat/src/rust/api/mixer.dart';
+import 'package:karbeat/services/mixer_service.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' hide removeRouting;
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
+import 'package:karbeat/utils/result_type.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
@@ -28,14 +30,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   late final ScrollController _trackScrollController;
   late final ScrollController _busScrollController;
 
+  // Key to track the exact coordinates of the drawing canvas
+  final GlobalKey _overlayKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
 
-    _trackScrollController = ScrollController()
-      ..addListener(() => setState(() {}));
-    _busScrollController = ScrollController()
-      ..addListener(() => setState(() {}));
+    _trackScrollController = ScrollController();
+    _busScrollController = ScrollController();
 
     _splitController = MultiSplitViewController(
       areas: [
@@ -121,12 +124,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     DawContextAction(
                       title: 'Route to node...',
                       onTap: () {
-                        _showRoutingDialog(
-                          context,
-                          entry.id,
-                          mixerState,
-                          state,
-                        );
+                        _showRoutingDialog(context, entry, mixerState, state);
                       },
                     ),
                   ],
@@ -261,51 +259,73 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               key: _stripKeys.putIfAbsent('bus_${entry.id}', () => GlobalKey()),
               child: KeyedSubtree(
                 key: ValueKey('mixer_bus_${entry.id}'),
-                child: _ChannelStrip(
-                  entry: entry,
-                  onVolumeChanged: (value) {
-                    state.setBusChannelParam(
-                      busId: entry.id,
-                      param: UiMixerChannelParams.volume(value),
-                    );
-                  },
-                  onVolumeChangeStart: () {
-                    state.markParamTouched(entry.id, 'volume');
-                  },
-                  onVolumeChangeEnd: () {
-                    state.markParamReleased(entry.id, 'volume');
-                  },
-                  onPanChanged: (value) {
-                    state.setBusChannelParam(
-                      busId: entry.id,
-                      param: UiMixerChannelParams.pan(value),
-                    );
-                  },
-                  onPanChangeStart: () {
-                    state.markParamTouched(entry.id, 'pan');
-                  },
-                  onPanChangeEnd: () {
-                    state.markParamReleased(entry.id, 'pan');
-                  },
-                  onMuteToggled: () {
-                    state.setBusChannelParam(
-                      busId: entry.id,
-                      param: UiMixerChannelParams.mute(!entry.channel.mute),
-                    );
-                  },
-                  onSoloToggled: () {
-                    state.setBusChannelParam(
-                      busId: entry.id,
-                      param: UiMixerChannelParams.solo(!entry.channel.solo),
-                    );
-                  },
-                  isSelected: _selectedChannelId == entry.id && _isSelectedBus,
-                  onTap: () {
-                    setState(() {
-                      _selectedChannelId = entry.id;
-                      _isSelectedBus = true;
-                    });
-                  },
+                child: ContextMenuWrapper(
+                  title: 'Bus ${entry.id}',
+                  header: Column(children: [Text(entry.name)]),
+                  actions: [
+                    DawContextAction(
+                      title: 'Route to node...',
+                      icon: Icons.account_tree,
+                      onTap: () {
+                        _showRoutingDialog(context, entry, mixerState, state);
+                      },
+                    ),
+                    DawContextAction(
+                      title: 'Delete Bus',
+                      icon: Icons.delete,
+                      isDestructive: true,
+                      onTap: () {
+                        removeBus(state, busId: entry.id);
+                      },
+                    ),
+                  ],
+                  child: _ChannelStrip(
+                    entry: entry,
+                    onVolumeChanged: (value) {
+                      state.setBusChannelParam(
+                        busId: entry.id,
+                        param: UiMixerChannelParams.volume(value),
+                      );
+                    },
+                    onVolumeChangeStart: () {
+                      state.markParamTouched(entry.id, 'volume');
+                    },
+                    onVolumeChangeEnd: () {
+                      state.markParamReleased(entry.id, 'volume');
+                    },
+                    onPanChanged: (value) {
+                      state.setBusChannelParam(
+                        busId: entry.id,
+                        param: UiMixerChannelParams.pan(value),
+                      );
+                    },
+                    onPanChangeStart: () {
+                      state.markParamTouched(entry.id, 'pan');
+                    },
+                    onPanChangeEnd: () {
+                      state.markParamReleased(entry.id, 'pan');
+                    },
+                    onMuteToggled: () {
+                      state.setBusChannelParam(
+                        busId: entry.id,
+                        param: UiMixerChannelParams.mute(!entry.channel.mute),
+                      );
+                    },
+                    onSoloToggled: () {
+                      state.setBusChannelParam(
+                        busId: entry.id,
+                        param: UiMixerChannelParams.solo(!entry.channel.solo),
+                      );
+                    },
+                    isSelected:
+                        _selectedChannelId == entry.id && _isSelectedBus,
+                    onTap: () {
+                      setState(() {
+                        _selectedChannelId = entry.id;
+                        _isSelectedBus = true;
+                      });
+                    },
+                  ),
                 ),
               ),
             );
@@ -317,82 +337,22 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
   void _showRoutingDialog(
     BuildContext context,
-    int trackId,
+    _ChannelEntry entry,
     UiMixerState mixerState,
-    dynamic state, // Using dynamic or your GlobalAppState type
+    GlobalAppState state, // Using dynamic or your GlobalAppState type
   ) {
+    final sourceNode = entry.isBus
+        ? mixer_api.UiRoutingNode.bus(entry.id)
+        : mixer_api.UiRoutingNode.track(entry.id);
+
     showDialog(
       context: context,
-      builder: (ctx) {
-        return SimpleDialog(
-          title: Text("Route Track $trackId To..."),
-          backgroundColor: Colors.grey.shade900,
-          titleTextStyle: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-          children: [
-            // Option to route to Master
-            SimpleDialogOption(
-              onPressed: () {
-                AppLogger.info("Routing track $trackId to Master");
-                // TODO: Call your state backend to update the routing graph
-                // e.g., state.routeTrackToMaster(trackId);
-                Navigator.pop(ctx);
-              },
-              child: const Row(
-                children: [
-                  Icon(Icons.hub, color: Colors.amber, size: 20),
-                  SizedBox(width: 12),
-                  Text("Master", style: TextStyle(color: Colors.white)),
-                ],
-              ),
-            ),
-
-            if (mixerState.buses.isNotEmpty) ...[
-              const Divider(color: Colors.white24),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: Text(
-                  "BUSES",
-                  style: TextStyle(
-                    color: Colors.white54,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              // Dynamically list all available buses
-              ...mixerState.buses.values.map((bus) {
-                return SimpleDialogOption(
-                  onPressed: () {
-                    AppLogger.info("Routing track $trackId to Bus ${bus.id}");
-                    // TODO: Call your state backend to update the routing graph
-                    // e.g., state.routeTrackToBus(trackId, bus.id);
-                    Navigator.pop(ctx);
-                  },
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.settings_input_component,
-                        color: Colors.cyanAccent,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        bus.name,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ],
-        );
-      },
+      builder: (ctx) => _RoutingDialog(
+        sourceNode: sourceNode,
+        sourceName: entry.name,
+        state: state,
+        mixerState: mixerState,
+      ),
     );
   }
 
@@ -406,103 +366,148 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
       body: Stack(
+        key: _overlayKey,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          Column(
             children: [
-              // === MultiSplitView replacing Tracks and Buses ===
               Expanded(
-                child: MultiSplitViewTheme(
-                  data: MultiSplitViewThemeData(
-                    dividerPainter: DividerPainters.grooved1(
-                      color: Colors.white10,
-                      highlightedColor: Colors.white70,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // === MultiSplitView replacing Tracks and Buses ===
+                    Expanded(
+                      child: MultiSplitViewTheme(
+                        data: MultiSplitViewThemeData(
+                          dividerPainter: DividerPainters.grooved1(
+                            color: Colors.white10,
+                            highlightedColor: Colors.white70,
+                          ),
+                        ),
+                        child: MultiSplitView(controller: _splitController),
+                      ),
                     ),
-                  ),
-                  child: MultiSplitView(controller: _splitController),
+
+                    // === Divider ===
+                    Container(width: 1, color: Colors.white10),
+
+                    // === Master Channel (fixed) ===
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 12,
+                      ),
+                      child: _ChannelStrip(
+                        entry: _ChannelEntry(
+                          id: -1,
+                          name: 'Master',
+                          channel: mixerState.masterBus,
+                          isMaster: true,
+                        ),
+                        onVolumeChanged: (value) {
+                          state.setMasterBusParam(
+                            param: UiMixerChannelParams.volume(value),
+                          );
+                        },
+                        onVolumeChangeStart: () {
+                          state.markParamTouched(4294967295, 'volume');
+                        },
+                        onVolumeChangeEnd: () {
+                          state.markParamReleased(4294967295, 'volume');
+                        },
+                        onPanChanged: (value) {
+                          state.setMasterBusParam(
+                            param: UiMixerChannelParams.pan(value),
+                          );
+                        },
+                        onPanChangeStart: () {
+                          state.markParamTouched(4294967295, 'pan');
+                        },
+                        onPanChangeEnd: () {
+                          state.markParamReleased(4294967295, 'pan');
+                        },
+                        onMuteToggled: () {
+                          state.setMasterBusParam(
+                            param: UiMixerChannelParams.mute(
+                              !mixerState.masterBus.mute,
+                            ),
+                          );
+                        },
+                        onSoloToggled: () {
+                          state.setMasterBusParam(
+                            param: UiMixerChannelParams.solo(
+                              !mixerState.masterBus.solo,
+                            ),
+                          );
+                        },
+                        isSelected: _selectedChannelId == -1 && !_isSelectedBus,
+                        onTap: () {
+                          setState(() {
+                            _selectedChannelId = -1;
+                            _isSelectedBus = false;
+                          });
+                        },
+                      ),
+                    ),
+
+                    // === Divider ===
+                    Container(width: 1, color: Colors.white10),
+
+                    // === Effect Rack Panel ===
+                    _buildEffectRackPanel(context, mixerState),
+                  ],
                 ),
               ),
-
-              // === Divider ===
-              Container(width: 1, color: Colors.white10),
-
-              // === Master Channel (fixed) ===
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: 12,
-                ),
-                child: _ChannelStrip(
-                  entry: _ChannelEntry(
-                    id: -1,
-                    name: 'Master',
-                    channel: mixerState.masterBus,
-                    isMaster: true,
+              // === ROUTING CABLE SPACE (The Trench) ===
+              Container(
+                height: 160,
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0C0C0F), // Darker trench
+                  border: Border(
+                    top: BorderSide(color: Colors.black, width: 4),
                   ),
-                  onVolumeChanged: (value) {
-                    state.setMasterBusParam(
-                      param: UiMixerChannelParams.volume(value),
-                    );
-                  },
-                  onVolumeChangeStart: () {
-                    state.markParamTouched(4294967295, 'volume');
-                  },
-                  onVolumeChangeEnd: () {
-                    state.markParamReleased(4294967295, 'volume');
-                  },
-                  onPanChanged: (value) {
-                    state.setMasterBusParam(
-                      param: UiMixerChannelParams.pan(value),
-                    );
-                  },
-                  onPanChangeStart: () {
-                    state.markParamTouched(4294967295, 'pan');
-                  },
-                  onPanChangeEnd: () {
-                    state.markParamReleased(4294967295, 'pan');
-                  },
-                  onMuteToggled: () {
-                    state.setMasterBusParam(
-                      param: UiMixerChannelParams.mute(
-                        !mixerState.masterBus.mute,
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: 12,
+                      left: 16,
+                      child: Text(
+                        "ROUTING MATRIX",
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(40),
+                          fontSize: 12,
+                          letterSpacing: 3,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    );
-                  },
-                  onSoloToggled: () {
-                    state.setMasterBusParam(
-                      param: UiMixerChannelParams.solo(
-                        !mixerState.masterBus.solo,
-                      ),
-                    );
-                  },
-                  isSelected: _selectedChannelId == -1 && !_isSelectedBus,
-                  onTap: () {
-                    setState(() {
-                      _selectedChannelId = -1;
-                      _isSelectedBus = false;
-                    });
-                  },
+                    ),
+                  ],
                 ),
               ),
-
-              // === Divider ===
-              Container(width: 1, color: Colors.white10),
-
-              // === Effect Rack Panel ===
-              _buildEffectRackPanel(context, mixerState),
             ],
           ),
 
           // === Routing Cables Overlay ===
           Positioned.fill(
             child: IgnorePointer(
-              child: CustomPaint(
-                painter: _RoutingPainter(
-                  routing: mixerState.routing,
-                  stripKeys: _stripKeys,
-                  selectedChannelId: _selectedChannelId,
-                  isSelectedBus: _isSelectedBus,
-                ),
+              child: AnimatedBuilder(
+                animation: Listenable.merge([
+                  _trackScrollController,
+                  _busScrollController,
+                  _splitController,
+                ]),
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: _RoutingPainter(
+                      routing: mixerState.routing,
+                      stripKeys: _stripKeys,
+                      selectedChannelId: _selectedChannelId,
+                      isSelectedBus: _isSelectedBus,
+                      overlayKey: _overlayKey,
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -1311,18 +1316,19 @@ class _ToggleButton extends StatelessWidget {
   }
 }
 
-// Place this anywhere at the bottom of the file
 class _RoutingPainter extends CustomPainter {
   final List<mixer_api.UiRoutingConnection> routing;
   final Map<String, GlobalKey> stripKeys;
   final int? selectedChannelId;
   final bool isSelectedBus;
+  final GlobalKey overlayKey;
 
   _RoutingPainter({
     required this.routing,
     required this.stripKeys,
     required this.selectedChannelId,
     required this.isSelectedBus,
+    required this.overlayKey,
   });
 
   String? _getNodeKeyString(mixer_api.UiRoutingNode node) {
@@ -1334,6 +1340,11 @@ class _RoutingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final overlayContext = overlayKey.currentContext;
+    if (overlayContext == null) return;
+    final overlayBox = overlayContext.findRenderObject() as RenderBox?;
+    if (overlayBox == null) return;
+
     final activePaint = Paint()
       ..color = Colors.cyanAccent.withAlpha(200)
       ..strokeWidth = 3
@@ -1343,6 +1354,10 @@ class _RoutingPainter extends CustomPainter {
       ..color = Colors.white.withAlpha(20)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
+
+    final plugPaint = Paint()
+      ..color = Colors.grey.shade800
+      ..style = PaintingStyle.fill;
 
     for (final conn in routing) {
       final srcStr = _getNodeKeyString(conn.source);
@@ -1360,18 +1375,35 @@ class _RoutingPainter extends CustomPainter {
 
       if (srcBox == null || dstBox == null) continue;
 
-      // Ensure boxes are actually attached to the screen coordinates
-      final srcPos = srcBox.localToGlobal(Offset.zero);
-      final dstPos = dstBox.localToGlobal(Offset.zero);
+      final srcPos = srcBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+      final dstPos = dstBox.localToGlobal(Offset.zero, ancestor: overlayBox);
 
-      // Start from bottom-center of source, go to bottom-center of destination
+      // Start perfectly at the bottom center of the UI element
       final start = Offset(
         srcPos.dx + srcBox.size.width / 2,
-        srcPos.dy + srcBox.size.height - 10,
+        srcPos.dy + srcBox.size.height,
       );
       final end = Offset(
         dstPos.dx + dstBox.size.width / 2,
-        dstPos.dy + dstBox.size.height - 10,
+        dstPos.dy + dstBox.size.height,
+      );
+
+      // Draw little physical "plugs" extending down from the strip
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(start.dx, start.dy + 4),
+          width: 8,
+          height: 8,
+        ),
+        plugPaint,
+      );
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(end.dx, end.dy + 4),
+          width: 8,
+          height: 8,
+        ),
+        plugPaint,
       );
 
       bool isActive = false;
@@ -1387,35 +1419,358 @@ class _RoutingPainter extends CustomPainter {
       }
 
       final path = Path();
-      path.moveTo(start.dx, start.dy);
+      // Start the actual curved wire from the tip of the plug
+      final wireStart = Offset(start.dx, start.dy + 8);
+      final wireEnd = Offset(end.dx, end.dy + 8);
 
-      // Draw a hanging curve under the tracks to visualize the cable
-      final distance = (end.dx - start.dx).abs();
-      final drop = 40.0 + (distance * 0.1).clamp(0.0, 80.0);
+      path.moveTo(wireStart.dx, wireStart.dy);
 
-      final controlPoint1 = Offset(start.dx, start.dy + drop);
-      final controlPoint2 = Offset(end.dx, end.dy + drop);
+      // CURVE DOWNWARD: Add the drop value
+      final distance = (wireEnd.dx - wireStart.dx).abs();
+      // The wider the cable spans horizontally, the deeper it hangs!
+      final drop = 50.0 + (distance * 0.15).clamp(0.0, 100.0);
+
+      final controlPoint1 = Offset(wireStart.dx, wireStart.dy + drop); // + drop
+      final controlPoint2 = Offset(wireEnd.dx, wireEnd.dy + drop); // + drop
+
       path.cubicTo(
         controlPoint1.dx,
         controlPoint1.dy,
         controlPoint2.dx,
         controlPoint2.dy,
-        end.dx,
-        end.dy,
+        wireEnd.dx,
+        wireEnd.dy,
       );
 
       canvas.drawPath(path, isActive ? activePaint : inactivePaint);
 
-      // Draw a glowing node point at the destination to indicate flow direction
+      // Arrow indicator for signal direction
       if (isActive) {
         final arrowPaint = Paint()
           ..color = Colors.cyanAccent.withAlpha(200)
           ..style = PaintingStyle.fill;
-        canvas.drawCircle(end, 4, arrowPaint);
+        canvas.drawCircle(Offset(wireEnd.dx, wireEnd.dy + 2), 4, arrowPaint);
       }
     }
   }
 
   @override
   bool shouldRepaint(covariant _RoutingPainter oldDelegate) => true;
+}
+
+// Place this at the bottom of your file with _RoutingPainter
+class _RoutingDialog extends StatefulWidget {
+  final mixer_api.UiRoutingNode sourceNode;
+  final String sourceName;
+  final GlobalAppState state;
+  final mixer_api.UiMixerState mixerState;
+
+  const _RoutingDialog({
+    required this.sourceNode,
+    required this.sourceName,
+    required this.state,
+    required this.mixerState,
+  });
+
+  @override
+  State<_RoutingDialog> createState() => _RoutingDialogState();
+}
+
+class _RoutingDialogState extends State<_RoutingDialog> {
+  late List<mixer_api.UiRoutingConnection> currentRoutes;
+  mixer_api.UiRoutingConnection? mainRoute;
+  List<mixer_api.UiRoutingConnection> sends = [];
+
+  // Local state for smooth slider dragging before pushing to backend
+  final Map<String, double> _localSendLevels = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshData();
+  }
+
+  void _refreshData() {
+    currentRoutes = getMixerChannelDest(
+      widget.state,
+      source: widget.sourceNode,
+    );
+    mainRoute = currentRoutes.where((r) => !r.isSend).firstOrNull;
+    sends = currentRoutes.where((r) => r.isSend).toList();
+
+    for (final s in sends) {
+      final key = _getNodeKeyStr(s.destination);
+      if (key != null) {
+        _localSendLevels[key] = s.sendLevel;
+      }
+    }
+  }
+
+  String? _getNodeKeyStr(mixer_api.UiRoutingNode node) {
+    if (node is mixer_api.UiRoutingNode_Track) return 'track_${node.field0}';
+    if (node is mixer_api.UiRoutingNode_Bus) return 'bus_${node.field0}';
+    if (node is mixer_api.UiRoutingNode_Master) return 'master';
+    return null;
+  }
+
+  bool _isSameNode(mixer_api.UiRoutingNode a, mixer_api.UiRoutingNode b) {
+    return _getNodeKeyStr(a) == _getNodeKeyStr(b);
+  }
+
+  /// Helper to safely handle FFI results and show snackbars on cycle errors
+  void _handleRoutingResult(Result<void> result) {
+    if (result.isErr() && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text((result as Error<void>).toErrorMessage()),
+          backgroundColor: Colors.redAccent.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setMainOutput(mixer_api.UiRoutingNode newDest) async {
+    final result = await updateRoutingCall(
+      widget.state,
+      src: widget.sourceNode,
+      dest: newDest,
+      sendLvl: 1.0,
+      isSend: false,
+    );
+
+    _handleRoutingResult(result);
+
+    if (mounted) {
+      setState(() {
+        _refreshData();
+      });
+    }
+  }
+
+  Future<void> _toggleSend(mixer_api.UiRoutingNode dest, bool enable) async {
+    if (enable) {
+      final result = await updateRoutingCall(
+        widget.state,
+        src: widget.sourceNode,
+        dest: dest,
+        sendLvl: 0.5, // Default start level (50%)
+        isSend: true,
+      );
+      _handleRoutingResult(result);
+    } else {
+      // We still use removeRouting here because updateRoutingCall only UPSERTS
+      final result = await removeRouting(
+        widget.state,
+        source: widget.sourceNode,
+        destination: dest,
+        isSend: true,
+      );
+      _handleRoutingResult(result);
+    }
+
+    if (mounted) {
+      setState(() {
+        _refreshData();
+      });
+    }
+  }
+
+  Future<void> _updateSendLevel(
+    mixer_api.UiRoutingNode dest,
+    double level,
+  ) async {
+    final result = await updateRoutingCall(
+      widget.state,
+      src: widget.sourceNode,
+      dest: dest,
+      sendLvl: level,
+      isSend: true,
+    );
+
+    _handleRoutingResult(result);
+
+    if (mounted) {
+      setState(() {
+        _refreshData();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. Gather Valid Main Outputs (Master + All Buses except self)
+    final List<MapEntry<String, mixer_api.UiRoutingNode>> availableMainOutputs =
+        [const MapEntry("Master", mixer_api.UiRoutingNode.master())];
+    for (final bus in widget.mixerState.buses.values) {
+      final node = mixer_api.UiRoutingNode.bus(bus.id);
+      if (!_isSameNode(widget.sourceNode, node)) {
+        availableMainOutputs.add(MapEntry(bus.name, node));
+      }
+    }
+
+    // 2. Gather Valid Sends (All Buses except self AND except current Main Output)
+    final List<MapEntry<String, mixer_api.UiRoutingNode>> availableSends = [];
+    for (final bus in widget.mixerState.buses.values) {
+      final node = mixer_api.UiRoutingNode.bus(bus.id);
+      if (!_isSameNode(widget.sourceNode, node) &&
+          (mainRoute == null || !_isSameNode(mainRoute!.destination, node))) {
+        availableSends.add(MapEntry(bus.name, node));
+      }
+    }
+
+    return AlertDialog(
+      title: Text("Routing: ${widget.sourceName}"),
+      backgroundColor: Colors.grey.shade900,
+      titleTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- MAIN OUTPUT ---
+            const Text(
+              "MAIN OUTPUT (Pre-Fader)",
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: mainRoute != null
+                      ? _getNodeKeyStr(mainRoute!.destination)
+                      : null,
+                  isExpanded: true,
+                  dropdownColor: Colors.black,
+                  style: const TextStyle(color: Colors.cyanAccent),
+                  items: availableMainOutputs.map((entry) {
+                    return DropdownMenuItem<String>(
+                      value: _getNodeKeyStr(entry.value),
+                      child: Text(entry.key),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val == null) return;
+                    final node = availableMainOutputs
+                        .firstWhere((e) => _getNodeKeyStr(e.value) == val)
+                        .value;
+                    _setMainOutput(node);
+                  },
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // --- SENDS ---
+            const Text(
+              "SENDS (Post-Fader)",
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (availableSends.isEmpty)
+              const Text(
+                "No available buses to send to.",
+                style: TextStyle(
+                  color: Colors.white24,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ...availableSends.map((entry) {
+              final destKey = _getNodeKeyStr(entry.value)!;
+              final existingSend = sends
+                  .where((s) => _isSameNode(s.destination, entry.value))
+                  .firstOrNull;
+              final isEnabled = existingSend != null;
+              final level = _localSendLevels[destKey] ?? 0.0;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Row(
+                  children: [
+                    Switch(
+                      value: isEnabled,
+                      activeThumbColor: Colors.cyanAccent,
+                      onChanged: (v) => _toggleSend(entry.value, v),
+                    ),
+                    SizedBox(
+                      width: 80,
+                      child: Text(
+                        entry.key,
+                        style: TextStyle(
+                          color: isEnabled ? Colors.white : Colors.white38,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      child: SliderTheme(
+                        data: const SliderThemeData(
+                          activeTrackColor: Colors.cyanAccent,
+                          inactiveTrackColor: Colors.white10,
+                          thumbColor: Colors.cyanAccent,
+                          trackHeight: 2,
+                          thumbShape: RoundSliderThumbShape(
+                            enabledThumbRadius: 6,
+                          ),
+                        ),
+                        child: Slider(
+                          value: level.clamp(0.0, 1.0),
+                          onChanged: isEnabled
+                              ? (v) {
+                                  setState(() {
+                                    _localSendLevels[destKey] = v;
+                                  });
+                                }
+                              : null,
+                          onChangeEnd: isEnabled
+                              ? (v) => _updateSendLevel(entry.value, v)
+                              : null,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 40,
+                      child: Text(
+                        "${(level * 100).toInt()}%",
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: isEnabled ? Colors.white54 : Colors.white24,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Close", style: TextStyle(color: Colors.white70)),
+        ),
+      ],
+    );
+  }
 }

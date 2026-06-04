@@ -24,7 +24,7 @@ pub struct AudioTrack {
     pub name: String,
     pub color: Color,
     pub track_type: TrackType,
-    pub clips: BTreeSet<Arc<Clip>>,
+    pub clips: BTreeSet<Clip>,
     pub max_sample_index: u32,
     pub generator: Option<GeneratorInstance>,
     /// ======================================
@@ -94,11 +94,11 @@ impl AudioTrack {
         self.order_idx = new_idx;
     }
 
-    pub fn clips(&self) -> &BTreeSet<Arc<Clip>> {
+    pub fn clips(&self) -> &BTreeSet<Clip> {
         return &self.clips;
     }
 
-    pub fn clips_to_vec(&self) -> Vec<Arc<Clip>> {
+    pub fn clips_to_vec(&self) -> Vec<Clip> {
         self.clips.iter().cloned().collect()
     }
 
@@ -106,7 +106,7 @@ impl AudioTrack {
         return &self.track_type;
     }
 
-    pub fn get_clip(&self, clip_id: &ClipId) -> Option<Arc<Clip>> {
+    pub fn get_clip(&self, clip_id: &ClipId) -> Option<Clip> {
         self.clips.iter().find(|c| c.id == *clip_id).cloned()
     }
 
@@ -126,12 +126,12 @@ impl AudioTrack {
             let clip_end = clip.time.start_time_raw() + clip.time.loop_length_raw();
 
             // 1. Wrap in Arc immediately
-            let clip_arc = Arc::new(clip);
+            // let clip_arc = Arc::new(clip);
 
             // 2. COW: Get mutable access to the vector
             let clips_set = &mut self.clips;
 
-            clips_set.insert(clip_arc);
+            clips_set.insert(clip);
 
             // update the max sample index
             if clip_end > self.max_sample_index as u64 {
@@ -148,7 +148,7 @@ impl AudioTrack {
     }
 
     /// Remove the clip, change max_index_sample if the deleted clip are the latest end sample index
-    pub fn remove_clip(&mut self, clip_id: &ClipId) -> anyhow::Result<Arc<Clip>> {
+    pub fn remove_clip(&mut self, clip_id: &ClipId) -> anyhow::Result<Clip> {
         let clips_set = &mut self.clips;
 
         let initial_len = clips_set.len();
@@ -194,7 +194,7 @@ impl AudioTrack {
     }
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
-    pub fn add_clips_bulk(&mut self, new_clips: &[Arc<Clip>]) {
+    pub fn add_clips_bulk(&mut self, new_clips: &[Clip]) {
         let clips_vec = &mut self.clips;
         clips_vec.extend(new_clips.iter().cloned());
 
@@ -220,19 +220,18 @@ impl AudioTrack {
         cut_point: u64,
         clip_counter: &mut u32,
     ) -> anyhow::Result<(Clip, Clip)> {
-        let clip_arc = self.get_clip(clip_id).ok_or_else(|| {
+        let clip = self.get_clip(clip_id).ok_or_else(|| {
             anyhow::anyhow!("Clip ID {:?} not found in track {:?}", clip_id, self.id)
         })?;
 
-        let clip_start = clip_arc.time.start_time_raw();
-        let clip_length = clip_arc.time.loop_length_raw();
-        let clip_offset = clip_arc.time.offset_start_raw();
+        let clip_start = clip.time.start_time_raw();
+        let clip_length = clip.time.loop_length_raw();
+        let clip_offset = clip.time.offset_start_raw();
 
         if cut_point > clip_start && cut_point < clip_start + clip_length {
             // Remove using the exact Arc reference
-            self.clips.remove(&clip_arc);
+            self.clips.remove(&clip);
 
-            let clip = clip_arc.as_ref();
             let first_length = cut_point - clip_start;
             let second_length = clip_length - first_length;
             let second_offset = clip_offset + first_length;
@@ -244,7 +243,7 @@ impl AudioTrack {
                 ClipTimeUnit::Samples { loop_length, .. } => *loop_length = first_length,
                 ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = first_length as u32,
             }
-            self.clips.insert(Arc::new(left_clip.clone()));
+            self.clips.insert(left_clip.clone());
 
             // Create right clip
             let mut right_clip = clip.clone();
@@ -269,7 +268,7 @@ impl AudioTrack {
                     *offset_start = second_offset as u32;
                 }
             }
-            self.clips.insert(Arc::new(right_clip.clone()));
+            self.clips.insert(right_clip.clone());
 
             log::info!("Successfully cut the clip");
             Ok((left_clip, right_clip))
@@ -302,8 +301,8 @@ impl ApplicationState {
         // Re-apply sequential indices to ALL tracks
         for (i, t) in tracks.iter().enumerate() {
             if t.order_idx != i {
-                if let Some(track_arc) = self.tracks.get_mut(&t.id) {
-                    Arc::make_mut(track_arc).set_order_idx(i);
+                if let Some(track) = self.tracks.get_mut(&t.id) {
+                    track.set_order_idx(i);
                 }
             }
         }
@@ -320,13 +319,13 @@ impl ApplicationState {
         for (new_idx, track) in tracks_sorted.into_iter().enumerate() {
             if track.order_idx != new_idx {
                 if let Some(t) = self.tracks.get_mut(&track.id) {
-                    Arc::make_mut(t).set_order_idx(new_idx);
+                    t.set_order_idx(new_idx);
                 }
             }
         }
     }
 
-    pub fn add_new_audio_track(&mut self) -> Arc<AudioTrack> {
+    pub fn add_new_audio_track(&mut self) -> AudioTrack {
         let new_track_id = TrackId::next(&mut self.track_counter);
         let track_order = self
             .tracks
@@ -343,22 +342,22 @@ impl ApplicationState {
             ..Default::default()
         };
 
-        let track_arc = Arc::new(new_track);
-        self.tracks.insert(new_track_id, track_arc.clone());
+        // let track_arc = Arc::new(new_track);
+        self.tracks.insert(new_track_id, new_track.clone());
 
         // Create a corresponding mixer channel and default routing
         self.mixer
             .channels
             .insert(new_track_id, Arc::new(TrackMixerChannel::default()));
         self.mixer.add_track_default_routing(new_track_id);
-        track_arc
+        new_track
     }
 
     /// Add a new MIDI track with a generator by its registry ID.
     pub fn add_new_midi_track_with_generator_id(
         &mut self,
         registry_id: u32,
-    ) -> anyhow::Result<Arc<AudioTrack>> {
+    ) -> anyhow::Result<AudioTrack> {
         let gen_id = GeneratorId::next(&mut self.generator_counter);
         let track_id = TrackId::next(&mut self.track_counter);
 
@@ -395,7 +394,7 @@ impl ApplicationState {
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
         };
         self.generator_pool
-            .insert(gen_id, Arc::new(generator.clone()));
+            .insert(gen_id, generator.clone());
 
         let track_order = self
             .tracks
@@ -414,8 +413,8 @@ impl ApplicationState {
             ..Default::default()
         };
 
-        let track_arc = Arc::new(new_track);
-        self.tracks.insert(track_id, track_arc.clone());
+        // let track_arc = Arc::new(new_track);
+        self.tracks.insert(track_id, new_track.clone());
 
         // Create a corresponding mixer channel and default routing
         self.mixer
@@ -428,7 +427,7 @@ impl ApplicationState {
             generator_name,
             registry_id
         );
-        Ok(track_arc)
+        Ok(new_track)
     }
 
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
@@ -467,7 +466,7 @@ impl ApplicationState {
     }
 
     // Get the track ordered by index
-    pub fn get_track_ordered_by_index(&self) -> Box<[Arc<AudioTrack>]> {
+    pub fn get_track_ordered_by_index(&self) -> Box<[AudioTrack]> {
         self.tracks
             .values()
             .sorted_by_key(|t| t.order_idx)
