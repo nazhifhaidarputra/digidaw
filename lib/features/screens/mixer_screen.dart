@@ -4,11 +4,12 @@ import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/features/audio_plugins/effects/effect_registry.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
-import 'package:karbeat/src/rust/api/mixer.dart' as plugin_api;
+import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
+import 'package:karbeat/utils/result_type.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
@@ -24,10 +25,18 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   bool _isSelectedBus = false;
 
   late final MultiSplitViewController _splitController;
+  final Map<String, GlobalKey> _stripKeys = {};
+  late final ScrollController _trackScrollController;
+  late final ScrollController _busScrollController;
 
   @override
   void initState() {
     super.initState();
+
+    _trackScrollController = ScrollController()
+      ..addListener(() => setState(() {}));
+    _busScrollController = ScrollController()
+      ..addListener(() => setState(() {}));
 
     _splitController = MultiSplitViewController(
       areas: [
@@ -47,6 +56,13 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       final state = ref.read(globalStateProvider);
       await state.syncMixerState();
     });
+  }
+
+  @override
+  void dispose() {
+    _trackScrollController.dispose();
+    _busScrollController.dispose();
+    super.dispose();
   }
 
   Widget _buildTracksArea(BuildContext context, Area area) {
@@ -86,72 +102,84 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         }
 
         return ListView.builder(
+          controller: _trackScrollController,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           itemCount: channelEntries.length,
           itemBuilder: (context, index) {
             final entry = channelEntries[index];
-            return KeyedSubtree(
-              key: ValueKey('mixer_track_${entry.id}'),
-              child: ContextMenuWrapper(
-                title: 'Track ${entry.id}',
-                header: Column(children: [Text(entry.name)]),
-                actions: [
-                  DawContextAction(
-                    title: 'Route to node...',
+            return Container(
+              key: _stripKeys.putIfAbsent(
+                'track_${entry.id}',
+                () => GlobalKey(),
+              ),
+              child: KeyedSubtree(
+                key: ValueKey('mixer_track_${entry.id}'),
+                child: ContextMenuWrapper(
+                  title: 'Track ${entry.id}',
+                  header: Column(children: [Text(entry.name)]),
+                  actions: [
+                    DawContextAction(
+                      title: 'Route to node...',
+                      onTap: () {
+                        _showRoutingDialog(
+                          context,
+                          entry.id,
+                          mixerState,
+                          state,
+                        );
+                      },
+                    ),
+                  ],
+                  child: _ChannelStrip(
+                    entry: entry,
+                    onVolumeChanged: (value) {
+                      state.setMixerChannelParam(
+                        trackId: entry.id,
+                        param: UiMixerChannelParams.volume(value),
+                      );
+                    },
+                    onVolumeChangeStart: () {
+                      state.markParamTouched(entry.id, 'volume');
+                    },
+                    onVolumeChangeEnd: () {
+                      state.markParamReleased(entry.id, 'volume');
+                    },
+                    onPanChanged: (value) {
+                      state.setMixerChannelParam(
+                        trackId: entry.id,
+                        param: UiMixerChannelParams.pan(value),
+                      );
+                    },
+                    onPanChangeStart: () {
+                      state.markParamTouched(entry.id, 'pan');
+                    },
+                    onPanChangeEnd: () {
+                      state.markParamReleased(entry.id, 'pan');
+                    },
+                    onMuteToggled: () {
+                      state.setMixerChannelParam(
+                        trackId: entry.id,
+                        param: UiMixerChannelParams.mute(!entry.channel.mute),
+                      );
+                    },
+                    onSoloToggled: () {
+                      state.setMixerChannelParam(
+                        trackId: entry.id,
+                        param: UiMixerChannelParams.solo(!entry.channel.solo),
+                      );
+                    },
+                    isSelected:
+                        _selectedChannelId == entry.id &&
+                        !_isSelectedBus &&
+                        !entry.isMaster,
                     onTap: () {
-                      _showRoutingDialog(context, entry.id, mixerState, state);
+                      setState(() {
+                        _selectedChannelId = entry.id;
+                        _isSelectedBus = false;
+                      });
                     },
                   ),
-                ],
-                child: _ChannelStrip(
-                  entry: entry,
-                  onVolumeChanged: (value) {
-                    state.setMixerChannelParam(
-                      trackId: entry.id,
-                      param: UiMixerChannelParams.volume(value),
-                    );
-                  },
-                  onVolumeChangeStart: () {
-                    state.markParamTouched(entry.id, 'volume');
-                  },
-                  onVolumeChangeEnd: () {
-                    state.markParamReleased(entry.id, 'volume');
-                  },
-                  onPanChanged: (value) {
-                    state.setMixerChannelParam(
-                      trackId: entry.id,
-                      param: UiMixerChannelParams.pan(value),
-                    );
-                  },
-                  onPanChangeStart: () {
-                    state.markParamTouched(entry.id, 'pan');
-                  },
-                  onPanChangeEnd: () {
-                    state.markParamReleased(entry.id, 'pan');
-                  },
-                  onMuteToggled: () {
-                    state.setMixerChannelParam(
-                      trackId: entry.id,
-                      param: UiMixerChannelParams.mute(!entry.channel.mute),
-                    );
-                  },
-                  onSoloToggled: () {
-                    state.setMixerChannelParam(
-                      trackId: entry.id,
-                      param: UiMixerChannelParams.solo(!entry.channel.solo),
-                    );
-                  },
-                  isSelected:
-                      _selectedChannelId == entry.id &&
-                      !_isSelectedBus &&
-                      !entry.isMaster,
-                  onTap: () {
-                    setState(() {
-                      _selectedChannelId = entry.id;
-                      _isSelectedBus = false;
-                    });
-                  },
                 ),
               ),
             );
@@ -183,6 +211,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         }
 
         return ListView.builder(
+          controller: _busScrollController,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           itemCount: busEntries.length + 1,
@@ -229,53 +258,56 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
             }
 
             final entry = busEntries[index];
-            return KeyedSubtree(
-              key: ValueKey('mixer_bus_${entry.id}'),
-              child: _ChannelStrip(
-                entry: entry,
-                onVolumeChanged: (value) {
-                  state.setBusChannelParam(
-                    busId: entry.id,
-                    param: UiMixerChannelParams.volume(value),
-                  );
-                },
-                onVolumeChangeStart: () {
-                  state.markParamTouched(entry.id, 'volume');
-                },
-                onVolumeChangeEnd: () {
-                  state.markParamReleased(entry.id, 'volume');
-                },
-                onPanChanged: (value) {
-                  state.setBusChannelParam(
-                    busId: entry.id,
-                    param: UiMixerChannelParams.pan(value),
-                  );
-                },
-                onPanChangeStart: () {
-                  state.markParamTouched(entry.id, 'pan');
-                },
-                onPanChangeEnd: () {
-                  state.markParamReleased(entry.id, 'pan');
-                },
-                onMuteToggled: () {
-                  state.setBusChannelParam(
-                    busId: entry.id,
-                    param: UiMixerChannelParams.mute(!entry.channel.mute),
-                  );
-                },
-                onSoloToggled: () {
-                  state.setBusChannelParam(
-                    busId: entry.id,
-                    param: UiMixerChannelParams.solo(!entry.channel.solo),
-                  );
-                },
-                isSelected: _selectedChannelId == entry.id && _isSelectedBus,
-                onTap: () {
-                  setState(() {
-                    _selectedChannelId = entry.id;
-                    _isSelectedBus = true;
-                  });
-                },
+            return Container(
+              key: _stripKeys.putIfAbsent('bus_${entry.id}', () => GlobalKey()),
+              child: KeyedSubtree(
+                key: ValueKey('mixer_bus_${entry.id}'),
+                child: _ChannelStrip(
+                  entry: entry,
+                  onVolumeChanged: (value) {
+                    state.setBusChannelParam(
+                      busId: entry.id,
+                      param: UiMixerChannelParams.volume(value),
+                    );
+                  },
+                  onVolumeChangeStart: () {
+                    state.markParamTouched(entry.id, 'volume');
+                  },
+                  onVolumeChangeEnd: () {
+                    state.markParamReleased(entry.id, 'volume');
+                  },
+                  onPanChanged: (value) {
+                    state.setBusChannelParam(
+                      busId: entry.id,
+                      param: UiMixerChannelParams.pan(value),
+                    );
+                  },
+                  onPanChangeStart: () {
+                    state.markParamTouched(entry.id, 'pan');
+                  },
+                  onPanChangeEnd: () {
+                    state.markParamReleased(entry.id, 'pan');
+                  },
+                  onMuteToggled: () {
+                    state.setBusChannelParam(
+                      busId: entry.id,
+                      param: UiMixerChannelParams.mute(!entry.channel.mute),
+                    );
+                  },
+                  onSoloToggled: () {
+                    state.setBusChannelParam(
+                      busId: entry.id,
+                      param: UiMixerChannelParams.solo(!entry.channel.solo),
+                    );
+                  },
+                  isSelected: _selectedChannelId == entry.id && _isSelectedBus,
+                  onTap: () {
+                    setState(() {
+                      _selectedChannelId = entry.id;
+                      _isSelectedBus = true;
+                    });
+                  },
+                ),
               ),
             );
           },
@@ -374,80 +406,107 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Stack(
         children: [
-          // === MultiSplitView replacing Tracks and Buses ===
-          Expanded(
-            child: MultiSplitViewTheme(
-              data: MultiSplitViewThemeData(
-                dividerPainter: DividerPainters.grooved1(
-                  color: Colors.white10,
-                  highlightedColor: Colors.white70,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // === MultiSplitView replacing Tracks and Buses ===
+              Expanded(
+                child: MultiSplitViewTheme(
+                  data: MultiSplitViewThemeData(
+                    dividerPainter: DividerPainters.grooved1(
+                      color: Colors.white10,
+                      highlightedColor: Colors.white70,
+                    ),
+                  ),
+                  child: MultiSplitView(controller: _splitController),
                 ),
               ),
-              child: MultiSplitView(controller: _splitController),
-            ),
-          ),
 
-          // === Divider ===
-          Container(width: 1, color: Colors.white10),
+              // === Divider ===
+              Container(width: 1, color: Colors.white10),
 
-          // === Master Channel (fixed) ===
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-            child: _ChannelStrip(
-              entry: _ChannelEntry(
-                id: -1,
-                name: 'Master',
-                channel: mixerState.masterBus,
-                isMaster: true,
+              // === Master Channel (fixed) ===
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 12,
+                ),
+                child: _ChannelStrip(
+                  entry: _ChannelEntry(
+                    id: -1,
+                    name: 'Master',
+                    channel: mixerState.masterBus,
+                    isMaster: true,
+                  ),
+                  onVolumeChanged: (value) {
+                    state.setMasterBusParam(
+                      param: UiMixerChannelParams.volume(value),
+                    );
+                  },
+                  onVolumeChangeStart: () {
+                    state.markParamTouched(4294967295, 'volume');
+                  },
+                  onVolumeChangeEnd: () {
+                    state.markParamReleased(4294967295, 'volume');
+                  },
+                  onPanChanged: (value) {
+                    state.setMasterBusParam(
+                      param: UiMixerChannelParams.pan(value),
+                    );
+                  },
+                  onPanChangeStart: () {
+                    state.markParamTouched(4294967295, 'pan');
+                  },
+                  onPanChangeEnd: () {
+                    state.markParamReleased(4294967295, 'pan');
+                  },
+                  onMuteToggled: () {
+                    state.setMasterBusParam(
+                      param: UiMixerChannelParams.mute(
+                        !mixerState.masterBus.mute,
+                      ),
+                    );
+                  },
+                  onSoloToggled: () {
+                    state.setMasterBusParam(
+                      param: UiMixerChannelParams.solo(
+                        !mixerState.masterBus.solo,
+                      ),
+                    );
+                  },
+                  isSelected: _selectedChannelId == -1 && !_isSelectedBus,
+                  onTap: () {
+                    setState(() {
+                      _selectedChannelId = -1;
+                      _isSelectedBus = false;
+                    });
+                  },
+                ),
               ),
-              onVolumeChanged: (value) {
-                state.setMasterBusParam(
-                  param: UiMixerChannelParams.volume(value),
-                );
-              },
-              onVolumeChangeStart: () {
-                state.markParamTouched(4294967295, 'volume');
-              },
-              onVolumeChangeEnd: () {
-                state.markParamReleased(4294967295, 'volume');
-              },
-              onPanChanged: (value) {
-                state.setMasterBusParam(param: UiMixerChannelParams.pan(value));
-              },
-              onPanChangeStart: () {
-                state.markParamTouched(4294967295, 'pan');
-              },
-              onPanChangeEnd: () {
-                state.markParamReleased(4294967295, 'pan');
-              },
-              onMuteToggled: () {
-                state.setMasterBusParam(
-                  param: UiMixerChannelParams.mute(!mixerState.masterBus.mute),
-                );
-              },
-              onSoloToggled: () {
-                state.setMasterBusParam(
-                  param: UiMixerChannelParams.solo(!mixerState.masterBus.solo),
-                );
-              },
-              isSelected: _selectedChannelId == -1 && !_isSelectedBus,
-              onTap: () {
-                setState(() {
-                  _selectedChannelId = -1;
-                  _isSelectedBus = false;
-                });
-              },
-            ),
+
+              // === Divider ===
+              Container(width: 1, color: Colors.white10),
+
+              // === Effect Rack Panel ===
+              _buildEffectRackPanel(context, mixerState),
+            ],
           ),
 
-          // === Divider ===
-          Container(width: 1, color: Colors.white10),
-
-          // === Effect Rack Panel ===
-          _buildEffectRackPanel(context, mixerState),
+          // === Routing Cables Overlay ===
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _RoutingPainter(
+                  routing: mixerState.routing,
+                  stripKeys: _stripKeys,
+                  selectedChannelId: _selectedChannelId,
+                  isSelectedBus: _isSelectedBus,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1255,7 +1314,7 @@ class _ToggleButton extends StatelessWidget {
 
 // Place this anywhere at the bottom of the file
 class _RoutingPainter extends CustomPainter {
-  final List<plugin_api.UiRoutingConnection> routing;
+  final List<mixer_api.UiRoutingConnection> routing;
   final Map<String, GlobalKey> stripKeys;
   final int? selectedChannelId;
   final bool isSelectedBus;
@@ -1267,10 +1326,10 @@ class _RoutingPainter extends CustomPainter {
     required this.isSelectedBus,
   });
 
-  String? _getNodeKeyString(plugin_api.UiRoutingNode node) {
-    if (node is plugin_api.UiRoutingNode_Track) return 'track_${node.field0}';
-    if (node is plugin_api.UiRoutingNode_Bus) return 'bus_${node.field0}';
-    if (node is plugin_api.UiRoutingNode_Master) return 'master';
+  String? _getNodeKeyString(mixer_api.UiRoutingNode node) {
+    if (node is mixer_api.UiRoutingNode_Track) return 'track_${node.field0}';
+    if (node is mixer_api.UiRoutingNode_Bus) return 'bus_${node.field0}';
+    if (node is mixer_api.UiRoutingNode_Master) return 'master';
     return null;
   }
 
@@ -1307,14 +1366,22 @@ class _RoutingPainter extends CustomPainter {
       final dstPos = dstBox.localToGlobal(Offset.zero);
 
       // Start from bottom-center of source, go to bottom-center of destination
-      final start = Offset(srcPos.dx + srcBox.size.width / 2, srcPos.dy + srcBox.size.height - 10);
-      final end = Offset(dstPos.dx + dstBox.size.width / 2, dstPos.dy + dstBox.size.height - 10);
+      final start = Offset(
+        srcPos.dx + srcBox.size.width / 2,
+        srcPos.dy + srcBox.size.height - 10,
+      );
+      final end = Offset(
+        dstPos.dx + dstBox.size.width / 2,
+        dstPos.dy + dstBox.size.height - 10,
+      );
 
       bool isActive = false;
       if (selectedChannelId != null) {
         final selectedStr = selectedChannelId == -1
             ? 'master'
-            : (isSelectedBus ? 'bus_$selectedChannelId' : 'track_$selectedChannelId');
+            : (isSelectedBus
+                  ? 'bus_$selectedChannelId'
+                  : 'track_$selectedChannelId');
         if (srcStr == selectedStr || dstStr == selectedStr) {
           isActive = true;
         }
@@ -1322,14 +1389,21 @@ class _RoutingPainter extends CustomPainter {
 
       final path = Path();
       path.moveTo(start.dx, start.dy);
-      
+
       // Draw a hanging curve under the tracks to visualize the cable
       final distance = (end.dx - start.dx).abs();
-      final drop = 40.0 + (distance * 0.1).clamp(0.0, 80.0); 
+      final drop = 40.0 + (distance * 0.1).clamp(0.0, 80.0);
 
       final controlPoint1 = Offset(start.dx, start.dy + drop);
       final controlPoint2 = Offset(end.dx, end.dy + drop);
-      path.cubicTo(controlPoint1.dx, controlPoint1.dy, controlPoint2.dx, controlPoint2.dy, end.dx, end.dy);
+      path.cubicTo(
+        controlPoint1.dx,
+        controlPoint1.dy,
+        controlPoint2.dx,
+        controlPoint2.dy,
+        end.dx,
+        end.dy,
+      );
 
       canvas.drawPath(path, isActive ? activePaint : inactivePaint);
 
@@ -1344,5 +1418,36 @@ class _RoutingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _RoutingPainter oldDelegate) => true; 
+  bool shouldRepaint(covariant _RoutingPainter oldDelegate) => true;
 }
+
+Future<Result<void>> updateRouting(
+  GlobalAppState state,
+  UiRoutingNode source,
+  UiRoutingNode destination,
+  double sendLevel,
+  bool isSend,
+) async {
+  return await attemptAsync(() async {
+    await setRouting(
+      source: source,
+      destination: destination,
+      sendLevel: sendLevel,
+      isSend: isSend,
+    );
+    return await state.syncRoutingConnection();
+  });
+}
+
+Future<Result<void>> removeRouting(
+  GlobalAppState state,
+  UiRoutingNode source,
+  UiRoutingNode destination,
+  bool isSend,
+) async {
+  return await attemptAsync(() async {
+    await mixer_api.removeRouting(source: source, destination: destination, isSend: isSend);
+    return await state.syncRoutingConnection();
+  });
+}
+

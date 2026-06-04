@@ -117,6 +117,36 @@ extension ResultExt<T> on Result<T> {
       Error<T>(error: final error) => Result.error(fn(error)),
     };
   }
+
+    T unwrap() {
+    return switch (this) {
+      Ok<T>(value: final value) => value,
+      Error<T>(error: final error) => throw error,
+    };
+  }
+
+  T unwrapOr(T defaultValue) {
+    return switch (this) {
+      Ok<T>(value: final value) => value,
+      Error<T>() => defaultValue,
+    };
+  }
+
+  T unwrapOrElse(T Function(Exception error) fn) {
+    return switch (this) {
+      Ok<T>(value: final value) => value,
+      Error<T>(error: final error) => fn(error),
+    };
+  }
+}
+
+extension ResultFlattenExt<T> on Result<Result<T>> {
+  Result<T> flatten() {
+    return switch (this) {
+      Ok<Result<T>>(value: final inner) => inner,
+      Error<Result<T>>(error: final error) => Result.error(error),
+    };
+  }
 }
 extension ResultAsyncExt<T> on Future<Result<T>> {
   Future<Result<U>> andThenAsync<U>(
