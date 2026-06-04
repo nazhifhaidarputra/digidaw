@@ -4,6 +4,7 @@
 //! This package also includes the Core API that is generic and reusable
 //! for any kind of UI implementation usage.
 
+pub mod init;
 pub mod api;
 pub mod audio;
 pub mod commands;

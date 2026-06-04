@@ -1,10 +1,11 @@
+use karbeat_core::init::init_engine;
 #[cfg(target_os = "android")]
 use once_cell::sync::OnceCell;
 
 #[cfg(target_os = "android")]
 use jni::{objects::JObject, refs::Global};
 
-use crate::{init_engine, init_logger};
+use crate::{init_logger};
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
