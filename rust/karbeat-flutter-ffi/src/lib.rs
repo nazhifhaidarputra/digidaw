@@ -1,17 +1,6 @@
-// src/lib.rs
-
-use std::{path::PathBuf, sync::Arc};
-
-use karbeat_core::audio::backend::AudioDeviceConfig;
-use memmap2::MmapOptions;
-use rtrb::RingBuffer;
-
-pub(crate) use karbeat_core::{
-    audio::backend::start_audio_stream,
-    commands::AudioCommand,
-    context::{ctx, INIT_LOGGER},
-    core::project::track::audio_waveform::AudioWaveform,
-};
+pub(crate) use karbeat_core::
+    context::INIT_LOGGER
+;
 
 pub mod api;
 mod frb_generated;
