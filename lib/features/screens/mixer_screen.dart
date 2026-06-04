@@ -9,7 +9,6 @@ import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
-import 'package:karbeat/utils/result_type.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
@@ -1420,34 +1419,3 @@ class _RoutingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RoutingPainter oldDelegate) => true;
 }
-
-Future<Result<void>> updateRouting(
-  GlobalAppState state,
-  UiRoutingNode source,
-  UiRoutingNode destination,
-  double sendLevel,
-  bool isSend,
-) async {
-  return await attemptAsync(() async {
-    await setRouting(
-      source: source,
-      destination: destination,
-      sendLevel: sendLevel,
-      isSend: isSend,
-    );
-    return await state.syncRoutingConnection();
-  });
-}
-
-Future<Result<void>> removeRouting(
-  GlobalAppState state,
-  UiRoutingNode source,
-  UiRoutingNode destination,
-  bool isSend,
-) async {
-  return await attemptAsync(() async {
-    await mixer_api.removeRouting(source: source, destination: destination, isSend: isSend);
-    return await state.syncRoutingConnection();
-  });
-}
-

@@ -1,4 +1,5 @@
 import 'package:karbeat/src/rust/api/mixer.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/result_type.dart';
 
@@ -28,8 +29,38 @@ Future<Result<void>> addNewRouting(
       sendLevel: sendLevel,
       isSend: isSend,
     );
-
+    // TODO: Add optimistic update before syncing
     // Attempt a sync only on routing connection
+    return await state.syncRoutingConnection();
+  });
+}
+
+Future<Result<void>> removeRouting(
+  GlobalAppState state, {
+  required UiRoutingNode source,
+  required UiRoutingNode destination,
+  required bool isSend,
+}) async {
+  return await attemptAsync(() async {
+    await mixer_api.removeRouting(
+      source: source,
+      destination: destination,
+      isSend: isSend,
+    );
+    // TODO: Add optimistic update before syncing
+    return await state.syncRoutingConnection();
+  });
+}
+
+Future<Result<void>> removeBus(GlobalAppState state, {
+  required int busId
+}) async {
+  return await attemptAsync(() async {
+    await mixer_api.deleteBus(busId: busId);
+    // TODO: Add optimistic update before syncing
     
+    return state.notifyCustomBackendChange(() async {
+      (state.syncBuses(), state.syncRoutingConnection()).wait;
+    });
   });
 }
