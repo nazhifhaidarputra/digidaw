@@ -1,0 +1,2353 @@
+import 'dart:async';
+import 'dart:developer';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/piano_roll/view/floating_midi_keyboard.dart';
+import 'package:karbeat/shared/models/export_audio.dart';
+import 'package:karbeat/shared/models/grid.dart';
+import 'package:karbeat/shared/models/interaction_target.dart';
+import 'package:karbeat/shared/models/menu_group.dart';
+import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/automation.dart';
+import 'package:karbeat/src/rust/api/project.dart' as project_api;
+import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
+import 'package:karbeat/src/rust/api/session.dart' as session_api;
+import 'package:karbeat/core/utils/color.dart';
+import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
+import 'package:karbeat/src/rust/api/pattern.dart';
+import 'package:karbeat/src/rust/api/plugin.dart';
+import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/track.dart';
+import 'package:karbeat/src/rust/api/track.dart' as track_api;
+import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
+
+import 'package:karbeat/core/utils/formatter.dart';
+import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/services/serializer_service.dart';
+
+/// Top-level Riverpod provider for the app state
+final globalStateProvider = ChangeNotifierProvider<GlobalAppState>((ref) {
+  return GlobalAppState();
+});
+
+enum ToolSelection { pointer, slice, draw, move, delete, zoom, select, resize }
+
+/// Piano roll specific tool selection (independent from main toolbar)
+enum PianoRollToolSelection { grab, draw, delete, select, slice, pan, zoom }
+
+enum WorkspaceView { trackList, pianoRoll, mixer, source }
+
+enum ToolbarMenuContextGroup { none, project, edit, view }
+
+/// Events that trigger a state refresh
+enum ProjectEvent {
+  tracksChanged,
+  transportChanged,
+  metadataChanged,
+  sourceListChanged,
+  generatorListChanged,
+  effectListChanged,
+  configChanged,
+  patternChanged,
+  mixerChanged,
+}
+
+class GlobalAppState extends ChangeNotifier {
+  // ================== BACKEND STATES =========================
+  UiTransportState _transportState = transportStateNew();
+
+  // Runtime transport state (derived from TransportFeedback stream)
+  bool _isLooping = false;
+  bool _isPatternPlaying = false;
+
+  UiProjectMetadata _metadata = projectMetadataNew();
+
+  UiAudioHardwareConfig _hardwareConfig = audioHardwareConfigNew();
+
+  mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState();
+  // List<Clipboard>
+
+  // =================== STORES ==========================
+  Map<int, UiTrack> _tracks = {};
+  // Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
+  Map<int, UiGeneratorInstance> _generators = {};
+  Map<int, UiPattern> _patterns = {};
+
+  List<UiPluginInfo> _availableGenerators = [];
+  List<UiPluginInfo> get availableGenerators => _availableGenerators;
+
+  List<UiPluginInfo> _availableEffects = [];
+  List<UiPluginInfo> get availableEffects => _availableEffects;
+
+  // Store the raw, flat pools from Rust
+  Map<int, ModulationLinkDto> _modulationLinks = {};
+  Map<int, AutomationLaneDto> _automationPool = {};
+  Map<int, ModulationSourceDto> _modulationSources = {};
+
+  Map<int, ModulationLinkDto> get modulationLinks => _modulationLinks;
+  Map<int, AutomationLaneDto> get automationPool => _automationPool;
+  Map<int, ModulationSourceDto> get modulationSources => _modulationSources;
+
+  static final List<DawToolbarMenuGroup> menuGroups = [
+    DawToolbarMenuGroupFactory.createProjectMenuGroup(),
+    DawToolbarMenuGroupFactory.createEditMenuGroup(),
+    DawToolbarMenuGroupFactory.createViewMenuGroup(),
+  ];
+
+  int maxSamplesIndex = 2000;
+
+  late final Stream<UiTransportFeedback> _positionBroadcastStream;
+
+  // STRATEGY: Internal Event Bus for State Synchronization
+  final StreamController<ProjectEvent> _stateEventController =
+      StreamController.broadcast();
+
+  // A custom defined internal event bus for state synchronization
+  final StreamController<Future<void> Function()> _customStateEventController =
+      StreamController.broadcast();
+
+  // ignore:unused_field
+  StreamSubscription<ProjectEvent>? _stateSubscription;
+
+  // Mixer event stream from Rust for automation/backend-initiated changes
+  StreamSubscription<mixer_api.UiMixerChannelSnapshot>?
+  _mixerSnapshotSubscription;
+
+  /// Params currently being touched by the user (trackId, paramName).
+  /// Automation events for these params are ignored while touched.
+  final Set<(int, String)> _touchedParams = {};
+
+  // =========== EDITOR STATE ====================
+  ToolSelection _selectedTool = ToolSelection.pointer;
+  WorkspaceView _currentView = WorkspaceView.trackList;
+  ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
+  GridSize _piannoRollGridDenom = GridSize.quarter;
+  int? _editingPatternId;
+
+  // =========== SESSION STATE (frontend-only) ====================
+  int? _selectedTrackId;
+  List<int> _selectedClipIds = [];
+  int? _focusClipId;
+  bool _isMetronomeActive = false;
+
+  bool get isMetronomeActive => _isMetronomeActive;
+
+  // =========== PIANO ROLL STATE ====================
+  PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.grab;
+  double _zoomLevelTick = 0.67;
+
+  double get zoomLevelTick => _zoomLevelTick;
+
+  set zoomLevelTick(double value) {
+    _zoomLevelTick = value.clamp(0.01, 5);
+  }
+
+  Set<int> _selectedNoteIds = {};
+  int? _previewGeneratorId;
+
+  /// Currently active interaction target for the interaction panel
+  InteractionTarget? _interactionTarget;
+
+  /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
+  GridSize gridSize = GridSize.quarter;
+  bool snapToGrid = false;
+
+  // ================== OTHER STATES ====================
+  bool _showExportPanel = false;
+
+  bool get showExportPanel => _showExportPanel;
+
+  FloatingMidiKeyboardFieldState midiKeyboardState =
+      FloatingMidiKeyboardFieldState(showed: false);
+
+  // ================ CONSTRUCTOR ==================
+  GlobalAppState() {
+    _positionBroadcastStream = createPositionStream().asBroadcastStream();
+    _initStateListener();
+    _positionBroadcastStream.listen((pos) {
+      // Update runtime transport state from audio thread feedback
+      bool changed = false;
+
+      if (pos.isPatternPlaying != _isPatternPlaying) {
+        _isPatternPlaying = pos.isPatternPlaying;
+        changed = true;
+      }
+
+      if (pos.isLooping != _isLooping) {
+        _isLooping = pos.isLooping;
+        changed = true;
+      }
+
+      if (pos.isPatternMode != _isPatternMode) {
+        _isPatternMode = pos.isPatternMode;
+        changed = true;
+      }
+
+      // Update BPM from audio thread (e.g. tempo automation)
+      if ((pos.tempo - _transportState.bpm).abs() > 0.01) {
+        _transportState = transportStateNewWithParam(
+          bpm: pos.tempo,
+          timeSignature: _transportState.timeSignature,
+        );
+        changed = true;
+      }
+
+      if (changed) {
+        notifyListeners();
+      }
+    });
+    syncTracksState();
+    syncMaxSampleIndex();
+    syncTransportState();
+    syncMetadataState();
+    // syncAudioSourceList();
+    syncPatternList();
+    syncGeneratorList();
+    syncAudioHardwareConfigState();
+    syncAutomationAndModulationState();
+    syncRoutingConnection();
+
+    // fetch available generators and effects
+    fetchAvailableGenerators();
+    fetchAvailableEffects();
+
+    // Start mixer event stream
+    _initMixerSnapshotStream();
+  }
+
+  @override
+  void dispose() {
+    // Cancel active stream subscriptions from the Rust backend and internal event bus
+    _stateSubscription?.cancel();
+    _mixerSnapshotSubscription?.cancel();
+
+    // Close the internal event bus controllers
+    if (!_stateEventController.isClosed) {
+      _stateEventController.close();
+    }
+
+    if (!_customStateEventController.isClosed) {
+      _customStateEventController.close();
+    }
+
+    // Always call super.dispose() last to properly tear down the ChangeNotifier
+    super.dispose();
+  }
+
+  void toggleSnapToGrid() {
+    snapToGrid = !snapToGrid;
+    notifyListeners();
+  }
+
+  void toggleFloatingMidiKeyboard() {
+    midiKeyboardState.showed = !midiKeyboardState.showed;
+    notifyListeners();
+  }
+
+  void setMidiKeyboardBaseKey(int key) {
+    midiKeyboardState.baseKey = key.clamp(21, 120);
+    notifyListeners();
+  }
+
+  void setMidiKeyboardRange(int range) {
+    midiKeyboardState.keyRange = range.clamp(12, 24);
+    notifyListeners();
+  }
+
+  void setMidiKeyboardGenerator(int? id) {
+    midiKeyboardState.selectedGeneratorId = id;
+    notifyListeners();
+  }
+
+  // =========================================================
+  // ============= Available Plugins API =====================
+  // =========================================================
+
+  /// Fetch available generators from system's registry
+  Future<void> fetchAvailableGenerators() async {
+    try {
+      // Use the ID-based API that returns UiPluginInfo with id and name
+      final list = await getAvailableGeneratorsWithIds();
+      _availableGenerators = list;
+      notifyListeners();
+    } catch (e) {
+      log("Error fetching plugins: $e");
+    }
+  }
+
+  /// Fetch available effects from system's registry
+  Future<void> fetchAvailableEffects() async {
+    try {
+      final list = await getAvailableEffectsWithIds();
+      _availableEffects = list;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("Error fetching effect plugins: $e");
+    }
+  }
+
+  void _initStateListener() {
+    _stateSubscription = _stateEventController.stream.listen((event) async {
+      switch (event) {
+        case ProjectEvent.tracksChanged:
+          await syncTracksState();
+          await syncMaxSampleIndex();
+          break;
+        case ProjectEvent.transportChanged:
+          await syncTransportState();
+          break;
+        case ProjectEvent.metadataChanged:
+          await syncMetadataState();
+          break;
+        case ProjectEvent.sourceListChanged:
+          // await syncAudioSourceList();
+          break;
+        case ProjectEvent.generatorListChanged:
+          await syncGeneratorList();
+          break;
+        case ProjectEvent.configChanged:
+          await syncAudioHardwareConfigState();
+          break;
+
+        case ProjectEvent.patternChanged:
+          await syncPatternList();
+          break;
+        case ProjectEvent.mixerChanged:
+          await syncMixerState();
+          break;
+        case ProjectEvent.effectListChanged:
+          // TODO: Handle this case.
+          // throw UnimplementedError();
+          break;
+      }
+    });
+
+    // Listen and execute caller-defined custom sync actions
+    _customStateEventController.stream.listen((action) async {
+      try {
+        await action();
+      } catch (e) {
+        AppLogger.error("Error executing custom backend change: $e");
+      }
+    });
+  }
+
+  // ============== GETTERS =================
+  UiTransportState get transport => _transportState;
+  UiProjectMetadata get metadata => _metadata;
+
+  bool get isPatternPlaying => _isPatternPlaying;
+  bool _isPatternMode = false;
+  bool get isPatternMode => _isPatternMode;
+
+  MusicalBeatSize _horizontalClipShiftSizeDenom = MusicalBeatSize.none;
+
+  MusicalBeatSize get horizontalClipShiftSizeDenom =>
+      _horizontalClipShiftSizeDenom;
+
+  set horizontalClipShiftSizeDenom(MusicalBeatSize value) {
+    _horizontalClipShiftSizeDenom = value;
+    notifyListeners();
+  }
+
+  bool get isLooping => _isLooping;
+  double get tempo => _transportState.bpm;
+  Map<int, UiTrack> get tracks => _tracks;
+  // Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
+  Map<int, UiGeneratorInstance> get generators => _generators;
+  ToolSelection get selectedTool => _selectedTool;
+  WorkspaceView get currentView => _currentView;
+  ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
+  UiAudioHardwareConfig get hardwareConfig => _hardwareConfig;
+  Stream<UiTransportFeedback> get positionStream => _positionBroadcastStream;
+  Map<int, UiPattern> get patterns => _patterns;
+  GridSize get pianoRollGridDenom => _piannoRollGridDenom;
+  int? get editingPatternId => _editingPatternId;
+  InteractionTarget? get interactionTarget => _interactionTarget;
+  mixer_api.UiMixerState get mixerState => _mixerState;
+  bool get showFloatingMidiKeyboard => midiKeyboardState.showed;
+
+  // Session state getters (frontend-only)
+  int? get selectedTrackId => _selectedTrackId;
+  List<int> get selectedClipIds => _selectedClipIds;
+  int? get focusClipId => _focusClipId;
+
+  // Piano roll getters
+  PianoRollToolSelection get pianoRollTool => _pianoRollTool;
+  Set<int> get selectedNoteIds => _selectedNoteIds;
+  int? get previewGeneratorId => _previewGeneratorId;
+
+  // ================ SETTERS ===================
+  set pianoRollGridDenom(GridSize val) {
+    _piannoRollGridDenom = val;
+    notifyListeners();
+  }
+
+  // =============== GLOBAL UI STATE ==========================
+  double _horizontalZoomLevel = 100;
+
+  /// Represent zoom level (the value here means number of ticks per pixel)
+  /// e.g 1000 means 1000 ticks per pixel
+  double get horizontalZoomLevel => _horizontalZoomLevel;
+
+  /// Min: 1 sample/px (each sample tick visible). Max: 1k ticks/px.
+  static const double _minZoom = 0.01;
+  static const double _maxZoom = 500.0;
+
+  set horizontalZoomLevel(double val) {
+    final clamped = val.clamp(_minZoom, _maxZoom);
+    if (_horizontalZoomLevel != clamped) {
+      _horizontalZoomLevel = clamped;
+      notifyListeners();
+    }
+  }
+
+  Map<int, int> trackIdHeightMap = {};
+
+  String? currentFilePath;
+
+  // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
+  // Placement mode state moved to local clipPlacementProvider in TrackListScreen
+
+  // ================ SYNCHRONIZATION ======================
+
+  /// Syncs only the track state
+  Future<void> syncTracksState() async {
+    try {
+      final newState = await getTracks();
+      _tracks = newState;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("error when syncing the track state: $e");
+    }
+  }
+
+  Future<void> syncTrackState(int trackId) async {
+    final newTrack = await getTrack(trackId: trackId);
+    _tracks[trackId] = newTrack;
+    notifyListeners();
+  }
+
+  /// Syncs only the transport settings (BPM, time signature) from the backend.
+  /// Runtime transport state (is_playing, etc.) comes from the TransportFeedback stream.
+  Future<void> syncTransportState() async {
+    try {
+      final newState = await getTransportState();
+      _transportState = newState;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("Transport sync failed: $e");
+    }
+  }
+
+  /// Syncs only the metadata (Project name, BPM, Time signature)
+  Future<void> syncMetadataState() async {
+    try {
+      final newState = await getProjectMetadata();
+      _metadata = newState;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("failed when syncing metadata: $e");
+    }
+  }
+
+  Future<void> syncMaxSampleIndex() async {
+    try {
+      final newState = await getMaxSampleIndex();
+      maxSamplesIndex = newState;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("failed when syncing max sample index: $e");
+    }
+  }
+
+  Future<Result<Map<int, AudioWaveformUiForSourceList>?>>
+  getLoadedAudioSources() async {
+    try {
+      final sources = await getAudioSourceList();
+      if (sources == null) {
+        return Result.error(Exception("Failed to fetch audio source data"));
+      }
+      return Result.ok(sources);
+    } catch (e) {
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<AudioWaveformUiForAudioProperties>> getAudioPropertiesHandle(
+    int id,
+  ) async {
+    try {
+      final audio = await getAudioProperties(id: id);
+      if (audio == null) {
+        return Result.error(
+          Exception("Failed to get audio properties of id $id"),
+        );
+      }
+      return Result.ok(audio);
+    } catch (e) {
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<void> syncGeneratorList() async {
+    try {
+      final generators = await getGeneratorList();
+      _generators = generators;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("Failed to sync generators: $e");
+    }
+  }
+
+  Future<void> syncGenerator({required int generatorId}) async {
+    try {
+      final generator = await getGenerator(generatorId: generatorId);
+      // final newMap = Map<int, UiGeneratorInstance>.from(_generators);
+      // newMap[generatorId] = generator;
+      _generators[generatorId] = generator;
+      notifyListeners();
+    } catch (error) {
+      AppLogger.error("Failed to sync generator $generatorId: $error");
+    }
+  }
+
+  Future<void> syncAudioHardwareConfigState() async {
+    try {
+      final newState = await getAudioConfig();
+      _hardwareConfig = newState;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("Failed to sync audio hardware state: $e");
+    }
+  }
+
+  Future<void> syncPatternList() async {
+    try {
+      final result = await getPatterns();
+      _patterns = result;
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("Failed to sync pattern list: $e");
+    }
+  }
+
+  /// Efficiently syncs a SINGLE pattern instead of the whole list
+  Future<void> syncPattern(int patternId) async {
+    try {
+      final updatedPattern = await getPattern(patternId: patternId);
+
+      // Creating a new map reference ensures Selectors in UI will trigger a rebuild
+      final newMap = Map<int, UiPattern>.from(_patterns);
+      newMap[patternId] = updatedPattern;
+      _patterns = newMap;
+
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("Error syncing single pattern $patternId: $e");
+    }
+  }
+
+  /// Efficiently syncs a SINGLE track (and its clips)
+  Future<void> syncTrack(int trackId) async {
+    try {
+      final updatedTrack = await getTrack(trackId: trackId);
+      final newMap = Map<int, UiTrack>.from(_tracks);
+      newMap[trackId] = updatedTrack;
+      _tracks = newMap;
+
+      notifyListeners();
+    } catch (e) {
+      AppLogger.error("Error syncing single track $trackId: $e");
+    }
+  }
+
+  /// Triggers a state refresh. Call this after any Rust API action.
+  void notifyBackendChange(ProjectEvent event) {
+    if (!_stateEventController.isClosed) {
+      _stateEventController.add(event);
+    }
+  }
+
+  /// Triggers a state refresh. Call this after any Rust API action.
+  void notifyCustomBackendChange(Future<void> Function() action) {
+    if (!_customStateEventController.isClosed) {
+      _customStateEventController.add(action);
+    }
+  }
+
+  Future<void> syncMixerState() async {
+    try {
+      final newState = await mixer_api.getMixerState();
+      _mixerState = newState;
+      notifyListeners();
+
+      queryAllMixerChannels();
+    } catch (e) {
+      AppLogger.error("Failed to sync mixer state: $e");
+    }
+  }
+
+  Future<void> syncBuses() async {
+    try {
+      final newBuses = await mixer_api.getBuses();
+      _mixerState = _mixerState.copyWith(buses: newBuses);
+      notifyListeners();
+
+      for (final busId in newBuses.keys) {
+        mixer_api.queryMixerChannel(
+          target: mixer_api.UiMixerChannelTarget.bus(busId),
+        );
+      }
+    } catch (e) {
+      AppLogger.error("Failedto sync mixer bus: $e");
+    }
+  }
+
+  Future<void> syncMixerChannel(int trackId) async {
+    try {
+      final updatedChannel = await mixer_api.getMixerChannel(trackId: trackId);
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updatedChannel;
+      _mixerState = _mixerState.copyWith(channels: newChannels);
+      notifyListeners();
+      mixer_api.queryMixerChannel(
+        target: mixer_api.UiMixerChannelTarget.track(trackId),
+      );
+    } catch (e) {
+      AppLogger.error("Error syncing mixer channel $trackId: $e");
+    }
+  }
+
+  Future<void> syncMasterBus() async {
+    try {
+      final updatedMaster = await mixer_api.getMasterBus();
+      _mixerState = _mixerState.copyWith(masterBus: updatedMaster);
+      notifyListeners();
+      mixer_api.queryMixerChannel(
+        target: const mixer_api.UiMixerChannelTarget.master(),
+      );
+    } catch (e) {
+      AppLogger.error("Failed to sync master bus: $e");
+    }
+  }
+
+  Future<void> syncRoutingConnection() async {
+    await attemptAsync(() async {
+      final newRouting = await mixer_api.getRoutingMatrix();
+      _mixerState = _mixerState.copyWith(routing: newRouting);
+    });
+  }
+
+  Future<Result<void>> syncAutomationAndModulationState() async {
+    return await attemptAsync(() async {
+      final (links, lanes, sources) = await (
+        getAllLinkedModulationParams(),
+        getAutomationsLanesAll(),
+        getAllModulationSources(),
+      ).wait;
+      _modulationLinks = links;
+      _automationPool = lanes;
+      _modulationSources = sources;
+      notifyListeners();
+    });
+  }
+
+  /// Efficiently sync a SINGLE modulation source (e.g., after tweaking an LFO rate)
+  Future<Result<void>> syncModulationSource(int sourceId) async {
+    return await attemptAsync(() async {
+      final source = await getModulationSource(id: sourceId);
+      if (source == null) {
+        throw Exception("Modulation source $sourceId not found");
+      }
+
+      // Creating a new map reference ensures Riverpod Selectors trigger a rebuild
+      final newSources = Map<int, ModulationSourceDto>.from(_modulationSources);
+      newSources[sourceId] = source;
+      _modulationSources = newSources;
+
+      notifyListeners();
+    });
+  }
+
+  Future<Result<void>> syncModulationLink(int linkId) async {
+    return await attemptAsync(() async {
+      final link = await getModulationLinkById(linkId: linkId);
+      if (link == null) throw Exception("Modulation link $linkId not found");
+      
+      final newLinks = Map<int, ModulationLinkDto>.from(_modulationLinks);
+      newLinks[linkId] = link;
+      _modulationLinks = newLinks;
+      
+      notifyListeners();
+    });
+  }
+
+  Future<Result<void>> syncAutomation(int laneId) async {
+    return await attemptAsync(() async {
+      final lane = await getAutomationLane(laneId: laneId);
+      if (lane == null) throw Exception("Automation lane $laneId not found");
+
+      final newLanes = Map<int, AutomationLaneDto>.from(_automationPool);
+      newLanes[laneId] = lane;
+      _automationPool = newLanes;
+
+      notifyListeners();
+    });
+  }
+
+  // =============== ACTIONS ===============
+
+  /// Ask the audio thread for real-time DSP state for all channels.
+  /// Resulting snapshots will be received by _applySnapshot via stream.
+  void queryAllMixerChannels() {
+    // Query Master
+    mixer_api.queryMixerChannel(
+      target: const mixer_api.UiMixerChannelTarget.master(),
+    );
+
+    // Query all Buses
+    for (final busId in _mixerState.buses.keys) {
+      mixer_api.queryMixerChannel(
+        target: mixer_api.UiMixerChannelTarget.bus(busId),
+      );
+    }
+
+    // Query all Tracks
+    for (final trackId in _mixerState.channels.keys) {
+      mixer_api.queryMixerChannel(
+        target: mixer_api.UiMixerChannelTarget.track(trackId),
+      );
+    }
+  }
+
+  void openExportPanel() {
+    _showExportPanel = true;
+    notifyListeners();
+  }
+
+  void closeExportPanel() {
+    _showExportPanel = false;
+    notifyListeners();
+  }
+
+  void toggleMetronomeActive() {
+    _isMetronomeActive = !isMetronomeActive;
+    audio_api.setMetronomeActive(active: isMetronomeActive);
+    notifyListeners();
+  }
+
+  // ======================================================
+  // Project related action
+  // ======================================================
+
+  /// Save project state using the provided file path
+  Future<Result<void>> saveProject(String path) async {
+    try {
+      final service = SerializerService();
+      await service.saveProject(pathName: path);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to save project: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Load project state from the provided file path and update the Flutter UI state
+  Future<Result<void>> loadProject(String path) async {
+    try {
+      final service = SerializerService();
+      final uiState = await service.loadProject(pathName: path);
+
+      _populateState(uiState);
+      // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
+
+      notifyListeners();
+
+      AppLogger.info("Project loaded successfully from $path");
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to load project: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<void> newBlankProject() async {
+    final newApp = await serialization_api.newBlankProject();
+    _populateState(newApp);
+    notifyListeners();
+    AppLogger.info("New blank project created");
+  }
+
+  Stream<double> exportProject({
+    required String path,
+    required String soundfileName,
+    required SupportedAudioFormat format,
+    required SampleRate sampleRate,
+    BitDepthDTO? bitDepth,
+    numberOfChannels = 2,
+    int? bitrate,
+    required TailHandling tailHandling,
+  }) async* {
+    // Construct final file path based on selected format
+    final ext = format.name.toLowerCase();
+    final fullPath = "$path/$soundfileName.$ext";
+
+    final bitDepthProper = bitDepth ?? BitDepthDTO_BitPerSample(8);
+
+    final tailHandlingDto = switch (tailHandling) {
+      TailHandling.cutRemainder => TailHandlingDTO.cutRemaining,
+      TailHandling.leaveRemainder => TailHandlingDTO.leaveRemaining,
+      TailHandling.wrapRemainder => TailHandlingDTO.wrapRemaining,
+    };
+
+    final AudioExportConfigDTO config;
+    switch (format) {
+      case SupportedAudioFormat.wav:
+        config = AudioExportConfigDTO.wav(
+          WavExportConfigDTO(
+            sampleRate: sampleRate.value,
+            channels: numberOfChannels,
+            bitDepth: bitDepthProper,
+          ),
+        );
+        break;
+      case SupportedAudioFormat.mp3:
+        config = AudioExportConfigDTO.mp3(
+          Mp3ExportConfigDTO(
+            sampleRate: sampleRate.value,
+            channels: numberOfChannels,
+            bitRate: bitDepthProper,
+          ),
+        );
+        break;
+      case SupportedAudioFormat.ogg:
+        // TODO: Handle this case.
+        return;
+      case SupportedAudioFormat.flac:
+        // TODO: Handle this case.
+        return;
+    }
+    yield* project_api.exportProjectFlutter(
+      outputPath: fullPath,
+      config: config,
+      tailHandling: tailHandlingDto,
+    );
+  }
+
+  /// Loads an audio file and refreshes the source list
+  Future<Result<void>> addAudioFile(String path) async {
+    try {
+      await addAudioSource(filePath: path);
+      // notifyBackendChange(ProjectEvent.sourceListChanged);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to add audio file: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addAudioTrack() async {
+    try {
+      await addNewAudioTrack();
+      notifyBackendChange(ProjectEvent.tracksChanged);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to add track: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Add a MIDI track with a generator by its registry ID (preferred method).
+  Future<Result<void>> addMidiTrackWithGeneratorId(int registryId) async {
+    try {
+      await track_api.addMidiTrackWithGeneratorId(registryId: registryId);
+      notifyBackendChange(ProjectEvent.tracksChanged);
+      notifyBackendChange(ProjectEvent.generatorListChanged);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to add midi track: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> deleteTrack(int trackId) async {
+    try {
+      final deletedTrackType = await track_api.deleteTrack(trackId: trackId);
+      notifyCustomBackendChange(() async {
+        await syncTracksState();
+        switch (deletedTrackType) {
+          case "audio":
+            break;
+          case "midi":
+            await syncGeneratorList();
+            break;
+          case "automation":
+            // Automation deletion is not removable from this API. it will be deleted on separate
+            // dedicated API to remove automation lane of a track, general bus, master bus, or project param automation.
+            break;
+        }
+      });
+
+      return Result.ok(null);
+    } catch (e) {
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> changeTrackName(int trackId, String newName) async {
+    final originalTrack = _tracks[trackId];
+    if (originalTrack == null) {
+      return Result.error(Exception("Track not found"));
+    }
+
+    final oldName = originalTrack.name;
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = _copyWithTrack(originalTrack, name: newName);
+    notifyListeners();
+
+    try {
+      await track_api.changeTrackName(trackId: trackId, newName: newName);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to change track name: $e");
+      if (_tracks.containsKey(trackId)) {
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(originalTrack, name: oldName);
+        notifyListeners();
+      }
+
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> changeTrackColor(int trackId, Color newColor) async {
+    final originalTrack = _tracks[trackId];
+    if (originalTrack == null) {
+      return Result.error(Exception("Track not found"));
+    }
+
+    final oldColorStr = originalTrack.color;
+    // Turn the color to hex string #RRGGBBAA representation
+    final colorStr = newColor.toRGBA();
+
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = _copyWithTrack(originalTrack, color: colorStr);
+    notifyListeners();
+
+    try {
+      await track_api.changeTrackColor(trackId: trackId, newColor: colorStr);
+      return Result.ok(null);
+    } catch (e) {
+      if (_tracks.containsKey(trackId)) {
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(originalTrack, color: oldColorStr);
+        notifyListeners();
+      }
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addEffectToMixerChannel(
+    int channelId,
+    int registryId,
+  ) async {
+    try {
+      if (channelId == -1) {
+        AppLogger.info("Adding effect to master channel");
+        await mixer_api.addEffectToMasterBus(registryId: registryId);
+        notifyCustomBackendChange(() async {
+          await syncMasterBus();
+        });
+      } else {
+        AppLogger.info("Adding effect to track channel $channelId");
+        await mixer_api.addEffectToMixerChannelById(
+          trackId: channelId,
+          registryId: registryId,
+        );
+        notifyCustomBackendChange(() async {
+          await syncMixerChannel(channelId);
+        });
+      }
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to add effect to channel: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addEffectToBusChannel(int busId, int registryId) async {
+    try {
+      AppLogger.info("Adding effect to bus channel $busId");
+      await mixer_api.addEffectToBus(busId: busId, registryId: registryId);
+      notifyCustomBackendChange(() async {
+        await syncBuses();
+      });
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to add effect to bus channel: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addEffectToMasterBus(int registryId) async {
+    try {
+      await mixer_api.addEffectToMasterBus(registryId: registryId);
+      notifyCustomBackendChange(() async {
+        await syncMasterBus();
+        AppLogger.info("Adding effect to master channel");
+      });
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to add effect to master bus: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> stop() async {
+    try {
+      await transport_api.stopSongPlayback();
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to stop play: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> toggleLoop() async {
+    try {
+      final newLooping = !_isLooping;
+      await transport_api.setLooping(val: newLooping);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to toggle loop: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Sets the BPM.
+  /// Updates local state optimistically and calls the backend API.
+  /// Auto-scales horizontalZoomLevel so that grid lines remain visually fixed.
+  Future<Result<void>> setBpm(double value) async {
+    try {
+      _transportState = transportStateNewWithParam(
+        bpm: value,
+        timeSignature: _transportState.timeSignature,
+      );
+
+      // (No longer scaling horizontalZoomLevel. Since it's in ticks/pixel, keeping it constant
+      // natively keeps the beat grids visually the same width independent of BPM)
+
+      notifyListeners();
+
+      await transport_api.setBpm(val: value);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to set bpm: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Change the selected tool to a desired tool
+  void selectTool(ToolSelection tool) {
+    if (_selectedTool != tool) {
+      _selectedTool = tool;
+      notifyListeners();
+    }
+  }
+
+  // =============== PIANO ROLL ACTIONS ===============
+
+  /// Change the selected piano roll tool
+  void selectPianoRollTool(PianoRollToolSelection tool) {
+    if (_pianoRollTool != tool) {
+      _pianoRollTool = tool;
+      notifyListeners();
+    }
+  }
+
+  /// Select notes in the piano roll
+  void selectNotes(Set<int> noteIds) {
+    _selectedNoteIds = noteIds;
+    notifyListeners();
+  }
+
+  /// Add notes to the current selection
+  void addNotesToSelection(Set<int> noteIds) {
+    _selectedNoteIds = {..._selectedNoteIds, ...noteIds};
+    notifyListeners();
+  }
+
+  /// Clear note selection
+  void clearNoteSelection() {
+    if (_selectedNoteIds.isNotEmpty) {
+      _selectedNoteIds = {};
+      notifyListeners();
+    }
+  }
+
+  void toggleToolbarContext(ToolbarMenuContextGroup group) {
+    if (group == _currentToolbarContext) {
+      // Toggle off
+      _currentToolbarContext = ToolbarMenuContextGroup.none;
+    } else {
+      _currentToolbarContext = group;
+    }
+    notifyListeners();
+  }
+
+  void closeContextPanel() {
+    _currentToolbarContext = ToolbarMenuContextGroup.none;
+    notifyListeners();
+  }
+
+  /// Shows the interaction panel for a given target (clip, multi-clip, or track)
+  void showInteractionPanel(InteractionTarget target) {
+    _interactionTarget = target;
+    notifyListeners();
+  }
+
+  /// Hides the interaction panel
+  void hideInteractionPanel() {
+    if (_interactionTarget != null) {
+      _interactionTarget = null;
+      notifyListeners();
+    }
+  }
+
+  void navigateTo(WorkspaceView view) {
+    if (_currentView != view) {
+      _currentView = view;
+      notifyListeners();
+    }
+  }
+
+  /// Opens the piano roll view with a specific pattern (from source list).
+  void openPattern(int patternId) {
+    _editingPatternId = patternId;
+    navigateTo(WorkspaceView.pianoRoll);
+  }
+
+  void setGridSize(GridSize newSize) {
+    if (gridSize != newSize) {
+      gridSize = newSize;
+      notifyListeners();
+    }
+  }
+
+  void setHorizontalZoom(double level) {
+    if (horizontalZoomLevel != level) {
+      horizontalZoomLevel = level;
+      notifyListeners();
+    }
+  }
+
+  Future<Result<void>> seekTo(int samples) async {
+    try {
+      // Call the Rust API
+      await transport_api.setPlayhead(val: samples);
+
+      // Optimistic update (optional, since Rust pushes the update back immediately)
+      notifyListeners();
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error seeking: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> deleteClip(int trackId, int clipId) async {
+    if (_tracks.containsKey(trackId)) {
+      final track = _tracks[trackId]!;
+      final updatedClips = track.clips.where((c) => c.id != clipId).toList();
+
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+      notifyListeners();
+    }
+
+    try {
+      await track_api.deleteClip(trackId: trackId, clipId: clipId);
+      // await syncTrack(trackId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error deleting clip: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> sliceClip(int trackId, int clipId, int cutPoint) async {
+    try {
+      await track_api.sliceClip(
+        sourceTrackId: trackId,
+        clipId: clipId,
+        cutPoint: cutPoint,
+      );
+      await syncTrack(trackId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error cutting clip: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> resizeClip(
+    int trackId,
+    int clipId,
+    UiResizeEdge edge,
+    int newTime,
+  ) async {
+    _applyOptimisticResize(trackId, clipId, edge, newTime);
+    try {
+      await track_api.resizeClip(
+        trackId: trackId,
+        clipId: clipId,
+        edge: edge,
+        newTimeVal: newTime,
+      );
+      // await syncTrack(trackId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error resizing clip: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> moveClip(
+    int trackId,
+    int clipId,
+    int newStartTime, {
+    int? newTrackId,
+  }) async {
+    _applyOptimisticMove(trackId, clipId, newStartTime, newTrackId);
+    try {
+      await track_api.moveClip(
+        sourceTrackId: trackId,
+        clipId: clipId,
+        newStartTime: newStartTime,
+        newTrackId: newTrackId,
+      );
+      // await syncTrack(trackId);
+      // if (newTrackId != null && newTrackId != trackId) {
+      //   await syncTrack(newTrackId);
+      // }
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error moving clip: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> createEmptyPatternClip({
+    required int trackId,
+    required int startTime,
+  }) async {
+    try {
+      await createClip(
+        sourceType: UiSourceType.midi,
+        trackId: trackId,
+        startTime: startTime,
+      );
+      AppLogger.info("New empty pattern clip is successfully created");
+      // notifyBackendChange(ProjectEvent.tracksChanged);
+      await syncTrack(trackId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error when creating new empty pattern clip: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  // ===================== BATCH CLIP OPERATIONS ==========================
+
+  /// Move multiple clips by a delta amount (in ticks)
+  Future<Result<void>> moveClipBatch(
+    int trackId,
+    List<int> clipIds,
+    int deltaTicks, {
+    int? newTrackId,
+  }) async {
+    _applyOptimisticMoveBatch(trackId, clipIds, deltaTicks, newTrackId);
+    try {
+      await track_api.moveClipBatch(
+        sourceTrackId: trackId,
+        clipIds: clipIds,
+        deltaTicks: deltaTicks,
+        newTrackId: newTrackId,
+      );
+      // await syncTrack(trackId);
+      // if (newTrackId != null && newTrackId != trackId) {
+      //   await syncTrack(newTrackId);
+      // }
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error moving clips in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Resize multiple clips by a delta amount (in ticks)
+  Future<Result<void>> resizeClipBatch(
+    int trackId,
+    List<int> clipIds,
+    UiResizeEdge edge,
+    int deltaTicks,
+  ) async {
+    _applyOptimisticResizeBatch(trackId, clipIds, edge, deltaTicks);
+    try {
+      await track_api.resizeClipBatch(
+        trackId: trackId,
+        clipIds: clipIds,
+        edge: edge,
+        deltaTicks: deltaTicks,
+      );
+      // await syncTrack(trackId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error resizing clips in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Delete multiple clips at once
+  Future<Result<void>> deleteClipBatch(int trackId, List<int> clipIds) async {
+    // Optimistic update
+    if (_tracks.containsKey(trackId)) {
+      final track = _tracks[trackId]!;
+      final clipIdSet = clipIds.toSet();
+      final updatedClips = track.clips
+          .where((c) => !clipIdSet.contains(c.id))
+          .toList();
+
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+      notifyListeners();
+    }
+
+    try {
+      await track_api.deleteClipBatch(trackId: trackId, clipIds: clipIds);
+      await syncTrack(trackId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error deleting clips in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Convenience method to delete all currently selected clips
+  Future<Result<void>> deleteSelectedClips() async {
+    final trackId = _selectedTrackId;
+    final clipIds = _selectedClipIds;
+
+    if (trackId == null || clipIds.isEmpty) return Result.ok(null);
+
+    final result = await deleteClipBatch(trackId, clipIds);
+    deselectAllClips();
+    return result;
+  }
+
+  // ===================== NOTE CHANGE API'S ==========================
+  Future<Result<void>> previewNote({
+    required int trackId,
+    required int noteKey,
+    required bool isOn,
+    int velocity = 0,
+  }) async {
+    try {
+      await playPreviewNote(
+        trackId: trackId,
+        noteKey: noteKey,
+        velocity: velocity,
+        isOn: isOn,
+      );
+      AppLogger.info(
+        "Play ${numToMidiKey(noteKey)} with generator from $trackId",
+      );
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error previewing note: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addPatternNote({
+    required int patternId,
+    required int key,
+    required int startTick,
+    required int duration,
+  }) async {
+    try {
+      await addNote(
+        patternId: patternId,
+        key: key,
+        startTick: startTick,
+        duration: duration,
+      );
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error adding note: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addPatternNoteBatch({
+    required int patternId,
+    required List<(int, int, int?)> notes,
+  }) async {
+    try {
+      await addNotesBatch(patternId: patternId, notes: notes);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error adding notes in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> deletePatternNoteBatch({
+    required int patternId,
+    required List<int> noteIds,
+  }) async {
+    for (final noteId in noteIds) {
+      _applyOptimisticNoteDeletion(patternId, noteId);
+    }
+    try {
+      await deleteNotesBatch(patternId: patternId, noteIds: noteIds);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error deleting notes in batch: $e");
+      await syncPattern(patternId);
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> movePatternNoteBatch({
+    required int patternId,
+    required List<(int, int, int)> updates,
+  }) async {
+    try {
+      await moveNotesBatch(patternId: patternId, updates: updates);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error moving notes in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> resizePatternNoteBatch({
+    required int patternId,
+    required List<(int, int)> updates,
+  }) async {
+    try {
+      await resizeNotesBatch(patternId: patternId, updates: updates);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error resizing notes in batch: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> deletePatternNote({
+    required int patternId,
+    required int noteId,
+  }) async {
+    _applyOptimisticNoteDeletion(patternId, noteId);
+    try {
+      await deleteNote(patternId: patternId, noteId: noteId);
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error deleting note: $e");
+      await syncPattern(patternId);
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> movePatternNote({
+    required int patternId,
+    required int noteId,
+    required int newStartTick,
+    required int newKey,
+  }) async {
+    try {
+      await moveNote(
+        patternId: patternId,
+        noteId: noteId,
+        newStartTick: newStartTick,
+        newKey: newKey,
+      );
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error moving note: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> resizePatternNote({
+    required int patternId,
+    required int noteId,
+    required int newDuration,
+  }) async {
+    try {
+      await resizeNote(
+        patternId: patternId,
+        noteId: noteId,
+        newDuration: newDuration,
+      );
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Error resizing note: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  // ==================== OPTIMISTIC HELPERS =============================
+  // Helper
+  void _applyOptimisticResize(
+    int trackId,
+    int clipId,
+    UiResizeEdge edge,
+    int newTime,
+  ) {
+    final track = _tracks[trackId];
+    if (track == null) return;
+
+    final clipIndex = track.clips.indexWhere((c) => c.id == clipId);
+    if (clipIndex == -1) return;
+
+    final clip = track.clips[clipIndex];
+
+    int newStart = clip.startTime.toInt();
+    int newLength = clip.loopLength.toInt();
+    int newOffset = clip.offsetStart.toInt();
+
+    if (edge == UiResizeEdge.right) {
+      // Dragging Right Edge: newTime is the END time
+      if (newTime > clip.startTime) {
+        newLength = newTime - clip.startTime;
+      }
+    } else {
+      // Dragging Left Edge: newTime is the START time (Slip Edit)
+      final oldEnd = clip.startTime + clip.loopLength;
+
+      if (newTime < oldEnd) {
+        final delta = newTime - clip.startTime;
+        final potentialOffset = clip.offsetStart + delta;
+
+        // Constraint: Offset cannot be negative
+        if (potentialOffset >= 0) {
+          newStart = newTime;
+          newLength = oldEnd - newTime;
+          newOffset = potentialOffset.toInt();
+        }
+      }
+    }
+
+    final updatedClip = _copyWithClip(
+      clip,
+      startTime: newStart,
+      loopLength: newLength,
+      offsetStart: newOffset,
+    );
+
+    final updatedClips = List<UiClip>.from(track.clips);
+    updatedClips[clipIndex] = updatedClip;
+
+    final updatedTrack = _copyWithTrack(track, clips: updatedClips);
+
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = updatedTrack;
+
+    notifyListeners();
+  }
+
+  void _applyOptimisticMove(
+    int trackId,
+    int clipId,
+    int newStartTime,
+    int? newTrackId,
+  ) {
+    if (!_tracks.containsKey(trackId)) return;
+    final track = _tracks[trackId]!;
+    final clipIndex = track.clips.indexWhere((c) => c.id == clipId);
+    if (clipIndex == -1) return;
+
+    final clip = track.clips[clipIndex];
+    final updatedClip = _copyWithClip(clip, startTime: newStartTime);
+
+    if (newTrackId != null && newTrackId != trackId) {
+      if (!_tracks.containsKey(newTrackId)) return;
+      final targetTrack = _tracks[newTrackId]!;
+
+      final sourceClips = List<UiClip>.from(track.clips)..removeAt(clipIndex);
+      final targetClips = List<UiClip>.from(targetTrack.clips)
+        ..add(updatedClip);
+
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: sourceClips);
+      _tracks[newTrackId] = _copyWithTrack(targetTrack, clips: targetClips);
+    } else {
+      final updatedClips = List<UiClip>.from(track.clips);
+      updatedClips[clipIndex] = updatedClip;
+
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    }
+    notifyListeners();
+  }
+
+  void _applyOptimisticMoveBatch(
+    int trackId,
+    List<int> clipIds,
+    int deltaSamples,
+    int? newTrackId,
+  ) {
+    if (!_tracks.containsKey(trackId)) return;
+    final track = _tracks[trackId]!;
+    final targetId = newTrackId ?? trackId;
+    if (!_tracks.containsKey(targetId)) return;
+    final targetTrack = _tracks[targetId]!;
+
+    final clipIdSet = clipIds.toSet();
+    final clipsToMove = track.clips
+        .where((c) => clipIdSet.contains(c.id))
+        .toList();
+
+    if (trackId != targetId) {
+      final sourceClips = track.clips
+          .where((c) => !clipIdSet.contains(c.id))
+          .toList();
+      final targetClips = List<UiClip>.from(targetTrack.clips);
+      for (var clip in clipsToMove) {
+        int newStart = clip.startTime + deltaSamples;
+        if (newStart < 0) newStart = 0;
+        targetClips.add(_copyWithClip(clip, startTime: newStart));
+      }
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: sourceClips);
+      _tracks[targetId] = _copyWithTrack(targetTrack, clips: targetClips);
+    } else {
+      final updatedClips = track.clips.map((clip) {
+        if (clipIdSet.contains(clip.id)) {
+          int newStart = clip.startTime + deltaSamples;
+          if (newStart < 0) newStart = 0;
+          return _copyWithClip(clip, startTime: newStart);
+        }
+        return clip;
+      }).toList();
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    }
+    notifyListeners();
+  }
+
+  void _applyOptimisticResizeBatch(
+    int trackId,
+    List<int> clipIds,
+    UiResizeEdge edge,
+    int deltaSamples,
+  ) {
+    if (!_tracks.containsKey(trackId)) return;
+    final track = _tracks[trackId]!;
+    final clipIdSet = clipIds.toSet();
+
+    final updatedClips = track.clips.map((clip) {
+      if (clipIdSet.contains(clip.id)) {
+        int newStart = clip.startTime;
+        int newLength = clip.loopLength;
+        int newOffset = clip.offsetStart;
+
+        if (edge == UiResizeEdge.right) {
+          int currentEnd = clip.startTime + clip.loopLength;
+          int newEnd = currentEnd + deltaSamples;
+          if (newEnd < clip.startTime + 100) newEnd = clip.startTime + 100;
+          newLength = newEnd - clip.startTime;
+        } else {
+          int oldStart = clip.startTime;
+          int oldEnd = clip.startTime + clip.loopLength;
+          int newStartProposed = oldStart + deltaSamples;
+          if (newStartProposed < 0) newStartProposed = 0;
+          if (newStartProposed > oldEnd - 100) newStartProposed = oldEnd - 100;
+
+          int delta = newStartProposed - oldStart;
+          int currentOffset = clip.offsetStart;
+          int newOffsetProposed = currentOffset + delta;
+          if (newOffsetProposed < 0) newOffsetProposed = 0;
+
+          newStart = newStartProposed;
+          newLength = oldEnd - newStartProposed;
+          newOffset = newOffsetProposed;
+        }
+        return _copyWithClip(
+          clip,
+          startTime: newStart,
+          loopLength: newLength,
+          offsetStart: newOffset,
+        );
+      }
+      return clip;
+    }).toList();
+
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    notifyListeners();
+  }
+
+  void _applyOptimisticNoteDeletion(int patternId, int noteId) {
+    final pattern = _patterns[patternId];
+    if (pattern == null) return;
+
+    // Filter out the specific note
+    final updatedNotes = pattern.notes.where((n) => n.id != noteId).toList();
+
+    final updatedPattern = UiPattern(
+      id: pattern.id,
+      name: pattern.name,
+      lengthTicks: pattern.lengthTicks,
+      notes: updatedNotes,
+    );
+
+    // Update Store & Notify UI immediately
+    final newPatterns = Map<int, UiPattern>.from(_patterns);
+    newPatterns[patternId] = updatedPattern;
+    _patterns = newPatterns;
+
+    notifyListeners();
+  }
+
+  // ============= PLACEMENT MODE LOGIC =================
+  // Placement logic moved to ClipPlacementNotifier
+
+  UiTrack _copyWithTrack(
+    UiTrack original, {
+    List<UiClip>? clips,
+    String? name,
+    String? color,
+  }) {
+    return UiTrack(
+      id: original.id,
+      color:
+          color ??
+          original.color, // Fixed: use original color instead of #FFFFFF
+      name: name ?? original.name,
+      trackType: original.trackType,
+      clips: clips ?? original.clips,
+      generatorId: original.generatorId, // Forward generator ID
+      orderIdx: original.orderIdx,
+    );
+  }
+
+  UiClip _copyWithClip(
+    UiClip original, {
+    String? name,
+    int? id,
+    int? startTime,
+    UiClipSource? source,
+    int? offsetStart,
+    int? loopLength,
+    bool? isSampleBased,
+  }) {
+    return UiClip(
+      name: name ?? original.name,
+      id: id ?? original.id,
+      startTime: startTime ?? original.startTime,
+      source: source ?? original.source,
+      offsetStart: offsetStart ?? original.offsetStart,
+      loopLength: loopLength ?? original.loopLength,
+      isSampleBased: isSampleBased ?? original.isSampleBased,
+    );
+  }
+
+  // ================== Session State (frontend-only) =====================
+
+  /// Select a single clip (replaces any existing selection)
+  void selectClip({required int trackId, required int clipId}) {
+    _selectedTrackId = trackId;
+    _selectedClipIds = [clipId];
+    _focusClipId = clipId;
+    notifyListeners();
+  }
+
+  /// Add a clip to the current selection (for Ctrl+Click)
+  void addClipToSelection({required int trackId, required int clipId}) {
+    // Different track - clear and start fresh
+    if (_selectedTrackId != null && _selectedTrackId != trackId) {
+      _selectedClipIds = [];
+    }
+    _selectedTrackId = trackId;
+    if (!_selectedClipIds.contains(clipId)) {
+      _selectedClipIds = [..._selectedClipIds, clipId];
+    }
+    _focusClipId = clipId;
+    notifyListeners();
+  }
+
+  /// Remove a clip from the current selection
+  void removeClipFromSelection({required int clipId}) {
+    _selectedClipIds = _selectedClipIds.where((id) => id != clipId).toList();
+
+    // If we removed the focus clip, update focus to last selected
+    if (_focusClipId == clipId) {
+      _focusClipId = _selectedClipIds.isNotEmpty ? _selectedClipIds.last : null;
+    }
+
+    // If no clips left, clear the track selection too
+    if (_selectedClipIds.isEmpty) {
+      _selectedTrackId = null;
+      _focusClipId = null;
+    }
+    notifyListeners();
+  }
+
+  /// Select multiple clips at once (for range select)
+  void selectClips({required int trackId, required List<int> clipIds}) {
+    _selectedTrackId = trackId;
+    _selectedClipIds = List.from(clipIds);
+    _focusClipId = clipIds.isNotEmpty ? clipIds.last : null;
+    notifyListeners();
+  }
+
+  /// Clear all clip selection
+  void deselectAllClips() {
+    _selectedTrackId = null;
+    _selectedClipIds = [];
+    _focusClipId = null;
+    notifyListeners();
+  }
+
+  /// Set the preview generator for piano roll
+  void setPreviewGenerator({int? generatorId}) {
+    _previewGeneratorId = generatorId;
+    notifyListeners();
+  }
+
+  // ====================================================
+  // ================== Mixer API's =====================
+  // ====================================================
+
+  // ================ MIXER SNAPSHOT STREAM ==================
+
+  /// Subscribe to the Rust → Dart MixerChannelSnapshot stream.
+  /// The audio thread pushes a snapshot in response to queryMixerChannel().
+  void _initMixerSnapshotStream() {
+    _mixerSnapshotSubscription?.cancel();
+    _mixerSnapshotSubscription = mixer_api.createMixerSnapshotStream().listen(
+      _applySnapshot,
+      onError: (e) {
+        AppLogger.error('Mixer snapshot stream error: $e');
+      },
+    );
+  }
+
+  /// Apply a full DSP snapshot from the audio thread to local mixer state.
+  /// Respects _touchedParams so in-flight slider drags are not overridden.
+  void _applySnapshot(mixer_api.UiMixerChannelSnapshot snapshot) {
+    if (snapshot.isMaster) {
+      // Master uses u32::MAX - 1 as sentinel in touchedParams
+      const int masterSentinel = 4294967294;
+      final ch = _mixerState.masterBus;
+      final updated = mixer_api.UiMixerChannel(
+        volume: _touchedParams.contains((masterSentinel, 'volume'))
+            ? ch.volume
+            : snapshot.volume,
+        pan: _touchedParams.contains((masterSentinel, 'pan'))
+            ? ch.pan
+            : snapshot.pan,
+        mute: _touchedParams.contains((masterSentinel, 'mute'))
+            ? ch.mute
+            : snapshot.mute,
+        solo: _touchedParams.contains((masterSentinel, 'solo'))
+            ? ch.solo
+            : snapshot.solo,
+        invertedPhase: snapshot.invertedPhase,
+        effects: ch.effects,
+      );
+      _mixerState = mixer_api.UiMixerState.newWithParam(
+        channels: _mixerState.channels,
+        masterBus: updated,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    } else if (snapshot.busId != null) {
+      final busId = snapshot.busId!;
+      final bus = _mixerState.buses[busId];
+      if (bus == null) return;
+      final ch = bus.channel;
+      final updated = mixer_api.UiMixerChannel(
+        volume: _touchedParams.contains((busId, 'volume'))
+            ? ch.volume
+            : snapshot.volume,
+        pan: _touchedParams.contains((busId, 'pan')) ? ch.pan : snapshot.pan,
+        mute: _touchedParams.contains((busId, 'mute'))
+            ? ch.mute
+            : snapshot.mute,
+        solo: _touchedParams.contains((busId, 'solo'))
+            ? ch.solo
+            : snapshot.solo,
+        invertedPhase: snapshot.invertedPhase,
+        effects: ch.effects,
+      );
+      final newBuses = Map<int, mixer_api.UiBus>.from(_mixerState.buses);
+      newBuses[busId] = mixer_api.UiBus(
+        id: bus.id,
+        name: bus.name,
+        channel: updated,
+      );
+      _mixerState = mixer_api.UiMixerState.newWithParam(
+        channels: _mixerState.channels,
+        masterBus: _mixerState.masterBus,
+        buses: newBuses,
+        routing: _mixerState.routing,
+      );
+    } else {
+      final trackId = snapshot.trackId;
+      final ch = _mixerState.channels[trackId];
+      if (ch == null) return;
+      final updated = mixer_api.UiMixerChannel(
+        volume: _touchedParams.contains((trackId, 'volume'))
+            ? ch.volume
+            : snapshot.volume,
+        pan: _touchedParams.contains((trackId, 'pan')) ? ch.pan : snapshot.pan,
+        mute: _touchedParams.contains((trackId, 'mute'))
+            ? ch.mute
+            : snapshot.mute,
+        solo: _touchedParams.contains((trackId, 'solo'))
+            ? ch.solo
+            : snapshot.solo,
+        invertedPhase: snapshot.invertedPhase,
+        effects: ch.effects,
+      );
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updated;
+      _mixerState = mixer_api.UiMixerState.newWithParam(
+        channels: newChannels,
+        masterBus: _mixerState.masterBus,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Mark a mixer param as "touched" (user is actively dragging).
+  /// Automation events for this param will be ignored while touched.
+  void markParamTouched(int trackId, String paramName) {
+    _touchedParams.add((trackId, paramName));
+  }
+
+  /// Mark a mixer param as "released" (user finished dragging).
+  /// Automation events will resume for this param.
+  void markParamReleased(int trackId, String paramName) {
+    _touchedParams.remove((trackId, paramName));
+  }
+
+  /// Fire-and-forget: sends a single param change to the audio thread ring buffer.
+  /// Applies the change optimistically to local state so the slider doesn't snap back.
+  void setMixerChannelParam({
+    required int trackId,
+    required mixer_api.UiMixerChannelParams param,
+  }) {
+    _applyParamToLocalChannel(trackId, param, isMaster: false);
+    mixer_api.setMixerChannelParam(
+      target: mixer_api.UiMixerChannelTarget.track(trackId),
+      param: param,
+    );
+  }
+
+  /// Fire-and-forget: sends a single master bus param change to the audio thread.
+  void setMasterBusParam({required mixer_api.UiMixerChannelParams param}) {
+    _applyParamToLocalChannel(0, param, isMaster: true);
+    mixer_api.setMixerChannelParam(
+      target: const mixer_api.UiMixerChannelTarget.master(),
+      param: param,
+    );
+  }
+
+  /// Fire-and-forget: sends a single bus channel param change to the audio thread.
+  void setBusChannelParam({
+    required int busId,
+    required mixer_api.UiMixerChannelParams param,
+  }) {
+    _applyParamToBusChannel(busId, param);
+    mixer_api.setMixerChannelParam(
+      target: mixer_api.UiMixerChannelTarget.bus(busId),
+      param: param,
+    );
+  }
+
+  Future<Result<void>> createNewBusChannel({String name = "Untitled"}) async {
+    try {
+      await mixer_api.createBus(name: name);
+      notifyCustomBackendChange(() async {
+        await syncBuses();
+      });
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error('Error when trying to add a new bus channel: $e');
+      syncBuses();
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Optimistically apply a single param to a track/master channel in local state.
+  void _applyParamToLocalChannel(
+    int trackId,
+    mixer_api.UiMixerChannelParams param, {
+    required bool isMaster,
+  }) {
+    final channel = isMaster
+        ? _mixerState.masterBus
+        : _mixerState.channels[trackId];
+    if (channel == null) return;
+
+    double volume = channel.volume;
+    double pan = channel.pan;
+    bool mute = channel.mute;
+    bool solo = channel.solo;
+    bool invertedPhase = channel.invertedPhase;
+
+    switch (param) {
+      case mixer_api.UiMixerChannelParams_Volume():
+        volume = param.field0;
+      case mixer_api.UiMixerChannelParams_Pan():
+        pan = param.field0;
+      case mixer_api.UiMixerChannelParams_Mute():
+        mute = param.field0;
+      case mixer_api.UiMixerChannelParams_Solo():
+        solo = param.field0;
+      case mixer_api.UiMixerChannelParams_InvertedPhase():
+        invertedPhase = param.field0;
+    }
+
+    final updated = mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: invertedPhase,
+      effects: channel.effects,
+    );
+
+    if (isMaster) {
+      _mixerState = mixer_api.UiMixerState.newWithParam(
+        channels: _mixerState.channels,
+        masterBus: updated,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    } else {
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updated;
+      _mixerState = mixer_api.UiMixerState.newWithParam(
+        channels: newChannels,
+        masterBus: _mixerState.masterBus,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Optimistically apply a single param to a bus channel in local state.
+  void _applyParamToBusChannel(
+    int busId,
+    mixer_api.UiMixerChannelParams param,
+  ) {
+    final bus = _mixerState.buses[busId];
+    if (bus == null) return;
+
+    final ch = bus.channel;
+    double volume = ch.volume;
+    double pan = ch.pan;
+    bool mute = ch.mute;
+    bool solo = ch.solo;
+    bool invertedPhase = ch.invertedPhase;
+
+    switch (param) {
+      case mixer_api.UiMixerChannelParams_Volume():
+        volume = param.field0;
+      case mixer_api.UiMixerChannelParams_Pan():
+        pan = param.field0;
+      case mixer_api.UiMixerChannelParams_Mute():
+        mute = param.field0;
+      case mixer_api.UiMixerChannelParams_Solo():
+        solo = param.field0;
+      case mixer_api.UiMixerChannelParams_InvertedPhase():
+        invertedPhase = param.field0;
+    }
+
+    final updatedBus = mixer_api.UiBus(
+      id: bus.id,
+      name: bus.name,
+      channel: mixer_api.UiMixerChannel(
+        volume: volume,
+        pan: pan,
+        mute: mute,
+        solo: solo,
+        invertedPhase: invertedPhase,
+        effects: ch.effects,
+      ),
+    );
+    final newBuses = Map<int, mixer_api.UiBus>.from(_mixerState.buses);
+    newBuses[busId] = updatedBus;
+    _mixerState = mixer_api.UiMixerState.newWithParam(
+      channels: _mixerState.channels,
+      masterBus: _mixerState.masterBus,
+      buses: newBuses,
+      routing: _mixerState.routing,
+    );
+    notifyListeners();
+  }
+
+  void removeNotesFromSelection(Set<int> noteIds) {
+    _selectedNoteIds = _selectedNoteIds
+        .where((id) => !noteIds.contains(id))
+        .toSet();
+    notifyListeners();
+  }
+
+  // ==============================================
+  // Session's clipboard API
+  // ==============================================
+
+  /// Copy notes from a pattern
+  Future<void> copyNotesFromPattern(int patternId, List<int> noteIds) async {
+    try {
+      session_api.copyPatternNotes(patternId: patternId, noteIds: noteIds);
+    } catch (e) {
+      AppLogger.error(e.toString());
+      // rethrow;
+    }
+  }
+
+  Future<void> cutNotesFromPattern(int patternId, List<int> noteIds) async {
+    for (final noteId in noteIds) {
+      _applyOptimisticNoteDeletion(patternId, noteId);
+    }
+
+    // Clear selection since the items are gone
+    _selectedNoteIds.clear();
+    notifyListeners();
+
+    // Perform Backend Call
+    try {
+      await session_api.cutPatternNotes(patternId: patternId, noteIds: noteIds);
+
+      notifyCustomBackendChange(() async {
+        await syncPattern(patternId);
+      });
+    } catch (e) {
+      AppLogger.error(e.toString());
+      // Re-sync on failure to restore accidentally "deleted" notes
+      await syncPattern(patternId);
+    }
+  }
+
+  Future<void> pasteNotesFromClipboardToPattern(
+    int targetPatternId,
+    int newTickStart,
+    int newKey,
+  ) async {
+    try {
+      // The API call returns the fully constructed list of notes
+      // (with their new IDs assigned by the backend)
+      final pastedNotes = await session_api.pastePatternNotes(
+        targetPatternId: targetPatternId,
+        playheadTick: newTickStart,
+        targetKey: newKey,
+      );
+
+      if (pastedNotes.isEmpty) return;
+
+      // Optimistic Update: Append the newly pasted notes immediately
+      final pattern = _patterns[targetPatternId];
+      if (pattern != null) {
+        final updatedNotes = List<UiNote>.from(pattern.notes)
+          ..addAll(pastedNotes);
+
+        final updatedPattern = UiPattern(
+          id: pattern.id,
+          name: pattern.name,
+          lengthTicks: pattern
+              .lengthTicks, // Backend recalcs this, but frontend will catch up
+          notes: updatedNotes,
+        );
+
+        final newPatterns = Map<int, UiPattern>.from(_patterns);
+        newPatterns[targetPatternId] = updatedPattern;
+        _patterns = newPatterns;
+
+        // Auto-select the newly pasted notes
+        _selectedNoteIds = pastedNotes.map((n) => n.id).toSet();
+        notifyListeners();
+      }
+
+      // Sync to get the authoritative length & sort order
+      notifyCustomBackendChange(() async {
+        await syncPattern(targetPatternId);
+      });
+    } catch (e) {
+      AppLogger.error(e.toString());
+    }
+  }
+
+  // ======================================
+  // Clip's clipboard action API
+  // ======================================
+
+  Future<Result<void>> copySelectedClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.copyClips(trackId: trackId, clipIds: clipIds);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> cutSelectedClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.cutClips(trackId: trackId, clipIds: clipIds);
+
+      // Do optimistic update
+      if (_tracks.containsKey(trackId)) {
+        final track = _tracks[trackId]!;
+        final clipIdSet = clipIds.toSet();
+
+        // Filter out the cut clips
+        final updatedClips = track.clips
+            .where((c) => !clipIdSet.contains(c.id))
+            .toList();
+
+        // Update the tracks map
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+
+        // Clear selection since these clips are no longer on the timeline
+        _selectedClipIds = [];
+        if (_selectedTrackId == trackId) {
+          _selectedTrackId = null;
+          _focusClipId = null;
+        }
+
+        notifyListeners();
+      }
+
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> pasteClips({
+    required int targetTrackId,
+    required int pasteStartTime,
+    required UiTrackType trackType,
+  }) async {
+    try {
+      final clips = await session_api.pasteClips(
+        targetTrackId: targetTrackId,
+        pasteStartTime: pasteStartTime,
+        trackType: trackType,
+      );
+
+      debugPrint(clips.length.toString());
+      if (clips.isEmpty) return Result.ok(null);
+
+      // SUCCESS: Update frontend immediately
+      if (_tracks.containsKey(targetTrackId)) {
+        final track = _tracks[targetTrackId]!;
+
+        // Append the newly pasted clips from the backend
+        final updatedClips = List<UiClip>.from(track.clips)..addAll(clips);
+
+        // Update the tracks map
+        _tracks = Map.from(_tracks);
+        _tracks[targetTrackId] = _copyWithTrack(track, clips: updatedClips);
+
+        // Automatically select the pasted clips so the user can easily drag them
+        _selectedTrackId = targetTrackId;
+        _selectedClipIds = clips.map((c) => c.id).toList();
+        _focusClipId = clips.last.id;
+
+        notifyListeners();
+      }
+
+      // Trigger a background sync to ensure perfect consistency (recalculating lengths, etc)
+      notifyCustomBackendChange(() async {
+        await syncTrack(targetTrackId);
+      });
+
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error(e.toString());
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Populate spreading state of UiApplication from provider new state
+  void _populateState(UiApplicationState state) {
+    _metadata = state.metadata;
+    _transportState = state.transport;
+    _hardwareConfig = state.hardwareConfig;
+
+    _tracks = Map.from(state.tracks);
+    _generators = Map.from(state.generators);
+    _patterns = Map.from(state.patterns);
+
+    _mixerState = state.mixer;
+    maxSamplesIndex = state.maxSampleIndex;
+    // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
+  }
+}
+
+extension on mixer_api.UiMixerState {
+  mixer_api.UiMixerState copyWith({
+    Map<int, mixer_api.UiMixerChannel>? channels,
+    mixer_api.UiMixerChannel? masterBus,
+    Map<int, mixer_api.UiBus>? buses,
+    List<mixer_api.UiRoutingConnection>? routing,
+  }) {
+    return mixer_api.UiMixerState.newWithParam(
+      channels: channels ?? this.channels,
+      masterBus: masterBus ?? this.masterBus,
+      buses: buses ?? this.buses,
+      routing: routing ?? this.routing,
+    );
+  }
+}
+
+extension TransportStateCopyWith on UiTransportState {
+  UiTransportState copyWith({double? bpm, (int, int)? timeSignature}) {
+    return transportStateNewWithParam(
+      bpm: bpm ?? this.bpm,
+      timeSignature: timeSignature ?? this.timeSignature,
+    );
+  }
+}

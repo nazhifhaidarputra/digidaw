@@ -1,4 +1,4 @@
-use crate::core::project::plugin::modulation::ModulationEvent;
+use crate::core::project::{AutomationLane, ModulationLink, ModulationSource};
 use crate::core::project::{
     automation::{AutomationCurveType, AutomationPoint},
     mixer::RoutingConnection,
@@ -158,6 +158,18 @@ pub struct AudioAutomationLane {
     pub default_value: f32,
 }
 
+impl From<AutomationLane> for AudioAutomationLane {
+    fn from(l: AutomationLane) -> Self {
+        Self {
+            points: l.points,
+            enabled: l.enabled,
+            min: l.min,
+            max: l.max,
+            default_value: l.default_value,
+        }
+    }
+}
+
 impl AudioAutomationLane {
     /// Get the denormalized value at a given time in ticks.
     /// Returns `default_value` (denormalized) if disabled or no points.
@@ -237,7 +249,8 @@ pub struct AudioGraphState {
     pub sample_rate: u32,
     pub buffer_size: usize,
 
-    pub modulation_events: HashMap<ModulationId, ModulationEvent>,
+    pub modulation_sources: HashMap<ModulationId, ModulationSource>,
+    pub modulation_links: HashMap<ModulationLinkId, ModulationLink>,
 }
 
 impl From<&ApplicationState> for AudioGraphState {
@@ -245,21 +258,13 @@ impl From<&ApplicationState> for AudioGraphState {
         let mut tracks_vec: Vec<AudioTrack> = app.tracks.values().cloned().collect();
         tracks_vec.sort_by_key(|t| t.id);
 
-        let modulation_events = app.modulation_pool.clone();
+        let modulation_links = app
+            .modulation_links
+            .iter()
+            .map(|(&id, view)| (id, view.prop.clone()))
+            .collect();
 
-        let mut automation_lanes = HashMap::new();
 
-        for (id, lane) in app.automation_pool.iter() {
-            let audio_auto_lane = AudioAutomationLane {
-                points: lane.points.clone(),
-                enabled: lane.enabled,
-                min: lane.min,
-                max: lane.max,
-                default_value: lane.default_value,
-            };
-
-            automation_lanes.insert(*id, audio_auto_lane);
-        }
         // 3. Append explicit user modulations (LFOs, Peak Controllers) from ApplicationState
         // (Assuming you added `pub modulations: Vec<ModulationEvent>` to ApplicationState)
         // modulation_events.extend(app.modulations.clone());
@@ -270,7 +275,7 @@ impl From<&ApplicationState> for AudioGraphState {
             routing: app.mixer.routing.clone().into_boxed_slice(),
             bus_ids: app.mixer.buses.keys().copied().collect(),
             asset_library: app.asset_library.clone(),
-            automation_lanes,
+            automation_lanes: app.automation_pool.clone().into_iter().map(|(id, l)| (id, l.into())).collect(),
             max_sample_index: app.max_sample_index,
             sample_rate: app.audio_config.sample_rate,
             buffer_size: if is_power_of_two(app.audio_config.buffer_size.into()) {
@@ -278,7 +283,8 @@ impl From<&ApplicationState> for AudioGraphState {
             } else {
                 64
             },
-            modulation_events,
+            modulation_sources: app.modulation_sources.clone(),
+            modulation_links,
         }
     }
 }

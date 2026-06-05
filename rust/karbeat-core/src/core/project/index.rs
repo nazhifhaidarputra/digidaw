@@ -49,9 +49,6 @@ pub struct ApplicationState {
     pub automation_pool: HashMap<AutomationId, AutomationLane>,
     pub automation_counter: u32,
 
-    pub modulation_pool: HashMap<ModulationId, ModulationEvent>,
-    pub modulation_counter: u32,
-
     // The Generators (LFOs, Macro Knobs, Peak Controllers)
     pub modulation_sources: HashMap<ModulationId, ModulationSource>,
     pub modulation_src_counter: u32,

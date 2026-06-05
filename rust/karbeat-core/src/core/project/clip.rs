@@ -182,6 +182,7 @@ impl ApplicationState {
                 return Err(anyhow::anyhow!("Track not found"));
             }
         }
+        self.update_max_sample_index();
         Ok(())
     }
 
@@ -198,6 +199,8 @@ impl ApplicationState {
         } else {
             Err(anyhow::anyhow!("Track not found"))
         })?;
+
+        self.update_max_sample_index();
 
         Ok(deleted_clip)
     }
@@ -263,6 +266,7 @@ impl ApplicationState {
                 .map_err(|e| e.to_string())?;
         }
 
+        self.update_max_sample_index();
         Ok(modified_clip)
     }
 

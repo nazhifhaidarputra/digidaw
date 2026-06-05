@@ -1,0 +1,336 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/plugins/view/dynamic_plugin_screen.dart';
+import 'package:karbeat/features/plugins/generators/synth_registry.dart';
+import 'package:karbeat/features/source/view/audio_properties_screen.dart';
+import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/track.dart';
+import 'package:karbeat/app/providers/app_state.dart';
+import 'package:karbeat/app/providers/clip_placement_state.dart';
+
+class SourceListScreen extends ConsumerWidget {
+  SourceListScreen({super.key});
+
+  Future<void> _pickFile(WidgetRef ref) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      String path = result.files.single.path!;
+      await ref.read(globalStateProvider).addAudioFile(path);
+      ref.invalidate(audioSourcesProvider);
+    }
+  }
+
+  final audioSourcesProvider =
+      FutureProvider.autoDispose<Map<int, AudioWaveformUiForSourceList>>((
+        ref,
+      ) async {
+        // Read the main state provider once to access the API
+        final appState = ref.read(globalStateProvider);
+        final result = await appState.getLoadedAudioSources();
+
+        if (result.isOk() && result.ok() != null) {
+          return result.ok()!;
+        }
+
+        return {};
+      });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Access the source map from state
+    final audioSourcesAsync = ref.watch(audioSourcesProvider);
+
+    final generators = ref.watch(
+      globalStateProvider.select((s) => s.generators),
+    );
+
+    final patterns = ref.watch(globalStateProvider.select((s) => s.patterns));
+
+    return Scaffold(
+      backgroundColor: Colors.grey.shade900,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _pickFile(ref),
+        backgroundColor: Colors.cyanAccent,
+        child: const Icon(Icons.add),
+      ),
+      body: CustomScrollView(
+        slivers: [
+          // ================================================
+          // 1. GENERATORS SECTION
+          // ================================================
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                "Instruments / Generators",
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          if (generators.isEmpty)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "No Instruments.",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ),
+
+          SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final id = generators.keys.elementAt(index);
+              final gen = generators.values.elementAt(index);
+              final instanceType = gen.instanceType;
+              final name = switch (instanceType) {
+                UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
+                _ => "Sampler",
+              };
+
+              final genInstance = switch (instanceType) {
+                UiGeneratorInstanceType_Plugin(:final field0) => field0,
+                _ => null,
+              };
+
+              return _SourceTile(
+                title: name,
+                subtitle: "ID: $id",
+                icon: Icons.piano,
+                color: Colors.orangeAccent,
+                onTap: () {
+                  Widget screen;
+                  try {
+                    final availableGenerators = ref
+                        .read(globalStateProvider)
+                        .availableGenerators;
+                    final registryId = availableGenerators
+                        .firstWhere((p) => p.id == genInstance?.registryId)
+                        .id;
+                    // final builder = SynthRegistry.getSynthBuilder(registryId);
+                    screen = SynthRegistry.getScreen(registryId: registryId, instanceId: id);
+                  } catch (_) {
+                    screen = DynamicPluginScreen(
+                      generatorId: id,
+                      generatorName: name,
+                    );
+                  }
+
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => screen));
+                },
+                onPlace: null,
+                // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement
+              );
+            }, childCount: generators.length),
+          ),
+
+          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+
+          // ================================================
+          // 2. AUDIO CLIPS SECTION
+          // ================================================
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                "Audio Clips",
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          audioSourcesAsync.when(
+            data: (audioSources) {
+              if (audioSources.isEmpty) {
+                return const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      "No Audio Files.",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final id = audioSources.keys.elementAt(index);
+                  final source = audioSources.values.elementAt(index);
+
+                  return _SourceTile(
+                    title: source.name,
+                    subtitle: "ID: $id | ${source.sampleRate} Hz",
+                    icon: Icons.audio_file,
+                    color: Colors.cyanAccent,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AudioPropertiesScreen(
+                            sourceId: id,
+                            sourceName: source.name,
+                          ),
+                        ),
+                      );
+                    },
+                    onPlace: () => ref
+                        .read(clipPlacementProvider.notifier)
+                        .startPlacement(id, type: UiSourceType.audio),
+                  );
+                }, childCount: audioSources.length),
+              );
+            },
+
+            loading: () => const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+
+            error: (err, stack) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  "Error loading audio sources: $err",
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+
+          // Patterns list
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                "Patterns",
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          if (patterns.isEmpty)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "No Patterns.",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ),
+
+          SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final id = patterns.keys.elementAt(index);
+              final pattern = patterns.values.elementAt(index);
+              return _SourceTile(
+                title: pattern.name,
+                subtitle: "ID: $id | ${pattern.name}",
+                icon: Icons.music_note,
+                color: Colors.purpleAccent,
+                onTap: () {
+                  ref.read(globalStateProvider).openPattern(id);
+                },
+                onPlace: () => ref
+                    .read(clipPlacementProvider.notifier)
+                    .startPlacement(id, type: UiSourceType.midi),
+              );
+            }, childCount: patterns.length),
+          ),
+
+          // Extra padding at bottom for FAB
+          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final VoidCallback? onPlace;
+
+  const _SourceTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.onPlace,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey)),
+      trailing: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert, color: Colors.white),
+        onSelected: (value) {
+          if (value == 'place') onPlace?.call();
+        },
+        itemBuilder: (context) => [
+          if (onPlace != null)
+            const PopupMenuItem(
+              value: 'place',
+              child: Row(
+                children: [
+                  Icon(Icons.input, color: Colors.black54),
+                  SizedBox(width: 8),
+                  Text("Put in timeline"),
+                ],
+              ),
+            ),
+          const PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete, color: Colors.red),
+                SizedBox(width: 8),
+                Text("Delete"),
+              ],
+            ),
+          ),
+        ],
+      ),
+      onTap: onTap,
+    );
+  }
+}

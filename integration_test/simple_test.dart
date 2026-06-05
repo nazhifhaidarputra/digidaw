@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:karbeat/app.dart';
+import 'package:karbeat/app/app.dart';
 import 'package:karbeat/src/rust/frb_generated.dart';
 import 'package:integration_test/integration_test.dart';
 

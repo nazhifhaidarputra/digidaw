@@ -507,3 +507,11 @@ pub fn get_modulation_link_by_id(
 ) -> Option<ModulationLinkDto> {
     automation_api::get_modulation_link_by_id(link_id).map(|m| (&m).into())
 }
+
+pub fn get_all_modulation_sources() -> HashMap<u32, ModulationSourceDto> {
+    automation_api::get_modulation_sources_map()
+}
+
+pub fn get_modulation_source(id: u32) -> Option<ModulationSourceDto> {
+    automation_api::get_modulation_source(id)
+}

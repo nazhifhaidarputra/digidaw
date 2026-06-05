@@ -1,18 +1,19 @@
 use crate::{
     commands::AudioCommand,
-    context::utils::{broadcast_automation_lane, send_audio_command},
+    context::utils::{ broadcast_automation_lane, send_audio_command },
     core::project::{
-        ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource, automation::{AutomationLane, AutomationPoint, AutomationTarget}
+        ModulationLink,
+        ModulationLinkForOrderedLaneView,
+        ModulationSource,
+        automation::{ AutomationLane, AutomationPoint, AutomationTarget },
     },
-    lock::{get_app_read, get_app_write},
-    shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
+    lock::{ get_app_read, get_app_write },
+    shared::{ AutomationId, BusId, ModulationId, ModulationLinkId, TrackId },
 };
 
 /// Get all automations lane for all types
 pub fn get_automations_lanes_all<C, U, M>(mapper: M) -> C
-where
-    M: Fn(&AutomationLane) -> U,
-    C: FromIterator<U>,
+    where M: Fn(&AutomationLane) -> U, C: FromIterator<U>
 {
     let app = get_app_read();
 
@@ -28,7 +29,7 @@ pub fn add_automation_lane_for_track(
     label: impl Into<String>,
     min: f32,
     max: f32,
-    default_value: f32,
+    default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
         let mut app = get_app_write();
@@ -48,7 +49,7 @@ pub fn add_automation_lane(
     label: impl Into<String>,
     min: f32,
     max: f32,
-    default_value: f32,
+    default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
         let mut app = get_app_write();
@@ -68,7 +69,7 @@ pub fn add_automation_lane_for_bus(
     label: impl Into<String>,
     min: f32,
     max: f32,
-    default_value: f32,
+    default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
         let mut app = get_app_write();
@@ -85,7 +86,7 @@ pub fn add_automation_lane_for_bus(
 pub fn add_new_automation_point(
     automation_id: AutomationId,
     time_ticks: u32,
-    value: f32,
+    value: f32
 ) -> anyhow::Result<AutomationPoint> {
     let auto_point = {
         let mut app = get_app_write();
@@ -114,13 +115,18 @@ pub fn update_automation_point(
     index: usize,
     time_ticks: u32,
     value: f32,
-    tension: f32,
+    tension: f32
 ) -> anyhow::Result<usize> {
     let new_index = {
         let mut app = get_app_write();
 
-        let (_, new_index) =
-            app.update_automation_point(automation_id, index, time_ticks, value, tension)?;
+        let (_, new_index) = app.update_automation_point(
+            automation_id,
+            index,
+            time_ticks,
+            value,
+            tension
+        )?;
         new_index
     };
 
@@ -129,22 +135,20 @@ pub fn update_automation_point(
 }
 
 pub fn get_automation_lanes_for_track(
-    track_id: TrackId,
+    track_id: TrackId
 ) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
     let app = get_app_read();
     app.get_automation_lanes_for_track(track_id)
 }
 
 pub fn get_automation_lanes_for_bus(
-    bus_id: BusId,
+    bus_id: BusId
 ) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
     let app = get_app_read();
     app.get_automation_lanes_for_bus(bus_id)
 }
 
-pub fn get_automation_lane<Id: Into<AutomationId>>(
-    lane_id: Id
-) -> Option<AutomationLane> {
+pub fn get_automation_lane<Id: Into<AutomationId>>(lane_id: Id) -> Option<AutomationLane> {
     let app = get_app_read();
     let id_typed = lane_id.into();
     app.automation_pool.get(&id_typed).cloned()
@@ -156,9 +160,9 @@ pub fn get_automation_lane<Id: Into<AutomationId>>(
 
 /// Get all modulations in the project
 pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> std::collections::HashMap<Id, T>
-where
-    Id: std::hash::Hash + std::cmp::Eq,
-    F: Fn(&ModulationLinkId, &crate::core::project::ModulationLinkForOrderedLaneView) -> (Id, T),
+    where
+        Id: std::hash::Hash + std::cmp::Eq,
+        F: Fn(&ModulationLinkId, &crate::core::project::ModulationLinkForOrderedLaneView) -> (Id, T)
 {
     let app = get_app_read();
     app.modulation_links
@@ -167,9 +171,9 @@ where
         .collect()
 }
 
-pub fn get_modulation_link_by_id<Id>(
-    id: Id
-) -> Option<ModulationLinkForOrderedLaneView> where Id: Into<ModulationLinkId> {
+pub fn get_modulation_link_by_id<Id>(id: Id) -> Option<ModulationLinkForOrderedLaneView>
+    where Id: Into<ModulationLinkId>
+{
     let app = get_app_read();
     let id_typed = id.into();
     app.modulation_links.get(&id_typed).cloned()
@@ -184,6 +188,26 @@ pub fn add_modulation_source(source: ModulationSource) -> ModulationId {
 
     send_audio_command(AudioCommand::AddModulationSource { id, source });
     id
+}
+
+pub fn get_modulation_sources_map<Id, S, C>() -> C
+    where Id: From<ModulationId>, S: for<'a> From<&'a ModulationSource>, C: FromIterator<(Id, S)>
+{
+    let app = get_app_read();
+    app.modulation_sources
+        .iter()
+        .map(|(id, s)| (Id::from(*id), S::from(s)))
+        .collect::<C>()
+}
+
+
+/// Get modulation source based on its modulation id
+pub fn get_modulation_source<Id, Siuuuu>(modulation_id: Id) -> Option<Siuuuu>
+    where Id: Into<ModulationId>, Siuuuu: for<'sybau> From<&'sybau ModulationSource>
+{
+    let app = get_app_read();
+    let id_typed = modulation_id.into();
+    app.modulation_sources.get(&id_typed).map(|s| Siuuuu::from(s))
 }
 
 /// Remove the modulation source. This function also cascade delete all link
@@ -210,13 +234,12 @@ pub fn link_this_param_to_controller(
     source_id: ModulationId,
     target: AutomationTarget,
     depth: f32,
-    base_value: f32,
+    base_value: f32
 ) -> anyhow::Result<ModulationLinkId> {
     let (id, link) = {
         let mut app = get_app_write();
         let id = app.link_modulation(source_id, target, depth, base_value)?;
-        let link = app
-            .modulation_links
+        let link = app.modulation_links
             .get(&id)
             .map(|l| ModulationLink {
                 id,

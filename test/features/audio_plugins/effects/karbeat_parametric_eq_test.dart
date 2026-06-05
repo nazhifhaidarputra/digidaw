@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:karbeat/features/audio_plugins/effects/karbeat_parametric_eq.dart';
+import 'package:karbeat/features/plugins/effects/karbeat_parametric_eq.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/frb_generated.dart';
 
