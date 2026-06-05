@@ -2,8 +2,7 @@ use crate::{
     commands::AudioCommand,
     context::utils::{broadcast_automation_lane, send_audio_command},
     core::project::{
-        automation::{AutomationLane, AutomationPoint, AutomationTarget},
-        ModulationLink, ModulationSource,
+        ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource, automation::{AutomationLane, AutomationPoint, AutomationTarget}
     },
     lock::{get_app_read, get_app_write},
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
@@ -83,16 +82,6 @@ pub fn add_automation_lane_for_bus(
     Ok(lane)
 }
 
-// pub fn remove_automation_lane(automation_id: AutomationId) -> anyhow::Result<()> {
-//     {
-//         let mut app = get_app_write();
-//         app.remove_automation_lane(automation_id)?;
-//     }
-//
-//     send_audio_command(AudioCommand::RemoveAutomationLane { id: automation_id });
-//     Ok(())
-// }
-
 pub fn add_new_automation_point(
     automation_id: AutomationId,
     time_ticks: u32,
@@ -153,6 +142,14 @@ pub fn get_automation_lanes_for_bus(
     app.get_automation_lanes_for_bus(bus_id)
 }
 
+pub fn get_automation_lane<Id: Into<AutomationId>>(
+    lane_id: Id
+) -> Option<AutomationLane> {
+    let app = get_app_read();
+    let id_typed = lane_id.into();
+    app.automation_pool.get(&id_typed).cloned()
+}
+
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 // Modulation API
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
@@ -170,6 +167,14 @@ where
         .collect()
 }
 
+pub fn get_modulation_link_by_id<Id>(
+    id: Id
+) -> Option<ModulationLinkForOrderedLaneView> where Id: Into<ModulationLinkId> {
+    let app = get_app_read();
+    let id_typed = id.into();
+    app.modulation_links.get(&id_typed).cloned()
+}
+
 /// Add generic modulation source
 pub fn add_modulation_source(source: ModulationSource) -> ModulationId {
     let id = {
@@ -177,7 +182,6 @@ pub fn add_modulation_source(source: ModulationSource) -> ModulationId {
         app.add_modulation_source(source.clone())
     };
 
-    // AddModulationSource is already a granular ring-buffer command
     send_audio_command(AudioCommand::AddModulationSource { id, source });
     id
 }

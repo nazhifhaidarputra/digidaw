@@ -205,6 +205,8 @@ class GlobalAppState extends ChangeNotifier {
     syncPatternList();
     syncGeneratorList();
     syncAudioHardwareConfigState();
+    syncAutomationAndModulationState();
+    syncRoutingConnection();
 
     // fetch available generators and effects
     fetchAvailableGenerators();
@@ -653,7 +655,23 @@ class GlobalAppState extends ChangeNotifier {
   }
 
   Future<Result<void>> syncModulation(int linkId) async {
-    return await attemptAsync(() async {});
+    return await attemptAsync(() async {
+      final link = await getModulationLinkById(linkId: linkId);
+      if (link == null) throw Exception("Link not found");
+      _modulationLinks[linkId] = link;
+      notifyListeners();
+    });
+  }
+
+  Future<Result<void>> syncAutomation(int automationId) async {
+    return await attemptAsync(() async {
+      final newLaneState = await getAutomationLane(laneId: automationId);
+      if (newLaneState == null) {
+        throw Exception("Automation lane not found for ID $automationId");
+      }
+      _automationPool[automationId] = newLaneState;
+      notifyListeners();
+    });
   }
 
   // =============== ACTIONS ===============

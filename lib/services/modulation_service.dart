@@ -19,7 +19,7 @@ Future<Result<void>> addModulation(
 /// Fetch all Automation lane for all buses. call this when we update
 /// the list of automation lane of buses.
 Future<Result<Map<int, List<(AutomationId, ModulationId, AutomationLaneDto)>>>>
-fetchAutomationLaneBuses({required WidgetRef ref}) async {
+getAutomationLaneBuses({required WidgetRef ref}) async {
   return await attemptAsync(() async {
     // final something = await getAut
     return {};
@@ -28,10 +28,26 @@ fetchAutomationLaneBuses({required WidgetRef ref}) async {
 
 /// Fetch all Automation lane for all buses. call this when we do an update
 /// that affects only on single track. For example: removing lane from a track.
-Future<Result<List<(AutomationId, ModulationId, AutomationLaneDto)>>>
-fetchAutomationLaneBus({required WidgetRef ref, required int busId}) async {
+Future<Result<List<AutomationLaneDto>>>
+getAutomationLaneBus(GlobalAppState state, {required int sourceBusId}) async {
   return await attemptAsync(() async {
-    final lanes = await getAutomationLanesForBus(busId: busId);
+    // Because all of automation lanes in pools are stored inside the ModulationLinks where
+    // we can inspect its connection target. we just iterate that
+    final lanes = state.modulationLinks.entries.where((entry) {
+      switch (entry.value.target) {
+
+        case AutomationTargetDto_Track():
+          return false;
+        case AutomationTargetDto_Bus(:final busId):
+          return sourceBusId == busId;
+        case AutomationTargetDto_Master():
+          return false;
+        case AutomationTargetDto_TempoBpm():
+          return false;
+      }
+    }).map((entry) => entry.value).toList();
+
+    // final lanes = await getAutomationLanesForBus(busId: busId);
     // TODO: Add to store in globalState
     return lanes;
   });
@@ -40,7 +56,7 @@ fetchAutomationLaneBus({required WidgetRef ref, required int busId}) async {
 /// Fetch all Automation lane for all buses. call this when we update
 /// the list of automation lane of buses.
 Future<Result<List<(AutomationId, ModulationId, AutomationLaneDto)>>>
-fetchAutomationLaneTrack({required WidgetRef ref, required int busId}) async {
+getAutomationLaneTrack({required WidgetRef ref, required int busId}) async {
   return await attemptAsync(() async {
     final lanes = await getAutomationLanesForBus(busId: busId);
     // TODO: Add to store in globalState
@@ -48,9 +64,13 @@ fetchAutomationLaneTrack({required WidgetRef ref, required int busId}) async {
   });
 }
 
-Future<Result<List<(AutomationId, ModulationId, AutomationLaneDto)>>>
-fetchAllModulationAutomationLane({required WidgetRef ref}) async {
-  return await attemptAsync(() async {
-    return [];
-  });
-}
+// Future<Result<void>>
+// gethAllModulations(GlobalAppState state) async {
+//   return await attemptAsync(() async {
+//     final mod = await getAllLinkedModulationParams();
+//     state.sync
+//     return mod;
+//   });
+// }
+
+// Future<Result<ModulationLinkDto>> getModulation

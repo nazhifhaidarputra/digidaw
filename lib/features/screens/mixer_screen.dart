@@ -459,7 +459,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               ),
               // === ROUTING CABLE SPACE (The Trench) ===
               Container(
-                height: 160,
+                height: 120,
                 width: double.infinity,
                 decoration: const BoxDecoration(
                   color: Color(0xFF0C0C0F), // Darker trench

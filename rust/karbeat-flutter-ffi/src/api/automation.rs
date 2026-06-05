@@ -378,6 +378,11 @@ pub fn get_automations_lanes_all() -> HashMap<u32, AutomationLaneDto> {
     automation_api::get_automations_lanes_all(|lane| (lane.id.into(), AutomationLaneDto::from(lane)))
 }
 
+/// Fetch a single automation lane
+pub fn get_automation_lane(lane_id: u32) -> Option<AutomationLaneDto>{
+    automation_api::get_automation_lane(lane_id).map(|l| (&l).into())
+}
+
 pub fn add_automation_lane_for_track(
     track_id: u32,
     target: AutomationTargetDto,
@@ -495,4 +500,10 @@ pub fn link_this_param_to_controller(
     )
     .map_err(|e| e.to_string())
     .and_then(|v| Ok(v.to_u32()))
+}
+
+pub fn get_modulation_link_by_id(
+    link_id: u32
+) -> Option<ModulationLinkDto> {
+    automation_api::get_modulation_link_by_id(link_id).map(|m| (&m).into())
 }
