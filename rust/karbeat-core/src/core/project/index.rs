@@ -12,7 +12,6 @@ pub use super::plugin::AudioPlugin;
 pub use super::track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack};
 pub use super::transport::TransportState;
 
-use crate::core::project::plugin::modulation::ModulationEvent;
 use crate::core::project::{automation::AutomationLane, mixer::MixerState};
 use crate::core::project::{ModulationLinkForOrderedLaneView, ModulationSource};
 
