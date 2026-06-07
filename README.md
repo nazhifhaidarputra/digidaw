@@ -1,5 +1,6 @@
 <div align="center">
   <h1>🎵 DigiDAW</h1>
+  <img src="./assets/images/Digidaw_logo.png"/>
   <p><strong>A minimal, cross-platform Digital Audio Workstation (DAW) written in Flutter and Rust.</strong></p>
   <p>
     <a href="https://github.com/haidarptrw/karbeat/stargazers"><img src="https://img.shields.io/github/stars/haidarptrw/karbeat?style=for-the-badge&color=yellow" alt="Stars Badge"/></a>
