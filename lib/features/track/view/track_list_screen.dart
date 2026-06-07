@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'package:karbeat/core/widgets/scroll_physics/unclamped_never_scrollable_physics.dart';
+import 'package:karbeat/features/mixer/service/modulation_service.dart';
+import 'package:karbeat/features/track/view/automation_lane_header.dart';
+import 'package:karbeat/features/track/view/automation_lane_slot.dart';
+import 'package:karbeat/features/track/view/grid_painter.dart';
+import 'package:karbeat/features/track/view/track_header.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'dart:math' as math;
 
@@ -11,9 +16,7 @@ import 'package:karbeat/features/track/view/midi_drawer.dart';
 import 'package:karbeat/features/track/view/waveform_painter.dart';
 import 'package:karbeat/features/track/view/clip_drag_controller.dart';
 import 'package:karbeat/features/track/view/playhead.dart';
-import 'package:karbeat/shared/models/id.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
-import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
@@ -23,12 +26,25 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
-import 'package:karbeat/core/utils/math.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/core/utils/scroll_behavior.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:multi_split_view/multi_split_view.dart';
+
+final trackWaveformProvider =
+    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+      // Re-evaluate whenever the track changes (e.g. clips added/removed)
+      ref.watch(globalStateProvider.select((s) => s.tracks[arg.trackId]));
+
+      // Sync call — no copy, no await; returns Arc handles into Rust memory
+      return getWaveformHandlesForTrack(trackId: arg.trackId);
+    });
+
+/// Tracks whether a track's automation accordion is expanded
+final trackAccordionExpandedProvider = StateProvider.family<bool, int>(
+  (ref, trackId) => true,
+);
 
 class TrackListScreen extends ConsumerWidget {
   const TrackListScreen({super.key});
@@ -652,9 +668,52 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               if (index == widget.trackIds.length) {
                 return _buildAddButton();
               }
-              return _TrackHeader(
-                trackId: widget.trackIds[index],
-                itemHeight: widget.itemHeight,
+
+              final trackId = widget.trackIds[index];
+              return Consumer(
+                builder: (context, ref, _) {
+                  final isExpanded = ref.watch(
+                    trackAccordionExpandedProvider(trackId),
+                  );
+                  final lanes = ref.watch(
+                    trackAutomationProvider(trackId),
+                  ); // Using the API from previous steps
+                  final trackColor = ref.watch(
+                    globalStateProvider.select(
+                      (s) => s.tracks[trackId]?.color.toColor() ?? Colors.grey,
+                    ),
+                  );
+
+                  return Column(
+                    children: [
+                      TrackHeader(
+                        trackId: trackId,
+                        itemHeight: widget.itemHeight,
+                      ),
+                      if (lanes.isNotEmpty)
+                        _AutomationExpandBar(
+                          isExpanded: isExpanded,
+                          laneCount: lanes.length,
+                          trackColor: trackColor,
+                          onTap: () => ref
+                              .read(
+                                trackAccordionExpandedProvider(
+                                  trackId,
+                                ).notifier,
+                              )
+                              .update((s) => !s),
+                        ),
+                      if (isExpanded)
+                        ...lanes.map(
+                          (entry) => AutomationLaneHeader(
+                            lane: entry.$3,
+                            itemHeight: 60,
+                            trackColor: trackColor,
+                          ),
+                        ),
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -951,16 +1010,65 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                   if (index == widget.trackIds.length) {
                                     return const SizedBox(height: 60);
                                   }
-                                  return IgnorePointer(
-                                    ignoring: isPlacing,
-                                    child: AudioTrackSlot(
-                                      trackId: widget.trackIds[index],
-                                      height: widget.itemHeight,
-                                      horizontalScrollController:
-                                          _trackContentController,
-                                      sampleRate: _activeSampleRate,
-                                      clipDragController: _clipDragController,
-                                    ),
+                                  final trackId = widget.trackIds[index];
+                                  return Consumer(
+                                    builder: (context, ref, _) {
+                                      final isExpanded = ref.watch(
+                                        trackAccordionExpandedProvider(trackId),
+                                      );
+                                      final lanes = ref.watch(
+                                        trackAutomationProvider(trackId),
+                                      );
+                                      final trackColor = ref.watch(
+                                        globalStateProvider.select(
+                                          (s) =>
+                                              s.tracks[trackId]?.color
+                                                  .toColor() ??
+                                              Colors.grey,
+                                        ),
+                                      );
+
+                                      return Column(
+                                        children: [
+                                          IgnorePointer(
+                                            ignoring: isPlacing,
+                                            child: AudioTrackSlot(
+                                              trackId: trackId,
+                                              height: widget.itemHeight,
+                                              horizontalScrollController:
+                                                  _trackContentController,
+                                              sampleRate: _activeSampleRate,
+                                              clipDragController:
+                                                  _clipDragController,
+                                            ),
+                                          ),
+                                          if (lanes.isNotEmpty)
+                                            _AutomationExpandBar(
+                                              isExpanded: isExpanded,
+                                              laneCount: lanes.length,
+                                              trackColor: trackColor,
+                                              onTap: () => ref
+                                                  .read(
+                                                    trackAccordionExpandedProvider(
+                                                      trackId,
+                                                    ).notifier,
+                                                  )
+                                                  .update((s) => !s),
+                                            ),
+                                          if (isExpanded)
+                                            ...lanes.map(
+                                              (entry) => AutomationLaneSlot(
+                                                lane: entry.$3,
+                                                height: 60,
+                                                horizontalScrollController:
+                                                    _trackContentController,
+                                                trackColor: trackColor,
+                                                sampleRate: _activeSampleRate,
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
                                   );
                                 },
                               ),
@@ -1500,293 +1608,60 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 }
 
-class _TrackHeader extends ConsumerWidget {
-  final int trackId;
-  final double itemHeight;
+class _AutomationExpandBar extends StatelessWidget {
+  final bool isExpanded;
+  final int laneCount;
+  final Color trackColor;
+  final VoidCallback onTap;
 
-  const _TrackHeader({required this.trackId, required this.itemHeight});
-
-  Color _getContrastColor(Color backgroundColor) {
-    return backgroundColor.computeLuminance() > 0.5
-        ? Colors.black
-        : Colors.white;
-  }
-
-  IconData _getTrackIcon(UiTrackType type) {
-    switch (type) {
-      case UiTrackType.audio:
-        return Icons.graphic_eq;
-      case UiTrackType.midi:
-        return Icons.piano;
-      case UiTrackType.automation:
-        return Icons.show_chart;
-    }
-  }
-
-  Future<Color?> _showColorPickerDialog(
-    BuildContext context,
-    Color currentColor,
-  ) {
-    return showDialog<Color>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text("Select Track Color"),
-          content: SingleChildScrollView(
-            child: Wrap(
-              spacing: 12.0,
-              runSpacing: 12.0,
-              children: dawColors.map((color) {
-                final isSelected = currentColor.toARGB32() == color.toARGB32();
-                return GestureDetector(
-                  onTap: () => Navigator.of(ctx).pop(color),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected ? Colors.white : Colors.transparent,
-                        width: isSelected ? 3 : 0,
-                      ),
-                      boxShadow: [
-                        if (isSelected)
-                          BoxShadow(
-                            color: color.withAlpha(100),
-                            blurRadius: 8,
-                            spreadRadius: 2,
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text("Cancel"),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  const _AutomationExpandBar({
+    required this.isExpanded,
+    required this.laneCount,
+    required this.trackColor,
+    required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Only rebuilds this specific header if the track's name/color/type changes
-    final track = ref.watch(
-      globalStateProvider.select((s) => s.tracks[trackId]),
-    );
-
-    if (track == null) return const SizedBox();
-
-    return ContextMenuWrapper(
-      title: track.name,
-      header: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Name: ${track.name}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "Type: ${track.trackType.name.toUpperCase()}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "ID: ${track.id}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Text(
-                "Color: ",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: track.color.toColor(),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ],
-          ),
-        ],
+  Widget build(BuildContext context) {
+    return Container(
+      height: 24,
+      margin: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade800,
+        border: Border(
+          right: BorderSide(color: Colors.grey.shade400, width: 1),
+        ),
       ),
-      actions: [
-        DawContextAction(
-          title: "Rename",
-          icon: Icons.edit,
-          onTap: () {
-            final textController = TextEditingController(text: track.name);
-
-            showDialog<String>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text("Rename Track"),
-                content: TextField(
-                  controller: textController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: "New track name",
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (value) {
-                    Navigator.pop(ctx, value);
-                  },
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Cancel"),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, textController.text),
-                    child: const Text("Rename"),
-                  ),
-                ],
+      child: InkWell(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: 16,
+              height: 16,
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                color: trackColor.withAlpha(60),
+                borderRadius: BorderRadius.circular(3),
               ),
-            ).then((newName) {
-              if (newName != null &&
-                  newName.trim().isNotEmpty &&
-                  newName != track.name) {
-                AppLogger.info(
-                  "Rename track requested for ID: ${track.id} with name [${newName.trim()}]",
-                );
-                ref
-                    .read(globalStateProvider)
-                    .changeTrackName(trackId, newName.trim());
-              }
-            });
-          },
-        ),
-        DawContextAction(
-          title: "Change Color",
-          icon: Icons.color_lens,
-          onTap: () {
-            final currentColor = track.color.toColor();
-
-            _showColorPickerDialog(context, currentColor).then((selectedColor) {
-              if (selectedColor != null &&
-                  selectedColor.toARGB32() != currentColor.toARGB32()) {
-                AppLogger.info(
-                  "Change color requested for track ID: ${track.id}",
-                );
-                ref
-                    .read(globalStateProvider)
-                    .changeTrackColor(trackId, selectedColor);
-              }
-            });
-          },
-        ),
-        DawContextAction(
-          title: "Move Up",
-          icon: Icons.arrow_upward,
-          onTap: () async {
-            AppLogger.info("Move Up requested for track ID: ${track.id}");
-            await handleUpdateTrackOrder(
-              ref: ref,
-              trackId: trackId,
-              newIdx: (track.orderIdx - 1).complyU32(),
-            );
-          },
-        ),
-        DawContextAction(
-          title: "Move Down",
-          icon: Icons.arrow_downward,
-          onTap: () async {
-            AppLogger.info("Move Down requested for track ID: ${track.id}");
-            await handleUpdateTrackOrder(
-              ref: ref,
-              trackId: trackId,
-              newIdx: (track.orderIdx + 1).complyU32(),
-            );
-          },
-        ),
-        DawContextAction(
-          title: "Delete Track",
-          icon: Icons.delete,
-          isDestructive: true,
-          onTap: () {
-            AppLogger.info("Delete track requested for ID: ${track.id}");
-            ref.read(globalStateProvider).deleteTrack(trackId);
-          },
-        ),
-      ],
-      child: SizedBox(
-        height: itemHeight,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: track.color.toColor(),
-            border: Border(
-              bottom: BorderSide(color: Colors.grey.shade400, width: 1),
-              right: BorderSide(color: Colors.grey.shade400, width: 1),
+              child: Center(
+                child: Icon(
+                  isExpanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_right,
+                  color: trackColor,
+                  size: 14,
+                ),
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      track.name,
-                      style: TextStyle(
-                        color: Colors.grey.shade800,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
-                      style: TextStyle(
-                        color: _getContrastColor(track.color.toColor()),
-                        // color: Colors.grey.shade600, // use inverse color of track color for better contrast
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  InkWell(
-                    onTap: () {},
-                    child: const Icon(
-                      Icons.mic_off,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  InkWell(
-                    onTap: () {},
-                    child: const Icon(
-                      Icons.volume_up,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            Icon(Icons.show_chart, color: trackColor, size: 12),
+            const SizedBox(width: 6),
+            Text(
+              '$laneCount automation lane${laneCount == 1 ? '' : 's'}',
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+          ],
         ),
       ),
     );
@@ -2051,7 +1926,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                 },
                 child: RepaintBoundary(
                   child: CustomPaint(
-                    painter: _GridPainter(
+                    painter: GridPainter(
                       zoomLevel: zoomLevel,
                       gridSize: gridSize,
                       tempo: tempo,
@@ -2728,119 +2603,6 @@ class _ClipRenderer extends ConsumerWidget {
   }
 }
 
-class _GridPainter extends CustomPainter {
-  final double zoomLevel;
-  final GridSize gridSize;
-  final double tempo;
-  final int sampleRate;
-  final ScrollController scrollController;
-
-  _GridPainter({
-    required this.zoomLevel,
-    required this.gridSize,
-    required this.tempo,
-    required this.sampleRate,
-    required this.scrollController,
-  }) : super(repaint: scrollController);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (tempo <= 0 ||
-        sampleRate <= 0 ||
-        zoomLevel <= 0 ||
-        gridSize.value <= 0) {
-      return;
-    }
-
-    // Calculate Grid Dimensions
-    final double ticksPerGridLine = (960.0 * 4.0) / gridSize.value;
-    double pixelsPerGridLine = ticksPerGridLine / zoomLevel;
-
-    if (pixelsPerGridLine < 0.0001) return;
-
-    int skipFactor = 1;
-    while (pixelsPerGridLine * skipFactor < 15.0) {
-      skipFactor *= 2;
-      if (skipFactor > 1000000) break;
-    }
-
-    final double visualInterval = pixelsPerGridLine * skipFactor;
-
-    double startX = 0.0;
-    double endX = size.width;
-
-    if (scrollController.hasClients) {
-      final position = scrollController.positions.first;
-      final double offset = position.pixels;
-      double viewportWidth = size.width;
-      // Use the local `position` variable — scrollController.position throws
-      // when multiple scroll views share the same controller.
-      if (position.hasViewportDimension) {
-        viewportWidth = position.viewportDimension;
-      }
-
-      const double buffer = 200.0;
-      startX = (offset - buffer).clamp(0.0, double.infinity);
-      endX = offset + viewportWidth + buffer;
-    }
-
-    final paint = Paint()
-      ..color = Colors.white.withAlpha((0.08 * 255).round())
-      ..strokeWidth = 1.0;
-
-    final barPaint = Paint()
-      ..color = Colors.white.withAlpha((0.25 * 255).round())
-      ..strokeWidth = 1.0;
-
-    // Calculate start index
-    int gridIndex = (startX / visualInterval).floor();
-
-    // Use multiplication instead of addition to prevent float drift
-    double currentX = gridIndex * visualInterval;
-
-    while (currentX < endX) {
-      if (currentX > size.width) break;
-
-      final int actualGridLines = gridIndex * skipFactor;
-      // Is this a bar line?
-      // A bar = 4 beats × 960 ticks = 3840 ticks. Use integer tick math to
-      // avoid a division-by-zero from the old reciprocal `(1/gridSize.value)`.
-      final int ticksAtLine = (actualGridLines * ticksPerGridLine).round();
-      final bool isBar = (ticksAtLine % 3840 == 0);
-
-      if (currentX >= 0) {
-        canvas.drawLine(
-          Offset(currentX, 0),
-          Offset(currentX, size.height),
-          isBar ? barPaint : paint,
-        );
-      }
-
-      // Increment index and recalculate X to stay precise
-      gridIndex++;
-      currentX = gridIndex * visualInterval;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GridPainter oldDelegate) {
-    return oldDelegate.zoomLevel != zoomLevel ||
-        oldDelegate.gridSize != gridSize ||
-        oldDelegate.tempo != tempo ||
-        oldDelegate.sampleRate != sampleRate ||
-        oldDelegate.scrollController != scrollController;
-  }
-}
-
-final trackWaveformProvider =
-    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
-      // Re-evaluate whenever the track changes (e.g. clips added/removed)
-      ref.watch(globalStateProvider.select((s) => s.tracks[arg.trackId]));
-
-      // Sync call — no copy, no await; returns Arc handles into Rust memory
-      return getWaveformHandlesForTrack(trackId: arg.trackId);
-    });
-
 int computeTargetBin(double zoomLevel) {
   if (zoomLevel <= 1) return 1;
 
@@ -3006,21 +2768,4 @@ class _GroupedBatchOverlay extends ConsumerWidget {
       },
     );
   }
-}
-
-// ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-// Function to call API from provider
-// ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-
-Future<Result<void>> handleUpdateTrackOrder({
-  required WidgetRef ref,
-  required int trackId,
-  required int newIdx,
-}) async {
-  return await attemptAsync(() async {
-    return await updateTrackOrder(trackId: trackId, newIdx: newIdx);
-  }).andThenAsync((_) async {
-    await ref.read(globalStateProvider).syncTracksState();
-    return Result.ok(null);
-  });
 }

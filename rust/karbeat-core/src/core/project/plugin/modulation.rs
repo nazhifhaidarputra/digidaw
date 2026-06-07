@@ -166,16 +166,36 @@ impl ApplicationState {
         max: f32,
         default_value: f32,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
-        // 1. Create the Lane (Pure Data)
+        // === PREVENT DUPLICATES ===
+        // Check if this exact target already has an Automation source linked to it.
+        let already_automated = self.modulation_links.values().any(|link| {
+            if link.prop.target == target {
+                // If it's linked to an Automation lane, reject it!
+                matches!(
+                    self.modulation_sources.get(&link.prop.source_id),
+                    Some(ModulationSource::Automation { .. })
+                )
+            } else {
+                false
+            }
+        });
+
+        if already_automated {
+            return Err(anyhow::anyhow!(
+                "An automation lane already exists for this parameter."
+            ));
+        }
+
+        // Create the Lane (Pure Data)
         let lane_id = AutomationId::next(&mut self.automation_counter);
         let lane = AutomationLane::new(lane_id, label, min, max, default_value);
         self.automation_pool.insert(lane_id, lane.clone());
 
-        // 2. Create the Source Generator
+        // Create the Source Generator
         let source = ModulationSource::Automation { lane_id };
         let source_id = self.add_modulation_source(source);
 
-        // 3. Connect the Cable (Depth 1.0, Base Value 0.0 for standard 1:1 automation tracking)
+        // Connect the Cable (Depth 1.0, Base Value 0.0 for standard 1:1 automation tracking)
         let link_id = self.link_modulation(source_id, target, 1.0, 0.0)?;
 
         log::info!(

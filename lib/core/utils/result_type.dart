@@ -170,4 +170,54 @@ extension ResultAsyncExt<T> on Future<Result<T>> {
       Error<T>(error: final error) => Result.error(error),
     };
   }
+
+    Future<T> unwrap() async {
+    final result = await this;
+    return switch (result) {
+      Ok<T>(value: final value) => value,
+      Error<T>(error: final error) => throw error,
+    };
+  }
+
+  Future<T> unwrapOr(T defaultValue) async {
+    final result = await this;
+    return switch (result) {
+      Ok<T>(value: final value) => value,
+      Error<T>() => defaultValue,
+    };
+  }
+
+  Future<T> unwrapOrElse(T Function(Exception error) fn) async {
+    final result = await this;
+    return switch (result) {
+      Ok<T>(value: final value) => value,
+      Error<T>(error: final error) => fn(error),
+    };
+  }
+
+  Future<T> unwrapOrElseAsync(Future<T> Function(Exception error) fn) async {
+    final result = await this;
+    return switch (result) {
+      Ok<T>(value: final value) => value,
+      Error<T>(error: final error) => await fn(error),
+    };
+  }
+
+  Future<Result<T>> mapErr(Exception Function(Exception error) fn) async {
+    final result = await this;
+    return switch (result) {
+      Ok<T>() => result,
+      Error<T>(error: final error) => Result.error(fn(error)),
+    };
+  }
+
+  Future<Result<T>> mapErrAsync(
+    Future<Exception> Function(Exception error) fn,
+  ) async {
+    final result = await this;
+    return switch (result) {
+      Ok<T>() => result,
+      Error<T>(error: final error) => Result.error(await fn(error)),
+    };
+  }
 }

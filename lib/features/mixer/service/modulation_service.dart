@@ -1,9 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
-typedef ChannelAutomationEntry = (int laneId, int linkId, AutomationLaneDto lane);
+typedef ChannelAutomationEntry = (
+  int laneId,
+  int linkId,
+  AutomationLaneDto lane,
+);
 
 Future<Result<void>> addModulation(
   GlobalAppState state,
@@ -19,12 +24,14 @@ Future<Result<void>> addModulation(
 
 /// Fetch all Automation lanes for all buses, grouped by Bus ID.
 /// Call this when you want to render the whole mixer's automation state at once.
-Map<int, List<ChannelAutomationEntry>> getAutomationLaneBuses(GlobalAppState state) {
+Map<int, List<ChannelAutomationEntry>> getAutomationLaneBuses(
+  GlobalAppState state,
+) {
   final map = <int, List<ChannelAutomationEntry>>{};
 
   for (final link in state.modulationLinks.values) {
     final target = link.target;
-    
+
     if (target is AutomationTargetDto_Bus) {
       final busId = target.busId;
       final source = state.modulationSources[link.sourceId];
@@ -69,7 +76,7 @@ List<ChannelAutomationEntry> getAutomationLaneBus(
       if (source is ModulationSourceDto_Automation) {
         final laneId = source.laneId;
         final lane = state.automationPool[laneId];
-        
+
         if (lane != null) {
           lanes.add((laneId, link.id, lane));
         }
@@ -99,11 +106,11 @@ List<ChannelAutomationEntry> getAutomationLaneTrack(
 
     if (target is AutomationTargetDto_Track && target.trackId == trackId) {
       final source = state.modulationSources[link.sourceId];
-      
+
       if (source is ModulationSourceDto_Automation) {
         final laneId = source.laneId;
         final lane = state.automationPool[laneId];
-        
+
         if (lane != null) {
           lanes.add((laneId, link.id, lane));
         }
@@ -123,14 +130,18 @@ List<ChannelAutomationEntry> getAutomationLaneTrack(
 
 /// Provider to get all automation lanes for a specific Bus ID.
 /// Usage in Widget: `final lanes = ref.watch(busAutomationProvider(busId));`
-final busAutomationProvider = Provider.family<List<ChannelAutomationEntry>, int>((ref, busId) {
-  final state = ref.watch(globalStateProvider);
-  return getAutomationLaneBus(state, sourceBusId: busId);
-});
+final busAutomationProvider =
+    Provider.family<List<ChannelAutomationEntry>, int>((ref, busId) {
+      final state = ref.watch(globalStateProvider);
+      return getAutomationLaneBus(state, sourceBusId: busId);
+    });
 
 /// Provider to get all automation lanes for a specific Track ID.
 /// Usage in Widget: `final lanes = ref.watch(trackAutomationProvider(trackId));`
-final trackAutomationProvider = Provider.family<List<ChannelAutomationEntry>, int>((ref, trackId) {
-  final state = ref.watch(globalStateProvider);
-  return getAutomationLaneTrack(state, trackId: trackId);
-});
+final trackAutomationProvider =
+    Provider.family<List<ChannelAutomationEntry>, int>((ref, trackId) {
+      final state = ref.watch(globalStateProvider);
+      final track = getAutomationLaneTrack(state, trackId: trackId);
+      AppLogger.info("$track");
+      return track;
+    });

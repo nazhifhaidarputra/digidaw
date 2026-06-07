@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/services/automation_service.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/plugins/effects/effect_registry.dart';
 import 'package:karbeat/features/mixer/service/mixer_service.dart';
+import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' hide removeRouting;
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -908,7 +910,7 @@ class _ChannelStripState extends State<_ChannelStrip> {
         );
       }
     } catch (e) {
-      debugPrint("Failed to load channel specs: $e");
+      AppLogger.error("Failed to load channel specs: $e");
     }
 
     if (mounted) {
@@ -965,6 +967,28 @@ class _ChannelStripState extends State<_ChannelStrip> {
     valueType: ParameterValueTypeDTO.float,
     choices: [],
   );
+
+  // Helper function to build the correct AutomationTarget instance based on track/bus/master
+  AutomationTargetDto _getAutomationTarget({required bool isPan}) {
+    final mixTarget = isPan
+        ? const MixerChannelParamTargetDto.pan()
+        : const MixerChannelParamTargetDto.volume();
+
+    if (widget.entry.isMaster) {
+      return AutomationTargetDto.master(mixTarget);
+    } else if (widget.entry.isBus) {
+      return AutomationTargetDto.bus(
+        busId: widget.entry.id,
+        mixTarget: mixTarget,
+      );
+    } else {
+      final trackTarget = TrackAutomationTargetDto.mixerChannel(mixTarget);
+      return AutomationTargetDto.track(
+        trackId: widget.entry.id,
+        trackTarget: trackTarget,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1031,8 +1055,9 @@ class _ChannelStripState extends State<_ChannelStrip> {
             // === Pan Knob ===
             _PanKnob(
               value: entry.channel.pan,
-              spec: _getPanSpec(), // Pass the bound FFI Spec
+              spec: _getPanSpec(),
               accentColor: accentColor,
+              automationTarget: _getAutomationTarget(isPan: true),
               onChanged: widget.onPanChanged,
               onChangeStart: widget.onPanChangeStart,
               onChangeEnd: widget.onPanChangeEnd,
@@ -1044,11 +1069,12 @@ class _ChannelStripState extends State<_ChannelStrip> {
             Expanded(
               child: _VolumeFader(
                 value: entry.channel.volume,
-                spec: _getVolumeSpec(), // Pass the bound FFI Spec
+                spec: _getVolumeSpec(),
                 accentColor: accentColor,
                 onChanged: widget.onVolumeChanged,
                 onChangeStart: widget.onVolumeChangeStart,
                 onChangeEnd: widget.onVolumeChangeEnd,
+                automationTarget: _getAutomationTarget(isPan: false),
               ),
             ),
 
@@ -1103,10 +1129,11 @@ class _ChannelStripState extends State<_ChannelStrip> {
 // Pan Knob
 // =========================================================
 
-class _PanKnob extends StatelessWidget {
+class _PanKnob extends ConsumerWidget {
   final double value;
-  final ParameterSpecDTO spec; // Injected FFI Spec
+  final ParameterSpecDTO spec;
   final Color accentColor;
+  final AutomationTargetDto automationTarget;
   final ValueChanged<double> onChanged;
   final VoidCallback? onChangeStart;
   final VoidCallback? onChangeEnd;
@@ -1116,12 +1143,13 @@ class _PanKnob extends StatelessWidget {
     required this.spec,
     required this.accentColor,
     required this.onChanged,
+    required this.automationTarget,
     this.onChangeStart,
     this.onChangeEnd,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final label = value == 0
         ? 'C'
         : value < 0
@@ -1159,11 +1187,18 @@ class _PanKnob extends StatelessWidget {
               max: spec.max,
               step: spec.step == 0.0 ? 0.01 : spec.step, // Safe fallback step
               onChanged: onChanged,
-              onAddAutomation: () {
+              onAddAutomation: () async {
                 AppLogger.info(
                   "Create automation for ${spec.name} (ID: ${spec.id})",
                 );
-                // TODO: Dispatch to state to create the lane
+                await handleAddAutomationForTarget(
+                  ref.read(globalStateProvider),
+                  target: automationTarget,
+                  label: spec.name,
+                  min: spec.min,
+                  max: spec.max,
+                  defaultValue: spec.defaultValue,
+                );
               },
               child: Slider(
                 value: value,
@@ -1188,10 +1223,11 @@ class _PanKnob extends StatelessWidget {
 // Volume Fader
 // =========================================================
 
-class _VolumeFader extends StatelessWidget {
+class _VolumeFader extends ConsumerWidget {
   final double value;
   final ParameterSpecDTO spec;
   final Color accentColor;
+  final AutomationTargetDto automationTarget;
   final ValueChanged<double> onChanged;
   final VoidCallback? onChangeStart;
   final VoidCallback? onChangeEnd;
@@ -1200,13 +1236,14 @@ class _VolumeFader extends StatelessWidget {
     required this.value,
     required this.spec,
     required this.accentColor,
+    required this.automationTarget,
     required this.onChanged,
     this.onChangeStart,
     this.onChangeEnd,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final sliderWidth = constraints.maxHeight;
@@ -1224,8 +1261,18 @@ class _VolumeFader extends StatelessWidget {
             max: spec.max,
             step: spec.step == 0.0 ? 0.1 : spec.step,
             onChanged: onChanged,
-            onAddAutomation: () {
-              debugPrint("Create automation for ${spec.name} (ID: ${spec.id})");
+            onAddAutomation: () async {
+              AppLogger.info(
+                "Create automation for ${spec.name} (ID: ${spec.id})",
+              );
+              await handleAddAutomationForTarget(
+                ref.read(globalStateProvider),
+                target: automationTarget,
+                label: spec.name,
+                min: spec.min,
+                max: spec.max,
+                defaultValue: spec.defaultValue,
+              );
             },
             child: SizedBox(
               width: sliderWidth,
