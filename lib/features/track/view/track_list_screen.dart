@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:karbeat/core/widgets/scroll_physics/unclamped_never_scrollable_physics.dart';
 import 'package:karbeat/features/mixer/service/modulation_service.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';

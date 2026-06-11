@@ -13,9 +13,7 @@ class SourceListScreen extends ConsumerWidget {
   SourceListScreen({super.key});
 
   Future<void> _pickFile(WidgetRef ref) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-    );
+    FilePickerResult? result = await FilePicker.pickFiles(type: FileType.audio);
 
     if (result != null && result.files.single.path != null) {
       String path = result.files.single.path!;
@@ -120,7 +118,10 @@ class SourceListScreen extends ConsumerWidget {
                         .firstWhere((p) => p.id == genInstance?.registryId)
                         .id;
                     // final builder = SynthRegistry.getSynthBuilder(registryId);
-                    screen = SynthRegistry.getScreen(registryId: registryId, instanceId: id);
+                    screen = SynthRegistry.getScreen(
+                      registryId: registryId,
+                      instanceId: id,
+                    );
                   } catch (_) {
                     screen = DynamicPluginScreen(
                       generatorId: id,

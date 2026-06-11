@@ -58,7 +58,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
   // Replace _pickDirectory with this new native save dialog handler
   Future<void> _pickSavePath() async {
-    String? outputFile = await FilePicker.platform.saveFile(
+    String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Select export location and name',
       fileName: '${_nameController.text}.${_selectedFormat.name.toLowerCase()}',
       type: FileType.custom,

@@ -157,15 +157,9 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                         {
                             plugin_instance.plugin_state = state_blob;
 
-                            let specs = if plugin_instance.registry_id > 0 {
-                                registry.get_generator_parameter_specs_by_id(
+                            let specs = registry.get_plugin_parameter_specs_by_id(
                                     plugin_instance.registry_id,
-                                )
-                            } else {
-                                registry
-                                    .get_generator_id_by_name(&plugin_instance.name)
-                                    .and_then(|id| registry.get_generator_parameter_specs_by_id(id))
-                            };
+                                );
                             if let Some(specs) = specs {
                                 plugin_instance.parameter_specs = specs;
                             }
@@ -184,13 +178,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                             let instance_mut = Arc::make_mut(&mut effect.instance);
                             instance_mut.plugin_state = state_blob;
 
-                            let specs = if instance_mut.registry_id > 0 {
-                                registry.get_effect_parameter_specs_by_id(instance_mut.registry_id)
-                            } else {
-                                registry
-                                    .get_effect_id_by_name(&instance_mut.name)
-                                    .and_then(|id| registry.get_effect_parameter_specs_by_id(id))
-                            };
+                            let specs = registry.get_plugin_parameter_specs_by_id(instance_mut.registry_id);
                             if let Some(specs) = specs {
                                 instance_mut.parameter_specs = specs;
                             }
@@ -209,13 +197,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                             let instance_mut = Arc::make_mut(&mut effect.instance);
                             instance_mut.plugin_state = state_blob;
 
-                            let specs = if instance_mut.registry_id > 0 {
-                                registry.get_effect_parameter_specs_by_id(instance_mut.registry_id)
-                            } else {
-                                registry
-                                    .get_effect_id_by_name(&instance_mut.name)
-                                    .and_then(|id| registry.get_effect_parameter_specs_by_id(id))
-                            };
+                            let specs = registry.get_plugin_parameter_specs_by_id(instance_mut.registry_id);
                             if let Some(specs) = specs {
                                 instance_mut.parameter_specs = specs;
                             }
@@ -232,13 +214,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                         let instance_mut = Arc::make_mut(&mut effect.instance);
                         instance_mut.plugin_state = state_blob;
 
-                        let specs = if instance_mut.registry_id > 0 {
-                            registry.get_effect_parameter_specs_by_id(instance_mut.registry_id)
-                        } else {
-                            registry
-                                .get_effect_id_by_name(&instance_mut.name)
-                                .and_then(|id| registry.get_effect_parameter_specs_by_id(id))
-                        };
+                        let specs = registry.get_plugin_parameter_specs_by_id(instance_mut.registry_id);
                         if let Some(specs) = specs {
                             instance_mut.parameter_specs = specs;
                         }
@@ -372,7 +348,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     for (gen_id, gen_arc) in &app.generator_pool {
         if let GeneratorInstanceType::Plugin(plugin_instance) = &gen_arc.instance_type {
             if let Some((mut plugin, _)) =
-                registry.create_generator_by_id(plugin_instance.registry_id)
+                registry.create_plugin_by_id(plugin_instance.registry_id)
             {
                 // Pass the binary state to the plugin
                 if !plugin_instance.plugin_state.is_empty() {
@@ -392,7 +368,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     for (track_id, channel_arc) in &app.mixer.channels {
         let mut track_chain = IndexMap::new();
         for effect in &channel_arc.channel.effects {
-            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
+            if let Some((mut plugin, _)) = registry.create_plugin_by_id(effect.instance.registry_id)
             {
                 if !effect.instance.plugin_state.is_empty() {
                     plugin.set_state(&effect.instance.plugin_state);
@@ -414,7 +390,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     for (bus_id, bus_arc) in &app.mixer.buses {
         let mut bus_chain = IndexMap::new();
         for effect in &bus_arc.channel.effects {
-            if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
+            if let Some((mut plugin, _)) = registry.create_plugin_by_id(effect.instance.registry_id)
             {
                 if !effect.instance.plugin_state.is_empty() {
                     plugin.set_state(&effect.instance.plugin_state);
@@ -434,7 +410,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
 
     // 4. Hydrate Master Effects
     for effect in &app.mixer.master_bus.effects {
-        if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id) {
+        if let Some((mut plugin, _)) = registry.create_plugin_by_id(effect.instance.registry_id) {
             if !effect.instance.plugin_state.is_empty() {
                 plugin.set_state(&effect.instance.plugin_state);
             }

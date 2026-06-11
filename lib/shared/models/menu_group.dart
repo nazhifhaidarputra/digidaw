@@ -69,7 +69,7 @@ class DawToolbarMenuGroupFactory {
     BuildContext context,
     GlobalAppState state,
   ) async {
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       dialogTitle: 'Save Project As...',
       fileName: 'untitled.dgdaw',
       type: FileType.custom,
@@ -124,7 +124,7 @@ class DawToolbarMenuGroupFactory {
         'Open project',
         shortcut: 'Ctrl+O',
         callback: (context, state) async {
-          final result = await FilePicker.platform.pickFiles(
+          final result = await FilePicker.pickFiles(
             type: FileType.custom,
             allowedExtensions: ['karbeat', 'dgdaw'],
           );

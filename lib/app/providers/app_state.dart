@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+// import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:karbeat/features/piano_roll/view/floating_midi_keyboard.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/shared/models/grid.dart';
@@ -679,11 +680,11 @@ class GlobalAppState extends ChangeNotifier {
     return await attemptAsync(() async {
       final link = await getModulationLinkById(linkId: linkId);
       if (link == null) throw Exception("Modulation link $linkId not found");
-      
+
       final newLinks = Map<int, ModulationLinkDto>.from(_modulationLinks);
       newLinks[linkId] = link;
       _modulationLinks = newLinks;
-      
+
       notifyListeners();
     });
   }

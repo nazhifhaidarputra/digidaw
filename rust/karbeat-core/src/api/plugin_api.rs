@@ -70,6 +70,12 @@ where
         .collect()
 }
 
+pub fn get_available_plugins<P, C>() -> C
+where P: for<'a> From<&'a PluginInfo>, C: FromIterator<P>  {
+    let registry = get_plugin_registry_read();
+    registry.list_plugins_with_ids().iter().map(|e| e.into()).collect()
+}
+
 pub fn get_generator<M, U>(generator_id: &GeneratorId, mapper: M) -> Option<U>
 where
     M: FnOnce(&GeneratorInstance) -> U,
@@ -158,13 +164,7 @@ where
     if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
         let registry = get_plugin_registry_read();
 
-        let specs = if plugin_instance.registry_id > 0 {
-            registry.get_generator_parameter_specs_by_id(plugin_instance.registry_id)
-        } else {
-            registry
-                .get_generator_id_by_name(&plugin_instance.name)
-                .and_then(|id| registry.get_generator_parameter_specs_by_id(id))
-        };
+        let specs = registry.get_plugin_parameter_specs_by_id(plugin_instance.registry_id);
 
         if let Some(specs) = specs {
             let result: Vec<T> = specs
@@ -239,13 +239,8 @@ where
 
     let registry = get_plugin_registry_read();
 
-    let specs = if plugin_registry_id > 0 {
-        registry.get_effect_parameter_specs_by_id(plugin_registry_id)
-    } else {
-        registry
-            .get_effect_id_by_name(&plugin_name)
-            .and_then(|id| registry.get_effect_parameter_specs_by_id(id))
-    };
+    let specs = 
+        registry.get_plugin_parameter_specs_by_id(plugin_registry_id);
 
     if let Some(specs) = specs {
         let result: Vec<T> = specs
@@ -347,7 +342,7 @@ pub fn execute_plugin_command_generator(
     payload_value: &serde_json::Value,
 ) -> Option<serde_json::Value> {
     let registry = get_plugin_registry_read();
-    let (mut plugin, _) = registry.create_generator_by_id(gen_registry_id)?;
+    let (mut plugin, _) = registry.create_plugin_by_id(gen_registry_id)?;
     plugin.execute_custom_command(command, payload_value)
 }
 
@@ -357,7 +352,7 @@ pub fn execute_plugin_command_effect(
     payload_value: &serde_json::Value,
 ) -> Option<serde_json::Value> {
     let registry = get_plugin_registry_read();
-    let (mut plugin, _) = registry.create_effect_by_id(effect_registry_id)?;
+    let (mut plugin, _) = registry.create_plugin_by_id(effect_registry_id)?;
     plugin.execute_custom_command(command, payload_value)
 }
 
@@ -423,14 +418,11 @@ pub fn execute_effect_instance_command(
     };
 
     let registry = get_plugin_registry_read();
-    let mut temp_plugin = (if plugin_registry_id > 0 {
+    let mut temp_plugin = (
         registry
-            .create_effect_by_id(plugin_registry_id)
+            .create_plugin_by_id(plugin_registry_id)
             .map(|(p, _)| p)
-    } else {
-        registry.create_effect(&plugin_name)
-    })
-    .ok_or_else(|| format!("Effect '{}' not found in registry", plugin_name))?;
+    ).ok_or_else(|| format!("Effect '{}' not found in registry", plugin_name))?;
 
     if !plugin_state.is_empty() {
         temp_plugin.set_state(&plugin_state);
@@ -461,13 +453,9 @@ pub fn execute_generator_instance_command(
     };
 
     let registry = get_plugin_registry_read();
-    let mut temp_plugin = (if plugin_registry_id > 0 {
-        registry
-            .create_generator_by_id(plugin_registry_id)
-            .map(|(p, _)| p)
-    } else {
-        registry.create_generator(&plugin_name)
-    })
+    let mut temp_plugin = ( registry
+            .create_plugin_by_id(plugin_registry_id)
+            .map(|(p, _)| p))
     .ok_or_else(|| format!("Generator '{}' not found in registry", plugin_name))?;
 
     if !plugin_state.is_empty() {

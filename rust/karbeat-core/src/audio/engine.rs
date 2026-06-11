@@ -1234,14 +1234,22 @@ impl AudioEngine {
                 let id_index = bus_id.to_u32() as usize;
                 self.plugin_state.add_bus(id_index);
                 self.bus_buffers.insert(bus_id, Vec::new());
+
+                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
+                let bus_ids = self.bus_buffers.keys().copied();
+                self.cached_routing_order = compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+
                 log::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
             }
             AudioCommand::RemoveBus { bus_id } => {
                 let id_index = bus_id.to_u32() as usize;
                 self.plugin_state.remove_bus(id_index);
                 self.bus_buffers.remove(&bus_id);
-                // Also remove from mixer state
                 self.mixer_state.bus_channels.remove(&bus_id);
+                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
+                let bus_ids = self.bus_buffers.keys().copied();
+                self.cached_routing_order = compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+                
                 log::info!("[AudioEngine] Removed bus {:?}", bus_id);
             }
             AudioCommand::UpdateRouting { routing } => {
@@ -1614,6 +1622,15 @@ impl AudioEngine {
                 self.current_state.graph.tracks = tracks;
                 self.current_state.graph.patterns = patterns;
                 self.current_state.graph.max_sample_index = max_sample_index;
+                
+                // Recompute routing order so new tracks are included in the DSP loop!
+                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
+                let bus_ids = self.bus_buffers.keys().copied();
+                self.cached_routing_order = compute_routing_order(
+                    track_ids, 
+                    bus_ids, 
+                    &self.current_state.graph.routing
+                );
                 pdc_dirty = true;
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {

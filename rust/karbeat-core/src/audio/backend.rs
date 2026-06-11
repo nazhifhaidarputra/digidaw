@@ -74,6 +74,8 @@ macro_rules! run_stream {
                 for i in 0..samples_needed {
                     if let Ok(sample) = consumer.pop() {
                         read_buffer[i] = sample;
+                    } else {
+                        read_buffer[i] = 0.0;
                     }
                 }
 
@@ -291,14 +293,31 @@ pub fn start_audio_stream(
     let host = resolve_host(config_pref.host_name.as_deref());
 
     let device = if let Some(dev_id) = &config_pref.device_id {
+        // Try to load the user's specifically saved device
         host.output_devices()?
-            .find(|d| match d.id() {
-                Ok(id) => id.to_string() == *dev_id,
-                Err(_) => false,
+            .find(|d| {
+                if let Ok(id_str) = d.id().map(|desc| desc.to_string()) {
+                    return id_str == *dev_id;
+                }
+
+                return false;
             })
-            .ok_or_else(|| anyhow!("Requested device ID '{}' not found", dev_id))?
+            .ok_or_else(|| anyhow!("Requested device '{}' not found", dev_id))?
     } else {
-        host.default_output_device()
+        // If no device is saved, aggressively prefer FlexASIO over ASIO4ALL
+        let mut devices = host.output_devices()?;
+
+        devices
+            .find(|d| {
+                let res = d.description()
+                    .map(|desc| desc.name().to_owned());
+
+                match res {
+                    Ok(name) => name.contains("FlexASIO"),
+                    Err(_) => false,
+                }
+            })
+            .or_else(|| host.default_output_device())
             .context("no audio output device available")?
     };
     // debug!("Output dev");
@@ -320,9 +339,8 @@ pub fn start_audio_stream(
         .supported_output_configs()
         .map_err(|e| anyhow!("error querying configs: {e}"))?;
 
-    // Find a config that supports F32, 2 Channels, AND the OS's native sample rate
     let supported_config = supported_configs_range
-        .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
+        .filter(|c| c.channels() == 2)
         .find(|c| {
             c.min_sample_rate() <= target_sample_rate && c.max_sample_rate() >= target_sample_rate
         })
@@ -333,14 +351,14 @@ pub fn start_audio_stream(
             device
                 .supported_output_configs()
                 .ok()?
-                .find(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
+                .find(|c| c.channels() == 2)
                 .map(|c| {
                     let clamped =
                         native_sample_rate.clamp(c.min_sample_rate(), c.max_sample_rate());
                     c.with_sample_rate(clamped)
                 })
         })
-        .context("device does not support f32 samples with 2 channels")?;
+        .context("device does not support stereo (2 channels) output")?;
 
     let buffer_size = match supported_config.buffer_size() {
         cpal::SupportedBufferSize::Range { min, max } => {
@@ -420,6 +438,16 @@ pub fn start_audio_stream(
         cpal::SampleFormat::F32 => {
             run_stream!(device, config, audio_ctx, consumer, f32, |s| s, err_fn)
         }
+
+        cpal::SampleFormat::I32 => run_stream!(
+            device,
+            config,
+            audio_ctx,
+            consumer,
+            i32,
+            |s: f32| (s * (i32::MAX as f32)).clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+            err_fn
+        ),
 
         cpal::SampleFormat::I16 => run_stream!(
             device,

@@ -365,7 +365,7 @@ impl ApplicationState {
         let (generator_plugin, generator_name) = {
             let registry = ctx().plugin_registry.read();
 
-            if let Some((generator_box, name)) = registry.create_generator_by_id(registry_id) {
+            if let Some((generator_box, name)) = registry.create_plugin_by_id(registry_id) {
                 (generator_box, name)
             } else {
                 let message = format!("Generator with ID {} not found in registry", registry_id);
