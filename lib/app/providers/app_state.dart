@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 // import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:karbeat/features/piano_roll/view/floating_midi_keyboard.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
@@ -33,28 +34,6 @@ import 'package:karbeat/core/services/serializer_service.dart';
 final globalStateProvider = ChangeNotifierProvider<GlobalAppState>((ref) {
   return GlobalAppState();
 });
-
-enum ToolSelection { pointer, slice, draw, move, delete, zoom, select, resize }
-
-/// Piano roll specific tool selection (independent from main toolbar)
-enum PianoRollToolSelection { grab, draw, delete, select, slice, pan, zoom }
-
-enum WorkspaceView { trackList, pianoRoll, mixer, source }
-
-enum ToolbarMenuContextGroup { none, project, edit, view }
-
-/// Events that trigger a state refresh
-enum ProjectEvent {
-  tracksChanged,
-  transportChanged,
-  metadataChanged,
-  sourceListChanged,
-  generatorListChanged,
-  effectListChanged,
-  configChanged,
-  patternChanged,
-  mixerChanged,
-}
 
 class GlobalAppState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
@@ -2325,30 +2304,5 @@ class GlobalAppState extends ChangeNotifier {
     _mixerState = state.mixer;
     maxSamplesIndex = state.maxSampleIndex;
     // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
-  }
-}
-
-extension on mixer_api.UiMixerState {
-  mixer_api.UiMixerState copyWith({
-    Map<int, mixer_api.UiMixerChannel>? channels,
-    mixer_api.UiMixerChannel? masterBus,
-    Map<int, mixer_api.UiBus>? buses,
-    List<mixer_api.UiRoutingConnection>? routing,
-  }) {
-    return mixer_api.UiMixerState.newWithParam(
-      channels: channels ?? this.channels,
-      masterBus: masterBus ?? this.masterBus,
-      buses: buses ?? this.buses,
-      routing: routing ?? this.routing,
-    );
-  }
-}
-
-extension TransportStateCopyWith on UiTransportState {
-  UiTransportState copyWith({double? bpm, (int, int)? timeSignature}) {
-    return transportStateNewWithParam(
-      bpm: bpm ?? this.bpm,
-      timeSignature: timeSignature ?? this.timeSignature,
-    );
   }
 }

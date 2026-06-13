@@ -12,6 +12,541 @@ part of 'automation.dart';
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
+mixin _$AutomationLaneDto {
+
+ int get id; String get label; List<AutomationPointDto> get points; bool get enabled; double get min; double get max; double get defaultValue;
+/// Create a copy of AutomationLaneDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AutomationLaneDtoCopyWith<AutomationLaneDto> get copyWith => _$AutomationLaneDtoCopyWithImpl<AutomationLaneDto>(this as AutomationLaneDto, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationLaneDto&&(identical(other.id, id) || other.id == id)&&(identical(other.label, label) || other.label == label)&&const DeepCollectionEquality().equals(other.points, points)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.min, min) || other.min == min)&&(identical(other.max, max) || other.max == max)&&(identical(other.defaultValue, defaultValue) || other.defaultValue == defaultValue));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,id,label,const DeepCollectionEquality().hash(points),enabled,min,max,defaultValue);
+
+@override
+String toString() {
+  return 'AutomationLaneDto(id: $id, label: $label, points: $points, enabled: $enabled, min: $min, max: $max, defaultValue: $defaultValue)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AutomationLaneDtoCopyWith<$Res>  {
+  factory $AutomationLaneDtoCopyWith(AutomationLaneDto value, $Res Function(AutomationLaneDto) _then) = _$AutomationLaneDtoCopyWithImpl;
+@useResult
+$Res call({
+ int id, String label, List<AutomationPointDto> points, bool enabled, double min, double max, double defaultValue
+});
+
+
+
+
+}
+/// @nodoc
+class _$AutomationLaneDtoCopyWithImpl<$Res>
+    implements $AutomationLaneDtoCopyWith<$Res> {
+  _$AutomationLaneDtoCopyWithImpl(this._self, this._then);
+
+  final AutomationLaneDto _self;
+  final $Res Function(AutomationLaneDto) _then;
+
+/// Create a copy of AutomationLaneDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? label = null,Object? points = null,Object? enabled = null,Object? min = null,Object? max = null,Object? defaultValue = null,}) {
+  return _then(_self.copyWith(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
+as String,points: null == points ? _self.points : points // ignore: cast_nullable_to_non_nullable
+as List<AutomationPointDto>,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,min: null == min ? _self.min : min // ignore: cast_nullable_to_non_nullable
+as double,max: null == max ? _self.max : max // ignore: cast_nullable_to_non_nullable
+as double,defaultValue: null == defaultValue ? _self.defaultValue : defaultValue // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [AutomationLaneDto].
+extension AutomationLaneDtoPatterns on AutomationLaneDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _AutomationLaneDto value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _AutomationLaneDto() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _AutomationLaneDto value)  $default,){
+final _that = this;
+switch (_that) {
+case _AutomationLaneDto():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _AutomationLaneDto value)?  $default,){
+final _that = this;
+switch (_that) {
+case _AutomationLaneDto() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double min,  double max,  double defaultValue)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _AutomationLaneDto() when $default != null:
+return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.max,_that.defaultValue);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double min,  double max,  double defaultValue)  $default,) {final _that = this;
+switch (_that) {
+case _AutomationLaneDto():
+return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.max,_that.defaultValue);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double min,  double max,  double defaultValue)?  $default,) {final _that = this;
+switch (_that) {
+case _AutomationLaneDto() when $default != null:
+return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.max,_that.defaultValue);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _AutomationLaneDto implements AutomationLaneDto {
+  const _AutomationLaneDto({required this.id, required this.label, required final  List<AutomationPointDto> points, required this.enabled, required this.min, required this.max, required this.defaultValue}): _points = points;
+  
+
+@override final  int id;
+@override final  String label;
+ final  List<AutomationPointDto> _points;
+@override List<AutomationPointDto> get points {
+  if (_points is EqualUnmodifiableListView) return _points;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_points);
+}
+
+@override final  bool enabled;
+@override final  double min;
+@override final  double max;
+@override final  double defaultValue;
+
+/// Create a copy of AutomationLaneDto
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$AutomationLaneDtoCopyWith<_AutomationLaneDto> get copyWith => __$AutomationLaneDtoCopyWithImpl<_AutomationLaneDto>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationLaneDto&&(identical(other.id, id) || other.id == id)&&(identical(other.label, label) || other.label == label)&&const DeepCollectionEquality().equals(other._points, _points)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.min, min) || other.min == min)&&(identical(other.max, max) || other.max == max)&&(identical(other.defaultValue, defaultValue) || other.defaultValue == defaultValue));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,id,label,const DeepCollectionEquality().hash(_points),enabled,min,max,defaultValue);
+
+@override
+String toString() {
+  return 'AutomationLaneDto(id: $id, label: $label, points: $points, enabled: $enabled, min: $min, max: $max, defaultValue: $defaultValue)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$AutomationLaneDtoCopyWith<$Res> implements $AutomationLaneDtoCopyWith<$Res> {
+  factory _$AutomationLaneDtoCopyWith(_AutomationLaneDto value, $Res Function(_AutomationLaneDto) _then) = __$AutomationLaneDtoCopyWithImpl;
+@override @useResult
+$Res call({
+ int id, String label, List<AutomationPointDto> points, bool enabled, double min, double max, double defaultValue
+});
+
+
+
+
+}
+/// @nodoc
+class __$AutomationLaneDtoCopyWithImpl<$Res>
+    implements _$AutomationLaneDtoCopyWith<$Res> {
+  __$AutomationLaneDtoCopyWithImpl(this._self, this._then);
+
+  final _AutomationLaneDto _self;
+  final $Res Function(_AutomationLaneDto) _then;
+
+/// Create a copy of AutomationLaneDto
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? label = null,Object? points = null,Object? enabled = null,Object? min = null,Object? max = null,Object? defaultValue = null,}) {
+  return _then(_AutomationLaneDto(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
+as String,points: null == points ? _self._points : points // ignore: cast_nullable_to_non_nullable
+as List<AutomationPointDto>,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,min: null == min ? _self.min : min // ignore: cast_nullable_to_non_nullable
+as double,max: null == max ? _self.max : max // ignore: cast_nullable_to_non_nullable
+as double,defaultValue: null == defaultValue ? _self.defaultValue : defaultValue // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$AutomationPointDto {
+
+ int get timeTicks; double get value; AutomationCurveTypeDto get curveType; double get tension;
+/// Create a copy of AutomationPointDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AutomationPointDtoCopyWith<AutomationPointDto> get copyWith => _$AutomationPointDtoCopyWithImpl<AutomationPointDto>(this as AutomationPointDto, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationPointDto&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,timeTicks,value,curveType,tension);
+
+@override
+String toString() {
+  return 'AutomationPointDto(timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AutomationPointDtoCopyWith<$Res>  {
+  factory $AutomationPointDtoCopyWith(AutomationPointDto value, $Res Function(AutomationPointDto) _then) = _$AutomationPointDtoCopyWithImpl;
+@useResult
+$Res call({
+ int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
+});
+
+
+
+
+}
+/// @nodoc
+class _$AutomationPointDtoCopyWithImpl<$Res>
+    implements $AutomationPointDtoCopyWith<$Res> {
+  _$AutomationPointDtoCopyWithImpl(this._self, this._then);
+
+  final AutomationPointDto _self;
+  final $Res Function(AutomationPointDto) _then;
+
+/// Create a copy of AutomationPointDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+  return _then(_self.copyWith(
+timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
+as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
+as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
+as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [AutomationPointDto].
+extension AutomationPointDtoPatterns on AutomationPointDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _AutomationPointDto value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _AutomationPointDto() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _AutomationPointDto value)  $default,){
+final _that = this;
+switch (_that) {
+case _AutomationPointDto():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _AutomationPointDto value)?  $default,){
+final _that = this;
+switch (_that) {
+case _AutomationPointDto() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _AutomationPointDto() when $default != null:
+return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)  $default,) {final _that = this;
+switch (_that) {
+case _AutomationPointDto():
+return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,) {final _that = this;
+switch (_that) {
+case _AutomationPointDto() when $default != null:
+return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _AutomationPointDto implements AutomationPointDto {
+  const _AutomationPointDto({required this.timeTicks, required this.value, required this.curveType, required this.tension});
+  
+
+@override final  int timeTicks;
+@override final  double value;
+@override final  AutomationCurveTypeDto curveType;
+@override final  double tension;
+
+/// Create a copy of AutomationPointDto
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$AutomationPointDtoCopyWith<_AutomationPointDto> get copyWith => __$AutomationPointDtoCopyWithImpl<_AutomationPointDto>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationPointDto&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,timeTicks,value,curveType,tension);
+
+@override
+String toString() {
+  return 'AutomationPointDto(timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$AutomationPointDtoCopyWith<$Res> implements $AutomationPointDtoCopyWith<$Res> {
+  factory _$AutomationPointDtoCopyWith(_AutomationPointDto value, $Res Function(_AutomationPointDto) _then) = __$AutomationPointDtoCopyWithImpl;
+@override @useResult
+$Res call({
+ int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
+});
+
+
+
+
+}
+/// @nodoc
+class __$AutomationPointDtoCopyWithImpl<$Res>
+    implements _$AutomationPointDtoCopyWith<$Res> {
+  __$AutomationPointDtoCopyWithImpl(this._self, this._then);
+
+  final _AutomationPointDto _self;
+  final $Res Function(_AutomationPointDto) _then;
+
+/// Create a copy of AutomationPointDto
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+  return _then(_AutomationPointDto(
+timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
+as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
+as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
+as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$AutomationTargetDto {
 
 
@@ -1004,6 +1539,290 @@ as EffectAutomationTargetDto,
 $EffectAutomationTargetDtoCopyWith<$Res> get target {
   
   return $EffectAutomationTargetDtoCopyWith<$Res>(_self.target, (value) {
+    return _then(_self.copyWith(target: value));
+  });
+}
+}
+
+/// @nodoc
+mixin _$ModulationLinkDto {
+
+ int get id; int get sourceId; AutomationTargetDto get target; double get depth; double get baseValue; int get orderIdx;
+/// Create a copy of ModulationLinkDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ModulationLinkDtoCopyWith<ModulationLinkDto> get copyWith => _$ModulationLinkDtoCopyWithImpl<ModulationLinkDto>(this as ModulationLinkDto, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ModulationLinkDto&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.target, target) || other.target == target)&&(identical(other.depth, depth) || other.depth == depth)&&(identical(other.baseValue, baseValue) || other.baseValue == baseValue)&&(identical(other.orderIdx, orderIdx) || other.orderIdx == orderIdx));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,id,sourceId,target,depth,baseValue,orderIdx);
+
+@override
+String toString() {
+  return 'ModulationLinkDto(id: $id, sourceId: $sourceId, target: $target, depth: $depth, baseValue: $baseValue, orderIdx: $orderIdx)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ModulationLinkDtoCopyWith<$Res>  {
+  factory $ModulationLinkDtoCopyWith(ModulationLinkDto value, $Res Function(ModulationLinkDto) _then) = _$ModulationLinkDtoCopyWithImpl;
+@useResult
+$Res call({
+ int id, int sourceId, AutomationTargetDto target, double depth, double baseValue, int orderIdx
+});
+
+
+$AutomationTargetDtoCopyWith<$Res> get target;
+
+}
+/// @nodoc
+class _$ModulationLinkDtoCopyWithImpl<$Res>
+    implements $ModulationLinkDtoCopyWith<$Res> {
+  _$ModulationLinkDtoCopyWithImpl(this._self, this._then);
+
+  final ModulationLinkDto _self;
+  final $Res Function(ModulationLinkDto) _then;
+
+/// Create a copy of ModulationLinkDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? sourceId = null,Object? target = null,Object? depth = null,Object? baseValue = null,Object? orderIdx = null,}) {
+  return _then(_self.copyWith(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,sourceId: null == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
+as int,target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
+as AutomationTargetDto,depth: null == depth ? _self.depth : depth // ignore: cast_nullable_to_non_nullable
+as double,baseValue: null == baseValue ? _self.baseValue : baseValue // ignore: cast_nullable_to_non_nullable
+as double,orderIdx: null == orderIdx ? _self.orderIdx : orderIdx // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+/// Create a copy of ModulationLinkDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$AutomationTargetDtoCopyWith<$Res> get target {
+  
+  return $AutomationTargetDtoCopyWith<$Res>(_self.target, (value) {
+    return _then(_self.copyWith(target: value));
+  });
+}
+}
+
+
+/// Adds pattern-matching-related methods to [ModulationLinkDto].
+extension ModulationLinkDtoPatterns on ModulationLinkDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _ModulationLinkDto value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _ModulationLinkDto() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _ModulationLinkDto value)  $default,){
+final _that = this;
+switch (_that) {
+case _ModulationLinkDto():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _ModulationLinkDto value)?  $default,){
+final _that = this;
+switch (_that) {
+case _ModulationLinkDto() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  int sourceId,  AutomationTargetDto target,  double depth,  double baseValue,  int orderIdx)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _ModulationLinkDto() when $default != null:
+return $default(_that.id,_that.sourceId,_that.target,_that.depth,_that.baseValue,_that.orderIdx);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  int sourceId,  AutomationTargetDto target,  double depth,  double baseValue,  int orderIdx)  $default,) {final _that = this;
+switch (_that) {
+case _ModulationLinkDto():
+return $default(_that.id,_that.sourceId,_that.target,_that.depth,_that.baseValue,_that.orderIdx);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  int sourceId,  AutomationTargetDto target,  double depth,  double baseValue,  int orderIdx)?  $default,) {final _that = this;
+switch (_that) {
+case _ModulationLinkDto() when $default != null:
+return $default(_that.id,_that.sourceId,_that.target,_that.depth,_that.baseValue,_that.orderIdx);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _ModulationLinkDto implements ModulationLinkDto {
+  const _ModulationLinkDto({required this.id, required this.sourceId, required this.target, required this.depth, required this.baseValue, required this.orderIdx});
+  
+
+@override final  int id;
+@override final  int sourceId;
+@override final  AutomationTargetDto target;
+@override final  double depth;
+@override final  double baseValue;
+@override final  int orderIdx;
+
+/// Create a copy of ModulationLinkDto
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$ModulationLinkDtoCopyWith<_ModulationLinkDto> get copyWith => __$ModulationLinkDtoCopyWithImpl<_ModulationLinkDto>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ModulationLinkDto&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.target, target) || other.target == target)&&(identical(other.depth, depth) || other.depth == depth)&&(identical(other.baseValue, baseValue) || other.baseValue == baseValue)&&(identical(other.orderIdx, orderIdx) || other.orderIdx == orderIdx));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,id,sourceId,target,depth,baseValue,orderIdx);
+
+@override
+String toString() {
+  return 'ModulationLinkDto(id: $id, sourceId: $sourceId, target: $target, depth: $depth, baseValue: $baseValue, orderIdx: $orderIdx)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$ModulationLinkDtoCopyWith<$Res> implements $ModulationLinkDtoCopyWith<$Res> {
+  factory _$ModulationLinkDtoCopyWith(_ModulationLinkDto value, $Res Function(_ModulationLinkDto) _then) = __$ModulationLinkDtoCopyWithImpl;
+@override @useResult
+$Res call({
+ int id, int sourceId, AutomationTargetDto target, double depth, double baseValue, int orderIdx
+});
+
+
+@override $AutomationTargetDtoCopyWith<$Res> get target;
+
+}
+/// @nodoc
+class __$ModulationLinkDtoCopyWithImpl<$Res>
+    implements _$ModulationLinkDtoCopyWith<$Res> {
+  __$ModulationLinkDtoCopyWithImpl(this._self, this._then);
+
+  final _ModulationLinkDto _self;
+  final $Res Function(_ModulationLinkDto) _then;
+
+/// Create a copy of ModulationLinkDto
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? sourceId = null,Object? target = null,Object? depth = null,Object? baseValue = null,Object? orderIdx = null,}) {
+  return _then(_ModulationLinkDto(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,sourceId: null == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
+as int,target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
+as AutomationTargetDto,depth: null == depth ? _self.depth : depth // ignore: cast_nullable_to_non_nullable
+as double,baseValue: null == baseValue ? _self.baseValue : baseValue // ignore: cast_nullable_to_non_nullable
+as double,orderIdx: null == orderIdx ? _self.orderIdx : orderIdx // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+/// Create a copy of ModulationLinkDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$AutomationTargetDtoCopyWith<$Res> get target {
+  
+  return $AutomationTargetDtoCopyWith<$Res>(_self.target, (value) {
     return _then(_self.copyWith(target: value));
   });
 }

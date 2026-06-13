@@ -5,7 +5,9 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
+part 'audio.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
@@ -57,77 +59,23 @@ Future<void> playPreviewNoteGenerator({
 void setMetronomeActive({required bool active}) =>
     RustLib.instance.api.crateApiAudioSetMetronomeActive(active: active);
 
-class UiTransportFeedback {
-  final int samples;
-  final int ticks;
-  final int beat;
-  final int bar;
-  final double tempo;
-  final int sampleRate;
-  final bool isPlaying;
-  final bool isLooping;
-  final bool isRecording;
-  final bool isPatternPlaying;
-  final bool isPatternMode;
-  final int patternSamples;
-  final int patternTicks;
-  final int patternBeat;
-  final int patternBar;
-
-  const UiTransportFeedback({
-    required this.samples,
-    required this.ticks,
-    required this.beat,
-    required this.bar,
-    required this.tempo,
-    required this.sampleRate,
-    required this.isPlaying,
-    required this.isLooping,
-    required this.isRecording,
-    required this.isPatternPlaying,
-    required this.isPatternMode,
-    required this.patternSamples,
-    required this.patternTicks,
-    required this.patternBeat,
-    required this.patternBar,
-  });
-
-  @override
-  int get hashCode =>
-      samples.hashCode ^
-      ticks.hashCode ^
-      beat.hashCode ^
-      bar.hashCode ^
-      tempo.hashCode ^
-      sampleRate.hashCode ^
-      isPlaying.hashCode ^
-      isLooping.hashCode ^
-      isRecording.hashCode ^
-      isPatternPlaying.hashCode ^
-      isPatternMode.hashCode ^
-      patternSamples.hashCode ^
-      patternTicks.hashCode ^
-      patternBeat.hashCode ^
-      patternBar.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiTransportFeedback &&
-          runtimeType == other.runtimeType &&
-          samples == other.samples &&
-          ticks == other.ticks &&
-          beat == other.beat &&
-          bar == other.bar &&
-          tempo == other.tempo &&
-          sampleRate == other.sampleRate &&
-          isPlaying == other.isPlaying &&
-          isLooping == other.isLooping &&
-          isRecording == other.isRecording &&
-          isPatternPlaying == other.isPatternPlaying &&
-          isPatternMode == other.isPatternMode &&
-          patternSamples == other.patternSamples &&
-          patternTicks == other.patternTicks &&
-          patternBeat == other.patternBeat &&
-          patternBar == other.patternBar;
+@freezed
+sealed class UiTransportFeedback with _$UiTransportFeedback {
+  const factory UiTransportFeedback({
+    required int samples,
+    required int ticks,
+    required int beat,
+    required int bar,
+    required double tempo,
+    required int sampleRate,
+    required bool isPlaying,
+    required bool isLooping,
+    required bool isRecording,
+    required bool isPatternPlaying,
+    required bool isPatternMode,
+    required int patternSamples,
+    required int patternTicks,
+    required int patternBeat,
+    required int patternBar,
+  }) = _UiTransportFeedback;
 }

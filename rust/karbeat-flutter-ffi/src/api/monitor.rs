@@ -1,10 +1,12 @@
 use std::thread;
 use std::time::Duration;
 
+use flutter_rust_bridge::frb;
 pub use karbeat_core::api::monitor_api::*;
 
 use crate::frb_generated::StreamSink;
 
+#[frb(dart_metadata=("freezed"))]
 pub struct PerformanceMetricsDTO {
     pub os_cpu_usage: f32,
     pub ram_usage_mb: f32,

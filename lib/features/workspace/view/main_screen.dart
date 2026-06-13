@@ -9,6 +9,7 @@ import 'package:karbeat/features/workspace/view/sidebar.dart';
 import 'package:karbeat/app/providers/app_state.dart';
 
 import 'package:karbeat/features/piano_roll/view/floating_midi_keyboard.dart';
+import 'package:karbeat/shared/enums/global.dart';
 
 class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});

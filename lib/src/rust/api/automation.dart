@@ -158,78 +158,27 @@ Future<ModulationSourceDto?> getModulationSource({required int id}) =>
 
 enum AutomationCurveTypeDto { linear, exponential, step }
 
-class AutomationLaneDto {
-  final int id;
-  final String label;
-  final List<AutomationPointDto> points;
-  final bool enabled;
-  final double min;
-  final double max;
-  final double defaultValue;
-
-  const AutomationLaneDto({
-    required this.id,
-    required this.label,
-    required this.points,
-    required this.enabled,
-    required this.min,
-    required this.max,
-    required this.defaultValue,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      label.hashCode ^
-      points.hashCode ^
-      enabled.hashCode ^
-      min.hashCode ^
-      max.hashCode ^
-      defaultValue.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AutomationLaneDto &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          label == other.label &&
-          points == other.points &&
-          enabled == other.enabled &&
-          min == other.min &&
-          max == other.max &&
-          defaultValue == other.defaultValue;
+@freezed
+sealed class AutomationLaneDto with _$AutomationLaneDto {
+  const factory AutomationLaneDto({
+    required int id,
+    required String label,
+    required List<AutomationPointDto> points,
+    required bool enabled,
+    required double min,
+    required double max,
+    required double defaultValue,
+  }) = _AutomationLaneDto;
 }
 
-class AutomationPointDto {
-  final int timeTicks;
-  final double value;
-  final AutomationCurveTypeDto curveType;
-  final double tension;
-
-  const AutomationPointDto({
-    required this.timeTicks,
-    required this.value,
-    required this.curveType,
-    required this.tension,
-  });
-
-  @override
-  int get hashCode =>
-      timeTicks.hashCode ^
-      value.hashCode ^
-      curveType.hashCode ^
-      tension.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AutomationPointDto &&
-          runtimeType == other.runtimeType &&
-          timeTicks == other.timeTicks &&
-          value == other.value &&
-          curveType == other.curveType &&
-          tension == other.tension;
+@freezed
+sealed class AutomationPointDto with _$AutomationPointDto {
+  const factory AutomationPointDto({
+    required int timeTicks,
+    required double value,
+    required AutomationCurveTypeDto curveType,
+    required double tension,
+  }) = _AutomationPointDto;
 }
 
 @freezed
@@ -272,43 +221,16 @@ sealed class MixerChannelParamTargetDto with _$MixerChannelParamTargetDto {
   }) = MixerChannelParamTargetDto_Plugin;
 }
 
-class ModulationLinkDto {
-  final int id;
-  final int sourceId;
-  final AutomationTargetDto target;
-  final double depth;
-  final double baseValue;
-  final int orderIdx;
-
-  const ModulationLinkDto({
-    required this.id,
-    required this.sourceId,
-    required this.target,
-    required this.depth,
-    required this.baseValue,
-    required this.orderIdx,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      sourceId.hashCode ^
-      target.hashCode ^
-      depth.hashCode ^
-      baseValue.hashCode ^
-      orderIdx.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ModulationLinkDto &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          sourceId == other.sourceId &&
-          target == other.target &&
-          depth == other.depth &&
-          baseValue == other.baseValue &&
-          orderIdx == other.orderIdx;
+@freezed
+sealed class ModulationLinkDto with _$ModulationLinkDto {
+  const factory ModulationLinkDto({
+    required int id,
+    required int sourceId,
+    required AutomationTargetDto target,
+    required double depth,
+    required double baseValue,
+    required int orderIdx,
+  }) = _ModulationLinkDto;
 }
 
 @freezed

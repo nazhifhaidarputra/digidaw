@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use flutter_rust_bridge::frb;
 use karbeat_core::shared::id::*;
 use karbeat_core::{
     api::{note_api, pattern_api},
@@ -7,6 +8,7 @@ use karbeat_core::{
 };
 
 #[derive(Clone)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiPattern {
     pub id: u32,
     pub name: String,
@@ -16,6 +18,7 @@ pub struct UiPattern {
 }
 
 #[derive(Clone)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiNote {
     pub id: u32,
     pub start_tick: u64,

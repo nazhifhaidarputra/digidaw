@@ -4,6 +4,7 @@ import 'package:flutter_material_design_icons/flutter_material_design_icons.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/track/view/performance_monitor.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/app/providers/app_state.dart';

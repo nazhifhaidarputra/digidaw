@@ -45,6 +45,7 @@ impl From<&UiMixerChannelTarget> for MixerChannelTarget {
 /// Full DSP state snapshot of a mixer channel, polled via
 /// poll_mixer_channel_feedback() after calling query_mixer_channel().
 #[derive(Clone)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiMixerChannelSnapshot {
     pub track_id: u32, // u32::MAX for buses, u32::MAX - 1 for master
     pub bus_id: Option<u32>,
@@ -57,6 +58,7 @@ pub struct UiMixerChannelSnapshot {
 }
 
 /// UI representation of a mixer channel.
+/// #[frb(dart_metadata=("freezed"))]
 pub struct UiMixerChannel {
     pub volume: f32,
     pub pan: f32,
@@ -96,6 +98,7 @@ impl From<&MixerChannel> for UiMixerChannel {
 }
 
 /// UI representation of a mixer bus.
+#[frb(dart_metadata=("freezed"))]
 pub struct UiBus {
     pub id: u32,
     pub name: String,
@@ -113,6 +116,7 @@ impl From<&BusMixerChannel> for UiBus {
 }
 
 /// UI representation of a routing connection.
+#[frb(dart_metadata=("freezed"))]
 pub struct UiRoutingConnection {
     pub source: UiRoutingNode,
     pub destination: UiRoutingNode,
@@ -174,6 +178,7 @@ impl From<UiRoutingNode> for RoutingNode {
 }
 
 /// UI representation of the mixer state.
+#[frb(dart_metadata=("freezed"))]
 pub struct UiMixerState {
     pub channels: HashMap<u32, UiMixerChannel>,
     pub master_bus: UiMixerChannel,
@@ -200,6 +205,7 @@ impl From<&MixerState> for UiMixerState {
     }
 }
 
+#[frb(dart_metadata=("freezed"))]
 pub struct UiEffectInstance {
     pub id: u32,
     pub name: String,
@@ -279,6 +285,7 @@ pub enum ParameterValueTypeDTO {
 
 // 2. Mirror the Struct
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct ParameterSpecDTO {
     pub id: u32,
     pub name: String,

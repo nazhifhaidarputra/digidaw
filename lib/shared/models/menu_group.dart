@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:karbeat/app/providers/app_state.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Toolbar Menu Group

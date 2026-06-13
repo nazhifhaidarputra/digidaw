@@ -107,6 +107,7 @@ impl From<TrackType> for UiTrackType {
     }
 }
 
+#[frb(dart_metadata=("freezed"))]
 pub struct UiTrack {
     pub id: u32,
     pub name: String,
@@ -118,6 +119,7 @@ pub struct UiTrack {
 }
 
 #[derive(Clone, Default)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiProjectMetadata {
     pub name: String,
     pub author: String,
@@ -147,6 +149,7 @@ impl From<UiProjectMetadata> for ProjectMetadata {
     }
 }
 
+#[frb(dart_metadata=("freezed"))]
 pub struct UiAudioHardwareConfig {
     pub selected_input_device: String,
     pub selected_output_device: String,
@@ -180,6 +183,7 @@ impl From<UiAudioHardwareConfig> for AudioHardwareConfig {
 }
 
 #[derive(Default, Clone)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiTransportState {
     pub bpm: f32,
     pub time_signature: (u8, u8),
@@ -266,6 +270,7 @@ pub fn transport_state_new_with_param(bpm: f32, time_signature: (u8, u8)) -> UiT
 }
 
 #[derive(Clone)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiClip {
     pub name: String,
     pub id: u32,
@@ -312,6 +317,7 @@ impl From<&Clip> for UiClip {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[frb(dart_metadata=("freezed"))]
 pub struct AudioWaveformUiForSourceList {
     pub name: String,
     pub muted: bool,
@@ -319,6 +325,7 @@ pub struct AudioWaveformUiForSourceList {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[frb(dart_metadata=("freezed"))]
 pub struct AudioWaveformUiForAudioProperties {
     pub id: Option<u32>,
     pub buffer_handle: WaveformHandle,
@@ -378,11 +385,13 @@ impl TryFrom<&AudioWaveform> for AudioWaveformUiForAudioProperties {
 // =================== GENERATOR INSTANCE =====================
 // ============================================================
 
+#[frb(dart_metadata=("freezed"))]
 pub struct UiGeneratorInstance {
     pub id: u32,
     pub instance_type: UiGeneratorInstanceType,
 }
 
+#[frb(dart_metadata=("freezed"))]
 pub struct UiPluginInstance {
     /// Registry ID for plugin lookup (stable identifier)
     pub registry_id: u32,

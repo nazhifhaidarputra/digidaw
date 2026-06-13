@@ -8,6 +8,7 @@ use karbeat_core::audio::event::TransportFeedback;
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
 
 #[derive(Clone, Copy, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiTransportFeedback {
     pub samples: u32,
     pub ticks: u32,

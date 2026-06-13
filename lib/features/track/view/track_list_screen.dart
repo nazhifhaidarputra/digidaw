@@ -6,6 +6,7 @@ import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_lane_slot.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
 import 'package:karbeat/features/track/view/track_header.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'dart:math' as math;
 

@@ -141,6 +141,8 @@ final busAutomationProvider =
 final trackAutomationProvider =
     Provider.family<List<ChannelAutomationEntry>, int>((ref, trackId) {
       final state = ref.watch(globalStateProvider);
+
+      
       final track = getAutomationLaneTrack(state, trackId: trackId);
       AppLogger.info("$track");
       return track;

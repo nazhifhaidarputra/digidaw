@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/audio.dart';

@@ -2,10 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/export_project_state.dart';
+import 'package:karbeat/core/constants/audio_format.dart';
+import 'package:karbeat/features/workspace/services/export_service.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/app/providers/app_state.dart';
 import 'package:file_picker/file_picker.dart';
+
 
 class ProjectExportPanel extends ConsumerStatefulWidget {
   final VoidCallback onClose;
@@ -20,25 +24,6 @@ class ProjectExportPanel extends ConsumerStatefulWidget {
 
 class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   late TextEditingController _nameController;
-  String _exportDirectory = "Select Directory...";
-  SupportedAudioFormat _selectedFormat = SupportedAudioFormat.wav;
-  BitDepthDTO _selectedBitDepth = const BitDepthDTO.bitPerSample(16);
-  SampleRate _selectedSampleRate = SampleRate.hz44100;
-  TailHandling _tailHandling = TailHandling.leaveRemainder;
-  bool _openFolderAfterExport = true;
-
-  static const _bitPerSampleOptions = [
-    BitDepthDTO.bitPerSample(8),
-    BitDepthDTO.bitPerSample(16),
-    BitDepthDTO.bitPerSample(24),
-    BitDepthDTO.bitPerSample(32),
-  ];
-  static const _bitPerSecondOptions = [
-    BitDepthDTO.bitPerSecond(128),
-    BitDepthDTO.bitPerSecond(192),
-    BitDepthDTO.bitPerSecond(256),
-    BitDepthDTO.bitPerSecond(320),
-  ];
 
   bool _isExporting = false;
   double _exportProgress = 0.0;
@@ -48,6 +33,11 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     super.initState();
     final state = ref.read(globalStateProvider);
     _nameController = TextEditingController(text: state.metadata.name);
+    
+    // Ensure the export directory text field updates dynamically when typing the name
+    _nameController.addListener(() {
+      setState(() {}); 
+    });
   }
 
   @override
@@ -56,31 +46,36 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     super.dispose();
   }
 
-  // Replace _pickDirectory with this new native save dialog handler
   Future<void> _pickSavePath() async {
+    final exportState = ref.read(exportProjectProvider);
+    final format = exportState.selectedFormat;
+
     String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Select export location and name',
-      fileName: '${_nameController.text}.${_selectedFormat.name.toLowerCase()}',
+      fileName: '${_nameController.text}.${format.name.toLowerCase()}',
       type: FileType.custom,
-      allowedExtensions: [_selectedFormat.name.toLowerCase()],
+      allowedExtensions: [format.name.toLowerCase()],
     );
 
     if (outputFile != null) {
       final file = File(outputFile);
-      setState(() {
-        _exportDirectory = file.parent.path;
-        // Extract filename without extension to cleanly update the name controller
-        final nameWithExt = file.uri.pathSegments.last;
-        final nameWithoutExt = nameWithExt.contains('.')
-            ? nameWithExt.substring(0, nameWithExt.lastIndexOf('.'))
-            : nameWithExt;
-        _nameController.text = nameWithoutExt;
-      });
+      
+      // Update global export state
+      ref.read(exportProjectProvider.notifier).updateExportDirectory(file.parent.path);
+      
+      // Extract filename without extension to cleanly update the local name controller
+      final nameWithExt = file.uri.pathSegments.last;
+      final nameWithoutExt = nameWithExt.contains('.')
+          ? nameWithExt.substring(0, nameWithExt.lastIndexOf('.'))
+          : nameWithExt;
+      _nameController.text = nameWithoutExt;
     }
   }
 
   Future<void> _handleExport() async {
-    if (_exportDirectory == "Select Directory...") {
+    final exportState = ref.read(exportProjectProvider);
+
+    if (exportState.exportDirectory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please select an export directory first."),
@@ -94,17 +89,15 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       _exportProgress = 0.0;
     });
 
-    final state = ref.read(globalStateProvider.notifier);
-
     try {
-      // Consume the progress stream
-      final progressStream = state.exportProject(
-        path: _exportDirectory,
+      // Consume the progress stream using values straight from the provider state
+      final progressStream = exportProject(
+        path: exportState.exportDirectory!,
         soundfileName: _nameController.text,
-        format: _selectedFormat,
-        bitDepth: _selectedBitDepth,
-        sampleRate: _selectedSampleRate,
-        tailHandling: _tailHandling,
+        format: exportState.selectedFormat,
+        bitDepth: exportState.selectedBitDepth,
+        sampleRate: exportState.selectedSampleRate,
+        tailHandling: exportState.tailHandling,
       );
 
       await for (final progress in progressStream) {
@@ -115,9 +108,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Export failed: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Export failed: $e")),
+        );
       }
     } finally {
       if (mounted) {
@@ -127,14 +120,14 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       }
     }
 
-    if (_openFolderAfterExport && mounted) {
+    if (exportState.openFolderAfterExport && mounted) {
       // Best effort to open folder
       if (Platform.isWindows) {
-        Process.run('explorer.exe', [_exportDirectory]);
+        Process.run('explorer.exe', [exportState.exportDirectory!]);
       } else if (Platform.isMacOS) {
-        Process.run('open', [_exportDirectory]);
+        Process.run('open', [exportState.exportDirectory!]);
       } else if (Platform.isLinux) {
-        Process.run('xdg-open', [_exportDirectory]);
+        Process.run('xdg-open', [exportState.exportDirectory!]);
       }
     }
 
@@ -144,6 +137,8 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final exportState = ref.watch(exportProjectProvider);
+    final exportNotifier = ref.read(exportProjectProvider.notifier);
 
     return Center(
       child: Material(
@@ -177,9 +172,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
+                    const Text(
                       "Export Project",
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -223,7 +218,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       TextField(
                         readOnly: true,
                         style: TextStyle(
-                          color: _exportDirectory == "Select Directory..."
+                          color: exportState.exportDirectory == null
                               ? Colors.white54
                               : Colors.white,
                         ),
@@ -251,9 +246,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                           ),
                         ),
                         controller: TextEditingController(
-                          text: _exportDirectory == "Select Directory..."
+                          text: exportState.exportDirectory == null
                               ? ""
-                              : "$_exportDirectory${Platform.pathSeparator}${_nameController.text}.${_selectedFormat.name.toLowerCase()}",
+                              : "${exportState.exportDirectory}${Platform.pathSeparator}${_nameController.text}.${exportState.selectedFormat.name.toLowerCase()}",
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -270,24 +265,17 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               children: [
                                 _buildSectionTitle("Format"),
                                 _buildDropdown<SupportedAudioFormat>(
-                                  value: _selectedFormat,
-                                  // items: SupportedAudioFormat.values,
+                                  value: exportState.selectedFormat,
                                   items: const [
                                     SupportedAudioFormat.wav,
                                     SupportedAudioFormat.mp3,
                                   ],
                                   itemLabel: (f) => f.name.toUpperCase(),
-                                  onChanged: (val) => setState(() {
-                                    _selectedFormat = val!;
-                                    _selectedBitDepth = switch (val) {
-                                      SupportedAudioFormat.wav ||
-                                      SupportedAudioFormat.flac =>
-                                        const BitDepthDTO.bitPerSample(16),
-                                      SupportedAudioFormat.mp3 ||
-                                      SupportedAudioFormat.ogg =>
-                                        const BitDepthDTO.bitPerSecond(192),
-                                    };
-                                  }),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      exportNotifier.updateFormat(val);
+                                    }
+                                  },
                                 ),
                               ],
                             ),
@@ -299,12 +287,14 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               children: [
                                 _buildSectionTitle("Sample Rate"),
                                 _buildDropdown<SampleRate>(
-                                  value: _selectedSampleRate,
+                                  value: exportState.selectedSampleRate,
                                   items: SampleRate.values,
                                   itemLabel: (s) => s.label,
-                                  onChanged: (val) => setState(
-                                    () => _selectedSampleRate = val!,
-                                  ),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      exportNotifier.updateSampleRate(val);
+                                    }
+                                  },
                                 ),
                               ],
                             ),
@@ -323,29 +313,24 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               children: [
                                 _buildSectionTitle("Bit Depth / Bitrate"),
                                 _buildDropdown<BitDepthDTO>(
-                                  value: _selectedBitDepth,
-                                  items:
-                                      _selectedFormat ==
-                                              SupportedAudioFormat.wav ||
-                                          _selectedFormat ==
-                                              SupportedAudioFormat.flac
-                                      ? _bitPerSampleOptions
-                                      : _bitPerSecondOptions,
+                                  value: exportState.selectedBitDepth,
+                                  items: exportState.selectedFormat == SupportedAudioFormat.wav ||
+                                         exportState.selectedFormat == SupportedAudioFormat.flac
+                                      ? bitPerSampleOptions
+                                      : bitPerSecondOptions,
                                   itemLabel: (b) => switch (b) {
-                                    BitDepthDTO_BitPerSample(:final field0) =>
-                                      field0.toString(),
-                                    BitDepthDTO_BitPerSecond(:final field0) =>
-                                      field0.toString(),
+                                    BitDepthDTO_BitPerSample(:final field0) => field0.toString(),
+                                    BitDepthDTO_BitPerSecond(:final field0) => field0.toString(),
                                   },
-                                  suffix:
-                                      _selectedFormat ==
-                                              SupportedAudioFormat.wav ||
-                                          _selectedFormat ==
-                                              SupportedAudioFormat.flac
+                                  suffix: exportState.selectedFormat == SupportedAudioFormat.wav ||
+                                          exportState.selectedFormat == SupportedAudioFormat.flac
                                       ? "-bit"
                                       : " kbps",
-                                  onChanged: (val) =>
-                                      setState(() => _selectedBitDepth = val!),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      exportNotifier.updateBitDepth(val);
+                                    }
+                                  },
                                 ),
                               ],
                             ),
@@ -357,14 +342,17 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               children: [
                                 _buildSectionTitle("Tail Handling"),
                                 _buildDropdown<TailHandling>(
-                                  value: _tailHandling,
+                                  value: exportState.tailHandling,
                                   items: TailHandling.values,
                                   itemLabel: (t) => t.name.replaceAll(
                                     RegExp(r'(?<!^)(?=[A-Z])'),
                                     ' ',
                                   ),
-                                  onChanged: (val) =>
-                                      setState(() => _tailHandling = val!),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      exportNotifier.updateTailHandling(val);
+                                    }
+                                  },
                                 ),
                               ],
                             ),
@@ -376,13 +364,15 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       Row(
                         children: [
                           Checkbox(
-                            value: _openFolderAfterExport,
+                            value: exportState.openFolderAfterExport,
                             activeColor: Colors.blueAccent,
                             onChanged: _isExporting
                                 ? null
-                                : (val) => setState(
-                                    () => _openFolderAfterExport = val!,
-                                  ),
+                                : (val) {
+                                    if (val != null) {
+                                      exportNotifier.setOpenFolderAfterExport(val);
+                                    }
+                                  },
                           ),
                           const Text(
                             "Open folder after export",

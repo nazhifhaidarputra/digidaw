@@ -5,6 +5,7 @@ import 'package:karbeat/features/mixer/view/mixer_screen.dart';
 import 'package:karbeat/features/piano_roll/view/piano_roll_screen.dart';
 import 'package:karbeat/features/source/view/source_list_screen.dart';
 import 'package:karbeat/features/track/view/track_list_screen.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/core/utils/logger.dart';

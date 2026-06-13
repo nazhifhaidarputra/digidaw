@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/core/utils/logger.dart';

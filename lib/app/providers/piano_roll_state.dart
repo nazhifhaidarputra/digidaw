@@ -1,50 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-class PianoRollStateData {
-  final int? editingPatternId;
-  final PianoRollToolSelection tool;
-  final double zoomLevelTick;
-  final GridSize gridSize;
-  final bool snapToGrid;
-  final Set<int> selectedNoteIds;
-  final int? previewGeneratorId;
+part 'piano_roll_state.freezed.dart';
 
-  PianoRollStateData({
-    this.editingPatternId,
-    required this.tool,
-    required this.zoomLevelTick,
-    required this.gridSize,
-    required this.snapToGrid,
-    required this.selectedNoteIds,
-    this.previewGeneratorId,
-  });
-
-  PianoRollStateData copyWith({
+@freezed
+abstract class PianoRollStateData with _$PianoRollStateData {
+  const factory PianoRollStateData({
+    @Default(null)
     int? editingPatternId,
-    PianoRollToolSelection? tool,
-    double? zoomLevelTick,
-    GridSize? gridSize,
-    bool? snapToGrid,
-    Set<int>? selectedNoteIds,
+    @Default(PianoRollToolSelection.grab)
+    PianoRollToolSelection tool,
+    @Default(0.67)
+    double zoomLevelTick,
+    @Default(GridSize.quarter)
+    GridSize gridSize,
+    @Default(false)
+    bool snapToGrid,
+    @Default({})
+    Set<int> selectedNoteIds,
+    @Default(null)
     int? previewGeneratorId,
-  }) {
-    return PianoRollStateData(
-      editingPatternId: editingPatternId ?? this.editingPatternId,
-      tool: tool ?? this.tool,
-      zoomLevelTick: zoomLevelTick ?? this.zoomLevelTick,
-      gridSize: gridSize ?? this.gridSize,
-      snapToGrid: snapToGrid ?? this.snapToGrid,
-      selectedNoteIds: selectedNoteIds ?? this.selectedNoteIds,
-      previewGeneratorId: previewGeneratorId ?? this.previewGeneratorId,
-    );
-  }
+  }) = _PianoRollStateData;
 }
 
 /// Top-level Riverpod 3.0 provider for Piano Roll Editor State

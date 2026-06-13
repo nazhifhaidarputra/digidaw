@@ -223,28 +223,13 @@ abstract class PluginBufferHandle implements RustOpaqueInterface {
 
 enum KarbeatPluginType { generator, effect }
 
-class UiEffectParameterSnapshot {
-  final UiEffectTarget target;
-  final int effectId;
-  final List<UiParameterValue> parameters;
-
-  const UiEffectParameterSnapshot({
-    required this.target,
-    required this.effectId,
-    required this.parameters,
-  });
-
-  @override
-  int get hashCode => target.hashCode ^ effectId.hashCode ^ parameters.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiEffectParameterSnapshot &&
-          runtimeType == other.runtimeType &&
-          target == other.target &&
-          effectId == other.effectId &&
-          parameters == other.parameters;
+@freezed
+sealed class UiEffectParameterSnapshot with _$UiEffectParameterSnapshot {
+  const factory UiEffectParameterSnapshot({
+    required UiEffectTarget target,
+    required int effectId,
+    required List<UiParameterValue> parameters,
+  }) = _UiEffectParameterSnapshot;
 }
 
 @freezed
@@ -257,25 +242,12 @@ sealed class UiEffectTarget with _$UiEffectTarget {
 }
 
 /// Parameter snapshot from the audio thread (DTO)
-class UiGeneratorParameterSnapshot {
-  final int generatorId;
-  final List<UiParameterValue> parameters;
-
-  const UiGeneratorParameterSnapshot({
-    required this.generatorId,
-    required this.parameters,
-  });
-
-  @override
-  int get hashCode => generatorId.hashCode ^ parameters.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiGeneratorParameterSnapshot &&
-          runtimeType == other.runtimeType &&
-          generatorId == other.generatorId &&
-          parameters == other.parameters;
+@freezed
+sealed class UiGeneratorParameterSnapshot with _$UiGeneratorParameterSnapshot {
+  const factory UiGeneratorParameterSnapshot({
+    required int generatorId,
+    required List<UiParameterValue> parameters,
+  }) = _UiGeneratorParameterSnapshot;
 }
 
 @freezed
@@ -294,133 +266,50 @@ sealed class UiParamId with _$UiParamId {
 enum UiParameterType { float, int, bool, choice }
 
 /// Single parameter value from the audio thread
-class UiParameterValue {
-  final int paramId;
-  final double value;
-
-  const UiParameterValue({required this.paramId, required this.value});
-
-  @override
-  int get hashCode => paramId.hashCode ^ value.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiParameterValue &&
-          runtimeType == other.runtimeType &&
-          paramId == other.paramId &&
-          value == other.value;
+@freezed
+sealed class UiParameterValue with _$UiParameterValue {
+  const factory UiParameterValue({
+    required int paramId,
+    required double value,
+  }) = _UiParameterValue;
 }
 
 /// A response message arriving from the audio thread to Flutter.
 /// Flutter uses the `request_id` to correlate with the original command sent
 /// via `execute_realtime_plugin_command`.
-class UiPluginCommandResponse {
-  /// Matches the `request_id` returned by `execute_realtime_plugin_command`
-  final int requestId;
-
-  /// JSON-encoded response from the plugin's `execute_custom_command`
-  final String responseJson;
-
-  const UiPluginCommandResponse({
-    required this.requestId,
-    required this.responseJson,
-  });
-
-  @override
-  int get hashCode => requestId.hashCode ^ responseJson.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiPluginCommandResponse &&
-          runtimeType == other.runtimeType &&
-          requestId == other.requestId &&
-          responseJson == other.responseJson;
+@freezed
+sealed class UiPluginCommandResponse with _$UiPluginCommandResponse {
+  const factory UiPluginCommandResponse({
+    required int requestId,
+    required String responseJson,
+  }) = _UiPluginCommandResponse;
 }
 
-class UiPluginInfo {
-  final int id;
-  final String name;
-  final KarbeatPluginType pluginType;
-
-  const UiPluginInfo({
-    required this.id,
-    required this.name,
-    required this.pluginType,
-  });
-
-  @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ pluginType.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiPluginInfo &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          name == other.name &&
-          pluginType == other.pluginType;
+@freezed
+sealed class UiPluginInfo with _$UiPluginInfo {
+  const factory UiPluginInfo({
+    required int id,
+    required String name,
+    required KarbeatPluginType pluginType,
+  }) = _UiPluginInfo;
 }
 
 /// Plugin parameter description for UI generation
-class UiPluginParameter {
-  final int id;
-  final String path;
-  final String name;
-  final String group;
-  final double value;
-  final double min;
-  final double max;
-  final double defaultValue;
-  final double step;
-  final UiParameterType paramType;
-  final List<String> choices;
-
-  const UiPluginParameter({
-    required this.id,
-    required this.path,
-    required this.name,
-    required this.group,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.defaultValue,
-    required this.step,
-    required this.paramType,
-    required this.choices,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      path.hashCode ^
-      name.hashCode ^
-      group.hashCode ^
-      value.hashCode ^
-      min.hashCode ^
-      max.hashCode ^
-      defaultValue.hashCode ^
-      step.hashCode ^
-      paramType.hashCode ^
-      choices.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiPluginParameter &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          path == other.path &&
-          name == other.name &&
-          group == other.group &&
-          value == other.value &&
-          min == other.min &&
-          max == other.max &&
-          defaultValue == other.defaultValue &&
-          step == other.step &&
-          paramType == other.paramType &&
-          choices == other.choices;
+@freezed
+sealed class UiPluginParameter with _$UiPluginParameter {
+  const factory UiPluginParameter({
+    required int id,
+    required String path,
+    required String name,
+    required String group,
+    required double value,
+    required double min,
+    required double max,
+    required double defaultValue,
+    required double step,
+    required UiParameterType paramType,
+    required List<String> choices,
+  }) = _UiPluginParameter;
 }
 
 @freezed

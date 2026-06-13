@@ -5,39 +5,20 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'monitor.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`
 
 Stream<PerformanceMetricsDTO> startPerformanceMonitor() =>
     RustLib.instance.api.crateApiMonitorStartPerformanceMonitor();
 
-class PerformanceMetricsDTO {
-  final double osCpuUsage;
-  final double ramUsageMb;
-  final double totalRamMb;
-  final double dspHeadroom;
-
-  const PerformanceMetricsDTO({
-    required this.osCpuUsage,
-    required this.ramUsageMb,
-    required this.totalRamMb,
-    required this.dspHeadroom,
-  });
-
-  @override
-  int get hashCode =>
-      osCpuUsage.hashCode ^
-      ramUsageMb.hashCode ^
-      totalRamMb.hashCode ^
-      dspHeadroom.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is PerformanceMetricsDTO &&
-          runtimeType == other.runtimeType &&
-          osCpuUsage == other.osCpuUsage &&
-          ramUsageMb == other.ramUsageMb &&
-          totalRamMb == other.totalRamMb &&
-          dspHeadroom == other.dspHeadroom;
+@freezed
+sealed class PerformanceMetricsDTO with _$PerformanceMetricsDTO {
+  const factory PerformanceMetricsDTO({
+    required double osCpuUsage,
+    required double ramUsageMb,
+    required double totalRamMb,
+    required double dspHeadroom,
+  }) = _PerformanceMetricsDTO;
 }

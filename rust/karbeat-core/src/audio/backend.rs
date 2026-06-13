@@ -320,7 +320,6 @@ pub fn start_audio_stream(
             .or_else(|| host.default_output_device())
             .context("no audio output device available")?
     };
-    // debug!("Output dev");
     let device_name = match device.description() {
         Ok(desc) => desc.name().to_owned(),
         Err(_) => "Unknown".into(),

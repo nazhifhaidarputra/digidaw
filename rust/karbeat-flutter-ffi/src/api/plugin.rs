@@ -51,6 +51,7 @@ impl From<ParameterValueType> for UiParameterType {
 
 /// Plugin parameter description for UI generation
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiPluginParameter {
     pub id: u32,
     pub path: String,
@@ -91,6 +92,7 @@ pub enum KarbeatPluginType {
     Effect,
 }
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiPluginInfo {
     pub id: u32,
     pub name: String,
@@ -210,12 +212,14 @@ pub fn get_generator_parameter(generator_id: u32, param_id: UiParamId) -> Result
 
 /// Parameter snapshot from the audio thread (DTO)
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiGeneratorParameterSnapshot {
     pub generator_id: u32,
     pub parameters: Vec<UiParameterValue>,
 }
 
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub enum UiEffectTarget {
     Track(u32),
     Master,
@@ -247,6 +251,7 @@ impl From<UiEffectTarget> for karbeat_core::commands::EffectTarget {
 }
 
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiEffectParameterSnapshot {
     pub target: UiEffectTarget,
     pub effect_id: u32,
@@ -255,6 +260,7 @@ pub struct UiEffectParameterSnapshot {
 
 /// Single parameter value from the audio thread
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiParameterValue {
     pub param_id: u32,
     pub value: f32,
@@ -418,6 +424,7 @@ pub fn parse_plugin_response<T: FromPluginCommand>(json_str: &str) -> Result<T, 
 /// Identifies which live plugin instance on the audio thread to target.
 /// Mirrors `karbeat_core::audio::event::PluginTarget` for FRB exposure.
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub enum UiPluginTarget {
     /// A generator plugin identified by its GeneratorId
     Generator(u32),
@@ -466,6 +473,7 @@ impl From<&PluginTarget> for UiPluginTarget {
 /// Flutter uses the `request_id` to correlate with the original command sent
 /// via `execute_realtime_plugin_command`.
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiPluginCommandResponse {
     /// Matches the `request_id` returned by `execute_realtime_plugin_command`
     pub request_id: u32,

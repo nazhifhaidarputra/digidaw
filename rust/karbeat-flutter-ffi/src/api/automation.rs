@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use flutter_rust_bridge::frb;
 use karbeat_core::{
     api::automation_api,
     core::project::{
@@ -13,6 +14,7 @@ use karbeat_core::{
 use crate::api::plugin::UiPluginTarget;
 
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct AutomationLaneDto {
     pub id: u32,
     pub label: String,
@@ -24,6 +26,7 @@ pub struct AutomationLaneDto {
 }
 
 #[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct AutomationPointDto {
     pub time_ticks: u32,
     pub value: f32,
@@ -74,6 +77,7 @@ pub enum AutomationCurveTypeDto {
     Step,
 }
 
+#[frb(dart_metadata=("freezed"))]
 pub struct ModulationLinkDto {
     pub id: u32,
     pub source_id: u32,              // Which LFO/Macro is driving this?

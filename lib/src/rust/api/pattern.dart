@@ -5,6 +5,8 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'pattern.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `from`, `from`
 
@@ -140,77 +142,26 @@ Future<void> stopPatternPreviewLocal({
 Future<void> stopPatternPreview() =>
     RustLib.instance.api.crateApiPatternStopPatternPreview();
 
-class UiNote {
-  final int id;
-  final int startTick;
-  final int duration;
-  final int key;
-  final int velocity;
-  final double probability;
-  final int microOffset;
-  final bool mute;
-
-  const UiNote({
-    required this.id,
-    required this.startTick,
-    required this.duration,
-    required this.key,
-    required this.velocity,
-    required this.probability,
-    required this.microOffset,
-    required this.mute,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      startTick.hashCode ^
-      duration.hashCode ^
-      key.hashCode ^
-      velocity.hashCode ^
-      probability.hashCode ^
-      microOffset.hashCode ^
-      mute.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiNote &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          startTick == other.startTick &&
-          duration == other.duration &&
-          key == other.key &&
-          velocity == other.velocity &&
-          probability == other.probability &&
-          microOffset == other.microOffset &&
-          mute == other.mute;
+@freezed
+sealed class UiNote with _$UiNote {
+  const factory UiNote({
+    required int id,
+    required int startTick,
+    required int duration,
+    required int key,
+    required int velocity,
+    required double probability,
+    required int microOffset,
+    required bool mute,
+  }) = _UiNote;
 }
 
-class UiPattern {
-  final int id;
-  final String name;
-  final int lengthTicks;
-  final List<UiNote> notes;
-
-  const UiPattern({
-    required this.id,
-    required this.name,
-    required this.lengthTicks,
-    required this.notes,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^ name.hashCode ^ lengthTicks.hashCode ^ notes.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiPattern &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          name == other.name &&
-          lengthTicks == other.lengthTicks &&
-          notes == other.notes;
+@freezed
+sealed class UiPattern with _$UiPattern {
+  const factory UiPattern({
+    required int id,
+    required String name,
+    required int lengthTicks,
+    required List<UiNote> notes,
+  }) = _UiPattern;
 }

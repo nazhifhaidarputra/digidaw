@@ -1,3 +1,5 @@
+import 'package:karbeat/src/rust/api/project.dart' show BitDepthDTO;
+
 enum BitPerSample { b8, b16, b24, b32 }
 
 enum TailHandling { cutRemainder, leaveRemainder, wrapRemainder }

@@ -39,8 +39,6 @@ class TrackListState {
   /// Total length of the project in sample frames (used for scrollbar sizing).
   final int maxSamplesIndex;
 
-  /// Path of the currently open project file.  `null` when unsaved.
-  final String? currentFilePath;
 
   const TrackListState({
     this.tracks = const {},
@@ -48,8 +46,7 @@ class TrackListState {
     this.selectedClipIds = const [],
     this.focusClipId,
     this.trackIdHeightMap = const {},
-    this.maxSamplesIndex = 2000,
-    this.currentFilePath,
+    this.maxSamplesIndex = 2000
   });
 
   TrackListState copyWith({
@@ -72,9 +69,6 @@ class TrackListState {
           : focusClipId as int?,
       trackIdHeightMap: trackIdHeightMap ?? this.trackIdHeightMap,
       maxSamplesIndex: maxSamplesIndex ?? this.maxSamplesIndex,
-      currentFilePath: identical(currentFilePath, _sentinel)
-          ? this.currentFilePath
-          : currentFilePath as String?,
     );
   }
 
@@ -87,8 +81,7 @@ class TrackListState {
         other.selectedClipIds == selectedClipIds &&
         other.focusClipId == focusClipId &&
         other.trackIdHeightMap == trackIdHeightMap &&
-        other.maxSamplesIndex == maxSamplesIndex &&
-        other.currentFilePath == currentFilePath;
+        other.maxSamplesIndex == maxSamplesIndex;
   }
 
   @override
@@ -99,7 +92,6 @@ class TrackListState {
     focusClipId,
     trackIdHeightMap,
     maxSamplesIndex,
-    currentFilePath,
   );
 }
 
@@ -237,7 +229,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     if (original == null) return Result.error(Exception('Track not found'));
 
     // Optimistic update
-    _patchTrack(trackId, name: newName);
+    _patchTrack(trackId, name: newName, color: original.color);
 
     try {
       await track_api.changeTrackName(trackId: trackId, newName: newName);
@@ -246,7 +238,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error('TrackListNotifier: failed to rename track: $e');
       // Rollback
       if (state.tracks.containsKey(trackId)) {
-        _patchTrack(trackId, name: original.name);
+        _patchTrack(trackId, name: original.name, color: original.color);
       }
       return Result.error(Exception('$e'));
     }
@@ -258,7 +250,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     if (original == null) return Result.error(Exception('Track not found'));
 
     final colorStr = newColor.toRGBA();
-    _patchTrack(trackId, color: colorStr);
+    _patchTrack(trackId, color: colorStr, name: original.name);
 
     try {
       await track_api.changeTrackColor(trackId: trackId, newColor: colorStr);
@@ -266,7 +258,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     } catch (e) {
       AppLogger.error('TrackListNotifier: failed to change track color: $e');
       if (state.tracks.containsKey(trackId)) {
-        _patchTrack(trackId, color: original.color);
+        _patchTrack(trackId, color: original.color, name: original.name);
       }
       return Result.error(Exception('$e'));
     }
@@ -499,7 +491,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
         final track = state.tracks[targetTrackId]!;
         final updatedClips = List<UiClip>.from(track.clips)..addAll(clips);
         final newTracks = Map<int, UiTrack>.from(state.tracks);
-        newTracks[targetTrackId] = _copyWithTrack(track, clips: updatedClips);
+        newTracks[targetTrackId] = track.copyWith(clips: updatedClips);
 
         state = state.copyWith(
           tracks: newTracks,
@@ -538,11 +530,11 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // Optimistic helpers
   // ------------------------------------------------------------------
 
-  void _patchTrack(int trackId, {String? name, String? color}) {
+  void _patchTrack(int trackId, {required String name, required String color}) {
     final original = state.tracks[trackId];
     if (original == null) return;
     final newTracks = Map<int, UiTrack>.from(state.tracks);
-    newTracks[trackId] = _copyWithTrack(original, name: name, color: color);
+    newTracks[trackId] = original.copyWith(name: name, color: color);
     state = state.copyWith(tracks: newTracks);
   }
 
@@ -553,7 +545,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
         .where((c) => !clipIdSet.contains(c.id))
         .toList();
     final newTracks = Map<int, UiTrack>.from(state.tracks);
-    newTracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    newTracks[trackId] = track.copyWith(clips: updatedClips);
     state = state.copyWith(tracks: newTracks);
   }
 
@@ -589,14 +581,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
 
     final updatedClips = List<UiClip>.from(track.clips);
-    updatedClips[clipIndex] = _copyWithClip(
-      clip,
+    updatedClips[clipIndex] = clip.copyWith(
       startTime: newStart,
       loopLength: newLength,
       offsetStart: newOffset,
     );
     final newTracks = Map<int, UiTrack>.from(state.tracks);
-    newTracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    newTracks[trackId] = track.copyWith(clips: updatedClips);
     state = state.copyWith(tracks: newTracks);
   }
 
@@ -612,7 +603,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     if (clipIndex == -1) return;
 
     final clip = track.clips[clipIndex];
-    final updatedClip = _copyWithClip(clip, startTime: newStartTime);
+    final updatedClip = clip.copyWith(startTime: newStartTime);
 
     final newTracks = Map<int, UiTrack>.from(state.tracks);
 
@@ -622,12 +613,12 @@ class TrackListNotifier extends Notifier<TrackListState> {
       final sourceClips = List<UiClip>.from(track.clips)..removeAt(clipIndex);
       final targetClips = List<UiClip>.from(targetTrack.clips)
         ..add(updatedClip);
-      newTracks[trackId] = _copyWithTrack(track, clips: sourceClips);
-      newTracks[newTrackId] = _copyWithTrack(targetTrack, clips: targetClips);
+      newTracks[trackId] = track.copyWith(clips: sourceClips);
+      newTracks[newTrackId] = targetTrack.copyWith(clips: targetClips);
     } else {
       final updatedClips = List<UiClip>.from(track.clips);
       updatedClips[clipIndex] = updatedClip;
-      newTracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+      newTracks[trackId] = track.copyWith(clips: updatedClips);
     }
     state = state.copyWith(tracks: newTracks);
   }
@@ -658,19 +649,19 @@ class TrackListNotifier extends Notifier<TrackListState> {
       final targetClips = List<UiClip>.from(targetTrack.clips);
       for (final clip in clipsToMove) {
         final newStart = (clip.startTime + deltaSamples).clamp(0, 1 << 62);
-        targetClips.add(_copyWithClip(clip, startTime: newStart.toInt()));
+        targetClips.add(clip.copyWith(startTime: newStart.toInt()));
       }
-      newTracks[trackId] = _copyWithTrack(track, clips: sourceClips);
-      newTracks[targetId] = _copyWithTrack(targetTrack, clips: targetClips);
+      newTracks[trackId] = track.copyWith(clips: sourceClips);
+      newTracks[targetId] = targetTrack.copyWith(clips: targetClips);
     } else {
       final updatedClips = track.clips.map((clip) {
         if (clipIdSet.contains(clip.id)) {
           final newStart = (clip.startTime + deltaSamples).clamp(0, 1 << 62);
-          return _copyWithClip(clip, startTime: newStart.toInt());
+          return clip.copyWith(startTime: newStart.toInt());
         }
         return clip;
       }).toList();
-      newTracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+      newTracks[trackId] = track.copyWith(clips: updatedClips);
     }
     state = state.copyWith(tracks: newTracks);
   }
@@ -709,8 +700,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
         newLength = oldEnd - newStartProposed;
         newOffset = newOffsetProposed.toInt();
       }
-      return _copyWithClip(
-        clip,
+      return clip.copyWith(
         startTime: newStart,
         loopLength: newLength,
         offsetStart: newOffset,
@@ -718,51 +708,10 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }).toList();
 
     final newTracks = Map<int, UiTrack>.from(state.tracks);
-    newTracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    newTracks[trackId] = track.copyWith(clips: updatedClips);
     state = state.copyWith(tracks: newTracks);
   }
 
-  // ------------------------------------------------------------------
-  // Copy helpers (mirrors GlobalAppState._copyWithTrack / _copyWithClip)
-  // ------------------------------------------------------------------
-
-  UiTrack _copyWithTrack(
-    UiTrack original, {
-    List<UiClip>? clips,
-    String? name,
-    String? color,
-  }) {
-    return UiTrack(
-      id: original.id,
-      color: color ?? original.color,
-      name: name ?? original.name,
-      trackType: original.trackType,
-      clips: clips ?? original.clips,
-      generatorId: original.generatorId,
-      orderIdx: original.orderIdx,
-    );
-  }
-
-  UiClip _copyWithClip(
-    UiClip original, {
-    String? name,
-    int? id,
-    int? startTime,
-    UiClipSource? source,
-    int? offsetStart,
-    int? loopLength,
-    bool? isSampleBased,
-  }) {
-    return UiClip(
-      name: name ?? original.name,
-      id: id ?? original.id,
-      startTime: startTime ?? original.startTime,
-      source: source ?? original.source,
-      offsetStart: offsetStart ?? original.offsetStart,
-      loopLength: loopLength ?? original.loopLength,
-      isSampleBased: isSampleBased ?? original.isSampleBased,
-    );
-  }
 }
 
 // ============================================================

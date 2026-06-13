@@ -490,26 +490,6 @@ class MixerNotifier extends Notifier<MixerEditorState> {
 }
 
 // ============================================================
-// Extension: copyWith for UiMixerState (keeps the extension local)
-// ============================================================
-
-extension _MixerStateCopyWith on mixer_api.UiMixerState {
-  mixer_api.UiMixerState copyWith({
-    Map<int, mixer_api.UiMixerChannel>? channels,
-    mixer_api.UiMixerChannel? masterBus,
-    Map<int, mixer_api.UiBus>? buses,
-    List<mixer_api.UiRoutingConnection>? routing,
-  }) {
-    return mixer_api.UiMixerState.newWithParam(
-      channels: channels ?? this.channels,
-      masterBus: masterBus ?? this.masterBus,
-      buses: buses ?? this.buses,
-      routing: routing ?? this.routing,
-    );
-  }
-}
-
-// ============================================================
 // Provider
 // ============================================================
 
