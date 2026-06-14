@@ -473,7 +473,9 @@ impl DigiParametricEQ {
                     Self::SPECTRUM_POINTS,
                     self.last_sample_rate,
                 )));
-                self.tables.as_mut().unwrap()
+
+                #[allow(clippy::unwrap_used)]
+                self.tables.as_mut().unwrap() // This is a safe unwrap
             }
         };
 

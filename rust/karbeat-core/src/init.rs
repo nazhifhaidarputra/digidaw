@@ -7,9 +7,14 @@ use std::{path::PathBuf, sync::Arc};
 use memmap2::MmapOptions;
 use rtrb::RingBuffer;
 
-use crate::{audio::backend::{AudioDeviceConfig, start_audio_stream}, commands::AudioCommand, context::ctx, core::project::AudioWaveform};
+use crate::{
+    audio::backend::{start_audio_stream, AudioDeviceConfig},
+    commands::AudioCommand,
+    context::ctx,
+    core::project::AudioWaveform,
+};
 
-fn generate_startup_beep() -> AudioWaveform {
+fn generate_startup_beep() -> Option<AudioWaveform> {
     let sample_rate = 48000;
     let duration_secs = 0.5;
     let total_frames = ((sample_rate as f32) * duration_secs) as usize;
@@ -29,16 +34,26 @@ fn generate_startup_beep() -> AudioWaveform {
     }
 
     let byte_slice: &[u8] = bytemuck::cast_slice(&buffer);
-    let mut mmap_mut = MmapOptions::new()
-        .len(byte_slice.len())
-        .map_anon()
-        .expect("Failed to create anonymous mmap for beep");
-    mmap_mut.copy_from_slice(byte_slice);
-    let mmap = mmap_mut
-        .make_read_only()
-        .expect("Failed to make mmap read-only");
+    let mmap_mut = match MmapOptions::new().len(byte_slice.len()).map_anon() {
+        Ok(mut m) => {
+            m.copy_from_slice(byte_slice);
+            m
+        }
+        Err(e) => {
+            log::warn!("Startup beep skipped: failed to allocate anonymous mmap: {e}");
+            return None;
+        }
+    };
 
-    AudioWaveform {
+    let mmap = match mmap_mut.make_read_only() {
+        Ok(m) => m,
+        Err(e) => {
+            log::warn!("Startup beep skipped: failed to make mmap read-only: {e}");
+            return None;
+        }
+    };
+
+    Some(AudioWaveform {
         buffer: Some(Arc::new(mmap)),
         file_path: PathBuf::from("internal_beep"),
         sample_rate,
@@ -46,7 +61,7 @@ fn generate_startup_beep() -> AudioWaveform {
         duration: duration_secs as f64,
         trim_end: total_frames as u32,
         ..Default::default()
-    }
+    })
 }
 
 pub fn init_engine() {
@@ -65,9 +80,10 @@ pub fn init_engine() {
 
             // SEND STARTUP BEEP
             if let Some(producer) = guard.as_mut() {
-                let beep_waveform = generate_startup_beep();
-                let _ = producer.push(AudioCommand::PlayOneShot(beep_waveform));
-                log::info!("Startup beep command sent");
+                if let Some(beep_waveform) = generate_startup_beep() {
+                    let _ = producer.push(AudioCommand::PlayOneShot(beep_waveform));
+                    log::info!("Startup beep command sent");
+                }
             }
         }
         Err(e) => {

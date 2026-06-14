@@ -49,6 +49,7 @@ app.*.map.json
 *.code-workspace
 .agents/
 opencode.json
+.zed
 
 # ENVs and Secrets
 .env

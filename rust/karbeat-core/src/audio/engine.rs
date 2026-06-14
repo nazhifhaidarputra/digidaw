@@ -1654,6 +1654,7 @@ impl AudioEngine {
 
                 if sr_changed || buf_changed {
                     if sr_changed {
+                        #[allow(clippy::unwrap_used)]
                         let sample_rate = sample_rate.unwrap(); // This is a safe unwrap
                         let ratio = sample_rate as f64 / self.sample_rate as f64;
                         self.song_state.playhead_samples = (self.song_state.playhead_samples as f64 * ratio) as u32;

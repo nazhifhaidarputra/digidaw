@@ -393,9 +393,7 @@ impl ApplicationState {
             id: gen_id,
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
         };
-        self.generator_pool
-            .insert(gen_id, generator.clone());
-
+        self.generator_pool.insert(gen_id, generator.clone());
         let track_order = self
             .tracks
             .values()
