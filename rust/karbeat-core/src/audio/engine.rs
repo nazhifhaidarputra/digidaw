@@ -1643,13 +1643,66 @@ impl AudioEngine {
                 sample_rate,
                 buffer_size,
             } => {
-                self.current_state.graph.sample_rate = sample_rate;
-                self.current_state.graph.buffer_size = buffer_size;
-                log::info!(
-                    "[AudioEngine] UpdateAudioConfig: {} Hz, buf {}",
-                    sample_rate,
-                    buffer_size
-                );
+                let sr_changed = match sample_rate {
+                    Some(val) => val != self.current_state.graph.sample_rate,
+                    None => false,
+                };
+                let buf_changed = match buffer_size {
+                    Some(val) => val != self.current_state.graph.buffer_size,
+                    None => false,
+                };
+
+                if sr_changed || buf_changed {
+                    if sr_changed {
+                        let sample_rate = sample_rate.unwrap(); // This is a safe unwrap
+                        let ratio = sample_rate as f64 / self.sample_rate as f64;
+                        self.song_state.playhead_samples = (self.song_state.playhead_samples as f64 * ratio) as u32;
+                        self.song_state.last_emitted_samples = (self.song_state.last_emitted_samples as f64 * ratio) as u32;
+                        
+                        self.pattern_state.playhead_samples = (self.pattern_state.playhead_samples as f64 * ratio) as u32;
+                        self.pattern_state.last_emitted_samples = (self.pattern_state.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.sample_rate = sample_rate;
+                    }
+
+                    let sr = sample_rate.unwrap_or(self.current_state.graph.sample_rate);
+                    let buf_size = buffer_size.unwrap_or(self.current_state.graph.buffer_size);
+                    self.current_state.graph.buffer_size = buf_size;
+                    
+                    let channels = self.num_channels as usize;
+                    let bf_size = buf_size.max(512);
+
+                    for gen in self.plugin_state.generators.iter_mut().flatten() {
+                        gen.plugin.prepare(sr as f32, channels, bf_size);
+                    }
+                    for effects in self.plugin_state.track_effects.iter_mut() {
+                        for effect in effects.iter_mut() {
+                            effect.plugin.prepare(sr as f32, channels, bf_size);
+                        }
+                    }
+                    for effects in self.plugin_state.bus_effects.iter_mut() {
+                        for effect in effects.iter_mut() {
+                            effect.plugin.prepare(sr as f32, channels, bf_size);
+                        }
+                    }
+                    for effect in self.plugin_state.master_effects.iter_mut() {
+                        effect.plugin.prepare(sr as f32, channels, bf_size);
+                    }
+
+                    // 3. Clear delay lines to avoid playing back garbage/pitch-shifted audio
+                    self.track_delay_lines.clear();
+                    self.bus_delay_lines.clear();
+                    self.sidechain_delay_lines.clear();
+
+                    // 4. Force Latency recalculation (latency samples change with sample rate)
+                    pdc_dirty = true;
+
+                    log::info!(
+                        "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                        sr,
+                        bf_size
+                    );
+                }
             }
             AudioCommand::ReplaceFullGraph { graph } => {
                 // Used for undo/redo. Atomically replace the full graph snapshot

@@ -70,6 +70,8 @@ where
     // Create a oneshot channel to receive the cloned engine
     let (engine_tx, engine_rx) = std::sync::mpsc::channel();
 
+    // Set the sample rate of Engine to use the requested sample_rate
+
     // Send audio command to get a copy of Audio Engine from live engine.
     // The engine is cloned from its own internal graph state — no triple-buffer involved.
     send_audio_command(AudioCommand::QueryAudioEngine {
@@ -82,6 +84,14 @@ where
     let mut offline_engine = *engine_rx.recv().map_err(|_| {
         AudioExportError::new("QueryEngineReceiver", "Failed to received offline engine")
     })?;
+
+    // We change the sample rate following the writer's sample rate
+    cmd_producer
+        .push(AudioCommand::UpdateAudioConfig {
+            sample_rate: Some(sample_rate),
+            buffer_size: None,
+        })
+        .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
 
     cmd_producer
         .push(AudioCommand::SetPlaybackMode(

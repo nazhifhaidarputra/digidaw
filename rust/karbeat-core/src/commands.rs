@@ -224,8 +224,8 @@ pub enum AudioCommand {
     /// Update audio engine config (sample_rate, buffer_size).
     /// Sent when the audio device is reconfigured at runtime.
     UpdateAudioConfig {
-        sample_rate: u32,
-        buffer_size: usize,
+        sample_rate: Option<u32>,
+        buffer_size: Option<usize>,
     },
 
     /// Atomically replace the full audio graph state on the engine.
