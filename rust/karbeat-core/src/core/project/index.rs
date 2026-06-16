@@ -190,20 +190,6 @@ impl Default for AudioHardwareConfig {
 }
 
 impl ApplicationState {
-    pub fn update_max_sample_index(&mut self) {
-        // Grab the absolute time context
-        let bpm = self.transport.bpm;
-        let sample_rate = self.audio_config.sample_rate;
-        self.max_sample_index = self
-            .tracks
-            .values_mut()
-            .map(|track_mut| {
-                track_mut.update_max_sample_index(bpm, sample_rate);
-                track_mut.max_sample_index
-            })
-            .max()
-            .unwrap_or(0);
-    }
 
     /// Deletes an audio source and removes all clips referencing it.
     pub fn remove_audio_source(
@@ -221,8 +207,6 @@ impl ApplicationState {
         for track in self.tracks.values_mut() {
             track.remove_clip_by_source_id(source_id, false);
         }
-
-        self.update_max_sample_index();
 
         Ok(source_id)
     }

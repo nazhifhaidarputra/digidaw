@@ -186,8 +186,6 @@ pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
         .unwrap_or(0);
     library.next_id = library.next_id.max(max_source_id.saturating_add(1));
 
-    app_state.update_max_sample_index();
-
     Ok(app_state)
 }
 

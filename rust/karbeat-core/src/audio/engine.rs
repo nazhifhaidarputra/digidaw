@@ -47,6 +47,9 @@ pub enum PlaybackMode {
     },
 }
 
+/// (pdc_dirty, needs_recalculate_max_index)
+type ProcessCommandFlag = (bool, bool);
+
 #[derive(Debug, Clone)]
 pub struct SongPlaybackState {
     pub is_playing: bool,
@@ -970,6 +973,7 @@ impl AudioEngine {
     /// Process incoming commands from command queue buffer
     fn process_command(&mut self, cmd: AudioCommand) -> bool {
         let mut pdc_dirty = false;
+        // let mut needs_recalculate_max_time = false;
         match cmd {
             AudioCommand::PlayOneShot(waveform) => {
                 self.preview_voices.clear();
@@ -1029,6 +1033,7 @@ impl AudioEngine {
             }
             AudioCommand::SetBPM(bpm) => {
                 self.bpm = bpm;
+                self.recalculate_max_sample_index();
                 self.emit_current_playback_position();
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
@@ -1237,7 +1242,8 @@ impl AudioEngine {
 
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.bus_buffers.keys().copied();
-                self.cached_routing_order = compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+                self.cached_routing_order =
+                    compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
 
                 log::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
             }
@@ -1248,8 +1254,9 @@ impl AudioEngine {
                 self.mixer_state.bus_channels.remove(&bus_id);
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.bus_buffers.keys().copied();
-                self.cached_routing_order = compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
-                
+                self.cached_routing_order =
+                    compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+
                 log::info!("[AudioEngine] Removed bus {:?}", bus_id);
             }
             AudioCommand::UpdateRouting { routing } => {
@@ -1562,11 +1569,8 @@ impl AudioEngine {
                 response_tx,
             } => {
                 // Clone the engine using its own internal graph state (no triple-buffer).
-                let cloned_engine = self.clone_for_export(
-                    command_consumer,
-                    position_producer,
-                    feedback_producer,
-                );
+                let cloned_engine =
+                    self.clone_for_export(command_consumer, position_producer, feedback_producer);
 
                 // Fire the fully hydrated engine back to the export thread
                 let _ = response_tx.send(Box::new(cloned_engine));
@@ -1611,7 +1615,6 @@ impl AudioEngine {
             // ================================================================
             // Granular Graph-State Updates (replace the old triple-buffer path)
             // ================================================================
-
             AudioCommand::UpdateTrackGraph {
                 tracks,
                 patterns,
@@ -1622,15 +1625,13 @@ impl AudioEngine {
                 self.current_state.graph.tracks = tracks;
                 self.current_state.graph.patterns = patterns;
                 self.current_state.graph.max_sample_index = max_sample_index;
-                
+
                 // Recompute routing order so new tracks are included in the DSP loop!
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.bus_buffers.keys().copied();
-                self.cached_routing_order = compute_routing_order(
-                    track_ids, 
-                    bus_ids, 
-                    &self.current_state.graph.routing
-                );
+                self.cached_routing_order =
+                    compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+                self.recalculate_max_sample_index();
                 pdc_dirty = true;
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {
@@ -1657,19 +1658,43 @@ impl AudioEngine {
                         #[allow(clippy::unwrap_used)]
                         let sample_rate = sample_rate.unwrap(); // This is a safe unwrap
                         let ratio = sample_rate as f64 / self.sample_rate as f64;
-                        self.song_state.playhead_samples = (self.song_state.playhead_samples as f64 * ratio) as u32;
-                        self.song_state.last_emitted_samples = (self.song_state.last_emitted_samples as f64 * ratio) as u32;
-                        
-                        self.pattern_state.playhead_samples = (self.pattern_state.playhead_samples as f64 * ratio) as u32;
-                        self.pattern_state.last_emitted_samples = (self.pattern_state.last_emitted_samples as f64 * ratio) as u32;
+                        self.song_state.playhead_samples =
+                            (self.song_state.playhead_samples as f64 * ratio) as u32;
+                        self.song_state.last_emitted_samples =
+                            (self.song_state.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.pattern_state.playhead_samples =
+                            (self.pattern_state.playhead_samples as f64 * ratio) as u32;
+                        self.pattern_state.last_emitted_samples =
+                            (self.pattern_state.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.current_state.graph.max_sample_index =
+                            (self.current_state.graph.max_sample_index as f64 * ratio) as u32;
+
+                        // Scale all Audio Clips that are mapped in Absolute Samples
+                        for track in self.current_state.graph.tracks.iter_mut() {
+                            for clip in track.clips.iter_mut() {
+                                if let crate::core::project::clip::ClipTimeUnit::Samples {
+                                    start_time,
+                                    loop_length,
+                                    offset_start,
+                                } = &mut clip.time
+                                {
+                                    *start_time = (*start_time as f64 * ratio) as u64;
+                                    *loop_length = (*loop_length as f64 * ratio) as u64;
+                                    *offset_start = (*offset_start as f64 * ratio) as u64;
+                                }
+                            }
+                        }
 
                         self.sample_rate = sample_rate;
+                        self.recalculate_max_sample_index();
                     }
 
                     let sr = sample_rate.unwrap_or(self.current_state.graph.sample_rate);
                     let buf_size = buffer_size.unwrap_or(self.current_state.graph.buffer_size);
                     self.current_state.graph.buffer_size = buf_size;
-                    
+
                     let channels = self.num_channels as usize;
                     let bf_size = buf_size.max(512);
 
@@ -1714,6 +1739,8 @@ impl AudioEngine {
                     compute_routing_order(track_ids, bus_ids, &graph.routing);
                 self.current_state.graph = graph;
                 pdc_dirty = true;
+
+                self.recalculate_max_sample_index();
                 log::debug!("[AudioEngine] ReplaceFullGraph applied");
             }
         }
@@ -3280,6 +3307,47 @@ impl AudioEngine {
             }
         }
     }
+
+    /// Dynamically calculates the absolute end of the project in samples.
+    /// Safely handles the conversion of MIDI Ticks -> Samples based on CURRENT engine BPM & Sample Rate.
+    fn recalculate_max_sample_index(&mut self) {
+        let bpm = self.bpm as f64;
+        let sample_rate = self.sample_rate as f64;
+        let mut max_end: u32 = 0;
+
+        for track in self.current_state.graph.tracks.iter() {
+            for clip in track.clips.iter() {
+                let end_sample = match &clip.time {
+                    crate::core::project::clip::ClipTimeUnit::Samples {
+                        start_time,
+                        loop_length,
+                        ..
+                    } => (*start_time + *loop_length) as u32,
+                    crate::core::project::clip::ClipTimeUnit::Ticks {
+                        start_time,
+                        loop_length,
+                        ..
+                    } => {
+                        let end_tick = *start_time + *loop_length;
+                        // Accurately project MIDI ticks into exact sample lengths
+                        ((end_tick as f64) * (60.0 / bpm) * (sample_rate / 960.0)) as u32
+                    }
+                };
+                if end_sample > max_end {
+                    max_end = end_sample;
+                }
+            }
+        }
+
+        // Add a 1-bar buffer at the end of the song so reverb tails don't instantly chop off
+        let one_bar_samples = (4.0 * (60.0 / bpm) * sample_rate) as u32;
+        self.current_state.graph.max_sample_index = max_end + one_bar_samples;
+
+        log::debug!(
+            "Max Sample Index recalculated: {}",
+            self.current_state.graph.max_sample_index
+        );
+    }
 }
 
 /// Unified entry point to render an audio waveform slice.
@@ -3449,6 +3517,8 @@ fn render_audio_waveform(
             // TODO: Implement WSOLA or Granular Engine logic
         }
     }
+
+    
 }
 
 /// Sample a waveform at a specific position using dasp interpolation.

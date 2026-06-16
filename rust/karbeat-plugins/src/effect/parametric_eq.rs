@@ -5,7 +5,7 @@ use karbeat_dsp::filter::{
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
 use num_complex::{Complex, Complex32};
-use rustfft::{num_traits::Zero, Fft, FftPlanner};
+use realfft::{RealFftPlanner, RealToComplex};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use smallvec::{smallvec, SmallVec};
@@ -265,18 +265,21 @@ impl AnalyzerTables {
 
 #[derive(Clone)]
 struct AnalyzerScratch {
-    /// FFT I/O buffer — reused every FFT call, no allocation.
-    fft_buf: Vec<Complex32>,
-    /// `raw_db[i]` = dB magnitude of FFT bin `i`, for `i < FFT_SIZE/2`.
+    /// Real-valued FFT input (length = FFT_SIZE).
+    fft_in: Vec<f32>,
+    /// Complex FFT output (length = FFT_SIZE/2 + 1).
+    fft_out: Vec<Complex32>,
+    /// dB magnitude per bin (length = FFT_SIZE/2).
     raw_db: Vec<f32>,
-    /// Flat output: [freq0, db0, freq1, db1, …].  Reused; Arc wraps a clone.
+    /// Flat output: [freq0, db0, freq1, db1, …].
     flat: Vec<f32>,
 }
 
 impl AnalyzerScratch {
     fn new() -> Self {
         Self {
-            fft_buf: vec![Complex::zero(); FFT_SIZE],
+            fft_in: vec![0.0f32; FFT_SIZE],
+            fft_out: vec![Complex32::new(0.0, 0.0); FFT_SIZE / 2 + 1],
             raw_db: vec![0.0f32; FFT_SIZE / 2],
             flat: Vec::new(),
         }
@@ -320,7 +323,7 @@ pub struct DigiParametricEQ {
     /// Temporal smoothing history for spectrum display.
     /// Initialized once in `prepare`; `clear` on `reset`.
     spectrum_history: Box<[f32]>,
-    fft_instance: Option<Arc<dyn Fft<f32>>>,
+    fft_plan: Option<Arc<dyn RealToComplex<f32>>>,
     samples_since_last_fft: usize,
 
     /// Precomputed Hann window + log-spaced frequency/bin tables.
@@ -363,8 +366,8 @@ impl DigiParametricEQ {
         }
         engine.last_sample_rate = 48000.0;
         engine.channels = 2;
-        let mut planner = FftPlanner::new();
-        engine.fft_instance = Some(planner.plan_fft_forward(FFT_SIZE));
+        let mut planner = RealFftPlanner::<f32>::new();
+        engine.fft_plan = Some(planner.plan_fft_forward(FFT_SIZE));
         engine.analyzer_buffer = smallvec![0.0; FFT_SIZE];
         engine.analyzer_idx = 0;
         engine.spectrum_history = vec![-100.0f32; Self::SPECTRUM_POINTS].into_boxed_slice();
@@ -483,23 +486,31 @@ impl DigiParametricEQ {
 
         // 1. Apply Hann window and fill FFT input buffer
         {
-            let fft_buf = &mut self.scratch.fft_buf;
+            let fft_in = &mut self.scratch.fft_in;
             let hann = &tables.hann;
             let ring = &self.analyzer_buffer;
             let idx = self.analyzer_idx;
-            // Unroll into two memcpy-friendly halves to help the compiler vectorize
             let tail_len = FFT_SIZE - idx;
+            // Second half of ring first (oldest samples)
             for i in 0..tail_len {
-                fft_buf[i] = Complex::new(ring[idx + i] * hann[i], 0.0);
+                fft_in[i] = ring[idx + i] * hann[i];
             }
+            // First half of ring (newest samples)
             for i in 0..idx {
-                fft_buf[tail_len + i] = Complex::new(ring[i] * hann[tail_len + i], 0.0);
+                fft_in[tail_len + i] = ring[i] * hann[tail_len + i];
             }
         }
 
-        // 2. FFT
-        if let Some(fft) = &self.fft_instance {
-            fft.process(&mut self.scratch.fft_buf);
+        // 2. Real-to-complex FFT — output length is FFT_SIZE/2 + 1
+        if let Some(plan) = &self.fft_plan {
+            // process_with_scratch requires mutable scratch; we split borrows carefully.
+            let (fft_in, fft_out) = {
+                let s = &mut *self.scratch;
+                (&mut s.fft_in, &mut s.fft_out)
+            };
+            // realfft processes in-place on the input slice and writes to output.
+            // It allocates no scratch of its own when called this way.
+            let _ = plan.process(fft_in, fft_out); // errors only on length mismatch
         }
 
         // 3. Convert to dB magnitude
@@ -509,12 +520,11 @@ impl DigiParametricEQ {
         //    = FAST_DB_SCALE·(0.5·ln(|X|²) − ln(N))
         {
             let norm_factor = (FFT_SIZE as f32) / 2.0;
-            let ln_norm = norm_factor.ln(); // precompute: constant per block
+            let ln_norm = norm_factor.ln();
             let raw_db = &mut self.scratch.raw_db;
-            let fft_buf = &self.scratch.fft_buf;
+            let fft_out = &self.scratch.fft_out;
             for i in 0..FFT_SIZE / 2 {
-                // norm_sqr() avoids the sqrt inside norm()
-                let ln_mag = 0.5 * fft_buf[i].norm_sqr().max(1e-30).ln() - ln_norm;
+                let ln_mag = 0.5 * fft_out[i].norm_sqr().max(1e-30).ln() - ln_norm;
                 raw_db[i] = (FAST_DB_SCALE * ln_mag).clamp(-100.0, 24.0);
             }
         }
@@ -554,7 +564,7 @@ impl DigiParametricEQ {
             // Fast attack / slow release smoothing
             let prev = self.spectrum_history[i];
             let smoothed = if current_db > prev {
-                current_db.mul_add(0.8, prev * 0.2) // mul_add = fused FMA on supported targets
+                current_db.mul_add(0.8, prev * 0.2)
             } else {
                 current_db.mul_add(0.1, prev * 0.9)
             };

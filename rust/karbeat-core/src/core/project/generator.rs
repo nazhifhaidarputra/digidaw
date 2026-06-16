@@ -49,7 +49,6 @@ impl ApplicationState {
             track.remove_clip_by_source_id(generator_id, true);
         }
 
-        self.update_max_sample_index();
         Some(generator_id)
     }
 }

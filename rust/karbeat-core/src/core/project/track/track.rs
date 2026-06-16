@@ -8,7 +8,7 @@ use crate::{
     context::ctx,
     core::project::{
         clip::ClipTimeUnit, ApplicationState, Clip, DawSource, GeneratorInstance,
-        GeneratorInstanceType, PluginInstance, TrackMixerChannel,
+        GeneratorInstanceType, PluginInstance, ResizeEdge, TrackMixerChannel,
     },
     shared::{
         id::{ClipId, TrackId},
@@ -24,8 +24,7 @@ pub struct AudioTrack {
     pub name: String,
     pub color: Color,
     pub track_type: TrackType,
-    pub clips: BTreeSet<Clip>,
-    pub max_sample_index: u32,
+    pub clips: Vec<Clip>,
     pub generator: Option<GeneratorInstance>,
     /// ======================================
     /// Track Sorting Order
@@ -42,8 +41,7 @@ impl Default for AudioTrack {
             name: Default::default(),
             color: Color::new_from_rgb(255, 255, 255),
             track_type: TrackType::Audio,
-            clips: BTreeSet::new(),
-            max_sample_index: 0,
+            clips: Vec::new(),
             generator: None,
             order_idx: 0,
         }
@@ -79,8 +77,7 @@ impl AudioTrack {
             name: name.to_string(),
             color,
             track_type,
-            clips: BTreeSet::new(),
-            max_sample_index: 0,
+            clips: Vec::new(),
             generator: None,
             order_idx: 0,
         }
@@ -94,12 +91,12 @@ impl AudioTrack {
         self.order_idx = new_idx;
     }
 
-    pub fn clips(&self) -> &BTreeSet<Clip> {
+    pub fn clips(&self) -> &[Clip] {
         return &self.clips;
     }
 
     pub fn clips_to_vec(&self) -> Vec<Clip> {
-        self.clips.iter().cloned().collect()
+        self.clips.clone()
     }
 
     pub fn track_type(&self) -> &TrackType {
@@ -125,18 +122,14 @@ impl AudioTrack {
             // Calculate potential new max index BEFORE moving clip (in native units)
             let clip_end = clip.time.start_time_raw() + clip.time.loop_length_raw();
 
-            // 1. Wrap in Arc immediately
-            // let clip_arc = Arc::new(clip);
+            let start_time = clip.time.start_time_raw();
+            let insert_pos = self
+                .clips
+                .binary_search_by_key(&start_time, |c| c.time.start_time_raw())
+                .unwrap_or_else(|e| e);
 
-            // 2. COW: Get mutable access to the vector
-            let clips_set = &mut self.clips;
-
-            clips_set.insert(clip);
-
-            // update the max sample index
-            if clip_end > self.max_sample_index as u64 {
-                self.max_sample_index = clip_end as u32;
-            }
+            // Insert directly at the sorted position (O(N) memory shift, highly cache-friendly)
+            self.clips.insert(insert_pos, clip);
 
             // Return the end sample of this new clip
             return Ok(clip_end as u32);
@@ -149,69 +142,37 @@ impl AudioTrack {
 
     /// Remove the clip, change max_index_sample if the deleted clip are the latest end sample index
     pub fn remove_clip(&mut self, clip_id: &ClipId) -> anyhow::Result<Clip> {
-        let clips_set = &mut self.clips;
-
-        let initial_len = clips_set.len();
-        let clip = clips_set
+        let idx = self
+            .clips
             .iter()
-            .find(|c| c.id == *clip_id)
-            .ok_or(anyhow::anyhow!("Clip not found"))?
-            .clone();
-        clips_set.retain(|c| c.id != *clip_id);
+            .position(|c| c.id == *clip_id)
+            .ok_or_else(|| anyhow::anyhow!("Clip not found"))?;
 
-        if clips_set.len() < initial_len {
-            // Recalculate max sample index if something was removed
-            self.max_sample_index = clips_set
-                .iter()
-                .map(|c| (c.time.start_time_raw() + c.time.loop_length_raw()) as u32)
-                .max()
-                .unwrap_or(0);
-
-            Ok(clip)
-        } else {
-            Err(anyhow::anyhow!("Clip not found"))
-        }
+        // Vec::remove shifts the remaining elements automatically
+        Ok(self.clips.remove(idx))
     }
 
     /// Remove all clips that have the same source ID (only remove
     /// audio clip because it needs a cascading remove upon an audio source deletion)
     pub fn remove_clip_by_source_id(&mut self, source_id: impl Into<u32>, is_generator: bool) {
         let source_id_u32: u32 = source_id.into();
-        let clips_set = &mut self.clips;
-
-        clips_set.retain(|clip_arc| match &clip_arc.source {
-            Some(DawSource::Audio(source_id)) => {
+        self.clips.retain(|clip| match &clip.source {
+            Some(DawSource::Audio(sid)) => {
                 if !is_generator {
-                    source_id != &source_id_u32
+                    sid != &source_id_u32
                 } else {
                     true
                 }
             }
-            Some(DawSource::Midi { .. }) => true,
-            Some(DawSource::Automation(_)) => true,
-            None => true,
+            _ => true,
         });
     }
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
     pub fn add_clips_bulk(&mut self, new_clips: &[Clip]) {
-        let clips_vec = &mut self.clips;
-        clips_vec.extend(new_clips.iter().cloned());
+        self.clips.extend(new_clips.iter().cloned());
 
-        self.max_sample_index = clips_vec
-            .iter()
-            .map(|c| (c.time.start_time_raw() + c.time.loop_length_raw()) as u32)
-            .max()
-            .unwrap_or(0);
-    }
-
-    pub fn update_max_sample_index(&mut self, bpm: f32, sample_rate: u32) {
-        self.max_sample_index = self
-            .clips
-            .iter()
-            .map(|c| c.time.end_samples(bpm, sample_rate) as u32) // Perfectly accurate!
-            .max()
-            .unwrap_or(0);
+        self.clips.sort_by_key(|c| c.time.start_time_raw());
     }
 
     pub fn slice_clip(
@@ -220,9 +181,15 @@ impl AudioTrack {
         cut_point: u64,
         clip_counter: &mut u32,
     ) -> anyhow::Result<(Clip, Clip)> {
-        let clip = self.get_clip(clip_id).ok_or_else(|| {
-            anyhow::anyhow!("Clip ID {:?} not found in track {:?}", clip_id, self.id)
-        })?;
+        let clip_idx = self
+            .clips
+            .iter()
+            .position(|c| c.id == *clip_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Clip ID {:?} not found in track {:?}", clip_id, self.id)
+            })?;
+
+        let clip = self.clips[clip_idx].clone();
 
         let clip_start = clip.time.start_time_raw();
         let clip_length = clip.time.loop_length_raw();
@@ -230,7 +197,7 @@ impl AudioTrack {
 
         if cut_point > clip_start && cut_point < clip_start + clip_length {
             // Remove using the exact Arc reference
-            self.clips.remove(&clip);
+            self.clips.remove(clip_idx);
 
             let first_length = cut_point - clip_start;
             let second_length = clip_length - first_length;
@@ -243,7 +210,6 @@ impl AudioTrack {
                 ClipTimeUnit::Samples { loop_length, .. } => *loop_length = first_length,
                 ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = first_length as u32,
             }
-            self.clips.insert(left_clip.clone());
 
             // Create right clip
             let mut right_clip = clip.clone();
@@ -268,13 +234,106 @@ impl AudioTrack {
                     *offset_start = second_offset as u32;
                 }
             }
-            self.clips.insert(right_clip.clone());
+            // Re-insert both clips safely maintaining sort order using Binary Search (O(log N))
+            let left_pos = self
+                .clips
+                .binary_search_by_key(&left_clip.time.start_time_raw(), |c| {
+                    c.time.start_time_raw()
+                })
+                .unwrap_or_else(|e| e);
+            self.clips.insert(left_pos, left_clip.clone());
+
+            let right_pos = self
+                .clips
+                .binary_search_by_key(&right_clip.time.start_time_raw(), |c| {
+                    c.time.start_time_raw()
+                })
+                .unwrap_or_else(|e| e);
+            self.clips.insert(right_pos, right_clip.clone());
 
             log::info!("Successfully cut the clip");
             Ok((left_clip, right_clip))
         } else {
             return Err(anyhow::anyhow!("Cannot cut clip outside its boundaries"));
         }
+    }
+
+    pub fn resize_clip(&mut self, clip_id: ClipId, edge: ResizeEdge, new_time_val: u64)-> anyhow::Result<Clip> {
+        // Find and remove the old clip by its index (O(N))
+        let clip_idx = self
+            .clips
+            .iter()
+            .position(|c| c.id == clip_id)
+            .ok_or_else(|| anyhow::anyhow!("Clip not found"))?;
+
+        let mut modified_clip = self.clips.remove(clip_idx);
+
+        let old_start = modified_clip.time.start_time_raw();
+        let old_length = modified_clip.time.loop_length_raw();
+        let old_end = old_start + old_length;
+        let old_offset = modified_clip.time.offset_start_raw();
+
+        match edge {
+            ResizeEdge::Right => {
+                // Dragging Right Edge: Only change loop_length
+                if new_time_val > old_start {
+                    let new_length = new_time_val - old_start;
+                    match &mut modified_clip.time {
+                        ClipTimeUnit::Samples { loop_length, .. } => {
+                            *loop_length = new_length;
+                        }
+                        ClipTimeUnit::Ticks { loop_length, .. } => {
+                            *loop_length = new_length as u32;
+                        }
+                    }
+                }
+            }
+            ResizeEdge::Left => {
+                // Dragging Left Edge: Slip Edit
+                // Bound check: New Start cannot be past the old End
+                if new_time_val < old_end {
+                    let delta = (new_time_val as i64) - (old_start as i64);
+                    let new_offset = (old_offset as i64) + delta;
+
+                    // Constraint: offset cannot be negative
+                    if new_offset >= 0 {
+                        let new_length = old_end - new_time_val;
+                        match &mut modified_clip.time {
+                            ClipTimeUnit::Samples {
+                                start_time,
+                                loop_length,
+                                offset_start,
+                            } => {
+                                *start_time = new_time_val;
+                                *loop_length = new_length;
+                                *offset_start = new_offset as u64;
+                            }
+                            ClipTimeUnit::Ticks {
+                                start_time,
+                                loop_length,
+                                offset_start,
+                            } => {
+                                *start_time = new_time_val as u32;
+                                *loop_length = new_length as u32;
+                                *offset_start = new_offset as u32;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Re-insert the modified clip safely maintaining sort order (O(log N) search + O(N) shift)
+        let insert_pos = self
+            .clips
+            .binary_search_by_key(&modified_clip.time.start_time_raw(), |c| {
+                c.time.start_time_raw()
+            })
+            .unwrap_or_else(|e| e);
+
+        self.clips.insert(insert_pos, modified_clip.clone());
+
+        Ok(modified_clip)
     }
 }
 
@@ -457,7 +516,6 @@ impl ApplicationState {
         // Remove all automation lanes for this track
         self.remove_modulations_for_track(track_id);
 
-        self.update_max_sample_index();
         self.normalize_track_orders();
 
         Ok(deleted_track_type)
