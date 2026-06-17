@@ -1,11 +1,13 @@
 use itertools::Itertools;
+use karbeat_plugin_api::traits::AudioPlugin;
+use karbeat_plugins::registry::PluginRegistry;
 use std::{collections::BTreeSet, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     commands::AudioCommand,
-    context::ctx,
+    // context::ctx,
     core::project::{
         clip::ClipTimeUnit, ApplicationState, Clip, DawSource, GeneratorInstance,
         GeneratorInstanceType, PluginInstance, ResizeEdge, TrackMixerChannel,
@@ -415,14 +417,14 @@ impl ApplicationState {
     /// Add a new MIDI track with a generator by its registry ID.
     pub fn add_new_midi_track_with_generator_id(
         &mut self,
+        registry: &mut PluginRegistry,
         registry_id: u32,
-    ) -> anyhow::Result<AudioTrack> {
+    ) -> anyhow::Result<(AudioTrack, GeneratorId, Box<dyn AudioPlugin + Send + Sync>)> {
         let gen_id = GeneratorId::next(&mut self.generator_counter);
         let track_id = TrackId::next(&mut self.track_counter);
 
         // Create the plugin via registry using ID
         let (generator_plugin, generator_name) = {
-            let registry = ctx().plugin_registry.read();
 
             if let Some((generator_box, name)) = registry.create_plugin_by_id(registry_id) {
                 (generator_box, name)
@@ -437,13 +439,14 @@ impl ApplicationState {
         };
 
         // Send the plugin to the audio thread (lock-free)
-        if let Some(sender) = ctx().command_sender.lock().as_mut() {
-            let _ = sender.push(AudioCommand::AddGenerator {
-                generator_id: gen_id,
-                track_id,
-                plugin: generator_plugin,
-            });
-        }
+        // We will refactor so that the command is pushed inside the service layer
+        // if let Some(sender) = ctx().command_sender.lock().as_mut() {
+        //     let _ = sender.push(AudioCommand::AddGenerator {
+        //         generator_id: gen_id,
+        //         track_id,
+        //         plugin: generator_plugin,
+        //     });
+        // }
 
         // Create plugin instance descriptor with registry ID
         let plugin_instance = PluginInstance::new_with_id(registry_id, &generator_name);
@@ -484,7 +487,7 @@ impl ApplicationState {
             generator_name,
             registry_id
         );
-        Ok(new_track)
+        Ok((new_track, gen_id, generator_plugin))
     }
 
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.

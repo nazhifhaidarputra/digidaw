@@ -1,21 +1,20 @@
 use crate::{
     commands::AudioCommand,
-    context::utils::{ broadcast_automation_lane, send_audio_command },
+    context::{DawContext},
     core::project::{
         ModulationLink,
         ModulationLinkForOrderedLaneView,
         ModulationSource,
         automation::{ AutomationLane, AutomationPoint, AutomationTarget },
     },
-    lock::{ get_app_read, get_app_write },
     shared::{ AutomationId, BusId, ModulationId, ModulationLinkId, TrackId },
 };
 
 /// Get all automations lane for all types
-pub fn get_automations_lanes_all<C, U, M>(mapper: M) -> C
+pub fn get_automations_lanes_all<C, U, M>(ctx: &DawContext, mapper: M) -> C
     where M: Fn(&AutomationLane) -> U, C: FromIterator<U>
 {
-    let app = get_app_read();
+    let app = &ctx.app_state;
 
     app.automation_pool
         .values()
@@ -24,6 +23,7 @@ pub fn get_automations_lanes_all<C, U, M>(mapper: M) -> C
 }
 
 pub fn add_automation_lane_for_track(
+    ctx: &mut DawContext,
     track_id: TrackId,
     target: AutomationTarget,
     label: impl Into<String>,
@@ -32,12 +32,12 @@ pub fn add_automation_lane_for_track(
     default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
-        let mut app = get_app_write();
+        let mut app = &mut ctx.app_state;
         app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?
     };
 
     // Broadcast the new lane to the audio thread by its AutomationId
-    broadcast_automation_lane(lane.id);
+    ctx.broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
@@ -45,6 +45,7 @@ pub fn add_automation_lane_for_track(
 }
 
 pub fn add_automation_lane(
+    ctx: &mut DawContext,
     target: AutomationTarget,
     label: impl Into<String>,
     min: f32,
@@ -52,11 +53,11 @@ pub fn add_automation_lane(
     default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
-        let mut app = get_app_write();
+        let mut app = &mut ctx.app_state;
         app.add_automation_lane(target, label, min, max, default_value)?
     };
 
-    broadcast_automation_lane(lane.id);
+    ctx.broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
@@ -64,6 +65,7 @@ pub fn add_automation_lane(
 }
 
 pub fn add_automation_lane_for_bus(
+    ctx: &mut DawContext,
     bus_id: BusId,
     target: AutomationTarget,
     label: impl Into<String>,
@@ -72,11 +74,11 @@ pub fn add_automation_lane_for_bus(
     default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
-        let mut app = get_app_write();
+        let mut app = &mut ctx.app_state;
         app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
     };
 
-    broadcast_automation_lane(lane.id);
+    ctx.broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
@@ -84,33 +86,39 @@ pub fn add_automation_lane_for_bus(
 }
 
 pub fn add_new_automation_point(
+    ctx: &mut DawContext,
     automation_id: AutomationId,
     time_ticks: u32,
     value: f32
 ) -> anyhow::Result<AutomationPoint> {
     let auto_point = {
-        let mut app = get_app_write();
+        let mut app = &mut ctx.app_state;
         let point = AutomationPoint::new(time_ticks, value);
         app.add_automation_point(automation_id, time_ticks, value)?;
         point
     };
 
-    broadcast_automation_lane(automation_id);
+    ctx.broadcast_automation_lane(automation_id);
 
     // TODO: Add history
     Ok(auto_point)
 }
 
-pub fn remove_automation_point(automation_id: AutomationId, index: usize) -> anyhow::Result<()> {
+pub fn remove_automation_point(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    index: usize
+) -> anyhow::Result<()> {
     {
-        let mut app = get_app_write();
+        let mut app = &mut ctx.app_state;
         app.remove_automation_point(automation_id, index)?;
     }
-    broadcast_automation_lane(automation_id);
+    ctx.broadcast_automation_lane(automation_id);
     Ok(())
 }
 
 pub fn update_automation_point(
+    ctx: &mut DawContext,
     automation_id: AutomationId,
     index: usize,
     time_ticks: u32,
@@ -118,7 +126,7 @@ pub fn update_automation_point(
     tension: f32
 ) -> anyhow::Result<usize> {
     let new_index = {
-        let mut app = get_app_write();
+        let mut app = &mut ctx.app_state;
 
         let (_, new_index) = app.update_automation_point(
             automation_id,
@@ -130,26 +138,31 @@ pub fn update_automation_point(
         new_index
     };
 
-    broadcast_automation_lane(automation_id);
+    ctx.broadcast_automation_lane(automation_id);
     Ok(new_index)
 }
 
 pub fn get_automation_lanes_for_track(
+    ctx: &DawContext,
     track_id: TrackId
 ) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
-    let app = get_app_read();
+    let app = &ctx.app_state;
     app.get_automation_lanes_for_track(track_id)
 }
 
 pub fn get_automation_lanes_for_bus(
+    ctx: &DawContext,
     bus_id: BusId
 ) -> Vec<(ModulationLinkId, AutomationId, AutomationLane)> {
-    let app = get_app_read();
+    let app = &ctx.app_state;
     app.get_automation_lanes_for_bus(bus_id)
 }
 
-pub fn get_automation_lane<Id: Into<AutomationId>>(lane_id: Id) -> Option<AutomationLane> {
-    let app = get_app_read();
+pub fn get_automation_lane<Id: Into<AutomationId>>(
+    ctx: &DawContext,
+    lane_id: Id
+) -> Option<AutomationLane> {
+    let app = &ctx.app_state;
     let id_typed = lane_id.into();
     app.automation_pool.get(&id_typed).cloned()
 }
@@ -159,41 +172,49 @@ pub fn get_automation_lane<Id: Into<AutomationId>>(lane_id: Id) -> Option<Automa
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 
 /// Get all modulations in the project
-pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> std::collections::HashMap<Id, T>
+pub fn get_all_linked_modulation_params<Id, T, F>(
+    ctx: &DawContext,
+    f: F
+) -> std::collections::HashMap<Id, T>
     where
         Id: std::hash::Hash + std::cmp::Eq,
         F: Fn(&ModulationLinkId, &crate::core::project::ModulationLinkForOrderedLaneView) -> (Id, T)
 {
-    let app = get_app_read();
+    let app = &ctx.app_state;
     app.modulation_links
         .iter()
         .map(|(id, modulation)| f(id, modulation))
         .collect()
 }
 
-pub fn get_modulation_link_by_id<Id>(id: Id) -> Option<ModulationLinkForOrderedLaneView>
+pub fn get_modulation_link_by_id<Id>(
+    ctx: &DawContext,
+    id: Id
+) -> Option<ModulationLinkForOrderedLaneView>
     where Id: Into<ModulationLinkId>
 {
-    let app = get_app_read();
+    let app = &ctx.app_state;
     let id_typed = id.into();
     app.modulation_links.get(&id_typed).cloned()
 }
 
 /// Add generic modulation source
-pub fn add_modulation_source(source: ModulationSource) -> ModulationId {
+pub fn add_modulation_source(ctx: &mut DawContext, source: ModulationSource) -> ModulationId {
     let id = {
-        let mut app = get_app_write();
+        let app = &mut ctx.app_state;
         app.add_modulation_source(source.clone())
     };
 
-    send_audio_command(AudioCommand::AddModulationSource { id, source });
+    ctx.send_audio_command(AudioCommand::AddModulationSource { id, source });
     id
 }
 
-pub fn get_modulation_sources_map<Id, S, C>() -> C
+pub fn get_modulation_sources_map<Id, S, C>(
+    ctx: &DawContext
+) -> C
     where Id: From<ModulationId>, S: for<'a> From<&'a ModulationSource>, C: FromIterator<(Id, S)>
 {
-    let app = get_app_read();
+    let app = &ctx.app_state;
     app.modulation_sources
         .iter()
         .map(|(id, s)| (Id::from(*id), S::from(s)))
@@ -202,42 +223,52 @@ pub fn get_modulation_sources_map<Id, S, C>() -> C
 
 
 /// Get modulation source based on its modulation id
-pub fn get_modulation_source<Id, Siuuuu>(modulation_id: Id) -> Option<Siuuuu>
+pub fn get_modulation_source<Id, Siuuuu>(
+    ctx: &DawContext,
+    modulation_id: Id
+) -> Option<Siuuuu>
     where Id: Into<ModulationId>, Siuuuu: for<'sybau> From<&'sybau ModulationSource>
 {
-    let app = get_app_read();
+    let app = &ctx.app_state;
     let id_typed = modulation_id.into();
     app.modulation_sources.get(&id_typed).map(|s| Siuuuu::from(s))
 }
 
 /// Remove the modulation source. This function also cascade delete all link
 /// with this source
-pub fn remove_modulation_source(mod_id: ModulationId) {
+pub fn remove_modulation_source(
+    ctx: &mut DawContext,
+    mod_id: ModulationId
+) {
     {
-        let mut app = get_app_write();
+        let app = &mut ctx.app_state;
         let _ = app.remove_modulation_source(mod_id);
     }
-    send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
+    ctx.send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
 }
 
-pub fn remove_modulation_link(mod_link_id: ModulationLinkId) {
+pub fn remove_modulation_link(
+    ctx: &mut DawContext,
+    mod_link_id: ModulationLinkId
+) {
     {
-        let mut app = get_app_write();
+        let app = &mut ctx.app_state;
         let _ = app.remove_modulation_link(mod_link_id);
     }
 
-    send_audio_command(AudioCommand::RemoveModulationLink(mod_link_id));
+    ctx.send_audio_command(AudioCommand::RemoveModulationLink(mod_link_id));
 }
 
 /// Link the target param to a modulation source
 pub fn link_this_param_to_controller(
+    ctx: &mut DawContext,
     source_id: ModulationId,
     target: AutomationTarget,
     depth: f32,
     base_value: f32
 ) -> anyhow::Result<ModulationLinkId> {
     let (id, link) = {
-        let mut app = get_app_write();
+        let app = &mut ctx.app_state;
         let id = app.link_modulation(source_id, target, depth, base_value)?;
         let link = app.modulation_links
             .get(&id)
@@ -252,6 +283,6 @@ pub fn link_this_param_to_controller(
         (id, link)
     };
 
-    send_audio_command(AudioCommand::AddModulationLink { id, link });
+    ctx.send_audio_command(AudioCommand::AddModulationLink { id, link });
     Ok(id)
 }
