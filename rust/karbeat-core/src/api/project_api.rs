@@ -45,11 +45,6 @@ where
         .collect())
 }
 
-pub fn get_max_sample_index() -> anyhow::Result<u32> {
-    let app = get_app_read();
-    Ok(app.max_sample_index)
-}
-
 pub fn save_project(path_name: &str) -> anyhow::Result<()> {
     log::info!("Initiating project save. Syncing plugin states from audio engine...");
 
@@ -303,10 +298,9 @@ where
     F: FnMut(f32) -> bool,
 {
     // Use read lock since the internal function only requires an immutable &ApplicationState
-    let app_state = get_app_read();
+    // let app_state = get_app_read();
 
     export_project_internal(
-        &app_state,
         output_path,
         config,
         tail_handling,

@@ -47,9 +47,6 @@ pub enum PlaybackMode {
     },
 }
 
-/// (pdc_dirty, needs_recalculate_max_index)
-type ProcessCommandFlag = (bool, bool);
-
 #[derive(Debug, Clone)]
 pub struct SongPlaybackState {
     pub is_playing: bool,
@@ -615,6 +612,7 @@ impl AudioEngine {
         // Fire recalculation if topology changed
         if pdc_dirty {
             self.recalculate_latencies();
+            self.recalculate_max_sample_index();
         }
 
         // Clear Buffer
@@ -1033,8 +1031,8 @@ impl AudioEngine {
             }
             AudioCommand::SetBPM(bpm) => {
                 self.bpm = bpm;
-                self.recalculate_max_sample_index();
                 self.emit_current_playback_position();
+                pdc_dirty = true;
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
                 // Silence everything to prevent hanging notes from the previous mode
@@ -1618,20 +1616,17 @@ impl AudioEngine {
             AudioCommand::UpdateTrackGraph {
                 tracks,
                 patterns,
-                max_sample_index,
             } => {
                 // Update only the track/pattern/sample-index portion of the local graph.
                 // Routing and automation lanes are untouched by this command.
                 self.current_state.graph.tracks = tracks;
                 self.current_state.graph.patterns = patterns;
-                self.current_state.graph.max_sample_index = max_sample_index;
 
                 // Recompute routing order so new tracks are included in the DSP loop!
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.bus_buffers.keys().copied();
                 self.cached_routing_order =
                     compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
-                self.recalculate_max_sample_index();
                 pdc_dirty = true;
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {
@@ -1688,7 +1683,6 @@ impl AudioEngine {
                         }
 
                         self.sample_rate = sample_rate;
-                        self.recalculate_max_sample_index();
                     }
 
                     let sr = sample_rate.unwrap_or(self.current_state.graph.sample_rate);
@@ -1740,7 +1734,6 @@ impl AudioEngine {
                 self.current_state.graph = graph;
                 pdc_dirty = true;
 
-                self.recalculate_max_sample_index();
                 log::debug!("[AudioEngine] ReplaceFullGraph applied");
             }
         }
@@ -3308,13 +3301,56 @@ impl AudioEngine {
         }
     }
 
-    /// Dynamically calculates the absolute end of the project in samples.
+    /// Returns the exact number of samples needed to fully clear all plugin delays and reverb tails.
+    /// Call this when the transport stops to know when to put the engine to sleep.
+    pub fn get_project_tail_length(&self) -> u32 {
+        let mut max_tail = 0;
+        for gen in self.plugin_state.generators.iter().flatten() {
+            max_tail = max_tail.max(gen.plugin.tail_samples());
+        }
+        for effects in self.plugin_state.track_effects.iter() {
+            for e in effects {
+                max_tail = max_tail.max(e.plugin.tail_samples());
+            }
+        }
+        for effects in self.plugin_state.bus_effects.iter() {
+            for e in effects {
+                max_tail = max_tail.max(e.plugin.tail_samples());
+            }
+        }
+        for e in &self.plugin_state.master_effects {
+            max_tail = max_tail.max(e.plugin.tail_samples());
+        }
+
+        // Cap the tail at 20 seconds so infinite reverbs don't render forever
+        let max_allowed_tail = 20 * self.sample_rate;
+        max_tail = max_tail.min(max_allowed_tail);
+
+        // Include PDC latency since it naturally delays the final output
+        let max_system_latency = self
+            .compensation_delays
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0);
+
+        max_tail + max_system_latency
+    }
+
+    /// Returns the absolute total length of the song in samples, including reverb tails.
+    /// Your offline export loop should use THIS value as its target length!
+    pub fn get_export_length(&self) -> u32 {
+        self.current_state.graph.max_sample_index + self.get_project_tail_length()
+    }
+
+    /// Dynamically calculates the absolute end of the project in samples (Clips ONLY).
     /// Safely handles the conversion of MIDI Ticks -> Samples based on CURRENT engine BPM & Sample Rate.
     fn recalculate_max_sample_index(&mut self) {
         let bpm = self.bpm as f64;
         let sample_rate = self.sample_rate as f64;
-        let mut max_end: u32 = 0;
+        let mut max_clip_end: u32 = 0;
 
+        // 1. Find the absolute furthest boundary of any clip on the timeline
         for track in self.current_state.graph.tracks.iter() {
             for clip in track.clips.iter() {
                 let end_sample = match &clip.time {
@@ -3333,18 +3369,18 @@ impl AudioEngine {
                         ((end_tick as f64) * (60.0 / bpm) * (sample_rate / 960.0)) as u32
                     }
                 };
-                if end_sample > max_end {
-                    max_end = end_sample;
+                if end_sample > max_clip_end {
+                    max_clip_end = end_sample;
                 }
             }
         }
 
-        // Add a 1-bar buffer at the end of the song so reverb tails don't instantly chop off
-        let one_bar_samples = (4.0 * (60.0 / bpm) * sample_rate) as u32;
-        self.current_state.graph.max_sample_index = max_end + one_bar_samples;
+        // 2. Set max_sample_index to ONLY the end of the clips (No Tails)
+        // This ensures looping and song-stop behaves perfectly in the UI.
+        self.current_state.graph.max_sample_index = max_clip_end;
 
         log::debug!(
-            "Max Sample Index recalculated: {}",
+            "[AudioEngine] Max Sample Index recalculated (Clips only): {}",
             self.current_state.graph.max_sample_index
         );
     }
@@ -3510,15 +3546,13 @@ fn render_audio_waveform(
                 loop_len,
             );
             if let Some(elapsed) = current_elapsed_samples {
-                *elapsed += frames_written as u32;
+                *elapsed += frames_written;
             }
         }
         AudioSampleMode::Stretch => {
             // TODO: Implement WSOLA or Granular Engine logic
         }
     }
-
-    
 }
 
 /// Sample a waveform at a specific position using dasp interpolation.

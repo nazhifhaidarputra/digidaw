@@ -32,7 +32,6 @@ pub struct UiApplicationState {
     pub generators: HashMap<u32, UiGeneratorInstance>,
     pub patterns: HashMap<u32, crate::api::pattern::UiPattern>,
     pub mixer: crate::api::mixer::UiMixerState,
-    pub max_sample_index: u32,
     pub audio_sources: HashMap<u32, AudioWaveformUiForSourceList>,
 }
 
@@ -81,7 +80,6 @@ impl From<ApplicationState> for UiApplicationState {
             generators,
             patterns,
             mixer: crate::api::mixer::UiMixerState::from(&value.mixer),
-            max_sample_index: value.max_sample_index,
             audio_sources,
         }
     }
@@ -563,11 +561,6 @@ pub fn add_new_audio_track() -> UiTrack {
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
     track_api::get_tracks_ordered(|id, track| (id, UiTrack::from(track))).map_err(|e| e.to_string())
-}
-
-/// Get the newest max sample index of the project
-pub fn get_max_sample_index() -> Result<u32, String> {
-    project_api::get_max_sample_index().map_err(|e| e.to_string())
 }
 
 /// Export project to flutter. also report progress via StreamSink

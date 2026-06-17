@@ -39,7 +39,7 @@ pub enum TailHandling {
 /// Generic, UI-agnostic.
 /// `progress_callback` should return `true` to continue, or `false` to abort rendering.
 pub fn export_project<F>(
-    app_state: &ApplicationState,
+    // app_state: &ApplicationState, <- we should put app context here
     output_path: &str,
     config: AudioExportConfig,
     tail_handling: TailHandling,
@@ -59,9 +59,6 @@ where
         AudioExportError::new("WriterInit", format!("Failed to create writer: {}", e))
     })?;
 
-    // Create a static snapshot of the Render State
-    let render_state = AudioRenderState::from(app_state);
-
     // Set up Dummy Communication Channels
     let (mut cmd_producer, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
     let (pos_producer, mut _pos_consumer) = RingBuffer::new(1024);
@@ -70,10 +67,7 @@ where
     // Create a oneshot channel to receive the cloned engine
     let (engine_tx, engine_rx) = std::sync::mpsc::channel();
 
-    // Set the sample rate of Engine to use the requested sample_rate
-
     // Send audio command to get a copy of Audio Engine from live engine.
-    // The engine is cloned from its own internal graph state — no triple-buffer involved.
     send_audio_command(AudioCommand::QueryAudioEngine {
         command_consumer: cmd_consumer,
         position_producer: pos_producer,
@@ -105,7 +99,17 @@ where
         .push(AudioCommand::SetPlaying(true))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
 
-    let song_length_samples = render_state.graph.max_sample_index;
+    // ========================================================================
+    // ENGINE SYNCHRONIZATION
+    // Process a 0-frame block to force the engine to consume the config commands,
+    // recalculate the PDC latencies, and stretch the time bounds to the target sample rate!
+    // ========================================================================
+    offline_engine.process(&mut []);
+
+    // Get true mathematically accurate lengths directly from the engine
+    let tail_samples = offline_engine.get_project_tail_length();
+    let song_length_samples = offline_engine.get_export_length() - tail_samples;
+
     let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<f32>>(4);
 
     let writer_thread = std::thread::spawn(move || -> Result<(), AudioExportError> {
@@ -123,7 +127,7 @@ where
         Ok(())
     });
 
-    let mut mix_buffer = vec![0.0; block_size * channels as usize];
+    let mut mix_buffer = vec![0.0; block_size * channels];
 
     let throttle_limit = (sample_rate / (block_size as u32) / 30).max(1);
     let mut loop_counter = 0;
@@ -177,7 +181,7 @@ where
     while processed_samples < song_length_samples {
         let remaining = song_length_samples - processed_samples;
         let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
-        let samples_to_process = frames_to_process * (channels as usize);
+        let samples_to_process = frames_to_process * channels;
 
         // Process the exact slice needed
         let active_slice = &mut mix_buffer[..samples_to_process];
@@ -219,7 +223,6 @@ where
 
     // ========================================================================
     // PHASE 3: DYNAMIC TAIL RENDERING (Only for LeaveRemainder)
-    // Detects when the reverb/delay naturally dies out
     // ========================================================================
     if matches!(tail_handling, TailHandling::LeaveRemainder) {
         log::info!("Calculating exact plugin tail (LeaveRemainder)...");
@@ -232,61 +235,15 @@ where
             .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
 
         // Process one empty block just to let the engine digest the SetPlaying(false) command
-        // and initialize the track_tails in its internal state.
-        offline_engine.process(&mut mix_buffer[..block_size * (channels as usize)]);
-        if tx
-            .send(mix_buffer[..block_size * (channels as usize)].to_vec())
-            .is_err()
-        {
-            return Ok(());
-        }
+        offline_engine.process(&mut []);
 
-        // Query all loaded plugins for their tail size
-        let mut max_tail_samples: u32 = 0;
-
-        let plugin_state = offline_engine.plugin_state();
-
-        for effect in &plugin_state.master_effects {
-            max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
-        }
-
-        for bus_chain in plugin_state.bus_effects.iter() {
-            for effect in bus_chain.iter() {
-                max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
-            }
-        }
-
-        for track_chain in plugin_state.track_effects.iter() {
-            for effect in track_chain.iter() {
-                max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
-            }
-        }
-
-        for gen in plugin_state.generators.iter() {
-            if let Some(ref gen_instance) = gen {
-                let tail = gen_instance.plugin.tail_samples();
-                // Synths often return u32::MAX for infinite sustain until NoteOff.
-                // Since we just sent a NoteOff by stopping transport, we clamp this
-                // to a reasonable default if it hasn't properly
-                // calculated a finite release tail yet.
-                if tail == u32::MAX {
-                    max_tail_samples = max_tail_samples.max(sample_rate * 20);
-                } else {
-                    max_tail_samples = max_tail_samples.max(tail);
-                }
-            }
-        }
-
-        // Hard fallback cap at 60 seconds just in case a plugin reports something insane
-        max_tail_samples = max_tail_samples.min(sample_rate * 60);
-
-        log::info!("Maximum tail calculated as {} samples", max_tail_samples);
+        log::info!("Maximum tail calculated as {} samples", tail_samples);
 
         // Now simply render exactly that many samples!
         let mut tail_processed = 0;
 
-        while tail_processed < max_tail_samples {
-            let remaining = max_tail_samples - tail_processed;
+        while tail_processed < tail_samples {
+            let remaining = tail_samples - tail_processed;
             let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
             let samples_to_process = frames_to_process * (channels as usize);
 

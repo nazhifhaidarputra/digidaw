@@ -49,6 +49,8 @@ dependencies:
   multi_split_view: ^3.6.1
   flex_color_picker: ^3.8.0
   logger: ^2.7.0
+  built_collection: ^5.1.1
+  fast_immutable_collections: ^11.2.0
 
 dev_dependencies:
   flutter_test:

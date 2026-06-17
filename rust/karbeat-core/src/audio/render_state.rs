@@ -276,7 +276,7 @@ impl From<&ApplicationState> for AudioGraphState {
             bus_ids: app.mixer.buses.keys().copied().collect(),
             asset_library: app.asset_library.clone(),
             automation_lanes: app.automation_pool.clone().into_iter().map(|(id, l)| (id, l.into())).collect(),
-            max_sample_index: app.max_sample_index,
+            max_sample_index: 0,
             sample_rate: app.audio_config.sample_rate,
             buffer_size: if is_power_of_two(app.audio_config.buffer_size.into()) {
                 app.audio_config.buffer_size as usize

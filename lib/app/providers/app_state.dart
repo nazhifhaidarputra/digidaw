@@ -77,24 +77,19 @@ class GlobalAppState extends ChangeNotifier {
     DawToolbarMenuGroupFactory.createViewMenuGroup(),
   ];
 
-  int maxSamplesIndex = 2000;
-
   late final Stream<UiTransportFeedback> _positionBroadcastStream;
 
   // STRATEGY: Internal Event Bus for State Synchronization
-  final StreamController<ProjectEvent> _stateEventController =
-      StreamController.broadcast();
+  final StreamController<ProjectEvent> _stateEventController = StreamController.broadcast();
 
   // A custom defined internal event bus for state synchronization
-  final StreamController<Future<void> Function()> _customStateEventController =
-      StreamController.broadcast();
+  final StreamController<Future<void> Function()> _customStateEventController = StreamController.broadcast();
 
   // ignore:unused_field
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
   // Mixer event stream from Rust for automation/backend-initiated changes
-  StreamSubscription<mixer_api.UiMixerChannelSnapshot>?
-  _mixerSnapshotSubscription;
+  StreamSubscription<mixer_api.UiMixerChannelSnapshot>? _mixerSnapshotSubscription;
 
   /// Params currently being touched by the user (trackId, paramName).
   /// Automation events for these params are ignored while touched.
@@ -140,8 +135,7 @@ class GlobalAppState extends ChangeNotifier {
 
   bool get showExportPanel => _showExportPanel;
 
-  FloatingMidiKeyboardFieldState midiKeyboardState =
-      FloatingMidiKeyboardFieldState(showed: false);
+  FloatingMidiKeyboardFieldState midiKeyboardState = FloatingMidiKeyboardFieldState(showed: false);
 
   // ================ CONSTRUCTOR ==================
   GlobalAppState() {
@@ -168,10 +162,7 @@ class GlobalAppState extends ChangeNotifier {
 
       // Update BPM from audio thread (e.g. tempo automation)
       if ((pos.tempo - _transportState.bpm).abs() > 0.01) {
-        _transportState = transportStateNewWithParam(
-          bpm: pos.tempo,
-          timeSignature: _transportState.timeSignature,
-        );
+        _transportState = transportStateNewWithParam(bpm: pos.tempo, timeSignature: _transportState.timeSignature);
         changed = true;
       }
 
@@ -180,7 +171,6 @@ class GlobalAppState extends ChangeNotifier {
       }
     });
     syncTracksState();
-    syncMaxSampleIndex();
     syncTransportState();
     syncMetadataState();
     // syncAudioSourceList();
@@ -274,7 +264,6 @@ class GlobalAppState extends ChangeNotifier {
       switch (event) {
         case ProjectEvent.tracksChanged:
           await syncTracksState();
-          await syncMaxSampleIndex();
           break;
         case ProjectEvent.transportChanged:
           await syncTransportState();
@@ -325,8 +314,7 @@ class GlobalAppState extends ChangeNotifier {
 
   MusicalBeatSize _horizontalClipShiftSizeDenom = MusicalBeatSize.none;
 
-  MusicalBeatSize get horizontalClipShiftSizeDenom =>
-      _horizontalClipShiftSizeDenom;
+  MusicalBeatSize get horizontalClipShiftSizeDenom => _horizontalClipShiftSizeDenom;
 
   set horizontalClipShiftSizeDenom(MusicalBeatSize value) {
     _horizontalClipShiftSizeDenom = value;
@@ -434,18 +422,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<void> syncMaxSampleIndex() async {
-    try {
-      final newState = await getMaxSampleIndex();
-      maxSamplesIndex = newState;
-      notifyListeners();
-    } catch (e) {
-      AppLogger.error("failed when syncing max sample index: $e");
-    }
-  }
-
-  Future<Result<Map<int, AudioWaveformUiForSourceList>?>>
-  getLoadedAudioSources() async {
+  Future<Result<Map<int, AudioWaveformUiForSourceList>?>> getLoadedAudioSources() async {
     try {
       final sources = await getAudioSourceList();
       if (sources == null) {
@@ -457,15 +434,11 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<AudioWaveformUiForAudioProperties>> getAudioPropertiesHandle(
-    int id,
-  ) async {
+  Future<Result<AudioWaveformUiForAudioProperties>> getAudioPropertiesHandle(int id) async {
     try {
       final audio = await getAudioProperties(id: id);
       if (audio == null) {
-        return Result.error(
-          Exception("Failed to get audio properties of id $id"),
-        );
+        return Result.error(Exception("Failed to get audio properties of id $id"));
       }
       return Result.ok(audio);
     } catch (e) {
@@ -578,9 +551,7 @@ class GlobalAppState extends ChangeNotifier {
       notifyListeners();
 
       for (final busId in newBuses.keys) {
-        mixer_api.queryMixerChannel(
-          target: mixer_api.UiMixerChannelTarget.bus(busId),
-        );
+        mixer_api.queryMixerChannel(target: mixer_api.UiMixerChannelTarget.bus(busId));
       }
     } catch (e) {
       AppLogger.error("Failedto sync mixer bus: $e");
@@ -590,15 +561,11 @@ class GlobalAppState extends ChangeNotifier {
   Future<void> syncMixerChannel(int trackId) async {
     try {
       final updatedChannel = await mixer_api.getMixerChannel(trackId: trackId);
-      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
-        _mixerState.channels,
-      );
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(_mixerState.channels);
       newChannels[trackId] = updatedChannel;
       _mixerState = _mixerState.copyWith(channels: newChannels);
       notifyListeners();
-      mixer_api.queryMixerChannel(
-        target: mixer_api.UiMixerChannelTarget.track(trackId),
-      );
+      mixer_api.queryMixerChannel(target: mixer_api.UiMixerChannelTarget.track(trackId));
     } catch (e) {
       AppLogger.error("Error syncing mixer channel $trackId: $e");
     }
@@ -609,9 +576,7 @@ class GlobalAppState extends ChangeNotifier {
       final updatedMaster = await mixer_api.getMasterBus();
       _mixerState = _mixerState.copyWith(masterBus: updatedMaster);
       notifyListeners();
-      mixer_api.queryMixerChannel(
-        target: const mixer_api.UiMixerChannelTarget.master(),
-      );
+      mixer_api.queryMixerChannel(target: const mixer_api.UiMixerChannelTarget.master());
     } catch (e) {
       AppLogger.error("Failed to sync master bus: $e");
     }
@@ -687,22 +652,16 @@ class GlobalAppState extends ChangeNotifier {
   /// Resulting snapshots will be received by _applySnapshot via stream.
   void queryAllMixerChannels() {
     // Query Master
-    mixer_api.queryMixerChannel(
-      target: const mixer_api.UiMixerChannelTarget.master(),
-    );
+    mixer_api.queryMixerChannel(target: const mixer_api.UiMixerChannelTarget.master());
 
     // Query all Buses
     for (final busId in _mixerState.buses.keys) {
-      mixer_api.queryMixerChannel(
-        target: mixer_api.UiMixerChannelTarget.bus(busId),
-      );
+      mixer_api.queryMixerChannel(target: mixer_api.UiMixerChannelTarget.bus(busId));
     }
 
     // Query all Tracks
     for (final trackId in _mixerState.channels.keys) {
-      mixer_api.queryMixerChannel(
-        target: mixer_api.UiMixerChannelTarget.track(trackId),
-      );
+      mixer_api.queryMixerChannel(target: mixer_api.UiMixerChannelTarget.track(trackId));
     }
   }
 
@@ -790,20 +749,12 @@ class GlobalAppState extends ChangeNotifier {
     switch (format) {
       case SupportedAudioFormat.wav:
         config = AudioExportConfigDTO.wav(
-          WavExportConfigDTO(
-            sampleRate: sampleRate.value,
-            channels: numberOfChannels,
-            bitDepth: bitDepthProper,
-          ),
+          WavExportConfigDTO(sampleRate: sampleRate.value, channels: numberOfChannels, bitDepth: bitDepthProper),
         );
         break;
       case SupportedAudioFormat.mp3:
         config = AudioExportConfigDTO.mp3(
-          Mp3ExportConfigDTO(
-            sampleRate: sampleRate.value,
-            channels: numberOfChannels,
-            bitRate: bitDepthProper,
-          ),
+          Mp3ExportConfigDTO(sampleRate: sampleRate.value, channels: numberOfChannels, bitRate: bitDepthProper),
         );
         break;
       case SupportedAudioFormat.ogg:
@@ -813,11 +764,7 @@ class GlobalAppState extends ChangeNotifier {
         // TODO: Handle this case.
         return;
     }
-    yield* project_api.exportProjectFlutter(
-      outputPath: fullPath,
-      config: config,
-      tailHandling: tailHandlingDto,
-    );
+    yield* project_api.exportProjectFlutter(outputPath: fullPath, config: config, tailHandling: tailHandlingDto);
   }
 
   /// Loads an audio file and refreshes the source list
@@ -933,10 +880,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> addEffectToMixerChannel(
-    int channelId,
-    int registryId,
-  ) async {
+  Future<Result<void>> addEffectToMixerChannel(int channelId, int registryId) async {
     try {
       if (channelId == -1) {
         AppLogger.info("Adding effect to master channel");
@@ -946,10 +890,7 @@ class GlobalAppState extends ChangeNotifier {
         });
       } else {
         AppLogger.info("Adding effect to track channel $channelId");
-        await mixer_api.addEffectToMixerChannelById(
-          trackId: channelId,
-          registryId: registryId,
-        );
+        await mixer_api.addEffectToMixerChannelById(trackId: channelId, registryId: registryId);
         notifyCustomBackendChange(() async {
           await syncMixerChannel(channelId);
         });
@@ -1015,10 +956,7 @@ class GlobalAppState extends ChangeNotifier {
   /// Auto-scales horizontalZoomLevel so that grid lines remain visually fixed.
   Future<Result<void>> setBpm(double value) async {
     try {
-      _transportState = transportStateNewWithParam(
-        bpm: value,
-        timeSignature: _transportState.timeSignature,
-      );
+      _transportState = transportStateNewWithParam(bpm: value, timeSignature: _transportState.timeSignature);
 
       // (No longer scaling horizontalZoomLevel. Since it's in ticks/pixel, keeping it constant
       // natively keeps the beat grids visually the same width independent of BPM)
@@ -1163,11 +1101,7 @@ class GlobalAppState extends ChangeNotifier {
 
   Future<Result<void>> sliceClip(int trackId, int clipId, int cutPoint) async {
     try {
-      await track_api.sliceClip(
-        sourceTrackId: trackId,
-        clipId: clipId,
-        cutPoint: cutPoint,
-      );
+      await track_api.sliceClip(sourceTrackId: trackId, clipId: clipId, cutPoint: cutPoint);
       await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
@@ -1176,20 +1110,10 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> resizeClip(
-    int trackId,
-    int clipId,
-    UiResizeEdge edge,
-    int newTime,
-  ) async {
+  Future<Result<void>> resizeClip(int trackId, int clipId, UiResizeEdge edge, int newTime) async {
     _applyOptimisticResize(trackId, clipId, edge, newTime);
     try {
-      await track_api.resizeClip(
-        trackId: trackId,
-        clipId: clipId,
-        edge: edge,
-        newTimeVal: newTime,
-      );
+      await track_api.resizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTime);
       // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
@@ -1198,12 +1122,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> moveClip(
-    int trackId,
-    int clipId,
-    int newStartTime, {
-    int? newTrackId,
-  }) async {
+  Future<Result<void>> moveClip(int trackId, int clipId, int newStartTime, {int? newTrackId}) async {
     _applyOptimisticMove(trackId, clipId, newStartTime, newTrackId);
     try {
       await track_api.moveClip(
@@ -1223,16 +1142,9 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> createEmptyPatternClip({
-    required int trackId,
-    required int startTime,
-  }) async {
+  Future<Result<void>> createEmptyPatternClip({required int trackId, required int startTime}) async {
     try {
-      await createClip(
-        sourceType: UiSourceType.midi,
-        trackId: trackId,
-        startTime: startTime,
-      );
+      await createClip(sourceType: UiSourceType.midi, trackId: trackId, startTime: startTime);
       AppLogger.info("New empty pattern clip is successfully created");
       // notifyBackendChange(ProjectEvent.tracksChanged);
       await syncTrack(trackId);
@@ -1246,12 +1158,7 @@ class GlobalAppState extends ChangeNotifier {
   // ===================== BATCH CLIP OPERATIONS ==========================
 
   /// Move multiple clips by a delta amount (in ticks)
-  Future<Result<void>> moveClipBatch(
-    int trackId,
-    List<int> clipIds,
-    int deltaTicks, {
-    int? newTrackId,
-  }) async {
+  Future<Result<void>> moveClipBatch(int trackId, List<int> clipIds, int deltaTicks, {int? newTrackId}) async {
     _applyOptimisticMoveBatch(trackId, clipIds, deltaTicks, newTrackId);
     try {
       await track_api.moveClipBatch(
@@ -1272,20 +1179,10 @@ class GlobalAppState extends ChangeNotifier {
   }
 
   /// Resize multiple clips by a delta amount (in ticks)
-  Future<Result<void>> resizeClipBatch(
-    int trackId,
-    List<int> clipIds,
-    UiResizeEdge edge,
-    int deltaTicks,
-  ) async {
+  Future<Result<void>> resizeClipBatch(int trackId, List<int> clipIds, UiResizeEdge edge, int deltaTicks) async {
     _applyOptimisticResizeBatch(trackId, clipIds, edge, deltaTicks);
     try {
-      await track_api.resizeClipBatch(
-        trackId: trackId,
-        clipIds: clipIds,
-        edge: edge,
-        deltaTicks: deltaTicks,
-      );
+      await track_api.resizeClipBatch(trackId: trackId, clipIds: clipIds, edge: edge, deltaTicks: deltaTicks);
       // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
@@ -1300,9 +1197,7 @@ class GlobalAppState extends ChangeNotifier {
     if (_tracks.containsKey(trackId)) {
       final track = _tracks[trackId]!;
       final clipIdSet = clipIds.toSet();
-      final updatedClips = track.clips
-          .where((c) => !clipIdSet.contains(c.id))
-          .toList();
+      final updatedClips = track.clips.where((c) => !clipIdSet.contains(c.id)).toList();
 
       _tracks = Map.from(_tracks);
       _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
@@ -1339,15 +1234,8 @@ class GlobalAppState extends ChangeNotifier {
     int velocity = 0,
   }) async {
     try {
-      await playPreviewNote(
-        trackId: trackId,
-        noteKey: noteKey,
-        velocity: velocity,
-        isOn: isOn,
-      );
-      AppLogger.info(
-        "Play ${numToMidiKey(noteKey)} with generator from $trackId",
-      );
+      await playPreviewNote(trackId: trackId, noteKey: noteKey, velocity: velocity, isOn: isOn);
+      AppLogger.info("Play ${numToMidiKey(noteKey)} with generator from $trackId");
       return Result.ok(null);
     } catch (e) {
       AppLogger.error("Error previewing note: $e");
@@ -1362,12 +1250,7 @@ class GlobalAppState extends ChangeNotifier {
     required int duration,
   }) async {
     try {
-      await addNote(
-        patternId: patternId,
-        key: key,
-        startTick: startTick,
-        duration: duration,
-      );
+      await addNote(patternId: patternId, key: key, startTick: startTick, duration: duration);
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
       return Result.ok(null);
@@ -1377,10 +1260,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> addPatternNoteBatch({
-    required int patternId,
-    required List<(int, int, int?)> notes,
-  }) async {
+  Future<Result<void>> addPatternNoteBatch({required int patternId, required List<(int, int, int?)> notes}) async {
     try {
       await addNotesBatch(patternId: patternId, notes: notes);
       await syncPattern(patternId);
@@ -1391,10 +1271,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> deletePatternNoteBatch({
-    required int patternId,
-    required List<int> noteIds,
-  }) async {
+  Future<Result<void>> deletePatternNoteBatch({required int patternId, required List<int> noteIds}) async {
     for (final noteId in noteIds) {
       _applyOptimisticNoteDeletion(patternId, noteId);
     }
@@ -1409,10 +1286,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> movePatternNoteBatch({
-    required int patternId,
-    required List<(int, int, int)> updates,
-  }) async {
+  Future<Result<void>> movePatternNoteBatch({required int patternId, required List<(int, int, int)> updates}) async {
     try {
       await moveNotesBatch(patternId: patternId, updates: updates);
       await syncPattern(patternId);
@@ -1423,10 +1297,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> resizePatternNoteBatch({
-    required int patternId,
-    required List<(int, int)> updates,
-  }) async {
+  Future<Result<void>> resizePatternNoteBatch({required int patternId, required List<(int, int)> updates}) async {
     try {
       await resizeNotesBatch(patternId: patternId, updates: updates);
       await syncPattern(patternId);
@@ -1437,10 +1308,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> deletePatternNote({
-    required int patternId,
-    required int noteId,
-  }) async {
+  Future<Result<void>> deletePatternNote({required int patternId, required int noteId}) async {
     _applyOptimisticNoteDeletion(patternId, noteId);
     try {
       await deleteNote(patternId: patternId, noteId: noteId);
@@ -1461,12 +1329,7 @@ class GlobalAppState extends ChangeNotifier {
     required int newKey,
   }) async {
     try {
-      await moveNote(
-        patternId: patternId,
-        noteId: noteId,
-        newStartTick: newStartTick,
-        newKey: newKey,
-      );
+      await moveNote(patternId: patternId, noteId: noteId, newStartTick: newStartTick, newKey: newKey);
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
       return Result.ok(null);
@@ -1482,11 +1345,7 @@ class GlobalAppState extends ChangeNotifier {
     required int newDuration,
   }) async {
     try {
-      await resizeNote(
-        patternId: patternId,
-        noteId: noteId,
-        newDuration: newDuration,
-      );
+      await resizeNote(patternId: patternId, noteId: noteId, newDuration: newDuration);
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
       return Result.ok(null);
@@ -1498,12 +1357,7 @@ class GlobalAppState extends ChangeNotifier {
 
   // ==================== OPTIMISTIC HELPERS =============================
   // Helper
-  void _applyOptimisticResize(
-    int trackId,
-    int clipId,
-    UiResizeEdge edge,
-    int newTime,
-  ) {
+  void _applyOptimisticResize(int trackId, int clipId, UiResizeEdge edge, int newTime) {
     final track = _tracks[trackId];
     if (track == null) return;
 
@@ -1538,12 +1392,7 @@ class GlobalAppState extends ChangeNotifier {
       }
     }
 
-    final updatedClip = _copyWithClip(
-      clip,
-      startTime: newStart,
-      loopLength: newLength,
-      offsetStart: newOffset,
-    );
+    final updatedClip = _copyWithClip(clip, startTime: newStart, loopLength: newLength, offsetStart: newOffset);
 
     final updatedClips = List<UiClip>.from(track.clips);
     updatedClips[clipIndex] = updatedClip;
@@ -1556,12 +1405,7 @@ class GlobalAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _applyOptimisticMove(
-    int trackId,
-    int clipId,
-    int newStartTime,
-    int? newTrackId,
-  ) {
+  void _applyOptimisticMove(int trackId, int clipId, int newStartTime, int? newTrackId) {
     if (!_tracks.containsKey(trackId)) return;
     final track = _tracks[trackId]!;
     final clipIndex = track.clips.indexWhere((c) => c.id == clipId);
@@ -1575,8 +1419,7 @@ class GlobalAppState extends ChangeNotifier {
       final targetTrack = _tracks[newTrackId]!;
 
       final sourceClips = List<UiClip>.from(track.clips)..removeAt(clipIndex);
-      final targetClips = List<UiClip>.from(targetTrack.clips)
-        ..add(updatedClip);
+      final targetClips = List<UiClip>.from(targetTrack.clips)..add(updatedClip);
 
       _tracks = Map.from(_tracks);
       _tracks[trackId] = _copyWithTrack(track, clips: sourceClips);
@@ -1591,12 +1434,7 @@ class GlobalAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _applyOptimisticMoveBatch(
-    int trackId,
-    List<int> clipIds,
-    int deltaSamples,
-    int? newTrackId,
-  ) {
+  void _applyOptimisticMoveBatch(int trackId, List<int> clipIds, int deltaSamples, int? newTrackId) {
     if (!_tracks.containsKey(trackId)) return;
     final track = _tracks[trackId]!;
     final targetId = newTrackId ?? trackId;
@@ -1604,14 +1442,10 @@ class GlobalAppState extends ChangeNotifier {
     final targetTrack = _tracks[targetId]!;
 
     final clipIdSet = clipIds.toSet();
-    final clipsToMove = track.clips
-        .where((c) => clipIdSet.contains(c.id))
-        .toList();
+    final clipsToMove = track.clips.where((c) => clipIdSet.contains(c.id)).toList();
 
     if (trackId != targetId) {
-      final sourceClips = track.clips
-          .where((c) => !clipIdSet.contains(c.id))
-          .toList();
+      final sourceClips = track.clips.where((c) => !clipIdSet.contains(c.id)).toList();
       final targetClips = List<UiClip>.from(targetTrack.clips);
       for (var clip in clipsToMove) {
         int newStart = clip.startTime + deltaSamples;
@@ -1636,12 +1470,7 @@ class GlobalAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _applyOptimisticResizeBatch(
-    int trackId,
-    List<int> clipIds,
-    UiResizeEdge edge,
-    int deltaSamples,
-  ) {
+  void _applyOptimisticResizeBatch(int trackId, List<int> clipIds, UiResizeEdge edge, int deltaSamples) {
     if (!_tracks.containsKey(trackId)) return;
     final track = _tracks[trackId]!;
     final clipIdSet = clipIds.toSet();
@@ -1673,12 +1502,7 @@ class GlobalAppState extends ChangeNotifier {
           newLength = oldEnd - newStartProposed;
           newOffset = newOffsetProposed;
         }
-        return _copyWithClip(
-          clip,
-          startTime: newStart,
-          loopLength: newLength,
-          offsetStart: newOffset,
-        );
+        return _copyWithClip(clip, startTime: newStart, loopLength: newLength, offsetStart: newOffset);
       }
       return clip;
     }).toList();
@@ -1713,17 +1537,10 @@ class GlobalAppState extends ChangeNotifier {
   // ============= PLACEMENT MODE LOGIC =================
   // Placement logic moved to ClipPlacementNotifier
 
-  UiTrack _copyWithTrack(
-    UiTrack original, {
-    List<UiClip>? clips,
-    String? name,
-    String? color,
-  }) {
+  UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips, String? name, String? color}) {
     return UiTrack(
       id: original.id,
-      color:
-          color ??
-          original.color, // Fixed: use original color instead of #FFFFFF
+      color: color ?? original.color, // Fixed: use original color instead of #FFFFFF
       name: name ?? original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,
@@ -1842,18 +1659,10 @@ class GlobalAppState extends ChangeNotifier {
       const int masterSentinel = 4294967294;
       final ch = _mixerState.masterBus;
       final updated = mixer_api.UiMixerChannel(
-        volume: _touchedParams.contains((masterSentinel, 'volume'))
-            ? ch.volume
-            : snapshot.volume,
-        pan: _touchedParams.contains((masterSentinel, 'pan'))
-            ? ch.pan
-            : snapshot.pan,
-        mute: _touchedParams.contains((masterSentinel, 'mute'))
-            ? ch.mute
-            : snapshot.mute,
-        solo: _touchedParams.contains((masterSentinel, 'solo'))
-            ? ch.solo
-            : snapshot.solo,
+        volume: _touchedParams.contains((masterSentinel, 'volume')) ? ch.volume : snapshot.volume,
+        pan: _touchedParams.contains((masterSentinel, 'pan')) ? ch.pan : snapshot.pan,
+        mute: _touchedParams.contains((masterSentinel, 'mute')) ? ch.mute : snapshot.mute,
+        solo: _touchedParams.contains((masterSentinel, 'solo')) ? ch.solo : snapshot.solo,
         invertedPhase: snapshot.invertedPhase,
         effects: ch.effects,
       );
@@ -1869,25 +1678,15 @@ class GlobalAppState extends ChangeNotifier {
       if (bus == null) return;
       final ch = bus.channel;
       final updated = mixer_api.UiMixerChannel(
-        volume: _touchedParams.contains((busId, 'volume'))
-            ? ch.volume
-            : snapshot.volume,
+        volume: _touchedParams.contains((busId, 'volume')) ? ch.volume : snapshot.volume,
         pan: _touchedParams.contains((busId, 'pan')) ? ch.pan : snapshot.pan,
-        mute: _touchedParams.contains((busId, 'mute'))
-            ? ch.mute
-            : snapshot.mute,
-        solo: _touchedParams.contains((busId, 'solo'))
-            ? ch.solo
-            : snapshot.solo,
+        mute: _touchedParams.contains((busId, 'mute')) ? ch.mute : snapshot.mute,
+        solo: _touchedParams.contains((busId, 'solo')) ? ch.solo : snapshot.solo,
         invertedPhase: snapshot.invertedPhase,
         effects: ch.effects,
       );
       final newBuses = Map<int, mixer_api.UiBus>.from(_mixerState.buses);
-      newBuses[busId] = mixer_api.UiBus(
-        id: bus.id,
-        name: bus.name,
-        channel: updated,
-      );
+      newBuses[busId] = mixer_api.UiBus(id: bus.id, name: bus.name, channel: updated);
       _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: _mixerState.channels,
         masterBus: _mixerState.masterBus,
@@ -1899,22 +1698,14 @@ class GlobalAppState extends ChangeNotifier {
       final ch = _mixerState.channels[trackId];
       if (ch == null) return;
       final updated = mixer_api.UiMixerChannel(
-        volume: _touchedParams.contains((trackId, 'volume'))
-            ? ch.volume
-            : snapshot.volume,
+        volume: _touchedParams.contains((trackId, 'volume')) ? ch.volume : snapshot.volume,
         pan: _touchedParams.contains((trackId, 'pan')) ? ch.pan : snapshot.pan,
-        mute: _touchedParams.contains((trackId, 'mute'))
-            ? ch.mute
-            : snapshot.mute,
-        solo: _touchedParams.contains((trackId, 'solo'))
-            ? ch.solo
-            : snapshot.solo,
+        mute: _touchedParams.contains((trackId, 'mute')) ? ch.mute : snapshot.mute,
+        solo: _touchedParams.contains((trackId, 'solo')) ? ch.solo : snapshot.solo,
         invertedPhase: snapshot.invertedPhase,
         effects: ch.effects,
       );
-      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
-        _mixerState.channels,
-      );
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(_mixerState.channels);
       newChannels[trackId] = updated;
       _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: newChannels,
@@ -1940,36 +1731,21 @@ class GlobalAppState extends ChangeNotifier {
 
   /// Fire-and-forget: sends a single param change to the audio thread ring buffer.
   /// Applies the change optimistically to local state so the slider doesn't snap back.
-  void setMixerChannelParam({
-    required int trackId,
-    required mixer_api.UiMixerChannelParams param,
-  }) {
+  void setMixerChannelParam({required int trackId, required mixer_api.UiMixerChannelParams param}) {
     _applyParamToLocalChannel(trackId, param, isMaster: false);
-    mixer_api.setMixerChannelParam(
-      target: mixer_api.UiMixerChannelTarget.track(trackId),
-      param: param,
-    );
+    mixer_api.setMixerChannelParam(target: mixer_api.UiMixerChannelTarget.track(trackId), param: param);
   }
 
   /// Fire-and-forget: sends a single master bus param change to the audio thread.
   void setMasterBusParam({required mixer_api.UiMixerChannelParams param}) {
     _applyParamToLocalChannel(0, param, isMaster: true);
-    mixer_api.setMixerChannelParam(
-      target: const mixer_api.UiMixerChannelTarget.master(),
-      param: param,
-    );
+    mixer_api.setMixerChannelParam(target: const mixer_api.UiMixerChannelTarget.master(), param: param);
   }
 
   /// Fire-and-forget: sends a single bus channel param change to the audio thread.
-  void setBusChannelParam({
-    required int busId,
-    required mixer_api.UiMixerChannelParams param,
-  }) {
+  void setBusChannelParam({required int busId, required mixer_api.UiMixerChannelParams param}) {
     _applyParamToBusChannel(busId, param);
-    mixer_api.setMixerChannelParam(
-      target: mixer_api.UiMixerChannelTarget.bus(busId),
-      param: param,
-    );
+    mixer_api.setMixerChannelParam(target: mixer_api.UiMixerChannelTarget.bus(busId), param: param);
   }
 
   Future<Result<void>> createNewBusChannel({String name = "Untitled"}) async {
@@ -1987,14 +1763,8 @@ class GlobalAppState extends ChangeNotifier {
   }
 
   /// Optimistically apply a single param to a track/master channel in local state.
-  void _applyParamToLocalChannel(
-    int trackId,
-    mixer_api.UiMixerChannelParams param, {
-    required bool isMaster,
-  }) {
-    final channel = isMaster
-        ? _mixerState.masterBus
-        : _mixerState.channels[trackId];
+  void _applyParamToLocalChannel(int trackId, mixer_api.UiMixerChannelParams param, {required bool isMaster}) {
+    final channel = isMaster ? _mixerState.masterBus : _mixerState.channels[trackId];
     if (channel == null) return;
 
     double volume = channel.volume;
@@ -2033,9 +1803,7 @@ class GlobalAppState extends ChangeNotifier {
         routing: _mixerState.routing,
       );
     } else {
-      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
-        _mixerState.channels,
-      );
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(_mixerState.channels);
       newChannels[trackId] = updated;
       _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: newChannels,
@@ -2048,10 +1816,7 @@ class GlobalAppState extends ChangeNotifier {
   }
 
   /// Optimistically apply a single param to a bus channel in local state.
-  void _applyParamToBusChannel(
-    int busId,
-    mixer_api.UiMixerChannelParams param,
-  ) {
+  void _applyParamToBusChannel(int busId, mixer_api.UiMixerChannelParams param) {
     final bus = _mixerState.buses[busId];
     if (bus == null) return;
 
@@ -2099,9 +1864,7 @@ class GlobalAppState extends ChangeNotifier {
   }
 
   void removeNotesFromSelection(Set<int> noteIds) {
-    _selectedNoteIds = _selectedNoteIds
-        .where((id) => !noteIds.contains(id))
-        .toSet();
+    _selectedNoteIds = _selectedNoteIds.where((id) => !noteIds.contains(id)).toSet();
     notifyListeners();
   }
 
@@ -2142,11 +1905,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<void> pasteNotesFromClipboardToPattern(
-    int targetPatternId,
-    int newTickStart,
-    int newKey,
-  ) async {
+  Future<void> pasteNotesFromClipboardToPattern(int targetPatternId, int newTickStart, int newKey) async {
     try {
       // The API call returns the fully constructed list of notes
       // (with their new IDs assigned by the backend)
@@ -2161,14 +1920,12 @@ class GlobalAppState extends ChangeNotifier {
       // Optimistic Update: Append the newly pasted notes immediately
       final pattern = _patterns[targetPatternId];
       if (pattern != null) {
-        final updatedNotes = List<UiNote>.from(pattern.notes)
-          ..addAll(pastedNotes);
+        final updatedNotes = List<UiNote>.from(pattern.notes)..addAll(pastedNotes);
 
         final updatedPattern = UiPattern(
           id: pattern.id,
           name: pattern.name,
-          lengthTicks: pattern
-              .lengthTicks, // Backend recalcs this, but frontend will catch up
+          lengthTicks: pattern.lengthTicks, // Backend recalcs this, but frontend will catch up
           notes: updatedNotes,
         );
 
@@ -2194,10 +1951,7 @@ class GlobalAppState extends ChangeNotifier {
   // Clip's clipboard action API
   // ======================================
 
-  Future<Result<void>> copySelectedClips({
-    required int trackId,
-    required List<int> clipIds,
-  }) async {
+  Future<Result<void>> copySelectedClips({required int trackId, required List<int> clipIds}) async {
     try {
       await session_api.copyClips(trackId: trackId, clipIds: clipIds);
       return Result.ok(null);
@@ -2207,10 +1961,7 @@ class GlobalAppState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> cutSelectedClips({
-    required int trackId,
-    required List<int> clipIds,
-  }) async {
+  Future<Result<void>> cutSelectedClips({required int trackId, required List<int> clipIds}) async {
     try {
       await session_api.cutClips(trackId: trackId, clipIds: clipIds);
 
@@ -2220,9 +1971,7 @@ class GlobalAppState extends ChangeNotifier {
         final clipIdSet = clipIds.toSet();
 
         // Filter out the cut clips
-        final updatedClips = track.clips
-            .where((c) => !clipIdSet.contains(c.id))
-            .toList();
+        final updatedClips = track.clips.where((c) => !clipIdSet.contains(c.id)).toList();
 
         // Update the tracks map
         _tracks = Map.from(_tracks);
@@ -2302,7 +2051,6 @@ class GlobalAppState extends ChangeNotifier {
     _patterns = Map.from(state.patterns);
 
     _mixerState = state.mixer;
-    maxSamplesIndex = state.maxSampleIndex;
     // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
   }
 }

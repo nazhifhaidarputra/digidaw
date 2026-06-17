@@ -36,17 +36,12 @@ class TrackListState {
   /// Per-track pixel heights for the arranger rows, keyed by track ID.
   final Map<int, int> trackIdHeightMap;
 
-  /// Total length of the project in sample frames (used for scrollbar sizing).
-  final int maxSamplesIndex;
-
-
   const TrackListState({
     this.tracks = const {},
     this.selectedTrackId,
     this.selectedClipIds = const [],
     this.focusClipId,
     this.trackIdHeightMap = const {},
-    this.maxSamplesIndex = 2000
   });
 
   TrackListState copyWith({
@@ -55,20 +50,14 @@ class TrackListState {
     List<int>? selectedClipIds,
     Object? focusClipId = _sentinel,
     Map<int, int>? trackIdHeightMap,
-    int? maxSamplesIndex,
     Object? currentFilePath = _sentinel,
   }) {
     return TrackListState(
       tracks: tracks ?? this.tracks,
-      selectedTrackId: identical(selectedTrackId, _sentinel)
-          ? this.selectedTrackId
-          : selectedTrackId as int?,
+      selectedTrackId: identical(selectedTrackId, _sentinel) ? this.selectedTrackId : selectedTrackId as int?,
       selectedClipIds: selectedClipIds ?? this.selectedClipIds,
-      focusClipId: identical(focusClipId, _sentinel)
-          ? this.focusClipId
-          : focusClipId as int?,
+      focusClipId: identical(focusClipId, _sentinel) ? this.focusClipId : focusClipId as int?,
       trackIdHeightMap: trackIdHeightMap ?? this.trackIdHeightMap,
-      maxSamplesIndex: maxSamplesIndex ?? this.maxSamplesIndex,
     );
   }
 
@@ -80,19 +69,11 @@ class TrackListState {
         other.selectedTrackId == selectedTrackId &&
         other.selectedClipIds == selectedClipIds &&
         other.focusClipId == focusClipId &&
-        other.trackIdHeightMap == trackIdHeightMap &&
-        other.maxSamplesIndex == maxSamplesIndex;
+        other.trackIdHeightMap == trackIdHeightMap;
   }
 
   @override
-  int get hashCode => Object.hash(
-    tracks,
-    selectedTrackId,
-    selectedClipIds,
-    focusClipId,
-    trackIdHeightMap,
-    maxSamplesIndex,
-  );
+  int get hashCode => Object.hash(tracks, selectedTrackId, selectedClipIds, focusClipId, trackIdHeightMap);
 }
 
 const Object _sentinel = Object();
@@ -147,27 +128,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
-  /// Sync the maximum sample index (project length).
-  Future<void> syncMaxSampleIndex() async {
-    try {
-      final newMax = await getMaxSampleIndex();
-      state = state.copyWith(maxSamplesIndex: newMax);
-    } catch (e) {
-      AppLogger.error('TrackListNotifier: error syncing max sample index: $e');
-    }
-  }
-
   // ------------------------------------------------------------------
   // Clip selection
   // ------------------------------------------------------------------
 
   /// Select a single clip (clears any existing multi-selection).
   void selectClip({required int trackId, required int clipId}) {
-    state = state.copyWith(
-      selectedTrackId: trackId,
-      selectedClipIds: [clipId],
-      focusClipId: clipId,
-    );
+    state = state.copyWith(selectedTrackId: trackId, selectedClipIds: [clipId], focusClipId: clipId);
   }
 
   /// Add a clip to the selection (Ctrl+Click behaviour).
@@ -178,11 +145,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       current = [];
     }
     final updated = current.contains(clipId) ? current : [...current, clipId];
-    state = state.copyWith(
-      selectedTrackId: trackId,
-      selectedClipIds: updated,
-      focusClipId: clipId,
-    );
+    state = state.copyWith(selectedTrackId: trackId, selectedClipIds: updated, focusClipId: clipId);
   }
 
   /// Remove a clip from the selection.
@@ -212,11 +175,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
   /// Clear all clip selection.
   void deselectAllClips() {
-    state = state.copyWith(
-      selectedTrackId: null,
-      selectedClipIds: const [],
-      focusClipId: null,
-    );
+    state = state.copyWith(selectedTrackId: null, selectedClipIds: const [], focusClipId: null);
   }
 
   // ------------------------------------------------------------------
@@ -269,16 +228,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // ------------------------------------------------------------------
 
   /// Create an empty MIDI pattern clip on [trackId] at [startTime].
-  Future<Result<void>> createEmptyPatternClip({
-    required int trackId,
-    required int startTime,
-  }) async {
+  Future<Result<void>> createEmptyPatternClip({required int trackId, required int startTime}) async {
     try {
-      await createClip(
-        sourceType: UiSourceType.midi,
-        trackId: trackId,
-        startTime: startTime,
-      );
+      await createClip(sourceType: UiSourceType.midi, trackId: trackId, startTime: startTime);
       await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
@@ -302,11 +254,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Slice a clip at [cutPoint] (sample position).
   Future<Result<void>> sliceClip(int trackId, int clipId, int cutPoint) async {
     try {
-      await track_api.sliceClip(
-        sourceTrackId: trackId,
-        clipId: clipId,
-        cutPoint: cutPoint,
-      );
+      await track_api.sliceClip(sourceTrackId: trackId, clipId: clipId, cutPoint: cutPoint);
       await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
@@ -316,20 +264,10 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   /// Resize a clip edge, with an optimistic local update.
-  Future<Result<void>> resizeClip(
-    int trackId,
-    int clipId,
-    UiResizeEdge edge,
-    int newTime,
-  ) async {
+  Future<Result<void>> resizeClip(int trackId, int clipId, UiResizeEdge edge, int newTime) async {
     _applyOptimisticResize(trackId, clipId, edge, newTime);
     try {
-      await track_api.resizeClip(
-        trackId: trackId,
-        clipId: clipId,
-        edge: edge,
-        newTimeVal: newTime,
-      );
+      await track_api.resizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTime);
       return Result.ok(null);
     } catch (e) {
       AppLogger.error('TrackListNotifier: error resizing clip: $e');
@@ -338,12 +276,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   /// Move a clip, optionally to a different track, with an optimistic update.
-  Future<Result<void>> moveClip(
-    int trackId,
-    int clipId,
-    int newStartTime, {
-    int? newTrackId,
-  }) async {
+  Future<Result<void>> moveClip(int trackId, int clipId, int newStartTime, {int? newTrackId}) async {
     _applyOptimisticMove(trackId, clipId, newStartTime, newTrackId);
     try {
       await track_api.moveClip(
@@ -364,12 +297,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // ------------------------------------------------------------------
 
   /// Move multiple clips by [deltaTicks], with an optimistic update.
-  Future<Result<void>> moveClipBatch(
-    int trackId,
-    List<int> clipIds,
-    int deltaTicks, {
-    int? newTrackId,
-  }) async {
+  Future<Result<void>> moveClipBatch(int trackId, List<int> clipIds, int deltaTicks, {int? newTrackId}) async {
     _applyOptimisticMoveBatch(trackId, clipIds, deltaTicks, newTrackId);
     try {
       await track_api.moveClipBatch(
@@ -386,20 +314,10 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   /// Resize multiple clips by [deltaTicks], with an optimistic update.
-  Future<Result<void>> resizeClipBatch(
-    int trackId,
-    List<int> clipIds,
-    UiResizeEdge edge,
-    int deltaTicks,
-  ) async {
+  Future<Result<void>> resizeClipBatch(int trackId, List<int> clipIds, UiResizeEdge edge, int deltaTicks) async {
     _applyOptimisticResizeBatch(trackId, clipIds, edge, deltaTicks);
     try {
-      await track_api.resizeClipBatch(
-        trackId: trackId,
-        clipIds: clipIds,
-        edge: edge,
-        deltaTicks: deltaTicks,
-      );
+      await track_api.resizeClipBatch(trackId: trackId, clipIds: clipIds, edge: edge, deltaTicks: deltaTicks);
       return Result.ok(null);
     } catch (e) {
       AppLogger.error('TrackListNotifier: error batch-resizing clips: $e');
@@ -435,10 +353,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // ------------------------------------------------------------------
 
   /// Copy the given clips to the session clipboard.
-  Future<Result<void>> copySelectedClips({
-    required int trackId,
-    required List<int> clipIds,
-  }) async {
+  Future<Result<void>> copySelectedClips({required int trackId, required List<int> clipIds}) async {
     try {
       await session_api.copyClips(trackId: trackId, clipIds: clipIds);
       return Result.ok(null);
@@ -449,20 +364,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   /// Cut the given clips to the session clipboard, with optimistic removal.
-  Future<Result<void>> cutSelectedClips({
-    required int trackId,
-    required List<int> clipIds,
-  }) async {
+  Future<Result<void>> cutSelectedClips({required int trackId, required List<int> clipIds}) async {
     try {
       await session_api.cutClips(trackId: trackId, clipIds: clipIds);
       _optimisticDeleteClips(trackId, clipIds.toSet());
       // Clear selection
       if (state.selectedTrackId == trackId) {
-        state = state.copyWith(
-          selectedClipIds: const [],
-          selectedTrackId: null,
-          focusClipId: null,
-        );
+        state = state.copyWith(selectedClipIds: const [], selectedTrackId: null, focusClipId: null);
       }
       return Result.ok(null);
     } catch (e) {
@@ -541,20 +449,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
   void _optimisticDeleteClips(int trackId, Set<int> clipIdSet) {
     final track = state.tracks[trackId];
     if (track == null) return;
-    final updatedClips = track.clips
-        .where((c) => !clipIdSet.contains(c.id))
-        .toList();
+    final updatedClips = track.clips.where((c) => !clipIdSet.contains(c.id)).toList();
     final newTracks = Map<int, UiTrack>.from(state.tracks);
     newTracks[trackId] = track.copyWith(clips: updatedClips);
     state = state.copyWith(tracks: newTracks);
   }
 
-  void _applyOptimisticResize(
-    int trackId,
-    int clipId,
-    UiResizeEdge edge,
-    int newTime,
-  ) {
+  void _applyOptimisticResize(int trackId, int clipId, UiResizeEdge edge, int newTime) {
     final track = state.tracks[trackId];
     if (track == null) return;
     final clipIndex = track.clips.indexWhere((c) => c.id == clipId);
@@ -581,22 +482,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
 
     final updatedClips = List<UiClip>.from(track.clips);
-    updatedClips[clipIndex] = clip.copyWith(
-      startTime: newStart,
-      loopLength: newLength,
-      offsetStart: newOffset,
-    );
+    updatedClips[clipIndex] = clip.copyWith(startTime: newStart, loopLength: newLength, offsetStart: newOffset);
     final newTracks = Map<int, UiTrack>.from(state.tracks);
     newTracks[trackId] = track.copyWith(clips: updatedClips);
     state = state.copyWith(tracks: newTracks);
   }
 
-  void _applyOptimisticMove(
-    int trackId,
-    int clipId,
-    int newStartTime,
-    int? newTrackId,
-  ) {
+  void _applyOptimisticMove(int trackId, int clipId, int newStartTime, int? newTrackId) {
     if (!state.tracks.containsKey(trackId)) return;
     final track = state.tracks[trackId]!;
     final clipIndex = track.clips.indexWhere((c) => c.id == clipId);
@@ -611,8 +503,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       if (!state.tracks.containsKey(newTrackId)) return;
       final targetTrack = state.tracks[newTrackId]!;
       final sourceClips = List<UiClip>.from(track.clips)..removeAt(clipIndex);
-      final targetClips = List<UiClip>.from(targetTrack.clips)
-        ..add(updatedClip);
+      final targetClips = List<UiClip>.from(targetTrack.clips)..add(updatedClip);
       newTracks[trackId] = track.copyWith(clips: sourceClips);
       newTracks[newTrackId] = targetTrack.copyWith(clips: targetClips);
     } else {
@@ -623,12 +514,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     state = state.copyWith(tracks: newTracks);
   }
 
-  void _applyOptimisticMoveBatch(
-    int trackId,
-    List<int> clipIds,
-    int deltaSamples,
-    int? newTrackId,
-  ) {
+  void _applyOptimisticMoveBatch(int trackId, List<int> clipIds, int deltaSamples, int? newTrackId) {
     if (!state.tracks.containsKey(trackId)) return;
     final track = state.tracks[trackId]!;
     final targetId = newTrackId ?? trackId;
@@ -636,16 +522,12 @@ class TrackListNotifier extends Notifier<TrackListState> {
     final targetTrack = state.tracks[targetId]!;
 
     final clipIdSet = clipIds.toSet();
-    final clipsToMove = track.clips
-        .where((c) => clipIdSet.contains(c.id))
-        .toList();
+    final clipsToMove = track.clips.where((c) => clipIdSet.contains(c.id)).toList();
 
     final newTracks = Map<int, UiTrack>.from(state.tracks);
 
     if (trackId != targetId) {
-      final sourceClips = track.clips
-          .where((c) => !clipIdSet.contains(c.id))
-          .toList();
+      final sourceClips = track.clips.where((c) => !clipIdSet.contains(c.id)).toList();
       final targetClips = List<UiClip>.from(targetTrack.clips);
       for (final clip in clipsToMove) {
         final newStart = (clip.startTime + deltaSamples).clamp(0, 1 << 62);
@@ -666,12 +548,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     state = state.copyWith(tracks: newTracks);
   }
 
-  void _applyOptimisticResizeBatch(
-    int trackId,
-    List<int> clipIds,
-    UiResizeEdge edge,
-    int deltaSamples,
-  ) {
+  void _applyOptimisticResizeBatch(int trackId, List<int> clipIds, UiResizeEdge edge, int deltaSamples) {
     if (!state.tracks.containsKey(trackId)) return;
     final track = state.tracks[trackId]!;
     final clipIdSet = clipIds.toSet();
@@ -683,35 +560,24 @@ class TrackListNotifier extends Notifier<TrackListState> {
       int newOffset = clip.offsetStart;
 
       if (edge == UiResizeEdge.right) {
-        final newEnd = (clip.startTime + clip.loopLength + deltaSamples).clamp(
-          clip.startTime + 100,
-          1 << 62,
-        );
+        final newEnd = (clip.startTime + clip.loopLength + deltaSamples).clamp(clip.startTime + 100, 1 << 62);
         newLength = newEnd.toInt() - clip.startTime;
       } else {
         final oldEnd = clip.startTime + clip.loopLength;
-        int newStartProposed = (clip.startTime + deltaSamples).clamp(
-          0,
-          oldEnd - 100,
-        );
+        int newStartProposed = (clip.startTime + deltaSamples).clamp(0, oldEnd - 100);
         final delta = newStartProposed - clip.startTime;
         final newOffsetProposed = (clip.offsetStart + delta).clamp(0, 1 << 62);
         newStart = newStartProposed.toInt();
         newLength = oldEnd - newStartProposed;
         newOffset = newOffsetProposed.toInt();
       }
-      return clip.copyWith(
-        startTime: newStart,
-        loopLength: newLength,
-        offsetStart: newOffset,
-      );
+      return clip.copyWith(startTime: newStart, loopLength: newLength, offsetStart: newOffset);
     }).toList();
 
     final newTracks = Map<int, UiTrack>.from(state.tracks);
     newTracks[trackId] = track.copyWith(clips: updatedClips);
     state = state.copyWith(tracks: newTracks);
   }
-
 }
 
 // ============================================================
@@ -722,5 +588,4 @@ class TrackListNotifier extends Notifier<TrackListState> {
 ///
 /// Read: `ref.watch(trackListStateProvider)`
 /// Mutate: `ref.read(trackListStateProvider.notifier).syncTracksState()`
-final trackListStateProvider =
-    NotifierProvider<TrackListNotifier, TrackListState>(TrackListNotifier.new);
+final trackListStateProvider = NotifierProvider<TrackListNotifier, TrackListState>(TrackListNotifier.new);

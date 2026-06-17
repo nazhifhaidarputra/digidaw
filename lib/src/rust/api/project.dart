@@ -77,10 +77,6 @@ Future<UiTrack> addNewAudioTrack() =>
 Future<Map<int, UiTrack>> getTracks() =>
     RustLib.instance.api.crateApiProjectGetTracks();
 
-/// Get the newest max sample index of the project
-Future<int> getMaxSampleIndex() =>
-    RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
-
 /// Export project to flutter. also report progress via StreamSink
 Stream<double> exportProjectFlutter({
   required String outputPath,
@@ -214,7 +210,6 @@ class UiApplicationState {
   final Map<int, UiGeneratorInstance> generators;
   final Map<int, UiPattern> patterns;
   final UiMixerState mixer;
-  final int maxSampleIndex;
   final Map<int, AudioWaveformUiForSourceList> audioSources;
 
   const UiApplicationState({
@@ -225,7 +220,6 @@ class UiApplicationState {
     required this.generators,
     required this.patterns,
     required this.mixer,
-    required this.maxSampleIndex,
     required this.audioSources,
   });
 
@@ -238,7 +232,6 @@ class UiApplicationState {
       generators.hashCode ^
       patterns.hashCode ^
       mixer.hashCode ^
-      maxSampleIndex.hashCode ^
       audioSources.hashCode;
 
   @override
@@ -253,7 +246,6 @@ class UiApplicationState {
           generators == other.generators &&
           patterns == other.patterns &&
           mixer == other.mixer &&
-          maxSampleIndex == other.maxSampleIndex &&
           audioSources == other.audioSources;
 }
 

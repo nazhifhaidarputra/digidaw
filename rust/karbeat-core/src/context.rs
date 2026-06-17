@@ -136,7 +136,6 @@ pub mod utils {
         send_audio_command(AudioCommand::UpdateTrackGraph {
             tracks: tracks_vec,
             patterns: app.pattern_pool.clone(),
-            max_sample_index: app.max_sample_index,
         });
     }
 

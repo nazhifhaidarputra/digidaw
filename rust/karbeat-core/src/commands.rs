@@ -206,7 +206,6 @@ pub enum AudioCommand {
     UpdateTrackGraph {
         tracks: Box<[AudioTrack]>,
         patterns: HashMap<PatternId, Pattern>,
-        max_sample_index: u32,
     },
 
     /// Add or replace a single automation lane on the audio thread.

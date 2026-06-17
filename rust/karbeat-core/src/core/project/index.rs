@@ -59,9 +59,6 @@ pub struct ApplicationState {
     // Counter for clips
     pub clip_counter: u32,
 
-    // Max samples index in the timeline
-    pub max_sample_index: u32,
-
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
     #[serde(skip)]
