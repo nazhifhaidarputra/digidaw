@@ -5,10 +5,7 @@ use crate::{
     audio::{
         render_state::AudioRenderState,
         writer::{create_writer, AudioExportConfig, AudioWriter},
-    },
-    commands::AudioCommand,
-    context::utils::send_audio_command,
-    core::project::ApplicationState,
+    }, commands::AudioCommand, context::DawContext, core::project::ApplicationState
 };
 
 #[derive(Debug, Clone, Error)]
@@ -40,6 +37,7 @@ pub enum TailHandling {
 /// `progress_callback` should return `true` to continue, or `false` to abort rendering.
 pub fn export_project<F>(
     // app_state: &ApplicationState, <- we should put app context here
+    ctx: &mut DawContext,
     output_path: &str,
     config: AudioExportConfig,
     tail_handling: TailHandling,
@@ -68,7 +66,7 @@ where
     let (engine_tx, engine_rx) = std::sync::mpsc::channel();
 
     // Send audio command to get a copy of Audio Engine from live engine.
-    send_audio_command(AudioCommand::QueryAudioEngine {
+    ctx.send_audio_command(AudioCommand::QueryAudioEngine {
         command_consumer: cmd_consumer,
         position_producer: pos_producer,
         feedback_producer: feedback_producer,

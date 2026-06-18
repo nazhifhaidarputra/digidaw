@@ -7,55 +7,79 @@ import '../frb_generated.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
-import 'plugins/opaque.dart';
 import 'project.dart';
 part 'plugin.freezed.dart';
 
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectParameterSnapshot`, `UiGeneratorParameterSnapshot`, `UiParameterValue`, `UiPluginCommandResponse`, `UiZeroCopyBufferResponse`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `hash`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
 /// Get all available generators with their registry IDs (preferred for UI)
-Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds() =>
-    RustLib.instance.api.crateApiPluginGetAvailableGeneratorsWithIds();
+Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds({
+  required DawContext ctx,
+}) =>
+    RustLib.instance.api.crateApiPluginGetAvailableGeneratorsWithIds(ctx: ctx);
 
 /// Get all available effects with their registry IDs (preferred for UI)
-Future<List<UiPluginInfo>> getAvailableEffectsWithIds() =>
-    RustLib.instance.api.crateApiPluginGetAvailableEffectsWithIds();
+Future<List<UiPluginInfo>> getAvailableEffectsWithIds({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiPluginGetAvailableEffectsWithIds(ctx: ctx);
 
 /// Get a single generator state from the Generator Pool
-Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
-    RustLib.instance.api.crateApiPluginGetGenerator(generatorId: generatorId);
+Future<UiGeneratorInstance> getGenerator({
+  required DawContext ctx,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPluginGetGenerator(
+  ctx: ctx,
+  generatorId: generatorId,
+);
 
 Future<UiEffectInstance> getEffect({
+  required DawContext ctx,
   required int trackId,
   required int effectId,
 }) => RustLib.instance.api.crateApiPluginGetEffect(
+  ctx: ctx,
   trackId: trackId,
   effectId: effectId,
 );
 
-Future<UiEffectInstance> getEffectFromMaster({required int effectId}) =>
-    RustLib.instance.api.crateApiPluginGetEffectFromMaster(effectId: effectId);
+Future<UiEffectInstance> getEffectFromMaster({
+  required DawContext ctx,
+  required int effectId,
+}) => RustLib.instance.api.crateApiPluginGetEffectFromMaster(
+  ctx: ctx,
+  effectId: effectId,
+);
 
-Future<List<UiEffectInstance>> getEffectsFromTrack({required int trackId}) =>
-    RustLib.instance.api.crateApiPluginGetEffectsFromTrack(trackId: trackId);
+Future<List<UiEffectInstance>> getEffectsFromTrack({
+  required DawContext ctx,
+  required int trackId,
+}) => RustLib.instance.api.crateApiPluginGetEffectsFromTrack(
+  ctx: ctx,
+  trackId: trackId,
+);
 
-Future<List<UiEffectInstance>> getMasterEffects() =>
-    RustLib.instance.api.crateApiPluginGetMasterEffects();
+Future<List<UiEffectInstance>> getMasterEffects({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiPluginGetMasterEffects(ctx: ctx);
 
 /// Get parameter specifications for a generator plugin.
 Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
+  required DawContext ctx,
   required int generatorId,
 }) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(
+  ctx: ctx,
   generatorId: generatorId,
 );
 
 /// Set a parameter on a generator plugin.
 Future<void> setGeneratorParameter({
+  required DawContext ctx,
   required int generatorId,
   required UiParamId paramId,
   required double value,
 }) => RustLib.instance.api.crateApiPluginSetGeneratorParameter(
+  ctx: ctx,
   generatorId: generatorId,
   paramId: paramId,
   value: value,
@@ -71,32 +95,32 @@ Future<double> getGeneratorParameter({
 );
 
 /// Request a parameter snapshot from the audio thread.
-Future<void> queryGeneratorParameters({required int generatorId}) => RustLib
-    .instance
-    .api
-    .crateApiPluginQueryGeneratorParameters(generatorId: generatorId);
-
-/// Poll for parameter feedback from the audio thread.
-Future<List<UiGeneratorParameterSnapshot>> pollGeneratorParameterFeedback() =>
-    RustLib.instance.api.crateApiPluginPollGeneratorParameterFeedback();
-
-Future<List<UiEffectParameterSnapshot>> pollEffectParameterFeedback() =>
-    RustLib.instance.api.crateApiPluginPollEffectParameterFeedback();
+Future<void> queryGeneratorParameters({
+  required DawContext ctx,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPluginQueryGeneratorParameters(
+  ctx: ctx,
+  generatorId: generatorId,
+);
 
 Future<List<UiPluginParameter>> getEffectParameterSpecs({
+  required DawContext ctx,
   required UiEffectTarget target,
   required int effectId,
 }) => RustLib.instance.api.crateApiPluginGetEffectParameterSpecs(
+  ctx: ctx,
   target: target,
   effectId: effectId,
 );
 
 Future<void> setEffectParameter({
+  required DawContext ctx,
   required UiEffectTarget target,
   required int effectId,
   required UiParamId paramId,
   required double value,
 }) => RustLib.instance.api.crateApiPluginSetEffectParameter(
+  ctx: ctx,
   target: target,
   effectId: effectId,
   paramId: paramId,
@@ -104,39 +128,47 @@ Future<void> setEffectParameter({
 );
 
 Future<void> queryEffectParameters({
+  required DawContext ctx,
   required UiEffectTarget target,
   required int effectId,
 }) => RustLib.instance.api.crateApiPluginQueryEffectParameters(
+  ctx: ctx,
   target: target,
   effectId: effectId,
 );
 
 Future<String?> executePluginCommandGenerator({
+  required DawContext ctx,
   required int genRegistryId,
   required String command,
   required String payloadJson,
 }) => RustLib.instance.api.crateApiPluginExecutePluginCommandGenerator(
+  ctx: ctx,
   genRegistryId: genRegistryId,
   command: command,
   payloadJson: payloadJson,
 );
 
 Future<String?> executePluginCommandEffect({
+  required DawContext ctx,
   required int effectRegistryId,
   required String command,
   required String payloadJson,
 }) => RustLib.instance.api.crateApiPluginExecutePluginCommandEffect(
+  ctx: ctx,
   effectRegistryId: effectRegistryId,
   command: command,
   payloadJson: payloadJson,
 );
 
 Future<String> executeEffectInstanceCommand({
+  required DawContext ctx,
   required UiEffectTarget target,
   required int effectId,
   required String command,
   required String payloadJson,
 }) => RustLib.instance.api.crateApiPluginExecuteEffectInstanceCommand(
+  ctx: ctx,
   target: target,
   effectId: effectId,
   command: command,
@@ -144,10 +176,12 @@ Future<String> executeEffectInstanceCommand({
 );
 
 Future<String> executeGeneratorInstanceCommand({
+  required DawContext ctx,
   required int generatorId,
   required String command,
   required String payloadJson,
 }) => RustLib.instance.api.crateApiPluginExecuteGeneratorInstanceCommand(
+  ctx: ctx,
   generatorId: generatorId,
   command: command,
   payloadJson: payloadJson,
@@ -170,25 +204,16 @@ Future<String> executeGeneratorInstanceCommand({
 /// in the stream. Returns `Err` if the audio stream is not active or the
 /// command queue is full.
 Future<int> executeRealtimePluginCommand({
+  required DawContext ctx,
   required UiPluginTarget target,
   required String command,
   required String payloadJson,
 }) => RustLib.instance.api.crateApiPluginExecuteRealtimePluginCommand(
+  ctx: ctx,
   target: target,
   command: command,
   payloadJson: payloadJson,
 );
-
-/// Opens a stream that continuously polls the audio→UI feedback channel and
-/// forwards any `PluginCommandResponse` messages to Flutter.
-///
-/// Flutter can subscribe to this stream with a `StreamBuilder<UiPluginCommandResponse>`
-/// and use `response.request_id` to match responses to pending commands.
-///
-/// The polling thread runs at ~16ms intervals (≈60fps). It terminates
-/// automatically when Flutter closes the stream (sink returns an error).
-Stream<UiPluginCommandResponse> createPluginMessageStream() =>
-    RustLib.instance.api.crateApiPluginCreatePluginMessageStream();
 
 /// Dispatches a request to the audio thread to fetch a zero-copy buffer from a live plugin.
 ///
@@ -199,20 +224,14 @@ Stream<UiPluginCommandResponse> createPluginMessageStream() =>
 /// # Returns
 /// `Ok(request_id)` — correlate this with `UiZeroCopyBufferResponse.request_id` in the stream.
 Future<int> queryLivePluginZeroCopyBuf({
+  required DawContext ctx,
   required UiPluginTarget target,
   required String name,
 }) => RustLib.instance.api.crateApiPluginQueryLivePluginZeroCopyBuf(
+  ctx: ctx,
   target: target,
   name: name,
 );
-
-/// Opens a stream that continuously polls the audio→UI feedback channel and
-/// forwards any requested `ZeroCopyBuffer` handles to Flutter.
-///
-/// The polling thread runs at ~16ms intervals (≈60fps). It terminates
-/// automatically when Flutter closes the stream.
-Stream<UiZeroCopyBufferResponse> createZeroCopyBufferStream() =>
-    RustLib.instance.api.crateApiPluginCreateZeroCopyBufferStream();
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>>
 abstract class PluginBufferHandle implements RustOpaqueInterface {
@@ -224,30 +243,12 @@ abstract class PluginBufferHandle implements RustOpaqueInterface {
 enum KarbeatPluginType { generator, effect }
 
 @freezed
-sealed class UiEffectParameterSnapshot with _$UiEffectParameterSnapshot {
-  const factory UiEffectParameterSnapshot({
-    required UiEffectTarget target,
-    required int effectId,
-    required List<UiParameterValue> parameters,
-  }) = _UiEffectParameterSnapshot;
-}
-
-@freezed
 sealed class UiEffectTarget with _$UiEffectTarget {
   const UiEffectTarget._();
 
   const factory UiEffectTarget.track(int field0) = UiEffectTarget_Track;
   const factory UiEffectTarget.master() = UiEffectTarget_Master;
   const factory UiEffectTarget.bus(int field0) = UiEffectTarget_Bus;
-}
-
-/// Parameter snapshot from the audio thread (DTO)
-@freezed
-sealed class UiGeneratorParameterSnapshot with _$UiGeneratorParameterSnapshot {
-  const factory UiGeneratorParameterSnapshot({
-    required int generatorId,
-    required List<UiParameterValue> parameters,
-  }) = _UiGeneratorParameterSnapshot;
 }
 
 @freezed
@@ -264,26 +265,6 @@ sealed class UiParamId with _$UiParamId {
 
 /// Parameter type enum for FRB
 enum UiParameterType { float, int, bool, choice }
-
-/// Single parameter value from the audio thread
-@freezed
-sealed class UiParameterValue with _$UiParameterValue {
-  const factory UiParameterValue({
-    required int paramId,
-    required double value,
-  }) = _UiParameterValue;
-}
-
-/// A response message arriving from the audio thread to Flutter.
-/// Flutter uses the `request_id` to correlate with the original command sent
-/// via `execute_realtime_plugin_command`.
-@freezed
-sealed class UiPluginCommandResponse with _$UiPluginCommandResponse {
-  const factory UiPluginCommandResponse({
-    required int requestId,
-    required String responseJson,
-  }) = _UiPluginCommandResponse;
-}
 
 @freezed
 sealed class UiPluginInfo with _$UiPluginInfo {
@@ -334,27 +315,4 @@ sealed class UiPluginTarget with _$UiPluginTarget {
   /// An effect on the master bus
   const factory UiPluginTarget.masterEffect(int field0) =
       UiPluginTarget_MasterEffect;
-}
-
-/// A response message arriving from the audio thread containing the zero-copy buffer.
-/// Dart uses the `request_id` to correlate with the original command sent via `query_zero_copy_buffer`.
-class UiZeroCopyBufferResponse {
-  final int requestId;
-
-  /// The opaque handle that Dart can use to read raw memory.
-  /// It is `None` if the plugin did not recognize the buffer name.
-  final ZeroCopyHandle? handle;
-
-  const UiZeroCopyBufferResponse({required this.requestId, this.handle});
-
-  @override
-  int get hashCode => requestId.hashCode ^ handle.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiZeroCopyBufferResponse &&
-          runtimeType == other.runtimeType &&
-          requestId == other.requestId &&
-          handle == other.handle;
 }

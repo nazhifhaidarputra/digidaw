@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use flutter_rust_bridge::frb;
 use karbeat_core::{
     api::automation_api,
+    context::DawContext,
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
         EffectAutomationTarget, MixerChannelParamTarget, ModulationLink,
@@ -339,8 +340,8 @@ impl From<AutomationTargetDto> for AutomationTarget {
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
-pub fn get_automation_lanes_for_track(track_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
-    automation_api::get_automation_lanes_for_track(track_id.into())
+pub fn get_automation_lanes_for_track(ctx: &DawContext, track_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
+    automation_api::get_automation_lanes_for_track(ctx, track_id.into())
         .into_iter()
         .map(|(mod_id, automation_id, lane)| {
             let lane_dto = (&lane).into();
@@ -351,8 +352,8 @@ pub fn get_automation_lanes_for_track(track_id: u32) -> Vec<(u32, u32, Automatio
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given bus id
-pub fn get_automation_lanes_for_bus(bus_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
-    automation_api::get_automation_lanes_for_bus(bus_id.into())
+pub fn get_automation_lanes_for_bus(ctx: &DawContext, bus_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
+    automation_api::get_automation_lanes_for_bus(ctx, bus_id.into())
         .into_iter()
         .map(|(mod_id, automation_id, lane)| {
             let lane_dto = (&lane).into();
@@ -362,13 +363,14 @@ pub fn get_automation_lanes_for_bus(bus_id: u32) -> Vec<(u32, u32, AutomationLan
 }
 
 pub fn add_automation_lane(
+    ctx: &mut DawContext,
     target: AutomationTargetDto,
     label: &str,
     min: f32,
     max: f32,
     default_value: f32,
 ) -> Result<AutomationLaneDto, String> {
-    match automation_api::add_automation_lane(target.into(), label, min, max, default_value) {
+    match automation_api::add_automation_lane(ctx, target.into(), label, min, max, default_value) {
         Ok(lane) => {
             let lane_dto = AutomationLaneDto::from(&lane);
             Ok(lane_dto)
@@ -378,16 +380,17 @@ pub fn add_automation_lane(
 }
 
 /// Fetch all automation lanes across all targets
-pub fn get_automations_lanes_all() -> HashMap<u32, AutomationLaneDto> {
-    automation_api::get_automations_lanes_all(|lane| (lane.id.into(), AutomationLaneDto::from(lane)))
+pub fn get_automations_lanes_all(ctx: &DawContext) -> HashMap<u32, AutomationLaneDto> {
+    automation_api::get_automations_lanes_all(ctx, |lane| (lane.id.into(), AutomationLaneDto::from(lane)))
 }
 
 /// Fetch a single automation lane
-pub fn get_automation_lane(lane_id: u32) -> Option<AutomationLaneDto>{
-    automation_api::get_automation_lane(lane_id).map(|l| (&l).into())
+pub fn get_automation_lane(ctx: &DawContext, lane_id: u32) -> Option<AutomationLaneDto>{
+    automation_api::get_automation_lane(ctx, lane_id).map(|l| (&l).into())
 }
 
 pub fn add_automation_lane_for_track(
+    ctx: &mut DawContext,
     track_id: u32,
     target: AutomationTargetDto,
     label: &str,
@@ -396,6 +399,7 @@ pub fn add_automation_lane_for_track(
     default_value: f32,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane_for_track(
+        ctx,
         track_id.into(),
         target.into(),
         label,
@@ -412,6 +416,7 @@ pub fn add_automation_lane_for_track(
 }
 
 pub fn add_automation_lane_for_bus(
+    ctx: &mut DawContext,
     bus_id: u32,
     target: AutomationTargetDto,
     label: &str,
@@ -420,6 +425,7 @@ pub fn add_automation_lane_for_bus(
     default_value: f32,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane_for_bus(
+        ctx,
         bus_id.into(),
         target.into(),
         label,
@@ -440,27 +446,29 @@ pub fn add_automation_lane_for_bus(
 // }
 
 pub fn add_new_automation_point(
+    ctx: &mut DawContext,
     automation_id: u32,
     time_ticks: u32,
     value: f32,
 ) -> Result<AutomationPointDto, String> {
-    automation_api::add_new_automation_point(automation_id.into(), time_ticks, value)
+    automation_api::add_new_automation_point(ctx, automation_id.into(), time_ticks, value)
         .map(|point| point.into())
         .map_err(|e| e.to_string())
 }
 
-pub fn remove_automation_point(automation_id: u32, index: usize) -> Result<(), String> {
-    automation_api::remove_automation_point(automation_id.into(), index).map_err(|e| e.to_string())
+pub fn remove_automation_point(ctx: &mut DawContext, automation_id: u32, index: usize) -> Result<(), String> {
+    automation_api::remove_automation_point(ctx, automation_id.into(), index).map_err(|e| e.to_string())
 }
 
 pub fn update_automation_point(
+    ctx: &mut DawContext,
     automation_id: u32,
     index: usize,
     time_ticks: u32,
     value: f32,
     tension: f32,
 ) -> Result<usize, String> {
-    automation_api::update_automation_point(automation_id.into(), index, time_ticks, value, tension)
+    automation_api::update_automation_point(ctx, automation_id.into(), index, time_ticks, value, tension)
         .map_err(|e| e.to_string())
 }
 
@@ -469,34 +477,36 @@ pub fn update_automation_point(
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 
 /// Get all modulations in the project
-pub fn get_all_linked_modulation_params() -> HashMap<u32, ModulationLinkDto> {
-    automation_api::get_all_linked_modulation_params(|id, mod_link| (id.to_u32(), mod_link.into()))
+pub fn get_all_linked_modulation_params(ctx: &DawContext) -> HashMap<u32, ModulationLinkDto> {
+    automation_api::get_all_linked_modulation_params(ctx, |id, mod_link| (id.to_u32(), mod_link.into()))
 }
 
 /// Add generic modulation source
-pub fn add_modulation_source(source: ModulationSourceDto) -> u32 {
-    automation_api::add_modulation_source(source.into()).to_u32()
+pub fn add_modulation_source(ctx: &mut DawContext, source: ModulationSourceDto) -> u32 {
+    automation_api::add_modulation_source(ctx, source.into()).to_u32()
 }
 
 /// Remove the modulation source. This function also cascade delete all link
 /// with this source
-pub fn remove_modulation_source(mod_id: u32) {
-    automation_api::remove_modulation_source(mod_id.into());
+pub fn remove_modulation_source(ctx: &mut DawContext, mod_id: u32) {
+    automation_api::remove_modulation_source(ctx, mod_id.into());
 }
 
 /// Remove modulation link based on queried modulation link id
-pub fn remove_modulation_link(mod_link_id: u32) {
-    automation_api::remove_modulation_link(mod_link_id.into());
+pub fn remove_modulation_link(ctx: &mut DawContext, mod_link_id: u32) {
+    automation_api::remove_modulation_link(ctx, mod_link_id.into());
 }
 
 /// Link the target param to a modulation source
 pub fn link_this_param_to_controller(
+    ctx: &mut DawContext,
     source_id: u32,
     target: AutomationTargetDto,
     depth: f32,
     base_value: f32,
 ) -> Result<u32, String> {
     automation_api::link_this_param_to_controller(
+        ctx,
         source_id.into(),
         target.into(),
         depth,
@@ -507,15 +517,16 @@ pub fn link_this_param_to_controller(
 }
 
 pub fn get_modulation_link_by_id(
+    ctx: &DawContext,
     link_id: u32
 ) -> Option<ModulationLinkDto> {
-    automation_api::get_modulation_link_by_id(link_id).map(|m| (&m).into())
+    automation_api::get_modulation_link_by_id(ctx, link_id).map(|m| (&m).into())
 }
 
-pub fn get_all_modulation_sources() -> HashMap<u32, ModulationSourceDto> {
-    automation_api::get_modulation_sources_map()
+pub fn get_all_modulation_sources(ctx: &DawContext) -> HashMap<u32, ModulationSourceDto> {
+    automation_api::get_modulation_sources_map(ctx)
 }
 
-pub fn get_modulation_source(id: u32) -> Option<ModulationSourceDto> {
-    automation_api::get_modulation_source(id)
+pub fn get_modulation_source(ctx: &DawContext, id: u32) -> Option<ModulationSourceDto> {
+    automation_api::get_modulation_source(ctx, id)
 }

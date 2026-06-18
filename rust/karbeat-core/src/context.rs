@@ -3,16 +3,22 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
+use std::sync::{Arc, Once};
+
 use hashbrown::HashMap;
 use karbeat_plugin_api::traits::AudioPlugin;
 use karbeat_plugins::registry::PluginRegistry;
+use parking_lot::Mutex;
 use rtrb::{Consumer, Producer};
 
 use crate::{
-    audio::{event::TransportFeedback, render_state::{AudioAutomationLane, AudioGraphState}},
+    audio::{
+        event::TransportFeedback,
+        render_state::{AudioAutomationLane, AudioGraphState},
+    },
     commands::{AudioCommand, AudioFeedback},
     core::{
-        history::HistoryManager,
+        history::{HistoryManager, ProjectAction},
         project::{ApplicationState, AudioTrack, Pattern},
     },
     shared::{AutomationId, PatternId},
@@ -24,40 +30,36 @@ pub struct DawContext {
     pub history: HistoryManager,
 
     /// Audio command queue producer (UI → Audio)
-    pub command_sender: Option<Producer<AudioCommand>>,
+    pub command_sender: Mutex<Option<Producer<AudioCommand>>>,
 
     /// Parameter feedback consumer (Audio → UI)
-    pub feedback_consumer: Option<rtrb::Consumer<AudioFeedback>>,
+    pub feedback_consumer: Arc<Mutex<Option<rtrb::Consumer<AudioFeedback>>>>,
 
     /// Audio stream handle
     pub stream_guard: Option<cpal::Stream>,
 
     /// Playback position ring buffer consumer
-    pub position_consumer: Option<rtrb::Consumer<TransportFeedback>>,
+    pub position_consumer: Arc<Mutex<Option<rtrb::Consumer<TransportFeedback>>>>,
 
     /// Plugin factory registry
     pub plugin_registry: PluginRegistry,
-
-    /// Shared pending feedback buffer for all modules to poll (Rust → Flutter)
-    pub pending_feedback: Vec<AudioFeedback>,
 }
 
 impl DawContext {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             app_state: ApplicationState::default(),
             history: HistoryManager::new(),
-            command_sender: None,
-            feedback_consumer: None,
+            command_sender: Mutex::new(None),
+            feedback_consumer: Arc::new(Mutex::new(None)),
             stream_guard: None,
-            position_consumer: None,
+            position_consumer: Arc::new(Mutex::new(None)),
             plugin_registry: PluginRegistry::new_with_defaults(),
-            pending_feedback: Vec::new(),
         }
     }
 
     pub fn send_audio_command(&mut self, command: AudioCommand) {
-        if let Some(sender) = self.command_sender.as_mut() {
+        if let Some(sender) = self.command_sender.lock().as_mut() {
             let _ = sender.push(command);
         };
     }
@@ -66,7 +68,7 @@ impl DawContext {
         &mut self,
         commands: Vec<AudioCommand>,
     ) -> anyhow::Result<()> {
-        if let Some(sender) = self.command_sender.as_mut() {
+        if let Some(sender) = self.command_sender.lock().as_mut() {
             commands.into_iter().for_each(|command| {
                 let _ = sender.push(command);
             });
@@ -128,4 +130,16 @@ impl DawContext {
     pub fn push_history(&mut self, action: ProjectAction) {
         self.history.push(action);
     }
+
+    /// Extracts the position consumer. This should only be called once when starting the UI stream.
+    pub fn take_position_consumer(&self) -> Option<Consumer<TransportFeedback>> {
+        self.position_consumer.lock().take()
+    }
+
+    /// Extracts the feedback consumer.
+    pub fn take_feedback_consumer(&self) -> Option<Consumer<AudioFeedback>> {
+        self.feedback_consumer.lock().take()
+    }
 }
+
+pub static INIT_LOGGER: Once = Once::new();

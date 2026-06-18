@@ -5,13 +5,19 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'project.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// Get a WaveformHandle for a single audio source by its source ID.
 /// Returns None if the source does not exist in the asset library.
-WaveformHandle? getWaveformHandle({required int sourceId}) =>
-    RustLib.instance.api.crateApiWaveformGetWaveformHandle(sourceId: sourceId);
+WaveformHandle? getWaveformHandle({
+  required DawContext ctx,
+  required int sourceId,
+}) => RustLib.instance.api.crateApiWaveformGetWaveformHandle(
+  ctx: ctx,
+  sourceId: sourceId,
+);
 
 /// Returns a map of source_id → WaveformHandle for every audio clip in the
 /// given track. Returns an empty map if the track does not exist, is not an
@@ -19,10 +25,13 @@ WaveformHandle? getWaveformHandle({required int sourceId}) =>
 ///
 /// This is a sync call — it only reads Arc pointers from the app state, so
 /// there is no blocking I/O and no buffer copying.
-Map<int, WaveformHandle> getWaveformHandlesForTrack({required int trackId}) =>
-    RustLib.instance.api.crateApiWaveformGetWaveformHandlesForTrack(
-      trackId: trackId,
-    );
+Map<int, WaveformHandle> getWaveformHandlesForTrack({
+  required DawContext ctx,
+  required int trackId,
+}) => RustLib.instance.api.crateApiWaveformGetWaveformHandlesForTrack(
+  ctx: ctx,
+  trackId: trackId,
+);
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<WaveformHandle>>
 abstract class WaveformHandle implements RustOpaqueInterface {

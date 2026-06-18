@@ -10,12 +10,20 @@ import 'pattern.dart';
 import 'project.dart';
 
 /// Save the currrent project to path_name
-Future<void> saveProject({required String pathName}) =>
-    RustLib.instance.api.crateApiSerializationSaveProject(pathName: pathName);
+Future<void> saveProject({required DawContext ctx, required String pathName}) =>
+    RustLib.instance.api.crateApiSerializationSaveProject(
+      ctx: ctx,
+      pathName: pathName,
+    );
 
 /// Load the `.karbeat` or `.dgdaw` project.
-Future<UiApplicationState> loadProject({required String pathName}) =>
-    RustLib.instance.api.crateApiSerializationLoadProject(pathName: pathName);
+Future<UiApplicationState> loadProject({
+  required DawContext ctx,
+  required String pathName,
+}) => RustLib.instance.api.crateApiSerializationLoadProject(
+  ctx: ctx,
+  pathName: pathName,
+);
 
-Future<UiApplicationState> newBlankProject() =>
-    RustLib.instance.api.crateApiSerializationNewBlankProject();
+Future<UiApplicationState> newBlankProject({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiSerializationNewBlankProject(ctx: ctx);

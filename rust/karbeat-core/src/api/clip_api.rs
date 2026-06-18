@@ -195,7 +195,7 @@ pub fn batch_delete_clips(
     let app = &mut ctx.app_state;
     let track = app
         .tracks
-        .get(&track_id)
+        .get_mut(&track_id)
         .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
     for clip_id in clip_ids {
         if let Ok(deleted_clip) = track.remove_clip(&clip_id) {
@@ -231,37 +231,34 @@ pub fn batch_move_clips(
         .tracks
         .get(&source_track_id)
         .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", source_track_id))?;
-    let old_clips = {
-        clip_ids
-            .iter()
-            .filter_map(|&id| track.get_clip(&id))
-            .collect::<Vec<_>>()
-    };
+    let old_clips = clip_ids
+        .iter()
+        .filter_map(|&id| track.get_clip(&id))
+        .collect::<Vec<_>>();
 
     // 2. Mutate state
-    let modified_clips = app.move_clip_batch(source_track_id, target_track_id, clip_ids, delta_ticks)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let modified_clips = app
+        .move_clip_batch(source_track_id, target_track_id, clip_ids, delta_ticks)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     // 3. Update history
-    {
-        let mut history_actions = Vec::new();
-        for (old, new) in old_clips.iter().zip(modified_clips.iter()) {
-            history_actions.push(ProjectAction::MoveClip {
-                old_track_id: source_track_id,
-                new_track_id: target_track_id,
-                clip_id: new.id,
-                old_start_time: old.time.start_time_raw(),
-                new_start_time: new.time.start_time_raw(),
-            });
-        }
+    let mut history_actions = Vec::new();
+    for (old, new) in old_clips.iter().zip(modified_clips.iter()) {
+        history_actions.push(ProjectAction::MoveClip {
+            old_track_id: source_track_id,
+            new_track_id: target_track_id,
+            clip_id: new.id,
+            old_start_time: old.time.start_time_raw(),
+            new_start_time: new.time.start_time_raw(),
+        });
+    }
 
-        if !history_actions.is_empty() {
-            // let mut history = get_history_lock();
-            if history_actions.len() == 1 {
-                ctx.push_history(history_actions.remove(0));
-            } else {
-                ctx.push_history(ProjectAction::Batch(history_actions));
-            }
+    if !history_actions.is_empty() {
+        // let mut history = get_history_lock();
+        if history_actions.len() == 1 {
+            ctx.push_history(history_actions.remove(0));
+        } else {
+            ctx.push_history(ProjectAction::Batch(history_actions));
         }
     }
     ctx.broadcast_track_graph();
@@ -277,7 +274,10 @@ pub fn batch_resize_clips(
 ) -> anyhow::Result<Vec<Clip>> {
     // 1. Capture old states
     let app = &mut ctx.app_state;
-    let track = app.tracks.get(&track_id).ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+    let track = app
+        .tracks
+        .get(&track_id)
+        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
     let old_clips = track
         .clips()
         .iter()
@@ -286,29 +286,29 @@ pub fn batch_resize_clips(
         .collect::<Vec<_>>();
 
     // 2. Mutate state
-    let modified_clips = app.resize_clip_batch(track_id, clip_ids, edge, delta_ticks)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let modified_clips = app
+        .resize_clip_batch(track_id, clip_ids, edge, delta_ticks)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     // 3. Update history
-    
-        let mut history_actions = Vec::new();
-        for (old, new) in old_clips.iter().zip(modified_clips.iter()) {
-            history_actions.push(ProjectAction::ResizeClip {
-                track_id,
-                old_clip: old.clone(),
-                new_clip: new.clone(),
-            });
-        }
 
-        if !history_actions.is_empty() {
-            
-            if history_actions.len() == 1 {
-                ctx.push_history(history_actions.remove(0));
-            } else {
-                ctx.push_history(ProjectAction::Batch(history_actions));
-            }
+    let mut history_actions = Vec::new();
+    for (old, new) in old_clips.iter().zip(modified_clips.iter()) {
+        history_actions.push(ProjectAction::ResizeClip {
+            track_id,
+            old_clip: old.clone(),
+            new_clip: new.clone(),
+        });
+    }
+
+    if !history_actions.is_empty() {
+        if history_actions.len() == 1 {
+            ctx.push_history(history_actions.remove(0));
+        } else {
+            ctx.push_history(ProjectAction::Batch(history_actions));
         }
-    
+    }
+
     ctx.broadcast_track_graph();
     Ok(modified_clips)
 }

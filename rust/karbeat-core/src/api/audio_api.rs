@@ -48,7 +48,7 @@ where
     F: FnMut(TransportFeedback) -> T,
 {
     let mut results = Vec::new();
-    if let Some(consumer) = ctx.position_consumer.as_mut() {
+    if let Some(consumer) = ctx.position_consumer.lock().as_mut() {
         while let Ok(pos_data) = consumer.pop() {
             results.push(mapper(pos_data));
         }

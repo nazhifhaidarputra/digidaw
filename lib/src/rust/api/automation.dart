@@ -7,6 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'plugin.dart';
+import 'project.dart';
 part 'automation.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
@@ -14,26 +15,32 @@ part 'automation.freezed.dart';
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
 Future<List<(int, int, AutomationLaneDto)>> getAutomationLanesForTrack({
+  required DawContext ctx,
   required int trackId,
 }) => RustLib.instance.api.crateApiAutomationGetAutomationLanesForTrack(
+  ctx: ctx,
   trackId: trackId,
 );
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given bus id
 Future<List<(int, int, AutomationLaneDto)>> getAutomationLanesForBus({
+  required DawContext ctx,
   required int busId,
 }) => RustLib.instance.api.crateApiAutomationGetAutomationLanesForBus(
+  ctx: ctx,
   busId: busId,
 );
 
 Future<AutomationLaneDto> addAutomationLane({
+  required DawContext ctx,
   required AutomationTargetDto target,
   required String label,
   required double min,
   required double max,
   required double defaultValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLane(
+  ctx: ctx,
   target: target,
   label: label,
   min: min,
@@ -42,14 +49,21 @@ Future<AutomationLaneDto> addAutomationLane({
 );
 
 /// Fetch all automation lanes across all targets
-Future<Map<int, AutomationLaneDto>> getAutomationsLanesAll() =>
-    RustLib.instance.api.crateApiAutomationGetAutomationsLanesAll();
+Future<Map<int, AutomationLaneDto>> getAutomationsLanesAll({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiAutomationGetAutomationsLanesAll(ctx: ctx);
 
 /// Fetch a single automation lane
-Future<AutomationLaneDto?> getAutomationLane({required int laneId}) =>
-    RustLib.instance.api.crateApiAutomationGetAutomationLane(laneId: laneId);
+Future<AutomationLaneDto?> getAutomationLane({
+  required DawContext ctx,
+  required int laneId,
+}) => RustLib.instance.api.crateApiAutomationGetAutomationLane(
+  ctx: ctx,
+  laneId: laneId,
+);
 
 Future<AutomationLaneDto> addAutomationLaneForTrack({
+  required DawContext ctx,
   required int trackId,
   required AutomationTargetDto target,
   required String label,
@@ -57,6 +71,7 @@ Future<AutomationLaneDto> addAutomationLaneForTrack({
   required double max,
   required double defaultValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForTrack(
+  ctx: ctx,
   trackId: trackId,
   target: target,
   label: label,
@@ -66,6 +81,7 @@ Future<AutomationLaneDto> addAutomationLaneForTrack({
 );
 
 Future<AutomationLaneDto> addAutomationLaneForBus({
+  required DawContext ctx,
   required int busId,
   required AutomationTargetDto target,
   required String label,
@@ -73,6 +89,7 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   required double max,
   required double defaultValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForBus(
+  ctx: ctx,
   busId: busId,
   target: target,
   label: label,
@@ -82,30 +99,36 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
 );
 
 Future<AutomationPointDto> addNewAutomationPoint({
+  required DawContext ctx,
   required int automationId,
   required int timeTicks,
   required double value,
 }) => RustLib.instance.api.crateApiAutomationAddNewAutomationPoint(
+  ctx: ctx,
   automationId: automationId,
   timeTicks: timeTicks,
   value: value,
 );
 
 Future<void> removeAutomationPoint({
+  required DawContext ctx,
   required int automationId,
   required int index,
 }) => RustLib.instance.api.crateApiAutomationRemoveAutomationPoint(
+  ctx: ctx,
   automationId: automationId,
   index: index,
 );
 
 Future<int> updateAutomationPoint({
+  required DawContext ctx,
   required int automationId,
   required int index,
   required int timeTicks,
   required double value,
   required double tension,
 }) => RustLib.instance.api.crateApiAutomationUpdateAutomationPoint(
+  ctx: ctx,
   automationId: automationId,
   index: index,
   timeTicks: timeTicks,
@@ -114,47 +137,74 @@ Future<int> updateAutomationPoint({
 );
 
 /// Get all modulations in the project
-Future<Map<int, ModulationLinkDto>> getAllLinkedModulationParams() =>
-    RustLib.instance.api.crateApiAutomationGetAllLinkedModulationParams();
+Future<Map<int, ModulationLinkDto>> getAllLinkedModulationParams({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiAutomationGetAllLinkedModulationParams(
+  ctx: ctx,
+);
 
 /// Add generic modulation source
-Future<int> addModulationSource({required ModulationSourceDto source}) =>
-    RustLib.instance.api.crateApiAutomationAddModulationSource(source: source);
+Future<int> addModulationSource({
+  required DawContext ctx,
+  required ModulationSourceDto source,
+}) => RustLib.instance.api.crateApiAutomationAddModulationSource(
+  ctx: ctx,
+  source: source,
+);
 
 /// Remove the modulation source. This function also cascade delete all link
 /// with this source
-Future<void> removeModulationSource({required int modId}) =>
-    RustLib.instance.api.crateApiAutomationRemoveModulationSource(modId: modId);
+Future<void> removeModulationSource({
+  required DawContext ctx,
+  required int modId,
+}) => RustLib.instance.api.crateApiAutomationRemoveModulationSource(
+  ctx: ctx,
+  modId: modId,
+);
 
 /// Remove modulation link based on queried modulation link id
-Future<void> removeModulationLink({required int modLinkId}) => RustLib
-    .instance
-    .api
-    .crateApiAutomationRemoveModulationLink(modLinkId: modLinkId);
+Future<void> removeModulationLink({
+  required DawContext ctx,
+  required int modLinkId,
+}) => RustLib.instance.api.crateApiAutomationRemoveModulationLink(
+  ctx: ctx,
+  modLinkId: modLinkId,
+);
 
 /// Link the target param to a modulation source
 Future<int> linkThisParamToController({
+  required DawContext ctx,
   required int sourceId,
   required AutomationTargetDto target,
   required double depth,
   required double baseValue,
 }) => RustLib.instance.api.crateApiAutomationLinkThisParamToController(
+  ctx: ctx,
   sourceId: sourceId,
   target: target,
   depth: depth,
   baseValue: baseValue,
 );
 
-Future<ModulationLinkDto?> getModulationLinkById({required int linkId}) =>
-    RustLib.instance.api.crateApiAutomationGetModulationLinkById(
-      linkId: linkId,
-    );
+Future<ModulationLinkDto?> getModulationLinkById({
+  required DawContext ctx,
+  required int linkId,
+}) => RustLib.instance.api.crateApiAutomationGetModulationLinkById(
+  ctx: ctx,
+  linkId: linkId,
+);
 
-Future<Map<int, ModulationSourceDto>> getAllModulationSources() =>
-    RustLib.instance.api.crateApiAutomationGetAllModulationSources();
+Future<Map<int, ModulationSourceDto>> getAllModulationSources({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiAutomationGetAllModulationSources(ctx: ctx);
 
-Future<ModulationSourceDto?> getModulationSource({required int id}) =>
-    RustLib.instance.api.crateApiAutomationGetModulationSource(id: id);
+Future<ModulationSourceDto?> getModulationSource({
+  required DawContext ctx,
+  required int id,
+}) => RustLib.instance.api.crateApiAutomationGetModulationSource(
+  ctx: ctx,
+  id: id,
+);
 
 enum AutomationCurveTypeDto { linear, exponential, step }
 

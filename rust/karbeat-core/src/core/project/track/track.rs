@@ -409,7 +409,7 @@ impl ApplicationState {
         // Create a corresponding mixer channel and default routing
         self.mixer
             .channels
-            .insert(new_track_id, Arc::new(TrackMixerChannel::default()));
+            .insert(new_track_id, TrackMixerChannel::default());
         self.mixer.add_track_default_routing(new_track_id);
         new_track
     }
@@ -479,7 +479,7 @@ impl ApplicationState {
         // Create a corresponding mixer channel and default routing
         self.mixer
             .channels
-            .insert(track_id, Arc::new(TrackMixerChannel::default()));
+            .insert(track_id, TrackMixerChannel::default());
         self.mixer.add_track_default_routing(track_id);
 
         log::info!(

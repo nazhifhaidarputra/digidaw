@@ -1,15 +1,17 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Context, Result};
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     OutputCallbackInfo,
 };
+use parking_lot::Mutex;
 use rtrb::{Consumer, RingBuffer};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     audio::{engine::AudioEngine, event::TransportFeedback},
-    commands::AudioCommand,
-    context::ctx,
+    commands::AudioCommand, context::DawContext,
 };
 
 #[allow(unused)]
@@ -280,16 +282,15 @@ pub fn get_device_sample_rates(
 /// Start the audio stream by initializing the Command Queue and Audio Engine
 /// and then building the audio stream.
 pub fn start_audio_stream(
+    ctx: &mut DawContext,
     command_consumer: Consumer<AudioCommand>,
     config_pref: AudioDeviceConfig,
 ) -> Result<()> {
-    {
-        let mut guard = ctx().stream_guard.lock();
-        if guard.is_some() {
-            log::info!("Stopping previous audio stream...");
-            *guard = None; // This drops the stream, stopping the audio thread
-        }
+    if ctx.stream_guard.is_some() {
+        log::info!("Stopping previous audio stream...");
+        ctx.stream_guard = None; // This drops the stream, stopping the audio thread
     }
+    
     let host = resolve_host(config_pref.host_name.as_deref());
 
     let device = if let Some(dev_id) = &config_pref.device_id {
@@ -381,30 +382,24 @@ pub fn start_audio_stream(
     log::info!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);
     log::info!("Sample format: {}", sample_format);
 
-    {
-        let mut state = ctx().app_state.write();
-        state.audio_config.sample_rate = sample_rate;
-        state.audio_config.selected_output_device = match device.description() {
-            Ok(desc) => desc.to_string(),
-            Err(_) => "Unknown".into(),
-        };
-    }
+    ctx.app_state.audio_config.sample_rate = sample_rate;
+    ctx.app_state.audio_config.selected_output_device = match device.description() {
+        Ok(desc) => desc.to_string(),
+        Err(_) => "Unknown".into(),
+    };
 
     let (pos_producer, pos_consumer) = RingBuffer::<TransportFeedback>::new(100);
 
     // Store Consumer in context
-    *ctx().position_consumer.lock() = Some(pos_consumer);
+    ctx.position_consumer = Arc::new(Mutex::new(Some(pos_consumer)));
 
     // Create feedback ring buffer (Audio → UI for parameter updates)
     let (feedback_producer, feedback_consumer) =
         RingBuffer::<crate::commands::AudioFeedback>::new(512);
-    *ctx().feedback_consumer.lock() = Some(feedback_consumer);
+    ctx.feedback_consumer = Arc::new(Mutex::new(Some(feedback_consumer)));
 
     // Read initial BPM from app state for the audio engine
-    let initial_bpm = {
-        let app = ctx().app_state.read();
-        app.transport.bpm
-    };
+    let initial_bpm = ctx.app_state.transport.bpm;
 
     // Resolved before engine creation so the engine can seed its internal
     // graph snapshot with the real buffer_size (avoids graph.buffer_size = 0).
@@ -487,8 +482,7 @@ pub fn start_audio_stream(
     stream.play().context("Failed to play stream")?;
 
     // store the stream in context so it does not get dropped
-    let mut guard = ctx().stream_guard.lock();
-    *guard = Some(stream);
+    ctx.stream_guard = Some(stream);
 
     log::info!("Successfully initialize Audio backend");
     Ok(())

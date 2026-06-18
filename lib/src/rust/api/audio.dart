@@ -6,36 +6,56 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'plugins/opaque.dart';
 import 'project.dart';
 part 'audio.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
+// These functions are ignored because they are not marked as `pub`: `map_effect_target`, `map_plugin_target`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `from`, `from`
+
+/// Opens a long-lived stream that forwards **all** `AudioFeedback` messages from
+/// the audio thread to Flutter as `UiAudioFeedback` variants.
+///
+/// Flutter dispatches by variant on the Dart side — no per-domain polling
+/// threads are needed. This stream replaces `create_mixer_snapshot_stream`,
+/// `create_plugin_message_stream`, and `create_zero_copy_buffer_stream`.
+///
+/// Call this once after the audio backend is initialised. The stream runs
+/// until Flutter closes the sink (returns an error), at which point the
+/// consumer is returned to the context so the stream can be re-opened.
+Stream<UiAudioFeedback> createFeedbackStream({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioCreateFeedbackStream(ctx: ctx);
+
+/// Opens a long-lived stream that forwards playback-position `TransportFeedback`
+/// events from the audio thread to Flutter as `UiTransportFeedback`.
+Stream<UiTransportFeedback> createPositionStream({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioCreatePositionStream(ctx: ctx);
 
 /// GETTER: Fetch details + Downsampled Buffer for UI
 Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
+  required DawContext ctx,
   required int id,
-}) => RustLib.instance.api.crateApiAudioGetAudioProperties(id: id);
+}) => RustLib.instance.api.crateApiAudioGetAudioProperties(ctx: ctx, id: id);
 
 /// ACTION: Play the sound via the Engine
-Future<void> playSourcePreview({required int id}) =>
-    RustLib.instance.api.crateApiAudioPlaySourcePreview(id: id);
+Future<void> playSourcePreview({required DawContext ctx, required int id}) =>
+    RustLib.instance.api.crateApiAudioPlaySourcePreview(ctx: ctx, id: id);
 
-Future<void> stopAllPreviews() =>
-    RustLib.instance.api.crateApiAudioStopAllPreviews();
+Future<void> stopAllPreviews({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioStopAllPreviews(ctx: ctx);
 
-Future<UiAudioHardwareConfig> getAudioConfig() =>
-    RustLib.instance.api.crateApiAudioGetAudioConfig();
-
-Stream<UiTransportFeedback> createPositionStream() =>
-    RustLib.instance.api.crateApiAudioCreatePositionStream();
+Future<UiAudioHardwareConfig> getAudioConfig({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioGetAudioConfig(ctx: ctx);
 
 /// play preview sound when drawing note or pressing the piano tile on the UI
 Future<void> playPreviewNote({
+  required DawContext ctx,
   required int trackId,
   required int noteKey,
   required int velocity,
   required bool isOn,
 }) => RustLib.instance.api.crateApiAudioPlayPreviewNote(
+  ctx: ctx,
   trackId: trackId,
   noteKey: noteKey,
   velocity: velocity,
@@ -45,19 +65,118 @@ Future<void> playPreviewNote({
 /// Play preview sound directly on a generator (without requiring a track).
 /// Used in plugin editor screens to test synth sounds.
 Future<void> playPreviewNoteGenerator({
+  required DawContext ctx,
   required int generatorId,
   required int noteKey,
   required int velocity,
   required bool isOn,
 }) => RustLib.instance.api.crateApiAudioPlayPreviewNoteGenerator(
+  ctx: ctx,
   generatorId: generatorId,
   noteKey: noteKey,
   velocity: velocity,
   isOn: isOn,
 );
 
-void setMetronomeActive({required bool active}) =>
-    RustLib.instance.api.crateApiAudioSetMetronomeActive(active: active);
+void setMetronomeActive({required DawContext ctx, required bool active}) =>
+    RustLib.instance.api.crateApiAudioSetMetronomeActive(
+      ctx: ctx,
+      active: active,
+    );
+
+@freezed
+sealed class UiAudioFeedback with _$UiAudioFeedback {
+  const UiAudioFeedback._();
+
+  /// A single generator parameter changed (e.g., driven by automation).
+  const factory UiAudioFeedback.generatorParameterChanged({
+    required int generatorId,
+    required int paramId,
+    required double value,
+  }) = UiAudioFeedback_GeneratorParameterChanged;
+
+  /// Full parameter snapshot for a generator (response to `query_generator_parameters`).
+  const factory UiAudioFeedback.generatorParameterSnapshot({
+    required int generatorId,
+
+    /// (param_id, value) pairs
+    required List<(int, double)> parameters,
+  }) = UiAudioFeedback_GeneratorParameterSnapshot;
+
+  /// A single effect parameter changed.
+  const factory UiAudioFeedback.effectParameterChanged({
+    /// `Some(id)` = track channel, `None` = master
+    int? targetTrackId,
+    int? targetBusId,
+    required int effectId,
+    required int paramId,
+    required double value,
+  }) = UiAudioFeedback_EffectParameterChanged;
+
+  /// Full parameter snapshot for an effect (response to `query_effect_parameters`).
+  const factory UiAudioFeedback.effectParameterSnapshot({
+    int? targetTrackId,
+    int? targetBusId,
+    required int effectId,
+
+    /// (param_id, value) pairs
+    required List<(int, double)> parameters,
+  }) = UiAudioFeedback_EffectParameterSnapshot;
+
+  /// Full DSP state snapshot for a mixer channel (response to `query_mixer_channel`).
+  const factory UiAudioFeedback.mixerChannelSnapshot({
+    /// `Some(id)` = track channel
+    int? targetTrackId,
+
+    /// `Some(id)` = bus channel
+    int? targetBusId,
+
+    /// `true` = master bus
+    required bool isMaster,
+    required double volume,
+    required double pan,
+    required bool mute,
+    required bool solo,
+    required bool invertedPhase,
+  }) = UiAudioFeedback_MixerChannelSnapshot;
+
+  /// Response to `execute_realtime_plugin_command`. Correlate via `request_id`.
+  const factory UiAudioFeedback.pluginCommandResponse({
+    required int requestId,
+
+    /// JSON-serialised response from the plugin's `execute_custom_command`.
+    required String responseJson,
+  }) = UiAudioFeedback_PluginCommandResponse;
+
+  /// Raw state blob from a plugin instance (response to `QueryPluginState`).
+  const factory UiAudioFeedback.pluginStateSnapshot({
+    /// `Some(id)` if the target is a generator
+    int? generatorId,
+
+    /// Set if the target is a track effect
+    int? trackEffectTrackId,
+    int? trackEffectEffectId,
+
+    /// Set if the target is a bus effect
+    int? busEffectBusId,
+    int? busEffectEffectId,
+
+    /// Set if the target is a master-bus effect
+    int? masterEffectId,
+
+    /// Raw serialised state bytes
+    required Uint8List state,
+    required int requestId,
+  }) = UiAudioFeedback_PluginStateSnapshot;
+
+  /// Response to `query_live_plugin_zero_copy_buf`. Correlate via `request_id`.
+  const factory UiAudioFeedback.zeroCopyBufferResponse({
+    required int requestId,
+
+    /// `None` if the plugin did not recognise the buffer name.
+    ZeroCopyHandle? handle,
+  }) = UiAudioFeedback_ZeroCopyBufferResponse;
+}
 
 @freezed
 sealed class UiTransportFeedback with _$UiTransportFeedback {

@@ -11,7 +11,7 @@ import 'pattern.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -45,48 +45,60 @@ UiTransportState transportStateNewWithParam({
 );
 
 /// Get the current project metadata state from the backend
-Future<UiProjectMetadata> getProjectMetadata() =>
-    RustLib.instance.api.crateApiProjectGetProjectMetadata();
+Future<UiProjectMetadata> getProjectMetadata({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiProjectGetProjectMetadata(ctx: ctx);
 
 /// Get the transport state from the backend
-Future<UiTransportState> getTransportState() =>
-    RustLib.instance.api.crateApiProjectGetTransportState();
+Future<UiTransportState> getTransportState({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiProjectGetTransportState(ctx: ctx);
 
 /// Get all audio waveform source list from the backend
-Future<Map<int, AudioWaveformUiForSourceList>?> getAudioSourceList() =>
-    RustLib.instance.api.crateApiProjectGetAudioSourceList();
+Future<Map<int, AudioWaveformUiForSourceList>?> getAudioSourceList({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiProjectGetAudioSourceList(ctx: ctx);
 
 /// Get generator list used in the project
-Future<Map<int, UiGeneratorInstance>> getGeneratorList() =>
-    RustLib.instance.api.crateApiProjectGetGeneratorList();
+Future<Map<int, UiGeneratorInstance>> getGeneratorList({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiProjectGetGeneratorList(ctx: ctx);
 
 /// Add a new audio source to the project
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-Future<int> addAudioSource({required String filePath}) =>
-    RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
+Future<int> addAudioSource({
+  required DawContext ctx,
+  required String filePath,
+}) => RustLib.instance.api.crateApiProjectAddAudioSource(
+  ctx: ctx,
+  filePath: filePath,
+);
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-Future<UiTrack> addNewAudioTrack() =>
-    RustLib.instance.api.crateApiProjectAddNewAudioTrack();
+Future<UiTrack> addNewAudioTrack({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiProjectAddNewAudioTrack(ctx: ctx);
 
 /// Get all tracks on the session/project.
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
-Future<Map<int, UiTrack>> getTracks() =>
-    RustLib.instance.api.crateApiProjectGetTracks();
+Future<Map<int, UiTrack>> getTracks({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiProjectGetTracks(ctx: ctx);
 
 /// Export project to flutter. also report progress via StreamSink
 Stream<double> exportProjectFlutter({
+  required DawContext ctx,
   required String outputPath,
   required AudioExportConfigDTO config,
   required TailHandlingDTO tailHandling,
 }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
+  ctx: ctx,
   outputPath: outputPath,
   config: config,
   tailHandling: tailHandling,
 );
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>
+abstract class AudioWaveform implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>>
 abstract class AudioWaveformUiForAudioProperties
@@ -146,7 +158,19 @@ abstract class AudioWaveformUiForAudioProperties
   set trimEnd(int trimEnd);
 
   set trimStart(int trimStart);
+
+  static Future<AudioWaveformUiForAudioProperties> tryFromWithContext({
+    required DawContext ctx,
+    required AudioWaveform value,
+  }) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesTryFromWithContext(
+        ctx: ctx,
+        value: value,
+      );
 }
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>
+abstract class DawContext implements RustOpaqueInterface {}
 
 @freezed
 sealed class AudioExportConfigDTO with _$AudioExportConfigDTO {

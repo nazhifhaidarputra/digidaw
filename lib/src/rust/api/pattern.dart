@@ -6,50 +6,66 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'project.dart';
 part 'pattern.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `from`, `from`
 
-Future<UiPattern> getPattern({required int patternId}) =>
-    RustLib.instance.api.crateApiPatternGetPattern(patternId: patternId);
+Future<UiPattern> getPattern({
+  required DawContext ctx,
+  required int patternId,
+}) => RustLib.instance.api.crateApiPatternGetPattern(
+  ctx: ctx,
+  patternId: patternId,
+);
 
-Future<Map<int, UiPattern>> getPatterns() =>
-    RustLib.instance.api.crateApiPatternGetPatterns();
+Future<Map<int, UiPattern>> getPatterns({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiPatternGetPatterns(ctx: ctx);
 
 Future<UiNote> addNote({
+  required DawContext ctx,
   required int patternId,
   required int key,
   required int startTick,
   int? duration,
 }) => RustLib.instance.api.crateApiPatternAddNote(
+  ctx: ctx,
   patternId: patternId,
   key: key,
   startTick: startTick,
   duration: duration,
 );
 
-Future<UiNote> deleteNote({required int patternId, required int noteId}) =>
-    RustLib.instance.api.crateApiPatternDeleteNote(
-      patternId: patternId,
-      noteId: noteId,
-    );
+Future<UiNote> deleteNote({
+  required DawContext ctx,
+  required int patternId,
+  required int noteId,
+}) => RustLib.instance.api.crateApiPatternDeleteNote(
+  ctx: ctx,
+  patternId: patternId,
+  noteId: noteId,
+);
 
 Future<UiNote> resizeNote({
+  required DawContext ctx,
   required int patternId,
   required int noteId,
   required int newDuration,
 }) => RustLib.instance.api.crateApiPatternResizeNote(
+  ctx: ctx,
   patternId: patternId,
   noteId: noteId,
   newDuration: newDuration,
 );
 
 Future<UiNote> moveNote({
+  required DawContext ctx,
   required int patternId,
   required int noteId,
   required int newStartTick,
   required int newKey,
 }) => RustLib.instance.api.crateApiPatternMoveNote(
+  ctx: ctx,
   patternId: patternId,
   noteId: noteId,
   newStartTick: newStartTick,
@@ -57,6 +73,7 @@ Future<UiNote> moveNote({
 );
 
 Future<UiNote> changeNoteParams({
+  required DawContext ctx,
   required int patternId,
   required int noteId,
   int? velocity,
@@ -64,6 +81,7 @@ Future<UiNote> changeNoteParams({
   int? microOffset,
   bool? mute,
 }) => RustLib.instance.api.crateApiPatternChangeNoteParams(
+  ctx: ctx,
   patternId: patternId,
   noteId: noteId,
   velocity: velocity,
@@ -78,9 +96,11 @@ Future<UiNote> changeNoteParams({
 /// * pattern_id: [u32], id of the pattern
 /// * new_notes: Vector of tuples that contains (key, start_tick, duration)
 Future<void> addNotesBatch({
+  required DawContext ctx,
   required int patternId,
   required List<(int, int, int?)> notes,
 }) => RustLib.instance.api.crateApiPatternAddNotesBatch(
+  ctx: ctx,
   patternId: patternId,
   notes: notes,
 );
@@ -91,9 +111,11 @@ Future<void> addNotesBatch({
 /// * pattern_id: [u32], id of the pattern
 /// * note_ids: Vector of notes ID to delete
 Future<void> deleteNotesBatch({
+  required DawContext ctx,
   required int patternId,
   required List<int> noteIds,
 }) => RustLib.instance.api.crateApiPatternDeleteNotesBatch(
+  ctx: ctx,
   patternId: patternId,
   noteIds: noteIds,
 );
@@ -104,17 +126,21 @@ Future<void> deleteNotesBatch({
 /// * pattern_id: [u32], id of the pattern
 /// * note_ids: Vector of notes updates (id, )
 Future<void> moveNotesBatch({
+  required DawContext ctx,
   required int patternId,
   required List<(int, int, int)> updates,
 }) => RustLib.instance.api.crateApiPatternMoveNotesBatch(
+  ctx: ctx,
   patternId: patternId,
   updates: updates,
 );
 
 Future<void> resizeNotesBatch({
+  required DawContext ctx,
   required int patternId,
   required List<(int, int)> updates,
 }) => RustLib.instance.api.crateApiPatternResizeNotesBatch(
+  ctx: ctx,
   patternId: patternId,
   updates: updates,
 );
@@ -122,25 +148,29 @@ Future<void> resizeNotesBatch({
 /// Play a pattern in isolation with a specific generator (looping automatically).
 /// This temporarily switches the engine to Pattern playback mode.
 Future<void> playPatternPreview({
+  required DawContext ctx,
   required int patternId,
   required int generatorId,
 }) => RustLib.instance.api.crateApiPatternPlayPatternPreview(
+  ctx: ctx,
   patternId: patternId,
   generatorId: generatorId,
 );
 
 /// Stop pattern preview without changing song mode. used in stop button inside pattern playback
 Future<void> stopPatternPreviewLocal({
+  required DawContext ctx,
   required int patternId,
   required int generatorId,
 }) => RustLib.instance.api.crateApiPatternStopPatternPreviewLocal(
+  ctx: ctx,
   patternId: patternId,
   generatorId: generatorId,
 );
 
 /// Stop pattern preview and return to Song mode.
-Future<void> stopPatternPreview() =>
-    RustLib.instance.api.crateApiPatternStopPatternPreview();
+Future<void> stopPatternPreview({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiPatternStopPatternPreview(ctx: ctx);
 
 @freezed
 sealed class UiNote with _$UiNote {

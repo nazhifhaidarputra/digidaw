@@ -10,28 +10,37 @@ import 'project.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
 Future<UiClip> createClip({
+  required DawContext ctx,
   int? sourceId,
   required UiSourceType sourceType,
   required int trackId,
   required int startTime,
 }) => RustLib.instance.api.crateApiTrackCreateClip(
+  ctx: ctx,
   sourceId: sourceId,
   sourceType: sourceType,
   trackId: trackId,
   startTime: startTime,
 );
 
-Future<void> deleteClip({required int trackId, required int clipId}) => RustLib
-    .instance
-    .api
-    .crateApiTrackDeleteClip(trackId: trackId, clipId: clipId);
+Future<void> deleteClip({
+  required DawContext ctx,
+  required int trackId,
+  required int clipId,
+}) => RustLib.instance.api.crateApiTrackDeleteClip(
+  ctx: ctx,
+  trackId: trackId,
+  clipId: clipId,
+);
 
 Future<UiClip> resizeClip({
+  required DawContext ctx,
   required int trackId,
   required int clipId,
   required UiResizeEdge edge,
   required int newTimeVal,
 }) => RustLib.instance.api.crateApiTrackResizeClip(
+  ctx: ctx,
   trackId: trackId,
   clipId: clipId,
   edge: edge,
@@ -39,11 +48,13 @@ Future<UiClip> resizeClip({
 );
 
 Future<UiClip> moveClip({
+  required DawContext ctx,
   required int sourceTrackId,
   required int clipId,
   required int newStartTime,
   int? newTrackId,
 }) => RustLib.instance.api.crateApiTrackMoveClip(
+  ctx: ctx,
   sourceTrackId: sourceTrackId,
   clipId: clipId,
   newStartTime: newStartTime,
@@ -61,34 +72,48 @@ Future<UiClip> moveClip({
 /// - clip_id: The cut clip id inside the track
 /// - cut_point_sample: Absolute sample point of cut location
 Future<List<UiClip>> sliceClip({
+  required DawContext ctx,
   required int sourceTrackId,
   required int clipId,
   required int cutPoint,
 }) => RustLib.instance.api.crateApiTrackSliceClip(
+  ctx: ctx,
   sourceTrackId: sourceTrackId,
   clipId: clipId,
   cutPoint: cutPoint,
 );
 
 /// Add a MIDI track with a generator by its registry ID (preferred method).
-Future<UiTrack> addMidiTrackWithGeneratorId({required int registryId}) =>
-    RustLib.instance.api.crateApiTrackAddMidiTrackWithGeneratorId(
-      registryId: registryId,
-    );
+Future<UiTrack> addMidiTrackWithGeneratorId({
+  required DawContext ctx,
+  required int registryId,
+}) => RustLib.instance.api.crateApiTrackAddMidiTrackWithGeneratorId(
+  ctx: ctx,
+  registryId: registryId,
+);
 
-Future<UiClip> getClip({required int trackId, required int clipId}) =>
-    RustLib.instance.api.crateApiTrackGetClip(trackId: trackId, clipId: clipId);
+Future<UiClip> getClip({
+  required DawContext ctx,
+  required int trackId,
+  required int clipId,
+}) => RustLib.instance.api.crateApiTrackGetClip(
+  ctx: ctx,
+  trackId: trackId,
+  clipId: clipId,
+);
 
-Future<UiTrack> getTrack({required int trackId}) =>
-    RustLib.instance.api.crateApiTrackGetTrack(trackId: trackId);
+Future<UiTrack> getTrack({required DawContext ctx, required int trackId}) =>
+    RustLib.instance.api.crateApiTrackGetTrack(ctx: ctx, trackId: trackId);
 
 /// move clips in batch
 Future<List<UiClip>> moveClipBatch({
+  required DawContext ctx,
   required int sourceTrackId,
   required List<int> clipIds,
   required int deltaTicks,
   int? newTrackId,
 }) => RustLib.instance.api.crateApiTrackMoveClipBatch(
+  ctx: ctx,
   sourceTrackId: sourceTrackId,
   clipIds: clipIds,
   deltaTicks: deltaTicks,
@@ -97,11 +122,13 @@ Future<List<UiClip>> moveClipBatch({
 
 /// Resize clips in batch by a delta amount
 Future<List<UiClip>> resizeClipBatch({
+  required DawContext ctx,
   required int trackId,
   required List<int> clipIds,
   required UiResizeEdge edge,
   required int deltaTicks,
 }) => RustLib.instance.api.crateApiTrackResizeClipBatch(
+  ctx: ctx,
   trackId: trackId,
   clipIds: clipIds,
   edge: edge,
@@ -110,39 +137,51 @@ Future<List<UiClip>> resizeClipBatch({
 
 /// Delete clips in batch
 Future<void> deleteClipBatch({
+  required DawContext ctx,
   required int trackId,
   required List<int> clipIds,
 }) => RustLib.instance.api.crateApiTrackDeleteClipBatch(
+  ctx: ctx,
   trackId: trackId,
   clipIds: clipIds,
 );
 
-Future<void> changeTrackName({required int trackId, required String newName}) =>
-    RustLib.instance.api.crateApiTrackChangeTrackName(
-      trackId: trackId,
-      newName: newName,
-    );
+Future<void> changeTrackName({
+  required DawContext ctx,
+  required int trackId,
+  required String newName,
+}) => RustLib.instance.api.crateApiTrackChangeTrackName(
+  ctx: ctx,
+  trackId: trackId,
+  newName: newName,
+);
 
 /// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
 Future<void> changeTrackColor({
+  required DawContext ctx,
   required int trackId,
   required String newColor,
 }) => RustLib.instance.api.crateApiTrackChangeTrackColor(
+  ctx: ctx,
   trackId: trackId,
   newColor: newColor,
 );
 
 /// Delete a track from the timeline. This function returns a string which will be
 /// "audio", "midi", or "automation"
-Future<String> deleteTrack({required int trackId}) =>
-    RustLib.instance.api.crateApiTrackDeleteTrack(trackId: trackId);
+Future<String> deleteTrack({required DawContext ctx, required int trackId}) =>
+    RustLib.instance.api.crateApiTrackDeleteTrack(ctx: ctx, trackId: trackId);
 
 /// Update track order in the timeline
-Future<void> updateTrackOrder({required int trackId, required int newIdx}) =>
-    RustLib.instance.api.crateApiTrackUpdateTrackOrder(
-      trackId: trackId,
-      newIdx: newIdx,
-    );
+Future<void> updateTrackOrder({
+  required DawContext ctx,
+  required int trackId,
+  required int newIdx,
+}) => RustLib.instance.api.crateApiTrackUpdateTrackOrder(
+  ctx: ctx,
+  trackId: trackId,
+  newIdx: newIdx,
+);
 
 enum UiResizeEdge { left, right }
 

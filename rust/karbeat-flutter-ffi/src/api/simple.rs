@@ -1,18 +1,31 @@
-use karbeat_core::init::init_engine;
+use karbeat_core::{context::DawContext, init::init_engine};
 #[cfg(target_os = "android")]
 use once_cell::sync::OnceCell;
 
 #[cfg(target_os = "android")]
 use jni::{objects::JObject, refs::Global};
 
-use crate::{init_logger};
+use crate::init_logger;
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
     init_logger();
-    init_engine();
-    log::info!("DAW Engine System Started via FRB Init");
+    log::info!("FRB Base Utilities Initialized");
+}
+
+// Using frb(sync) because memory allocation and basic struct setup is virtually instantaneous.
+#[flutter_rust_bridge::frb(sync)]
+pub fn create_daw_context() -> DawContext {
+    let mut context = DawContext::new();
+
+    // Start the audio thread and connect the ring buffers
+    init_engine(&mut context);
+
+    log::info!("DAW Engine System Started. Yielding Context to Flutter.");
+
+    // Return the context. FRB converts this into an opaque pointer for Dart!
+    context
 }
 
 // ============================================================================

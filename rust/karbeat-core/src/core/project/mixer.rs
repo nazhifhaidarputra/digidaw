@@ -159,14 +159,14 @@ pub enum MixerChannelParams {
 #[serde(default)]
 pub struct EffectInstance {
     pub id: EffectId,
-    pub instance: Arc<PluginInstance>,
+    pub instance: PluginInstance,
 }
 
 impl EffectInstance {
     pub fn new(id: EffectId, instance: PluginInstance) -> Self {
         Self {
             id,
-            instance: Arc::new(instance),
+            instance: instance,
         }
     }
 }
@@ -175,11 +175,11 @@ impl EffectInstance {
 #[serde(default)]
 pub struct MixerState {
     /// Per-track mixer channels (volume, pan, effects)
-    pub channels: HashMap<TrackId, Arc<TrackMixerChannel>>,
+    pub channels: HashMap<TrackId, TrackMixerChannel>,
     /// Master bus channel
-    pub master_bus: Arc<MixerChannel>,
+    pub master_bus: MixerChannel,
     /// Named buses for grouping/submixing
-    pub buses: HashMap<BusId, Arc<BusMixerChannel>>,
+    pub buses: HashMap<BusId, BusMixerChannel>,
     /// All routing connections in the matrix
     pub routing: Vec<RoutingConnection>,
     /// Counter for generating bus IDs
@@ -272,16 +272,13 @@ impl MixerState {
         track_id: &TrackId,
         registry_id: u32,
     ) -> anyhow::Result<(EffectTarget, EffectId, Box<dyn AudioPlugin + Send + Sync>)> {
-        let mixer_channel_arc = self
+        let mixer_channel = self
             .channels
             .get_mut(track_id)
             .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        // Clone and modify the channel
-        let channel = Arc::make_mut(mixer_channel_arc);
-
-        let (effect_plugin, effect_name, effect_id) = channel.channel.add_effect(registry, registry_id)?;
+        let (effect_plugin, effect_name, effect_id) = mixer_channel.channel.add_effect(registry, registry_id)?;
 
         // // Push to the audio thread
         // ctx.send_audio_command(AudioCommand::AddEffect {
@@ -305,15 +302,14 @@ impl MixerState {
         track_id: &TrackId,
         effect_id: EffectId,
     ) -> anyhow::Result<(EffectTarget, EffectId)> {
-        let mixer_channel_arc = self
+        let mixer_channel = self
             .channels
             .get_mut(track_id)
             .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))
             .map_err(|e| anyhow::anyhow!(e))?;
 
         // Clone and modify the channel
-        let channel = Arc::make_mut(mixer_channel_arc);
-        channel.channel.remove_effect(effect_id)?;
+        mixer_channel.channel.remove_effect(effect_id)?;
 
         // send_audio_command(AudioCommand::RemoveEffect {
         //     target: crate::commands::EffectTarget::Track(*track_id),
@@ -328,19 +324,18 @@ impl MixerState {
         &self,
         track_id: &TrackId,
     ) -> Result<Vec<EffectInstance>, MixerNotFoundError> {
-        let mut mixer_channel_arc = self
+        let mixer_channel = self
             .channels
             .get(track_id)
             .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))?
             .to_owned();
 
         // Clone and modify the channel
-        let channel = Arc::make_mut(&mut mixer_channel_arc);
-        Ok(channel.channel.effects.to_vec())
+        Ok(mixer_channel.channel.effects.to_vec())
     }
 
     pub fn add_effect_to_master_bus(&mut self, registry: &mut PluginRegistry,  registry_id: u32) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
-        let channel = Arc::make_mut(&mut self.master_bus);
+        let channel = &mut self.master_bus;
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
 
         // send_audio_command(AudioCommand::AddEffect {
@@ -358,7 +353,7 @@ impl MixerState {
     }
 
     pub fn remove_effect_from_master_bus(&mut self, effect_id: EffectId) -> anyhow::Result<()> {
-        let channel = Arc::make_mut(&mut self.master_bus);
+        let channel = &mut self.master_bus;
         channel.remove_effect(effect_id)?;
 
         // // Send master effect removal command to audio thread
@@ -378,7 +373,7 @@ impl MixerState {
     pub fn create_bus(&mut self, name: String) -> BusId {
         let bus_id = BusId::next(&mut self.bus_counter);
         let bus = BusMixerChannel::new(bus_id, &name);
-        self.buses.insert(bus_id, Arc::new(bus));
+        self.buses.insert(bus_id, bus);
 
         // By default, new buses route to master
         self.routing.push(RoutingConnection::new(
@@ -413,17 +408,16 @@ impl MixerState {
     }
 
     /// Get a mutable reference to a bus
-    pub fn get_bus_mut(&mut self, bus_id: &BusId) -> Option<&mut Arc<BusMixerChannel>> {
+    pub fn get_bus_mut(&mut self, bus_id: &BusId) -> Option<&mut BusMixerChannel> {
         self.buses.get_mut(bus_id)
     }
 
     pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
-        let bus_arc = self
+        let bus = self
             .buses
             .get_mut(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
-        let bus = Arc::make_mut(bus_arc);
         let old_name = bus.name.clone();
         bus.name = new_name.to_string();
 
@@ -437,12 +431,11 @@ impl MixerState {
         bus_id: BusId,
         registry_id: u32,
     ) -> anyhow::Result<(EffectTarget, EffectId, Box<dyn AudioPlugin + Send + Sync>)> {
-        let bus_arc = self
+        let bus = self
             .buses
             .get_mut(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
-        let bus = Arc::make_mut(bus_arc);
         let (effect_plugin, effect_name, effect_id) = bus.channel.add_effect(registry, registry_id)?;
 
         // send_audio_command(AudioCommand::AddEffect {
@@ -466,12 +459,11 @@ impl MixerState {
         bus_id: BusId,
         effect_id: EffectId,
     ) -> anyhow::Result<()> {
-        let bus_arc = self
+        let bus = self
             .buses
             .get_mut(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
-        let bus = Arc::make_mut(bus_arc);
         bus.channel.remove_effect(effect_id)?;
 
         Ok(())
@@ -704,7 +696,7 @@ impl MixerState {
 
 impl ApplicationState {
     /// Get the mixer of a track ID
-    pub fn get_mixer_from_track(&self, track_id: &TrackId) -> Option<Arc<TrackMixerChannel>> {
+    pub fn get_mixer_from_track(&self, track_id: &TrackId) -> Option<TrackMixerChannel> {
         // check if the track exists
         if self.tracks.get(track_id).is_none() {
             return None;

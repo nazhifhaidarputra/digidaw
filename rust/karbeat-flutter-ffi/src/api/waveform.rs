@@ -2,13 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use karbeat_core::{
-    core::{
+    context::DawContext, core::{
         file_manager::audio_loader::AudioLoader,
         project::{DawSource, TrackType},
-    },
-    lock::get_app_read,
-    shared::{AudioSourceId, TrackId},
-    utils::get_waveform_buffer,
+    }, shared::{AudioSourceId, TrackId}, utils::get_waveform_buffer
 };
 
 pub use karbeat_core::core::project::AudioWaveform;
@@ -59,9 +56,8 @@ impl WaveformHandle {
 /// Get a WaveformHandle for a single audio source by its source ID.
 /// Returns None if the source does not exist in the asset library.
 #[frb(sync)]
-pub fn get_waveform_handle(source_id: u32) -> Option<WaveformHandle> {
-    let app = get_app_read();
-    let wf = app.get_audio_source(&AudioSourceId::from(source_id))?;
+pub fn get_waveform_handle(ctx: &DawContext, source_id: u32) -> Option<WaveformHandle> {
+    let wf = ctx.app_state.get_audio_source(&AudioSourceId::from(source_id))?;
     Some(WaveformHandle(wf.clone()))
 }
 
@@ -72,10 +68,8 @@ pub fn get_waveform_handle(source_id: u32) -> Option<WaveformHandle> {
 /// This is a sync call — it only reads Arc pointers from the app state, so
 /// there is no blocking I/O and no buffer copying.
 #[frb(sync)]
-pub fn get_waveform_handles_for_track(track_id: u32) -> HashMap<u32, WaveformHandle> {
-    let app = get_app_read();
-
-    let track = match app.tracks.get(&TrackId::from(track_id)) {
+pub fn get_waveform_handles_for_track(ctx: &DawContext, track_id: u32) -> HashMap<u32, WaveformHandle> {
+    let track = match ctx.app_state.tracks.get(&TrackId::from(track_id)) {
         Some(t) => t,
         None => return HashMap::new(),
     };
@@ -94,7 +88,7 @@ pub fn get_waveform_handles_for_track(track_id: u32) -> HashMap<u32, WaveformHan
                 continue;
             }
 
-            if let Some(wf) = app.get_audio_source(&source_id) {
+            if let Some(wf) = ctx.app_state.get_audio_source(&source_id) {
                 map.insert(source_id.to_u32(), WaveformHandle(wf.clone()));
             }
         }

@@ -41,7 +41,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 582624587;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 636371167;
 
 // Section: executor
 
@@ -1463,6 +1463,34 @@ fn wire__crate__api__project__AudioWaveformUiForAudioProperties_auto_accessor_se
         },
     )
 }
+fn wire__crate__api__project__AudioWaveformUiForAudioProperties_try_from_with_context_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "AudioWaveformUiForAudioProperties_try_from_with_context", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>>::sse_decode(&mut deserializer);
+let api_value = <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse::<_, String>((move ||  {
+                        let mut api_ctx_guard = None;
+let mut api_value_guard = None;
+let decode_indices_ = flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_ctx, 0, false), flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_value, 1, false)]);
+        for i in decode_indices_ {
+            match i {
+                0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+1 => api_value_guard = Some(api_value.lockable_decode_sync_ref()),
+                _ => unreachable!(),
+            }
+        }
+        let api_ctx_guard = api_ctx_guard.unwrap();
+let api_value_guard = api_value_guard.unwrap();
+ let output_ok = crate::api::project::AudioWaveformUiForAudioProperties::try_from_with_context(&*api_ctx_guard, &*api_value_guard)?;   Ok(output_ok)
+                    })())
+                } })
+}
 fn wire__crate__api__plugin__PluginBufferHandle_read_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1869,11 +1897,29 @@ fn wire__crate__api__project__add_audio_source_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_file_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::project::add_audio_source(&api_file_path)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::project::add_audio_source(&mut *api_ctx_guard, &api_file_path)?;
                     Ok(output_ok)
                 })())
             }
@@ -1902,6 +1948,9 @@ fn wire__crate__api__automation__add_automation_lane_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
             let api_label = <String>::sse_decode(&mut deserializer);
@@ -1911,7 +1960,22 @@ fn wire__crate__api__automation__add_automation_lane_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::automation::add_automation_lane(
+                        &mut *api_ctx_guard,
                         api_target,
                         &api_label,
                         api_min,
@@ -1946,6 +2010,9 @@ fn wire__crate__api__automation__add_automation_lane_for_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_bus_id = <u32>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
@@ -1956,7 +2023,22 @@ fn wire__crate__api__automation__add_automation_lane_for_bus_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::automation::add_automation_lane_for_bus(
+                        &mut *api_ctx_guard,
                         api_bus_id,
                         api_target,
                         &api_label,
@@ -1992,6 +2074,9 @@ fn wire__crate__api__automation__add_automation_lane_for_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
@@ -2002,7 +2087,22 @@ fn wire__crate__api__automation__add_automation_lane_for_track_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::automation::add_automation_lane_for_track(
+                        &mut *api_ctx_guard,
                         api_track_id,
                         api_target,
                         &api_label,
@@ -2038,13 +2138,33 @@ fn wire__crate__api__mixer__add_effect_to_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_bus_id = <u32>::sse_decode(&mut deserializer);
             let api_registry_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::mixer::add_effect_to_bus(api_bus_id, api_registry_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::mixer::add_effect_to_bus(
+                        &mut *api_ctx_guard,
+                        api_bus_id,
+                        api_registry_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2073,11 +2193,31 @@ fn wire__crate__api__mixer__add_effect_to_master_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_registry_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::add_effect_to_master_bus(api_registry_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::mixer::add_effect_to_master_bus(
+                        &mut *api_ctx_guard,
+                        api_registry_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2106,12 +2246,30 @@ fn wire__crate__api__mixer__add_effect_to_mixer_channel_by_id_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_registry_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::mixer::add_effect_to_mixer_channel_by_id(
+                        &mut *api_ctx_guard,
                         api_track_id,
                         api_registry_id,
                     )?;
@@ -2143,12 +2301,31 @@ fn wire__crate__api__track__add_midi_track_with_generator_id_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_registry_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::track::add_midi_track_with_generator_id(api_registry_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::track::add_midi_track_with_generator_id(
+                        &mut *api_ctx_guard,
+                        api_registry_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2177,14 +2354,33 @@ fn wire__crate__api__automation__add_modulation_source_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source =
                 <crate::api::automation::ModulationSourceDto>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::automation::add_modulation_source(api_source),
-                    )?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::automation::add_modulation_source(
+                            &mut *api_ctx_guard,
+                            api_source,
+                        ))?;
                     Ok(output_ok)
                 })())
             }
@@ -2213,11 +2409,29 @@ fn wire__crate__api__project__add_new_audio_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::project::add_new_audio_track())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(crate::api::project::add_new_audio_track(
+                        &mut *api_ctx_guard,
+                    ))?;
                     Ok(output_ok)
                 })())
             }
@@ -2246,13 +2460,31 @@ fn wire__crate__api__automation__add_new_automation_point_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
             let api_time_ticks = <u32>::sse_decode(&mut deserializer);
             let api_value = <f32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::automation::add_new_automation_point(
+                        &mut *api_ctx_guard,
                         api_automation_id,
                         api_time_ticks,
                         api_value,
@@ -2285,6 +2517,9 @@ fn wire__crate__api__pattern__add_note_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_key = <u32>::sse_decode(&mut deserializer);
             let api_start_tick = <u64>::sse_decode(&mut deserializer);
@@ -2292,7 +2527,22 @@ fn wire__crate__api__pattern__add_note_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::pattern::add_note(
+                        &mut *api_ctx_guard,
                         api_pattern_id,
                         api_key,
                         api_start_tick,
@@ -2326,13 +2576,33 @@ fn wire__crate__api__pattern__add_notes_batch_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_notes = <Vec<(u8, u64, Option<u64>)>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::pattern::add_notes_batch(api_pattern_id, api_notes)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::pattern::add_notes_batch(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_notes,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2433,6 +2703,9 @@ fn wire__crate__api__pattern__change_note_params_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_velocity = <Option<i64>>::sse_decode(&mut deserializer);
@@ -2442,7 +2715,22 @@ fn wire__crate__api__pattern__change_note_params_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::pattern::change_note_params(
+                        &mut *api_ctx_guard,
                         api_pattern_id,
                         api_note_id,
                         api_velocity,
@@ -2478,13 +2766,33 @@ fn wire__crate__api__track__change_track_color_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_new_color = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::track::change_track_color(api_track_id, &api_new_color)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::track::change_track_color(
+                        &mut *api_ctx_guard,
+                        api_track_id,
+                        &api_new_color,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2513,13 +2821,33 @@ fn wire__crate__api__track__change_track_name_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_new_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::track::change_track_name(api_track_id, &api_new_name)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::track::change_track_name(
+                        &mut *api_ctx_guard,
+                        api_track_id,
+                        &api_new_name,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2548,13 +2876,34 @@ fn wire__crate__api__session__copy_clips_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::session::copy_clips(api_track_id, api_clip_ids);
+                        crate::api::session::copy_clips(
+                            &mut *api_ctx_guard,
+                            api_track_id,
+                            api_clip_ids,
+                        );
                     })?;
                     Ok(output_ok)
                 })())
@@ -2584,13 +2933,33 @@ fn wire__crate__api__session__copy_pattern_notes_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::session::copy_pattern_notes(api_pattern_id, api_note_ids)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::session::copy_pattern_notes(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_note_ids,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2619,11 +2988,28 @@ fn wire__crate__api__mixer__create_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::create_bus(api_name)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::mixer::create_bus(&mut *api_ctx_guard, api_name)?;
                     Ok(output_ok)
                 })())
             }
@@ -2652,6 +3038,9 @@ fn wire__crate__api__track__create_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source_id = <Option<u32>>::sse_decode(&mut deserializer);
             let api_source_type = <crate::api::track::UiSourceType>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
@@ -2659,7 +3048,22 @@ fn wire__crate__api__track__create_clip_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::track::create_clip(
+                        &mut *api_ctx_guard,
                         api_source_id,
                         api_source_type,
                         api_track_id,
@@ -2671,17 +3075,16 @@ fn wire__crate__api__track__create_clip_impl(
         },
     )
 }
-fn wire__crate__api__mixer__create_mixer_snapshot_stream_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
+fn wire__crate__api__simple__create_daw_context_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "create_mixer_snapshot_stream",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            debug_name: "create_daw_context",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -2693,21 +3096,15 @@ fn wire__crate__api__mixer__create_mixer_snapshot_stream_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_sink = <StreamSink<
-                crate::api::mixer::UiMixerChannelSnapshot,
-                flutter_rust_bridge::for_generated::SseCodec,
-            >>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::create_mixer_snapshot_stream(api_sink)?;
-                    Ok(output_ok)
-                })())
-            }
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::create_daw_context())?;
+                Ok(output_ok)
+            })())
         },
     )
 }
-fn wire__crate__api__plugin__create_plugin_message_stream_impl(
+fn wire__crate__api__audio__create_feedback_stream_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -2715,7 +3112,7 @@ fn wire__crate__api__plugin__create_plugin_message_stream_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "create_plugin_message_stream",
+            debug_name: "create_feedback_stream",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -2729,14 +3126,32 @@ fn wire__crate__api__plugin__create_plugin_message_stream_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_sink = <StreamSink<
-                crate::api::plugin::UiPluginCommandResponse,
+                crate::api::audio::UiAudioFeedback,
                 flutter_rust_bridge::for_generated::SseCodec,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::create_plugin_message_stream(api_sink)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::audio::create_feedback_stream(&*api_ctx_guard, api_sink)?;
                     Ok(output_ok)
                 })())
             }
@@ -2769,46 +3184,28 @@ fn wire__crate__api__audio__create_position_stream_impl(
                 crate::api::audio::UiTransportFeedback,
                 flutter_rust_bridge::for_generated::SseCodec,
             >>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio::create_position_stream(api_sink)?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__plugin__create_zero_copy_buffer_stream_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "create_zero_copy_buffer_stream",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_sink = <StreamSink<
-                crate::api::plugin::UiZeroCopyBufferResponse,
-                flutter_rust_bridge::for_generated::SseCodec,
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::create_zero_copy_buffer_stream(api_sink)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::audio::create_position_stream(api_sink, &*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -2837,12 +3234,33 @@ fn wire__crate__api__session__cut_clips_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::session::cut_clips(api_track_id, api_clip_ids)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::session::cut_clips(
+                        &mut *api_ctx_guard,
+                        api_track_id,
+                        api_clip_ids,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2871,13 +3289,33 @@ fn wire__crate__api__session__cut_pattern_notes_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::session::cut_pattern_notes(api_pattern_id, api_note_ids)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::session::cut_pattern_notes(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_note_ids,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2906,11 +3344,28 @@ fn wire__crate__api__mixer__delete_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_bus_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::delete_bus(api_bus_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::mixer::delete_bus(&mut *api_ctx_guard, api_bus_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -2939,12 +3394,33 @@ fn wire__crate__api__track__delete_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::track::delete_clip(api_track_id, api_clip_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::track::delete_clip(
+                        &mut *api_ctx_guard,
+                        api_track_id,
+                        api_clip_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -2973,13 +3449,33 @@ fn wire__crate__api__track__delete_clip_batch_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::track::delete_clip_batch(api_track_id, api_clip_ids)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::track::delete_clip_batch(
+                        &mut *api_ctx_guard,
+                        api_track_id,
+                        api_clip_ids,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3008,12 +3504,33 @@ fn wire__crate__api__session__delete_clips_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::session::delete_clips(api_track_id, api_clip_ids)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::session::delete_clips(
+                        &mut *api_ctx_guard,
+                        api_track_id,
+                        api_clip_ids,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3042,12 +3559,33 @@ fn wire__crate__api__pattern__delete_note_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::pattern::delete_note(api_pattern_id, api_note_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::pattern::delete_note(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_note_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3076,13 +3614,33 @@ fn wire__crate__api__pattern__delete_notes_batch_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::pattern::delete_notes_batch(api_pattern_id, api_note_ids)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::pattern::delete_notes_batch(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_note_ids,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3111,13 +3669,33 @@ fn wire__crate__api__session__delete_pattern_notes_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::session::delete_pattern_notes(api_pattern_id, api_note_ids)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::session::delete_pattern_notes(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_note_ids,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3146,11 +3724,29 @@ fn wire__crate__api__track__delete_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::track::delete_track(api_track_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::track::delete_track(&mut *api_ctx_guard, api_track_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -3179,6 +3775,9 @@ fn wire__crate__api__plugin__execute_effect_instance_command_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target = <crate::api::plugin::UiEffectTarget>::sse_decode(&mut deserializer);
             let api_effect_id = <u32>::sse_decode(&mut deserializer);
             let api_command = <String>::sse_decode(&mut deserializer);
@@ -3186,7 +3785,22 @@ fn wire__crate__api__plugin__execute_effect_instance_command_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::plugin::execute_effect_instance_command(
+                        &*api_ctx_guard,
                         api_target,
                         api_effect_id,
                         api_command,
@@ -3220,13 +3834,31 @@ fn wire__crate__api__plugin__execute_generator_instance_command_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             let api_command = <String>::sse_decode(&mut deserializer);
             let api_payload_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::plugin::execute_generator_instance_command(
+                        &*api_ctx_guard,
                         api_generator_id,
                         api_command,
                         api_payload_json,
@@ -3259,14 +3891,32 @@ fn wire__crate__api__plugin__execute_plugin_command_effect_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_effect_registry_id = <u32>::sse_decode(&mut deserializer);
             let api_command = <String>::sse_decode(&mut deserializer);
             let api_payload_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::plugin::execute_plugin_command_effect(
+                            &mut *api_ctx_guard,
                             api_effect_registry_id,
                             api_command,
                             api_payload_json,
@@ -3299,14 +3949,32 @@ fn wire__crate__api__plugin__execute_plugin_command_generator_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_gen_registry_id = <u32>::sse_decode(&mut deserializer);
             let api_command = <String>::sse_decode(&mut deserializer);
             let api_payload_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::plugin::execute_plugin_command_generator(
+                            &mut *api_ctx_guard,
                             api_gen_registry_id,
                             api_command,
                             api_payload_json,
@@ -3339,13 +4007,31 @@ fn wire__crate__api__plugin__execute_realtime_plugin_command_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target = <crate::api::plugin::UiPluginTarget>::sse_decode(&mut deserializer);
             let api_command = <String>::sse_decode(&mut deserializer);
             let api_payload_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::plugin::execute_realtime_plugin_command(
+                        &mut *api_ctx_guard,
                         api_target,
                         api_command,
                         api_payload_json,
@@ -3378,6 +4064,9 @@ fn wire__crate__api__project__export_project_flutter_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_output_path = <String>::sse_decode(&mut deserializer);
             let api_config =
                 <crate::api::project::AudioExportConfigDTO>::sse_decode(&mut deserializer);
@@ -3390,7 +4079,22 @@ fn wire__crate__api__project__export_project_flutter_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::project::export_project_flutter(
+                        &mut *api_ctx_guard,
                         api_output_path,
                         api_config,
                         api_tail_handling,
@@ -3424,11 +4128,28 @@ fn wire__crate__api__automation__get_all_linked_modulation_params_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok(
-                        crate::api::automation::get_all_linked_modulation_params(),
+                        crate::api::automation::get_all_linked_modulation_params(&*api_ctx_guard),
                     )?;
                     Ok(output_ok)
                 })())
@@ -3458,11 +4179,29 @@ fn wire__crate__api__automation__get_all_modulation_sources_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::automation::get_all_modulation_sources())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::automation::get_all_modulation_sources(&*api_ctx_guard),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3491,10 +4230,27 @@ fn wire__crate__api__audio__get_audio_config_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::audio::get_audio_config()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::audio::get_audio_config(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -3523,12 +4279,31 @@ fn wire__crate__api__audio__get_audio_properties_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::audio::get_audio_properties(api_id))?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(crate::api::audio::get_audio_properties(
+                        &*api_ctx_guard,
+                        api_id,
+                    ))?;
                     Ok(output_ok)
                 })())
             }
@@ -3557,11 +4332,29 @@ fn wire__crate__api__project__get_audio_source_list_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::project::get_audio_source_list())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::project::get_audio_source_list(&*api_ctx_guard),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3590,12 +4383,29 @@ fn wire__crate__api__automation__get_automation_lane_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_lane_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok(
-                        crate::api::automation::get_automation_lane(api_lane_id),
+                        crate::api::automation::get_automation_lane(&*api_ctx_guard, api_lane_id),
                     )?;
                     Ok(output_ok)
                 })())
@@ -3625,13 +4435,32 @@ fn wire__crate__api__automation__get_automation_lanes_for_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_bus_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::automation::get_automation_lanes_for_bus(api_bus_id),
-                    )?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::automation::get_automation_lanes_for_bus(
+                            &*api_ctx_guard,
+                            api_bus_id,
+                        ))?;
                     Ok(output_ok)
                 })())
             }
@@ -3660,12 +4489,32 @@ fn wire__crate__api__automation__get_automation_lanes_for_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok(
-                        crate::api::automation::get_automation_lanes_for_track(api_track_id),
+                        crate::api::automation::get_automation_lanes_for_track(
+                            &*api_ctx_guard,
+                            api_track_id,
+                        ),
                     )?;
                     Ok(output_ok)
                 })())
@@ -3695,11 +4544,29 @@ fn wire__crate__api__automation__get_automations_lanes_all_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::automation::get_automations_lanes_all())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::automation::get_automations_lanes_all(&*api_ctx_guard),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3728,10 +4595,28 @@ fn wire__crate__api__plugin__get_available_effects_with_ids_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::get_available_effects_with_ids()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::plugin::get_available_effects_with_ids(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -3760,10 +4645,28 @@ fn wire__crate__api__plugin__get_available_generators_with_ids_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::get_available_generators_with_ids()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::plugin::get_available_generators_with_ids(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -3792,12 +4695,29 @@ fn wire__crate__api__mixer__get_bus_mixer_channel_specs_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_bus_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok(
-                        crate::api::mixer::get_bus_mixer_channel_specs(api_bus_id),
+                        crate::api::mixer::get_bus_mixer_channel_specs(&*api_ctx_guard, api_bus_id),
                     )?;
                     Ok(output_ok)
                 })())
@@ -3827,10 +4747,28 @@ fn wire__crate__api__mixer__get_buses_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(crate::api::mixer::get_buses())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::mixer::get_buses(&*api_ctx_guard))?;
                     Ok(output_ok)
                 })())
             }
@@ -3859,14 +4797,34 @@ fn wire__crate__api__mixer__get_channel_destinations_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_is_bus = <bool>::sse_decode(&mut deserializer);
             let api_channel_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::mixer::get_channel_destinations(api_is_bus, api_channel_id),
-                    )?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::mixer::get_channel_destinations(
+                            &*api_ctx_guard,
+                            api_is_bus,
+                            api_channel_id,
+                        ))?;
                     Ok(output_ok)
                 })())
             }
@@ -3895,12 +4853,30 @@ fn wire__crate__api__track__get_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::track::get_clip(api_track_id, api_clip_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::track::get_clip(&*api_ctx_guard, api_track_id, api_clip_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -3929,11 +4905,29 @@ fn wire__crate__api__session__get_clipboard_contents_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::session::get_clipboard_contents())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::session::get_clipboard_contents(&*api_ctx_guard),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3962,12 +4956,33 @@ fn wire__crate__api__plugin__get_effect_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_effect_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::get_effect(api_track_id, api_effect_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::plugin::get_effect(
+                        &*api_ctx_guard,
+                        api_track_id,
+                        api_effect_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -3996,11 +5011,29 @@ fn wire__crate__api__plugin__get_effect_from_master_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_effect_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::get_effect_from_master(api_effect_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::plugin::get_effect_from_master(&*api_ctx_guard, api_effect_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -4029,13 +5062,33 @@ fn wire__crate__api__plugin__get_effect_parameter_specs_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target = <crate::api::plugin::UiEffectTarget>::sse_decode(&mut deserializer);
             let api_effect_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::plugin::get_effect_parameter_specs(api_target, api_effect_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::plugin::get_effect_parameter_specs(
+                        &*api_ctx_guard,
+                        api_target,
+                        api_effect_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4064,11 +5117,29 @@ fn wire__crate__api__plugin__get_effects_from_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::get_effects_from_track(api_track_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::plugin::get_effects_from_track(&*api_ctx_guard, api_track_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -4097,11 +5168,29 @@ fn wire__crate__api__plugin__get_generator_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::plugin::get_generator(api_generator_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::plugin::get_generator(&*api_ctx_guard, api_generator_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -4130,10 +5219,27 @@ fn wire__crate__api__project__get_generator_list_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::project::get_generator_list()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::project::get_generator_list(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -4199,12 +5305,31 @@ fn wire__crate__api__plugin__get_generator_parameter_specs_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::plugin::get_generator_parameter_specs(api_generator_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::plugin::get_generator_parameter_specs(
+                        &*api_ctx_guard,
+                        api_generator_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4233,10 +5358,28 @@ fn wire__crate__api__mixer__get_master_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(crate::api::mixer::get_master_bus())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::mixer::get_master_bus(&*api_ctx_guard))?;
                     Ok(output_ok)
                 })())
             }
@@ -4265,11 +5408,29 @@ fn wire__crate__api__mixer__get_master_bus_populated_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::mixer::get_master_bus_populated())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::mixer::get_master_bus_populated(&*api_ctx_guard),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4298,11 +5459,29 @@ fn wire__crate__api__mixer__get_master_channel_specs_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::mixer::get_master_channel_specs())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::mixer::get_master_channel_specs(&*api_ctx_guard),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4331,10 +5510,29 @@ fn wire__crate__api__plugin__get_master_effects_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(crate::api::plugin::get_master_effects())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(crate::api::plugin::get_master_effects(
+                        &*api_ctx_guard,
+                    ))?;
                     Ok(output_ok)
                 })())
             }
@@ -4363,11 +5561,29 @@ fn wire__crate__api__mixer__get_mixer_channel_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::get_mixer_channel(api_track_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::mixer::get_mixer_channel(&*api_ctx_guard, api_track_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -4396,11 +5612,31 @@ fn wire__crate__api__mixer__get_mixer_channel_populated_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::get_mixer_channel_populated(api_track_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::mixer::get_mixer_channel_populated(
+                        &*api_ctx_guard,
+                        api_track_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4429,10 +5665,28 @@ fn wire__crate__api__mixer__get_mixer_state_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(crate::api::mixer::get_mixer_state())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::mixer::get_mixer_state(&*api_ctx_guard))?;
                     Ok(output_ok)
                 })())
             }
@@ -4461,13 +5715,32 @@ fn wire__crate__api__automation__get_modulation_link_by_id_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_link_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::automation::get_modulation_link_by_id(api_link_id),
-                    )?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::automation::get_modulation_link_by_id(
+                            &*api_ctx_guard,
+                            api_link_id,
+                        ))?;
                     Ok(output_ok)
                 })())
             }
@@ -4496,12 +5769,30 @@ fn wire__crate__api__automation__get_modulation_source_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::automation::get_modulation_source(api_id))?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::automation::get_modulation_source(&*api_ctx_guard, api_id),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4530,11 +5821,29 @@ fn wire__crate__api__pattern__get_pattern_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::pattern::get_pattern(api_pattern_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::pattern::get_pattern(&*api_ctx_guard, api_pattern_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -4563,10 +5872,27 @@ fn wire__crate__api__pattern__get_patterns_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::pattern::get_patterns()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::pattern::get_patterns(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -4595,10 +5921,27 @@ fn wire__crate__api__project__get_project_metadata_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::project::get_project_metadata()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::project::get_project_metadata(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -4627,10 +5970,29 @@ fn wire__crate__api__mixer__get_routing_matrix_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(crate::api::mixer::get_routing_matrix())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(crate::api::mixer::get_routing_matrix(
+                        &*api_ctx_guard,
+                    ))?;
                     Ok(output_ok)
                 })())
             }
@@ -4659,11 +6021,28 @@ fn wire__crate__api__track__get_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::track::get_track(api_track_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::track::get_track(&*api_ctx_guard, api_track_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -4692,13 +6071,32 @@ fn wire__crate__api__mixer__get_track_mixer_channel_specs_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::mixer::get_track_mixer_channel_specs(api_track_id),
-                    )?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::mixer::get_track_mixer_channel_specs(
+                            &*api_ctx_guard,
+                            api_track_id,
+                        ))?;
                     Ok(output_ok)
                 })())
             }
@@ -4727,10 +6125,27 @@ fn wire__crate__api__project__get_tracks_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::project::get_tracks()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::project::get_tracks(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -4759,10 +6174,27 @@ fn wire__crate__api__project__get_transport_state_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::project::get_transport_state()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::project::get_transport_state(&*api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -4790,11 +6222,30 @@ fn wire__crate__api__waveform__get_waveform_handle_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok =
-                    Result::<_, ()>::Ok(crate::api::waveform::get_waveform_handle(api_source_id))?;
+                let mut api_ctx_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_ctx, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_ctx_guard = api_ctx_guard.unwrap();
+                let output_ok = Result::<_, ()>::Ok(crate::api::waveform::get_waveform_handle(
+                    &*api_ctx_guard,
+                    api_source_id,
+                ))?;
                 Ok(output_ok)
             })())
         },
@@ -4821,12 +6272,31 @@ fn wire__crate__api__waveform__get_waveform_handles_for_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::waveform::get_waveform_handles_for_track(api_track_id),
-                )?;
+                let mut api_ctx_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_ctx, 0, false,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                        _ => unreachable!(),
+                    }
+                }
+                let api_ctx_guard = api_ctx_guard.unwrap();
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::waveform::get_waveform_handles_for_track(
+                        &*api_ctx_guard,
+                        api_track_id,
+                    ))?;
                 Ok(output_ok)
             })())
         },
@@ -4918,6 +6388,9 @@ fn wire__crate__api__automation__link_this_param_to_controller_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source_id = <u32>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
@@ -4926,7 +6399,22 @@ fn wire__crate__api__automation__link_this_param_to_controller_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::automation::link_this_param_to_controller(
+                        &mut *api_ctx_guard,
                         api_source_id,
                         api_target,
                         api_depth,
@@ -4960,11 +6448,31 @@ fn wire__crate__api__serialization__load_project_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_path_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::serialization::load_project(&api_path_name)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::serialization::load_project(
+                        &mut *api_ctx_guard,
+                        &api_path_name,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -4993,6 +6501,9 @@ fn wire__crate__api__session__move_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_old_track_id = <u32>::sse_decode(&mut deserializer);
             let api_new_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
@@ -5000,7 +6511,22 @@ fn wire__crate__api__session__move_clip_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::session::move_clip(
+                        &mut *api_ctx_guard,
                         api_old_track_id,
                         api_new_track_id,
                         api_clip_id,
@@ -5034,6 +6560,9 @@ fn wire__crate__api__track__move_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             let api_new_start_time = <u64>::sse_decode(&mut deserializer);
@@ -5041,7 +6570,22 @@ fn wire__crate__api__track__move_clip_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::track::move_clip(
+                        &mut *api_ctx_guard,
                         api_source_track_id,
                         api_clip_id,
                         api_new_start_time,
@@ -5075,6 +6619,9 @@ fn wire__crate__api__track__move_clip_batch_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             let api_delta_ticks = <i64>::sse_decode(&mut deserializer);
@@ -5082,7 +6629,22 @@ fn wire__crate__api__track__move_clip_batch_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::track::move_clip_batch(
+                        &mut *api_ctx_guard,
                         api_source_track_id,
                         api_clip_ids,
                         api_delta_ticks,
@@ -5116,6 +6678,9 @@ fn wire__crate__api__pattern__move_note_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_new_start_tick = <u64>::sse_decode(&mut deserializer);
@@ -5123,7 +6688,22 @@ fn wire__crate__api__pattern__move_note_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::pattern::move_note(
+                        &mut *api_ctx_guard,
                         api_pattern_id,
                         api_note_id,
                         api_new_start_tick,
@@ -5157,13 +6737,33 @@ fn wire__crate__api__pattern__move_notes_batch_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_updates = <Vec<(u32, u64, u8)>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::pattern::move_notes_batch(api_pattern_id, api_updates)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::pattern::move_notes_batch(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_updates,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5192,11 +6792,29 @@ fn wire__crate__api__serialization__new_blank_project_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::serialization::new_blank_project())?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::serialization::new_blank_project(&mut *api_ctx_guard),
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5225,13 +6843,31 @@ fn wire__crate__api__session__paste_clips_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target_track_id = <u32>::sse_decode(&mut deserializer);
             let api_paste_start_time = <u32>::sse_decode(&mut deserializer);
             let api_track_type = <crate::api::project::UiTrackType>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::session::paste_clips(
+                        &mut *api_ctx_guard,
                         api_target_track_id,
                         api_paste_start_time,
                         api_track_type,
@@ -5264,13 +6900,31 @@ fn wire__crate__api__session__paste_pattern_notes_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_playhead_tick = <u64>::sse_decode(&mut deserializer);
             let api_target_key = <Option<u8>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::session::paste_pattern_notes(
+                        &mut *api_ctx_guard,
                         api_target_pattern_id,
                         api_playhead_tick,
                         api_target_key,
@@ -5303,12 +6957,30 @@ fn wire__crate__api__pattern__play_pattern_preview_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::pattern::play_pattern_preview(
+                        &mut *api_ctx_guard,
                         api_pattern_id,
                         api_generator_id,
                     )?;
@@ -5340,6 +7012,9 @@ fn wire__crate__api__audio__play_preview_note_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_note_key = <i32>::sse_decode(&mut deserializer);
             let api_velocity = <i32>::sse_decode(&mut deserializer);
@@ -5347,7 +7022,22 @@ fn wire__crate__api__audio__play_preview_note_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::audio::play_preview_note(
+                        &mut *api_ctx_guard,
                         api_track_id,
                         api_note_key,
                         api_velocity,
@@ -5381,6 +7071,9 @@ fn wire__crate__api__audio__play_preview_note_generator_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             let api_note_key = <i32>::sse_decode(&mut deserializer);
             let api_velocity = <i32>::sse_decode(&mut deserializer);
@@ -5388,7 +7081,22 @@ fn wire__crate__api__audio__play_preview_note_generator_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::audio::play_preview_note_generator(
+                        &mut *api_ctx_guard,
                         api_generator_id,
                         api_note_key,
                         api_velocity,
@@ -5422,80 +7130,30 @@ fn wire__crate__api__audio__play_source_preview_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::audio::play_source_preview(api_id);
+                        crate::api::audio::play_source_preview(&mut *api_ctx_guard, api_id);
                     })?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__plugin__poll_effect_parameter_feedback_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "poll_effect_parameter_feedback",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::plugin::poll_effect_parameter_feedback())?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__plugin__poll_generator_parameter_feedback_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "poll_generator_parameter_feedback",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::plugin::poll_generator_parameter_feedback(),
-                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5553,13 +7211,33 @@ fn wire__crate__api__plugin__query_effect_parameters_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target = <crate::api::plugin::UiEffectTarget>::sse_decode(&mut deserializer);
             let api_effect_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::plugin::query_effect_parameters(api_target, api_effect_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::plugin::query_effect_parameters(
+                        &mut *api_ctx_guard,
+                        api_target,
+                        api_effect_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5588,12 +7266,31 @@ fn wire__crate__api__plugin__query_generator_parameters_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::plugin::query_generator_parameters(api_generator_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::plugin::query_generator_parameters(
+                        &mut *api_ctx_guard,
+                        api_generator_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5622,13 +7319,33 @@ fn wire__crate__api__plugin__query_live_plugin_zero_copy_buf_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target = <crate::api::plugin::UiPluginTarget>::sse_decode(&mut deserializer);
             let api_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::plugin::query_live_plugin_zero_copy_buf(api_target, api_name)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::plugin::query_live_plugin_zero_copy_buf(
+                        &mut *api_ctx_guard,
+                        api_target,
+                        api_name,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5657,13 +7374,30 @@ fn wire__crate__api__mixer__query_mixer_channel_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::mixer::UiMixerChannelTarget>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::mixer::query_mixer_channel(api_target);
+                        crate::api::mixer::query_mixer_channel(&mut *api_ctx_guard, api_target);
                     })?;
                     Ok(output_ok)
                 })())
@@ -5693,10 +7427,27 @@ fn wire__crate__api__session__redo_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::session::redo()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::session::redo(&mut *api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -5725,12 +7476,30 @@ fn wire__crate__api__automation__remove_automation_point_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
             let api_index = <usize>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::automation::remove_automation_point(
+                        &mut *api_ctx_guard,
                         api_automation_id,
                         api_index,
                     )?;
@@ -5762,12 +7531,31 @@ fn wire__crate__api__mixer__remove_effect_from_master_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_effect_instance_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::mixer::remove_effect_from_master_bus(api_effect_instance_id)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::mixer::remove_effect_from_master_bus(
+                        &mut *api_ctx_guard,
+                        api_effect_instance_id,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5796,12 +7584,30 @@ fn wire__crate__api__mixer__remove_effect_from_mixer_channel_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_effect_instance_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::mixer::remove_effect_from_mixer_channel(
+                        &mut *api_ctx_guard,
                         api_track_id,
                         api_effect_instance_id,
                     )?;
@@ -5833,12 +7639,32 @@ fn wire__crate__api__automation__remove_modulation_link_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_mod_link_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::automation::remove_modulation_link(api_mod_link_id);
+                        crate::api::automation::remove_modulation_link(
+                            &mut *api_ctx_guard,
+                            api_mod_link_id,
+                        );
                     })?;
                     Ok(output_ok)
                 })())
@@ -5868,12 +7694,32 @@ fn wire__crate__api__automation__remove_modulation_source_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_mod_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::automation::remove_modulation_source(api_mod_id);
+                        crate::api::automation::remove_modulation_source(
+                            &mut *api_ctx_guard,
+                            api_mod_id,
+                        );
                     })?;
                     Ok(output_ok)
                 })())
@@ -5903,13 +7749,31 @@ fn wire__crate__api__mixer__remove_routing_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
             let api_destination = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
             let api_is_send = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::mixer::remove_routing(
+                        &mut *api_ctx_guard,
                         api_source,
                         api_destination,
                         api_is_send,
@@ -5942,12 +7806,33 @@ fn wire__crate__api__mixer__rename_bus_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_bus_id = <u32>::sse_decode(&mut deserializer);
             let api_new_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::rename_bus(api_bus_id, api_new_name)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::mixer::rename_bus(
+                        &mut *api_ctx_guard,
+                        api_bus_id,
+                        api_new_name,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -5976,6 +7861,9 @@ fn wire__crate__api__session__resize_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
@@ -5983,7 +7871,22 @@ fn wire__crate__api__session__resize_clip_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::session::resize_clip(
+                        &mut *api_ctx_guard,
                         api_track_id,
                         api_clip_id,
                         api_edge,
@@ -6017,6 +7920,9 @@ fn wire__crate__api__track__resize_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
@@ -6024,7 +7930,22 @@ fn wire__crate__api__track__resize_clip_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::track::resize_clip(
+                        &mut *api_ctx_guard,
                         api_track_id,
                         api_clip_id,
                         api_edge,
@@ -6058,6 +7979,9 @@ fn wire__crate__api__track__resize_clip_batch_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
@@ -6065,7 +7989,22 @@ fn wire__crate__api__track__resize_clip_batch_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::track::resize_clip_batch(
+                        &mut *api_ctx_guard,
                         api_track_id,
                         api_clip_ids,
                         api_edge,
@@ -6099,13 +8038,31 @@ fn wire__crate__api__pattern__resize_note_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_new_duration = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::pattern::resize_note(
+                        &mut *api_ctx_guard,
                         api_pattern_id,
                         api_note_id,
                         api_new_duration,
@@ -6138,13 +8095,33 @@ fn wire__crate__api__pattern__resize_notes_batch_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_updates = <Vec<(u32, u64)>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::pattern::resize_notes_batch(api_pattern_id, api_updates)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::pattern::resize_notes_batch(
+                        &mut *api_ctx_guard,
+                        api_pattern_id,
+                        api_updates,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -6173,11 +8150,31 @@ fn wire__crate__api__serialization__save_project_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_path_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::serialization::save_project(&api_path_name)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::serialization::save_project(
+                        &mut *api_ctx_guard,
+                        &api_path_name,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -6206,11 +8203,28 @@ fn wire__crate__api__transport__set_bpm_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_val = <f32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::transport::set_bpm(api_val)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::transport::set_bpm(&mut *api_ctx_guard, api_val)?;
                     Ok(output_ok)
                 })())
             }
@@ -6239,6 +8253,9 @@ fn wire__crate__api__plugin__set_effect_parameter_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target = <crate::api::plugin::UiEffectTarget>::sse_decode(&mut deserializer);
             let api_effect_id = <u32>::sse_decode(&mut deserializer);
             let api_param_id = <crate::api::plugin::UiParamId>::sse_decode(&mut deserializer);
@@ -6246,7 +8263,22 @@ fn wire__crate__api__plugin__set_effect_parameter_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::plugin::set_effect_parameter(
+                        &mut *api_ctx_guard,
                         api_target,
                         api_effect_id,
                         api_param_id,
@@ -6280,13 +8312,31 @@ fn wire__crate__api__plugin__set_generator_parameter_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             let api_param_id = <crate::api::plugin::UiParamId>::sse_decode(&mut deserializer);
             let api_value = <f32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::plugin::set_generator_parameter(
+                        &mut *api_ctx_guard,
                         api_generator_id,
                         api_param_id,
                         api_value,
@@ -6319,11 +8369,29 @@ fn wire__crate__api__transport__set_looping_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_val = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::transport::set_looping(api_val)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::transport::set_looping(&mut *api_ctx_guard, api_val)?;
                     Ok(output_ok)
                 })())
             }
@@ -6351,11 +8419,28 @@ fn wire__crate__api__audio__set_metronome_active_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_active = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
+                let mut api_ctx_guard = None;
+                let decode_indices_ =
+                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                            &api_ctx, 0, true,
+                        ),
+                    ]);
+                for i in decode_indices_ {
+                    match i {
+                        0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                        _ => unreachable!(),
+                    }
+                }
+                let mut api_ctx_guard = api_ctx_guard.unwrap();
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::audio::set_metronome_active(api_active);
+                    crate::api::audio::set_metronome_active(&mut *api_ctx_guard, api_active);
                 })?;
                 Ok(output_ok)
             })())
@@ -6384,6 +8469,9 @@ fn wire__crate__api__mixer__set_mixer_channel_param_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::mixer::UiMixerChannelTarget>::sse_decode(&mut deserializer);
             let api_param =
@@ -6391,8 +8479,26 @@ fn wire__crate__api__mixer__set_mixer_channel_param_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::mixer::set_mixer_channel_param(api_target, api_param);
+                        crate::api::mixer::set_mixer_channel_param(
+                            &mut *api_ctx_guard,
+                            api_target,
+                            api_param,
+                        );
                     })?;
                     Ok(output_ok)
                 })())
@@ -6422,11 +8528,29 @@ fn wire__crate__api__transport__set_playhead_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_val = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::transport::set_playhead(api_val)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::transport::set_playhead(&mut *api_ctx_guard, api_val)?;
                     Ok(output_ok)
                 })())
             }
@@ -6455,11 +8579,29 @@ fn wire__crate__api__transport__set_playing_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_val = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::transport::set_playing(api_val)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::transport::set_playing(&mut *api_ctx_guard, api_val)?;
                     Ok(output_ok)
                 })())
             }
@@ -6488,6 +8630,9 @@ fn wire__crate__api__mixer__set_routing_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
             let api_destination = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
             let api_send_level = <f32>::sse_decode(&mut deserializer);
@@ -6495,7 +8640,22 @@ fn wire__crate__api__mixer__set_routing_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::mixer::set_routing(
+                        &mut *api_ctx_guard,
                         api_source,
                         api_destination,
                         api_send_level,
@@ -6529,13 +8689,31 @@ fn wire__crate__api__track__slice_clip_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_source_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             let api_cut_point = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::track::slice_clip(
+                        &mut *api_ctx_guard,
                         api_source_track_id,
                         api_clip_id,
                         api_cut_point,
@@ -6603,11 +8781,28 @@ fn wire__crate__api__audio__stop_all_previews_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::audio::stop_all_previews();
+                        crate::api::audio::stop_all_previews(&mut *api_ctx_guard);
                     })?;
                     Ok(output_ok)
                 })())
@@ -6637,10 +8832,27 @@ fn wire__crate__api__pattern__stop_pattern_preview_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::pattern::stop_pattern_preview()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::pattern::stop_pattern_preview(&mut *api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -6669,12 +8881,30 @@ fn wire__crate__api__pattern__stop_pattern_preview_local_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::pattern::stop_pattern_preview_local(
+                        &mut *api_ctx_guard,
                         api_pattern_id,
                         api_generator_id,
                     )?;
@@ -6706,10 +8936,27 @@ fn wire__crate__api__transport__stop_song_playback_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::transport::stop_song_playback()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::transport::stop_song_playback(&mut *api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -6738,12 +8985,32 @@ fn wire__crate__api__transport__switch_pattern_generator_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::transport::switch_pattern_generator(api_generator_id);
+                        crate::api::transport::switch_pattern_generator(
+                            &mut *api_ctx_guard,
+                            api_generator_id,
+                        );
                     })?;
                     Ok(output_ok)
                 })())
@@ -6773,13 +9040,31 @@ fn wire__crate__api__transport__toggle_pattern_playback_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
             let api_generator_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
                         crate::api::transport::toggle_pattern_playback(
+                            &mut *api_ctx_guard,
                             api_pattern_id,
                             api_generator_id,
                         );
@@ -6812,13 +9097,33 @@ fn wire__crate__api__transport__toggle_playback_with_mode_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_playback_mode =
                 <crate::api::transport::PlaybackModeDto>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::transport::toggle_playback_with_mode(api_playback_mode);
+                        crate::api::transport::toggle_playback_with_mode(
+                            &mut *api_ctx_guard,
+                            api_playback_mode,
+                        );
                     })?;
                     Ok(output_ok)
                 })())
@@ -7119,10 +9424,27 @@ fn wire__crate__api__session__undo_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::session::undo()?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::session::undo(&mut *api_ctx_guard)?;
                     Ok(output_ok)
                 })())
             }
@@ -7151,6 +9473,9 @@ fn wire__crate__api__automation__update_automation_point_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
             let api_index = <usize>::sse_decode(&mut deserializer);
             let api_time_ticks = <u32>::sse_decode(&mut deserializer);
@@ -7159,7 +9484,22 @@ fn wire__crate__api__automation__update_automation_point_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
                     let output_ok = crate::api::automation::update_automation_point(
+                        &mut *api_ctx_guard,
                         api_automation_id,
                         api_index,
                         api_time_ticks,
@@ -7194,11 +9534,29 @@ fn wire__crate__api__mixer__update_routing_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_conn = <crate::api::mixer::UiRoutingConnection>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::mixer::update_routing(api_conn)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok =
+                        crate::api::mixer::update_routing(&mut *api_ctx_guard, api_conn)?;
                     Ok(output_ok)
                 })())
             }
@@ -7227,13 +9585,33 @@ fn wire__crate__api__track__update_track_order_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ctx = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
+            >>::sse_decode(&mut deserializer);
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_new_idx = <usize>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok =
-                        crate::api::track::update_track_order(api_track_id, api_new_idx)?;
+                    let mut api_ctx_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_ctx, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_ctx_guard = api_ctx_guard.unwrap();
+                    let output_ok = crate::api::track::update_track_order(
+                        &mut *api_ctx_guard,
+                        api_track_id,
+                        api_new_idx,
+                    )?;
                     Ok(output_ok)
                 })())
             }
@@ -7244,10 +9622,16 @@ fn wire__crate__api__track__update_track_order_impl(
 // Section: related_funcs
 
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<BufferDataType>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
     flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>
@@ -7286,6 +9670,16 @@ impl SseDecode for BufferDataType {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <RustOpaqueMoi<
             flutter_rust_bridge::for_generated::RustAutoOpaqueInner<BufferDataType>,
+        >>::sse_decode(deserializer);
+        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+    }
+}
+
+impl SseDecode for DawContext {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <RustOpaqueMoi<
+            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
         >>::sse_decode(deserializer);
         return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
     }
@@ -7410,6 +9804,16 @@ impl SseDecode for std::collections::HashMap<u32, crate::api::project::UiTrack> 
 }
 
 impl SseDecode
+    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <usize>::sse_decode(deserializer);
+        return decode_rust_opaque_moi(inner);
+    }
+}
+
+impl SseDecode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>,
     >
@@ -7423,6 +9827,16 @@ impl SseDecode
 
 impl SseDecode
     for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<BufferDataType>>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <usize>::sse_decode(deserializer);
+        return decode_rust_opaque_moi(inner);
+    }
+}
+
+impl SseDecode
+    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7483,23 +9897,7 @@ impl SseDecode
 }
 
 impl SseDecode
-    for StreamSink<
-        crate::api::mixer::UiMixerChannelSnapshot,
-        flutter_rust_bridge::for_generated::SseCodec,
-    >
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <String>::sse_decode(deserializer);
-        return StreamSink::deserialize(inner);
-    }
-}
-
-impl SseDecode
-    for StreamSink<
-        crate::api::plugin::UiPluginCommandResponse,
-        flutter_rust_bridge::for_generated::SseCodec,
-    >
+    for StreamSink<crate::api::audio::UiAudioFeedback, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7511,19 +9909,6 @@ impl SseDecode
 impl SseDecode
     for StreamSink<
         crate::api::audio::UiTransportFeedback,
-        flutter_rust_bridge::for_generated::SseCodec,
-    >
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <String>::sse_decode(deserializer);
-        return StreamSink::deserialize(inner);
-    }
-}
-
-impl SseDecode
-    for StreamSink<
-        crate::api::plugin::UiZeroCopyBufferResponse,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -7911,6 +10296,18 @@ impl SseDecode for Vec<(u32, u64, u8)> {
     }
 }
 
+impl SseDecode for Vec<(u32, f32)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<(u32, f32)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<(u32, crate::api::automation::ModulationLinkDto)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8055,20 +10452,6 @@ impl SseDecode for Vec<crate::api::mixer::UiEffectInstance> {
     }
 }
 
-impl SseDecode for Vec<crate::api::plugin::UiEffectParameterSnapshot> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::api::plugin::UiEffectParameterSnapshot>::sse_decode(
-                deserializer,
-            ));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for Vec<crate::api::mixer::UiEffectSummary> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8083,18 +10466,6 @@ impl SseDecode for Vec<crate::api::mixer::UiEffectSummary> {
     }
 }
 
-impl SseDecode for Vec<crate::api::plugin::UiGeneratorParameterSnapshot> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::api::plugin::UiGeneratorParameterSnapshot>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for Vec<crate::api::pattern::UiNote> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8102,20 +10473,6 @@ impl SseDecode for Vec<crate::api::pattern::UiNote> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::pattern::UiNote>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<crate::api::plugin::UiParameterValue> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::api::plugin::UiParameterValue>::sse_decode(
-                deserializer,
-            ));
         }
         return ans_;
     }
@@ -8562,6 +10919,15 @@ impl SseDecode for (u32, u64, u8) {
     }
 }
 
+impl SseDecode for (u32, f32) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u32>::sse_decode(deserializer);
+        let mut var_field1 = <f32>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
 impl SseDecode for (u32, crate::api::automation::ModulationLinkDto) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8770,6 +11136,118 @@ impl SseDecode for crate::api::project::UiApplicationState {
     }
 }
 
+impl SseDecode for crate::api::audio::UiAudioFeedback {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_generatorId = <u32>::sse_decode(deserializer);
+                let mut var_paramId = <u32>::sse_decode(deserializer);
+                let mut var_value = <f32>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::GeneratorParameterChanged {
+                    generator_id: var_generatorId,
+                    param_id: var_paramId,
+                    value: var_value,
+                };
+            }
+            1 => {
+                let mut var_generatorId = <u32>::sse_decode(deserializer);
+                let mut var_parameters = <Vec<(u32, f32)>>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::GeneratorParameterSnapshot {
+                    generator_id: var_generatorId,
+                    parameters: var_parameters,
+                };
+            }
+            2 => {
+                let mut var_targetTrackId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_targetBusId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_effectId = <u32>::sse_decode(deserializer);
+                let mut var_paramId = <u32>::sse_decode(deserializer);
+                let mut var_value = <f32>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::EffectParameterChanged {
+                    target_track_id: var_targetTrackId,
+                    target_bus_id: var_targetBusId,
+                    effect_id: var_effectId,
+                    param_id: var_paramId,
+                    value: var_value,
+                };
+            }
+            3 => {
+                let mut var_targetTrackId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_targetBusId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_effectId = <u32>::sse_decode(deserializer);
+                let mut var_parameters = <Vec<(u32, f32)>>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::EffectParameterSnapshot {
+                    target_track_id: var_targetTrackId,
+                    target_bus_id: var_targetBusId,
+                    effect_id: var_effectId,
+                    parameters: var_parameters,
+                };
+            }
+            4 => {
+                let mut var_targetTrackId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_targetBusId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_isMaster = <bool>::sse_decode(deserializer);
+                let mut var_volume = <f32>::sse_decode(deserializer);
+                let mut var_pan = <f32>::sse_decode(deserializer);
+                let mut var_mute = <bool>::sse_decode(deserializer);
+                let mut var_solo = <bool>::sse_decode(deserializer);
+                let mut var_invertedPhase = <bool>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::MixerChannelSnapshot {
+                    target_track_id: var_targetTrackId,
+                    target_bus_id: var_targetBusId,
+                    is_master: var_isMaster,
+                    volume: var_volume,
+                    pan: var_pan,
+                    mute: var_mute,
+                    solo: var_solo,
+                    inverted_phase: var_invertedPhase,
+                };
+            }
+            5 => {
+                let mut var_requestId = <u32>::sse_decode(deserializer);
+                let mut var_responseJson = <String>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::PluginCommandResponse {
+                    request_id: var_requestId,
+                    response_json: var_responseJson,
+                };
+            }
+            6 => {
+                let mut var_generatorId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_trackEffectTrackId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_trackEffectEffectId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_busEffectBusId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_busEffectEffectId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_masterEffectId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_state = <Vec<u8>>::sse_decode(deserializer);
+                let mut var_requestId = <u32>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::PluginStateSnapshot {
+                    generator_id: var_generatorId,
+                    track_effect_track_id: var_trackEffectTrackId,
+                    track_effect_effect_id: var_trackEffectEffectId,
+                    bus_effect_bus_id: var_busEffectBusId,
+                    bus_effect_effect_id: var_busEffectEffectId,
+                    master_effect_id: var_masterEffectId,
+                    state: var_state,
+                    request_id: var_requestId,
+                };
+            }
+            7 => {
+                let mut var_requestId = <u32>::sse_decode(deserializer);
+                let mut var_handle = <Option<ZeroCopyHandle>>::sse_decode(deserializer);
+                return crate::api::audio::UiAudioFeedback::ZeroCopyBufferResponse {
+                    request_id: var_requestId,
+                    handle: var_handle,
+                };
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for crate::api::project::UiAudioHardwareConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8886,21 +11364,6 @@ impl SseDecode for crate::api::mixer::UiEffectInstance {
     }
 }
 
-impl SseDecode for crate::api::plugin::UiEffectParameterSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_target = <crate::api::plugin::UiEffectTarget>::sse_decode(deserializer);
-        let mut var_effectId = <u32>::sse_decode(deserializer);
-        let mut var_parameters =
-            <Vec<crate::api::plugin::UiParameterValue>>::sse_decode(deserializer);
-        return crate::api::plugin::UiEffectParameterSnapshot {
-            target: var_target,
-            effect_id: var_effectId,
-            parameters: var_parameters,
-        };
-    }
-}
-
 impl SseDecode for crate::api::mixer::UiEffectSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8976,19 +11439,6 @@ impl SseDecode for crate::api::project::UiGeneratorInstanceType {
     }
 }
 
-impl SseDecode for crate::api::plugin::UiGeneratorParameterSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_generatorId = <u32>::sse_decode(deserializer);
-        let mut var_parameters =
-            <Vec<crate::api::plugin::UiParameterValue>>::sse_decode(deserializer);
-        return crate::api::plugin::UiGeneratorParameterSnapshot {
-            generator_id: var_generatorId,
-            parameters: var_parameters,
-        };
-    }
-}
-
 impl SseDecode for crate::api::mixer::UiMixerChannel {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9038,30 +11488,6 @@ impl SseDecode for crate::api::mixer::UiMixerChannelParams {
                 unimplemented!("");
             }
         }
-    }
-}
-
-impl SseDecode for crate::api::mixer::UiMixerChannelSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_trackId = <u32>::sse_decode(deserializer);
-        let mut var_busId = <Option<u32>>::sse_decode(deserializer);
-        let mut var_isMaster = <bool>::sse_decode(deserializer);
-        let mut var_volume = <f32>::sse_decode(deserializer);
-        let mut var_pan = <f32>::sse_decode(deserializer);
-        let mut var_mute = <bool>::sse_decode(deserializer);
-        let mut var_solo = <bool>::sse_decode(deserializer);
-        let mut var_invertedPhase = <bool>::sse_decode(deserializer);
-        return crate::api::mixer::UiMixerChannelSnapshot {
-            track_id: var_trackId,
-            bus_id: var_busId,
-            is_master: var_isMaster,
-            volume: var_volume,
-            pan: var_pan,
-            mute: var_mute,
-            solo: var_solo,
-            inverted_phase: var_invertedPhase,
-        };
     }
 }
 
@@ -9167,18 +11593,6 @@ impl SseDecode for crate::api::plugin::UiParameterType {
     }
 }
 
-impl SseDecode for crate::api::plugin::UiParameterValue {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_paramId = <u32>::sse_decode(deserializer);
-        let mut var_value = <f32>::sse_decode(deserializer);
-        return crate::api::plugin::UiParameterValue {
-            param_id: var_paramId,
-            value: var_value,
-        };
-    }
-}
-
 impl SseDecode for crate::api::pattern::UiPattern {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9191,18 +11605,6 @@ impl SseDecode for crate::api::pattern::UiPattern {
             name: var_name,
             length_ticks: var_lengthTicks,
             notes: var_notes,
-        };
-    }
-}
-
-impl SseDecode for crate::api::plugin::UiPluginCommandResponse {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_requestId = <u32>::sse_decode(deserializer);
-        let mut var_responseJson = <String>::sse_decode(deserializer);
-        return crate::api::plugin::UiPluginCommandResponse {
-            request_id: var_requestId,
-            response_json: var_responseJson,
         };
     }
 }
@@ -9468,18 +11870,6 @@ impl SseDecode for crate::api::project::UiTransportState {
     }
 }
 
-impl SseDecode for crate::api::plugin::UiZeroCopyBufferResponse {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_requestId = <u32>::sse_decode(deserializer);
-        let mut var_handle = <Option<ZeroCopyHandle>>::sse_decode(deserializer);
-        return crate::api::plugin::UiZeroCopyBufferResponse {
-            request_id: var_requestId,
-            handle: var_handle,
-        };
-    }
-}
-
 impl SseDecode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
@@ -9515,89 +11905,82 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        37 => wire__crate__api__project__add_audio_source_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__automation__add_automation_lane_impl(
+        29 => {
+            wire__crate__api__project__AudioWaveformUiForAudioProperties_try_from_with_context_impl(
+                port,
+                ptr,
+                rust_vec_len,
+                data_len,
+            )
+        }
+        38 => wire__crate__api__project__add_audio_source_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__automation__add_automation_lane_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__automation__add_automation_lane_for_bus_impl(
+        40 => wire__crate__api__automation__add_automation_lane_for_bus_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__automation__add_automation_lane_for_track_impl(
+        41 => wire__crate__api__automation__add_automation_lane_for_track_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__mixer__add_effect_to_bus_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__mixer__add_effect_to_master_bus_impl(
+        42 => wire__crate__api__mixer__add_effect_to_bus_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__mixer__add_effect_to_master_bus_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__mixer__add_effect_to_mixer_channel_by_id_impl(
+        44 => wire__crate__api__mixer__add_effect_to_mixer_channel_by_id_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__track__add_midi_track_with_generator_id_impl(
+        45 => wire__crate__api__track__add_midi_track_with_generator_id_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__automation__add_modulation_source_impl(
+        46 => wire__crate__api__automation__add_modulation_source_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => {
+        47 => {
             wire__crate__api__project__add_new_audio_track_impl(port, ptr, rust_vec_len, data_len)
         }
-        47 => wire__crate__api__automation__add_new_automation_point_impl(
+        48 => wire__crate__api__automation__add_new_automation_point_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__api__pattern__add_note_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__pattern__add_notes_batch_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__pattern__change_note_params_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__track__change_track_color_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__track__change_track_name_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__session__copy_clips_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__session__copy_pattern_notes_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__mixer__create_bus_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__track__create_clip_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__mixer__create_mixer_snapshot_stream_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        60 => wire__crate__api__plugin__create_plugin_message_stream_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
+        49 => wire__crate__api__pattern__add_note_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__pattern__add_notes_batch_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__pattern__change_note_params_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__track__change_track_color_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__track__change_track_name_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__session__copy_clips_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__session__copy_pattern_notes_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__mixer__create_bus_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__track__create_clip_impl(port, ptr, rust_vec_len, data_len),
         61 => {
+            wire__crate__api__audio__create_feedback_stream_impl(port, ptr, rust_vec_len, data_len)
+        }
+        62 => {
             wire__crate__api__audio__create_position_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        62 => wire__crate__api__plugin__create_zero_copy_buffer_stream_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         63 => wire__crate__api__session__cut_clips_impl(port, ptr, rust_vec_len, data_len),
         64 => wire__crate__api__session__cut_pattern_notes_impl(port, ptr, rust_vec_len, data_len),
         65 => wire__crate__api__mixer__delete_bus_impl(port, ptr, rust_vec_len, data_len),
@@ -9835,159 +12218,147 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         137 => wire__crate__api__audio__play_source_preview_impl(port, ptr, rust_vec_len, data_len),
-        138 => wire__crate__api__plugin__poll_effect_parameter_feedback_impl(
+        139 => wire__crate__api__plugin__query_effect_parameters_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        139 => wire__crate__api__plugin__poll_generator_parameter_feedback_impl(
+        140 => wire__crate__api__plugin__query_generator_parameters_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        141 => wire__crate__api__plugin__query_effect_parameters_impl(
+        141 => wire__crate__api__plugin__query_live_plugin_zero_copy_buf_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        142 => wire__crate__api__plugin__query_generator_parameters_impl(
+        142 => wire__crate__api__mixer__query_mixer_channel_impl(port, ptr, rust_vec_len, data_len),
+        143 => wire__crate__api__session__redo_impl(port, ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__automation__remove_automation_point_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        143 => wire__crate__api__plugin__query_live_plugin_zero_copy_buf_impl(
+        145 => wire__crate__api__mixer__remove_effect_from_master_bus_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        144 => wire__crate__api__mixer__query_mixer_channel_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__api__session__redo_impl(port, ptr, rust_vec_len, data_len),
-        146 => wire__crate__api__automation__remove_automation_point_impl(
+        146 => wire__crate__api__mixer__remove_effect_from_mixer_channel_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        147 => wire__crate__api__mixer__remove_effect_from_master_bus_impl(
+        147 => wire__crate__api__automation__remove_modulation_link_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        148 => wire__crate__api__mixer__remove_effect_from_mixer_channel_impl(
+        148 => wire__crate__api__automation__remove_modulation_source_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        149 => wire__crate__api__automation__remove_modulation_link_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        150 => wire__crate__api__automation__remove_modulation_source_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        151 => wire__crate__api__mixer__remove_routing_impl(port, ptr, rust_vec_len, data_len),
-        152 => wire__crate__api__mixer__rename_bus_impl(port, ptr, rust_vec_len, data_len),
-        153 => wire__crate__api__session__resize_clip_impl(port, ptr, rust_vec_len, data_len),
-        154 => wire__crate__api__track__resize_clip_impl(port, ptr, rust_vec_len, data_len),
-        155 => wire__crate__api__track__resize_clip_batch_impl(port, ptr, rust_vec_len, data_len),
-        156 => wire__crate__api__pattern__resize_note_impl(port, ptr, rust_vec_len, data_len),
-        157 => {
+        149 => wire__crate__api__mixer__remove_routing_impl(port, ptr, rust_vec_len, data_len),
+        150 => wire__crate__api__mixer__rename_bus_impl(port, ptr, rust_vec_len, data_len),
+        151 => wire__crate__api__session__resize_clip_impl(port, ptr, rust_vec_len, data_len),
+        152 => wire__crate__api__track__resize_clip_impl(port, ptr, rust_vec_len, data_len),
+        153 => wire__crate__api__track__resize_clip_batch_impl(port, ptr, rust_vec_len, data_len),
+        154 => wire__crate__api__pattern__resize_note_impl(port, ptr, rust_vec_len, data_len),
+        155 => {
             wire__crate__api__pattern__resize_notes_batch_impl(port, ptr, rust_vec_len, data_len)
         }
-        158 => {
+        156 => {
             wire__crate__api__serialization__save_project_impl(port, ptr, rust_vec_len, data_len)
         }
-        159 => wire__crate__api__transport__set_bpm_impl(port, ptr, rust_vec_len, data_len),
-        160 => {
+        157 => wire__crate__api__transport__set_bpm_impl(port, ptr, rust_vec_len, data_len),
+        158 => {
             wire__crate__api__plugin__set_effect_parameter_impl(port, ptr, rust_vec_len, data_len)
         }
-        161 => wire__crate__api__plugin__set_generator_parameter_impl(
+        159 => wire__crate__api__plugin__set_generator_parameter_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        162 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
-        164 => {
+        160 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
+        162 => {
             wire__crate__api__mixer__set_mixer_channel_param_impl(port, ptr, rust_vec_len, data_len)
         }
-        165 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
-        166 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
-        167 => wire__crate__api__mixer__set_routing_impl(port, ptr, rust_vec_len, data_len),
-        168 => wire__crate__api__track__slice_clip_impl(port, ptr, rust_vec_len, data_len),
-        170 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
-        171 => {
+        163 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
+        164 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
+        165 => wire__crate__api__mixer__set_routing_impl(port, ptr, rust_vec_len, data_len),
+        166 => wire__crate__api__track__slice_clip_impl(port, ptr, rust_vec_len, data_len),
+        168 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
+        169 => {
             wire__crate__api__pattern__stop_pattern_preview_impl(port, ptr, rust_vec_len, data_len)
         }
-        172 => wire__crate__api__pattern__stop_pattern_preview_local_impl(
+        170 => wire__crate__api__pattern__stop_pattern_preview_local_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        173 => {
+        171 => {
             wire__crate__api__transport__stop_song_playback_impl(port, ptr, rust_vec_len, data_len)
         }
-        174 => wire__crate__api__transport__switch_pattern_generator_impl(
+        172 => wire__crate__api__transport__switch_pattern_generator_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        175 => wire__crate__api__transport__toggle_pattern_playback_impl(
+        173 => wire__crate__api__transport__toggle_pattern_playback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        176 => wire__crate__api__transport__toggle_playback_with_mode_impl(
+        174 => wire__crate__api__transport__toggle_playback_with_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        179 => wire__crate__api__session__ui_clipboard_content_default_impl(
+        177 => wire__crate__api__session__ui_clipboard_content_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        182 => {
+        180 => {
             wire__crate__api__plugin__ui_param_id_resolve_impl(port, ptr, rust_vec_len, data_len)
         }
-        183 => wire__crate__api__project__ui_project_metadata_default_impl(
+        181 => wire__crate__api__project__ui_project_metadata_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        184 => wire__crate__api__project__ui_transport_state_default_impl(
+        182 => wire__crate__api__project__ui_transport_state_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        185 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
-        186 => wire__crate__api__automation__update_automation_point_impl(
+        183 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
+        184 => wire__crate__api__automation__update_automation_point_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        187 => wire__crate__api__mixer__update_routing_impl(port, ptr, rust_vec_len, data_len),
-        188 => wire__crate__api__track__update_track_order_impl(port, ptr, rust_vec_len, data_len),
+        185 => wire__crate__api__mixer__update_routing_impl(port, ptr, rust_vec_len, data_len),
+        186 => wire__crate__api__track__update_track_order_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -10028,26 +12399,27 @@ fn pde_ffi_dispatcher_sync_impl(
 26 => wire__crate__api__project__AudioWaveformUiForAudioProperties_auto_accessor_set_sample_rate_impl(ptr, rust_vec_len, data_len),
 27 => wire__crate__api__project__AudioWaveformUiForAudioProperties_auto_accessor_set_trim_end_impl(ptr, rust_vec_len, data_len),
 28 => wire__crate__api__project__AudioWaveformUiForAudioProperties_auto_accessor_set_trim_start_impl(ptr, rust_vec_len, data_len),
-29 => wire__crate__api__plugin__PluginBufferHandle_read_impl(ptr, rust_vec_len, data_len),
-30 => wire__crate__api__waveform__WaveformHandle_get_channels_impl(ptr, rust_vec_len, data_len),
-31 => wire__crate__api__waveform__WaveformHandle_get_len_impl(ptr, rust_vec_len, data_len),
-32 => wire__crate__api__waveform__WaveformHandle_get_pointer_impl(ptr, rust_vec_len, data_len),
-33 => wire__crate__api__waveform__WaveformHandle_get_sample_rate_impl(ptr, rust_vec_len, data_len),
-34 => wire__crate__api__plugins__opaque__ZeroCopyHandle_data_type_impl(ptr, rust_vec_len, data_len),
-35 => wire__crate__api__plugins__opaque__ZeroCopyHandle_length_elements_impl(ptr, rust_vec_len, data_len),
-36 => wire__crate__api__plugins__opaque__ZeroCopyHandle_memory_address_impl(ptr, rust_vec_len, data_len),
-50 => wire__crate__api__project__audio_hardware_config_new_impl(ptr, rust_vec_len, data_len),
-51 => wire__crate__api__project__audio_hardware_config_new_with_param_impl(ptr, rust_vec_len, data_len),
+30 => wire__crate__api__plugin__PluginBufferHandle_read_impl(ptr, rust_vec_len, data_len),
+31 => wire__crate__api__waveform__WaveformHandle_get_channels_impl(ptr, rust_vec_len, data_len),
+32 => wire__crate__api__waveform__WaveformHandle_get_len_impl(ptr, rust_vec_len, data_len),
+33 => wire__crate__api__waveform__WaveformHandle_get_pointer_impl(ptr, rust_vec_len, data_len),
+34 => wire__crate__api__waveform__WaveformHandle_get_sample_rate_impl(ptr, rust_vec_len, data_len),
+35 => wire__crate__api__plugins__opaque__ZeroCopyHandle_data_type_impl(ptr, rust_vec_len, data_len),
+36 => wire__crate__api__plugins__opaque__ZeroCopyHandle_length_elements_impl(ptr, rust_vec_len, data_len),
+37 => wire__crate__api__plugins__opaque__ZeroCopyHandle_memory_address_impl(ptr, rust_vec_len, data_len),
+51 => wire__crate__api__project__audio_hardware_config_new_impl(ptr, rust_vec_len, data_len),
+52 => wire__crate__api__project__audio_hardware_config_new_with_param_impl(ptr, rust_vec_len, data_len),
+60 => wire__crate__api__simple__create_daw_context_impl(ptr, rust_vec_len, data_len),
 120 => wire__crate__api__waveform__get_waveform_handle_impl(ptr, rust_vec_len, data_len),
 121 => wire__crate__api__waveform__get_waveform_handles_for_track_impl(ptr, rust_vec_len, data_len),
 122 => wire__crate__api__utils__hash_str_fnv1a_impl(ptr, rust_vec_len, data_len),
-140 => wire__crate__api__project__project_metadata_new_impl(ptr, rust_vec_len, data_len),
-163 => wire__crate__api__audio__set_metronome_active_impl(ptr, rust_vec_len, data_len),
-169 => wire__crate__api__monitor__start_performance_monitor_impl(ptr, rust_vec_len, data_len),
-177 => wire__crate__api__project__transport_state_new_impl(ptr, rust_vec_len, data_len),
-178 => wire__crate__api__project__transport_state_new_with_param_impl(ptr, rust_vec_len, data_len),
-180 => wire__crate__api__mixer__ui_mixer_state_new_impl(ptr, rust_vec_len, data_len),
-181 => wire__crate__api__mixer__ui_mixer_state_new_with_param_impl(ptr, rust_vec_len, data_len),
+138 => wire__crate__api__project__project_metadata_new_impl(ptr, rust_vec_len, data_len),
+161 => wire__crate__api__audio__set_metronome_active_impl(ptr, rust_vec_len, data_len),
+167 => wire__crate__api__monitor__start_performance_monitor_impl(ptr, rust_vec_len, data_len),
+175 => wire__crate__api__project__transport_state_new_impl(ptr, rust_vec_len, data_len),
+176 => wire__crate__api__project__transport_state_new_with_param_impl(ptr, rust_vec_len, data_len),
+178 => wire__crate__api__mixer__ui_mixer_state_new_impl(ptr, rust_vec_len, data_len),
+179 => wire__crate__api__mixer__ui_mixer_state_new_with_param_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -10085,6 +12457,21 @@ impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<
 
 impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<BufferDataType>> for BufferDataType {
     fn into_into_dart(self) -> FrbWrapper<BufferDataType> {
+        self.into()
+    }
+}
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<DawContext> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
+            .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<DawContext> {}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<DawContext>> for DawContext {
+    fn into_into_dart(self) -> FrbWrapper<DawContext> {
         self.into()
     }
 }
@@ -10661,6 +13048,132 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::UiApplicationState>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::audio::UiAudioFeedback {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::audio::UiAudioFeedback::GeneratorParameterChanged {
+                generator_id,
+                param_id,
+                value,
+            } => [
+                0.into_dart(),
+                generator_id.into_into_dart().into_dart(),
+                param_id.into_into_dart().into_dart(),
+                value.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::api::audio::UiAudioFeedback::GeneratorParameterSnapshot {
+                generator_id,
+                parameters,
+            } => [
+                1.into_dart(),
+                generator_id.into_into_dart().into_dart(),
+                parameters.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::api::audio::UiAudioFeedback::EffectParameterChanged {
+                target_track_id,
+                target_bus_id,
+                effect_id,
+                param_id,
+                value,
+            } => [
+                2.into_dart(),
+                target_track_id.into_into_dart().into_dart(),
+                target_bus_id.into_into_dart().into_dart(),
+                effect_id.into_into_dart().into_dart(),
+                param_id.into_into_dart().into_dart(),
+                value.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::api::audio::UiAudioFeedback::EffectParameterSnapshot {
+                target_track_id,
+                target_bus_id,
+                effect_id,
+                parameters,
+            } => [
+                3.into_dart(),
+                target_track_id.into_into_dart().into_dart(),
+                target_bus_id.into_into_dart().into_dart(),
+                effect_id.into_into_dart().into_dart(),
+                parameters.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::api::audio::UiAudioFeedback::MixerChannelSnapshot {
+                target_track_id,
+                target_bus_id,
+                is_master,
+                volume,
+                pan,
+                mute,
+                solo,
+                inverted_phase,
+            } => [
+                4.into_dart(),
+                target_track_id.into_into_dart().into_dart(),
+                target_bus_id.into_into_dart().into_dart(),
+                is_master.into_into_dart().into_dart(),
+                volume.into_into_dart().into_dart(),
+                pan.into_into_dart().into_dart(),
+                mute.into_into_dart().into_dart(),
+                solo.into_into_dart().into_dart(),
+                inverted_phase.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::api::audio::UiAudioFeedback::PluginCommandResponse {
+                request_id,
+                response_json,
+            } => [
+                5.into_dart(),
+                request_id.into_into_dart().into_dart(),
+                response_json.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::api::audio::UiAudioFeedback::PluginStateSnapshot {
+                generator_id,
+                track_effect_track_id,
+                track_effect_effect_id,
+                bus_effect_bus_id,
+                bus_effect_effect_id,
+                master_effect_id,
+                state,
+                request_id,
+            } => [
+                6.into_dart(),
+                generator_id.into_into_dart().into_dart(),
+                track_effect_track_id.into_into_dart().into_dart(),
+                track_effect_effect_id.into_into_dart().into_dart(),
+                bus_effect_bus_id.into_into_dart().into_dart(),
+                bus_effect_effect_id.into_into_dart().into_dart(),
+                master_effect_id.into_into_dart().into_dart(),
+                state.into_into_dart().into_dart(),
+                request_id.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            crate::api::audio::UiAudioFeedback::ZeroCopyBufferResponse { request_id, handle } => [
+                7.into_dart(),
+                request_id.into_into_dart().into_dart(),
+                handle.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::audio::UiAudioFeedback
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::audio::UiAudioFeedback>
+    for crate::api::audio::UiAudioFeedback
+{
+    fn into_into_dart(self) -> crate::api::audio::UiAudioFeedback {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::UiAudioHardwareConfig {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -10802,28 +13315,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mixer::UiEffectInstance>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::plugin::UiEffectParameterSnapshot {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.target.into_into_dart().into_dart(),
-            self.effect_id.into_into_dart().into_dart(),
-            self.parameters.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::plugin::UiEffectParameterSnapshot
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiEffectParameterSnapshot>
-    for crate::api::plugin::UiEffectParameterSnapshot
-{
-    fn into_into_dart(self) -> crate::api::plugin::UiEffectParameterSnapshot {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::mixer::UiEffectSummary {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -10928,27 +13419,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::UiGeneratorInstanceT
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::plugin::UiGeneratorParameterSnapshot {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.generator_id.into_into_dart().into_dart(),
-            self.parameters.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::plugin::UiGeneratorParameterSnapshot
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiGeneratorParameterSnapshot>
-    for crate::api::plugin::UiGeneratorParameterSnapshot
-{
-    fn into_into_dart(self) -> crate::api::plugin::UiGeneratorParameterSnapshot {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::mixer::UiMixerChannel {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11006,33 +13476,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mixer::UiMixerChannelParams>
     for crate::api::mixer::UiMixerChannelParams
 {
     fn into_into_dart(self) -> crate::api::mixer::UiMixerChannelParams {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::mixer::UiMixerChannelSnapshot {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.track_id.into_into_dart().into_dart(),
-            self.bus_id.into_into_dart().into_dart(),
-            self.is_master.into_into_dart().into_dart(),
-            self.volume.into_into_dart().into_dart(),
-            self.pan.into_into_dart().into_dart(),
-            self.mute.into_into_dart().into_dart(),
-            self.solo.into_into_dart().into_dart(),
-            self.inverted_phase.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::mixer::UiMixerChannelSnapshot
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::mixer::UiMixerChannelSnapshot>
-    for crate::api::mixer::UiMixerChannelSnapshot
-{
-    fn into_into_dart(self) -> crate::api::mixer::UiMixerChannelSnapshot {
         self
     }
 }
@@ -11159,27 +13602,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiParameterType>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::plugin::UiParameterValue {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.param_id.into_into_dart().into_dart(),
-            self.value.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::plugin::UiParameterValue
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiParameterValue>
-    for crate::api::plugin::UiParameterValue
-{
-    fn into_into_dart(self) -> crate::api::plugin::UiParameterValue {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::pattern::UiPattern {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11199,27 +13621,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::pattern::UiPattern>
     for crate::api::pattern::UiPattern
 {
     fn into_into_dart(self) -> crate::api::pattern::UiPattern {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::plugin::UiPluginCommandResponse {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.request_id.into_into_dart().into_dart(),
-            self.response_json.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::plugin::UiPluginCommandResponse
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiPluginCommandResponse>
-    for crate::api::plugin::UiPluginCommandResponse
-{
-    fn into_into_dart(self) -> crate::api::plugin::UiPluginCommandResponse {
         self
     }
 }
@@ -11557,27 +13958,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::UiTransportState>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::plugin::UiZeroCopyBufferResponse {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.request_id.into_into_dart().into_dart(),
-            self.handle.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::plugin::UiZeroCopyBufferResponse
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiZeroCopyBufferResponse>
-    for crate::api::plugin::UiZeroCopyBufferResponse
-{
-    fn into_into_dart(self) -> crate::api::plugin::UiZeroCopyBufferResponse {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::WavExportConfigDTO {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11625,6 +14005,13 @@ impl SseEncode for BufferDataType {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<BufferDataType>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
+    }
+}
+
+impl SseEncode for DawContext {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
     }
 }
 
@@ -11746,6 +14133,17 @@ impl SseEncode for std::collections::HashMap<u32, crate::api::project::UiTrack> 
 }
 
 impl SseEncode
+    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        let (ptr, size) = self.sse_encode_raw();
+        <usize>::sse_encode(ptr, serializer);
+        <i32>::sse_encode(size, serializer);
+    }
+}
+
+impl SseEncode
     for RustOpaqueMoi<
         flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>,
     >
@@ -11760,6 +14158,17 @@ impl SseEncode
 
 impl SseEncode
     for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<BufferDataType>>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        let (ptr, size) = self.sse_encode_raw();
+        <usize>::sse_encode(ptr, serializer);
+        <i32>::sse_encode(size, serializer);
+    }
+}
+
+impl SseEncode
+    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -11822,22 +14231,7 @@ impl SseEncode
 }
 
 impl SseEncode
-    for StreamSink<
-        crate::api::mixer::UiMixerChannelSnapshot,
-        flutter_rust_bridge::for_generated::SseCodec,
-    >
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        unimplemented!("")
-    }
-}
-
-impl SseEncode
-    for StreamSink<
-        crate::api::plugin::UiPluginCommandResponse,
-        flutter_rust_bridge::for_generated::SseCodec,
-    >
+    for StreamSink<crate::api::audio::UiAudioFeedback, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -11848,18 +14242,6 @@ impl SseEncode
 impl SseEncode
     for StreamSink<
         crate::api::audio::UiTransportFeedback,
-        flutter_rust_bridge::for_generated::SseCodec,
-    >
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        unimplemented!("")
-    }
-}
-
-impl SseEncode
-    for StreamSink<
-        crate::api::plugin::UiZeroCopyBufferResponse,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -12196,6 +14578,16 @@ impl SseEncode for Vec<(u32, u64, u8)> {
     }
 }
 
+impl SseEncode for Vec<(u32, f32)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u32, f32)>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<(u32, crate::api::automation::ModulationLinkDto)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12306,16 +14698,6 @@ impl SseEncode for Vec<crate::api::mixer::UiEffectInstance> {
     }
 }
 
-impl SseEncode for Vec<crate::api::plugin::UiEffectParameterSnapshot> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::api::plugin::UiEffectParameterSnapshot>::sse_encode(item, serializer);
-        }
-    }
-}
-
 impl SseEncode for Vec<crate::api::mixer::UiEffectSummary> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12326,32 +14708,12 @@ impl SseEncode for Vec<crate::api::mixer::UiEffectSummary> {
     }
 }
 
-impl SseEncode for Vec<crate::api::plugin::UiGeneratorParameterSnapshot> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::api::plugin::UiGeneratorParameterSnapshot>::sse_encode(item, serializer);
-        }
-    }
-}
-
 impl SseEncode for Vec<crate::api::pattern::UiNote> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::pattern::UiNote>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<crate::api::plugin::UiParameterValue> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::api::plugin::UiParameterValue>::sse_encode(item, serializer);
         }
     }
 }
@@ -12711,6 +15073,14 @@ impl SseEncode for (u32, u64, u8) {
     }
 }
 
+impl SseEncode for (u32, f32) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.0, serializer);
+        <f32>::sse_encode(self.1, serializer);
+    }
+}
+
 impl SseEncode for (u32, crate::api::automation::ModulationLinkDto) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12895,6 +15265,114 @@ impl SseEncode for crate::api::project::UiApplicationState {
     }
 }
 
+impl SseEncode for crate::api::audio::UiAudioFeedback {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::audio::UiAudioFeedback::GeneratorParameterChanged {
+                generator_id,
+                param_id,
+                value,
+            } => {
+                <i32>::sse_encode(0, serializer);
+                <u32>::sse_encode(generator_id, serializer);
+                <u32>::sse_encode(param_id, serializer);
+                <f32>::sse_encode(value, serializer);
+            }
+            crate::api::audio::UiAudioFeedback::GeneratorParameterSnapshot {
+                generator_id,
+                parameters,
+            } => {
+                <i32>::sse_encode(1, serializer);
+                <u32>::sse_encode(generator_id, serializer);
+                <Vec<(u32, f32)>>::sse_encode(parameters, serializer);
+            }
+            crate::api::audio::UiAudioFeedback::EffectParameterChanged {
+                target_track_id,
+                target_bus_id,
+                effect_id,
+                param_id,
+                value,
+            } => {
+                <i32>::sse_encode(2, serializer);
+                <Option<u32>>::sse_encode(target_track_id, serializer);
+                <Option<u32>>::sse_encode(target_bus_id, serializer);
+                <u32>::sse_encode(effect_id, serializer);
+                <u32>::sse_encode(param_id, serializer);
+                <f32>::sse_encode(value, serializer);
+            }
+            crate::api::audio::UiAudioFeedback::EffectParameterSnapshot {
+                target_track_id,
+                target_bus_id,
+                effect_id,
+                parameters,
+            } => {
+                <i32>::sse_encode(3, serializer);
+                <Option<u32>>::sse_encode(target_track_id, serializer);
+                <Option<u32>>::sse_encode(target_bus_id, serializer);
+                <u32>::sse_encode(effect_id, serializer);
+                <Vec<(u32, f32)>>::sse_encode(parameters, serializer);
+            }
+            crate::api::audio::UiAudioFeedback::MixerChannelSnapshot {
+                target_track_id,
+                target_bus_id,
+                is_master,
+                volume,
+                pan,
+                mute,
+                solo,
+                inverted_phase,
+            } => {
+                <i32>::sse_encode(4, serializer);
+                <Option<u32>>::sse_encode(target_track_id, serializer);
+                <Option<u32>>::sse_encode(target_bus_id, serializer);
+                <bool>::sse_encode(is_master, serializer);
+                <f32>::sse_encode(volume, serializer);
+                <f32>::sse_encode(pan, serializer);
+                <bool>::sse_encode(mute, serializer);
+                <bool>::sse_encode(solo, serializer);
+                <bool>::sse_encode(inverted_phase, serializer);
+            }
+            crate::api::audio::UiAudioFeedback::PluginCommandResponse {
+                request_id,
+                response_json,
+            } => {
+                <i32>::sse_encode(5, serializer);
+                <u32>::sse_encode(request_id, serializer);
+                <String>::sse_encode(response_json, serializer);
+            }
+            crate::api::audio::UiAudioFeedback::PluginStateSnapshot {
+                generator_id,
+                track_effect_track_id,
+                track_effect_effect_id,
+                bus_effect_bus_id,
+                bus_effect_effect_id,
+                master_effect_id,
+                state,
+                request_id,
+            } => {
+                <i32>::sse_encode(6, serializer);
+                <Option<u32>>::sse_encode(generator_id, serializer);
+                <Option<u32>>::sse_encode(track_effect_track_id, serializer);
+                <Option<u32>>::sse_encode(track_effect_effect_id, serializer);
+                <Option<u32>>::sse_encode(bus_effect_bus_id, serializer);
+                <Option<u32>>::sse_encode(bus_effect_effect_id, serializer);
+                <Option<u32>>::sse_encode(master_effect_id, serializer);
+                <Vec<u8>>::sse_encode(state, serializer);
+                <u32>::sse_encode(request_id, serializer);
+            }
+            crate::api::audio::UiAudioFeedback::ZeroCopyBufferResponse { request_id, handle } => {
+                <i32>::sse_encode(7, serializer);
+                <u32>::sse_encode(request_id, serializer);
+                <Option<ZeroCopyHandle>>::sse_encode(handle, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseEncode for crate::api::project::UiAudioHardwareConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12980,15 +15458,6 @@ impl SseEncode for crate::api::mixer::UiEffectInstance {
     }
 }
 
-impl SseEncode for crate::api::plugin::UiEffectParameterSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <crate::api::plugin::UiEffectTarget>::sse_encode(self.target, serializer);
-        <u32>::sse_encode(self.effect_id, serializer);
-        <Vec<crate::api::plugin::UiParameterValue>>::sse_encode(self.parameters, serializer);
-    }
-}
-
 impl SseEncode for crate::api::mixer::UiEffectSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13051,14 +15520,6 @@ impl SseEncode for crate::api::project::UiGeneratorInstanceType {
     }
 }
 
-impl SseEncode for crate::api::plugin::UiGeneratorParameterSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.generator_id, serializer);
-        <Vec<crate::api::plugin::UiParameterValue>>::sse_encode(self.parameters, serializer);
-    }
-}
-
 impl SseEncode for crate::api::mixer::UiMixerChannel {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13099,20 +15560,6 @@ impl SseEncode for crate::api::mixer::UiMixerChannelParams {
                 unimplemented!("");
             }
         }
-    }
-}
-
-impl SseEncode for crate::api::mixer::UiMixerChannelSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.track_id, serializer);
-        <Option<u32>>::sse_encode(self.bus_id, serializer);
-        <bool>::sse_encode(self.is_master, serializer);
-        <f32>::sse_encode(self.volume, serializer);
-        <f32>::sse_encode(self.pan, serializer);
-        <bool>::sse_encode(self.mute, serializer);
-        <bool>::sse_encode(self.solo, serializer);
-        <bool>::sse_encode(self.inverted_phase, serializer);
     }
 }
 
@@ -13204,14 +15651,6 @@ impl SseEncode for crate::api::plugin::UiParameterType {
     }
 }
 
-impl SseEncode for crate::api::plugin::UiParameterValue {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.param_id, serializer);
-        <f32>::sse_encode(self.value, serializer);
-    }
-}
-
 impl SseEncode for crate::api::pattern::UiPattern {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13219,14 +15658,6 @@ impl SseEncode for crate::api::pattern::UiPattern {
         <String>::sse_encode(self.name, serializer);
         <u64>::sse_encode(self.length_ticks, serializer);
         <Vec<crate::api::pattern::UiNote>>::sse_encode(self.notes, serializer);
-    }
-}
-
-impl SseEncode for crate::api::plugin::UiPluginCommandResponse {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.request_id, serializer);
-        <String>::sse_encode(self.response_json, serializer);
     }
 }
 
@@ -13433,14 +15864,6 @@ impl SseEncode for crate::api::project::UiTransportState {
     }
 }
 
-impl SseEncode for crate::api::plugin::UiZeroCopyBufferResponse {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.request_id, serializer);
-        <Option<ZeroCopyHandle>>::sse_encode(self.handle, serializer);
-    }
-}
-
 impl SseEncode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
@@ -13488,6 +15911,20 @@ mod io {
     flutter_rust_bridge::frb_generated_boilerplate_io!();
 
     #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_karbeat_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveform(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>::increment_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_karbeat_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveform(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>::decrement_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
     pub extern "C" fn frbgen_karbeat_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
         ptr: *const std::ffi::c_void,
     ) {
@@ -13521,6 +15958,20 @@ mod io {
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<BufferDataType>>::decrement_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_karbeat_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>::increment_strong_count(ptr as _);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn frbgen_karbeat_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>::decrement_strong_count(ptr as _);
     }
 
     #[unsafe(no_mangle)]
@@ -13594,6 +16045,20 @@ mod web {
     flutter_rust_bridge::frb_generated_boilerplate_web!();
 
     #[wasm_bindgen]
+    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveform(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>::increment_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveform(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>::decrement_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
     pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
         ptr: *const std::ffi::c_void,
     ) {
@@ -13627,6 +16092,20 @@ mod web {
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<BufferDataType>>::decrement_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>::increment_strong_count(ptr as _);
+    }
+
+    #[wasm_bindgen]
+    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
+        ptr: *const std::ffi::c_void,
+    ) {
+        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>::decrement_strong_count(ptr as _);
     }
 
     #[wasm_bindgen]

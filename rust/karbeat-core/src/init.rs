@@ -5,6 +5,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use memmap2::MmapOptions;
+use parking_lot::Mutex;
 use rtrb::RingBuffer;
 
 use crate::{
@@ -68,16 +69,16 @@ pub fn init_engine(ctx: &mut DawContext) {
     let (cmd_prod, cmd_cons) = RingBuffer::new(128);
 
     // Store Producer in context
-    ctx.command_sender = Some(cmd_prod);
+    ctx.command_sender = Mutex::new(Some(cmd_prod));
 
-    match start_audio_stream(cmd_cons, device_conf) {
+    match start_audio_stream(ctx, cmd_cons, device_conf) {
         Ok(_) => {
             log::info!("Audio Engine Successfully initialized");
 
             // SEND STARTUP BEEP
             if let Some(beep_waveform) = generate_startup_beep() {
                 // Borrow the sender safely via as_mut() without locks
-                if let Some(producer) = ctx.command_sender.as_mut() {
+                if let Some(producer) = ctx.command_sender.lock().as_mut() {
                     let _ = producer.push(AudioCommand::PlayOneShot(beep_waveform));
                     log::info!("Startup beep command sent");
                 }

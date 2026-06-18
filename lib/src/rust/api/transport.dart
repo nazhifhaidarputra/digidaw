@@ -6,50 +6,59 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'project.dart';
 part 'transport.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`
 
 /// set the play state of the transport
-Future<void> setPlaying({required bool val}) =>
-    RustLib.instance.api.crateApiTransportSetPlaying(val: val);
+Future<void> setPlaying({required DawContext ctx, required bool val}) =>
+    RustLib.instance.api.crateApiTransportSetPlaying(ctx: ctx, val: val);
 
 /// set what position the playhead is at (in samples)
-Future<void> setPlayhead({required int val}) =>
-    RustLib.instance.api.crateApiTransportSetPlayhead(val: val);
+Future<void> setPlayhead({required DawContext ctx, required int val}) =>
+    RustLib.instance.api.crateApiTransportSetPlayhead(ctx: ctx, val: val);
 
 /// set whether the transport is looping
-Future<void> setLooping({required bool val}) =>
-    RustLib.instance.api.crateApiTransportSetLooping(val: val);
+Future<void> setLooping({required DawContext ctx, required bool val}) =>
+    RustLib.instance.api.crateApiTransportSetLooping(ctx: ctx, val: val);
 
 /// set the BPM of the transport.
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
-Future<void> setBpm({required double val}) =>
-    RustLib.instance.api.crateApiTransportSetBpm(val: val);
+Future<void> setBpm({required DawContext ctx, required double val}) =>
+    RustLib.instance.api.crateApiTransportSetBpm(ctx: ctx, val: val);
 
 /// stop the song playback and reset the playhead to 0
-Future<void> stopSongPlayback() =>
-    RustLib.instance.api.crateApiTransportStopSongPlayback();
+Future<void> stopSongPlayback({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiTransportStopSongPlayback(ctx: ctx);
 
 /// Toggle the pattern playback
 Future<void> togglePatternPlayback({
+  required DawContext ctx,
   required int patternId,
   required int generatorId,
 }) => RustLib.instance.api.crateApiTransportTogglePatternPlayback(
+  ctx: ctx,
   patternId: patternId,
   generatorId: generatorId,
 );
 
 /// Toggle the playback with specific playback
-Future<void> togglePlaybackWithMode({required PlaybackModeDto playbackMode}) =>
-    RustLib.instance.api.crateApiTransportTogglePlaybackWithMode(
-      playbackMode: playbackMode,
-    );
+Future<void> togglePlaybackWithMode({
+  required DawContext ctx,
+  required PlaybackModeDto playbackMode,
+}) => RustLib.instance.api.crateApiTransportTogglePlaybackWithMode(
+  ctx: ctx,
+  playbackMode: playbackMode,
+);
 
-Future<void> switchPatternGenerator({required int generatorId}) => RustLib
-    .instance
-    .api
-    .crateApiTransportSwitchPatternGenerator(generatorId: generatorId);
+Future<void> switchPatternGenerator({
+  required DawContext ctx,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiTransportSwitchPatternGenerator(
+  ctx: ctx,
+  generatorId: generatorId,
+);
 
 @freezed
 sealed class PlaybackModeDto with _$PlaybackModeDto {

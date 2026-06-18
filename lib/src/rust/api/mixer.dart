@@ -6,144 +6,180 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'project.dart';
 part 'mixer.freezed.dart';
 
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiMixerChannelSnapshot`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
-
-/// Opens a stream that continuously polls the audio-thread feedback ring buffer
-/// for `MixerChannelSnapshot` events and forwards them to Flutter.
-///
-/// Call `query_mixer_channel(target)` to request a snapshot; the audio thread
-/// will push the response into the feedback ring buffer, and it will arrive
-/// here within one polling interval (~16 ms).
-///
-/// This mirrors the pattern used by `create_plugin_message_stream` for plugin
-/// parameters — there is no special direct-callback path; everything goes
-/// through the shared `PENDING_FEEDBACK` buffer.
-///
-/// The polling thread terminates automatically when Flutter closes the stream.
-Stream<UiMixerChannelSnapshot> createMixerSnapshotStream() =>
-    RustLib.instance.api.crateApiMixerCreateMixerSnapshotStream();
 
 /// Set a single DSP parameter on a mixer channel.
 /// Routes through the audio thread ring buffer; AppState is only updated on save.
 Future<void> setMixerChannelParam({
+  required DawContext ctx,
   required UiMixerChannelTarget target,
   required UiMixerChannelParams param,
 }) => RustLib.instance.api.crateApiMixerSetMixerChannelParam(
+  ctx: ctx,
   target: target,
   param: param,
 );
 
 /// Request a full snapshot of a mixer channel's current DSP state.
-/// Results arrive asynchronously via the `create_mixer_snapshot_stream` polling stream.
-Future<void> queryMixerChannel({required UiMixerChannelTarget target}) =>
-    RustLib.instance.api.crateApiMixerQueryMixerChannel(target: target);
+/// The response arrives asynchronously as `UiAudioFeedback::MixerChannelSnapshot`
+/// via the unified `create_feedback_stream` in `audio.rs`.
+Future<void> queryMixerChannel({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+}) => RustLib.instance.api.crateApiMixerQueryMixerChannel(
+  ctx: ctx,
+  target: target,
+);
 
 /// **GETTER: Fetch the mixer state**
-Future<UiMixerState> getMixerState() =>
-    RustLib.instance.api.crateApiMixerGetMixerState();
+Future<UiMixerState> getMixerState({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiMixerGetMixerState(ctx: ctx);
 
 /// **GETTER: Fetch a specific mixer channel**
-Future<UiMixerChannel> getMixerChannel({required int trackId}) =>
-    RustLib.instance.api.crateApiMixerGetMixerChannel(trackId: trackId);
+Future<UiMixerChannel> getMixerChannel({
+  required DawContext ctx,
+  required int trackId,
+}) => RustLib.instance.api.crateApiMixerGetMixerChannel(
+  ctx: ctx,
+  trackId: trackId,
+);
 
 Future<(UiMixerChannel, List<UiEffectInstance>)> getMixerChannelPopulated({
+  required DawContext ctx,
   required int trackId,
 }) => RustLib.instance.api.crateApiMixerGetMixerChannelPopulated(
+  ctx: ctx,
   trackId: trackId,
 );
 
 /// **GETTER: Fetch the master bus**
-Future<UiMixerChannel> getMasterBus() =>
-    RustLib.instance.api.crateApiMixerGetMasterBus();
+Future<UiMixerChannel> getMasterBus({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiMixerGetMasterBus(ctx: ctx);
 
-Future<List<UiEffectInstance>> getMasterBusPopulated() =>
-    RustLib.instance.api.crateApiMixerGetMasterBusPopulated();
+Future<List<UiEffectInstance>> getMasterBusPopulated({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiMixerGetMasterBusPopulated(ctx: ctx);
 
 /// **GETTER: Fetch all buses**
-Future<Map<int, UiBus>> getBuses() =>
-    RustLib.instance.api.crateApiMixerGetBuses();
+Future<Map<int, UiBus>> getBuses({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiMixerGetBuses(ctx: ctx);
 
 /// **GETTER: Fetch the routing matrix**
-Future<List<UiRoutingConnection>> getRoutingMatrix() =>
-    RustLib.instance.api.crateApiMixerGetRoutingMatrix();
+Future<List<UiRoutingConnection>> getRoutingMatrix({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiMixerGetRoutingMatrix(ctx: ctx);
 
 /// Get track channel's parameter specs
 Future<List<ParameterSpecDTO>?> getTrackMixerChannelSpecs({
+  required DawContext ctx,
   required int trackId,
 }) => RustLib.instance.api.crateApiMixerGetTrackMixerChannelSpecs(
+  ctx: ctx,
   trackId: trackId,
 );
 
 /// Get bus channel's parameter specs
-Future<List<ParameterSpecDTO>?> getBusMixerChannelSpecs({required int busId}) =>
-    RustLib.instance.api.crateApiMixerGetBusMixerChannelSpecs(busId: busId);
+Future<List<ParameterSpecDTO>?> getBusMixerChannelSpecs({
+  required DawContext ctx,
+  required int busId,
+}) => RustLib.instance.api.crateApiMixerGetBusMixerChannelSpecs(
+  ctx: ctx,
+  busId: busId,
+);
 
 /// get master channel's parameter specs
-Future<List<ParameterSpecDTO>> getMasterChannelSpecs() =>
-    RustLib.instance.api.crateApiMixerGetMasterChannelSpecs();
+Future<List<ParameterSpecDTO>> getMasterChannelSpecs({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiMixerGetMasterChannelSpecs(ctx: ctx);
 
 /// Add an effect to a mixer channel by its registry ID (preferred method).
 Future<void> addEffectToMixerChannelById({
+  required DawContext ctx,
   required int trackId,
   required int registryId,
 }) => RustLib.instance.api.crateApiMixerAddEffectToMixerChannelById(
+  ctx: ctx,
   trackId: trackId,
   registryId: registryId,
 );
 
 Future<void> removeEffectFromMixerChannel({
+  required DawContext ctx,
   required int trackId,
   required int effectInstanceId,
 }) => RustLib.instance.api.crateApiMixerRemoveEffectFromMixerChannel(
+  ctx: ctx,
   trackId: trackId,
   effectInstanceId: effectInstanceId,
 );
 
-Future<void> addEffectToMasterBus({required int registryId}) => RustLib
-    .instance
-    .api
-    .crateApiMixerAddEffectToMasterBus(registryId: registryId);
+Future<void> addEffectToMasterBus({
+  required DawContext ctx,
+  required int registryId,
+}) => RustLib.instance.api.crateApiMixerAddEffectToMasterBus(
+  ctx: ctx,
+  registryId: registryId,
+);
 
-Future<void> removeEffectFromMasterBus({required int effectInstanceId}) =>
-    RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(
-      effectInstanceId: effectInstanceId,
-    );
+Future<void> removeEffectFromMasterBus({
+  required DawContext ctx,
+  required int effectInstanceId,
+}) => RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(
+  ctx: ctx,
+  effectInstanceId: effectInstanceId,
+);
 
 /// Create a new mixer bus and return its ID.
-Future<int> createBus({required String name}) =>
-    RustLib.instance.api.crateApiMixerCreateBus(name: name);
+Future<int> createBus({required DawContext ctx, required String name}) =>
+    RustLib.instance.api.crateApiMixerCreateBus(ctx: ctx, name: name);
 
 /// Delete a mixer bus.
-Future<void> deleteBus({required int busId}) =>
-    RustLib.instance.api.crateApiMixerDeleteBus(busId: busId);
+Future<void> deleteBus({required DawContext ctx, required int busId}) =>
+    RustLib.instance.api.crateApiMixerDeleteBus(ctx: ctx, busId: busId);
 
 /// Add an effect to a bus by its registry ID.
-Future<void> addEffectToBus({required int busId, required int registryId}) =>
-    RustLib.instance.api.crateApiMixerAddEffectToBus(
-      busId: busId,
-      registryId: registryId,
-    );
+Future<void> addEffectToBus({
+  required DawContext ctx,
+  required int busId,
+  required int registryId,
+}) => RustLib.instance.api.crateApiMixerAddEffectToBus(
+  ctx: ctx,
+  busId: busId,
+  registryId: registryId,
+);
 
-Future<void> renameBus({required int busId, required String newName}) =>
-    RustLib.instance.api.crateApiMixerRenameBus(busId: busId, newName: newName);
+Future<void> renameBus({
+  required DawContext ctx,
+  required int busId,
+  required String newName,
+}) => RustLib.instance.api.crateApiMixerRenameBus(
+  ctx: ctx,
+  busId: busId,
+  newName: newName,
+);
 
 Future<List<UiRoutingConnection>> getChannelDestinations({
+  required DawContext ctx,
   required bool isBus,
   required int channelId,
 }) => RustLib.instance.api.crateApiMixerGetChannelDestinations(
+  ctx: ctx,
   isBus: isBus,
   channelId: channelId,
 );
 
 /// Set routing: source → destination with send level.
 Future<void> setRouting({
+  required DawContext ctx,
   required UiRoutingNode source,
   required UiRoutingNode destination,
   required double sendLevel,
   required bool isSend,
 }) => RustLib.instance.api.crateApiMixerSetRouting(
+  ctx: ctx,
   source: source,
   destination: destination,
   sendLevel: sendLevel,
@@ -152,17 +188,21 @@ Future<void> setRouting({
 
 /// Remove a routing connection.
 Future<void> removeRouting({
+  required DawContext ctx,
   required UiRoutingNode source,
   required UiRoutingNode destination,
   required bool isSend,
 }) => RustLib.instance.api.crateApiMixerRemoveRouting(
+  ctx: ctx,
   source: source,
   destination: destination,
   isSend: isSend,
 );
 
-Future<void> updateRouting({required UiRoutingConnection conn}) =>
-    RustLib.instance.api.crateApiMixerUpdateRouting(conn: conn);
+Future<void> updateRouting({
+  required DawContext ctx,
+  required UiRoutingConnection conn,
+}) => RustLib.instance.api.crateApiMixerUpdateRouting(ctx: ctx, conn: conn);
 
 @freezed
 sealed class ParameterSpecDTO with _$ParameterSpecDTO {
@@ -279,22 +319,6 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
       UiMixerChannelParams_InvertedPhase;
   const factory UiMixerChannelParams.solo(bool field0) =
       UiMixerChannelParams_Solo;
-}
-
-/// Full DSP state snapshot of a mixer channel, polled via
-/// poll_mixer_channel_feedback() after calling query_mixer_channel().
-@freezed
-sealed class UiMixerChannelSnapshot with _$UiMixerChannelSnapshot {
-  const factory UiMixerChannelSnapshot({
-    required int trackId,
-    int? busId,
-    required bool isMaster,
-    required double volume,
-    required double pan,
-    required bool mute,
-    required bool solo,
-    required bool invertedPhase,
-  }) = _UiMixerChannelSnapshot;
 }
 
 @freezed

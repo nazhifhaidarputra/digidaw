@@ -1,3 +1,5 @@
+use crate::context::DawContext;
+
 pub mod audio_api;
 pub mod audio_waveform_api;
 pub mod automation_api;
@@ -13,27 +15,16 @@ pub mod project_api;
 pub mod track_api;
 pub mod transport_api;
 
-use crate::{
-    context::utils::broadcast_full_graph,
-    lock::{get_app_write, get_history_lock},
-};
 
-pub fn undo() -> Result<(), String> {
-    {
-        let mut history = get_history_lock();
-        let mut app = get_app_write();
-        history.undo(&mut app)?;
-    }
-    broadcast_full_graph();
+
+pub fn undo(ctx: &mut DawContext) -> Result<(), String> {
+    ctx.history.undo(&mut ctx.app_state)?;
+    ctx.broadcast_full_graph();
     Ok(())
 }
 
-pub fn redo() -> Result<(), String> {
-    {
-        let mut history = get_history_lock();
-        let mut app = get_app_write();
-        history.redo(&mut app)?;
-    }
-    broadcast_full_graph();
+pub fn redo(ctx: &mut DawContext) -> Result<(), String> {
+    ctx.history.redo(&mut ctx.app_state)?;
+    ctx.broadcast_full_graph();
     Ok(())
 }
