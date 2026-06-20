@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PianoRollStateData {
 
- int? get editingPatternId; PianoRollToolSelection get tool; double get zoomLevelTick; GridSize get gridSize; bool get snapToGrid; Set<int> get selectedNoteIds; int? get previewGeneratorId;
+ int? get editingPatternId; PianoRollToolSelection get tool; double get zoomLevelTick; GridSize get gridSize; bool get snapToGrid; ISet<int> get selectedNoteIds; int? get previewGeneratorId;
 /// Create a copy of PianoRollStateData
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -45,7 +45,7 @@ abstract mixin class $PianoRollStateDataCopyWith<$Res>  {
   factory $PianoRollStateDataCopyWith(PianoRollStateData value, $Res Function(PianoRollStateData) _then) = _$PianoRollStateDataCopyWithImpl;
 @useResult
 $Res call({
- int? editingPatternId, PianoRollToolSelection tool, double zoomLevelTick, GridSize gridSize, bool snapToGrid, Set<int> selectedNoteIds, int? previewGeneratorId
+ int? editingPatternId, PianoRollToolSelection tool, double zoomLevelTick, GridSize gridSize, bool snapToGrid, ISet<int> selectedNoteIds, int? previewGeneratorId
 });
 
 
@@ -70,7 +70,7 @@ as PianoRollToolSelection,zoomLevelTick: null == zoomLevelTick ? _self.zoomLevel
 as double,gridSize: null == gridSize ? _self.gridSize : gridSize // ignore: cast_nullable_to_non_nullable
 as GridSize,snapToGrid: null == snapToGrid ? _self.snapToGrid : snapToGrid // ignore: cast_nullable_to_non_nullable
 as bool,selectedNoteIds: null == selectedNoteIds ? _self.selectedNoteIds : selectedNoteIds // ignore: cast_nullable_to_non_nullable
-as Set<int>,previewGeneratorId: freezed == previewGeneratorId ? _self.previewGeneratorId : previewGeneratorId // ignore: cast_nullable_to_non_nullable
+as ISet<int>,previewGeneratorId: freezed == previewGeneratorId ? _self.previewGeneratorId : previewGeneratorId // ignore: cast_nullable_to_non_nullable
 as int?,
   ));
 }
@@ -156,7 +156,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? editingPatternId,  PianoRollToolSelection tool,  double zoomLevelTick,  GridSize gridSize,  bool snapToGrid,  Set<int> selectedNoteIds,  int? previewGeneratorId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? editingPatternId,  PianoRollToolSelection tool,  double zoomLevelTick,  GridSize gridSize,  bool snapToGrid,  ISet<int> selectedNoteIds,  int? previewGeneratorId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PianoRollStateData() when $default != null:
 return $default(_that.editingPatternId,_that.tool,_that.zoomLevelTick,_that.gridSize,_that.snapToGrid,_that.selectedNoteIds,_that.previewGeneratorId);case _:
@@ -177,7 +177,7 @@ return $default(_that.editingPatternId,_that.tool,_that.zoomLevelTick,_that.grid
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? editingPatternId,  PianoRollToolSelection tool,  double zoomLevelTick,  GridSize gridSize,  bool snapToGrid,  Set<int> selectedNoteIds,  int? previewGeneratorId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? editingPatternId,  PianoRollToolSelection tool,  double zoomLevelTick,  GridSize gridSize,  bool snapToGrid,  ISet<int> selectedNoteIds,  int? previewGeneratorId)  $default,) {final _that = this;
 switch (_that) {
 case _PianoRollStateData():
 return $default(_that.editingPatternId,_that.tool,_that.zoomLevelTick,_that.gridSize,_that.snapToGrid,_that.selectedNoteIds,_that.previewGeneratorId);case _:
@@ -197,7 +197,7 @@ return $default(_that.editingPatternId,_that.tool,_that.zoomLevelTick,_that.grid
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? editingPatternId,  PianoRollToolSelection tool,  double zoomLevelTick,  GridSize gridSize,  bool snapToGrid,  Set<int> selectedNoteIds,  int? previewGeneratorId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? editingPatternId,  PianoRollToolSelection tool,  double zoomLevelTick,  GridSize gridSize,  bool snapToGrid,  ISet<int> selectedNoteIds,  int? previewGeneratorId)?  $default,) {final _that = this;
 switch (_that) {
 case _PianoRollStateData() when $default != null:
 return $default(_that.editingPatternId,_that.tool,_that.zoomLevelTick,_that.gridSize,_that.snapToGrid,_that.selectedNoteIds,_that.previewGeneratorId);case _:
@@ -212,7 +212,7 @@ return $default(_that.editingPatternId,_that.tool,_that.zoomLevelTick,_that.grid
 
 
 class _PianoRollStateData implements PianoRollStateData {
-  const _PianoRollStateData({this.editingPatternId = null, this.tool = PianoRollToolSelection.grab, this.zoomLevelTick = 0.67, this.gridSize = GridSize.quarter, this.snapToGrid = false, final  Set<int> selectedNoteIds = const {}, this.previewGeneratorId = null}): _selectedNoteIds = selectedNoteIds;
+  const _PianoRollStateData({this.editingPatternId = null, this.tool = PianoRollToolSelection.grab, this.zoomLevelTick = 0.67, this.gridSize = GridSize.quarter, this.snapToGrid = false, this.selectedNoteIds = const ISetConst<int>({}), this.previewGeneratorId = null});
   
 
 @override@JsonKey() final  int? editingPatternId;
@@ -220,13 +220,7 @@ class _PianoRollStateData implements PianoRollStateData {
 @override@JsonKey() final  double zoomLevelTick;
 @override@JsonKey() final  GridSize gridSize;
 @override@JsonKey() final  bool snapToGrid;
- final  Set<int> _selectedNoteIds;
-@override@JsonKey() Set<int> get selectedNoteIds {
-  if (_selectedNoteIds is EqualUnmodifiableSetView) return _selectedNoteIds;
-  // ignore: implicit_dynamic_type
-  return EqualUnmodifiableSetView(_selectedNoteIds);
-}
-
+@override@JsonKey() final  ISet<int> selectedNoteIds;
 @override@JsonKey() final  int? previewGeneratorId;
 
 /// Create a copy of PianoRollStateData
@@ -239,12 +233,12 @@ _$PianoRollStateDataCopyWith<_PianoRollStateData> get copyWith => __$PianoRollSt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PianoRollStateData&&(identical(other.editingPatternId, editingPatternId) || other.editingPatternId == editingPatternId)&&(identical(other.tool, tool) || other.tool == tool)&&(identical(other.zoomLevelTick, zoomLevelTick) || other.zoomLevelTick == zoomLevelTick)&&(identical(other.gridSize, gridSize) || other.gridSize == gridSize)&&(identical(other.snapToGrid, snapToGrid) || other.snapToGrid == snapToGrid)&&const DeepCollectionEquality().equals(other._selectedNoteIds, _selectedNoteIds)&&(identical(other.previewGeneratorId, previewGeneratorId) || other.previewGeneratorId == previewGeneratorId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PianoRollStateData&&(identical(other.editingPatternId, editingPatternId) || other.editingPatternId == editingPatternId)&&(identical(other.tool, tool) || other.tool == tool)&&(identical(other.zoomLevelTick, zoomLevelTick) || other.zoomLevelTick == zoomLevelTick)&&(identical(other.gridSize, gridSize) || other.gridSize == gridSize)&&(identical(other.snapToGrid, snapToGrid) || other.snapToGrid == snapToGrid)&&const DeepCollectionEquality().equals(other.selectedNoteIds, selectedNoteIds)&&(identical(other.previewGeneratorId, previewGeneratorId) || other.previewGeneratorId == previewGeneratorId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,editingPatternId,tool,zoomLevelTick,gridSize,snapToGrid,const DeepCollectionEquality().hash(_selectedNoteIds),previewGeneratorId);
+int get hashCode => Object.hash(runtimeType,editingPatternId,tool,zoomLevelTick,gridSize,snapToGrid,const DeepCollectionEquality().hash(selectedNoteIds),previewGeneratorId);
 
 @override
 String toString() {
@@ -259,7 +253,7 @@ abstract mixin class _$PianoRollStateDataCopyWith<$Res> implements $PianoRollSta
   factory _$PianoRollStateDataCopyWith(_PianoRollStateData value, $Res Function(_PianoRollStateData) _then) = __$PianoRollStateDataCopyWithImpl;
 @override @useResult
 $Res call({
- int? editingPatternId, PianoRollToolSelection tool, double zoomLevelTick, GridSize gridSize, bool snapToGrid, Set<int> selectedNoteIds, int? previewGeneratorId
+ int? editingPatternId, PianoRollToolSelection tool, double zoomLevelTick, GridSize gridSize, bool snapToGrid, ISet<int> selectedNoteIds, int? previewGeneratorId
 });
 
 
@@ -283,8 +277,8 @@ as int?,tool: null == tool ? _self.tool : tool // ignore: cast_nullable_to_non_n
 as PianoRollToolSelection,zoomLevelTick: null == zoomLevelTick ? _self.zoomLevelTick : zoomLevelTick // ignore: cast_nullable_to_non_nullable
 as double,gridSize: null == gridSize ? _self.gridSize : gridSize // ignore: cast_nullable_to_non_nullable
 as GridSize,snapToGrid: null == snapToGrid ? _self.snapToGrid : snapToGrid // ignore: cast_nullable_to_non_nullable
-as bool,selectedNoteIds: null == selectedNoteIds ? _self._selectedNoteIds : selectedNoteIds // ignore: cast_nullable_to_non_nullable
-as Set<int>,previewGeneratorId: freezed == previewGeneratorId ? _self.previewGeneratorId : previewGeneratorId // ignore: cast_nullable_to_non_nullable
+as bool,selectedNoteIds: null == selectedNoteIds ? _self.selectedNoteIds : selectedNoteIds // ignore: cast_nullable_to_non_nullable
+as ISet<int>,previewGeneratorId: freezed == previewGeneratorId ? _self.previewGeneratorId : previewGeneratorId // ignore: cast_nullable_to_non_nullable
 as int?,
   ));
 }

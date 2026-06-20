@@ -2,6 +2,7 @@
 import 'package:karbeat/src/rust/api/project.dart';
 
 Stream<double> exportProject({
+    required DawContext ctx,
     required String path,
     required String soundfileName,
     required SupportedAudioFormat format,
@@ -51,6 +52,7 @@ Stream<double> exportProject({
         return;
     }
     yield* exportProjectFlutter(
+      ctx: ctx,
       outputPath: fullPath,
       config: config,
       tailHandling: tailHandlingDto,

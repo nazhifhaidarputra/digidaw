@@ -1,43 +1,35 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/shared/enums/global.dart';
+import 'package:karbeat/src/rust/api/project.dart' show DawContext;
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
-class ClipPlacementState {
-  final int? sourceId;
-  final UiSourceType? sourceType;
-  final int trackId;
-  final double timeSamples;
+part 'clip_placement_state.freezed.dart';
 
-  const ClipPlacementState({
-    this.sourceId,
-    this.sourceType,
-    this.trackId = -1,
-    this.timeSamples = 0.0,
-  });
-
-  bool get isPlacing => sourceId != null;
-
-  ClipPlacementState copyWith({
+@freezed
+abstract class ClipPlacementState with _$ClipPlacementState {
+  const factory ClipPlacementState({
     int? sourceId,
     UiSourceType? sourceType,
-    int? trackId,
-    double? timeSamples,
-  }) {
-    return ClipPlacementState(
-      sourceId: sourceId ?? this.sourceId,
-      sourceType: sourceType ?? this.sourceType,
-      trackId: trackId ?? this.trackId,
-      timeSamples: timeSamples ?? this.timeSamples,
-    );
-  }
+    @Default(-1) int trackId,
+    @Default(0.0) double timeSamples,
+  }) = _ClipPlacementState;
+}
+
+extension ClipPlacementHelper on ClipPlacementState {
+  bool get isPlacing => sourceId != null;
 }
 
 class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
   @override
   ClipPlacementState build() => const ClipPlacementState();
+
+  ProjectNotifier get _projectProvider => ref.read(projectProvider.notifier);
+  DawContext get _ctx => _projectProvider.dawContext;
 
   void startPlacement(int sourceId, {required UiSourceType type}) {
     state = ClipPlacementState(sourceId: sourceId, sourceType: type);
@@ -58,6 +50,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
     if (s.sourceId != null && s.sourceType != null && s.trackId != -1) {
       try {
         await createClip(
+          ctx: _ctx,
           sourceId: s.sourceId!,
           sourceType: s.sourceType!,
           trackId: s.trackId,
@@ -77,7 +70,6 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
   }
 }
 
-final clipPlacementProvider =
-    NotifierProvider<ClipPlacementNotifier, ClipPlacementState>(
-      () => ClipPlacementNotifier(),
-    );
+final clipPlacementProvider = NotifierProvider<ClipPlacementNotifier, ClipPlacementState>(
+  () => ClipPlacementNotifier(),
+);
