@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/workspace/view/control_panel.dart';
 import 'package:karbeat/features/mixer/view/mixer_screen.dart';
 import 'package:karbeat/features/piano_roll/view/piano_roll_screen.dart';
@@ -7,7 +10,6 @@ import 'package:karbeat/features/source/view/source_list_screen.dart';
 import 'package:karbeat/features/track/view/track_list_screen.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 
 class MainContent extends ConsumerWidget {
@@ -16,7 +18,7 @@ class MainContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentView = ref.watch(
-      globalStateProvider.select((s) => s.currentView),
+      workspaceStateProvider.select((s) => s.currentView),
     );
 
     return Container(
@@ -55,16 +57,17 @@ class MainContent extends ConsumerWidget {
   }
 
   Widget _buildPianoRoll(WidgetRef ref) {
-    final state = ref.watch(globalStateProvider);
+    final trackState = ref.watch(trackListStateProvider);
+    final projectState = ref.watch(projectProvider);
 
     // Try to get pattern from focused clip (most recently selected)
-    final clipId = state.focusClipId;
-    final trackId = state.selectedTrackId;
+    final clipId = trackState.focusClipId;
+    final trackId = trackState.selectedTrackId;
     int? resultPatternId;
     int? generatorId;
 
     if (clipId != null && trackId != null) {
-      final track = state.tracks[trackId];
+      final track = projectState.value?.tracks[trackId];
       if (track != null) {
         for (final clip in track.clips) {
           if (clip.id == clipId) {
@@ -78,7 +81,7 @@ class MainContent extends ConsumerWidget {
     }
 
     // Fallback: Use editingPatternId (from source list)
-    resultPatternId ??= state.editingPatternId;
+    resultPatternId ??= ref.read(workspaceStateProvider).editingPatternId;
 
     AppLogger.info(
       "Opening piano roll for pattern: $resultPatternId on track: $generatorId",

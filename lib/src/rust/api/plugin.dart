@@ -11,7 +11,7 @@ import 'project.dart';
 part 'plugin.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectParameterSnapshot`, `UiGeneratorParameterSnapshot`, `UiParameterValue`, `UiPluginCommandResponse`, `UiZeroCopyBufferResponse`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
 /// Get all available generators with their registry IDs (preferred for UI)
@@ -24,6 +24,10 @@ Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds({
 Future<List<UiPluginInfo>> getAvailableEffectsWithIds({
   required DawContext ctx,
 }) => RustLib.instance.api.crateApiPluginGetAvailableEffectsWithIds(ctx: ctx);
+
+Future<List<UiPluginInfo>> getAvailablePluginsWithIds({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiPluginGetAvailablePluginsWithIds(ctx: ctx);
 
 /// Get a single generator state from the Generator Pool
 Future<UiGeneratorInstance> getGenerator({

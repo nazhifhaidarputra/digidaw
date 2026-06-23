@@ -1,8 +1,10 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:karbeat/app/providers/app_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -15,12 +17,7 @@ class DawToolbarMenuGroup {
   /// Define list of actions with type [DawToolbarMenuAction]
   final List<DawToolbarMenuAction> actions;
 
-  DawToolbarMenuGroup({
-    required this.id,
-    required this.title,
-    required this.icon,
-    required this.actions,
-  });
+  DawToolbarMenuGroup({required this.id, required this.title, required this.icon, required this.actions});
 }
 
 /// Model for toolbar menu action
@@ -36,16 +33,10 @@ class DawToolbarMenuAction {
   /// Define the callback when this action is executed
   final DawToolbarMenuActionCallback? callback;
 
-  DawToolbarMenuAction(
-    this.title, {
-    this.shortcut,
-    this.isDestructive = false,
-    this.callback,
-  });
+  DawToolbarMenuAction(this.title, {this.shortcut, this.isDestructive = false, this.callback});
 }
 
-typedef DawToolbarMenuActionCallback =
-    void Function(BuildContext, GlobalAppState);
+typedef DawToolbarMenuActionCallback = void Function(BuildContext, WidgetRef);
 
 /// Factory for toolbar menu group
 ///
@@ -66,10 +57,7 @@ class DawToolbarMenuGroupFactory {
   }
 
   /// Helper to handle "Save As" logic used by both Save and Save As buttons
-  static Future<void> _performSaveAs(
-    BuildContext context,
-    GlobalAppState state,
-  ) async {
+  static Future<void> _performSaveAs(BuildContext context, WidgetRef ref) async {
     final path = await FilePicker.saveFile(
       dialogTitle: 'Save Project As...',
       fileName: 'untitled.dgdaw',
@@ -82,15 +70,12 @@ class DawToolbarMenuGroupFactory {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) =>
-              const Center(child: CircularProgressIndicator()),
+          builder: (context) => const Center(child: CircularProgressIndicator()),
         );
       }
 
-      await state.saveProject(path);
+      await ref.read(projectProvider.notifier).saveProject(path);
 
-      // Update the active file path and window title after successful save
-      state.currentFilePath = path;
       await _updateWindowTitle(path);
 
       if (context.mounted) Navigator.of(context).pop();
@@ -105,11 +90,8 @@ class DawToolbarMenuGroupFactory {
       DawToolbarMenuAction(
         'New project',
         shortcut: 'Ctrl + N',
-        callback: (context, state) async {
-          final _ = await state.newBlankProject();
-          // newBlankProject never throws error, it just load the new project
-          // Reset file path in state
-          state.currentFilePath = null;
+        callback: (context, ref) async {
+          ref.invalidate(projectProvider);
 
           // Safely update window title back to default
           if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
@@ -124,11 +106,8 @@ class DawToolbarMenuGroupFactory {
       DawToolbarMenuAction(
         'Open project',
         shortcut: 'Ctrl+O',
-        callback: (context, state) async {
-          final result = await FilePicker.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: ['karbeat', 'dgdaw'],
-          );
+        callback: (context, ref) async {
+          final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['karbeat', 'dgdaw']);
           if (result != null && result.files.single.path != null) {
             final path = result.files.single.path!;
 
@@ -139,19 +118,14 @@ class DawToolbarMenuGroupFactory {
                 barrierDismissible: false, // User cannot tap outside to dismiss
                 useRootNavigator: true, // Ensures it covers the entire app
                 builder: (context) => PopScope(
-                  canPop:
-                      false, // Prevents Android back-button from dismissing it
+                  canPop: false, // Prevents Android back-button from dismissing it
                   child: const Center(
                     child: Card(
                       child: Padding(
                         padding: EdgeInsets.all(24.0),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text("Loading Project..."),
-                          ],
+                          children: [CircularProgressIndicator(), SizedBox(height: 16), Text("Loading Project...")],
                         ),
                       ),
                     ),
@@ -162,10 +136,8 @@ class DawToolbarMenuGroupFactory {
 
             try {
               // Await the Rust Shadow Load & Swap
-              await state.loadProject(path);
+              await ref.read(projectProvider.notifier).loadProject(path);
 
-              // Update UI state (Window title, etc.)
-              state.currentFilePath = path;
               await _updateWindowTitle(path);
             } catch (e) {
               debugPrint("Failed to load project: $e");
@@ -182,20 +154,20 @@ class DawToolbarMenuGroupFactory {
       DawToolbarMenuAction(
         'Save Project',
         shortcut: 'Ctrl+S',
-        callback: (context, state) async {
-          if (state.currentFilePath == null) {
+        callback: (context, ref) async {
+          final currentFilePath = ref.read(projectProvider).value?.currentFilePath;
+          if (currentFilePath == null) {
             // If the project has never been saved, trigger Save As
-            await _performSaveAs(context, state);
+            await _performSaveAs(context, ref);
           } else {
             // Otherwise, save silently to the existing path
             showDialog(
               context: context,
               barrierDismissible: false,
-              builder: (context) =>
-                  const Center(child: CircularProgressIndicator()),
+              builder: (context) => const Center(child: CircularProgressIndicator()),
             );
 
-            await state.saveProject(state.currentFilePath!);
+            await ref.read(projectProvider.notifier).saveProject(currentFilePath);
 
             if (context.mounted) Navigator.of(context).pop();
           }
@@ -204,15 +176,15 @@ class DawToolbarMenuGroupFactory {
       DawToolbarMenuAction(
         'Save As...',
         shortcut: 'Ctrl+Shift+S',
-        callback: (context, state) async {
-          await _performSaveAs(context, state);
+        callback: (context, ref) async {
+          await _performSaveAs(context, ref);
         },
       ),
       DawToolbarMenuAction('Import Audio'),
       DawToolbarMenuAction(
         'Export Project',
-        callback: (context, state) async {
-          state.openExportPanel();
+        callback: (context, ref) async {
+          ref.read(workspaceStateProvider.notifier).openExportPanel();
         },
       ),
       DawToolbarMenuAction('Settings'),

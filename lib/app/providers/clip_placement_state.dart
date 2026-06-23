@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/project.dart' show DawContext;
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
@@ -26,14 +27,20 @@ extension ClipPlacementHelper on ClipPlacementState {
 
 class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
   @override
-  ClipPlacementState build() => const ClipPlacementState();
+  ClipPlacementState build() {
 
-  ProjectNotifier get _projectProvider => ref.read(projectProvider.notifier);
-  DawContext get _ctx => _projectProvider.dawContext;
+    return const ClipPlacementState();
+  }
+
+  DawContext get _ctx {
+    // Optional: Add a debug assert to catch architectural mistakes early
+    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    return ref.read(projectProvider.notifier).dawContext;
+  }
 
   void startPlacement(int sourceId, {required UiSourceType type}) {
     state = ClipPlacementState(sourceId: sourceId, sourceType: type);
-    ref.read(globalStateProvider).navigateTo(WorkspaceView.trackList);
+    ref.read(workspaceStateProvider.notifier).navigateTo(WorkspaceView.trackList);
   }
 
   void updatePlacementTarget(int trackId, double timeSamples) {
@@ -56,9 +63,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
           trackId: s.trackId,
           startTime: s.timeSamples.toInt(),
         );
-        ref.read(globalStateProvider).notifyCustomBackendChange(() async {
-          await ref.read(globalStateProvider).syncTrackState(s.trackId);
-        });
+        await ref.read(trackListStateProvider.notifier).syncTrack(s.trackId);
         state = const ClipPlacementState();
         return Result.ok(null);
       } catch (e) {

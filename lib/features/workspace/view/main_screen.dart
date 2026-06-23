@@ -2,12 +2,12 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/constants/toolbar.dart';
 import 'package:karbeat/features/workspace/view/project_export.dart';
 import 'package:karbeat/features/workspace/view/main_content.dart';
 import 'package:karbeat/features/workspace/view/side_panel.dart';
 import 'package:karbeat/features/workspace/view/sidebar.dart';
-import 'package:karbeat/app/providers/app_state.dart';
-
 import 'package:karbeat/features/piano_roll/view/floating_midi_keyboard.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
@@ -17,15 +17,14 @@ class MainScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentContext = ref.watch(
-      globalStateProvider.select((s) => s.currentToolbarContext),
-    );
-    final showMidiKeyboard = ref.watch(
-      globalStateProvider.select((s) => s.showFloatingMidiKeyboard),
-    );
-
-    final showExportPanel = ref.watch(
-      globalStateProvider.select((s) => s.showExportPanel),
-    );
+          workspaceStateProvider.select((s) => s.currentToolbarContext),
+        );
+        final showMidiKeyboard = ref.watch(
+          workspaceStateProvider.select((s) => s.showFloatingMidiKeyboard),
+        );
+        final showExportPanel = ref.watch(
+          workspaceStateProvider.select((s) => s.showExportPanel),
+        );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -64,7 +63,7 @@ class MainScreen extends ConsumerWidget {
             Positioned.fill(
               child: ProjectExportPanel(
                 onClose: () {
-                  ref.read(globalStateProvider).closeExportPanel();
+                  ref.read(workspaceStateProvider.notifier).closeExportPanel();
                 },
               ),
             ),
@@ -79,21 +78,21 @@ class MainScreen extends ConsumerWidget {
     WidgetRef ref,
     ToolbarMenuContextGroup currentContext,
   ) {
-    final group = GlobalAppState.menuGroups.firstWhere(
+    final group = ToolbarConstants.menuGroups.firstWhere(
       (g) => g.id == currentContext,
     );
 
     return ContextPanel(
       group: group,
       onAction: (action) {
-        final state = ref.read(globalStateProvider);
+        final state = ref.read(workspaceStateProvider.notifier);
         state.closeContextPanel();
-        action.callback?.call(context, state);
+        action.callback?.call(context, ref);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Executed: ${action.title}')));
       },
-      onClose: () => ref.read(globalStateProvider).closeContextPanel(),
+      onClose: () => ref.read(workspaceStateProvider.notifier).closeContextPanel(),
     );
   }
 }

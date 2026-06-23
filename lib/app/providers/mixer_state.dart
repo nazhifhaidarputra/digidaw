@@ -46,7 +46,11 @@ abstract class MixerEditorState with _$MixerEditorState {
 /// intended as a drop-in replacement during the slow migration.
 class MixerNotifier extends Notifier<MixerEditorState> {
   ProjectNotifier get _projectNotifier => ref.read(projectProvider.notifier);
-  DawContext get _ctx => _projectNotifier.dawContext;
+  DawContext get _ctx {
+    // Optional: Add a debug assert to catch architectural mistakes early
+    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    return ref.read(projectProvider.notifier).dawContext;
+  }
 
   mixer_api.UiMixerState? get _mixerState => ref.read(projectProvider).value?.mixer;
 

@@ -52,10 +52,16 @@ abstract class TrackListState with _$TrackListState {
 /// and are intended as a drop-in replacement during the slow migration.
 class TrackListNotifier extends Notifier<TrackListState> {
   @override
-  TrackListState build() => const TrackListState();
+  TrackListState build() {
+    return const TrackListState();
+    }
 
   ProjectNotifier get _projectNotifierRead => ref.read(projectProvider.notifier);
-  DawContext get _ctx => _projectNotifierRead.dawContext;
+  DawContext get _ctx {
+    // Optional: Add a debug assert to catch architectural mistakes early
+    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    return ref.read(projectProvider.notifier).dawContext;
+  }
   // ------------------------------------------------------------------
   // Synchronisation
   // ------------------------------------------------------------------
@@ -160,6 +166,10 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
+  // ================================================
+  // Track CRUD
+  // ================================================
+
   /// Change a track's color with optimistic update and backend rollback.
   Future<Result<void>> changeTrackColor(int trackId, Color newColor) async {
     final original = ref.read(projectProvider).value?.tracks[trackId];
@@ -180,6 +190,20 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
+  Future<AsyncValue<Null>> addAudioTrack() async {
+    final createRes = await AsyncValue.guard(() async {
+      await addNewAudioTrack(ctx: _ctx);
+
+      // sync tracks
+      await syncTracks();
+    });
+
+    if (createRes.hasError) {
+      AppLogger.error('TrackListNotifier: failed to add audio track: ${createRes.error}');
+      return AsyncValue.error(Exception(createRes.error.toString()), createRes.stackTrace!);
+    }
+    return createRes;
+  }
   // ------------------------------------------------------------------
   // Clip CRUD
   // ------------------------------------------------------------------
@@ -392,6 +416,14 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error('TrackListNotifier: error pasting clips: $e');
       return Result.error(Exception('$e'));
     }
+  }
+
+  Future<void> handleUpdateTrackOrder({
+    required WidgetRef ref,
+    required int trackId,
+    required int newIdx,
+  }) async {
+    
   }
 
   // ------------------------------------------------------------------

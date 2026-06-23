@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
 class FloatingPillControlPanel extends ConsumerWidget {

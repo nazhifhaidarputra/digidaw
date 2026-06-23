@@ -15,6 +15,21 @@ enum GridSize {
 
   final double value;
   const GridSize(this.value);
+  String get label => switch (this) {
+    GridSize.oneBar => '1 Bar',
+    GridSize.twoBeat => '2 Beats',
+    GridSize.full => '1/1',
+    GridSize.half => '1/2',
+    GridSize.third => '1/3',
+    GridSize.quarter => '1/4',
+    GridSize.sixth => '1/6',
+    GridSize.eighth => '1/8',
+    GridSize.twelfth => '1/12',
+    GridSize.sixteenth => '1/16',
+    GridSize.thirtysecond => '1/32',
+    GridSize.sixtyfourth => '1/64',
+    GridSize.infinity => 'None',
+  };
 }
 
 enum MusicalBeatSize {
@@ -35,4 +50,21 @@ enum MusicalBeatSize {
 
   final double value;
   const MusicalBeatSize(this.value);
+
+  String get label => switch (this) {
+    MusicalBeatSize.four => '1 Bar',
+    MusicalBeatSize.three => '3 Beats',
+    MusicalBeatSize.two => '2 Beats',
+    MusicalBeatSize.one => '1 Beat',
+    MusicalBeatSize.half => '1/2 Step',
+    MusicalBeatSize.third => '1/3 Step',
+    MusicalBeatSize.quarter => '1/4 Step',
+    MusicalBeatSize.sixth => '1/6 Step',
+    MusicalBeatSize.eighth => '1/8 Step',
+    MusicalBeatSize.twelfth => '1/12 Step',
+    MusicalBeatSize.sixteenth => '1/16 Step',
+    MusicalBeatSize.thirtysecond => '1/32 Step',
+    MusicalBeatSize.sixtyfourth => '1/64 Step',
+    MusicalBeatSize.none => 'None',
+  };
 }

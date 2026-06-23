@@ -77,6 +77,11 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     return await _fetchFullState(uiState, null);
   }
 
+  Future<void> newBlankProject() async {
+    final uiState = await serialization_api.newBlankProject(ctx: _dawContext);
+    await _fetchFullState(uiState, null);
+  }
+
   /// Load a project from disk relying on the injected `SerializerService`.
   Future<Result<void>> loadProject(String path) async {
     final result = await AsyncValue.guard(() async {

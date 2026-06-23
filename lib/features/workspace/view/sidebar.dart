@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/app_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/constants/toolbar.dart';
 
 class Sidebar extends ConsumerWidget {
   const Sidebar({super.key});
@@ -8,7 +9,7 @@ class Sidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentContext = ref.watch(
-      globalStateProvider.select((s) => s.currentToolbarContext),
+      workspaceStateProvider.select((s) => s.currentToolbarContext),
     );
 
     return Container(
@@ -22,13 +23,13 @@ class Sidebar extends ConsumerWidget {
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
-                  children: GlobalAppState.menuGroups.map((group) {
+                  children: ToolbarConstants.menuGroups.map((group) {
                     return SidebarItem(
                       icon: group.icon,
                       title: group.title,
                       isActive: currentContext == group.id,
                       onTap: () => ref
-                          .read(globalStateProvider)
+                          .read(workspaceStateProvider.notifier)
                           .toggleToolbarContext(group.id),
                     );
                   }).toList(),

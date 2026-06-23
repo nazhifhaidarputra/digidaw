@@ -6,6 +6,7 @@ use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
+use karbeat_utils::hash::hash_str;
 
 #[derive(Clone)]
 #[karbeat_plugin]
@@ -343,8 +344,10 @@ impl AudioPluginBuilder for KarbeatzerV2 {
 
 impl Manifestable for KarbeatzerV2 {
     fn build_manifest() -> PluginManifest {
+        let id_string = "synth_karbeatzer_v2";
         PluginManifest {
-            id: 0,
+            id: hash_str(id_string),
+            id_string: id_string.to_string(),
             name: "Karbeatzer V2".to_owned(),
             internal_type: "KarbeatzerV2".to_owned(),
             is_synth: true,

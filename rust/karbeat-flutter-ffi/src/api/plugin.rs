@@ -117,6 +117,20 @@ impl UiPluginInfo {
     }
 }
 
+impl From<&PluginInfo> for UiPluginInfo {
+    fn from(p: &PluginInfo) -> Self {
+        let plugin_type = match p.is_synth {
+            true => KarbeatPluginType::Generator,
+            false => KarbeatPluginType::Effect,
+        };
+        Self {
+            id: p.id,
+            name: p.name.clone(),
+            plugin_type,
+        }
+    }
+}
+
 /// A response message arriving from the audio thread containing the zero-copy buffer.
 /// Dart uses the `request_id` to correlate with the original command sent via `query_zero_copy_buffer`.
 pub struct UiZeroCopyBufferResponse {
@@ -138,6 +152,10 @@ pub fn get_available_effects_with_ids(ctx: &DawContext) -> Result<Vec<UiPluginIn
     Ok(plugin_api::get_available_effects(ctx, |plugin_info| {
         UiPluginInfo::from_info_to_effect(plugin_info)
     }))
+}
+
+pub fn get_available_plugins_with_ids(ctx: &DawContext) -> Vec<UiPluginInfo> {
+    plugin_api::get_available_plugins(ctx)
 }
 
 /// Get a single generator state from the Generator Pool

@@ -6,6 +6,7 @@
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
+use karbeat_utils::hash::hash_str;
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
 /// It has strictly two oscillators, making it a simple 8-bit retro sound.
@@ -325,8 +326,10 @@ impl AudioPluginBuilder for MyRetro {
 
 impl Manifestable for MyRetro {
     fn build_manifest() -> PluginManifest {
+        let id_str = "synth_my_retro";
         PluginManifest {
-            id: 1,
+            id: hash_str(id_str),
+            id_string: id_str.to_owned(),
             name: "My Retro".to_owned(),
             internal_type: "MyRetro".to_owned(),
             is_synth: true,

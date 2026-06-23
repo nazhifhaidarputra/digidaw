@@ -4,6 +4,7 @@ use karbeat_dsp::filter::{
 
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
+use karbeat_utils::hash::hash_str;
 use num_complex::{Complex, Complex32};
 use realfft::{RealFftPlanner, RealToComplex};
 use serde::{Deserialize, Serialize};
@@ -755,8 +756,10 @@ impl AudioPlugin for DigiParametricEQ {
 
 impl Manifestable for DigiParametricEQ {
     fn build_manifest() -> PluginManifest {
+        let id_string = "effect_param_eq";
         PluginManifest {
-            id: 0, // Set to your global plugin ID
+            id: hash_str(id_string),
+            id_string: id_string.to_string(),
             name: "Digi Parametric EQ".into(),
             internal_type: "DigiParametricEQ".into(),
             is_synth: false,

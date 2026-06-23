@@ -8,6 +8,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub struct PluginManifest {
     pub id: u32,
+    pub id_string: String,
     pub name: String,
     pub internal_type: String,
     pub is_synth: bool,

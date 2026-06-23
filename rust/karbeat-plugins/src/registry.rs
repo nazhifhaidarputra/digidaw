@@ -22,6 +22,7 @@ struct RegisteredPlugin {
 pub struct PluginInfo {
     pub id: u32,
     pub name: String,
+    pub is_synth: bool,
 }
 
 pub struct PluginRegistry {
@@ -169,6 +170,7 @@ impl PluginRegistry {
             .map(|(id, reg)| PluginInfo {
                 id: *id,
                 name: reg.name.clone(),
+                is_synth: reg.is_synth,
             })
             .collect()
     }
@@ -196,6 +198,7 @@ impl PluginRegistry {
             .map(|(id, reg)| PluginInfo {
                 id: *id,
                 name: reg.name.clone(),
+                is_synth: reg.is_synth,
             })
             .collect()
     }
@@ -207,6 +210,7 @@ impl PluginRegistry {
             .map(|(id, reg)| PluginInfo {
                 id: *id,
                 name: reg.name.clone(),
+                is_synth: reg.is_synth,
             })
             .collect()
     }

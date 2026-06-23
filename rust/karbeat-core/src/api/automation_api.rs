@@ -32,7 +32,7 @@ pub fn add_automation_lane_for_track(
     default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
-        let mut app = &mut ctx.app_state;
+        let app = &mut ctx.app_state;
         app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?
     };
 
@@ -53,7 +53,7 @@ pub fn add_automation_lane(
     default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
-        let mut app = &mut ctx.app_state;
+        let app = &mut ctx.app_state;
         app.add_automation_lane(target, label, min, max, default_value)?
     };
 
@@ -74,7 +74,7 @@ pub fn add_automation_lane_for_bus(
     default_value: f32
 ) -> anyhow::Result<AutomationLane> {
     let (lane, _link_id) = {
-        let mut app = &mut ctx.app_state;
+        let app = &mut ctx.app_state;
         app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
     };
 
@@ -92,7 +92,7 @@ pub fn add_new_automation_point(
     value: f32
 ) -> anyhow::Result<AutomationPoint> {
     let auto_point = {
-        let mut app = &mut ctx.app_state;
+        let app = &mut ctx.app_state;
         let point = AutomationPoint::new(time_ticks, value);
         app.add_automation_point(automation_id, time_ticks, value)?;
         point
@@ -110,7 +110,7 @@ pub fn remove_automation_point(
     index: usize
 ) -> anyhow::Result<()> {
     {
-        let mut app = &mut ctx.app_state;
+        let app = &mut ctx.app_state;
         app.remove_automation_point(automation_id, index)?;
     }
     ctx.broadcast_automation_lane(automation_id);
@@ -126,7 +126,7 @@ pub fn update_automation_point(
     tension: f32
 ) -> anyhow::Result<usize> {
     let new_index = {
-        let mut app = &mut ctx.app_state;
+        let app = &mut ctx.app_state;
 
         let (_, new_index) = app.update_automation_point(
             automation_id,

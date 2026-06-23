@@ -31,7 +31,11 @@ abstract class PianoRollStateData with _$PianoRollStateData {
 final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollStateData>(PianoRollNotifier.new);
 
 class PianoRollNotifier extends Notifier<PianoRollStateData> {
-  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
+  DawContext get _ctx {
+    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    return ref.read(projectProvider.notifier).dawContext;
+  }
+
   ProjectNotifier get _projectNotifier => ref.read(projectProvider.notifier);
   AsyncValue<ApplicationDataStore> get _projectState => ref.read(projectProvider);
 

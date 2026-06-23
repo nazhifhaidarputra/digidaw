@@ -8,7 +8,6 @@ import 'package:karbeat/core/constants/audio_format.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:file_picker/file_picker.dart';
 
 class ProjectExportPanel extends ConsumerStatefulWidget {

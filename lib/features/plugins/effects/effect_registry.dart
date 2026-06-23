@@ -1,7 +1,7 @@
 import 'package:karbeat/features/plugins/effects/abstract_effect_screen.dart';
 import 'package:karbeat/features/plugins/effects/karbeat_parametric_eq.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
-import 'package:karbeat/src/rust/api/utils.dart';
+import 'package:karbeat/generated/plugins/plugins.dart';
 
 typedef EffectScreenBuilder =
     AbstractEffectScreen Function(int effectId, UiEffectTarget target);
@@ -9,7 +9,7 @@ typedef EffectScreenBuilder =
 class EffectRegistry {
   EffectRegistry._();
   static final Map<int, EffectScreenBuilder> _effects = {
-    hashStrFnv1A(s: "effect_param_eq"): (id, target) =>
+    DigiParametricEQSpecs.id: (id, target) =>
         KarbeatParametricEq(effectId: id, target: target),
   };
 

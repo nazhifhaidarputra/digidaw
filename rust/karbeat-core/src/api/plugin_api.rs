@@ -1,4 +1,3 @@
-use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 

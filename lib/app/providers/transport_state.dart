@@ -36,7 +36,11 @@ final transportProvider = AsyncNotifierProvider<TransportNotifier, TransportStat
 
 class TransportNotifier extends AsyncNotifier<TransportStateData> {
   // Helper to grab the opaque FFI context pointer instantly
-  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
+    DawContext get _ctx {
+    // Optional: Add a debug assert to catch architectural mistakes early
+    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    return ref.read(projectProvider.notifier).dawContext;
+  }
 
   @override
   Future<TransportStateData> build() async {

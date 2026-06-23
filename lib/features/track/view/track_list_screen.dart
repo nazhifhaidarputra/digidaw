@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/widgets/scroll_physics/unclamped_never_scrollable_physics.dart';
 import 'package:karbeat/features/mixer/service/modulation_service.dart';
+import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_lane_slot.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
@@ -38,9 +43,8 @@ final trackWaveformProvider =
     Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
       // Re-evaluate whenever the track changes (e.g. clips added/removed)
       ref.watch(globalStateProvider.select((s) => s.tracks[arg.trackId]));
-
-      // Sync call — no copy, no await; returns Arc handles into Rust memory
-      return getWaveformHandlesForTrack(trackId: arg.trackId);
+      final ctx = ref.read(projectProvider.notifier).dawContext;
+      return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
     });
 
 /// Tracks whether a track's automation accordion is expanded
@@ -65,29 +69,20 @@ class TrackListScreen extends ConsumerWidget {
             ? 220.0
             : parentWidth * 0.35;
 
-        return Builder(
-          builder: (context) {
-            final trackIdsStr = ref.watch(
-              globalStateProvider.select((s) {
-                // Sort the actual track objects by their orderIdx
-                final sortedTracks = s.tracks.values.toList()
-                  ..sort((a, b) => a.orderIdx.compareTo(b.orderIdx));
+        final tracksMap = ref.watch(
+          projectProvider.select((s) => s.value?.tracks),
+        );
+        if (tracksMap == null) return const SizedBox();
 
-                // Map them back to just their IDs
-                return sortedTracks.map((t) => t.id).join(',');
-              }),
-            );
+        final sortedTracks = tracksMap.values.toList()
+          ..sort((a, b) => a.orderIdx.compareTo(b.orderIdx));
 
-            final trackIds = trackIdsStr.isEmpty
-                ? <int>[]
-                : trackIdsStr.split(',').map(int.parse).toList();
+        final trackIds = sortedTracks.map((t) => t.id).toList();
 
-            return _SplitTrackView(
-              trackIds: trackIds,
-              itemHeight: itemHeight,
-              headerWidth: headerWidth,
-            );
-          },
+        return _SplitTrackView(
+          trackIds: trackIds,
+          itemHeight: itemHeight,
+          headerWidth: headerWidth,
         );
       },
     );
@@ -181,21 +176,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
 
-    final state = ref.read(globalStateProvider);
-    _activeSampleRate = state.hardwareConfig.sampleRate > 0
-        ? state.hardwareConfig.sampleRate
-        : 44100;
-
-    _posSub = state.positionStream.listen((pos) {
-      if (!mounted) return;
-      if (pos.sampleRate > 0 && pos.sampleRate != _activeSampleRate) {
-        // Only setState if it changed to avoid spamming rebuilds
-        setState(() {
-          _activeSampleRate = pos.sampleRate;
-        });
-      }
-    });
-
     // Listen to batch drag controller for overlay updates
     _clipDragController.addListener(_onBatchDragUpdate);
   }
@@ -229,24 +209,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           LogicalKeyboardKey.controlRight,
         );
 
-    if (isCtrl != _isCtrlPressed) {
-      // Check mounted before setState in case of fast dispose
-      if (mounted) {
-        setState(() {
-          _isCtrlPressed = isCtrl;
-        });
-      }
+    if (isCtrl != _isCtrlPressed && mounted) {
+      setState(() {
+        _isCtrlPressed = isCtrl;
+      });
     }
     return false;
   }
 
   void _handleScrollExpansion() {
-    // If the user scrolls within 500px of the edge...
     final maxScroll = _trackContentController.position.maxScrollExtent;
     final currentScroll = _trackContentController.offset;
 
     if (currentScroll >= maxScroll - 500) {
-      // ... Add more space (e.g., another 2000px)
       setState(() {
         _timelineWidth += 2000.0;
       });
@@ -254,8 +229,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   void _updateZoom(double newZoom, double focalPointX) {
-    final state = ref.read(globalStateProvider);
-    final oldZoom = state.horizontalZoomLevel;
+    final workspaceState = ref.read(workspaceStateProvider);
+    final oldZoom = workspaceState.horizontalZoomLevel;
 
     final clampedZoom = newZoom.clamp(1.0, 1000.0);
     if (clampedZoom == oldZoom) return;
@@ -271,14 +246,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     double newScroll = (ticksAtFocalPoint / clampedZoom) - focalPointX;
     if (newScroll < 0) newScroll = 0.0;
 
+    final tracks = ref.read(projectProvider).value?.tracks.values ?? [];
+    final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate =
+        ref.read(projectProvider).value?.hardwareConfig.sampleRate ?? 48000;
+
     // Dynamic Window Strategy
     // Find the actual furthest tick of content in the project
     double maxContentTicks = 3840.0; // Base minimum 1 bar
-    for (final track in state.tracks.values) {
+    for (final track in tracks) {
       for (final clip in track.clips) {
         final endTick =
-            clip.startTimeInTicks(state.tempo, _activeSampleRate) +
-            clip.loopLengthInTicks(state.tempo, _activeSampleRate);
+            clip.startTimeInTicks(tempo, sampleRate) +
+            clip.loopLengthInTicks(tempo, sampleRate);
         if (endTick > maxContentTicks) {
           maxContentTicks = endTick.toDouble();
         }
@@ -299,7 +279,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     double newTimelineWidth = math.max(contentWidth, requiredWindowWidth);
 
     // Update the state immediately
-    state.horizontalZoomLevel = clampedZoom;
+    ref.read(workspaceStateProvider.notifier).setHorizontalZoom(clampedZoom);
     setState(() {
       _timelineWidth = newTimelineWidth;
     });
@@ -313,7 +293,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   void _handleTimelineGesture(BuildContext context, Offset localPosition) {
-    final state = ref.read(globalStateProvider);
+    final selectedTool = ref.read(workspaceStateProvider).selectedTool;
     double scrollX = 0;
     if (_trackContentController.hasClients) {
       scrollX = _trackContentController.offset;
@@ -321,7 +301,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final double absoluteX = localPosition.dx + scrollX;
     if (absoluteX < 0) return;
 
-    switch (state.selectedTool) {
+    switch (selectedTool) {
       case ToolSelection.zoom:
         break;
       case ToolSelection.draw:
@@ -386,7 +366,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   /// Confirms the range selection and selects all clips within the time range
-  void _confirmRangeSelect(GlobalAppState state) {
+  void _confirmRangeSelect() {
     if (!_isRangeSelecting ||
         _rangeSelectStart == null ||
         _rangeSelectEnd == null ||
@@ -395,7 +375,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       return;
     }
 
-    final zoomLevel = state.horizontalZoomLevel;
+    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
 
     // Get time range in ticks
     final startX = _rangeSelectStart!.dx;
@@ -406,11 +386,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final startTimeTicks = (minX * zoomLevel).toInt();
     final endTimeTicks = (maxX * zoomLevel).toInt();
 
-    final bpm = state.tempo;
-    final sr = state.hardwareConfig.sampleRate;
+    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sr =
+        ref.read(projectProvider).value?.hardwareConfig.sampleRate ?? 48000;
 
     // Find clips in the target track that overlap with the selection range
-    final track = state.tracks[_rangeSelectTrackId!];
+    final track = ref.read(projectProvider).value?.tracks[_rangeSelectTrackId!];
     if (track == null) {
       _cancelRangeSelect();
       return;
@@ -429,12 +410,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     // Select the clips
     if (selectedClipIds.isNotEmpty) {
-      state.selectClips(
-        trackId: _rangeSelectTrackId!,
-        clipIds: selectedClipIds,
-      );
+      ref
+          .read(trackListStateProvider.notifier)
+          .selectClips(trackId: _rangeSelectTrackId!, clipIds: selectedClipIds);
     } else {
-      state.deselectAllClips();
+      ref.read(trackListStateProvider.notifier).deselectAllClips();
     }
 
     _cancelRangeSelect();
@@ -451,7 +431,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   /// Helper method to build the cut helper line
-  Widget _buildCutHelperLine(BuildContext context, GlobalAppState state) {
+  Widget _buildCutHelperLine(BuildContext context) {
+    final state = ref.watch(workspaceStateProvider);
     if (_mousePos == null || state.selectedTool != ToolSelection.slice) {
       return const SizedBox();
     }
@@ -499,6 +480,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildToolbar() {
+    final workspaceState = ref.watch(workspaceStateProvider);
     return Container(
       height: 36,
       color: Colors.grey.shade900,
@@ -513,60 +495,20 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
             const SizedBox(width: 8),
             DropdownButton<GridSize>(
-              value: ref.watch(globalStateProvider.select((s) => s.gridSize)),
+              value: workspaceState.gridSize,
               dropdownColor: Colors.grey.shade800,
               style: const TextStyle(color: Colors.white, fontSize: 12),
               underline: const SizedBox(),
               items: GridSize.values.map((size) {
-                String label = "";
-                switch (size) {
-                  case GridSize.full:
-                    label = "1/1";
-                    break;
-                  case GridSize.half:
-                    label = "1/2";
-                    break;
-                  case GridSize.third:
-                    label = "1/3";
-                    break;
-                  case GridSize.quarter:
-                    label = "1/4";
-                    break;
-                  case GridSize.sixth:
-                    label = "1/6";
-                    break;
-                  case GridSize.eighth:
-                    label = "1/8";
-                    break;
-                  case GridSize.sixteenth:
-                    label = "1/16";
-                    break;
-                  case GridSize.thirtysecond:
-                    label = "1/32";
-                    break;
-                  case GridSize.sixtyfourth:
-                    label = "1/64";
-                    break;
-                  case GridSize.oneBar:
-                    label = "1 Bar";
-                    break;
-                  case GridSize.twoBeat:
-                    label = "2 Beats";
-                    break;
-                  case GridSize.infinity:
-                    label = "None";
-                    break;
-                  case GridSize.twelfth:
-                    label = "1/12";
-                    break;
-                }
+                final label = size.label;
                 return DropdownMenuItem<GridSize>(
                   value: size,
                   child: Text(label),
                 );
               }).toList(),
               onChanged: (val) {
-                if (val != null) ref.read(globalStateProvider).setGridSize(val);
+                if (val != null)
+                  ref.read(workspaceStateProvider.notifier).setGridSize(val);
               },
             ),
             const SizedBox(width: 16),
@@ -576,69 +518,21 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
             const SizedBox(width: 8),
             DropdownButton<MusicalBeatSize>(
-              value: ref.watch(
-                globalStateProvider.select(
-                  (s) => s.horizontalClipShiftSizeDenom,
-                ),
-              ),
+              value: workspaceState.horizontalClipShiftSizeDenom,
               dropdownColor: Colors.grey.shade800,
               style: const TextStyle(color: Colors.white, fontSize: 12),
               underline: const SizedBox(),
               items: MusicalBeatSize.values.map((size) {
-                String label = "";
-                switch (size) {
-                  case MusicalBeatSize.four:
-                    label = "1 Bar";
-                    break;
-                  case MusicalBeatSize.three:
-                    label = "3 Beats";
-                    break;
-                  case MusicalBeatSize.two:
-                    label = "2 Beats";
-                    break;
-                  case MusicalBeatSize.one:
-                    label = "1 Beat";
-                    break;
-                  case MusicalBeatSize.half:
-                    label = "1/2 Step";
-                    break;
-                  case MusicalBeatSize.quarter:
-                    label = "1/4 Step";
-                    break;
-                  case MusicalBeatSize.eighth:
-                    label = "1/8 Step";
-                    break;
-                  case MusicalBeatSize.sixteenth:
-                    label = "1/16 Step";
-                    break;
-                  case MusicalBeatSize.thirtysecond:
-                    label = "1/32 Step";
-                    break;
-                  case MusicalBeatSize.sixtyfourth:
-                    label = "1/64 Step";
-                    break;
-                  case MusicalBeatSize.none:
-                    label = "None";
-                    break;
-                  case MusicalBeatSize.third:
-                    label = "1/3 Step";
-                    break;
-                  case MusicalBeatSize.sixth:
-                    label = "1/6 Step";
-                    break;
-                  case MusicalBeatSize.twelfth:
-                    label = "1/12 Step";
-                    break;
-                }
                 return DropdownMenuItem<MusicalBeatSize>(
                   value: size,
-                  child: Text(label),
+                  child: Text(size.label),
                 );
               }).toList(),
               onChanged: (val) {
                 if (val != null) {
-                  ref.read(globalStateProvider).horizontalClipShiftSizeDenom =
-                      val;
+                  ref
+                      .read(workspaceStateProvider.notifier)
+                      .setHorizontalClipShiftSizeDenom(val);
                 }
               },
             ),
@@ -681,8 +575,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     trackAutomationProvider(trackId),
                   ); // Using the API from previous steps
                   final trackColor = ref.watch(
-                    globalStateProvider.select(
-                      (s) => s.tracks[trackId]?.color.toColor() ?? Colors.grey,
+                    projectProvider.select(
+                      (s) =>
+                          s.value?.tracks[trackId]?.color.toColor() ??
+                          Colors.grey,
                     ),
                   );
 
@@ -725,20 +621,20 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildTimelineArea(BuildContext context, int itemCount) {
-    final state = ref.read(globalStateProvider);
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
     );
-    final selectedTool = ref.watch(
-      globalStateProvider.select((s) => s.selectedTool),
-    );
-    final horizontalZoom = ref.watch(
-      globalStateProvider.select((s) => s.horizontalZoomLevel),
-    );
+    final workspaceState = ref.watch(workspaceStateProvider);
+    final selectedTool = workspaceState.selectedTool;
+    final horizontalZoom = workspaceState.horizontalZoomLevel;
     final selectedClipIds = ref.watch(
-      globalStateProvider.select((s) => s.selectedClipIds),
+      trackListStateProvider.select((s) => s.selectedClipIds),
     );
     final bool isZooming = _isCtrlPressed || selectedTool == ToolSelection.zoom;
+
+    final sr =
+        ref.read(projectProvider).value?.hardwareConfig.sampleRate ?? 48000;
+    final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
 
     MouseCursor handleCursor() {
       if (isPlacing) return SystemMouseCursors.move;
@@ -759,28 +655,18 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     ? _rulerController.offset
                     : 0;
                 double absoluteX = details.localPosition.dx + scrollX;
-                final ticks = absoluteX * state.horizontalZoomLevel;
-                final sampleRate = _activeSampleRate > 0
-                    ? _activeSampleRate
-                    : 48000;
-                final samples =
-                    (ticks * (60.0 / state.tempo) * (sampleRate / 960.0))
-                        .round();
-                state.seekTo(samples);
+                final ticks = absoluteX * horizontalZoom;
+                final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
+                ref.read(transportProvider.notifier).seekTo(samples);
               },
               onPanUpdate: (details) {
                 double scrollX = _rulerController.hasClients
                     ? _rulerController.offset
                     : 0;
                 double absoluteX = details.localPosition.dx + scrollX;
-                final ticks = absoluteX * state.horizontalZoomLevel;
-                final sampleRate = _activeSampleRate > 0
-                    ? _activeSampleRate
-                    : 48000;
-                final samples =
-                    (ticks * (60.0 / state.tempo) * (sampleRate / 960.0))
-                        .round();
-                state.seekTo(samples);
+                final ticks = absoluteX * horizontalZoom;
+                final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
+                ref.read(transportProvider.notifier).seekTo(samples);
               },
               child: Container(
                 height: 30,
@@ -823,20 +709,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     _mousePos = event.localPosition;
                     if (event.buttons == kSecondaryButton) {
                       _lastRightClickPos = event.localPosition;
-                      ref.read(globalStateProvider).deselectAllClips();
+                      ref
+                          .read(trackListStateProvider.notifier)
+                          .deselectAllClips();
                       setState(() {});
                     }
                   },
                   onPointerSignal: (event) {
                     if (event is PointerScrollEvent && _isCtrlPressed) {
-                      final currentZoom = ref
-                          .read(globalStateProvider)
-                          .horizontalZoomLevel;
                       final double multiplier = event.scrollDelta.dy > 0
                           ? 0.9
                           : 1.1;
                       _updateZoom(
-                        currentZoom * multiplier,
+                        horizontalZoom * multiplier,
                         event.localPosition.dx,
                       );
                     }
@@ -849,14 +734,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                         return;
                       }
                       if (selectedTool == ToolSelection.zoom) {
-                        final currentZoom = ref
-                            .read(globalStateProvider)
-                            .horizontalZoomLevel;
                         final double multiplier = details.delta.dy > 0
                             ? 0.9
                             : 1.1;
                         _updateZoom(
-                          currentZoom * multiplier,
+                          horizontalZoom * multiplier,
                           details.localPosition.dx,
                         );
                         return;
@@ -883,7 +765,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     onPanEnd: (details) {
                       if (selectedTool == ToolSelection.select &&
                           _isRangeSelecting) {
-                        _confirmRangeSelect(state);
+                        _confirmRangeSelect();
                       }
                     },
                     child: ScrollConfiguration(
@@ -917,9 +799,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                     final targetPos = _lastRightClickPos;
                                     if (targetPos == null) return;
 
-                                    final currentState = ref.read(
-                                      globalStateProvider,
-                                    );
                                     double scrollY =
                                         _timelineController.hasClients
                                         ? _timelineController.offset
@@ -934,9 +813,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
                                     final targetTrackId =
                                         widget.trackIds[trackIndex];
-                                    final targetTrack =
-                                        currentState.tracks[targetTrackId];
-                                    if (targetTrack == null) return;
+                                    final track = ref
+                                        .read(projectProvider)
+                                        .value
+                                        ?.tracks[targetTrackId];
+                                    if (track == null) return;
 
                                     double scrollX =
                                         _trackContentController.hasClients
@@ -944,43 +825,46 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                         : 0;
                                     double absoluteX = (targetPos.dx + scrollX)
                                         .clamp(0, double.infinity);
-                                    double ticks =
-                                        absoluteX *
-                                        currentState.horizontalZoomLevel;
+                                    double ticks = absoluteX * horizontalZoom;
 
-                                    if (currentState.snapToGrid) {
+                                    if (workspaceState.snapToGrid) {
                                       ticks = _snapTick(
                                         ticks.toInt(),
-                                        currentState,
+                                        workspaceState,
                                       ).toDouble();
                                     }
 
                                     int pasteStartTime;
-                                    if (targetTrack.trackType ==
-                                        UiTrackType.audio) {
+                                    if (track.trackType == UiTrackType.audio) {
                                       final sr =
-                                          currentState
-                                                  .hardwareConfig
-                                                  .sampleRate >
-                                              0
-                                          ? currentState
-                                                .hardwareConfig
-                                                .sampleRate
-                                          : 48000;
+                                          ref
+                                              .read(projectProvider)
+                                              .value
+                                              ?.hardwareConfig
+                                              .sampleRate ??
+                                          48000;
+                                      final tempo =
+                                          ref
+                                              .read(transportProvider)
+                                              .value
+                                              ?.state
+                                              ?.bpm ??
+                                          120.0;
                                       pasteStartTime = ticksToSamples(
                                         ticks.toInt(),
-                                        currentState.tempo,
+                                        tempo,
                                         sr,
                                       );
                                     } else {
                                       pasteStartTime = ticks.toInt();
                                     }
 
-                                    final result = await currentState
+                                    final result = await ref
+                                        .read(trackListStateProvider.notifier)
                                         .pasteClips(
                                           targetTrackId: targetTrackId,
                                           pasteStartTime: pasteStartTime,
-                                          trackType: targetTrack.trackType,
+                                          trackType: track.trackType,
                                         );
 
                                     if (result.isErr() && context.mounted) {
@@ -1022,13 +906,21 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                         trackAutomationProvider(trackId),
                                       );
                                       final trackColor = ref.watch(
-                                        globalStateProvider.select(
+                                        projectProvider.select(
                                           (s) =>
-                                              s.tracks[trackId]?.color
+                                              s.value?.tracks[trackId]?.color
                                                   .toColor() ??
                                               Colors.grey,
                                         ),
                                       );
+
+                                      final sr =
+                                          ref
+                                              .read(projectProvider)
+                                              .value
+                                              ?.hardwareConfig
+                                              .sampleRate ??
+                                          48000;
 
                                       return Column(
                                         children: [
@@ -1039,7 +931,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                               height: widget.itemHeight,
                                               horizontalScrollController:
                                                   _trackContentController,
-                                              sampleRate: _activeSampleRate,
+                                              sampleRate: sr,
                                               clipDragController:
                                                   _clipDragController,
                                             ),
@@ -1089,7 +981,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         // Overlays inside the Timeline Stack
         if (isPlacing && _mousePos != null) _buildGhostClip(context),
         if (_isRangeSelecting) _buildRangeSelectRect(context),
-        _buildCutHelperLine(context, state),
+        _buildCutHelperLine(context),
 
         _GroupedBatchOverlay(
           trackIds: widget.trackIds,
@@ -1108,15 +1000,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               zoomLevel: horizontalZoom,
               sampleSelector: (pos) => pos.ticks,
               onSeek: (int newTicks) {
-                final state = ref.read(globalStateProvider);
-                final tempo = state.tempo;
+                final state = ref.read(projectProvider).value;
+                if (state == null) return;
+                final tempo = ref.read(transportProvider).value?.state?.bpm;
+                if (tempo == null) return;
                 final safeTicks = newTicks < 0 ? 0 : newTicks;
                 final sampleRate = state.hardwareConfig.sampleRate > 0
                     ? state.hardwareConfig.sampleRate
                     : 48000;
                 final samples =
                     (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
-                state.seekTo(samples);
+                ref.read(transportProvider.notifier).seekTo(samples);
               },
             ),
           ),
@@ -1172,12 +1066,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 title: "Copy",
                 icon: Icons.copy,
                 onTap: () async {
-                  final trackId = state.selectedTrackId;
+                  final trackId = ref
+                      .read(trackListStateProvider)
+                      .selectedTrackId;
                   if (trackId == null) return;
-                  final result = await state.copySelectedClips(
-                    trackId: trackId,
-                    clipIds: selectedClipIds,
-                  );
+                  final result = await ref
+                      .read(trackListStateProvider.notifier)
+                      .copySelectedClips(
+                        trackId: trackId,
+                        clipIds: selectedClipIds.toList(),
+                      );
                   if (!context.mounted) return;
                   if (result.isErr()) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1192,13 +1090,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 title: "Cut",
                 icon: Icons.cut,
                 onTap: () async {
-                  final trackId = state.selectedTrackId;
+                  final trackId = ref
+                      .read(trackListStateProvider)
+                      .selectedTrackId;
                   if (trackId == null) return;
-                  final result = await state.cutSelectedClips(
-                    trackId: trackId,
-                    clipIds: selectedClipIds,
-                  );
-                  state.deselectAllClips();
+                  final result = await ref
+                      .read(trackListStateProvider.notifier)
+                      .cutSelectedClips(
+                        trackId: trackId,
+                        clipIds: selectedClipIds.toList(),
+                      );
+                  ref.read(trackListStateProvider.notifier).deselectAllClips();
                   if (!context.mounted) return;
                   if (result.isErr()) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1214,12 +1116,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 icon: Icons.delete,
                 isDestructive: true,
                 onTap: () async {
-                  state.deleteSelectedClips();
-                  state.deselectAllClips();
+                  ref
+                      .read(trackListStateProvider.notifier)
+                      .deleteSelectedClips();
+                  ref.read(trackListStateProvider.notifier).deselectAllClips();
                 },
               ),
             ],
-            onClose: () => state.deselectAllClips(),
+            onClose: () =>
+                ref.read(trackListStateProvider.notifier).deselectAllClips(),
             title:
                 "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
           ),
@@ -1250,7 +1155,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     double absoluteX = (_mousePos!.dx + scrollX).clamp(0, double.infinity);
 
     // Convert X Pixels -> Ticks
-    final state = ref.read(globalStateProvider);
+    final state = ref.read(workspaceStateProvider);
     final zoomLevel = state.horizontalZoomLevel;
     double ticks = absoluteX * zoomLevel;
 
@@ -1286,7 +1191,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       scrollX = _trackContentController.offset;
     }
 
-    final state = ref.read(globalStateProvider);
+    final state = ref.read(workspaceStateProvider);
     double absoluteX = _mousePos!.dx + scrollX;
     if (absoluteX < 0) absoluteX = 0;
 
@@ -1422,9 +1327,21 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         title: const Text("Add New Track"),
         children: [
           SimpleDialogOption(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              ref.read(globalStateProvider).addAudioTrack();
+              final result = await ref
+                  .read(trackListStateProvider.notifier)
+                  .addAudioTrack();
+              result.when(
+                data: (_) {},
+                loading: () {},
+                error: (error, stack) {
+                  AppLogger.error("Error adding audio track: $error");
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(error.toString())));
+                },
+              );
             },
             child: const Row(
               children: [
@@ -1454,7 +1371,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   void _showGeneratorBrowser(BuildContext context) {
-    final availablePlugins = ref.read(globalStateProvider).availableGenerators;
+    final availablePlugins = ref
+        .read(audioPluginProvider.notifier)
+        .getAvailableGenerators();
 
     showDialog(
       context: context,
@@ -2618,19 +2537,11 @@ int computeTargetBin(double zoomLevel) {
 }
 
 /// Snaps a tick value to the nearest grid line based on the global state
-int _snapTick(int ticks, GlobalAppState state) {
-  if (!state.snapToGrid) return ticks;
-
-  final gridSize = state.gridSize;
-
-  if (gridSize.value <= 0) return ticks;
-
-  // Calculate the exact tick width of one grid line (4 * 960 = whole note)
-  final double ticksPerGridLine = (960.0 * 4.0) / gridSize.value;
-
+int _snapTick(int ticks, WorkspaceState workspaceState) {
+  if (!workspaceState.snapToGrid) return ticks;
+  if (workspaceState.gridSize.value <= 0) return ticks;
+  final double ticksPerGridLine = (960.0 * 4.0) / workspaceState.gridSize.value;
   if (ticksPerGridLine <= 0) return ticks;
-
-  // Round to the nearest grid interval
   return ((ticks / ticksPerGridLine).round() * ticksPerGridLine).toInt();
 }
 
