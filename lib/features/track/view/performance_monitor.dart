@@ -75,7 +75,9 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
                   Text(
                     "DSP: ${_currentDsp.toStringAsFixed(1)}%",
                     style: TextStyle(
-                      color: _currentDsp > 85 ? Colors.redAccent : Colors.cyanAccent,
+                      color: _currentDsp > 85
+                          ? Colors.redAccent
+                          : Colors.cyanAccent,
                       fontSize: 10,
                       fontFamily: 'monospace',
                     ),
@@ -83,7 +85,11 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
                   const SizedBox(width: 16),
                   Text(
                     "RAM: ${(_currentRamMb / 1024).toStringAsFixed(1)} GB / ${(_totalRamMb / 1024).toStringAsFixed(1)} GB",
-                    style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace'),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ],
               ),

@@ -4,15 +4,14 @@ use crate::core::project::AudioTrack;
 use crate::shared::id::*;
 use karbeat_utils::color::Color;
 
-pub fn get_track<T, F>(ctx: &DawContext, track_id: TrackId, mapper: F) -> anyhow::Result<T>
+pub fn get_track<T, F>(ctx: &DawContext, track_id: TrackId, mapper: F) -> Option<T>
 where
     F: Fn(&AudioTrack) -> T,
 {
     let track = ctx.app_state
         .tracks
-        .get(&track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-    Ok(mapper(track))
+        .get(&track_id)?;
+    Some(mapper(track))
 }
 
 pub fn add_midi_track_with_generator_id(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<AudioTrack> {
@@ -50,16 +49,16 @@ pub fn add_new_audio_track(ctx: &mut DawContext) -> AudioTrack {
     track
 }
 
-pub fn get_tracks<C, U, M>(ctx: &DawContext, mapper: M) -> anyhow::Result<C>
+pub fn get_tracks<C, U, M>(ctx: &DawContext, mapper: M) -> C
 where
     M: Fn(u32, &AudioTrack) -> U,
     C: FromIterator<U>,
 {
-    Ok(ctx.app_state
+    ctx.app_state
         .tracks
         .iter()
         .map(|(id, track)| mapper(id.to_u32(), track))
-        .collect())
+        .collect()
 }
 
 /// Get tracks ordered by index (For UI)

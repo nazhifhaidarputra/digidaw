@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/track/view/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -17,20 +19,13 @@ class AudioPropertiesScreen extends ConsumerWidget {
     required this.sourceName,
   });
 
-  final audioPropertiesProvider = FutureProvider.autoDispose
-      .family<AudioWaveformUiForAudioProperties, int>((ref, sourceId) async {
-        final result = await getAudioProperties(id: sourceId);
 
-        if (result == null) {
-          throw Exception("Failed to load audio properties");
-        }
-
-        return result;
-      });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final propsAsync = ref.watch(audioPropertiesProvider(sourceId));
+
+    final ctx = ref.read(projectProvider.notifier).dawContext;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
@@ -47,7 +42,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
         ),
 
         data: (props) {
-          final handle = props.id != null ? getWaveformHandle(sourceId: props.id!) : null;
+          final handle = props.id != null ? getWaveformHandle(ctx: ctx, sourceId: props.id!) : null;
           return Column(
             children: [
               // HEADER
@@ -89,7 +84,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
                     FloatingActionButton.extended(
                       heroTag: 'play_source_fab',
                       onPressed: () {
-                        playSourcePreview(id: sourceId);
+                        playSourcePreview(ctx: ctx, id: sourceId);
                       },
                       icon: const Icon(Icons.play_arrow),
                       label: const Text("Preview"),
@@ -100,7 +95,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
                     FloatingActionButton.extended(
                       heroTag: 'stop_source_fab',
                       onPressed: () {
-                        stopAllPreviews();
+                        stopAllPreviews(ctx: ctx);
                       },
                       label: const Text("Stop"),
                       icon: const Icon(Icons.stop),

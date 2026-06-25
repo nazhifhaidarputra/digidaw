@@ -102,7 +102,7 @@ Future<UiClip> getClip({
   clipId: clipId,
 );
 
-Future<UiTrack> getTrack({required DawContext ctx, required int trackId}) =>
+Future<UiTrack?> getTrack({required DawContext ctx, required int trackId}) =>
     RustLib.instance.api.crateApiTrackGetTrack(ctx: ctx, trackId: trackId);
 
 /// move clips in batch

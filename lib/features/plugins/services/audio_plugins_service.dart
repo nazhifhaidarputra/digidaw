@@ -5,6 +5,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/track.dart' as track_api;
 
 part 'audio_plugins_service.freezed.dart';
 
@@ -72,11 +73,12 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
 
     // 1. Replicate GlobalAppState constructor behavior: Fetch on boot
     try {
-      final generators = await getAvailableGeneratorsWithIds(ctx: _ctx);
-      final effects = await getAvailableEffectsWithIds(ctx: _ctx);
+      // final generators = await getAvailableGeneratorsWithIds(ctx: _ctx);
+      // final effects = await getAvailableEffectsWithIds(ctx: _ctx);
+      final plugins = await getAvailablePluginsWithIds(ctx: _ctx);
 
       return state.copyWith(
-        registry: state.registry.addPlugins([...generators, ...effects]),
+        registry: state.registry.addPlugins(plugins),
       );
     } catch (e) {
       AppLogger.error("Failed to initialize plugin registry: $e");

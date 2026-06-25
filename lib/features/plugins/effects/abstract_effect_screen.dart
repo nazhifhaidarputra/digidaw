@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/daw_stream_provider.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
+import 'package:karbeat/src/rust/api/project.dart';
 
 /// Abstract base class for effect plugin screens.
 ///
@@ -33,8 +37,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   bool isLoading = true;
   String? errorMessage;
 
-  /// Timer for polling parameter feedback from audio thread
-  Timer? _parameterPollTimer;
+  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
 
   /// Display name for the effect (shown in AppBar).
   /// Override this in subclasses to customize.
@@ -56,88 +59,31 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   void initState() {
     super.initState();
     loadParameterSpecs();
-    startParameterPolling();
-  }
-
-  @override
-  void dispose() {
-    _parameterPollTimer?.cancel();
-    super.dispose();
+    _requestParameterFeedback();
   }
 
   /// Start polling for parameter feedback from the audio thread.
   @protected
-  void startParameterPolling() async {
-    // Request initial parameter snapshot from audio thread
-    await plugin_api.queryEffectParameters(
-      target: widget.target,
-      effectId: widget.effectId,
-    );
-
-    // Poll every 50ms for smooth UI updates during automation
-    _parameterPollTimer = Timer.periodic(
-      const Duration(milliseconds: 50),
-      (_) => _pollParameterFeedback(),
-    );
-  }
-
-  /// Poll for parameter feedback from the audio thread and update UI.
-  void _pollParameterFeedback() async {
-    if (!mounted) return;
-
-    try {
-      final snapshots = await plugin_api.pollEffectParameterFeedback();
-      if (snapshots.isEmpty) return;
-
-      bool updated = false;
-
-      // Update local UI state
-      setState(() {
-        for (final snapshot in snapshots) {
-          // Only process snapshots for this effect and target
-          if (snapshot.effectId != widget.effectId ||
-              snapshot.target != widget.target) {
-            continue;
-          }
-
-          for (final paramValue in snapshot.parameters) {
-            final index = parameters.indexWhere(
-              (p) => p.id == paramValue.paramId,
-            );
-            if (index != -1) {
-              // Copy all immutable fields but update the value
-              parameters[index] = plugin_api.UiPluginParameter(
-                id: parameters[index].id,
-                path: parameters[index].path,
-                name: parameters[index].name,
-                group: parameters[index].group,
-                value: paramValue.value,
-                min: parameters[index].min,
-                max: parameters[index].max,
-                defaultValue: parameters[index].defaultValue,
-                step: parameters[index].step,
-                paramType: parameters[index].paramType,
-                choices: parameters[index].choices,
-              );
-              updated = true;
-            }
-          }
-        }
-      });
-
-      if (updated) {
-        onParametersUpdated();
+  void _requestParameterFeedback() async {
+      try {
+        // Just tell Rust we are watching this effect.
+        // The stream will handle the actual data delivery.
+        await plugin_api.queryEffectParameters(
+          ctx: _ctx,
+          target: widget.target,
+          effectId: widget.effectId,
+        );
+      } catch (e) {
+        debugPrint('Failed to request effect parameters: $e');
       }
-    } catch (e) {
-      debugPrint('Error polling effect parameter feedback: $e');
     }
-  }
 
   /// Load parameter specs from the backend.
   @protected
   Future<void> loadParameterSpecs() async {
     try {
       final specs = await plugin_api.getEffectParameterSpecs(
+        ctx: _ctx,
         target: widget.target,
         effectId: widget.effectId,
       );
@@ -160,6 +106,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   @protected
   Future<void> resetToDefault({required int paramId, }) async {
     await plugin_api.setEffectParameter(
+      ctx: _ctx,
       target: widget.target,
       effectId: widget.effectId,
       paramId: plugin_api.UiParamId.id(paramId),
@@ -195,6 +142,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     // Send to backend
     try {
       await plugin_api.setEffectParameter(
+        ctx: _ctx,
         target: widget.target,
         effectId: widget.effectId,
         paramId: plugin_api.UiParamId.id(paramId),
@@ -240,6 +188,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     // Send to backend
     try {
       await plugin_api.setEffectParameter(
+        ctx: _ctx,
         target: widget.target,
         effectId: widget.effectId,
         paramId: plugin_api.UiParamId.path(paramId),
@@ -382,8 +331,89 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     return buildDynamicEffectBody(context);
   }
 
-  @override
-  Widget build(BuildContext context) {
+  @protected
+  void initParameterListener() {
+    ref.listen(masterAudioFeedbackProvider, (previous, next) {
+      if (!next.hasValue || next.value == null) return;
+
+      final feedback = next.value!;
+
+      // Helper to verify this stream event belongs to THIS specific effect widget
+      bool isMatchingTarget(int? streamTrackId, int? streamBusId) {
+        if (widget.target is plugin_api.UiEffectTarget_Track) {
+          return streamTrackId == (widget.target as plugin_api.UiEffectTarget_Track).field0;
+        } else if (widget.target is plugin_api.UiEffectTarget_Bus) {
+          return streamBusId == (widget.target as plugin_api.UiEffectTarget_Bus).field0;
+        } else if (widget.target is plugin_api.UiEffectTarget_Master) {
+          return streamTrackId == null && streamBusId == null;
+        }
+        return false;
+      }
+
+      feedback.maybeWhen(
+        // 1. Handle Bulk Parameter Snapshots
+        effectParameterSnapshot: (targetTrackId, targetBusId, snapshotEffectId, snapshotParams) {
+          if (snapshotEffectId != widget.effectId || !isMatchingTarget(targetTrackId, targetBusId) || snapshotParams.isEmpty) return;
+
+          setState(() {
+            for (final paramTuple in snapshotParams) {
+              final paramId = paramTuple.$1;
+              final paramValue = paramTuple.$2;
+
+              final index = parameters.indexWhere((p) => p.id == paramId);
+              if (index != -1) {
+                parameters[index] = plugin_api.UiPluginParameter(
+                  id: parameters[index].id,
+                  path: parameters[index].path,
+                  name: parameters[index].name,
+                  group: parameters[index].group,
+                  value: paramValue,
+                  min: parameters[index].min,
+                  max: parameters[index].max,
+                  defaultValue: parameters[index].defaultValue,
+                  step: parameters[index].step,
+                  paramType: parameters[index].paramType,
+                  choices: parameters[index].choices,
+                );
+              }
+            }
+          });
+          onParametersUpdated();
+        },
+
+        // 2. Handle Single Parameter Changes
+        effectParameterChanged: (targetTrackId, targetBusId, changedEffectId, paramId, value) {
+          if (changedEffectId != widget.effectId || !isMatchingTarget(targetTrackId, targetBusId)) return;
+
+          setState(() {
+            final index = parameters.indexWhere((p) => p.id == paramId);
+            if (index != -1) {
+              parameters[index] = plugin_api.UiPluginParameter(
+                id: parameters[index].id,
+                path: parameters[index].path,
+                name: parameters[index].name,
+                group: parameters[index].group,
+                value: value,
+                min: parameters[index].min,
+                max: parameters[index].max,
+                defaultValue: parameters[index].defaultValue,
+                step: parameters[index].step,
+                paramType: parameters[index].paramType,
+                choices: parameters[index].choices,
+              );
+            }
+          });
+          onParametersUpdated();
+        },
+
+        // 3. Ignore Generator, Mixer, and other events
+        orElse: () {}, 
+      );
+    });
+  }
+
+  @protected
+  Scaffold buildScaffold(Widget body) {
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
       appBar: AppBar(
@@ -395,7 +425,13 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
       ),
-      body: buildEffectBody(context),
+      body: body,
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    initParameterListener();
+    return buildScaffold(buildEffectBody(context));
   }
 }

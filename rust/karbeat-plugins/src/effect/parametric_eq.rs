@@ -344,6 +344,9 @@ pub struct DigiParametricEQ {
     /// Determines if the FFT and ring buffer should collect data
     enable_spectrum_analyzer: bool,
     enable_magnitude_curve: bool,
+
+    #[serde(skip)]
+    active_parameter_edits: hashbrown::HashSet<u32>,
 }
 
 impl Default for DigiParametricEQ {
@@ -381,6 +384,7 @@ impl DigiParametricEQ {
         engine.spectrum_buffer = Arc::new(Box::new([]));
         engine.enable_spectrum_analyzer = false;
         engine.enable_magnitude_curve = false;
+        engine.active_parameter_edits = hashbrown::HashSet::new();
         engine.handle_side_effects(0);
         engine
     }
@@ -582,7 +586,7 @@ impl DigiParametricEQ {
         self.spectrum_buffer = Arc::new(flat.clone().into_boxed_slice());
     }
 
-    fn process_dsp(&mut self, buffer: &mut [f32]) {
+    fn process_dsp(&mut self, buffers: &mut AudioBuffers) {
         let current_base_gain = self.base_gain.get();
         let master_linear_gain = if current_base_gain.abs() > 0.01 {
             (10.0_f32).powf(current_base_gain / 20.0)
@@ -597,37 +601,31 @@ impl DigiParametricEQ {
             }
         }
 
-        if self.channels == 2 {
-            for chunk in buffer.chunks_exact_mut(2) {
-                let mut l = chunk[0] * master_linear_gain;
-                let mut r = chunk[1] * master_linear_gain;
+        if buffers.main_inputs.is_empty() || buffers.main_outputs.is_empty() {
+            return;
+        }
+
+        let inputs = &buffers.main_inputs[0].channel_data;
+        let outputs = &mut buffers.main_outputs[0].channel_data;
+        
+        let channels = std::cmp::min(inputs.len(), outputs.len());
+        if channels == 0 { return; }
+        
+        let frames = inputs[0].len();
+
+        for i in 0..frames {
+            let mut mono_mix = 0.0;
+            for c in 0..channels {
+                let mut sample = inputs[c][i] * master_linear_gain;
                 for node in active_bands.iter_mut() {
-                    l = node.channels[0].process(l, &node.coeff);
-                    r = node.channels[1].process(r, &node.coeff);
+                    sample = node.channels[c].process(sample, &node.coeff);
                 }
-                chunk[0] = l;
-                chunk[1] = r;
-                if self.enable_spectrum_analyzer {
-                    let mono_mix = (l + r) * 0.5;
-                    self.analyzer_buffer[self.analyzer_idx] = mono_mix;
-                    self.analyzer_idx = (self.analyzer_idx + 1) % FFT_SIZE;
-                }
+                outputs[c][i] = sample;
+                mono_mix += sample;
             }
-        } else {
-            for i in (0..buffer.len()).step_by(self.channels) {
-                let mut mono_mix = 0.0;
-                for channel in 0..self.channels {
-                    let mut sample = buffer[i + channel] * master_linear_gain;
-                    for node in active_bands.iter_mut() {
-                        sample = node.channels[channel].process(sample, &node.coeff);
-                    }
-                    buffer[i + channel] = sample;
-                    mono_mix += sample;
-                }
-                if self.enable_spectrum_analyzer {
-                    self.analyzer_buffer[self.analyzer_idx] = mono_mix / (self.channels as f32);
-                    self.analyzer_idx = (self.analyzer_idx + 1) % FFT_SIZE;
-                }
+            if self.enable_spectrum_analyzer {
+                self.analyzer_buffer[self.analyzer_idx] = mono_mix / (channels as f32);
+                self.analyzer_idx = (self.analyzer_idx + 1) % FFT_SIZE;
             }
         }
     }
@@ -639,12 +637,14 @@ impl AudioPlugin for DigiParametricEQ {
         "Parametric EQ"
     }
 
-    fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
-        let needs_update =
-            (sample_rate - self.last_sample_rate).abs() > 0.1 || self.channels != channels;
+    fn category(&self) -> PluginCategory {
+        PluginCategory::Effect
+    }
+
+    fn prepare(&mut self, sample_rate: f32,  _max_buffer_size: usize) {
+        let needs_update = (sample_rate - self.last_sample_rate).abs() > 0.1;
         if needs_update {
             self.last_sample_rate = sample_rate;
-            self.channels = channels;
             // Rebuild precomputed tables for the new sample rate
             self.tables = Some(Box::new(AnalyzerTables::build(
                 Self::SPECTRUM_POINTS,
@@ -658,21 +658,6 @@ impl AudioPlugin for DigiParametricEQ {
             self.handle_side_effects(0);
         }
     }
-
-    fn process(&mut self, buffer: &mut [f32], _context: &ProcessContext) {
-        if self.channels == 0 || buffer.is_empty() {
-            return;
-        }
-        let num_frames = buffer.len() / self.channels;
-        self.process_dsp(buffer);
-        if self.enable_spectrum_analyzer {
-            self.samples_since_last_fft += num_frames;
-            if self.samples_since_last_fft >= Self::FFT_TRIGGER_SAMPLES {
-                self.samples_since_last_fft = 0;
-                self.compute_and_update_spectrum();
-            }
-        }
-    }
     fn reset(&mut self) {
         for node in &mut self.nodes {
             node.reset_state();
@@ -681,6 +666,44 @@ impl AudioPlugin for DigiParametricEQ {
         self.spectrum_history.fill(-100.0);
 
         self.compute_and_update_spectrum();
+    }
+
+    fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext) {
+        // 1. Process sample-accurate automation from the context
+        for param_change in context.param_changes {
+            self.set_parameter(param_change.param_id, param_change.normalized_value);
+        }
+
+        let num_frames = buffers.main_outputs.first().map_or(0, |b| b.channel_data.first().map_or(0, |ch| ch.len()));
+        
+        if self.channels == 0 || num_frames == 0 {
+            return;
+        }
+        
+        // 2. Process non-interleaved audio
+        self.process_dsp(buffers);
+        
+        // 3. Handle spectrum analyzer scheduling
+        if self.enable_spectrum_analyzer {
+            self.samples_since_last_fft += num_frames;
+            if self.samples_since_last_fft >= Self::FFT_TRIGGER_SAMPLES {
+                self.samples_since_last_fft = 0;
+                self.compute_and_update_spectrum();
+            }
+        }
+    }
+
+    fn latency_samples(&self) -> u32 {
+        0
+    }
+
+    fn tail_samples(&self) -> u32 {
+        // IIR filters technically ring forever, but practically hit the noise floor
+        // in less than a millisecond. We return 0, or a tiny arbitrary safety
+        // buffer (e.g., 50 milliseconds) to let high-Q bands fully settle.
+
+        // (0.05 seconds * sample_rate)
+        (self.last_sample_rate * 0.05) as u32
     }
 
     fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
@@ -728,19 +751,6 @@ impl AudioPlugin for DigiParametricEQ {
         }
     }
 
-    fn latency_samples(&self) -> u32 {
-        0
-    }
-
-    fn tail_samples(&self) -> u32 {
-        // IIR filters technically ring forever, but practically hit the noise floor
-        // in less than a millisecond. We return 0, or a tiny arbitrary safety
-        // buffer (e.g., 50 milliseconds) to let high-Q bands fully settle.
-
-        // (0.05 seconds * sample_rate)
-        (self.last_sample_rate * 0.05) as u32
-    }
-
     fn get_zero_copy_buffer(&self, name: &str) -> Option<ZeroCopyBuffer> {
         match name {
             "magnitude" => Some(ZeroCopyBuffer::Float32(self.magnitude_buffer.clone())),
@@ -749,8 +759,85 @@ impl AudioPlugin for DigiParametricEQ {
         }
     }
 
-    fn category(&self) -> PluginCategory {
-        PluginCategory::Effect
+    fn set_io_layout(&mut self, inputs: &[BusConfig], outputs: &[BusConfig]) {
+        let new_channels = inputs.first().map(|b| b.channel_count).unwrap_or(2);
+        if self.channels != new_channels {
+            self.channels = new_channels;
+            self.update_all_nodes();
+        }
+    }
+    
+    fn vendor(&self) -> &str { "Digidaw" }
+    
+    fn version(&self) -> &str { "1.0.0" }
+    
+    fn can_apply_io_layout(&self, inputs: &[BusConfig], outputs: &[BusConfig]) -> bool {
+        true // Default: accept any layout
+    }
+    
+    fn set_bypass(&mut self, _bypass: bool) {}
+    
+    fn has_latency_changed(&mut self) -> bool { false }
+    
+    fn begin_parameter_edit(&mut self, id: u32) {
+        self.active_parameter_edits.insert(id);
+    }
+    
+    fn end_parameter_edit(&mut self, id: u32) {
+        self.active_parameter_edits.remove(&id);
+    }
+    
+    fn plain_to_normalized(&self, id: u32, plain: f32) -> f32 { plain }
+    
+    fn normalized_to_plain(&self, id: u32, normalized: f32) -> f32 { normalized }
+    
+    fn value_to_string(&self, id: u32, normalized: f32) -> String { 
+        std::format!("{:.2}", self.normalized_to_plain(id, normalized)) 
+    }
+    
+    fn string_to_value(&self, id: u32, text: &str) -> Option<f32> { 
+        text.parse::<f32>().ok().map(|p| self.plain_to_normalized(id, p)) 
+    }
+    
+    fn get_state(&self) -> Vec<u8> {
+        let mut current_params: hashbrown::HashMap<u32, f32> = hashbrown::HashMap::new();
+    
+        let specs = self.get_parameter_specs();
+        for spec in specs {
+            current_params.insert(spec.id, self.get_parameter(spec.id));
+        }
+    
+        rmp_serde::to_vec(&current_params).unwrap_or_else(|err| {
+            log::error!("Failed to serialize Plugin state: {}", err);
+            Vec::new()
+        })
+    }
+    
+    fn set_state(&mut self, state: &[u8]) {
+        if state.is_empty() {
+            return;
+        }
+    
+        match rmp_serde::from_slice::<hashbrown::HashMap<u32, f32>>(state) {
+            Ok(saved_params) => {
+                for (id, value) in saved_params {
+                    self.set_parameter(id, value);
+                }
+            }
+            Err(err) => {
+                log::error!("Failed to deserialize Plugin state: {}", err);
+            }
+        }
+    }
+    
+    fn get_factory_presets(&self) -> Vec<(String, Vec<u8>)> {
+        Vec::new()
+    }
+    
+    fn load_preset(&mut self, _index: usize) {}
+    
+    fn current_preset_index(&self) -> Option<usize> {
+        None
     }
 }
 

@@ -34,7 +34,7 @@ class AutomationCurvePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final path = Path();
-    
+
     // Sort points by time just in case, though backend should guarantee this
     final points = List<AutomationPointDto>.from(lane.points)
       ..sort((a, b) => a.timeTicks.compareTo(b.timeTicks));
@@ -48,9 +48,10 @@ class AutomationCurvePainter extends CustomPainter {
     }
 
     final firstPos = getPixelCoords(points.first);
-    
+
     // Draw initial line from 0 to the first point (using default value or first value)
-    final startY = size.height - (lane.defaultValue.clamp(0.0, 1.0) * size.height);
+    final startY =
+        size.height - (lane.defaultValue.clamp(0.0, 1.0) * size.height);
     path.moveTo(0 - scrollX, startY);
     path.lineTo(firstPos.dx, firstPos.dy);
 
@@ -68,24 +69,25 @@ class AutomationCurvePainter extends CustomPainter {
       final curveType = p1.curveType;
 
       switch (curveType) {
-        
         case AutomationCurveTypeDto.linear:
           path.lineTo(pos2.dx, pos2.dy);
         case AutomationCurveTypeDto.exponential:
           // Exponential: Approximate the curve with multiple small segments
-        const int segments = 15;
-        final v1 = math.max(p1.value, 0.0001);
-        final v2 = math.max(p2.value, 0.0001);
-        
-        for (int step = 1; step <= segments; step++) {
-          final t = step / segments;
-          final currentTick = p1.timeTicks + (p2.timeTicks - p1.timeTicks) * t;
-          final currentValue = v1 * math.pow((v2 / v1), t);
-          
-          final curX = (currentTick / zoomLevel) - scrollX;
-          final curY = size.height - (currentValue.clamp(0.0, 1.0) * size.height);
-          path.lineTo(curX, curY);
-        }
+          const int segments = 15;
+          final v1 = math.max(p1.value, 0.0001);
+          final v2 = math.max(p2.value, 0.0001);
+
+          for (int step = 1; step <= segments; step++) {
+            final t = step / segments;
+            final currentTick =
+                p1.timeTicks + (p2.timeTicks - p1.timeTicks) * t;
+            final currentValue = v1 * math.pow((v2 / v1), t);
+
+            final curX = (currentTick / zoomLevel) - scrollX;
+            final curY =
+                size.height - (currentValue.clamp(0.0, 1.0) * size.height);
+            path.lineTo(curX, curY);
+          }
         case AutomationCurveTypeDto.step:
           // Step: Hold value until the next point, then jump
           path.lineTo(pos2.dx, pos1.dy);
@@ -102,7 +104,11 @@ class AutomationCurvePainter extends CustomPainter {
       // Only draw points that are visibly on screen
       if (pos.dx >= -10 && pos.dx <= size.width + 10) {
         canvas.drawCircle(pos, 4.0, pointPaint);
-        canvas.drawCircle(pos, 4.0, linePaint..strokeWidth = 1.5); // colored border
+        canvas.drawCircle(
+          pos,
+          4.0,
+          linePaint..strokeWidth = 1.5,
+        ); // colored border
       }
     }
   }
@@ -110,7 +116,7 @@ class AutomationCurvePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant AutomationCurvePainter oldDelegate) {
     return oldDelegate.zoomLevel != zoomLevel ||
-           oldDelegate.lane.points.length != lane.points.length ||
-           oldDelegate.scrollController != scrollController;
+        oldDelegate.lane.points.length != lane.points.length ||
+        oldDelegate.scrollController != scrollController;
   }
 }

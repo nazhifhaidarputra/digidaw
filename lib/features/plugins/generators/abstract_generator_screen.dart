@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/daw_stream_provider.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
-import 'package:karbeat/src/rust/api/plugin.dart'
-    as plugin_api; // Import the universal widgets
+import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
+import 'package:karbeat/src/rust/api/project.dart'; // Import the universal widgets
 
 /// # Overview
 ///
@@ -31,9 +35,9 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   bool isLoading = true;
   String? errorMessage;
 
-  Timer? _parameterPollTimer;
-
   String get generatorName => 'Generator';
+
+  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
 
   /// Helper getter to automatically group parameters by their Rust `group` string.
   Map<String, List<plugin_api.UiPluginParameter>> get groupedParameters {
@@ -51,68 +55,20 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   void initState() {
     super.initState();
     loadParameterSpecs();
-    startParameterPolling();
-  }
-
-  @override
-  void dispose() {
-    _parameterPollTimer?.cancel();
-    super.dispose();
+    _requestParameterFeedback();
   }
 
   @protected
-  void startParameterPolling() async {
-    await plugin_api.queryGeneratorParameters(generatorId: widget.generatorId);
-
-    _parameterPollTimer = Timer.periodic(
-      const Duration(milliseconds: 50),
-      (_) => _pollParameterFeedback(),
-    );
-  }
-
-  void _pollParameterFeedback() async {
-    if (!mounted) return;
-
+  void _requestParameterFeedback() async {
     try {
-      final snapshots = await plugin_api.pollGeneratorParameterFeedback();
-      if (snapshots.isEmpty) return;
-
-      bool updated = false;
-
-      setState(() {
-        for (final snapshot in snapshots) {
-          if (snapshot.generatorId != widget.generatorId) continue;
-
-          for (final paramValue in snapshot.parameters) {
-            final index = parameters.indexWhere(
-              (p) => p.id == paramValue.paramId,
-            );
-            if (index != -1) {
-              // Copy all immutable fields but update the value
-              parameters[index] = plugin_api.UiPluginParameter(
-                id: parameters[index].id,
-                path: parameters[index].path,
-                name: parameters[index].name,
-                group: parameters[index].group,
-                value: paramValue.value,
-                min: parameters[index].min,
-                max: parameters[index].max,
-                defaultValue: parameters[index].defaultValue,
-                step: parameters[index].step,
-                paramType: parameters[index].paramType,
-                choices: parameters[index].choices,
-              );
-              updated = true;
-            }
-          }
-        }
-      });
-
-      if (updated) {
-        onParametersUpdated();
-      }
+      // Just tell Rust we are watching this generator.
+      // The stream will handle the actual data delivery.
+      await plugin_api.queryGeneratorParameters(
+        ctx: _ctx,
+        generatorId: widget.generatorId,
+      );
     } catch (e) {
-      debugPrint('Error polling generator parameter feedback: $e');
+      AppLogger.error('Failed to request generator parameters: $e');
     }
   }
 
@@ -120,6 +76,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   Future<void> loadParameterSpecs() async {
     try {
       final specs = await plugin_api.getGeneratorParameterSpecs(
+        ctx: _ctx,
         generatorId: widget.generatorId,
       );
       setState(() {
@@ -162,12 +119,13 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
 
     try {
       await plugin_api.setGeneratorParameter(
+        ctx: _ctx,
         generatorId: widget.generatorId,
         paramId: plugin_api.UiParamId.id(paramId),
         value: value,
       );
     } catch (e) {
-      debugPrint('Error setting generator parameter: $e');
+      AppLogger.error('Error setting generator parameter: $e');
     }
   }
 
@@ -204,6 +162,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
 
     try {
       await plugin_api.setGeneratorParameter(
+        ctx: _ctx,
         generatorId: widget.generatorId,
         paramId: plugin_api.UiParamId.path(paramId),
         value: value,
@@ -350,6 +309,76 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(masterAudioFeedbackProvider, (previous, next) {
+      if (!next.hasValue || next.value == null) return;
+
+      final feedback = next.value!;
+
+      feedback.maybeWhen(
+        // 1. Handle Bulk Parameter Snapshots (e.g., when the plugin first loads)
+        generatorParameterSnapshot: (snapshotGeneratorId, parameters) {
+          if (snapshotGeneratorId != widget.generatorId || parameters.isEmpty) {
+            return;
+          }
+
+          setState(() {
+            for (final paramTuple in parameters) {
+              // FRB translates Rust Vec<(u32, f32)> to Dart List<(int, double)>
+              final paramId = paramTuple.$1;
+              final paramValue = paramTuple.$2;
+
+              final index = this.parameters.indexWhere((p) => p.id == paramId);
+              if (index != -1) {
+                // Copy all immutable fields but update the value
+                this.parameters[index] = plugin_api.UiPluginParameter(
+                  id: this.parameters[index].id,
+                  path: this.parameters[index].path,
+                  name: this.parameters[index].name,
+                  group: this.parameters[index].group,
+                  value: paramValue,
+                  min: this.parameters[index].min,
+                  max: this.parameters[index].max,
+                  defaultValue: this.parameters[index].defaultValue,
+                  step: this.parameters[index].step,
+                  paramType: this.parameters[index].paramType,
+                  choices: this.parameters[index].choices,
+                );
+              }
+            }
+          });
+
+          onParametersUpdated();
+        },
+
+        // 2. Handle Single Parameter Changes (e.g., automation or real-time tweaks)
+        generatorParameterChanged: (changedGeneratorId, paramId, value) {
+          if (changedGeneratorId != widget.generatorId) return;
+          setState(() {
+            final index = parameters.indexWhere((p) => p.id == paramId);
+            if (index != -1) {
+              parameters[index] = plugin_api.UiPluginParameter(
+                id: parameters[index].id,
+                path: parameters[index].path,
+                name: parameters[index].name,
+                group: parameters[index].group,
+                value: value,
+                min: parameters[index].min,
+                max: parameters[index].max,
+                defaultValue: parameters[index].defaultValue,
+                step: parameters[index].step,
+                paramType: parameters[index].paramType,
+                choices: parameters[index].choices,
+              );
+            }
+          });
+
+          onParametersUpdated();
+        },
+
+        // 3. Ignore all Effect, Mixer, and Plugin Command events
+        orElse: () {},
+      );
+    });
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
       appBar: AppBar(

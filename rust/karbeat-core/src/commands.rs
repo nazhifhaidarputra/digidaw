@@ -9,12 +9,9 @@ use crate::{
         render_state::{AudioAutomationLane, AudioGraphState},
     },
     core::project::{
-        mixer::{MixerChannelParams, RoutingConnection},
-        plugin::AudioPlugin,
-        track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack},
-        GeneratorId, ModulationLink, ModulationSource,
+        AutomationTarget, GeneratorId, ModulationLink, ModulationSource, mixer::{MixerChannelParams, RoutingConnection}, plugin::AudioPlugin, track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern}
     },
-    shared::{id::*, AutomationId, ModulationId, PatternId},
+    shared::{AutomationId, ModulationId, PatternId, id::*},
 };
 
 pub enum AudioCommand {
@@ -251,6 +248,10 @@ pub enum AudioCommand {
         depth: f32,
     },
     RemoveModulationLink(ModulationLinkId),
+
+    /// Automation tracker
+    BeginEdit {target: AutomationTarget},
+    EndEdit {target: AutomationTarget}
 }
 
 // ============================================================================

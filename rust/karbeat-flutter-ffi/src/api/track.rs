@@ -156,9 +156,8 @@ pub fn get_clip(ctx: &DawContext, track_id: u32, clip_id: u32) -> Result<UiClip,
 }
 
 // Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
-pub fn get_track(ctx: &DawContext, track_id: u32) -> Result<UiTrack, String> {
+pub fn get_track(ctx: &DawContext, track_id: u32) -> Option<UiTrack> {
     track_api::get_track(ctx, TrackId::from(track_id), |t| UiTrack::from(t))
-        .map_err(|e| e.to_string())
 }
 
 // =====================================

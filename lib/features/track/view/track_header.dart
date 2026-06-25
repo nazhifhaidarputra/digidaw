@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:karbeat/app/providers/app_state.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/math.dart';
@@ -86,9 +88,7 @@ class TrackHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds this specific header if the track's name/color/type changes
-    final track = ref.watch(
-      globalStateProvider.select((s) => s.tracks[trackId]),
-    );
+    final track = ref.watch(projectProvider).value?.tracks[trackId];
 
     if (track == null) return const SizedBox();
 
@@ -171,7 +171,7 @@ class TrackHeader extends ConsumerWidget {
                   "Rename track requested for ID: ${track.id} with name [${newName.trim()}]",
                 );
                 ref
-                    .read(globalStateProvider)
+                    .read(trackListStateProvider.notifier)
                     .changeTrackName(trackId, newName.trim());
               }
             });
@@ -190,7 +190,7 @@ class TrackHeader extends ConsumerWidget {
                   "Change color requested for track ID: ${track.id}",
                 );
                 ref
-                    .read(globalStateProvider)
+                    .read(trackListStateProvider.notifier)
                     .changeTrackColor(trackId, selectedColor);
               }
             });
@@ -201,7 +201,7 @@ class TrackHeader extends ConsumerWidget {
           icon: Icons.arrow_upward,
           onTap: () async {
             AppLogger.info("Move Up requested for track ID: ${track.id}");
-            await handleUpdateTrackOrder(
+            ref.read(trackListStateProvider.notifier).handleUpdateTrackOrder(
               ref: ref,
               trackId: trackId,
               newIdx: (track.orderIdx - 1).complyU32(),
@@ -213,7 +213,7 @@ class TrackHeader extends ConsumerWidget {
           icon: Icons.arrow_downward,
           onTap: () async {
             AppLogger.info("Move Down requested for track ID: ${track.id}");
-            await handleUpdateTrackOrder(
+            ref.read(trackListStateProvider.notifier).handleUpdateTrackOrder(
               ref: ref,
               trackId: trackId,
               newIdx: (track.orderIdx + 1).complyU32(),
@@ -226,7 +226,7 @@ class TrackHeader extends ConsumerWidget {
           isDestructive: true,
           onTap: () {
             AppLogger.info("Delete track requested for ID: ${track.id}");
-            ref.read(globalStateProvider).deleteTrack(trackId);
+            ref.read(trackListStateProvider.notifier).deleteTrack(trackId: trackId);
           },
         ),
       ],

@@ -389,6 +389,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
 
   @protected
+  UiTrack dco_decode_box_autoadd_ui_track(dynamic raw);
+
+  @protected
   WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw);
 
   @protected
@@ -593,6 +596,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
+
+  @protected
+  UiTrack? dco_decode_opt_box_autoadd_ui_track(dynamic raw);
 
   @protected
   List<ParameterSpecDTO>? dco_decode_opt_list_parameter_spec_dto(dynamic raw);
@@ -1181,6 +1187,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiTrack sse_decode_box_autoadd_ui_track(SseDeserializer deserializer);
+
+  @protected
   WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
     SseDeserializer deserializer,
   );
@@ -1427,6 +1436,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
+  UiTrack? sse_decode_opt_box_autoadd_ui_track(SseDeserializer deserializer);
 
   @protected
   List<ParameterSpecDTO>? sse_decode_opt_list_parameter_spec_dto(
@@ -2128,6 +2140,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_track(UiTrack self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_wav_export_config_dto(
     WavExportConfigDTO self,
     SseSerializer serializer,
@@ -2419,6 +2434,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_track(
+    UiTrack? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_parameter_spec_dto(

@@ -1,41 +1,31 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/piano_roll_state.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
 import 'package:karbeat/features/plugins/view/dynamic_plugin_screen.dart';
 import 'package:karbeat/features/plugins/generators/synth_registry.dart';
+import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/app/providers/clip_placement_state.dart';
 
 class SourceListScreen extends ConsumerWidget {
-  SourceListScreen({super.key});
+  const SourceListScreen({super.key});
 
   Future<void> _pickFile(WidgetRef ref) async {
     FilePickerResult? result = await FilePicker.pickFiles(type: FileType.audio);
 
     if (result != null && result.files.single.path != null) {
       String path = result.files.single.path!;
-      await ref.read(globalStateProvider).addAudioFile(path);
+      final ctx = ref.read(projectProvider.notifier).dawContext;
+      await addAudioSource(ctx: ctx, filePath: path);
       ref.invalidate(audioSourcesProvider);
     }
   }
-
-  final audioSourcesProvider =
-      FutureProvider.autoDispose<Map<int, AudioWaveformUiForSourceList>>((
-        ref,
-      ) async {
-        // Read the main state provider once to access the API
-        final appState = ref.read(globalStateProvider);
-        final result = await appState.getLoadedAudioSources();
-
-        if (result.isOk() && result.ok() != null) {
-          return result.ok()!;
-        }
-
-        return {};
-      });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -43,10 +33,12 @@ class SourceListScreen extends ConsumerWidget {
     final audioSourcesAsync = ref.watch(audioSourcesProvider);
 
     final generators = ref.watch(
-      globalStateProvider.select((s) => s.generators),
+      projectProvider.select((s) => s.value?.generators ?? const IMapConst({})),
     );
 
-    final patterns = ref.watch(globalStateProvider.select((s) => s.patterns));
+    final patterns = ref.watch(
+      projectProvider.select((s) => s.value?.patterns ?? const IMapConst({})),
+    );
 
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
@@ -112,8 +104,8 @@ class SourceListScreen extends ConsumerWidget {
                   Widget screen;
                   try {
                     final availableGenerators = ref
-                        .read(globalStateProvider)
-                        .availableGenerators;
+                        .read(audioPluginProvider.notifier)
+                        .getAvailableGenerators();
                     final registryId = availableGenerators
                         .firstWhere((p) => p.id == genInstance?.registryId)
                         .id;
@@ -262,7 +254,7 @@ class SourceListScreen extends ConsumerWidget {
                 icon: Icons.music_note,
                 color: Colors.purpleAccent,
                 onTap: () {
-                  ref.read(globalStateProvider).openPattern(id);
+                  ref.read(pianoRollProvider.notifier).openPattern(id);
                 },
                 onPlace: () => ref
                     .read(clipPlacementProvider.notifier)

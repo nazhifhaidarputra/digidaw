@@ -6078,7 +6078,7 @@ fn wire__crate__api__track__get_track_impl(
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, ()>((move || {
                     let mut api_ctx_guard = None;
                     let decode_indices_ =
                         flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
@@ -6093,7 +6093,10 @@ fn wire__crate__api__track__get_track_impl(
                         }
                     }
                     let api_ctx_guard = api_ctx_guard.unwrap();
-                    let output_ok = crate::api::track::get_track(&*api_ctx_guard, api_track_id)?;
+                    let output_ok = Result::<_, ()>::Ok(crate::api::track::get_track(
+                        &*api_ctx_guard,
+                        api_track_id,
+                    ))?;
                     Ok(output_ok)
                 })())
             }
@@ -10828,6 +10831,17 @@ impl SseDecode for Option<u8> {
     }
 }
 
+impl SseDecode for Option<crate::api::project::UiTrack> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::project::UiTrack>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<Vec<crate::api::mixer::ParameterSpecDTO>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -15009,6 +15023,16 @@ impl SseEncode for Option<u8> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <u8>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::project::UiTrack> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::project::UiTrack>::sse_encode(value, serializer);
         }
     }
 }

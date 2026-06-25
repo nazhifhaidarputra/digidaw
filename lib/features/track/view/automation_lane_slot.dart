@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/app_state.dart';
+import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'automation_curve_painter.dart';
@@ -23,10 +25,11 @@ class AutomationLaneSlot extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(globalStateProvider);
+    final state = ref.watch(workspaceStateProvider);
+    final transportState = ref.watch(transportProvider).value;
     final zoomLevel = state.horizontalZoomLevel;
     final gridSize = state.gridSize;
-    final tempo = state.tempo;
+    final tempo = transportState?.state?.bpm ?? 120.0;
     final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
 
     return Container(
@@ -54,7 +57,7 @@ class AutomationLaneSlot extends ConsumerWidget {
               ),
             ),
           ),
-          
+
           // 2. Automation Curve Overlay
           Positioned.fill(
             child: RepaintBoundary(

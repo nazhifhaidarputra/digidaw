@@ -4,21 +4,21 @@ import 'package:flutter/material.dart';
 
 import 'dart:ffi' as ffi;
 
-import 'package:karbeat/src/rust/api/waveform.dart'; 
+import 'package:karbeat/src/rust/api/waveform.dart';
 
-/// Create Float32List of waveform buffer 
+/// Create Float32List of waveform buffer
 /// from raw pointer to the waveform buffer at the Rust memory
 Float32List createZeroCopyWaveformView(WaveformHandle handle) {
   final ptrAddress = handle.getPointer();
   final len = handle.getLen();
-  
+
   if (ptrAddress == 0 || len == 0) {
     return Float32List(0);
   }
-  
+
   // Cast the raw integer address back into a C-Pointer
   final ptr = ffi.Pointer<ffi.Float>.fromAddress(ptrAddress);
-  
+
   // Create a Dart Float32List that looks directly at the Rust memory!
   return ptr.asTypedList(len);
 }
@@ -199,8 +199,12 @@ class StereoWaveformClipPainter extends CustomPainter {
       }
     }
     const double pad = 50;
-    final double vLeft = (scrollOffset - clipLeftOffset - pad).clamp(0, size.width);
-    final double vRight = (scrollOffset - clipLeftOffset + viewportWidth + pad).clamp(0, size.width);
+    final double vLeft = (scrollOffset - clipLeftOffset - pad).clamp(
+      0,
+      size.width,
+    );
+    final double vRight = (scrollOffset - clipLeftOffset + viewportWidth + pad)
+        .clamp(0, size.width);
 
     final double divLeft = vLeft.clamp(0, size.width);
     final double divRight = vRight.clamp(0, size.width);
@@ -214,18 +218,45 @@ class StereoWaveformClipPainter extends CustomPainter {
     );
 
     if (framesPerPixel < 1.0) {
-      _paintConnectedLines(canvas, size, paint, totalFrames, vLeft, vRight, scrollOffset, viewportWidth, pad);
+      _paintConnectedLines(
+        canvas,
+        size,
+        paint,
+        totalFrames,
+        vLeft,
+        vRight,
+        scrollOffset,
+        viewportWidth,
+        pad,
+      );
     } else {
-      _paintVerticalBars(canvas, size, paint, totalFrames, framesPerPixel, vLeft, vRight);
+      _paintVerticalBars(
+        canvas,
+        size,
+        paint,
+        totalFrames,
+        framesPerPixel,
+        vLeft,
+        vRight,
+      );
     }
   }
 
   void _paintConnectedLines(
-    Canvas canvas, Size size, Paint paint, int totalFrames,
-    double vLeft, double vRight, double scrollOffset, double viewportWidth, double pad,
+    Canvas canvas,
+    Size size,
+    Paint paint,
+    int totalFrames,
+    double vLeft,
+    double vRight,
+    double scrollOffset,
+    double viewportWidth,
+    double pad,
   ) {
-    final double startFrameFloat = (offsetTicks + (vLeft * zoomLevel)) * samplesPerTick;
-    final double endFrameFloat = (offsetTicks + (vRight * zoomLevel)) * samplesPerTick;
+    final double startFrameFloat =
+        (offsetTicks + (vLeft * zoomLevel)) * samplesPerTick;
+    final double endFrameFloat =
+        (offsetTicks + (vRight * zoomLevel)) * samplesPerTick;
 
     final int startFrame = startFrameFloat.floor().clamp(0, totalFrames);
     final int endFrame = endFrameFloat.ceil().clamp(0, totalFrames);
@@ -249,7 +280,7 @@ class StereoWaveformClipPainter extends CustomPainter {
 
       final int idx = i * 2;
       // 2. Removed `* _kI8Scale`
-      final double l = samples[idx]; 
+      final double l = samples[idx];
       final double r = samples[idx + 1];
 
       leftPoints[ptr] = x;
@@ -264,14 +295,26 @@ class StereoWaveformClipPainter extends CustomPainter {
   }
 
   void _paintVerticalBars(
-    Canvas canvas, Size size, Paint paint, int totalFrames,
-    double framesPerPixel, double vLeft, double vRight,
+    Canvas canvas,
+    Size size,
+    Paint paint,
+    int totalFrames,
+    double framesPerPixel,
+    double vLeft,
+    double vRight,
   ) {
     final double dataFirstPixel = -offsetTicks / zoomLevel;
-    final double dataLastPixel = ((totalFrames / samplesPerTick) - offsetTicks) / zoomLevel;
+    final double dataLastPixel =
+        ((totalFrames / samplesPerTick) - offsetTicks) / zoomLevel;
 
-    final int startPixel = vLeft.floor().clamp(dataFirstPixel.floor(), dataLastPixel.ceil()).clamp(0, size.width.ceil());
-    final int endPixel = vRight.ceil().clamp(dataFirstPixel.floor(), dataLastPixel.ceil()).clamp(0, size.width.ceil());
+    final int startPixel = vLeft
+        .floor()
+        .clamp(dataFirstPixel.floor(), dataLastPixel.ceil())
+        .clamp(0, size.width.ceil());
+    final int endPixel = vRight
+        .ceil()
+        .clamp(dataFirstPixel.floor(), dataLastPixel.ceil())
+        .clamp(0, size.width.ceil());
 
     if (startPixel >= endPixel) return;
 
@@ -313,8 +356,10 @@ class StereoWaveformClipPainter extends CustomPainter {
         final double r = samples[idx + 1];
 
         if (!hasData) {
-          lMin = l; lMax = l;
-          rMin = r; rMax = r;
+          lMin = l;
+          lMax = l;
+          rMin = r;
+          rMax = r;
           hasData = true;
         } else {
           if (l < lMin) lMin = l;
@@ -329,8 +374,14 @@ class StereoWaveformClipPainter extends CustomPainter {
         continue;
       }
 
-      if (lMax == lMin) { lMax += 0.01; lMin -= 0.01; }
-      if (rMax == rMin) { rMax += 0.01; rMin -= 0.01; }
+      if (lMax == lMin) {
+        lMax += 0.01;
+        lMin -= 0.01;
+      }
+      if (rMax == rMin) {
+        rMax += 0.01;
+        rMin -= 0.01;
+      }
 
       final double xPos = x.toDouble();
 

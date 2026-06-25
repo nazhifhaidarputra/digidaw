@@ -36,7 +36,7 @@ class AutomationLaneHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          
+
           // Icon and Label
           Icon(
             Icons.timeline,
@@ -60,15 +60,12 @@ class AutomationLaneHeader extends StatelessWidget {
                 ),
                 Text(
                   "Min: ${lane.min} | Max: ${lane.max}",
-                  style: const TextStyle(
-                    color: Colors.white38,
-                    fontSize: 9,
-                  ),
+                  style: const TextStyle(color: Colors.white38, fontSize: 9),
                 ),
               ],
             ),
           ),
-          
+
           // Toggle active state
           IconButton(
             icon: Icon(

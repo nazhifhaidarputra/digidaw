@@ -223,11 +223,13 @@ pub fn get_modulation_sources_map<Id, S, C>(
 
 
 /// Get modulation source based on its modulation id
-pub fn get_modulation_source<Id, Siuuuu>(
-    ctx: &DawContext,
+pub fn get_modulation_source<'a, Id, Siuuuu>(
+    ctx: &'a DawContext,
     modulation_id: Id
 ) -> Option<Siuuuu>
-    where Id: Into<ModulationId>, Siuuuu: for<'sybau> From<&'sybau ModulationSource>
+where
+    Id: Into<ModulationId>,
+    Siuuuu: From<&'a ModulationSource>,
 {
     let app = &ctx.app_state;
     let id_typed = modulation_id.into();

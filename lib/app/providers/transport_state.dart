@@ -22,28 +22,37 @@ abstract class TransportStateData with _$TransportStateData {
   }) = _TransportStateData;
 }
 
-final transportPositionStreamProvider = StreamProvider<audio_api.UiTransportFeedback>((ref) async* {
-  // Ensure the project provider has finished booting and creating the context
-  await ref.watch(projectProvider.future);
-  final ctx = ref.read(projectProvider.notifier).dawContext;
+final transportPositionStreamProvider =
+    StreamProvider<audio_api.UiTransportFeedback>((ref) async* {
+      // Ensure the project provider has finished booting and creating the context
+      await ref.watch(projectProvider.future);
+      final ctx = ref.read(projectProvider.notifier).dawContext;
 
-  // Yield the stream directly from FRB
-  yield* audio_api.createPositionStream(ctx: ctx);
-});
+      // Yield the stream directly from FRB
+      yield* audio_api.createPositionStream(ctx: ctx);
+    });
 
 /// Top-level Riverpod 3.0 provider for Transport State
-final transportProvider = AsyncNotifierProvider<TransportNotifier, TransportStateData>(TransportNotifier.new);
+final transportProvider =
+    AsyncNotifierProvider<TransportNotifier, TransportStateData>(
+      TransportNotifier.new,
+    );
 
 class TransportNotifier extends AsyncNotifier<TransportStateData> {
   // Helper to grab the opaque FFI context pointer instantly
-    DawContext get _ctx {
+  DawContext get _ctx {
     // Optional: Add a debug assert to catch architectural mistakes early
-    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    assert(
+      ref.read(projectProvider).hasValue,
+      "Attempted to access DawContext before ProjectProvider finished loading!",
+    );
     return ref.read(projectProvider.notifier).dawContext;
   }
 
   @override
   Future<TransportStateData> build() async {
+    await ref.watch(projectProvider.future);
+
     ref.listen(transportPositionStreamProvider, (previous, next) {
       if (!state.hasValue || !next.hasValue || next.value == null) return;
 
@@ -72,7 +81,8 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
       }
 
       // Update BPM from audio thread (e.g. tempo automation)
-      if (newTransportState != null && (pos.tempo - newTransportState.bpm).abs() > 0.01) {
+      if (newTransportState != null &&
+          (pos.tempo - newTransportState.bpm).abs() > 0.01) {
         newTransportState = newTransportState.copyWith(bpm: pos.tempo);
         changed = true;
       }
@@ -107,13 +117,15 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
   // ==========================================
 
   Future<void> syncTransportState() async {
-    try {
+    final result = await AsyncValue.guard(() async {
       final newState = await getTransportState(ctx: _ctx);
       if (state.hasValue) {
         state = AsyncData(state.requireValue.copyWith(state: newState));
       }
-    } catch (e) {
-      AppLogger.error("Transport sync failed: $e");
+    });
+
+    if (result.hasError) {
+      AppLogger.error("Transport sync failed: ${result.error}");
     }
   }
 
@@ -131,53 +143,55 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
   }
 
   Future<Result<void>> stop() async {
-    try {
-      await transport_api.stopSongPlayback(ctx: _ctx);
-      return Result.ok(null);
-    } catch (e) {
-      AppLogger.error("Failed to stop play: $e");
-      return Result.error(Exception("$e"));
+    final result = await AsyncValue.guard(() => transport_api.stopSongPlayback(ctx: _ctx));
+    
+    if (result.hasError) {
+      AppLogger.error("Failed to stop play: ${result.error}");
+      return Result.error(Exception(result.error.toString()));
     }
+    return Result.ok(null);
   }
 
   Future<Result<void>> toggleLoop() async {
     if (!state.hasValue) return Result.error(Exception("State not ready"));
-    try {
-      final newLooping = !state.requireValue.isLooping;
-      await transport_api.setLooping(ctx: _ctx, val: newLooping);
-      return Result.ok(null);
-    } catch (e) {
-      AppLogger.error("Failed to toggle loop: $e");
-      return Result.error(Exception("$e"));
+    
+    final newLooping = !state.requireValue.isLooping;
+    final result = await AsyncValue.guard(() => transport_api.setLooping(ctx: _ctx, val: newLooping));
+
+    if (result.hasError) {
+      AppLogger.error("Failed to toggle loop: ${result.error}");
+      return Result.error(Exception(result.error.toString()));
     }
+    return Result.ok(null);
   }
 
   Future<Result<void>> setBpm(double value) async {
     if (!state.hasValue || state.requireValue.state == null) {
       return Result.error(Exception("State not ready"));
     }
-    try {
-      final current = state.requireValue;
+    
+    final current = state.requireValue;
 
-      // Optimistic update
-      final updatedTransport = current.state!.copyWith(bpm: value);
-      state = AsyncData(current.copyWith(state: updatedTransport));
+    // Optimistic update
+    final updatedTransport = current.state!.copyWith(bpm: value);
+    state = AsyncData(current.copyWith(state: updatedTransport));
 
-      await transport_api.setBpm(ctx: _ctx, val: value);
-      return Result.ok(null);
-    } catch (e) {
-      AppLogger.error("Failed to set bpm: $e");
-      return Result.error(Exception("$e"));
+    final result = await AsyncValue.guard(() => transport_api.setBpm(ctx: _ctx, val: value));
+
+    if (result.hasError) {
+      AppLogger.error("Failed to set bpm: ${result.error}");
+      return Result.error(Exception(result.error.toString()));
     }
+    return Result.ok(null);
   }
 
   Future<Result<void>> seekTo(int samples) async {
-    try {
-      await transport_api.setPlayhead(ctx: _ctx, val: samples);
-      return Result.ok(null);
-    } catch (e) {
-      AppLogger.error("Error seeking: $e");
-      return Result.error(Exception("$e"));
+    final result = await AsyncValue.guard(() => transport_api.setPlayhead(ctx: _ctx, val: samples));
+
+    if (result.hasError) {
+      AppLogger.error("Error seeking: ${result.error}");
+      return Result.error(Exception(result.error.toString()));
     }
+    return Result.ok(null);
   }
 }

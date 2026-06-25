@@ -51,6 +51,8 @@ pub struct KarbeatzerV2 {
 
     #[serde(skip)]
     pub scratch_buffer: Vec<f32>,
+
+    pub interleaved_buffer: Vec<f32>,
 }
 
 impl Default for KarbeatzerV2 {
@@ -81,6 +83,7 @@ impl Default for KarbeatzerV2 {
         engine.channels = 2;
 
         engine.scratch_buffer = vec![0.0; 4096];
+        engine.interleaved_buffer = vec![0.0; 8192];
 
         engine
     }
@@ -177,11 +180,18 @@ impl AudioPlugin for KarbeatzerV2 {
         "Karbeatzer V2"
     }
 
-    fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
+    fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
         self.sample_rate = sample_rate;
-        self.channels = channels;
-        self.filter.prepare(channels as u8, sample_rate as u32);
+        self.filter.prepare(self.channels as u8, sample_rate as u32);
         self.filter.calculate_coefficients();
+    }
+
+    fn set_io_layout(&mut self, _inputs: &[BusConfig], outputs: &[BusConfig]) {
+        let new_channels = outputs.first().map(|b| b.channel_count).unwrap_or(2);
+        if self.channels != new_channels {
+            self.channels = new_channels;
+            self.filter.prepare(self.channels as u8, self.sample_rate as u32);
+        }
     }
 
     fn reset(&mut self) {
@@ -189,18 +199,32 @@ impl AudioPlugin for KarbeatzerV2 {
         self.filter.reset_state();
     }
 
-    fn process(&mut self, output_buffer: &mut [f32], context: &ProcessContext) {
-        output_buffer.fill(0.0);
+    fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext) {
+        for param_change in context.param_changes {
+            self.set_parameter(param_change.param_id, param_change.normalized_value);
+        }
+
+        if buffers.main_outputs.is_empty() { return; }
+        
+        let outputs = &mut buffers.main_outputs[0].channel_data;
+        let total_frames = outputs.first().map_or(0, |ch| ch.len());
+        
+        if self.channels == 0 || total_frames == 0 { return; }
+
+        // Resize internal interleaved buffer if necessary
+        let required_len = total_frames * self.channels;
+        if self.interleaved_buffer.len() < required_len {
+            self.interleaved_buffer.resize(required_len, 0.0);
+        }
+        self.interleaved_buffer[..required_len].fill(0.0);
 
         let current_drive = self.drive.get();
         let master_gain = self.gain.get();
-        let total_frames = output_buffer.len() / self.channels;
         let midi_events = context.midi_events;
 
         let mut current_frame = 0;
         let mut event_idx = 0;
 
-        // Ensure our persistent scratch buffer is large enough for this block
         if self.scratch_buffer.len() < total_frames {
             self.scratch_buffer.resize(total_frames, 0.0);
         }
@@ -216,10 +240,8 @@ impl AudioPlugin for KarbeatzerV2 {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice =
-                    &mut output_buffer[current_frame * self.channels..end_frame * self.channels];
+                let out_slice = &mut self.interleaved_buffer[current_frame * self.channels..end_frame * self.channels];
 
-                // Destructure `self` to separate the mutable voices from the immutable components!
                 let KarbeatzerV2 {
                     active_voices,
                     oscillators,
@@ -231,11 +253,9 @@ impl AudioPlugin for KarbeatzerV2 {
 
                 let scratch_slice = &mut scratch_buffer[0..block_len];
 
-                // 1. Render all active voices
+                // Render all active voices
                 for voice in active_voices.iter_mut() {
-                    if !voice.is_active {
-                        continue;
-                    }
+                    if !voice.is_active { continue; }
 
                     Self::generate_voice_block(
                         oscillators,
@@ -245,7 +265,7 @@ impl AudioPlugin for KarbeatzerV2 {
                         scratch_slice,
                     );
 
-                    // Mix mono voice into stereo output buffer
+                    // Mix mono voice into interleaved stereo output buffer
                     for (i, &sample) in scratch_slice.iter().enumerate() {
                         for ch in 0..self.channels {
                             out_slice[i * self.channels + ch] += sample;
@@ -253,12 +273,12 @@ impl AudioPlugin for KarbeatzerV2 {
                     }
                 }
 
-                // 2. Apply global filter
+                // Apply global filter
                 for chunk in out_slice.chunks_exact_mut(self.channels) {
                     self.filter.process_frame(chunk);
                 }
 
-                // 3. Apply drive
+                // Apply drive
                 if current_drive > 0.0 {
                     let drive_amt = 1.0 + current_drive * 4.0;
                     for sample in out_slice.iter_mut() {
@@ -266,17 +286,17 @@ impl AudioPlugin for KarbeatzerV2 {
                     }
                 }
 
-                // 4. Apply Master Gain
+                // Apply Master Gain
                 for sample in out_slice.iter_mut() {
                     *sample *= master_gain;
                 }
             }
 
             // Process MIDI
-            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
-            {
+            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame {
                 match midi_events[event_idx].data {
-                    MidiMessage::NoteOn { key, velocity } => {
+                    // Ignored the new `channel` field using `..` 
+                    MidiMessage::NoteOn { key, velocity, .. } => {
                         if velocity > 0 {
                             self.active_voices.push(SynthVoice::new(
                                 key,
@@ -290,7 +310,7 @@ impl AudioPlugin for KarbeatzerV2 {
                             }
                         }
                     }
-                    MidiMessage::NoteOff { key } => {
+                    MidiMessage::NoteOff { key, .. } => {
                         for v in self.active_voices.iter_mut().filter(|v| v.note == key) {
                             v.release();
                         }
@@ -304,6 +324,13 @@ impl AudioPlugin for KarbeatzerV2 {
 
         // Cleanup dead voices
         self.active_voices.retain(|v| v.is_active);
+
+        // 2. Finally, de-interleave the result into the provided AudioBuffers
+        for c in 0..self.channels {
+            for i in 0..total_frames {
+                outputs[c][i] = self.interleaved_buffer[i * self.channels + c];
+            }
+        }
     }
 
     fn category(&self) -> PluginCategory {

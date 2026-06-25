@@ -1,14 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/daw_stream_provider.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/utils/logger.dart';
 import 'dart:math';
 
 import 'package:karbeat/features/plugins/effects/abstract_effect_screen.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
-import 'package:karbeat/shared/models/payload.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
+import 'package:karbeat/generated/plugins/param_eq.dart';
+import 'package:karbeat/src/rust/api/plugins/opaque.dart' as plugin_api;
+import 'package:karbeat/src/rust/api/project.dart';
 
 /// Math helpers for Logarithmic Frequency Mapping
 const double minFreq = 20.0;
@@ -79,15 +87,24 @@ class KarbeatParametricEqState
   int? _draggingNodeIndex;
 
   // Backend-computed response curve
-  List<CurvePoint> _responseCurve = [];
-  List<CurvePoint> _spectrumCurve = [];
+  /// Latest magnitude (EQ response) buffer received from Rust.
+  Float32List? _magnitudeBuffer;
+
+  /// Latest spectrum (FFT analyser) buffer received from Rust.
+  Float32List? _spectrumBuffer;
+
+  /// Map to handle all pending requests and its names.
+  /// This ensures that every requests is handled
+  final Map<int, String> _pendingRequests = {};
+
+  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
 
   // ======================================
   // Real-time Plugin Command Stream
   // ======================================
 
   /// Subscription to the plugin command response stream.
-  StreamSubscription<plugin_api.UiZeroCopyBufferResponse>? _zeroCopyStreamSub;
+  // StreamSubscription<plugin_api.UiZeroCopyBufferResponse>? _zeroCopyStreamSub;
 
   /// request_id of the most recently dispatched GET_MAGNITUDE_RESPONSE command.
   /// Responses are matched by ID so stale replies are ignored.
@@ -117,24 +134,12 @@ class KarbeatParametricEqState
   void initState() {
     super.initState();
     _initBandsFromParameters();
-    _zeroCopyStreamSub = plugin_api.createZeroCopyBufferStream().listen(
-      _onZeroCopyMessage,
-    );
 
     // Request the initial magnitude response after the first frame so that
     // the widget.target and widget.effectId are fully bound.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendMagnitudeRequest();
-      plugin_api.executeRealtimePluginCommand(
-        target: _toPluginTarget(),
-        command: 'SET_SPECTRUM_ACTIVE',
-        payloadJson: jsonEncode({'active': true}),
-      );
-      plugin_api.executeRealtimePluginCommand(
-        target: _toPluginTarget(),
-        command: 'SET_MAGNITUDE_ACTIVE',
-        payloadJson: jsonEncode({'active': true}),
-      );
+      _togglePluginActive(true);
     });
 
     // Re-fire GET_SPECTRUM at ~30 FPS to drive the real-time spectrum analyzer.
@@ -146,21 +151,24 @@ class KarbeatParametricEqState
 
   @override
   void dispose() {
-    plugin_api.executeRealtimePluginCommand(
-      target: _toPluginTarget(),
-      command: 'SET_SPECTRUM_ACTIVE',
-      payloadJson: jsonEncode({'active': false}),
-    );
-
-    plugin_api.executeRealtimePluginCommand(
-      target: _toPluginTarget(),
-      command: 'SET_MAGNITUDE_ACTIVE',
-      payloadJson: jsonEncode({'active': false}),
-    );
-
-    _zeroCopyStreamSub?.cancel();
+    _togglePluginActive(false);
     _spectrumPollTimer?.cancel();
     super.dispose();
+  }
+
+  void _togglePluginActive(bool active) {
+    plugin_api.executeRealtimePluginCommand(
+      ctx: _ctx,
+      target: _toPluginTarget(),
+      command: 'SET_SPECTRUM_ACTIVE',
+      payloadJson: jsonEncode({'active': active}),
+    );
+    plugin_api.executeRealtimePluginCommand(
+      ctx: _ctx,
+      target: _toPluginTarget(),
+      command: 'SET_MAGNITUDE_ACTIVE',
+      payloadJson: jsonEncode({'active': active}),
+    );
   }
 
   // ======================================
@@ -171,20 +179,17 @@ class KarbeatParametricEqState
   /// [UiPluginTarget] understood by the real-time command channel.
   plugin_api.UiPluginTarget _toPluginTarget() {
     final t = widget.target;
-    final eid = widget.effectId;
-    if (t is plugin_api.UiEffectTarget_Track) {
-      return plugin_api.UiPluginTarget.trackEffect(
-        trackId: t.field0,
-        effectId: eid,
-      );
-    } else if (t is plugin_api.UiEffectTarget_Bus) {
-      return plugin_api.UiPluginTarget.busEffect(
-        busId: t.field0,
-        effectId: eid,
-      );
-    } else {
-      return plugin_api.UiPluginTarget.masterEffect(eid);
-    }
+    return t.when(
+      track: (id) => plugin_api.UiPluginTarget.trackEffect(
+        trackId: id,
+        effectId: widget.effectId,
+      ),
+      bus: (id) => plugin_api.UiPluginTarget.busEffect(
+        busId: id,
+        effectId: widget.effectId,
+      ),
+      master: () => plugin_api.UiPluginTarget.masterEffect(widget.effectId),
+    );
   }
 
   /// Sends GET_MAGNITUDE_RESPONSE to the live plugin instance.
@@ -192,14 +197,15 @@ class KarbeatParametricEqState
   void _sendMagnitudeRequest() {
     plugin_api
         .queryLivePluginZeroCopyBuf(
+          ctx: _ctx,
           target: _toPluginTarget(),
           name: 'magnitude',
         )
         .then((id) {
-          _magnitudeRequestId = id;
+          _pendingRequests[id] = 'magnitude';
         })
         .catchError((Object e) {
-          debugPrint('EQ magnitude request failed: $e');
+          AppLogger.error('EQ magnitude request failed: $e');
         });
   }
 
@@ -207,63 +213,23 @@ class KarbeatParametricEqState
   /// Fired at ~30 FPS by [_spectrumPollTimer].
   void _sendSpectrumRequest() {
     plugin_api
-        .queryLivePluginZeroCopyBuf(target: _toPluginTarget(), name: 'spectrum')
+        .queryLivePluginZeroCopyBuf(
+          ctx: _ctx,
+          target: _toPluginTarget(),
+          name: 'spectrum',
+        )
         .then((id) {
-          _spectrumRequestId = id;
+          _pendingRequests[id] = 'spectrum';
         })
         .catchError((Object _) {
           /* Ignore dropped frames */
         });
   }
 
-  /// Routes incoming zero-copy buffer responses to the correct state field.
-  /// Converts the raw memory pointer instantly to a Float32List.
-  void _onZeroCopyMessage(plugin_api.UiZeroCopyBufferResponse msg) {
-    if (!mounted) return;
-
-    if (msg.requestId == _magnitudeRequestId ||
-        msg.requestId == _spectrumRequestId) {
-      final handle = msg.handle;
-      if (handle == null) return;
-
-      // Bridge the raw memory pointer directly to a Dart TypedData list
-      final address = handle.memoryAddress();
-      final length = handle.lengthElements();
-
-      final ptr = ffi.Pointer<ffi.Float>.fromAddress(address);
-      final rawList = ptr.asTypedList(length);
-
-      final List<CurvePoint> parsedPoints = [];
-
-      // Iterate by 2 to extract the pairs [freq, db]
-      for (int i = 0; i < rawList.length; i += 2) {
-        if (i + 1 < rawList.length) {
-          parsedPoints.add(
-            CurvePoint(
-              frequency: rawList[i].toDouble(),
-              magnitudeDb: rawList[i + 1].toDouble(),
-            ),
-          );
-        }
-      }
-
-      if (msg.requestId == _magnitudeRequestId) {
-        setState(() => _responseCurve = parsedPoints);
-      } else {
-        setState(() => _spectrumCurve = parsedPoints);
-      }
-    }
-  }
-
   @override
   void onParametersUpdated() {
-    if (parameters.isEmpty) return;
-
-    setState(() {
-      _applyParametersToState();
-    });
-
-    _sendMagnitudeRequest();
+    super.onParametersUpdated();
+    _applyParametersToState();
   }
 
   void _initBandsFromParameters() {
@@ -433,6 +399,61 @@ class KarbeatParametricEqState
   }
 
   @override
+  void initParameterListener() {
+    super.initParameterListener();
+    ref.listen(masterAudioFeedbackProvider, (previous, next) {
+      if (!next.hasValue || next.value == null) return;
+
+      final feedback = next.value!;
+      feedback.maybeWhen(
+        zeroCopyBufferResponse: (requestId, handle) {
+          if (requestId == _magnitudeRequestId ||
+              requestId == _spectrumRequestId) {
+            _processBuffer(requestId, handle);
+          }
+        },
+        orElse: () {},
+      );
+    });
+  }
+
+  /// Copies the zero-copy buffer into a [Float32List] and routes it to the
+  /// correct field so the painter can consume it on the next frame.
+  ///
+  /// The Rust side serialises the data as interleaved f32 pairs:
+  ///   [freq₀, db₀, freq₁, db₁, …]
+  /// The painter reads this layout directly — no CurvePoint allocation needed.
+  void _processBuffer(int requestId, plugin_api.ZeroCopyHandle? handle) {
+    final type = _pendingRequests.remove(requestId);
+
+    if (type == null) return;
+
+    if (handle == null) return;
+
+    final ptr = ffi.Pointer<ffi.Float>.fromAddress(handle.memoryAddress());
+    // Copy immediately – the Rust side may reclaim the buffer after this call.
+    final data = Float32List.fromList(ptr.asTypedList(handle.lengthElements()));
+
+    // Must be pairs; discard a trailing orphan element if present.
+    if (data.length < 2) return;
+    final safeData = data.length.isEven
+        ? data
+        : Float32List.sublistView(data, 0, data.length - 1);
+
+    setState(() {
+      switch (type) {
+        case 'magnitude':
+          _magnitudeBuffer = safeData;
+          break;
+
+        case 'spectrum':
+          _spectrumBuffer = safeData;
+          break;
+      }
+    });
+  }
+
+  @override
   Widget buildEffectBody(BuildContext context) {
     return Container(
       color: Colors.grey.shade900,
@@ -462,8 +483,8 @@ class KarbeatParametricEqState
                           bands: bands,
                           bandColors: _bandColors,
                           activeNodeIndex: _draggingNodeIndex,
-                          responseCurve: _responseCurve,
-                          spectrumCurve: _spectrumCurve,
+                          magnitudeBuffer: _magnitudeBuffer,
+                          spectrumBuffer: _spectrumBuffer,
                         ),
                       ),
                     );
@@ -738,7 +759,10 @@ class KarbeatParametricEqState
 
     return Container(
       width: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8), // Tighter padding
+      padding: const EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 8,
+      ), // Tighter padding
       child: Column(
         children: [
           const FittedBox(
@@ -822,46 +846,91 @@ class KarbeatParametricEqState
 }
 
 /// Custom graph painter to render the frequency response curve and interactable nodes
+
 class _EqResponsePainter extends CustomPainter {
   final List<EqBand> bands;
   final List<Color> bandColors;
   final int? activeNodeIndex;
-  final List<CurvePoint> responseCurve;
-  final List<CurvePoint> spectrumCurve;
+
+  /// Interleaved [freq₀, db₀, freq₁, db₁, …] from the magnitude zero-copy buf.
+  final Float32List? magnitudeBuffer;
+
+  /// Interleaved [freq₀, db₀, freq₁, db₁, …] from the spectrum zero-copy buf.
+  final Float32List? spectrumBuffer;
 
   _EqResponsePainter({
     required this.bands,
     required this.bandColors,
     required this.activeNodeIndex,
-    required this.responseCurve,
-    required this.spectrumCurve,
+    required this.magnitudeBuffer,
+    required this.spectrumBuffer,
   });
+
+  // ---------------------------------------------------------------------------
+  // Helpers: decode buffer → screen offsets without intermediate objects
+  // ---------------------------------------------------------------------------
+
+  /// Iterates the interleaved buffer and projects each (freq, db) pair onto
+  /// canvas coordinates using the supplied [yMapper].
+  List<Offset> _bufferToOffsets(
+    Float32List buf,
+    double w,
+    double h,
+    double Function(double db, double h) yMapper,
+  ) {
+    final pts = <Offset>[];
+    for (int i = 0; i + 1 < buf.length; i += 2) {
+      final freq = buf[i].toDouble();
+      final db = buf[i + 1].toDouble();
+      if (freq <= 0) continue; // skip sentinel / padding entries
+      pts.add(Offset(_freqToX(freq, w), yMapper(db, h)));
+    }
+    return pts;
+  }
+
+  // ---------------------------------------------------------------------------
+  // paint
+  // ---------------------------------------------------------------------------
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
 
-    // Draw Grid Lines
+    _drawGrid(canvas, w, h);
+    _drawZeroDbLine(canvas, w, h);
+
+    if (spectrumBuffer != null && spectrumBuffer!.isNotEmpty) {
+      _drawSpectrum(canvas, w, h);
+    }
+
+    if (magnitudeBuffer != null && magnitudeBuffer!.isNotEmpty) {
+      _drawMagnitudeCurve(canvas, w, h);
+    }
+
+    _drawNodes(canvas, w, h);
+  }
+
+  void _drawGrid(Canvas canvas, double w, double h) {
     final gridPaint = Paint()
       ..color = Colors.white.withAlpha(20)
       ..strokeWidth = 1;
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    final tp = TextPainter(textDirection: TextDirection.ltr);
 
-    final freqsToDraw = [50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0];
-    for (var f in freqsToDraw) {
+    for (final f in [50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0]) {
       final x = _freqToX(f, w);
       canvas.drawLine(Offset(x, 0), Offset(x, h), gridPaint);
 
-      textPainter.text = TextSpan(
-        text: f >= 1000 ? "${f ~/ 1000}k" : "${f.toInt()}",
+      tp.text = TextSpan(
+        text: f >= 1000 ? '${f ~/ 1000}k' : '${f.toInt()}',
         style: const TextStyle(color: Colors.white30, fontSize: 10),
       );
-      textPainter.layout();
-      textPainter.paint(canvas, Offset(x + 2, h - 14));
+      tp.layout();
+      tp.paint(canvas, Offset(x + 2, h - 14));
     }
+  }
 
-    // 0dB Center Line
+  void _drawZeroDbLine(Canvas canvas, double w, double h) {
     canvas.drawLine(
       Offset(0, h / 2),
       Offset(w, h / 2),
@@ -869,81 +938,84 @@ class _EqResponsePainter extends CustomPainter {
         ..color = Colors.white54
         ..strokeWidth = 1,
     );
+  }
 
-    // Draw FFT Spectrum Analyzer
-    if (spectrumCurve.isNotEmpty) {
-      final pts = spectrumCurve.map((p) {
-        final x = _freqToX(p.frequency.toDouble(), w);
-        final normalizedDb =
-            (p.magnitudeDb.toDouble() - (-100.0)) / (24.0 - (-100.0));
-        final y = h - (normalizedDb.clamp(0.0, 1.0) * h);
-        return Offset(x, y);
-      }).toList();
-
-      final path = _buildSmoothPath(pts);
-
-      final fillPath = Path.from(path)
-        ..lineTo(w, h)
-        ..lineTo(0, h)
-        ..close();
-
-      canvas.drawPath(
-        fillPath,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.white.withAlpha(120), Colors.white.withAlpha(20)],
-          ).createShader(Rect.fromLTWH(0, 0, w, h))
-          ..style = PaintingStyle.fill,
-      );
-
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white.withAlpha(150)
-          ..strokeWidth = 1.0
-          ..style = PaintingStyle.stroke
-          ..isAntiAlias = true,
-      );
+  void _drawSpectrum(Canvas canvas, double w, double h) {
+    // Spectrum Y: maps dB to height where 24 dB = top, -100 dB = bottom
+    double spectrumY(double db, double height) {
+      const floor = -100.0;
+      const ceil = 24.0;
+      final norm = (db - floor) / (ceil - floor);
+      return height - norm.clamp(0.0, 1.0) * height;
     }
 
-    // Draw the response curve from backend-computed data
-    if (responseCurve.isNotEmpty) {
-      final pts = responseCurve.map((point) {
-        final x = _freqToX(point.frequency.toDouble(), w);
-        final y = _gainToY(
-          point.magnitudeDb.toDouble().clamp(minGain, maxGain),
-          h,
-        );
-        return Offset(x, y);
-      }).toList();
+    final pts = _bufferToOffsets(spectrumBuffer!, w, h, spectrumY);
+    if (pts.isEmpty) return;
 
-      final path = _buildSmoothPath(pts);
+    final curvePath = _buildSmoothPath(pts);
 
-      final fillPath = Path.from(path)
-        ..lineTo(w, h / 2)
-        ..lineTo(0, h / 2)
-        ..close();
+    // Filled area under the spectrum line
+    final fillPath = Path.from(curvePath)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
 
-      canvas.drawPath(
-        fillPath,
-        Paint()
-          ..color = Colors.cyanAccent.withAlpha(20)
-          ..style = PaintingStyle.fill,
-      );
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white.withAlpha(120), Colors.white.withAlpha(20)],
+        ).createShader(Rect.fromLTWH(0, 0, w, h))
+        ..style = PaintingStyle.fill,
+    );
 
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.cyanAccent
-          ..strokeWidth = 2
-          ..style = PaintingStyle.stroke
-          ..isAntiAlias = true,
-      );
-    }
+    canvas.drawPath(
+      curvePath,
+      Paint()
+        ..color = Colors.white.withAlpha(150)
+        ..strokeWidth = 1.0
+        ..style = PaintingStyle.stroke
+        ..isAntiAlias = true,
+    );
+  }
 
-    // Draw Interactable Nodes
+  void _drawMagnitudeCurve(Canvas canvas, double w, double h) {
+    double magnitudeY(double db, double height) =>
+        _gainToY(db.clamp(minGain, maxGain), height);
+
+    final pts = _bufferToOffsets(magnitudeBuffer!, w, h, magnitudeY);
+    if (pts.isEmpty) return;
+
+    final curvePath = _buildSmoothPath(pts);
+
+    // Filled area between the curve and the 0 dB centre line
+    final fillPath = Path.from(curvePath)
+      ..lineTo(w, h / 2)
+      ..lineTo(0, h / 2)
+      ..close();
+
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..color = Colors.cyanAccent.withAlpha(20)
+        ..style = PaintingStyle.fill,
+    );
+
+    canvas.drawPath(
+      curvePath,
+      Paint()
+        ..color = Colors.cyanAccent
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke
+        ..isAntiAlias = true,
+    );
+  }
+
+  void _drawNodes(Canvas canvas, double w, double h) {
+    final tp = TextPainter(textDirection: TextDirection.ltr);
+
     for (int i = 0; i < bands.length; i++) {
       if (!bands[i].active) continue;
 
@@ -951,8 +1023,9 @@ class _EqResponsePainter extends CustomPainter {
       final y = _gainToY(bands[i].gain, h);
       final color = bandColors[i];
       final isDragging = activeNodeIndex == i;
+      final radius = isDragging ? 8.0 : 6.0;
 
-      // Draw vertical drop line
+      // Vertical drop line to 0 dB axis
       canvas.drawLine(
         Offset(x, y),
         Offset(x, h / 2),
@@ -961,42 +1034,45 @@ class _EqResponsePainter extends CustomPainter {
           ..strokeWidth = 1,
       );
 
-      // Node Circle
+      // Filled circle
       canvas.drawCircle(
         Offset(x, y),
-        isDragging ? 8 : 6,
+        radius,
         Paint()
           ..color = color
           ..style = PaintingStyle.fill,
       );
+
+      // White border
       canvas.drawCircle(
         Offset(x, y),
-        isDragging ? 8 : 6,
+        radius,
         Paint()
           ..color = Colors.white
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
 
-      // Draw Band Number
-      textPainter.text = TextSpan(
-        text: "${i + 1}",
+      // Band number label
+      tp.text = TextSpan(
+        text: '${i + 1}',
         style: const TextStyle(
           color: Colors.black,
           fontSize: 9,
           fontWeight: FontWeight.bold,
         ),
       );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(x - textPainter.width / 2, y - textPainter.height / 2),
-      );
+      tp.layout();
+      tp.paint(canvas, Offset(x - tp.width / 2, y - tp.height / 2));
     }
   }
 
   @override
-  bool shouldRepaint(covariant _EqResponsePainter oldDelegate) => true;
+  bool shouldRepaint(covariant _EqResponsePainter old) =>
+      old.magnitudeBuffer != magnitudeBuffer ||
+      old.spectrumBuffer != spectrumBuffer ||
+      old.activeNodeIndex != activeNodeIndex ||
+      old.bands != bands;
 }
 
 Path _buildSmoothPath(List<Offset> pts) {

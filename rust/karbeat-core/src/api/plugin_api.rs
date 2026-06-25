@@ -68,13 +68,13 @@ where
 
 pub fn get_available_plugins<P, C>(ctx: &DawContext) -> C
 where
-    P: for<'a> From<&'a PluginInfo>,
+    P: From<PluginInfo>,
     C: FromIterator<P>,
 {
     ctx.plugin_registry
         .list_plugins_with_ids()
-        .iter()
-        .map(|e| e.into())
+        .into_iter()
+        .map(|p| P::from(p))
         .collect()
 }
 
@@ -536,4 +536,116 @@ pub fn query_zero_copy_buffer_from_live_plugin(
     } else {
         Err("Audio stream not initialised".to_string())
     }
+}
+
+// =====================================
+// Human interaction parameter editing
+// =====================================
+
+/// Signals the start of a parameter edit gesture (e.g., user clicks a knob).
+pub fn begin_generator_parameter_edit(
+    ctx: &mut DawContext,
+    generator_id: &GeneratorId,
+    track_id: &TrackId,
+    param_id: impl IntoParamId,
+) -> anyhow::Result<()> {
+    let param_id = param_id.into_id();
+    
+    let target = AutomationTarget::Track {
+        track_id: *track_id,
+        track_target: TrackAutomationTarget::Generator { param_id },
+    };
+
+    ctx.send_audio_command(AudioCommand::BeginEdit { target })
+}
+
+/// Signals the end of a parameter edit gesture (e.g., user releases a knob).
+pub fn end_generator_parameter_edit(
+    ctx: &mut DawContext,
+    generator_id: &GeneratorId,
+    track_id: &TrackId,
+    param_id: impl IntoParamId,
+) -> anyhow::Result<()> {
+    let param_id = param_id.into_id();
+    
+    let target = AutomationTarget::Track {
+        track_id: *track_id,
+        track_target: TrackAutomationTarget::Generator { param_id },
+    };
+
+    ctx.send_audio_command(AudioCommand::EndEdit { target })
+}
+
+/// Signals the start of an effect parameter edit gesture.
+pub fn begin_effect_parameter_edit(
+    ctx: &mut DawContext,
+    effect_target: &EffectTarget,
+    effect_id: &EffectId,
+    param_id: impl IntoParamId,
+) -> anyhow::Result<()> {
+    let param_id = param_id.into_id();
+    
+    let target = match effect_target {
+        EffectTarget::Track(track_id) => AutomationTarget::Track {
+            track_id: *track_id,
+            track_target: TrackAutomationTarget::MixerChannel(
+                MixerChannelParamTarget::Plugin { 
+                    effect_id: *effect_id, 
+                    target: EffectAutomationTarget::PluginParam { param_id } 
+                }
+            ),
+        },
+        EffectTarget::Bus(bus_id) => AutomationTarget::Bus {
+            bus_id: *bus_id,
+            mix_target: MixerChannelParamTarget::Plugin { 
+                effect_id: *effect_id, 
+                target: EffectAutomationTarget::PluginParam { param_id } 
+            },
+        },
+        EffectTarget::Master => AutomationTarget::Master(
+            MixerChannelParamTarget::Plugin { 
+                effect_id: *effect_id, 
+                target: EffectAutomationTarget::PluginParam { param_id } 
+            }
+        ),
+    };
+
+    ctx.send_audio_command(AudioCommand::BeginEdit { target })
+}
+
+/// Signals the end of an effect parameter edit gesture.
+pub fn end_effect_parameter_edit(
+    ctx: &mut DawContext,
+    effect_target: &EffectTarget,
+    effect_id: &EffectId,
+    param_id: impl IntoParamId,
+) -> anyhow::Result<()> {
+    let param_id = param_id.into_id();
+    
+    let target = match effect_target {
+        EffectTarget::Track(track_id) => AutomationTarget::Track {
+            track_id: *track_id,
+            track_target: TrackAutomationTarget::MixerChannel(
+                MixerChannelParamTarget::Plugin { 
+                    effect_id: *effect_id, 
+                    target: EffectAutomationTarget::PluginParam { param_id } 
+                }
+            ),
+        },
+        EffectTarget::Bus(bus_id) => AutomationTarget::Bus {
+            bus_id: *bus_id,
+            mix_target: MixerChannelParamTarget::Plugin { 
+                effect_id: *effect_id, 
+                target: EffectAutomationTarget::PluginParam { param_id } 
+            },
+        },
+        EffectTarget::Master => AutomationTarget::Master(
+            MixerChannelParamTarget::Plugin { 
+                effect_id: *effect_id, 
+                target: EffectAutomationTarget::PluginParam { param_id } 
+            }
+        ),
+    };
+
+    ctx.send_audio_command(AudioCommand::EndEdit { target })
 }

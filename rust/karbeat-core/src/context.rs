@@ -58,10 +58,14 @@ impl DawContext {
         }
     }
 
-    pub fn send_audio_command(&mut self, command: AudioCommand) {
+    pub fn send_audio_command(&mut self, command: AudioCommand) -> anyhow::Result<()> {
         if let Some(sender) = self.command_sender.lock().as_mut() {
             let _ = sender.push(command);
+        } else {
+            return Err(anyhow::anyhow!("Audio stream is not initialized"));
         };
+
+        Ok(())
     }
 
     pub fn try_send_audio_command_chain(

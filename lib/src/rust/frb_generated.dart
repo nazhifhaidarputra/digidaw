@@ -681,7 +681,7 @@ abstract class RustLibApi extends BaseApi {
     required DawContext ctx,
   });
 
-  Future<UiTrack> crateApiTrackGetTrack({
+  Future<UiTrack?> crateApiTrackGetTrack({
     required DawContext ctx,
     required int trackId,
   });
@@ -5462,7 +5462,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_routing_matrix", argNames: ["ctx"]);
 
   @override
-  Future<UiTrack> crateApiTrackGetTrack({
+  Future<UiTrack?> crateApiTrackGetTrack({
     required DawContext ctx,
     required int trackId,
   }) {
@@ -5483,8 +5483,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_ui_track,
-          decodeErrorData: sse_decode_String,
+          decodeSuccessData: sse_decode_opt_box_autoadd_ui_track,
+          decodeErrorData: null,
         ),
         constMeta: kCrateApiTrackGetTrackConstMeta,
         argValues: [ctx, trackId],
@@ -8862,6 +8862,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiTrack dco_decode_box_autoadd_ui_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ui_track(raw);
+  }
+
+  @protected
   WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_wav_export_config_dto(raw);
@@ -9328,6 +9334,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int? dco_decode_opt_box_autoadd_u_8(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_8(raw);
+  }
+
+  @protected
+  UiTrack? dco_decode_opt_box_autoadd_ui_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_ui_track(raw);
   }
 
   @protected
@@ -10995,6 +11007,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiTrack sse_decode_box_autoadd_ui_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ui_track(deserializer));
+  }
+
+  @protected
   WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
     SseDeserializer deserializer,
   ) {
@@ -11714,6 +11732,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_u_8(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  UiTrack? sse_decode_opt_box_autoadd_ui_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_ui_track(deserializer));
     } else {
       return null;
     }
@@ -13601,6 +13630,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_ui_track(UiTrack self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_track(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_wav_export_config_dto(
     WavExportConfigDTO self,
     SseSerializer serializer,
@@ -14257,6 +14292,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_u_8(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_track(
+    UiTrack? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_ui_track(self, serializer);
     }
   }
 

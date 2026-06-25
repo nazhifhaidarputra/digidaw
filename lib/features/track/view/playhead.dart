@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
-import 'package:karbeat/app/providers/app_state.dart';
+
+// 1. Swap the import to your decoupled transport provider
+import 'package:karbeat/app/providers/transport_state.dart';
 
 class _PlayheadHandlePainter extends CustomPainter {
   @override
@@ -53,21 +55,17 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
 }
 
 class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
-  late Stream<UiTransportFeedback> _positionStream;
-
   bool _isDragging = false;
   int _dragSamples = 0;
-
   int _lastKnownSamples = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _positionStream = ref.read(globalStateProvider).positionStream;
-  }
+  // No initState needed anymore! Riverpod handles stream subscription.
 
   @override
   Widget build(BuildContext context) {
+    // 2. Watch the FFI Stream natively via Riverpod
+    final positionAsync = ref.watch(transportPositionStreamProvider);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportWidth = constraints.maxWidth;
@@ -75,107 +73,105 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            StreamBuilder<UiTransportFeedback>(
-              stream: _positionStream,
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const SizedBox();
+            // 3. Extract the value cleanly instead of using StreamBuilder
+            if (positionAsync.hasValue && positionAsync.value != null)
+              Builder(
+                builder: (context) {
+                  final pos = positionAsync.value!;
+                  _lastKnownSamples = widget.sampleSelector(pos);
 
-                _lastKnownSamples = widget.sampleSelector(snapshot.data!);
+                  final currentSamples = _isDragging
+                      ? _dragSamples
+                      : _lastKnownSamples;
 
-                // final streamSamples = widget.sampleSelector(snapshot.data!);
+                  double playheadAbsoluteX = 0;
+                  if (widget.zoomLevel > 0) {
+                    playheadAbsoluteX = currentSamples / widget.zoomLevel;
+                  }
 
-                final currentSamples = _isDragging
-                    ? _dragSamples
-                    : _lastKnownSamples;
+                  return AnimatedBuilder(
+                    animation: widget.scrollController,
+                    builder: (context, child) {
+                      double scrollOffset = 0;
+                      if (widget.scrollController.hasClients) {
+                        scrollOffset = widget.scrollController.offset;
+                      }
 
-                double playheadAbsoluteX = 0;
-                if (widget.zoomLevel > 0) {
-                  playheadAbsoluteX = currentSamples / widget.zoomLevel;
-                }
+                      // Calculate Screen X
+                      final double left =
+                          widget.offsetAdjustment +
+                          playheadAbsoluteX -
+                          scrollOffset;
 
-                return AnimatedBuilder(
-                  animation: widget.scrollController,
-                  builder: (context, child) {
-                    double scrollOffset = 0;
-                    if (widget.scrollController.hasClients) {
-                      scrollOffset = widget.scrollController.offset;
-                    }
+                      // Optimization: Don't render if completely off-screen
+                      if (left > viewportWidth + 50) return const SizedBox();
 
-                    // Calculate Screen X
-                    final double left =
-                        widget.offsetAdjustment +
-                        playheadAbsoluteX -
-                        scrollOffset;
+                      // Hide if it goes behind the header/offset (scrolled too far left)
+                      if (left < widget.offsetAdjustment) return const SizedBox();
 
-                    // Optimization: Don't render if completely off-screen
-                    if (left > viewportWidth + 50) return const SizedBox();
+                      return Positioned(
+                        left: left - 10, // Center the 20px wide handle
+                        top: 0,
+                        bottom: 0,
+                        width: 20, // Hitbox
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onHorizontalDragStart: (details) {
+                                setState(() {
+                                  _isDragging = true;
+                                  _dragSamples = currentSamples;
+                                });
+                              },
+                              onHorizontalDragUpdate: (details) {
+                                // Update local state instantly for buttery smooth UI
+                                setState(() {
+                                  final deltaSamples =
+                                      (details.delta.dx * widget.zoomLevel)
+                                          .toInt();
+                                  _dragSamples += deltaSamples;
+                                  if (_dragSamples < 0) {
+                                    _dragSamples = 0; // Prevent negative time
+                                  }
+                                });
 
-                    // Hide if it goes behind the header/offset (scrolled too far left)
-                    if (left < widget.offsetAdjustment) return const SizedBox();
-
-                    return Positioned(
-                      left: left - 10, // Center the 20px wide handle
-                      top: 0,
-                      bottom: 0,
-                      width: 20, // Hitbox
-                      child: Column(
-                        children: [
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onHorizontalDragStart: (details) {
-                              setState(() {
-                                _isDragging = true;
-                                _dragSamples = currentSamples;
-                              });
-                            },
-                            onHorizontalDragUpdate: (details) {
-                              // Update local state instantly for buttery smooth UI
-                              setState(() {
-                                final deltaSamples =
-                                    (details.delta.dx * widget.zoomLevel)
-                                        .toInt();
-                                _dragSamples += deltaSamples;
-                                if (_dragSamples < 0) {
-                                  _dragSamples = 0; // Prevent negative time
-                                }
-                              });
-
-                              widget.onSeek(_dragSamples);
-                            },
-                            onHorizontalDragEnd: (details) {
-                              setState(() {
-                                _isDragging = false;
-                              });
-                            },
-                            onHorizontalDragCancel: () {
-                              setState(() {
-                                _isDragging = false;
-                              });
-                            },
-                            child: SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CustomPaint(
-                                painter: _PlayheadHandlePainter(),
+                                widget.onSeek(_dragSamples);
+                              },
+                              onHorizontalDragEnd: (details) {
+                                setState(() {
+                                  _isDragging = false;
+                                });
+                              },
+                              onHorizontalDragCancel: () {
+                                setState(() {
+                                  _isDragging = false;
+                                });
+                              },
+                              child: SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CustomPaint(
+                                  painter: _PlayheadHandlePainter(),
+                                ),
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: Container(
-                              width: 1.5,
-                              color: Colors.yellowAccent.withAlpha(
-                                // If the user is zooming/panning the screen, dim the playhead slightly to indicate interaction
-                                widget.isInteracting ? 100 : 204,
+                            Expanded(
+                              child: Container(
+                                width: 1.5,
+                                color: Colors.yellowAccent.withAlpha(
+                                  // If the user is zooming/panning the screen, dim the playhead slightly to indicate interaction
+                                  widget.isInteracting ? 100 : 204,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
           ],
         );
       },
