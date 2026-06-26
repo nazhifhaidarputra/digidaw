@@ -210,6 +210,12 @@ impl ApplicationState {
 
     /// reset current application state to default
     pub fn new_blank_project(&mut self) {
+        let current_audio_config = self.audio_config.clone();
+        let current_clipboard = self.clipboard.clone();
+
         *self = ApplicationState::default();
+
+        self.audio_config = current_audio_config;
+        self.clipboard = current_clipboard;
     }
 }

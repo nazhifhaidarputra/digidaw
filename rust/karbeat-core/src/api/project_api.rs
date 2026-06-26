@@ -266,7 +266,14 @@ where
 
     // 3. Lock, mutate the global state, and map to the UI DTO
     let app = &mut ctx.app_state;
+    let current_audio_config = app.audio_config.clone();
+    let current_clipboard = app.clipboard.clone();
+
     *app = loaded_app;
+
+    app.audio_config = current_audio_config;
+    app.clipboard = current_clipboard;
+
     let mapped_ui_state = mapper(&app);
 
     // 4. Fire all necessary sync and loading events to the engine/UI

@@ -8,7 +8,6 @@ use hashbrown::HashMap;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
 use std::{
-    cell::Cell,
     sync::atomic::{AtomicU32, Ordering},
     time::Instant,
 };
@@ -1043,7 +1042,10 @@ impl AudioEngine {
                 }
             }
             AudioCommand::SetPlayhead(samples) => {
-                log::debug!("[AudioEngine Seek] Received SetPlayhead(samples: {})", samples);
+                log::debug!(
+                    "[AudioEngine Seek] Received SetPlayhead(samples: {})",
+                    samples
+                );
                 self.stop_all_active_generators();
                 self.song_state.playhead_samples = samples;
                 self.recalculate_beat_bar();
@@ -1749,7 +1751,7 @@ impl AudioEngine {
                     let sr = sample_rate.unwrap_or(self.current_state.graph.sample_rate);
                     let buf_size = buffer_size.unwrap_or(self.current_state.graph.buffer_size);
                     self.current_state.graph.buffer_size = buf_size;
-                    
+
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
                     log::info!(
@@ -1780,7 +1782,7 @@ impl AudioEngine {
                             (self.pattern_state.playhead_samples as f64 * ratio) as u32;
                         self.pattern_state.last_emitted_samples =
                             (self.pattern_state.last_emitted_samples as f64 * ratio) as u32;
-                        
+
                         self.sample_rate = sr;
                     }
 
@@ -1829,14 +1831,6 @@ impl AudioEngine {
         self.song_state.current_beat =
             (self.song_state.playhead_samples as usize) / samples_per_beat + 1;
         self.song_state.current_bar = (self.song_state.current_beat - 1) / 4 + 1;
-        
-        log::info!(
-            "[AudioEngine BeatCalc] samples_per_beat: {}, playhead_samples: {}, resulted beat: {}, bar: {}",
-            samples_per_beat,
-            self.song_state.playhead_samples,
-            self.song_state.current_beat,
-            self.song_state.current_bar
-        );
     }
 
     fn reset_playhead(&mut self) {
@@ -2582,7 +2576,7 @@ impl AudioEngine {
             let src_channels = voice.waveform.channels as usize;
 
             let Some(context) = voice.waveform.get_playback_context(bpm) else {
-                return false;
+                continue;
             };
 
             let step = ((voice.waveform.sample_rate as f64) / (sample_rate as f64))
@@ -2627,6 +2621,8 @@ impl AudioEngine {
                 fade_samples,
                 voice.clip_loop_length,
             );
+
+            voice.output_offset_samples = 0;
         }
         did_render
     }
@@ -3442,18 +3438,21 @@ impl AudioEngine {
 
     fn handle_parameter_edit(&mut self, target: &AutomationTarget, is_begin: bool) {
         match target {
-            AutomationTarget::Generator { generator_id, param_id } => {
-                            if let Some(inst) = self
-                                .plugin_state
-                                .get_generator_mut(generator_id.to_u32() as usize)
-                            {
-                                if is_begin {
-                                    inst.plugin.begin_parameter_edit(*param_id);
-                                } else {
-                                    inst.plugin.end_parameter_edit(*param_id);
-                                }
-                            }
-                        }
+            AutomationTarget::Generator {
+                generator_id,
+                param_id,
+            } => {
+                if let Some(inst) = self
+                    .plugin_state
+                    .get_generator_mut(generator_id.to_u32() as usize)
+                {
+                    if is_begin {
+                        inst.plugin.begin_parameter_edit(*param_id);
+                    } else {
+                        inst.plugin.end_parameter_edit(*param_id);
+                    }
+                }
+            }
             AutomationTarget::Track {
                 track_id,
                 track_target,
