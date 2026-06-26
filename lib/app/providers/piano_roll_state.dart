@@ -20,10 +20,10 @@ abstract class PianoRollStateData with _$PianoRollStateData {
     @Default(null) int? editingPatternId,
     @Default(PianoRollToolSelection.grab) PianoRollToolSelection tool,
     @Default(0.67) double zoomLevelTick,
-    @Default(GridSize.quarter) GridSize gridSize,
     @Default(false) bool snapToGrid,
     @Default(ISetConst<int>({})) ISet<int> selectedNoteIds,
     @Default(null) int? previewGeneratorId,
+    @Default(GridSize.quarter) GridSize pianoRollGridDenom,
   }) = _PianoRollStateData;
 }
 
@@ -32,7 +32,10 @@ final pianoRollProvider = NotifierProvider<PianoRollNotifier, PianoRollStateData
 
 class PianoRollNotifier extends Notifier<PianoRollStateData> {
   DawContext get _ctx {
-    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    assert(
+      ref.read(projectProvider).hasValue,
+      "Attempted to access DawContext before ProjectProvider finished loading!",
+    );
     return ref.read(projectProvider.notifier).dawContext;
   }
 
@@ -45,7 +48,6 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
       editingPatternId: null,
       tool: PianoRollToolSelection.grab,
       zoomLevelTick: 0.67,
-      gridSize: GridSize.quarter,
       snapToGrid: false,
       selectedNoteIds: const ISetConst<int>({}),
       previewGeneratorId: null,
@@ -70,8 +72,8 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
   }
 
   void setGridSize(GridSize newSize) {
-    if (state.gridSize != newSize) {
-      state = state.copyWith(gridSize: newSize);
+    if (state.pianoRollGridDenom != newSize) {
+      state = state.copyWith(pianoRollGridDenom: newSize);
     }
   }
 
@@ -165,9 +167,25 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     required int startTick,
     required int duration,
   }) async {
+    if (!ref.read(projectProvider).hasValue) {
+      return Result.error(Exception("projectProvider has not been initialized"));
+    }
+    final patternToUpdate = ref.read(projectProvider).requireValue.patterns[patternId];
+    if (patternToUpdate == null) {
+      return Result.error(Exception("Pattern not found in the project Provider"));
+    }
     final result = await AsyncValue.guard(() async {
-      await addNote(ctx: _ctx, patternId: patternId, key: key, startTick: startTick, duration: duration);
-      syncPattern(patternId);
+      final newNote = await addNote(
+        ctx: _ctx,
+        patternId: patternId,
+        key: key,
+        startTick: startTick,
+        duration: duration,
+      );
+      // Add this note into the pattern
+      ref
+          .read(projectProvider.notifier)
+          .upsertPattern(patternId, patternToUpdate.copyWith(notes: [...patternToUpdate.notes, newNote]));
     });
 
     if (result.hasError) {
@@ -177,31 +195,120 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     return Result.ok(null);
   }
 
+  Future<void> addPatternNoteBatch({required int patternId, required List<(int, int, int?)> notesToInsert}) async {
+    if (!ref.read(projectProvider).hasValue) {
+      AppLogger.error("projectProvider has not been initialized");
+      return;
+    }
+    final patternToUpdate = ref.read(projectProvider).requireValue.patterns[patternId];
+    if (patternToUpdate == null) {
+      AppLogger.error("Pattern not found in the project Provider");
+      return;
+    }
+
+    final result = await AsyncValue.guard(() async {
+      final addedNotes = await addNotesBatch(ctx: _ctx, patternId: patternId, notes: notesToInsert);
+
+      // Update notes here and then push into the upsertPattern
+      ref
+          .read(projectProvider.notifier)
+          .upsertPattern(patternId, patternToUpdate.copyWith(notes: [...patternToUpdate.notes, ...addedNotes]));
+    });
+
+    if (result.hasError) {
+      AppLogger.error("Error when adding note batch in pattern $patternId: ${result.error.toString()}");
+    }
+  }
+
+  Future<void> deletePatternNote({required int patternId, required int noteId}) async {
+    final pattern = _projectState.value?.patterns[patternId];
+    if (pattern == null) {
+      AppLogger.error("Pattern not found");
+      return;
+    }
+    final result = await AsyncValue.guard(() async {
+      await deleteNote(ctx: _ctx, patternId: patternId, noteId: noteId);
+
+      _projectNotifier.upsertPattern(
+        patternId,
+        pattern.copyWith(
+          notes: pattern.notes.where((note) {
+            return note.id != noteId;
+          }).toList(),
+        ),
+      );
+    });
+
+    if (result.hasError) {
+      AppLogger.error("Error when deleting note $noteId in pattern $patternId: ${result.error.toString()}");
+    }
+  }
+
   Future<Result<void>> deletePatternNoteBatch({required int patternId, required List<int> noteIds}) async {
+    // Preserve an in-memory copy of the original pattern for instant rollback
+    final patternOriCopy = _projectState.value?.patterns[patternId];
+    if (patternOriCopy == null) return Result.error(Exception("Pattern not found"));
+
     _applyOptimisticNoteDeletionBatch(patternId, noteIds);
 
     final result = await AsyncValue.guard(() async {
       await deleteNotesBatch(ctx: _ctx, patternId: patternId, noteIds: noteIds);
-      await syncPattern(patternId);
     });
 
     if (result.hasError) {
       AppLogger.error("Error deleting notes in batch: ${result.error}");
-      syncPattern(patternId); // Rollback
+      _projectNotifier.upsertPattern(patternId, patternOriCopy);
       return Result.error(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
 
+  Future<Result<void>> movePatternNote({
+      required int patternId,
+      required int noteId,
+      required int newStartTick,
+      required int newKey,
+    }) async {
+      final patternOriCopy = _projectState.value?.patterns[patternId];
+      if (patternOriCopy == null) return Result.error(Exception("Pattern not found"));
+  
+      // 1. Optimistic Update
+      _applyOptimisticNoteMove(patternId, noteId, newStartTick, newKey);
+  
+      // 2. Fire FFI
+      final result = await AsyncValue.guard(() async {
+        await pattern_api.moveNote(
+          ctx: _ctx,
+          patternId: patternId,
+          noteId: noteId,
+          newStartTick: newStartTick,
+          newKey: newKey,
+        );
+      });
+  
+      // 3. Rollback on Error
+      if (result.hasError) {
+        AppLogger.error("Error moving note: ${result.error}");
+        _projectNotifier.upsertPattern(patternId, patternOriCopy);
+        return Result.error(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    }
+
   Future<Result<void>> movePatternNoteBatch({required int patternId, required List<(int, int, int)> updates}) async {
+    final patternOriCopy = _projectState.value?.patterns[patternId];
+    if (patternOriCopy == null) return Result.error(Exception("Pattern not found"));
+
+    _applyOptimisticNoteMoveBatch(patternId, updates);
+
     final result = await AsyncValue.guard(() async {
+      // Backend applies changes. No need to sync afterwards because we optimistically updated!
       await moveNotesBatch(ctx: _ctx, patternId: patternId, updates: updates);
-      syncPattern(patternId);
     });
 
     if (result.hasError) {
       AppLogger.error("Error moving notes in batch: ${result.error}");
-      syncPattern(patternId);
+      _projectNotifier.upsertPattern(patternId, patternOriCopy);
       return Result.error(Exception(result.error.toString()));
     }
     return Result.ok(null);
@@ -222,6 +329,9 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
   }
 
   Future<void> cutNotesFromPattern(int patternId, List<int> noteIds) async {
+    final patternOriCopy = _projectState.value?.patterns[patternId];
+    if (patternOriCopy == null) return;
+
     _applyOptimisticNoteDeletionBatch(patternId, noteIds);
     clearNoteSelection();
 
@@ -231,9 +341,55 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
 
     if (result.hasError) {
       AppLogger.error(result.error.toString());
+      // Rollback instantly from memory
+      _projectNotifier.upsertPattern(patternId, patternOriCopy);
     }
+  }
 
-    syncPattern(patternId);
+  Future<Result<void>> resizePatternNote({
+    required int patternId,
+    required int noteId,
+    required int newDuration,
+  }) async {
+    final patternOriCopy = _projectState.value?.patterns[patternId];
+    if (patternOriCopy == null) return Result.error(Exception("Pattern not found"));
+
+    // 1. Optimistic Update
+    _applyOptimisticNoteResize(patternId, noteId, newDuration);
+
+    // 2. Fire FFI
+    final result = await AsyncValue.guard(() async {
+      await pattern_api.resizeNote(ctx: _ctx, patternId: patternId, noteId: noteId, newDuration: newDuration);
+    });
+
+    // 3. Rollback on Error
+    if (result.hasError) {
+      AppLogger.error("Error resizing note: ${result.error}");
+      _projectNotifier.upsertPattern(patternId, patternOriCopy);
+      return Result.error(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  Future<Result<void>> resizePatternNoteBatch({required int patternId, required List<(int, int)> updates}) async {
+    final patternOriCopy = _projectState.value?.patterns[patternId];
+    if (patternOriCopy == null) return Result.error(Exception("Pattern not found"));
+
+    // 1. Optimistic Update
+    _applyOptimisticNoteResizeBatch(patternId, updates);
+
+    // 2. Fire FFI
+    final result = await AsyncValue.guard(() async {
+      await pattern_api.resizeNotesBatch(ctx: _ctx, patternId: patternId, updates: updates);
+    });
+
+    // 3. Rollback on Error
+    if (result.hasError) {
+      AppLogger.error("Error resizing notes in batch: ${result.error}");
+      _projectNotifier.upsertPattern(patternId, patternOriCopy);
+      return Result.error(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
   }
 
   Future<void> pasteNotesFromClipboardToPattern(int targetPatternId, int newTickStart, int newKey) async {
@@ -247,12 +403,8 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
 
       if (pastedNotes.isNotEmpty) {
         _applyOptimisticNotePaste(targetPatternId, pastedNotes);
-
         // Auto-select the newly pasted notes
         selectNotes(pastedNotes.map((n) => n.id));
-
-        // Trigger background sync to ensure authoritative state
-        syncPattern(targetPatternId);
       }
     });
 
@@ -269,10 +421,71 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     final pattern = _projectState.value?.patterns[patternId];
     if (pattern == null) return;
 
-    final newPattern = pattern.copyWith(
-      notes: List.of(pattern.notes)..addAll(pastedNotes),
-    );
+    final newPattern = pattern.copyWith(notes: List.of(pattern.notes)..addAll(pastedNotes));
 
     _projectNotifier.upsertPattern(patternId, newPattern);
+  }
+
+  void _applyOptimisticNoteMove(int patternId, int noteId, int newStartTick, int newKey) {
+      final pattern = _projectState.value?.patterns[patternId];
+      if (pattern == null) return;
+  
+      final newNotes = pattern.notes.map((n) {
+        if (n.id == noteId) {
+          return n.copyWith(startTick: newStartTick, key: newKey);
+        }
+        return n;
+      }).toList();
+  
+      _projectNotifier.upsertPattern(patternId, pattern.copyWith(notes: newNotes));
+    }
+
+  void _applyOptimisticNoteMoveBatch(int patternId, List<(int, int, int)> updates) {
+    final pattern = _projectState.value?.patterns[patternId];
+    if (pattern == null) return;
+
+    final updateMap = {for (var u in updates) u.$1: u};
+
+    final newNotes = pattern.notes.map((n) {
+      final update = updateMap[n.id];
+      if (update != null) {
+        return n.copyWith(startTick: update.$2, key: update.$3);
+      }
+      return n;
+    }).toList();
+
+    _projectNotifier.upsertPattern(patternId, pattern.copyWith(notes: newNotes));
+  }
+
+  void _applyOptimisticNoteResize(int patternId, int noteId, int newDuration) {
+    final pattern = _projectState.value?.patterns[patternId];
+    if (pattern == null) return;
+
+    final newNotes = pattern.notes.map((n) {
+      if (n.id == noteId) {
+        return n.copyWith(duration: newDuration);
+      }
+      return n;
+    }).toList();
+
+    _projectNotifier.upsertPattern(patternId, pattern.copyWith(notes: newNotes));
+  }
+
+  void _applyOptimisticNoteResizeBatch(int patternId, List<(int, int)> updates) {
+    final pattern = _projectState.value?.patterns[patternId];
+    if (pattern == null) return;
+
+    // Map of noteId -> newDuration
+    final updateMap = {for (var u in updates) u.$1: u.$2};
+
+    final newNotes = pattern.notes.map((n) {
+      final newDuration = updateMap[n.id];
+      if (newDuration != null) {
+        return n.copyWith(duration: newDuration);
+      }
+      return n;
+    }).toList();
+
+    _projectNotifier.upsertPattern(patternId, pattern.copyWith(notes: newNotes));
   }
 }

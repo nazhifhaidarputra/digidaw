@@ -1,7 +1,7 @@
 use crate::api::plugins::opaque::ZeroCopyHandle;
 use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
 use flutter_rust_bridge::frb;
-use karbeat_core::api::plugin_api;
+use karbeat_core::api::plugin_api::{self, IntoParamId};
 use karbeat_core::audio::event::PluginTarget;
 use karbeat_core::context::DawContext;
 use karbeat_core::core::project::TrackId;
@@ -81,6 +81,15 @@ impl UiParamId {
     }
 }
 
+impl IntoParamId for UiParamId {
+    fn into_id(self) -> u32 {
+        match self {
+            UiParamId::Id(id) => id,
+            UiParamId::Path(path) => karbeat_utils::hash::hash_str(&path),
+        }
+    }
+}
+
 // ============================================================================
 // PLUGIN API FUNCTIONS
 // ============================================================================
@@ -144,7 +153,6 @@ impl From<PluginInfo> for UiPluginInfo {
         }
     }
 }
-
 
 /// A response message arriving from the audio thread containing the zero-copy buffer.
 /// Dart uses the `request_id` to correlate with the original command sent via `query_zero_copy_buffer`.
@@ -560,4 +568,83 @@ pub fn query_live_plugin_zero_copy_buf(
     name: String,
 ) -> Result<u32, String> {
     plugin_api::query_zero_copy_buffer_from_live_plugin(ctx, target.into(), name)
+}
+
+// =============================================
+// Parameter edit API
+// =============================================
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as edited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+pub fn begin_generator_parameter_edit(
+    ctx: &mut DawContext,
+    generator_id: u32,
+    param_id: UiParamId,
+) -> Result<(), String> {
+    let generator_id: GeneratorId = generator_id.into();
+    let track_id: TrackId = track_id.into();
+
+    plugin_api::begin_generator_parameter_edit(ctx, &generator_id, param_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as unedited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+pub fn end_generator_parameter_edit(
+    ctx: &mut DawContext,
+    generator_id: u32,
+    param_id: UiParamId,
+) -> Result<(), String> {
+    let generator_id: GeneratorId = generator_id.into();
+    let track_id: TrackId = track_id.into();
+    plugin_api::end_generator_parameter_edit(ctx, &generator_id, param_id)
+        .map_err(|e| e.to_string())
+}
+
+// =============================================
+// Parameter edit API
+// =============================================
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as edited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+pub fn begin_effect_parameter_edit(
+    ctx: &mut DawContext,
+    effect_target: UiEffectTarget,
+    effect_id: u32,
+    param_id: UiParamId,
+) -> Result<(), String> {
+    let effect_target = &(effect_target.into());
+    let effect_id = &(effect_id.into());
+    plugin_api::begin_effect_parameter_edit(ctx, effect_target, effect_id, param_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as unedited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+pub fn end_effect_parameter_edit(
+    ctx: &mut DawContext,
+    effect_target: UiEffectTarget,
+    effect_id: u32,
+    param_id: UiParamId,
+) -> Result<(), String> {
+    let effect_target = &(effect_target.into());
+    let effect_id = &(effect_id.into());
+    plugin_api::end_effect_parameter_edit(ctx, effect_target, effect_id, param_id)
+        .map_err(|e| e.to_string())
 }

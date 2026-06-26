@@ -184,6 +184,34 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   @protected
   void onParametersUpdated() {}
 
+  /// Signals the engine that a human is starting to manipulate this parameter.
+  @protected
+  void beginParameterEdit(int paramId) {
+    try {
+      plugin_api.beginGeneratorParameterEdit(
+        ctx: _ctx,
+        generatorId: widget.generatorId,
+        paramId: plugin_api.UiParamId.id(paramId),
+      );
+    } catch (e) {
+      debugPrint('Error beginning effect parameter edit: $e');
+    }
+  }
+
+  /// Signals the engine that the human has stopped manipulating this parameter.
+  @protected
+  void endParameterEdit(int paramId) {
+    try {
+      plugin_api.endGeneratorParameterEdit(
+        ctx: _ctx,
+        generatorId: widget.generatorId,
+        paramId: plugin_api.UiParamId.id(paramId),
+      );
+    } catch (e) {
+      debugPrint('Error ending effect parameter edit: $e');
+    }
+  }
+
   // ==========================================================================
   // DYNAMIC UI GENERATION
   // ==========================================================================

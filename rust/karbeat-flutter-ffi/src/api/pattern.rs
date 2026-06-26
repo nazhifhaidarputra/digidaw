@@ -183,9 +183,13 @@ pub fn add_notes_batch(
     ctx: &mut DawContext,
     pattern_id: u32,
     notes: Vec<(u8, u64, Option<u64>)>,
-) -> Result<(), String> {
-    let _ = note_api::add_notes_batch(ctx, pattern_id.into(), notes).map_err(|e| e.to_string())?;
-    Ok(())
+) -> Result<Vec<UiNote>, String> {
+    let added_notes = note_api::add_notes_batch(ctx, pattern_id.into(), notes)
+        .map_err(|e| e.to_string())?
+        .iter()
+        .map(|n| n.into())
+        .collect();
+    Ok(added_notes);
 }
 
 /// Delete notes in batch
@@ -215,8 +219,8 @@ pub fn move_notes_batch(
     ctx: &mut DawContext,
     pattern_id: u32,
     updates: Vec<(u32, u64, u8)>,
-) -> Result<(), String> {
-    let _ = note_api::move_notes_batch(
+) -> Result<Vec<UiNote>, String> {
+    let moved_notes = note_api::move_notes_batch(
         ctx,
         pattern_id.into(),
         updates
@@ -225,19 +229,22 @@ pub fn move_notes_batch(
             .collect(),
     )
     .map_err(|e| e.to_string())?;
-    Ok(())
+
+    let moved_notes = moved_notes.iter().map(|n| n.into()).collect();
+    Ok(moved_notes)
 }
 
 pub fn resize_notes_batch(
     ctx: &mut DawContext,
     pattern_id: u32,
     updates: Vec<(u32, u64)>,
-) -> Result<(), String> {
+) -> Result<Vec<UiNote>, String> {
     let pattern_id_typed: PatternId = pattern_id.into();
     let updates_proper = updates.into_iter().map(|u| (u.0.into(), u.1)).collect();
-    let _ = note_api::resize_notes_batch(ctx, pattern_id_typed, updates_proper)
+    let resized_notes = note_api::resize_notes_batch(ctx, pattern_id_typed, updates_proper)
         .map_err(|e| e.to_string())?;
-    Ok(())
+    let resized_notes = resized_notes.iter().map(|n| n.into()).collect();
+    Ok(resized_notes)
 }
 
 // ========================= PATTERN PREVIEW TRANSPORT ============================

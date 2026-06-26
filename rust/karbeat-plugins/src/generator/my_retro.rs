@@ -58,6 +58,12 @@ pub struct MyRetro {
     pub active_voices: Vec<SynthVoice>,
     pub sample_rate: f32,
     pub channels: usize,
+
+    #[serde(skip)]
+    pub scratch_buffer: Vec<f32>,
+
+    #[serde(skip)]
+    pub interleaved_buffer: Vec<f32>,
 }
 
 impl Default for MyRetro {
@@ -80,6 +86,9 @@ impl Default for MyRetro {
         engine.active_voices = Vec::with_capacity(16);
         engine.sample_rate = 48000.0;
         engine.channels = 2;
+
+        engine.scratch_buffer = vec![0.0; 4096];
+        engine.interleaved_buffer = vec![0.0; 8192];
 
         engine
     }
@@ -167,29 +176,53 @@ impl AudioPlugin for MyRetro {
         "My Retro"
     }
 
-    fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
+    fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
         self.sample_rate = sample_rate;
-        self.channels = channels;
+    }
+
+    fn set_io_layout(&mut self, _inputs: &[BusConfig], outputs: &[BusConfig]) {
+        let new_channels = outputs.first().map(|b| b.channel_count).unwrap_or(2);
+        if self.channels != new_channels {
+            self.channels = new_channels;
+        }
     }
 
     fn reset(&mut self) {
         self.active_voices.clear();
     }
 
-    fn process(&mut self, output_buffer: &mut [f32], context: &ProcessContext) {
-        output_buffer.fill(0.0);
+    fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext) {
+        // 1. Process sample-accurate automation
+        for param_change in context.param_changes {
+            self.set_parameter(param_change.param_id, param_change.normalized_value);
+        }
+
+        if buffers.main_outputs.is_empty() { return; }
+
+        let outputs = &mut buffers.main_outputs[0].channel_data;
+        let total_frames = outputs.first().map_or(0, |ch| ch.len());
+
+        if self.channels == 0 || total_frames == 0 { return; }
+
+        // Resize internal buffers if necessary (no allocations if already large enough)
+        let required_len = total_frames * self.channels;
+        if self.interleaved_buffer.len() < required_len {
+            self.interleaved_buffer.resize(required_len, 0.0);
+        }
+        if self.scratch_buffer.len() < required_len {
+            self.scratch_buffer.resize(required_len, 0.0);
+        }
+        
+        self.interleaved_buffer[..required_len].fill(0.0);
 
         let midi_events = context.midi_events;
 
         // Extract primitives outside the loop
         let master_gain = self.gain.get();
         let crush_steps = self.bitcrush_resolution.get().max(2.0);
-        let total_frames = output_buffer.len() / self.channels;
 
         let mut current_frame = 0;
         let mut event_idx = 0;
-
-        let mut scratch = vec![0.0; total_frames * self.channels];
 
         while current_frame < total_frames {
             let next_event_frame = if event_idx < midi_events.len() {
@@ -203,7 +236,7 @@ impl AudioPlugin for MyRetro {
 
             if block_len > 0 {
                 let out_slice =
-                    &mut output_buffer[current_frame * self.channels..end_frame * self.channels];
+                    &mut self.interleaved_buffer[current_frame * self.channels..end_frame * self.channels];
 
                 // Destructure `self` to separate mutable voices from immutable parameters
                 let MyRetro {
@@ -212,6 +245,7 @@ impl AudioPlugin for MyRetro {
                     amp_envelope,
                     sample_rate,
                     channels,
+                    scratch_buffer,
                     ..
                 } = self;
 
@@ -220,7 +254,7 @@ impl AudioPlugin for MyRetro {
                         continue;
                     }
 
-                    let scratch_slice = &mut scratch[0..block_len * *channels];
+                    let scratch_slice = &mut scratch_buffer[0..block_len * *channels];
 
                     Self::generate_voice_block(
                         oscillators,
@@ -233,7 +267,7 @@ impl AudioPlugin for MyRetro {
                         self.base_freq.get(),
                     );
 
-                    // Mix the voice scratch buffer into the main output
+                    // Mix the voice scratch buffer into the main interleaved output
                     for (i, &sample) in scratch_slice.iter().enumerate() {
                         out_slice[i] += sample;
                     }
@@ -249,7 +283,8 @@ impl AudioPlugin for MyRetro {
             while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
             {
                 match midi_events[event_idx].data {
-                    MidiMessage::NoteOn { key, velocity } => {
+                    // Ignore the new channel field with `..`
+                    MidiMessage::NoteOn { key, velocity, .. } => {
                         if velocity > 0 {
                             let mut voice = SynthVoice::new(
                                 key,
@@ -270,7 +305,7 @@ impl AudioPlugin for MyRetro {
                             }
                         }
                     }
-                    MidiMessage::NoteOff { key } => {
+                    MidiMessage::NoteOff { key, .. } => {
                         for v in self.active_voices.iter_mut() {
                             if v.note == key && v.is_active {
                                 v.release();
@@ -286,6 +321,13 @@ impl AudioPlugin for MyRetro {
         }
 
         self.active_voices.retain(|v| v.is_active);
+
+        // 2. Finally, de-interleave the result into the provided AudioBuffers
+        for c in 0..self.channels {
+            for i in 0..total_frames {
+                outputs[c][i] = self.interleaved_buffer[i * self.channels + c];
+            }
+        }
     }
 
     fn category(&self) -> PluginCategory {

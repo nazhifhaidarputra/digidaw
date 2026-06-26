@@ -95,7 +95,7 @@ Future<UiNote> changeNoteParams({
 /// ## Parameters
 /// * pattern_id: [u32], id of the pattern
 /// * new_notes: Vector of tuples that contains (key, start_tick, duration)
-Future<void> addNotesBatch({
+Future<List<UiNote>> addNotesBatch({
   required DawContext ctx,
   required int patternId,
   required List<(int, int, int?)> notes,
@@ -125,7 +125,7 @@ Future<void> deleteNotesBatch({
 /// ## Parameters
 /// * pattern_id: [u32], id of the pattern
 /// * note_ids: Vector of notes updates (id, )
-Future<void> moveNotesBatch({
+Future<List<UiNote>> moveNotesBatch({
   required DawContext ctx,
   required int patternId,
   required List<(int, int, int)> updates,
@@ -135,7 +135,7 @@ Future<void> moveNotesBatch({
   updates: updates,
 );
 
-Future<void> resizeNotesBatch({
+Future<List<UiNote>> resizeNotesBatch({
   required DawContext ctx,
   required int patternId,
   required List<(int, int)> updates,

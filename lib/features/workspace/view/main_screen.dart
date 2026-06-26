@@ -20,7 +20,7 @@ class MainScreen extends ConsumerWidget {
           workspaceStateProvider.select((s) => s.currentToolbarContext),
         );
         final showMidiKeyboard = ref.watch(
-          workspaceStateProvider.select((s) => s.showFloatingMidiKeyboard),
+          workspaceStateProvider.select((s) => s.floatingMidiKeyboardState.showed),
         );
         final showExportPanel = ref.watch(
           workspaceStateProvider.select((s) => s.showExportPanel),

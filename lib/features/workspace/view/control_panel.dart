@@ -318,7 +318,7 @@ class DefaultControlPanel extends ConsumerWidget {
             name: "MIDI KB",
             icon: Icons.piano,
             color: Colors.deepPurpleAccent,
-            isActive: workspaceState.showFloatingMidiKeyboard,
+            isActive: workspaceState.floatingMidiKeyboardState.showed,
             onTap: () => ref.read(workspaceStateProvider.notifier).toggleFloatingMidiKeyboard(),
           ),
         ],

@@ -32,7 +32,7 @@ pub mod v2 {
     use std::sync::atomic::{AtomicU32, Ordering};
 
     use hashbrown::HashMap;
-    use karbeat_plugin_api::types_new::MidiEvent;
+    use karbeat_plugin_api::types::MidiEvent;
     use smallvec::SmallVec;
     use super::PlaybackMode;
 

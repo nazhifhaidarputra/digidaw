@@ -15,6 +15,8 @@ class DawFloatParam extends StatelessWidget {
   final double step;
   final String suffix;
   final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChangeStart;
+  final ValueChanged<double>? onChangeEnd;
   final SliderInteraction sliderInteraction;
   final double? sliderWidth;
 
@@ -29,6 +31,8 @@ class DawFloatParam extends StatelessWidget {
     this.step = 0.01,
     this.suffix = '',
     required this.onChanged,
+    this.onChangeStart,
+    this.onChangeEnd,
     this.sliderInteraction = SliderInteraction.slideThumb,
     this.sliderWidth,
   });
@@ -88,6 +92,8 @@ class DawFloatParam extends StatelessWidget {
                 max: max,
                 divisions: divisions,
                 onChanged: onChanged,
+                onChangeStart: onChangeStart,
+                onChangeEnd: onChangeEnd,
                 allowedInteraction: sliderInteraction,
               ),
             ),

@@ -24,15 +24,10 @@ abstract class AbstractEffectScreen extends ConsumerStatefulWidget {
   final plugin_api.UiEffectTarget target;
   final int effectId;
 
-  const AbstractEffectScreen({
-    super.key,
-    required this.target,
-    required this.effectId,
-  });
+  const AbstractEffectScreen({super.key, required this.target, required this.effectId});
 }
 
-abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
-    extends ConsumerState<T> {
+abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends ConsumerState<T> {
   List<plugin_api.UiPluginParameter> parameters = [];
   bool isLoading = true;
   String? errorMessage;
@@ -65,18 +60,14 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   /// Start polling for parameter feedback from the audio thread.
   @protected
   void _requestParameterFeedback() async {
-      try {
-        // Just tell Rust we are watching this effect.
-        // The stream will handle the actual data delivery.
-        await plugin_api.queryEffectParameters(
-          ctx: _ctx,
-          target: widget.target,
-          effectId: widget.effectId,
-        );
-      } catch (e) {
-        debugPrint('Failed to request effect parameters: $e');
-      }
+    try {
+      // Just tell Rust we are watching this effect.
+      // The stream will handle the actual data delivery.
+      await plugin_api.queryEffectParameters(ctx: _ctx, target: widget.target, effectId: widget.effectId);
+    } catch (e) {
+      debugPrint('Failed to request effect parameters: $e');
     }
+  }
 
   /// Load parameter specs from the backend.
   @protected
@@ -104,7 +95,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
 
   /// Reset a parameter to its default value.
   @protected
-  Future<void> resetToDefault({required int paramId, }) async {
+  Future<void> resetToDefault({required int paramId}) async {
     await plugin_api.setEffectParameter(
       ctx: _ctx,
       target: widget.target,
@@ -212,6 +203,36 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   @protected
   void onParametersUpdated() {}
 
+  /// Signals the engine that a human is starting to manipulate this parameter.
+  @protected
+  void beginParameterEdit(int paramId) {
+    try {
+      plugin_api.beginEffectParameterEdit(
+        ctx: _ctx,
+        effectTarget: widget.target,
+        effectId: widget.effectId,
+        paramId: plugin_api.UiParamId.id(paramId),
+      );
+    } catch (e) {
+      debugPrint('Error beginning effect parameter edit: $e');
+    }
+  }
+
+  /// Signals the engine that the human has stopped manipulating this parameter.
+  @protected
+  void endParameterEdit(int paramId) {
+    try {
+      plugin_api.endEffectParameterEdit(
+        ctx: _ctx,
+        effectTarget: widget.target,
+        effectId: widget.effectId,
+        paramId: plugin_api.UiParamId.id(paramId),
+      );
+    } catch (e) {
+      debugPrint('Error ending effect parameter edit: $e');
+    }
+  }
+
   // ==========================================================================
   // DYNAMIC UI GENERATION
   // ==========================================================================
@@ -224,10 +245,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
 
     if (errorMessage != null) {
       return Center(
-        child: Text(
-          errorMessage!,
-          style: const TextStyle(color: Colors.redAccent),
-        ),
+        child: Text(errorMessage!, style: const TextStyle(color: Colors.redAccent)),
       );
     }
 
@@ -246,10 +264,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: entry.value.map((param) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: buildParameterWidget(param),
-                    );
+                    return Padding(padding: const EdgeInsets.only(bottom: 16), child: buildParameterWidget(param));
                   }).toList(),
                 ),
               ),
@@ -277,6 +292,8 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
           defaultValue: param.defaultValue,
           step: param.step == 0.0 ? 0.01 : param.step,
           onChanged: (val) => setParameter(param.id, val),
+          onChangeStart: (_) => beginParameterEdit(param.id),
+          onChangeEnd: (_) => endParameterEdit(param.id),
         );
       case plugin_api.UiParameterType.choice:
         return DawChoiceParam(
@@ -285,7 +302,12 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
           value: param.value,
           choices: param.choices,
           defaultValue: param.defaultValue,
-          onChanged: (val) => setParameter(param.id, val),
+          onChanged: (val) {
+            // Instantaneous sequence for dropdowns
+            beginParameterEdit(param.id);
+            setParameter(param.id, val);
+            endParameterEdit(param.id);
+          },
         );
       case plugin_api.UiParameterType.bool:
         return DawBoolParam(
@@ -293,7 +315,12 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
           name: param.name,
           value: param.value,
           defaultValue: param.defaultValue,
-          onChanged: (val) => setParameter(param.id, val),
+          onChanged: (val) {
+            // Instantaneous sequence for toggles
+            beginParameterEdit(param.id);
+            setParameter(param.id, val);
+            endParameterEdit(param.id);
+          },
         );
     }
   }
@@ -303,12 +330,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         title,
-        style: const TextStyle(
-          color: Colors.cyanAccent,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
+        style: const TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2),
       ),
     );
   }
@@ -353,7 +375,10 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       feedback.maybeWhen(
         // 1. Handle Bulk Parameter Snapshots
         effectParameterSnapshot: (targetTrackId, targetBusId, snapshotEffectId, snapshotParams) {
-          if (snapshotEffectId != widget.effectId || !isMatchingTarget(targetTrackId, targetBusId) || snapshotParams.isEmpty) return;
+          if (snapshotEffectId != widget.effectId ||
+              !isMatchingTarget(targetTrackId, targetBusId) ||
+              snapshotParams.isEmpty)
+            return;
 
           setState(() {
             for (final paramTuple in snapshotParams) {
@@ -407,7 +432,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
         },
 
         // 3. Ignore Generator, Mixer, and other events
-        orElse: () {}, 
+        orElse: () {},
       );
     });
   }
@@ -420,10 +445,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
         backgroundColor: const Color(0xFF16213E),
         elevation: 0,
         foregroundColor: Colors.white,
-        title: Text(
-          effectName,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
+        title: Text(effectName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
       ),
       body: body,
     );

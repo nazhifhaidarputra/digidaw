@@ -6,8 +6,7 @@ use crate::{
     commands::{AudioCommand, EffectTarget},
     context::DawContext,
     core::project::{
-        generator::GeneratorInstanceType, mixer::EffectInstance, GeneratorId, GeneratorInstance,
-        TrackId,
+        AutomationTarget, EffectAutomationTarget, GeneratorId, GeneratorInstance, MixerChannelParamTarget, TrackAutomationTarget, TrackId, generator::GeneratorInstanceType, mixer::EffectInstance
     },
     shared::id::*,
 };
@@ -546,14 +545,13 @@ pub fn query_zero_copy_buffer_from_live_plugin(
 pub fn begin_generator_parameter_edit(
     ctx: &mut DawContext,
     generator_id: &GeneratorId,
-    track_id: &TrackId,
     param_id: impl IntoParamId,
 ) -> anyhow::Result<()> {
     let param_id = param_id.into_id();
     
-    let target = AutomationTarget::Track {
-        track_id: *track_id,
-        track_target: TrackAutomationTarget::Generator { param_id },
+    let target = AutomationTarget::Generator {
+        generator_id: *generator_id,
+        param_id,
     };
 
     ctx.send_audio_command(AudioCommand::BeginEdit { target })
@@ -563,14 +561,13 @@ pub fn begin_generator_parameter_edit(
 pub fn end_generator_parameter_edit(
     ctx: &mut DawContext,
     generator_id: &GeneratorId,
-    track_id: &TrackId,
     param_id: impl IntoParamId,
 ) -> anyhow::Result<()> {
     let param_id = param_id.into_id();
     
-    let target = AutomationTarget::Track {
-        track_id: *track_id,
-        track_target: TrackAutomationTarget::Generator { param_id },
+    let target = AutomationTarget::Generator {
+        generator_id: *generator_id,
+        param_id,
     };
 
     ctx.send_audio_command(AudioCommand::EndEdit { target })

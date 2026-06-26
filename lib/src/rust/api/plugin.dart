@@ -11,7 +11,7 @@ import 'project.dart';
 part 'plugin.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectParameterSnapshot`, `UiGeneratorParameterSnapshot`, `UiParameterValue`, `UiPluginCommandResponse`, `UiZeroCopyBufferResponse`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`, `into_id`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
 /// Get all available generators with their registry IDs (preferred for UI)
@@ -235,6 +235,74 @@ Future<int> queryLivePluginZeroCopyBuf({
   ctx: ctx,
   target: target,
   name: name,
+);
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as edited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+Future<void> beginGeneratorParameterEdit({
+  required DawContext ctx,
+  required int generatorId,
+  required UiParamId paramId,
+}) => RustLib.instance.api.crateApiPluginBeginGeneratorParameterEdit(
+  ctx: ctx,
+  generatorId: generatorId,
+  paramId: paramId,
+);
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as unedited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+Future<void> endGeneratorParameterEdit({
+  required DawContext ctx,
+  required int generatorId,
+  required UiParamId paramId,
+}) => RustLib.instance.api.crateApiPluginEndGeneratorParameterEdit(
+  ctx: ctx,
+  generatorId: generatorId,
+  paramId: paramId,
+);
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as edited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+Future<void> beginEffectParameterEdit({
+  required DawContext ctx,
+  required UiEffectTarget effectTarget,
+  required int effectId,
+  required UiParamId paramId,
+}) => RustLib.instance.api.crateApiPluginBeginEffectParameterEdit(
+  ctx: ctx,
+  effectTarget: effectTarget,
+  effectId: effectId,
+  paramId: paramId,
+);
+
+/// Begin a parameter edit from user touch, or other input
+///
+/// This will flag the affected plugin parameter as unedited.
+///
+/// The behavior during which the plugin's parameter are
+/// edited, are determined by the plugin's internal implementation
+Future<void> endEffectParameterEdit({
+  required DawContext ctx,
+  required UiEffectTarget effectTarget,
+  required int effectId,
+  required UiParamId paramId,
+}) => RustLib.instance.api.crateApiPluginEndEffectParameterEdit(
+  ctx: ctx,
+  effectTarget: effectTarget,
+  effectId: effectId,
+  paramId: paramId,
 );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>>

@@ -8,6 +8,33 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'workspace_state.freezed.dart';
 
+/// State for Floating midi keyboard's properties
+@freezed
+abstract class FloatingMidiKeyboardFieldState with _$FloatingMidiKeyboardFieldState {
+  const FloatingMidiKeyboardFieldState._(); // enables custom methods
+
+  const factory FloatingMidiKeyboardFieldState({
+    int? selectedGeneratorId,
+    @Default(48) int baseKey,
+    @Default(15) int keyRange,
+    @Default(false) bool showed,
+  }) = _FloatingMidiKeyboardFieldState;
+
+  /// Clamped factory that mirrors the original constructor logic
+  factory FloatingMidiKeyboardFieldState.create({
+    int? selectedGeneratorId,
+    int baseKey = 48,
+    int keyRange = 15,
+    bool showed = false,
+  }) {
+    return FloatingMidiKeyboardFieldState(
+      selectedGeneratorId: selectedGeneratorId,
+      baseKey: baseKey.clamp(21, 120),
+      keyRange: keyRange.clamp(12, 24),
+      showed: showed,
+    );
+  }
+}
 // ============================================================
 // State data class
 // ============================================================
@@ -47,7 +74,7 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(false) bool showExportPanel,
 
-    @Default(false) bool showFloatingMidiKeyboard,
+    @Default(FloatingMidiKeyboardFieldState()) FloatingMidiKeyboardFieldState floatingMidiKeyboardState,
   }) = _WorkspaceState;
 }
 
@@ -184,9 +211,36 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     state = state.copyWith(showExportPanel: false);
   }
 
-  // Floating midi keyboard
+  void setMidiKeyboardBaseKey(int key) {
+    state = state.copyWith(
+      floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
+        baseKey: key.clamp(21, 120),
+      ),
+    );
+  }
+  
+  void setMidiKeyboardRange(int range) {
+    state = state.copyWith(
+      floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
+        keyRange: range.clamp(12, 24),
+      ),
+    );
+  }
+  
+  void setMidiKeyboardGenerator(int? generatorId) {
+    state = state.copyWith(
+      floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
+        selectedGeneratorId: generatorId,
+      ),
+    );
+  }
+  
   void toggleFloatingMidiKeyboard() {
-    state = state.copyWith(showFloatingMidiKeyboard: !state.showFloatingMidiKeyboard);
+    state = state.copyWith(
+      floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
+        showed: !state.floatingMidiKeyboardState.showed,
+      ),
+    );
   }
 }
 

@@ -1790,7 +1790,6 @@ impl AudioEngine {
                     self.sidechain_delay_lines.clear();
 
                     // 4. Force Latency recalculation (latency samples change with sample rate)
-                    
 
                     log::info!(
                         "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
@@ -1807,16 +1806,15 @@ impl AudioEngine {
                 self.cached_routing_order =
                     compute_routing_order(track_ids, bus_ids, &graph.routing);
                 self.current_state.graph = graph;
-                
 
                 log::debug!("[AudioEngine] ReplaceFullGraph applied");
             }
             AudioCommand::BeginEdit { target } => {
                 self.handle_parameter_edit(&target, true);
-            },
+            }
             AudioCommand::EndEdit { target } => {
                 self.handle_parameter_edit(&target, false);
-            },
+            }
         }
     }
 
@@ -2222,7 +2220,7 @@ impl AudioEngine {
                             let mut gen_ctx = base_ctx.clone();
                             gen_ctx.midi_events = events;
 
-                            Self::process_plugin_wrapper(
+                            process_plugin_wrapper(
                                 &mut *gen_instance.plugin,
                                 &mut self.mix_buffer,
                                 aux,
@@ -2429,7 +2427,7 @@ impl AudioEngine {
                         for effect in effects.iter_mut() {
                             let sidechain_id = SidechainRouteId::BusEffect(*bus_id, effect.id);
                             let aux = self.aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
-                            Self::process_plugin_wrapper(
+                            process_plugin_wrapper(
                                 &mut *effect.plugin,
                                 &mut self.mix_buffer,
                                 aux,
@@ -2658,7 +2656,7 @@ impl AudioEngine {
                 let sidechain_id = SidechainRouteId::TrackEffect(track_id, effect.id);
                 let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
-                Self::process_plugin_wrapper(
+                process_plugin_wrapper(
                     &mut *effect.plugin,
                     buffer,
                     aux,
@@ -2710,7 +2708,7 @@ impl AudioEngine {
             let sidechain_id = SidechainRouteId::MasterEffect(effect.id);
             let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
-            Self::process_plugin_wrapper(
+            process_plugin_wrapper(
                 &mut *effect.plugin,
                 buffer,
                 aux,
@@ -3346,27 +3344,21 @@ impl AudioEngine {
 
     fn apply_parameter_change(&mut self, target: &AutomationTarget, final_value: f32) {
         match target {
+            AutomationTarget::Generator {
+                generator_id,
+                param_id,
+            } => {
+                if let Some(inst) = self
+                    .plugin_state
+                    .get_generator_mut(generator_id.to_u32() as usize)
+                {
+                    inst.plugin.apply_automation(*param_id, final_value);
+                }
+            }
             AutomationTarget::Track {
                 track_id,
                 track_target,
             } => match track_target {
-                TrackAutomationTarget::Generator { param_id } => {
-                    if let Some(gen_id) = self
-                        .current_state
-                        .graph
-                        .tracks
-                        .iter()
-                        .find(|t| t.id == *track_id)
-                        .and_then(|t| t.generator.as_ref().map(|g| g.id))
-                    {
-                        if let Some(inst) = self
-                            .plugin_state
-                            .get_generator_mut(gen_id.to_u32() as usize)
-                        {
-                            inst.plugin.apply_automation(*param_id, final_value);
-                        }
-                    }
-                }
                 TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Volume => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
@@ -3447,31 +3439,22 @@ impl AudioEngine {
 
     fn handle_parameter_edit(&mut self, target: &AutomationTarget, is_begin: bool) {
         match target {
+            AutomationTarget::Generator { generator_id, param_id } => {
+                            if let Some(inst) = self
+                                .plugin_state
+                                .get_generator_mut(generator_id.to_u32() as usize)
+                            {
+                                if is_begin {
+                                    inst.plugin.begin_parameter_edit(*param_id);
+                                } else {
+                                    inst.plugin.end_parameter_edit(*param_id);
+                                }
+                            }
+                        }
             AutomationTarget::Track {
                 track_id,
                 track_target,
             } => match track_target {
-                TrackAutomationTarget::Generator { param_id } => {
-                    if let Some(gen_id) = self
-                        .current_state
-                        .graph
-                        .tracks
-                        .iter()
-                        .find(|t| t.id == *track_id)
-                        .and_then(|t| t.generator.as_ref().map(|g| g.id))
-                    {
-                        if let Some(inst) = self
-                            .plugin_state
-                            .get_generator_mut(gen_id.to_u32() as usize)
-                        {
-                            if is_begin {
-                                inst.plugin.begin_parameter_edit(*param_id);
-                            } else {
-                                inst.plugin.end_parameter_edit(*param_id);
-                            }
-                        }
-                    }
-                }
                 TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Plugin { effect_id, target } => match target {
                         EffectAutomationTarget::Mix => {}

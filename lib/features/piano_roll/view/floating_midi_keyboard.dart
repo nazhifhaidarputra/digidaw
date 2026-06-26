@@ -1,9 +1,11 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/core/utils/formatter.dart';
 
@@ -13,23 +15,6 @@ class FloatingMidiKeyboard extends ConsumerStatefulWidget {
   @override
   ConsumerState<FloatingMidiKeyboard> createState() =>
       _FloatingMidiKeyboardState();
-}
-
-/// State for Floating midi keyboard's properties
-class FloatingMidiKeyboardFieldState {
-  int? selectedGeneratorId;
-
-  int baseKey;
-  int keyRange;
-  bool showed  = false;
-
-  FloatingMidiKeyboardFieldState({
-    this.selectedGeneratorId,
-    int baseKey = 48,
-    int keyRange = 15,
-    required this.showed,
-  }) : baseKey = baseKey.clamp(21, 120),
-       keyRange = keyRange.clamp(12, 24);
 }
 
 class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
@@ -46,13 +31,13 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   }
 
   // Safe resolver that doesn't mutate state during build
-  int? _resolveActiveGeneratorId(GlobalAppState state) {
-    int? genId = state.midiKeyboardState.selectedGeneratorId;
-    if (genId != null && !state.generators.containsKey(genId)) {
+  int? _resolveActiveGeneratorId(int? selectedGeneratorId, IMap<int, UiGeneratorInstance> generators) {
+    int? genId = selectedGeneratorId;
+    if (genId != null && !generators.containsKey(genId)) {
       genId = null;
     }
-    if (genId == null && state.generators.isNotEmpty) {
-      genId = state.generators.keys.first;
+    if (genId == null && generators.isNotEmpty) {
+      genId = generators.keys.first;
     }
     return genId;
   }
@@ -60,11 +45,20 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   @override
   Widget build(BuildContext context) {
 
-    final state = ref.watch(globalStateProvider);
-    final kState = state.midiKeyboardState;
-    final generators = state.generators;
-
-    final activeGeneratorId = _resolveActiveGeneratorId(state);
+    final workspaceState = ref.watch(workspaceStateProvider);
+        final kState = workspaceState.floatingMidiKeyboardState;
+        final workspaceNotifier = ref.read(workspaceStateProvider.notifier);
+    
+        // Safely unwrap the async project state
+        final IMap<int, UiGeneratorInstance> generators = ref.watch(projectProvider).maybeWhen(
+              data: (project) => project.generators,
+              orElse: () => const IMapConst<int, UiGeneratorInstance>({}),
+            );
+    
+        final activeGeneratorId = _resolveActiveGeneratorId(
+          kState.selectedGeneratorId,
+          generators,
+        );
 
     return Positioned(
       left: _x,
@@ -153,8 +147,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         ),
                         const Spacer(),
                         InkWell(
-                          onTap: () => ref
-                              .read(globalStateProvider)
+                          onTap: () => workspaceNotifier
                               .toggleFloatingMidiKeyboard(),
                           child: const Icon(
                             Icons.close,
@@ -177,10 +170,10 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         "BASE KEY",
                         numToMidiKey(kState.baseKey),
                         () {
-                          state.setMidiKeyboardBaseKey(kState.baseKey - 1);
+                          workspaceNotifier.setMidiKeyboardBaseKey(kState.baseKey - 1);
                         },
                         () {
-                          state.setMidiKeyboardBaseKey(kState.baseKey + 1);
+                          workspaceNotifier.setMidiKeyboardBaseKey(kState.baseKey + 1);
                         },
                       ),
                       const SizedBox(width: 20),
@@ -188,10 +181,10 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         "RANGE",
                         "+${kState.keyRange}",
                         () {
-                          state.setMidiKeyboardRange(kState.keyRange - 1);
+                          workspaceNotifier.setMidiKeyboardRange(kState.keyRange - 1);
                         },
                         () {
-                          state.setMidiKeyboardRange(kState.keyRange + 1);
+                          workspaceNotifier.setMidiKeyboardRange(kState.keyRange + 1);
                         },
                       ),
                       const Spacer(),
@@ -224,7 +217,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                               fontFamily: 'monospace',
                             ),
                             onChanged: (val) {
-                              state.setMidiKeyboardGenerator(val);
+                              workspaceNotifier.setMidiKeyboardGenerator(val);
                             },
                             items: generators.entries.map((e) {
                               return DropdownMenuItem(
@@ -319,6 +312,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     if (generatorId != null) {
       try {
         await audio_api.playPreviewNoteGenerator(
+          ctx: ref.read(projectProvider.notifier).dawContext,
           generatorId: generatorId,
           noteKey: note,
           velocity: 100,
@@ -335,6 +329,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     if (generatorId != null) {
       try {
         await audio_api.playPreviewNoteGenerator(
+          ctx: ref.read(projectProvider.notifier).dawContext,
           generatorId: generatorId,
           noteKey: note,
           velocity: 100,

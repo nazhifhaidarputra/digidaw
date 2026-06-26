@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::shared::{
     id::{AutomationId, BusId, EffectId, TrackId},
-    types::FractionF32,
+    types::FractionF32, GeneratorId,
 };
 
 // ============================================================================
@@ -22,6 +22,7 @@ use crate::shared::{
 /// generator, or effect slot).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AutomationTarget {
+    Generator { generator_id: GeneratorId, param_id: u32 },
     Track {
         track_id: TrackId,
         track_target: TrackAutomationTarget,
@@ -40,7 +41,6 @@ pub enum AutomationTarget {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TrackAutomationTarget {
-    Generator { param_id: u32 },
     MixerChannel(MixerChannelParamTarget),
 }
 
@@ -79,6 +79,7 @@ impl AutomationTarget {
     /// Checks if two targets belong in the same UI accordion/drawer
     pub fn belongs_to_same_drawer_as(&self, other: &Self) -> bool {
         match (self, other) {
+            (Self::Generator { generator_id: id1, .. }, Self::Generator { generator_id: id2, .. }) => id1 == id2,
             (Self::Track { track_id: id1, .. }, Self::Track { track_id: id2, .. }) => id1 == id2,
             (Self::Bus { bus_id: id1, .. }, Self::Bus { bus_id: id2, .. }) => id1 == id2,
             (Self::Master(_), Self::Master(_)) => true,
