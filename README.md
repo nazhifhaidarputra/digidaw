@@ -29,7 +29,7 @@ _More features are currently in active development._
 
 A huge thanks to the developers who made this project possible:
 
-| <a href="https://github.com/haidarptrw"><img src="https://github.com/haidarptrw.png" width="80px;" alt=""/></a><br /><sub><b>[haidarptrw](https://github.com/haidarptrw)</b></sub> |
+| <a href="https://codeberg.org/haidarptrw"><img src="https://codeberg.org/avatars/52b87e29a45aa11b374f02b83c5d6d42" width="80px;" alt=""/></a><br /><sub><b>[haidarptrw](https://codeberg.org/haidarptrw)</b></sub> |
 | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 |                                                                    **Creator, Lead Developer & Audio Engineer**                                                                    |
 
@@ -67,3 +67,7 @@ We intend to build the desktop version entirely in Rust, though we are still res
 This shift is necessary because the desktop version will include features incompatible with mobile platforms, such as
 broad support for popular audio plugin formats like VST3, LV2, CLAP, and AU. Furthermore, Rust offers superior performance
 for desktop GUI applications compared to Flutter, whose garbage collector can impact real-time efficiency.
+
+## Supporting this Project
+
+To support this project, you can donate to my Ko-Fi [here](https://ko-fi.com/haidarwibowo)
