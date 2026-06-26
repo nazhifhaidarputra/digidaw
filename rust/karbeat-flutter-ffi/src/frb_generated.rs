@@ -10302,6 +10302,14 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
+                let mut var_generatorId = <u32>::sse_decode(deserializer);
+                let mut var_paramId = <u32>::sse_decode(deserializer);
+                return crate::api::automation::AutomationTargetDto::Generator {
+                    generator_id: var_generatorId,
+                    param_id: var_paramId,
+                };
+            }
+            1 => {
                 let mut var_trackId = <u32>::sse_decode(deserializer);
                 let mut var_trackTarget =
                     <crate::api::automation::TrackAutomationTargetDto>::sse_decode(deserializer);
@@ -10310,7 +10318,7 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
                     track_target: var_trackTarget,
                 };
             }
-            1 => {
+            2 => {
                 let mut var_busId = <u32>::sse_decode(deserializer);
                 let mut var_mixTarget =
                     <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
@@ -10319,12 +10327,12 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
                     mix_target: var_mixTarget,
                 };
             }
-            2 => {
+            3 => {
                 let mut var_field0 =
                     <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
                 return crate::api::automation::AutomationTargetDto::Master(var_field0);
             }
-            3 => {
+            4 => {
                 return crate::api::automation::AutomationTargetDto::TempoBpm;
             }
             _ => {
@@ -11345,12 +11353,6 @@ impl SseDecode for crate::api::automation::TrackAutomationTargetDto {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_paramId = <u32>::sse_decode(deserializer);
-                return crate::api::automation::TrackAutomationTargetDto::Generator {
-                    param_id: var_paramId,
-                };
-            }
-            1 => {
                 let mut var_field0 =
                     <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
                 return crate::api::automation::TrackAutomationTargetDto::MixerChannel(var_field0);
@@ -12969,25 +12971,34 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::automation::AutomationPointDt
 impl flutter_rust_bridge::IntoDart for crate::api::automation::AutomationTargetDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
+            crate::api::automation::AutomationTargetDto::Generator {
+                generator_id,
+                param_id,
+            } => [
+                0.into_dart(),
+                generator_id.into_into_dart().into_dart(),
+                param_id.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
             crate::api::automation::AutomationTargetDto::Track {
                 track_id,
                 track_target,
             } => [
-                0.into_dart(),
+                1.into_dart(),
                 track_id.into_into_dart().into_dart(),
                 track_target.into_into_dart().into_dart(),
             ]
             .into_dart(),
             crate::api::automation::AutomationTargetDto::Bus { bus_id, mix_target } => [
-                1.into_dart(),
+                2.into_dart(),
                 bus_id.into_into_dart().into_dart(),
                 mix_target.into_into_dart().into_dart(),
             ]
             .into_dart(),
             crate::api::automation::AutomationTargetDto::Master(field0) => {
-                [2.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+                [3.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::automation::AutomationTargetDto::TempoBpm => [3.into_dart()].into_dart(),
+            crate::api::automation::AutomationTargetDto::TempoBpm => [4.into_dart()].into_dart(),
             _ => {
                 unimplemented!("");
             }
@@ -13318,11 +13329,8 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::TailHandlingDTO>
 impl flutter_rust_bridge::IntoDart for crate::api::automation::TrackAutomationTargetDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
-            crate::api::automation::TrackAutomationTargetDto::Generator { param_id } => {
-                [0.into_dart(), param_id.into_into_dart().into_dart()].into_dart()
-            }
             crate::api::automation::TrackAutomationTargetDto::MixerChannel(field0) => {
-                [1.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+                [0.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
             _ => {
                 unimplemented!("");
@@ -14651,11 +14659,19 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         match self {
+            crate::api::automation::AutomationTargetDto::Generator {
+                generator_id,
+                param_id,
+            } => {
+                <i32>::sse_encode(0, serializer);
+                <u32>::sse_encode(generator_id, serializer);
+                <u32>::sse_encode(param_id, serializer);
+            }
             crate::api::automation::AutomationTargetDto::Track {
                 track_id,
                 track_target,
             } => {
-                <i32>::sse_encode(0, serializer);
+                <i32>::sse_encode(1, serializer);
                 <u32>::sse_encode(track_id, serializer);
                 <crate::api::automation::TrackAutomationTargetDto>::sse_encode(
                     track_target,
@@ -14663,20 +14679,20 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
                 );
             }
             crate::api::automation::AutomationTargetDto::Bus { bus_id, mix_target } => {
-                <i32>::sse_encode(1, serializer);
+                <i32>::sse_encode(2, serializer);
                 <u32>::sse_encode(bus_id, serializer);
                 <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
                     mix_target, serializer,
                 );
             }
             crate::api::automation::AutomationTargetDto::Master(field0) => {
-                <i32>::sse_encode(2, serializer);
+                <i32>::sse_encode(3, serializer);
                 <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
                     field0, serializer,
                 );
             }
             crate::api::automation::AutomationTargetDto::TempoBpm => {
-                <i32>::sse_encode(3, serializer);
+                <i32>::sse_encode(4, serializer);
             }
             _ => {
                 unimplemented!("");
@@ -15528,12 +15544,8 @@ impl SseEncode for crate::api::automation::TrackAutomationTargetDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         match self {
-            crate::api::automation::TrackAutomationTargetDto::Generator { param_id } => {
-                <i32>::sse_encode(0, serializer);
-                <u32>::sse_encode(param_id, serializer);
-            }
             crate::api::automation::TrackAutomationTargetDto::MixerChannel(field0) => {
-                <i32>::sse_encode(1, serializer);
+                <i32>::sse_encode(0, serializer);
                 <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
                     field0, serializer,
                 );

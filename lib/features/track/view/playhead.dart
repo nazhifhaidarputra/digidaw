@@ -135,10 +135,9 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                                     _dragSamples = 0; // Prevent negative time
                                   }
                                 });
-
-                                widget.onSeek(_dragSamples);
                               },
                               onHorizontalDragEnd: (details) {
+                                widget.onSeek(_dragSamples);
                                 setState(() {
                                   _isDragging = false;
                                 });

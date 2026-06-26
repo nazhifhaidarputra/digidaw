@@ -8812,24 +8812,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     switch (raw[0]) {
       case 0:
+        return AutomationTargetDto_Generator(
+          generatorId: dco_decode_u_32(raw[1]),
+          paramId: dco_decode_u_32(raw[2]),
+        );
+      case 1:
         return AutomationTargetDto_Track(
           trackId: dco_decode_u_32(raw[1]),
           trackTarget: dco_decode_box_autoadd_track_automation_target_dto(
             raw[2],
           ),
         );
-      case 1:
+      case 2:
         return AutomationTargetDto_Bus(
           busId: dco_decode_u_32(raw[1]),
           mixTarget: dco_decode_box_autoadd_mixer_channel_param_target_dto(
             raw[2],
           ),
         );
-      case 2:
+      case 3:
         return AutomationTargetDto_Master(
           dco_decode_box_autoadd_mixer_channel_param_target_dto(raw[1]),
         );
-      case 3:
+      case 4:
         return AutomationTargetDto_TempoBpm();
       default:
         throw Exception("unreachable");
@@ -9818,10 +9823,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     switch (raw[0]) {
       case 0:
-        return TrackAutomationTargetDto_Generator(
-          paramId: dco_decode_u_32(raw[1]),
-        );
-      case 1:
         return TrackAutomationTargetDto_MixerChannel(
           dco_decode_box_autoadd_mixer_channel_param_target_dto(raw[1]),
         );
@@ -10930,6 +10931,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var tag_ = sse_decode_i_32(deserializer);
     switch (tag_) {
       case 0:
+        var var_generatorId = sse_decode_u_32(deserializer);
+        var var_paramId = sse_decode_u_32(deserializer);
+        return AutomationTargetDto_Generator(
+          generatorId: var_generatorId,
+          paramId: var_paramId,
+        );
+      case 1:
         var var_trackId = sse_decode_u_32(deserializer);
         var var_trackTarget =
             sse_decode_box_autoadd_track_automation_target_dto(deserializer);
@@ -10937,7 +10945,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           trackId: var_trackId,
           trackTarget: var_trackTarget,
         );
-      case 1:
+      case 2:
         var var_busId = sse_decode_u_32(deserializer);
         var var_mixTarget =
             sse_decode_box_autoadd_mixer_channel_param_target_dto(deserializer);
@@ -10945,12 +10953,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           busId: var_busId,
           mixTarget: var_mixTarget,
         );
-      case 2:
+      case 3:
         var var_field0 = sse_decode_box_autoadd_mixer_channel_param_target_dto(
           deserializer,
         );
         return AutomationTargetDto_Master(var_field0);
-      case 3:
+      case 4:
         return AutomationTargetDto_TempoBpm();
       default:
         throw UnimplementedError('');
@@ -12212,9 +12220,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var tag_ = sse_decode_i_32(deserializer);
     switch (tag_) {
       case 0:
-        var var_paramId = sse_decode_u_32(deserializer);
-        return TrackAutomationTargetDto_Generator(paramId: var_paramId);
-      case 1:
         var var_field0 = sse_decode_box_autoadd_mixer_channel_param_target_dto(
           deserializer,
         );
@@ -13526,11 +13531,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     switch (self) {
+      case AutomationTargetDto_Generator(
+        generatorId: final generatorId,
+        paramId: final paramId,
+      ):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_32(generatorId, serializer);
+        sse_encode_u_32(paramId, serializer);
       case AutomationTargetDto_Track(
         trackId: final trackId,
         trackTarget: final trackTarget,
       ):
-        sse_encode_i_32(0, serializer);
+        sse_encode_i_32(1, serializer);
         sse_encode_u_32(trackId, serializer);
         sse_encode_box_autoadd_track_automation_target_dto(
           trackTarget,
@@ -13540,20 +13552,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         busId: final busId,
         mixTarget: final mixTarget,
       ):
-        sse_encode_i_32(1, serializer);
+        sse_encode_i_32(2, serializer);
         sse_encode_u_32(busId, serializer);
         sse_encode_box_autoadd_mixer_channel_param_target_dto(
           mixTarget,
           serializer,
         );
       case AutomationTargetDto_Master(field0: final field0):
-        sse_encode_i_32(2, serializer);
+        sse_encode_i_32(3, serializer);
         sse_encode_box_autoadd_mixer_channel_param_target_dto(
           field0,
           serializer,
         );
       case AutomationTargetDto_TempoBpm():
-        sse_encode_i_32(3, serializer);
+        sse_encode_i_32(4, serializer);
     }
   }
 
@@ -14759,11 +14771,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     switch (self) {
-      case TrackAutomationTargetDto_Generator(paramId: final paramId):
-        sse_encode_i_32(0, serializer);
-        sse_encode_u_32(paramId, serializer);
       case TrackAutomationTargetDto_MixerChannel(field0: final field0):
-        sse_encode_i_32(1, serializer);
+        sse_encode_i_32(0, serializer);
         sse_encode_box_autoadd_mixer_channel_param_target_dto(
           field0,
           serializer,

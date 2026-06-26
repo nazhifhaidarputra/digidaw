@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$TransportStateData {
 
- UiTransportState? get state; bool get isLooping; bool get isPatternPlaying; bool get isPatternMode; bool get isMetronomeActive;
+ UiTransportState? get state; bool get isLooping; bool get isPatternPlaying; bool get isPatternMode; bool get isMetronomeActive; int? get sampleRate;
 /// Create a copy of TransportStateData
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $TransportStateDataCopyWith<TransportStateData> get copyWith => _$TransportState
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is TransportStateData&&(identical(other.state, state) || other.state == state)&&(identical(other.isLooping, isLooping) || other.isLooping == isLooping)&&(identical(other.isPatternPlaying, isPatternPlaying) || other.isPatternPlaying == isPatternPlaying)&&(identical(other.isPatternMode, isPatternMode) || other.isPatternMode == isPatternMode)&&(identical(other.isMetronomeActive, isMetronomeActive) || other.isMetronomeActive == isMetronomeActive));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is TransportStateData&&(identical(other.state, state) || other.state == state)&&(identical(other.isLooping, isLooping) || other.isLooping == isLooping)&&(identical(other.isPatternPlaying, isPatternPlaying) || other.isPatternPlaying == isPatternPlaying)&&(identical(other.isPatternMode, isPatternMode) || other.isPatternMode == isPatternMode)&&(identical(other.isMetronomeActive, isMetronomeActive) || other.isMetronomeActive == isMetronomeActive)&&(identical(other.sampleRate, sampleRate) || other.sampleRate == sampleRate));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,state,isLooping,isPatternPlaying,isPatternMode,isMetronomeActive);
+int get hashCode => Object.hash(runtimeType,state,isLooping,isPatternPlaying,isPatternMode,isMetronomeActive,sampleRate);
 
 @override
 String toString() {
-  return 'TransportStateData(state: $state, isLooping: $isLooping, isPatternPlaying: $isPatternPlaying, isPatternMode: $isPatternMode, isMetronomeActive: $isMetronomeActive)';
+  return 'TransportStateData(state: $state, isLooping: $isLooping, isPatternPlaying: $isPatternPlaying, isPatternMode: $isPatternMode, isMetronomeActive: $isMetronomeActive, sampleRate: $sampleRate)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $TransportStateDataCopyWith<$Res>  {
   factory $TransportStateDataCopyWith(TransportStateData value, $Res Function(TransportStateData) _then) = _$TransportStateDataCopyWithImpl;
 @useResult
 $Res call({
- UiTransportState? state, bool isLooping, bool isPatternPlaying, bool isPatternMode, bool isMetronomeActive
+ UiTransportState? state, bool isLooping, bool isPatternPlaying, bool isPatternMode, bool isMetronomeActive, int? sampleRate
 });
 
 
@@ -62,14 +62,15 @@ class _$TransportStateDataCopyWithImpl<$Res>
 
 /// Create a copy of TransportStateData
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? state = freezed,Object? isLooping = null,Object? isPatternPlaying = null,Object? isPatternMode = null,Object? isMetronomeActive = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? state = freezed,Object? isLooping = null,Object? isPatternPlaying = null,Object? isPatternMode = null,Object? isMetronomeActive = null,Object? sampleRate = freezed,}) {
   return _then(_self.copyWith(
 state: freezed == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
 as UiTransportState?,isLooping: null == isLooping ? _self.isLooping : isLooping // ignore: cast_nullable_to_non_nullable
 as bool,isPatternPlaying: null == isPatternPlaying ? _self.isPatternPlaying : isPatternPlaying // ignore: cast_nullable_to_non_nullable
 as bool,isPatternMode: null == isPatternMode ? _self.isPatternMode : isPatternMode // ignore: cast_nullable_to_non_nullable
 as bool,isMetronomeActive: null == isMetronomeActive ? _self.isMetronomeActive : isMetronomeActive // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,sampleRate: freezed == sampleRate ? _self.sampleRate : sampleRate // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 /// Create a copy of TransportStateData
@@ -166,10 +167,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiTransportState? state,  bool isLooping,  bool isPatternPlaying,  bool isPatternMode,  bool isMetronomeActive)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiTransportState? state,  bool isLooping,  bool isPatternPlaying,  bool isPatternMode,  bool isMetronomeActive,  int? sampleRate)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _TransportStateData() when $default != null:
-return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatternMode,_that.isMetronomeActive);case _:
+return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatternMode,_that.isMetronomeActive,_that.sampleRate);case _:
   return orElse();
 
 }
@@ -187,10 +188,10 @@ return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatte
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiTransportState? state,  bool isLooping,  bool isPatternPlaying,  bool isPatternMode,  bool isMetronomeActive)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiTransportState? state,  bool isLooping,  bool isPatternPlaying,  bool isPatternMode,  bool isMetronomeActive,  int? sampleRate)  $default,) {final _that = this;
 switch (_that) {
 case _TransportStateData():
-return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatternMode,_that.isMetronomeActive);case _:
+return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatternMode,_that.isMetronomeActive,_that.sampleRate);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -207,10 +208,10 @@ return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatte
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiTransportState? state,  bool isLooping,  bool isPatternPlaying,  bool isPatternMode,  bool isMetronomeActive)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiTransportState? state,  bool isLooping,  bool isPatternPlaying,  bool isPatternMode,  bool isMetronomeActive,  int? sampleRate)?  $default,) {final _that = this;
 switch (_that) {
 case _TransportStateData() when $default != null:
-return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatternMode,_that.isMetronomeActive);case _:
+return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatternMode,_that.isMetronomeActive,_that.sampleRate);case _:
   return null;
 
 }
@@ -222,7 +223,7 @@ return $default(_that.state,_that.isLooping,_that.isPatternPlaying,_that.isPatte
 
 
 class _TransportStateData implements TransportStateData {
-  const _TransportStateData({this.state, this.isLooping = false, this.isPatternPlaying = false, this.isPatternMode = false, this.isMetronomeActive = false});
+  const _TransportStateData({this.state, this.isLooping = false, this.isPatternPlaying = false, this.isPatternMode = false, this.isMetronomeActive = false, this.sampleRate});
   
 
 @override final  UiTransportState? state;
@@ -230,6 +231,7 @@ class _TransportStateData implements TransportStateData {
 @override@JsonKey() final  bool isPatternPlaying;
 @override@JsonKey() final  bool isPatternMode;
 @override@JsonKey() final  bool isMetronomeActive;
+@override final  int? sampleRate;
 
 /// Create a copy of TransportStateData
 /// with the given fields replaced by the non-null parameter values.
@@ -241,16 +243,16 @@ _$TransportStateDataCopyWith<_TransportStateData> get copyWith => __$TransportSt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TransportStateData&&(identical(other.state, state) || other.state == state)&&(identical(other.isLooping, isLooping) || other.isLooping == isLooping)&&(identical(other.isPatternPlaying, isPatternPlaying) || other.isPatternPlaying == isPatternPlaying)&&(identical(other.isPatternMode, isPatternMode) || other.isPatternMode == isPatternMode)&&(identical(other.isMetronomeActive, isMetronomeActive) || other.isMetronomeActive == isMetronomeActive));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TransportStateData&&(identical(other.state, state) || other.state == state)&&(identical(other.isLooping, isLooping) || other.isLooping == isLooping)&&(identical(other.isPatternPlaying, isPatternPlaying) || other.isPatternPlaying == isPatternPlaying)&&(identical(other.isPatternMode, isPatternMode) || other.isPatternMode == isPatternMode)&&(identical(other.isMetronomeActive, isMetronomeActive) || other.isMetronomeActive == isMetronomeActive)&&(identical(other.sampleRate, sampleRate) || other.sampleRate == sampleRate));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,state,isLooping,isPatternPlaying,isPatternMode,isMetronomeActive);
+int get hashCode => Object.hash(runtimeType,state,isLooping,isPatternPlaying,isPatternMode,isMetronomeActive,sampleRate);
 
 @override
 String toString() {
-  return 'TransportStateData(state: $state, isLooping: $isLooping, isPatternPlaying: $isPatternPlaying, isPatternMode: $isPatternMode, isMetronomeActive: $isMetronomeActive)';
+  return 'TransportStateData(state: $state, isLooping: $isLooping, isPatternPlaying: $isPatternPlaying, isPatternMode: $isPatternMode, isMetronomeActive: $isMetronomeActive, sampleRate: $sampleRate)';
 }
 
 
@@ -261,7 +263,7 @@ abstract mixin class _$TransportStateDataCopyWith<$Res> implements $TransportSta
   factory _$TransportStateDataCopyWith(_TransportStateData value, $Res Function(_TransportStateData) _then) = __$TransportStateDataCopyWithImpl;
 @override @useResult
 $Res call({
- UiTransportState? state, bool isLooping, bool isPatternPlaying, bool isPatternMode, bool isMetronomeActive
+ UiTransportState? state, bool isLooping, bool isPatternPlaying, bool isPatternMode, bool isMetronomeActive, int? sampleRate
 });
 
 
@@ -278,14 +280,15 @@ class __$TransportStateDataCopyWithImpl<$Res>
 
 /// Create a copy of TransportStateData
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? state = freezed,Object? isLooping = null,Object? isPatternPlaying = null,Object? isPatternMode = null,Object? isMetronomeActive = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? state = freezed,Object? isLooping = null,Object? isPatternPlaying = null,Object? isPatternMode = null,Object? isMetronomeActive = null,Object? sampleRate = freezed,}) {
   return _then(_TransportStateData(
 state: freezed == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
 as UiTransportState?,isLooping: null == isLooping ? _self.isLooping : isLooping // ignore: cast_nullable_to_non_nullable
 as bool,isPatternPlaying: null == isPatternPlaying ? _self.isPatternPlaying : isPatternPlaying // ignore: cast_nullable_to_non_nullable
 as bool,isPatternMode: null == isPatternMode ? _self.isPatternMode : isPatternMode // ignore: cast_nullable_to_non_nullable
 as bool,isMetronomeActive: null == isMetronomeActive ? _self.isMetronomeActive : isMetronomeActive // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,sampleRate: freezed == sampleRate ? _self.sampleRate : sampleRate // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 

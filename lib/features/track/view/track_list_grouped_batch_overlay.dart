@@ -58,7 +58,7 @@ class _GroupedBatchOverlay extends ConsumerWidget {
             if (clip == null) return const SizedBox();
 
             final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
-            final sr = projectState.hardwareConfig.sampleRate;
+            final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
             final screenLeft =
                 (clip.startTimeInTicks(bpm, sr) / zoomLevel) - scrollX;
             final screenTop = (trackIndex * itemHeight) - scrollY + 30 + 2;

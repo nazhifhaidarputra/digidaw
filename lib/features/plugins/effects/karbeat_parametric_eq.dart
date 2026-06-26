@@ -97,7 +97,7 @@ class KarbeatParametricEqState
   /// This ensures that every requests is handled
   final Map<int, String> _pendingRequests = {};
 
-  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
+  late final DawContext _dawContext;
 
   // ======================================
   // Real-time Plugin Command Stream
@@ -105,13 +105,6 @@ class KarbeatParametricEqState
 
   /// Subscription to the plugin command response stream.
   // StreamSubscription<plugin_api.UiZeroCopyBufferResponse>? _zeroCopyStreamSub;
-
-  /// request_id of the most recently dispatched GET_MAGNITUDE_RESPONSE command.
-  /// Responses are matched by ID so stale replies are ignored.
-  int? _magnitudeRequestId;
-
-  /// request_id of the most recently dispatched GET_SPECTRUM command.
-  int? _spectrumRequestId;
 
   /// Timer that re-fires GET_SPECTRUM at a FPS to drive the analyzer.
   Timer? _spectrumPollTimer;
@@ -133,6 +126,7 @@ class KarbeatParametricEqState
   @override
   void initState() {
     super.initState();
+    _dawContext = ref.read(projectProvider.notifier).dawContext;
     _initBandsFromParameters();
 
     // Request the initial magnitude response after the first frame so that
@@ -158,13 +152,13 @@ class KarbeatParametricEqState
 
   void _togglePluginActive(bool active) {
     plugin_api.executeRealtimePluginCommand(
-      ctx: _ctx,
+      ctx: _dawContext,
       target: _toPluginTarget(),
       command: 'SET_SPECTRUM_ACTIVE',
       payloadJson: jsonEncode({'active': active}),
     );
     plugin_api.executeRealtimePluginCommand(
-      ctx: _ctx,
+      ctx: _dawContext,
       target: _toPluginTarget(),
       command: 'SET_MAGNITUDE_ACTIVE',
       payloadJson: jsonEncode({'active': active}),
@@ -197,7 +191,7 @@ class KarbeatParametricEqState
   void _sendMagnitudeRequest() {
     plugin_api
         .queryLivePluginZeroCopyBuf(
-          ctx: _ctx,
+          ctx: _dawContext,
           target: _toPluginTarget(),
           name: 'magnitude',
         )
@@ -214,7 +208,7 @@ class KarbeatParametricEqState
   void _sendSpectrumRequest() {
     plugin_api
         .queryLivePluginZeroCopyBuf(
-          ctx: _ctx,
+          ctx: _dawContext,
           target: _toPluginTarget(),
           name: 'spectrum',
         )
@@ -407,10 +401,7 @@ class KarbeatParametricEqState
       final feedback = next.value!;
       feedback.maybeWhen(
         zeroCopyBufferResponse: (requestId, handle) {
-          if (requestId == _magnitudeRequestId ||
-              requestId == _spectrumRequestId) {
-            _processBuffer(requestId, handle);
-          }
+          _processBuffer(requestId, handle);
         },
         orElse: () {},
       );

@@ -10,6 +10,7 @@ import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 part 'mixer_state.freezed.dart';
@@ -48,7 +49,10 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   ProjectNotifier get _projectNotifier => ref.read(projectProvider.notifier);
   DawContext get _ctx {
     // Optional: Add a debug assert to catch architectural mistakes early
-    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    assert(
+      ref.read(projectProvider).hasValue,
+      "Attempted to access DawContext before ProjectProvider finished loading!",
+    );
     return ref.read(projectProvider.notifier).dawContext;
   }
 
@@ -211,100 +215,6 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   }
 
   // ------------------------------------------------------------------
-  // Fire-and-forget param updates (optimistic)
-  // ------------------------------------------------------------------
-
-  /// Apply a param change to a track channel immediately and push it to Rust.
-  void setMixerChannelParam({required int trackId, required mixer_api.UiMixerChannelParams param}) {
-    _applyParamToLocalChannel(trackId, param, isMaster: false);
-    mixer_api.setMixerChannelParam(ctx: _ctx, target: mixer_api.UiMixerChannelTarget.track(trackId), param: param);
-  }
-
-  /// Apply a param change to the master bus immediately and push it to Rust.
-  void setMasterBusParam({required mixer_api.UiMixerChannelParams param}) {
-    _applyParamToLocalChannel(0, param, isMaster: true);
-    mixer_api.setMixerChannelParam(ctx: _ctx, target: const mixer_api.UiMixerChannelTarget.master(), param: param);
-  }
-
-  /// Apply a param change to a bus channel immediately and push it to Rust.
-  void setBusChannelParam({required int busId, required mixer_api.UiMixerChannelParams param}) {
-    _applyParamToBusChannel(busId, param);
-    mixer_api.setMixerChannelParam(ctx: _ctx, target: mixer_api.UiMixerChannelTarget.bus(busId), param: param);
-  }
-
-  // ------------------------------------------------------------------
-  // Effect management
-  // ------------------------------------------------------------------
-
-  /// Add an effect to a track channel or the master bus.
-  ///
-  /// Pass `channelId == -1` to target the master bus.
-  Future<Result<void>> addEffectToMixerChannel(int channelId, int registryId) async {
-    final result = await AsyncValue.guard(() async {
-      if (channelId == -1) {
-        await mixer_api.addEffectToMasterBus(ctx: _ctx, registryId: registryId);
-        await syncMasterBus();
-      } else {
-        await mixer_api.addEffectToMixerChannelById(ctx: _ctx, trackId: channelId, registryId: registryId);
-        await syncMixerChannel(channelId);
-      }
-    });
-
-    if (result.hasError) {
-      AppLogger.error('MixerNotifier: failed to add effect to channel: ${result.error}');
-      return Result.error(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
-  }
-
-  /// Add an effect to a bus channel.
-  Future<Result<void>> addEffectToBusChannel(int busId, int registryId) async {
-    final result = await AsyncValue.guard(() async {
-      await mixer_api.addEffectToBus(ctx: _ctx, busId: busId, registryId: registryId);
-      await syncBuses();
-    });
-
-    if (result.hasError) {
-      AppLogger.error('MixerNotifier: failed to add effect to bus $busId: ${result.error}');
-      return Result.error(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
-  }
-
-  /// Add an effect to the master bus.
-  Future<Result<void>> addEffectToMasterBus(int registryId) async {
-    final result = await AsyncValue.guard(() async {
-      await mixer_api.addEffectToMasterBus(ctx: _ctx, registryId: registryId);
-      await syncMasterBus();
-    });
-
-    if (result.hasError) {
-      AppLogger.error('MixerNotifier: failed to add effect to master bus: ${result.error}');
-      return Result.error(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
-  }
-
-  // ------------------------------------------------------------------
-  // Bus management
-  // ------------------------------------------------------------------
-
-  /// Create a new bus channel with the given [name].
-  Future<Result<void>> createNewBusChannel({String name = 'Untitled'}) async {
-    final result = await AsyncValue.guard(() async {
-      await mixer_api.createBus(ctx: _ctx, name: name);
-      await syncBuses();
-    });
-
-    if (result.hasError) {
-      AppLogger.error('MixerNotifier: failed to create bus channel: ${result.error}');
-      await syncBuses();
-      return Result.error(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
-  }
-
-  // ------------------------------------------------------------------
   // Private optimistic helpers
   // ------------------------------------------------------------------
 
@@ -390,6 +300,219 @@ class MixerNotifier extends Notifier<MixerEditorState> {
       ),
     );
     _projectNotifier.upsertBusMixerChannel(busId, updatedBus);
+  }
+}
+
+extension MixerService on MixerNotifier {
+  // ------------------------------------------------------------------
+  // Fire-and-forget param updates (optimistic)
+  // ------------------------------------------------------------------
+
+  /// Apply a param change to a track channel immediately and push it to Rust.
+  void setMixerChannelParam({required int trackId, required mixer_api.UiMixerChannelParams param}) {
+    _applyParamToLocalChannel(trackId, param, isMaster: false);
+    mixer_api.setMixerChannelParam(ctx: _ctx, target: mixer_api.UiMixerChannelTarget.track(trackId), param: param);
+  }
+
+  /// Apply a param change to the master bus immediately and push it to Rust.
+  void setMasterBusParam({required mixer_api.UiMixerChannelParams param}) {
+    _applyParamToLocalChannel(0, param, isMaster: true);
+    mixer_api.setMixerChannelParam(ctx: _ctx, target: const mixer_api.UiMixerChannelTarget.master(), param: param);
+  }
+
+  /// Apply a param change to a bus channel immediately and push it to Rust.
+  void setBusChannelParam({required int busId, required mixer_api.UiMixerChannelParams param}) {
+    _applyParamToBusChannel(busId, param);
+    mixer_api.setMixerChannelParam(ctx: _ctx, target: mixer_api.UiMixerChannelTarget.bus(busId), param: param);
+  }
+
+  // ------------------------------------------------------------------
+  // Effect management
+  // ------------------------------------------------------------------
+
+  /// Add an effect to a track channel or the master bus.
+  ///
+  /// Pass `channelId == -1` to target the master bus.
+  Future<Result<void>> addEffectToMixerChannel(int channelId, int registryId) async {
+    final result = await AsyncValue.guard(() async {
+      if (channelId == -1) {
+        await mixer_api.addEffectToMasterBus(ctx: _ctx, registryId: registryId);
+        await syncMasterBus();
+      } else {
+        await mixer_api.addEffectToMixerChannelById(ctx: _ctx, trackId: channelId, registryId: registryId);
+        await syncMixerChannel(channelId);
+      }
+    });
+
+    if (result.hasError) {
+      AppLogger.error('MixerNotifier: failed to add effect to channel: ${result.error}');
+      return Result.error(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  /// Add an effect to a bus channel.
+  Future<Result<void>> addEffectToBusChannel(int busId, int registryId) async {
+    final result = await AsyncValue.guard(() async {
+      await mixer_api.addEffectToBus(ctx: _ctx, busId: busId, registryId: registryId);
+      await syncBuses();
+    });
+
+    if (result.hasError) {
+      AppLogger.error('MixerNotifier: failed to add effect to bus $busId: ${result.error}');
+      return Result.error(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  /// Add an effect to the master bus.
+  Future<Result<void>> addEffectToMasterBus(int registryId) async {
+    final result = await AsyncValue.guard(() async {
+      await mixer_api.addEffectToMasterBus(ctx: _ctx, registryId: registryId);
+      await syncMasterBus();
+    });
+
+    if (result.hasError) {
+      AppLogger.error('MixerNotifier: failed to add effect to master bus: ${result.error}');
+      return Result.error(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  // ------------------------------------------------------------------
+  // Bus management
+  // ------------------------------------------------------------------
+
+  List<mixer_api.UiRoutingConnection> getMixerChannelDest({required mixer_api.UiRoutingNode source}) {
+    final mixer = _mixerState;
+    if (mixer == null) return [];
+    
+    return mixer.routing.where((conn) => conn.source == source).toList();
+  }
+
+  /// Create a new bus channel with the given [name].
+  Future<Result<void>> createNewBusChannel({String name = 'Untitled'}) async {
+    final result = await AsyncValue.guard(() async {
+      await mixer_api.createBus(ctx: _ctx, name: name);
+      await syncBuses();
+    });
+
+    if (result.hasError) {
+      AppLogger.error('MixerNotifier: failed to create bus channel: ${result.error}');
+      await syncBuses();
+      return Result.error(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  Future<Result<Null>> removeBus({required int busId}) async {
+    final originalMixer = _mixerState;
+    if (originalMixer == null) return Result.error(Exception("Mixer state missing"));
+
+    // 1. Optimistic Update (Remove bus AND cascading routes)
+    final newBuses = Map<int, mixer_api.UiBus>.from(originalMixer.buses)..remove(busId);
+    final targetNode = mixer_api.UiRoutingNode.bus(busId);
+    
+    final newRouting = originalMixer.routing.where((conn) {
+      return conn.source != targetNode && conn.destination != targetNode;
+    }).toList();
+
+    _projectNotifier.updateMixer(originalMixer.copyWith(buses: newBuses, routing: newRouting));
+
+    // 2. Fire FFI
+    final result = await AsyncValue.guard(() async {
+      await mixer_api.deleteBus(ctx: _ctx, busId: busId);
+    });
+
+    // 3. Rollback
+    if (result.hasError) {
+      AppLogger.error("Failed to remove bus: ${result.error}");
+      _projectNotifier.updateMixer(originalMixer);
+      return Result.error(Exception(result.error.toString()));
+    }
+    
+    return Result.ok(null);
+  }
+
+/// Add or update a routing connection.
+  Future<Result<void>> updateRoutingCall({
+    required mixer_api.UiRoutingNode src,
+    required mixer_api.UiRoutingNode dest,
+    required double sendLvl,
+    required bool isSend,
+  }) async {
+    final originalMixer = _mixerState;
+    if (originalMixer == null) return Result.error(Exception("Mixer state missing"));
+
+    // 1. Optimistic Update
+    final newConn = mixer_api.UiRoutingConnection(
+      source: src,
+      destination: dest,
+      sendLevel: sendLvl,
+      isSend: isSend,
+    );
+
+    final currentRoutes = List<mixer_api.UiRoutingConnection>.from(originalMixer.routing);
+    final existingIdx = currentRoutes.indexWhere((r) => 
+      r.source == src && r.destination == dest && r.isSend == isSend
+    );
+
+    if (existingIdx != -1) {
+      currentRoutes[existingIdx] = newConn;
+    } else {
+      currentRoutes.add(newConn);
+    }
+
+    _projectNotifier.updateMixer(originalMixer.copyWith(routing: currentRoutes));
+
+    // 2. Fire FFI
+    final result = await AsyncValue.guard(() async {
+      await mixer_api.updateRouting(ctx: _ctx, conn: newConn);
+    });
+
+    // 3. Rollback
+    if (result.hasError) {
+      AppLogger.error("Failed to update routing: ${result.error}");
+      _projectNotifier.updateMixer(originalMixer);
+      return Result.error(Exception(result.error.toString()));
+    }
+
+    return Result.ok(null);
+  }
+  /// Remove a specific routing connection.
+  Future<Result<void>> removeRouting({
+    required mixer_api.UiRoutingNode source,
+    required mixer_api.UiRoutingNode destination,
+    required bool isSend,
+  }) async {
+    final originalMixer = _mixerState;
+    if (originalMixer == null) return Result.error(Exception("Mixer state missing"));
+
+    // 1. Optimistic Update
+    final currentRoutes = originalMixer.routing.where((r) => 
+      !(r.source == source && r.destination == destination && r.isSend == isSend)
+    ).toList();
+
+    _projectNotifier.updateMixer(originalMixer.copyWith(routing: currentRoutes));
+
+    // 2. Fire FFI
+    final result = await AsyncValue.guard(() async {
+      await mixer_api.removeRouting(
+        ctx: _ctx,
+        source: source,
+        destination: destination,
+        isSend: isSend,
+      );
+    });
+
+    // 3. Rollback
+    if (result.hasError) {
+      AppLogger.error("Failed to remove routing: ${result.error}");
+      _projectNotifier.updateMixer(originalMixer);
+      return Result.error(Exception(result.error.toString()));
+    }
+
+    return Result.ok(null);
   }
 }
 

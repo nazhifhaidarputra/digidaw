@@ -37,6 +37,10 @@ pub struct AutomationPointDto {
 
 #[derive(Clone, Debug)]
 pub enum AutomationTargetDto {
+    Generator {
+        generator_id: u32,
+        param_id: u32,
+    },
     Track {
         track_id: u32,
         track_target: TrackAutomationTargetDto,
@@ -51,7 +55,6 @@ pub enum AutomationTargetDto {
 
 #[derive(Clone, Debug)]
 pub enum TrackAutomationTargetDto {
-    Generator { param_id: u32 },
     MixerChannel(MixerChannelParamTargetDto),
 }
 
@@ -247,9 +250,6 @@ impl From<&MixerChannelParamTarget> for MixerChannelParamTargetDto {
 impl From<&TrackAutomationTarget> for TrackAutomationTargetDto {
     fn from(target: &TrackAutomationTarget) -> Self {
         match target {
-            TrackAutomationTarget::Generator { param_id } => Self::Generator {
-                param_id: *param_id,
-            },
             TrackAutomationTarget::MixerChannel(target) => {
                 Self::MixerChannel(MixerChannelParamTargetDto::from(target))
             }
@@ -260,7 +260,6 @@ impl From<&TrackAutomationTarget> for TrackAutomationTargetDto {
 impl From<TrackAutomationTargetDto> for TrackAutomationTarget {
     fn from(dto: TrackAutomationTargetDto) -> Self {
         match dto {
-            TrackAutomationTargetDto::Generator { param_id } => Self::Generator { param_id },
             TrackAutomationTargetDto::MixerChannel(target) => {
                 Self::MixerChannel(MixerChannelParamTarget::from(target))
             }
@@ -286,6 +285,7 @@ impl From<&AutomationTarget> for AutomationTargetDto {
                 Self::Master(MixerChannelParamTargetDto::from(mix_target))
             }
             AutomationTarget::TempoBpm => Self::TempoBpm,
+            AutomationTarget::Generator { generator_id, param_id } => Self::Generator { generator_id: (*generator_id).into(), param_id: *param_id },
         }
     }
 }
@@ -334,6 +334,7 @@ impl From<AutomationTargetDto> for AutomationTarget {
                 Self::Master(MixerChannelParamTarget::from(mix_target))
             }
             AutomationTargetDto::TempoBpm => Self::TempoBpm,
+            AutomationTargetDto::Generator { generator_id, param_id } => Self::Generator { generator_id: generator_id.into(), param_id },
         }
     }
 }

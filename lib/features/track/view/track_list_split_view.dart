@@ -34,8 +34,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   // LocalState for width
   double _timelineWidth = 2000.0;
 
-  final _activeSampleRate = 44100;
-
   // ignore:unused_field
   StreamSubscription? _posSub;
 
@@ -144,8 +142,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     final tracks = ref.read(projectProvider).value?.tracks.values ?? [];
     final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
-    final sampleRate =
-        ref.read(projectProvider).value?.hardwareConfig.sampleRate ?? 48000;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
     // Dynamic Window Strategy
     // Find the actual furthest tick of content in the project
@@ -283,8 +280,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final endTimeTicks = (maxX * zoomLevel).toInt();
 
     final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
-    final sr =
-        ref.read(projectProvider).value?.hardwareConfig.sampleRate ?? 48000;
+    final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
     // Find clips in the target track that overlap with the selection range
     final track = ref.read(projectProvider).value?.tracks[_rangeSelectTrackId!];
@@ -531,10 +527,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
     final bool isZooming = _isCtrlPressed || selectedTool == ToolSelection.zoom;
 
-    final sr =
-        ref.read(projectProvider).value?.hardwareConfig.sampleRate ?? 48000;
-    final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
-
     MouseCursor handleCursor() {
       if (isPlacing) return SystemMouseCursors.move;
       if (selectedTool == ToolSelection.select) {
@@ -555,16 +547,37 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     : 0;
                 double absoluteX = details.localPosition.dx + scrollX;
                 final ticks = absoluteX * horizontalZoom;
+
+                final pos = ref.read(transportPositionStreamProvider).value;
+                if (pos == null) return;
+
+                final sr = pos.sampleRate;
+                final tempo = pos.tempo;
+
                 final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
+                AppLogger.info(
+                  "[UI Seek] onTapDown: absoluteX=$absoluteX, ticks=$ticks, tempo=$tempo, sr=$sr -> samples=$samples",
+                );
                 ref.read(transportProvider.notifier).seekTo(samples);
               },
               onPanUpdate: (details) {
+                // Throttled by the TransportNotifier's seekTo queue implementation
                 double scrollX = _rulerController.hasClients
                     ? _rulerController.offset
                     : 0;
                 double absoluteX = details.localPosition.dx + scrollX;
                 final ticks = absoluteX * horizontalZoom;
+
+                final pos = ref.read(transportPositionStreamProvider).value;
+                if (pos == null) return;
+
+                final sr = pos.sampleRate;
+                final tempo = pos.tempo;
+
                 final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
+                AppLogger.info(
+                  "[UI Seek] onPanUpdate: absoluteX=$absoluteX, ticks=$ticks, tempo=$tempo, sr=$sr -> samples=$samples",
+                );
                 ref.read(transportProvider.notifier).seekTo(samples);
               },
               child: Container(
@@ -582,7 +595,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     height: 30,
                     child: _TimelineRuler(
                       scrollController: _rulerController,
-                      sampleRate: _activeSampleRate,
+                      sampleRate:
+                          ref.read(transportProvider).value?.sampleRate ??
+                          48000,
                     ),
                   ),
                 ),
@@ -737,10 +752,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                     if (track.trackType == UiTrackType.audio) {
                                       final sr =
                                           ref
-                                              .read(projectProvider)
+                                              .read(transportProvider)
                                               .value
-                                              ?.hardwareConfig
-                                              .sampleRate ??
+                                              ?.sampleRate ??
                                           48000;
                                       final tempo =
                                           ref
@@ -815,10 +829,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
                                       final sr =
                                           ref
-                                              .read(projectProvider)
+                                              .read(transportProvider)
                                               .value
-                                              ?.hardwareConfig
-                                              .sampleRate ??
+                                              ?.sampleRate ??
                                           48000;
 
                                       return Column(
@@ -856,7 +869,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                                 horizontalScrollController:
                                                     _trackContentController,
                                                 trackColor: trackColor,
-                                                sampleRate: _activeSampleRate,
+                                                sampleRate: sr,
                                               ),
                                             ),
                                         ],
@@ -899,16 +912,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               zoomLevel: horizontalZoom,
               sampleSelector: (pos) => pos.ticks,
               onSeek: (int newTicks) {
-                final state = ref.read(projectProvider).value;
-                if (state == null) return;
-                final tempo = ref.read(transportProvider).value?.state?.bpm;
-                if (tempo == null) return;
+                final pos = ref.read(transportPositionStreamProvider).value;
+                if (pos == null) return;
+                final tempo = pos.tempo;
+                final sampleRate = pos.sampleRate;
+                if (tempo <= 0 || sampleRate <= 0) return;
                 final safeTicks = newTicks < 0 ? 0 : newTicks;
-                final sampleRate = state.hardwareConfig.sampleRate > 0
-                    ? state.hardwareConfig.sampleRate
-                    : 48000;
                 final samples =
                     (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
+                AppLogger.info(
+                  "[UI Seek] onSeek: safeTicks=$safeTicks, tempo=$tempo, sr=$sampleRate -> samples=$samples",
+                );
                 ref.read(transportProvider.notifier).seekTo(samples);
               },
             ),
@@ -1269,10 +1283,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  void _showGeneratorBrowser(BuildContext context) {
-    final availablePlugins = ref
+  void _showGeneratorBrowser(BuildContext context) async {
+    final availablePlugins = await ref
         .read(audioPluginProvider.notifier)
         .getAvailableGenerators();
+
+    if (!context.mounted) return;
 
     showDialog(
       context: context,

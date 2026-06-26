@@ -197,13 +197,13 @@ pub fn set_mixer_channel_param(
     target: MixerChannelTarget,
     param: MixerChannelParams,
 ) {
-    ctx.send_audio_command(AudioCommand::SetMixerChannelParameter { target, param });
+    let _ = ctx.send_audio_command(AudioCommand::SetMixerChannelParameter { target, param });
 }
 
 /// Ask the audio thread to emit a full MixerChannelSnapshot for the given
 /// channel. Poll the result with `poll_mixer_channel_feedback`.
 pub fn query_mixer_channel(ctx: &mut DawContext, target: MixerChannelTarget) {
-    ctx.send_audio_command(AudioCommand::QueryMixerChannel { target });
+    let _ = ctx.send_audio_command(AudioCommand::QueryMixerChannel { target });
 }
 
 // ======================================
@@ -227,7 +227,7 @@ pub fn add_effect_to_mixer_channel_by_id(
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
     if let Some(plugin) = ctx.get_plugin_box(registry_id) {
-        ctx.send_audio_command(AudioCommand::AddEffect {
+        let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Track(track_id),
             effect_id,
             effect: plugin,
@@ -249,7 +249,7 @@ pub fn remove_effect_from_mixer_channel(
     ctx.app_state
         .mixer
         .remove_effect_by_id(&track_id, effect_instance_id)?;
-    ctx.send_audio_command(AudioCommand::RemoveEffect {
+    let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
         target: EffectTarget::Track(track_id),
         effect_id: effect_instance_id,
     });
@@ -269,7 +269,7 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
     if let Some(plugin) = ctx.get_plugin_box(registry_id) {
-        ctx.send_audio_command(AudioCommand::AddEffect {
+        let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Master,
             effect_id,
             effect: plugin,
@@ -290,7 +290,7 @@ pub fn remove_effect_from_master_bus(
     ctx.app_state
         .mixer
         .remove_effect_from_master_bus(effect_instance_id)?;
-    ctx.send_audio_command(AudioCommand::RemoveEffect {
+    let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
         target: EffectTarget::Master,
         effect_id: effect_instance_id,
     });
@@ -299,13 +299,13 @@ pub fn remove_effect_from_master_bus(
 
 pub fn create_bus(ctx: &mut DawContext, name: String) -> BusId {
     let bus_id = ctx.app_state.mixer.create_bus(name.clone());
-    ctx.send_audio_command(AudioCommand::AddBus { bus_id, name });
+    let _ = ctx.send_audio_command(AudioCommand::AddBus { bus_id, name });
     bus_id
 }
 
 pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
     ctx.app_state.mixer.remove_bus(bus_id)?;
-    ctx.send_audio_command(AudioCommand::RemoveBus { bus_id });
+    let _ = ctx.send_audio_command(AudioCommand::RemoveBus { bus_id });
     Ok(())
 }
 
@@ -326,7 +326,7 @@ pub fn add_effect_to_bus(
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
     if let Some(plugin) = ctx.get_plugin_box(registry_id) {
-        ctx.send_audio_command(AudioCommand::AddEffect {
+        let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Bus(bus_id),
             effect_id,
             effect: plugin,
@@ -348,7 +348,7 @@ pub fn set_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Res
     let app = &mut ctx.app_state;
     app.mixer.add_routing(conn)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
-    ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }
 
@@ -361,12 +361,12 @@ pub fn remove_routing(
     let app = &mut ctx.app_state;
     app.mixer.remove_routing(source, destination, is_send)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
-    ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }
 
 pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
     let routing = ctx.app_state.mixer.update_routing(conn)?;
-    ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }

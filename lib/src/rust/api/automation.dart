@@ -235,6 +235,10 @@ sealed class AutomationPointDto with _$AutomationPointDto {
 sealed class AutomationTargetDto with _$AutomationTargetDto {
   const AutomationTargetDto._();
 
+  const factory AutomationTargetDto.generator({
+    required int generatorId,
+    required int paramId,
+  }) = AutomationTargetDto_Generator;
   const factory AutomationTargetDto.track({
     required int trackId,
     required TrackAutomationTargetDto trackTarget,
@@ -300,8 +304,6 @@ sealed class ModulationSourceDto with _$ModulationSourceDto {
 sealed class TrackAutomationTargetDto with _$TrackAutomationTargetDto {
   const TrackAutomationTargetDto._();
 
-  const factory TrackAutomationTargetDto.generator({required int paramId}) =
-      TrackAutomationTargetDto_Generator;
   const factory TrackAutomationTargetDto.mixerChannel(
     MixerChannelParamTargetDto field0,
   ) = TrackAutomationTargetDto_MixerChannel;

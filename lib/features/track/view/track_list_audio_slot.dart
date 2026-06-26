@@ -155,7 +155,3 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     );
   }
 }
-
-// =============================================================================
-// INTERACTIVE CLIP WRAPPER (Handles Logic)
-// =============================================================================

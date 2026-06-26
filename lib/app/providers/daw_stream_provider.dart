@@ -8,8 +8,7 @@ import 'package:karbeat/src/rust/api/audio.dart';
 
 final masterAudioFeedbackProvider = StreamProvider<UiAudioFeedback>((ref) async* {
   // Ensure the project provider has finished booting and creating the context
-  await ref.watch(projectProvider.future);
-  final ctx = ref.read(projectProvider.notifier).dawContext;
+  final ctx = ref.watch(projectProvider.notifier).dawContext;
 
   // Yield the stream directly from FRB
   yield* createFeedbackStream(ctx: ctx);

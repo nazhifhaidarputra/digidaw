@@ -19,14 +19,14 @@ abstract class TransportStateData with _$TransportStateData {
     @Default(false) bool isPatternPlaying,
     @Default(false) bool isPatternMode,
     @Default(false) bool isMetronomeActive,
+    int? sampleRate,
   }) = _TransportStateData;
 }
 
 final transportPositionStreamProvider =
     StreamProvider<audio_api.UiTransportFeedback>((ref) async* {
       // Ensure the project provider has finished booting and creating the context
-      await ref.watch(projectProvider.future);
-      final ctx = ref.read(projectProvider.notifier).dawContext;
+      final ctx = ref.watch(projectProvider.notifier).dawContext;
 
       // Yield the stream directly from FRB
       yield* audio_api.createPositionStream(ctx: ctx);
@@ -51,8 +51,6 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
 
   @override
   Future<TransportStateData> build() async {
-    await ref.watch(projectProvider.future);
-
     ref.listen(transportPositionStreamProvider, (previous, next) {
       if (!state.hasValue || !next.hasValue || next.value == null) return;
 
@@ -64,6 +62,7 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
       var newLooping = current.isLooping;
       var newPatternMode = current.isPatternMode;
       var newTransportState = current.state;
+      var newSampleRate = current.sampleRate;
 
       if (pos.isPatternPlaying != newPatternPlaying) {
         newPatternPlaying = pos.isPatternPlaying;
@@ -77,6 +76,11 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
 
       if (pos.isPatternMode != newPatternMode) {
         newPatternMode = pos.isPatternMode;
+        changed = true;
+      }
+      
+      if (pos.sampleRate != newSampleRate) {
+        newSampleRate = pos.sampleRate;
         changed = true;
       }
 
@@ -94,6 +98,7 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
             isLooping: newLooping,
             isPatternMode: newPatternMode,
             state: newTransportState,
+            sampleRate: newSampleRate,
           ),
         );
       }
@@ -109,6 +114,7 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
       isPatternPlaying: false,
       isPatternMode: false,
       isMetronomeActive: false,
+      // sampleRate will be hydrated by the stream immediately
     );
   }
 
@@ -185,13 +191,30 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
     return Result.ok(null);
   }
 
-  Future<Result<void>> seekTo(int samples) async {
-    final result = await AsyncValue.guard(() => transport_api.setPlayhead(ctx: _ctx, val: samples));
+  int? _pendingSeekSamples;
+  bool _isSeeking = false;
 
-    if (result.hasError) {
-      AppLogger.error("Error seeking: ${result.error}");
-      return Result.error(Exception(result.error.toString()));
+  Future<Result<void>> seekTo(int samples) async {
+    _pendingSeekSamples = samples;
+    if (_isSeeking) {
+      return Result.ok(null);
     }
-    return Result.ok(null);
+    
+    _isSeeking = true;
+    Result<void>? lastError;
+
+    while (_pendingSeekSamples != null) {
+      final target = _pendingSeekSamples!;
+      _pendingSeekSamples = null;
+      
+      final result = await AsyncValue.guard(() => transport_api.setPlayhead(ctx: _ctx, val: target));
+      if (result.hasError) {
+        AppLogger.error("Error seeking: ${result.error}");
+        lastError = Result.error(Exception(result.error.toString()));
+      }
+    }
+    
+    _isSeeking = false;
+    return lastError ?? Result.ok(null);
   }
 }

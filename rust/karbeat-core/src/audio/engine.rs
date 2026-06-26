@@ -680,7 +680,8 @@ impl AudioEngine {
             // (e.g., preview notes with sustain, ADSR tails)
             self.render_voices_to_buffer(output_buffer, channels, false);
             self.cleanup_finished_voices(frame_count);
-            self.emit_static_position();
+            // Do NOT emit every audio callback — position is only pushed when state
+            // actually changes (seek, stop, play toggle) via emit_current_playback_position.
         }
 
         // Always Render Previews (Metronome, Browser Preview)
@@ -737,7 +738,10 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
-        if self.song_state.playhead_samples > self.current_state.graph.max_sample_index {
+        let song_end = self.current_state.graph.max_sample_index;
+
+        // Only enforce the auto-stop/loop boundary if the project actually has content (song_end > 0)
+        if song_end > 0 && self.song_state.playhead_samples > song_end {
             if self.song_state.is_looping {
                 // Reset playhead back to 0 without changing `is_playing` state
                 self.song_state.playhead_samples = 0;
@@ -1039,7 +1043,7 @@ impl AudioEngine {
                 }
             }
             AudioCommand::SetPlayhead(samples) => {
-                log::info!("[AudioEngine] Seek: {}", samples);
+                log::debug!("[AudioEngine Seek] Received SetPlayhead(samples: {})", samples);
                 self.stop_all_active_generators();
                 self.song_state.playhead_samples = samples;
                 self.recalculate_beat_bar();
@@ -1061,6 +1065,7 @@ impl AudioEngine {
             AudioCommand::SetBPM(bpm) => {
                 self.bpm = bpm;
                 self.emit_current_playback_position();
+                self.recalculate_max_sample_index();
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
                 // Silence everything to prevent hanging notes from the previous mode
@@ -1504,7 +1509,11 @@ impl AudioEngine {
                         *is_playing = true;
                     }
                 } else {
-                    self.stop_playback();
+                    // Do NOT call stop_playback() here — that would reset the song playhead.
+                    // Only silence voices and stop both states; the playhead stays where it is.
+                    self.stop_all_active_generators();
+                    self.song_state.is_playing = false;
+                    self.pattern_state.is_playing = false;
                     self.playback_mode = playback_mode;
                     match self.playback_mode {
                         PlaybackMode::Song => {
@@ -1679,6 +1688,7 @@ impl AudioEngine {
                 let bus_ids = self.bus_buffers.keys().copied();
                 self.cached_routing_order =
                     compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+                self.recalculate_max_sample_index();
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {
                 self.current_state.graph.automation_lanes.insert(id, lane);
@@ -1739,66 +1749,50 @@ impl AudioEngine {
                     let sr = sample_rate.unwrap_or(self.current_state.graph.sample_rate);
                     let buf_size = buffer_size.unwrap_or(self.current_state.graph.buffer_size);
                     self.current_state.graph.buffer_size = buf_size;
-
-                    let channels = self.num_channels as usize;
-                    let bf_size = buf_size.max(512);
-
-                    for gen in self.plugin_state.generators.iter_mut().flatten() {
-                        gen.plugin.prepare(sr as f32, bf_size);
-                        let bus = BusConfig {
-                            name: "Main".into(),
-                            channel_count: channels,
-                            is_optional: false,
-                        };
-                        gen.plugin.set_io_layout(&[bus.clone()], &[bus]);
-                    }
-                    for effects in self.plugin_state.track_effects.iter_mut() {
-                        for effect in effects.iter_mut() {
-                            effect.plugin.prepare(sr as f32, bf_size);
-                            let bus = BusConfig {
-                                name: "Main".into(),
-                                channel_count: channels,
-                                is_optional: false,
-                            };
-                            effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
-                        }
-                    }
-                    for effects in self.plugin_state.bus_effects.iter_mut() {
-                        for effect in effects.iter_mut() {
-                            effect.plugin.prepare(sr as f32, bf_size);
-                            let bus = BusConfig {
-                                name: "Main".into(),
-                                channel_count: channels,
-                                is_optional: false,
-                            };
-                            effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
-                        }
-                    }
-                    for effect in self.plugin_state.master_effects.iter_mut() {
-                        effect.plugin.prepare(sr as f32, bf_size);
-                        let bus = BusConfig {
-                            name: "Main".into(),
-                            channel_count: channels,
-                            is_optional: false,
-                        };
-                        effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
-                    }
-
-                    // 3. Clear delay lines to avoid playing back garbage/pitch-shifted audio
-                    self.track_delay_lines.clear();
-                    self.bus_delay_lines.clear();
-                    self.sidechain_delay_lines.clear();
-
-                    // 4. Force Latency recalculation (latency samples change with sample rate)
+                    
+                    self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
                     log::info!(
                         "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
                         sr,
-                        bf_size
+                        buf_size
                     );
+
+                    self.recalculate_max_sample_index();
                 }
             }
             AudioCommand::ReplaceFullGraph { graph } => {
+                let sr_changed = graph.sample_rate != self.sample_rate;
+                let buf_changed = graph.buffer_size != self.current_state.graph.buffer_size;
+
+                if sr_changed || buf_changed {
+                    let sr = graph.sample_rate;
+                    let buf_size = graph.buffer_size;
+
+                    if sr_changed {
+                        let ratio = sr as f64 / self.sample_rate as f64;
+                        self.song_state.playhead_samples =
+                            (self.song_state.playhead_samples as f64 * ratio) as u32;
+                        self.song_state.last_emitted_samples =
+                            (self.song_state.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.pattern_state.playhead_samples =
+                            (self.pattern_state.playhead_samples as f64 * ratio) as u32;
+                        self.pattern_state.last_emitted_samples =
+                            (self.pattern_state.last_emitted_samples as f64 * ratio) as u32;
+                        
+                        self.sample_rate = sr;
+                    }
+
+                    self.reprepare_plugins_and_clear_delays(sr, buf_size);
+
+                    log::info!(
+                        "[AudioEngine] ReplaceFullGraph sync: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                        sr,
+                        buf_size
+                    );
+                }
+
                 // Used for undo/redo. Atomically replace the full graph snapshot
                 // and recompute the cached routing order.
                 let track_ids = graph.tracks.iter().map(|t| t.id);
@@ -1808,6 +1802,7 @@ impl AudioEngine {
                 self.current_state.graph = graph;
 
                 log::debug!("[AudioEngine] ReplaceFullGraph applied");
+                self.recalculate_max_sample_index();
             }
             AudioCommand::BeginEdit { target } => {
                 self.handle_parameter_edit(&target, true);
@@ -1834,6 +1829,14 @@ impl AudioEngine {
         self.song_state.current_beat =
             (self.song_state.playhead_samples as usize) / samples_per_beat + 1;
         self.song_state.current_bar = (self.song_state.current_beat - 1) / 4 + 1;
+        
+        log::info!(
+            "[AudioEngine BeatCalc] samples_per_beat: {}, playhead_samples: {}, resulted beat: {}, bar: {}",
+            samples_per_beat,
+            self.song_state.playhead_samples,
+            self.song_state.current_beat,
+            self.song_state.current_bar
+        );
     }
 
     fn reset_playhead(&mut self) {
@@ -1912,7 +1915,7 @@ impl AudioEngine {
             beat: self.song_state.current_beat,
             bar: self.song_state.current_bar,
             tempo: self.bpm,
-            sample_rate: self.current_state.graph.sample_rate,
+            sample_rate: self.sample_rate,
 
             // Transport state
             is_playing,
@@ -3564,6 +3567,57 @@ impl AudioEngine {
 
     /// Dynamically calculates the absolute end of the project in samples (Clips ONLY).
     /// Safely handles the conversion of MIDI Ticks -> Samples based on CURRENT engine BPM & Sample Rate.
+    fn reprepare_plugins_and_clear_delays(&mut self, sr: u32, buf_size: usize) {
+        let channels = self.num_channels as usize;
+        let bf_size = buf_size.max(512);
+
+        for gen in self.plugin_state.generators.iter_mut().flatten() {
+            gen.plugin.prepare(sr as f32, bf_size);
+            let bus = BusConfig {
+                name: "Main".into(),
+                channel_count: channels,
+                is_optional: false,
+            };
+            gen.plugin.set_io_layout(&[bus.clone()], &[bus]);
+        }
+        for effects in self.plugin_state.track_effects.iter_mut() {
+            for effect in effects.iter_mut() {
+                effect.plugin.prepare(sr as f32, bf_size);
+                let bus = BusConfig {
+                    name: "Main".into(),
+                    channel_count: channels,
+                    is_optional: false,
+                };
+                effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
+            }
+        }
+        for effects in self.plugin_state.bus_effects.iter_mut() {
+            for effect in effects.iter_mut() {
+                effect.plugin.prepare(sr as f32, bf_size);
+                let bus = BusConfig {
+                    name: "Main".into(),
+                    channel_count: channels,
+                    is_optional: false,
+                };
+                effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
+            }
+        }
+        for effect in self.plugin_state.master_effects.iter_mut() {
+            effect.plugin.prepare(sr as f32, bf_size);
+            let bus = BusConfig {
+                name: "Main".into(),
+                channel_count: channels,
+                is_optional: false,
+            };
+            effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
+        }
+
+        // 3. Clear delay lines to avoid playing back garbage/pitch-shifted audio
+        self.track_delay_lines.clear();
+        self.bus_delay_lines.clear();
+        self.sidechain_delay_lines.clear();
+    }
+
     fn recalculate_max_sample_index(&mut self) {
         let bpm = self.bpm as f64;
         let sample_rate = self.sample_rate as f64;

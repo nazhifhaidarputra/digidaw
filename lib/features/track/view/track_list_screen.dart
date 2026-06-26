@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/widgets/scroll_physics/unclamped_never_scrollable_physics.dart';
-import 'package:karbeat/features/mixer/service/modulation_service.dart';
 import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_lane_slot.dart';

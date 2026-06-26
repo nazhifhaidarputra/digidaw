@@ -83,7 +83,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
   void _syncModel() {
     final bpm = ref.read(transportProvider).value?.state?.bpm;
-    final sr = ref.read(projectProvider).value?.hardwareConfig.sampleRate;
+    final sr = ref.read(transportProvider).value?.sampleRate;
     // Convert to tick-equivalent for rendering on the tick-based timeline
     if (bpm == null || sr == null) return;
     _visualStartTime = widget.clip.startTimeInTicks(bpm, sr);
@@ -99,9 +99,8 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final double safeWidth = width < 1 ? 1 : width;
     const resizeEdgeSize = 20.0;
 
-    final sampleRate =
-        ref.read(projectProvider).value?.hardwareConfig.sampleRate ?? 48000;
-    final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.watch(transportProvider).value?.sampleRate ?? 48000;
+    final tempo = ref.watch(transportProvider).value?.state?.bpm ?? 120.0;
 
     // final isMoving = _currentAction == _DragAction.move;
 
@@ -227,11 +226,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       );
                 } else if (widget.selectedTool == ToolSelection.slice) {
                   // Calculate absolute position on the timeline (in native clip units)
-                  final project = ref.read(projectProvider).value!;
                   final bpm = ref.read(transportProvider).value?.state?.bpm;
-                  final sr = project.hardwareConfig.sampleRate;
+                  final sr = ref.read(transportProvider).value?.sampleRate;
 
-                  if (bpm == null || sr == 0) {
+                  if (bpm == null || sr == null || sr == 0) {
                     throw Exception("BPM or Sample Rate is null or zero");
                   }
                   int cutPoint;
@@ -316,11 +314,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                     ?.tracks[widget.trackId];
                 if (track != null && currentSelectedIds.isNotEmpty) {
                   final tempo = ref.read(transportProvider).value?.state?.bpm;
-                  final sr = ref
-                      .read(projectProvider)
-                      .value
-                      ?.hardwareConfig
-                      .sampleRate;
+                  final sr = ref.read(transportProvider).value?.sampleRate;
                   if (tempo == null || sr == null) {
                     throw Exception("Tempo or Sample Rate is null or zero");
                   }
@@ -521,12 +515,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 color: widget.color,
                 zoomLevel: widget.zoomLevel,
                 projectSampleRate:
-                    ref
-                        .read(projectProvider)
-                        .value
-                        ?.hardwareConfig
-                        .sampleRate ??
-                    48000,
+                    ref.watch(transportProvider).value?.sampleRate ?? 48000,
                 overrideOffset: _visualOffset.toDouble(),
                 isSelected: widget.isSelected,
                 scrollController: widget.horizontalScrollController,

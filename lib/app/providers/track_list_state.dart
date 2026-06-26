@@ -10,6 +10,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/track.dart' as track_api;
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
 part 'track_list_state.freezed.dart';
 
@@ -262,6 +263,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
         registryId: id,
       );
       _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
+      if (newTrack.generatorId != null) {
+        final generator = await plugin_api.getGenerator(
+          ctx: _ctx,
+          generatorId: newTrack.generatorId!,
+        );
+        _projectNotifierRead.upsertGenerator(newTrack.generatorId!, generator);
+      }
     });
 
     if (result.hasError) {

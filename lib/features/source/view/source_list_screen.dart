@@ -100,10 +100,13 @@ class SourceListScreen extends ConsumerWidget {
                 subtitle: "ID: $id",
                 icon: Icons.piano,
                 color: Colors.orangeAccent,
-                onTap: () {
+                onTap: () async {
                   Widget screen;
+
+                  if (!context.mounted) return;
+
                   try {
-                    final availableGenerators = ref
+                    final availableGenerators = await ref
                         .read(audioPluginProvider.notifier)
                         .getAvailableGenerators();
                     final registryId = availableGenerators

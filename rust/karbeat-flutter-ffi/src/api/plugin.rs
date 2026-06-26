@@ -586,7 +586,6 @@ pub fn begin_generator_parameter_edit(
     param_id: UiParamId,
 ) -> Result<(), String> {
     let generator_id: GeneratorId = generator_id.into();
-    let track_id: TrackId = track_id.into();
 
     plugin_api::begin_generator_parameter_edit(ctx, &generator_id, param_id)
         .map_err(|e| e.to_string())
@@ -604,7 +603,6 @@ pub fn end_generator_parameter_edit(
     param_id: UiParamId,
 ) -> Result<(), String> {
     let generator_id: GeneratorId = generator_id.into();
-    let track_id: TrackId = track_id.into();
     plugin_api::end_generator_parameter_edit(ctx, &generator_id, param_id)
         .map_err(|e| e.to_string())
 }

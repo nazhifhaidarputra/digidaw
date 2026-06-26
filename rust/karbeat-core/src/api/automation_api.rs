@@ -205,7 +205,7 @@ pub fn add_modulation_source(ctx: &mut DawContext, source: ModulationSource) -> 
         app.add_modulation_source(source.clone())
     };
 
-    ctx.send_audio_command(AudioCommand::AddModulationSource { id, source });
+    let _ = ctx.send_audio_command(AudioCommand::AddModulationSource { id, source });
     id
 }
 
@@ -246,7 +246,7 @@ pub fn remove_modulation_source(
         let app = &mut ctx.app_state;
         let _ = app.remove_modulation_source(mod_id);
     }
-    ctx.send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
+    let _ = ctx.send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
 }
 
 pub fn remove_modulation_link(
@@ -258,7 +258,7 @@ pub fn remove_modulation_link(
         let _ = app.remove_modulation_link(mod_link_id);
     }
 
-    ctx.send_audio_command(AudioCommand::RemoveModulationLink(mod_link_id));
+    let _ = ctx.send_audio_command(AudioCommand::RemoveModulationLink(mod_link_id));
 }
 
 /// Link the target param to a modulation source
@@ -285,6 +285,6 @@ pub fn link_this_param_to_controller(
         (id, link)
     };
 
-    ctx.send_audio_command(AudioCommand::AddModulationLink { id, link });
+    let _ = ctx.send_audio_command(AudioCommand::AddModulationLink { id, link });
     Ok(id)
 }

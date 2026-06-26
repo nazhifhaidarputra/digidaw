@@ -287,7 +287,7 @@ pub fn set_effect_parameter(
     value: f32,
 ) -> Result<(), String> {
     let param_id = param_id.into_id();
-    ctx.send_audio_command(AudioCommand::SetEffectParameter {
+    let _ = ctx.send_audio_command(AudioCommand::SetEffectParameter {
         target: target.clone(),
         effect_id: *effect_id,
         param_id,

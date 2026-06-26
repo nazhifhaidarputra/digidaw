@@ -14,33 +14,33 @@ pub fn set_playing(ctx: &mut DawContext, val: bool) -> anyhow::Result<()> {
 }
 
 pub fn set_playhead(ctx: &mut DawContext, val: u32) {
-    ctx.send_audio_command(AudioCommand::SetPlayhead(val));
+    let _ = ctx.send_audio_command(AudioCommand::SetPlayhead(val));
 }
 
 pub fn set_looping(ctx: &mut DawContext, val: bool) {
-    ctx.send_audio_command(AudioCommand::SetLooping(val));
+    let _ = ctx.send_audio_command(AudioCommand::SetLooping(val));
 }
 
 pub fn set_bpm(ctx: &mut DawContext, val: f32) {
     ctx.app_state.transport.bpm = val;
-    ctx.send_audio_command(AudioCommand::SetBPM(val));
+    let _ = ctx.send_audio_command(AudioCommand::SetBPM(val));
 }
 
 pub fn stop_song_playback(ctx: &mut DawContext, ) {
-    ctx.send_audio_command(AudioCommand::StopAndReset);
+    let _ = ctx.send_audio_command(AudioCommand::StopAndReset);
 }
 
 pub fn toggle_pattern_playback(ctx: &mut DawContext, pattern_id: PatternId, generator_id: GeneratorId) {
-    ctx.send_audio_command(AudioCommand::TogglePatternPlayback {
+    let _ = ctx.send_audio_command(AudioCommand::TogglePatternPlayback {
         pattern_id,
         generator_id,
     });
 }
 
 pub fn toggle_playing_with_playback(ctx: &mut DawContext, playback_mode: PlaybackMode) {
-    ctx.send_audio_command(AudioCommand::TogglePlayingWithPlaybackMode(playback_mode));
+    let _ = ctx.send_audio_command(AudioCommand::TogglePlayingWithPlaybackMode(playback_mode));
 }
 
 pub fn switch_pattern_generator(ctx: &mut DawContext, generator_id: GeneratorId) {
-    ctx.send_audio_command(AudioCommand::SwitchPatternGenerator(generator_id));
+    let _ = ctx.send_audio_command(AudioCommand::SwitchPatternGenerator(generator_id));
 }

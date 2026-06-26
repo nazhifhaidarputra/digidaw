@@ -67,7 +67,6 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
   @override
   Future<PluginState> build() async {
     // Await the Project Provider to ensure the DawContext is fully initialized first
-    await ref.watch(projectProvider.future);
     
     final state = const PluginState(PluginRegistry());
 
@@ -153,17 +152,18 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
 
   /// Returns a clean list of generators synchronously.
   /// Safe to call directly from the UI once the provider `hasValue`.
-  List<UiPluginInfo> getAvailableGenerators() {
-    if (!state.hasValue) return [];
-    return state.requireValue.registry.availablePlugins
+  Future<List<UiPluginInfo>> getAvailableGenerators() async {
+    // Awaiting `future` guarantees build() has finished and state.hasValue is true!
+    final currentState = await future; 
+    return currentState.registry.availablePlugins
         .where((plugin) => plugin.pluginType == KarbeatPluginType.generator)
         .toList();
   }
 
-  /// Returns a clean list of effects synchronously.
-  List<UiPluginInfo> getAvailableEffects() {
-    if (!state.hasValue) return [];
-    return state.requireValue.registry.availablePlugins
+  /// Returns a clean list of effects. Awaits the initial load if necessary.
+  Future<List<UiPluginInfo>> getAvailableEffects() async {
+    final currentState = await future;
+    return currentState.registry.availablePlugins
         .where((plugin) => plugin.pluginType == KarbeatPluginType.effect)
         .toList();
   }

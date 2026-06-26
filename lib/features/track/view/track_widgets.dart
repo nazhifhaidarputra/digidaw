@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/features/mixer/service/modulation_service.dart';
+import 'package:karbeat/app/providers/automation_provider.dart';
 
 /// Accordion Widget to show all automation link connected to corresponding track
 class TrackAccordion extends ConsumerStatefulWidget {

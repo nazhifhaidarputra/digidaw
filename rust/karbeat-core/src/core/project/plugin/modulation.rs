@@ -74,8 +74,8 @@ impl ApplicationState {
     /// Creates a new signal generator (e.g., an LFO)
     pub fn add_modulation_source(&mut self, source: ModulationSource) -> ModulationId {
         let new_id = ModulationId::next(&mut self.modulation_src_counter);
-        self.modulation_sources.insert(new_id, source);
-        new_id
+        self.modulation_sources.insert(new_id, source.clone());
+        return new_id;
     }
 
     /// Removes a generator AND all cables connected to it

@@ -5,8 +5,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 
 final audioSourcesProvider = FutureProvider.autoDispose<Map<int, AudioWaveformUiForSourceList>>((ref) async {
   // 1. Wait for DAW context to be ready
-  await ref.watch(projectProvider.future);
-  final ctx = ref.read(projectProvider.notifier).dawContext;
+  final ctx = ref.watch(projectProvider.notifier).dawContext;
 
   // 2. Direct FFI call instead of routing through monolithic state
   final result = await getAudioSourceList(ctx: ctx); 
@@ -16,7 +15,7 @@ final audioSourcesProvider = FutureProvider.autoDispose<Map<int, AudioWaveformUi
 
   final audioPropertiesProvider = FutureProvider.autoDispose
       .family<AudioWaveformUiForAudioProperties, int>((ref, sourceId) async {
-        await ref.watch(projectProvider.future);
+        
         final ctx = ref.read(projectProvider.notifier).dawContext;
         final result = await getAudioProperties(ctx: ctx, id: sourceId);
 

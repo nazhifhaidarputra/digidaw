@@ -80,13 +80,13 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
 
     // Fire off all Query Commands to the audio thread
     for (i, target) in pending_requests.into_iter().enumerate() {
-        ctx.send_audio_command(AudioCommand::QueryPluginState {
+        let _ = ctx.send_audio_command(AudioCommand::QueryPluginState {
             target,
             request_id: i as u32,
         });
     }
     for target in mixer_channel_targets {
-        ctx.send_audio_command(AudioCommand::QueryMixerChannel { target });
+        let _ = ctx.send_audio_command(AudioCommand::QueryMixerChannel { target });
     }
 
     // Wait for the audio thread to return the snapshots
@@ -262,7 +262,7 @@ where
     let bpm = loaded_app.transport.bpm;
 
     // 2. Halt the audio engine immediately to prevent reading partially overwritten state
-    ctx.send_audio_command(AudioCommand::StopAndReset);
+    let _ = ctx.send_audio_command(AudioCommand::StopAndReset);
 
     // 3. Lock, mutate the global state, and map to the UI DTO
     let app = &mut ctx.app_state;
@@ -271,7 +271,7 @@ where
 
     // 4. Fire all necessary sync and loading events to the engine/UI
     ctx.broadcast_full_graph();
-    ctx.send_audio_command(AudioCommand::SetBPM(bpm));
+    let _ = ctx.send_audio_command(AudioCommand::SetBPM(bpm));
     let _ = hydrate_live_audio_engine(ctx);
 
     Ok(mapped_ui_state)
@@ -301,7 +301,7 @@ pub fn new_blank_project(ctx: &mut DawContext) -> ApplicationState {
 
     // prepare plugin with this new state
     ctx.broadcast_full_graph();
-    ctx.send_audio_command(AudioCommand::SetBPM(app_clone.transport.bpm));
+    let _ = ctx.send_audio_command(AudioCommand::SetBPM(app_clone.transport.bpm));
     let _ = hydrate_live_audio_engine(ctx);
 
     app_clone
@@ -438,7 +438,7 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     };
 
     // Send the fully configured plugins to the Live Audio Engine
-    ctx.send_audio_command(AudioCommand::HydratePlugin {
+    let _ = ctx.send_audio_command(AudioCommand::HydratePlugin {
         generators,
         track_effects,
         bus_effects,

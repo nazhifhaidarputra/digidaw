@@ -590,10 +590,11 @@ extension AutomationTargetDtoPatterns on AutomationTargetDto {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( AutomationTargetDto_Track value)?  track,TResult Function( AutomationTargetDto_Bus value)?  bus,TResult Function( AutomationTargetDto_Master value)?  master,TResult Function( AutomationTargetDto_TempoBpm value)?  tempoBpm,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( AutomationTargetDto_Generator value)?  generator,TResult Function( AutomationTargetDto_Track value)?  track,TResult Function( AutomationTargetDto_Bus value)?  bus,TResult Function( AutomationTargetDto_Master value)?  master,TResult Function( AutomationTargetDto_TempoBpm value)?  tempoBpm,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
-case AutomationTargetDto_Track() when track != null:
+case AutomationTargetDto_Generator() when generator != null:
+return generator(_that);case AutomationTargetDto_Track() when track != null:
 return track(_that);case AutomationTargetDto_Bus() when bus != null:
 return bus(_that);case AutomationTargetDto_Master() when master != null:
 return master(_that);case AutomationTargetDto_TempoBpm() when tempoBpm != null:
@@ -615,10 +616,11 @@ return tempoBpm(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( AutomationTargetDto_Track value)  track,required TResult Function( AutomationTargetDto_Bus value)  bus,required TResult Function( AutomationTargetDto_Master value)  master,required TResult Function( AutomationTargetDto_TempoBpm value)  tempoBpm,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( AutomationTargetDto_Generator value)  generator,required TResult Function( AutomationTargetDto_Track value)  track,required TResult Function( AutomationTargetDto_Bus value)  bus,required TResult Function( AutomationTargetDto_Master value)  master,required TResult Function( AutomationTargetDto_TempoBpm value)  tempoBpm,}){
 final _that = this;
 switch (_that) {
-case AutomationTargetDto_Track():
+case AutomationTargetDto_Generator():
+return generator(_that);case AutomationTargetDto_Track():
 return track(_that);case AutomationTargetDto_Bus():
 return bus(_that);case AutomationTargetDto_Master():
 return master(_that);case AutomationTargetDto_TempoBpm():
@@ -636,10 +638,11 @@ return tempoBpm(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( AutomationTargetDto_Track value)?  track,TResult? Function( AutomationTargetDto_Bus value)?  bus,TResult? Function( AutomationTargetDto_Master value)?  master,TResult? Function( AutomationTargetDto_TempoBpm value)?  tempoBpm,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( AutomationTargetDto_Generator value)?  generator,TResult? Function( AutomationTargetDto_Track value)?  track,TResult? Function( AutomationTargetDto_Bus value)?  bus,TResult? Function( AutomationTargetDto_Master value)?  master,TResult? Function( AutomationTargetDto_TempoBpm value)?  tempoBpm,}){
 final _that = this;
 switch (_that) {
-case AutomationTargetDto_Track() when track != null:
+case AutomationTargetDto_Generator() when generator != null:
+return generator(_that);case AutomationTargetDto_Track() when track != null:
 return track(_that);case AutomationTargetDto_Bus() when bus != null:
 return bus(_that);case AutomationTargetDto_Master() when master != null:
 return master(_that);case AutomationTargetDto_TempoBpm() when tempoBpm != null:
@@ -660,9 +663,10 @@ return tempoBpm(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int trackId,  TrackAutomationTargetDto trackTarget)?  track,TResult Function( int busId,  MixerChannelParamTargetDto mixTarget)?  bus,TResult Function( MixerChannelParamTargetDto field0)?  master,TResult Function()?  tempoBpm,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int generatorId,  int paramId)?  generator,TResult Function( int trackId,  TrackAutomationTargetDto trackTarget)?  track,TResult Function( int busId,  MixerChannelParamTargetDto mixTarget)?  bus,TResult Function( MixerChannelParamTargetDto field0)?  master,TResult Function()?  tempoBpm,required TResult orElse(),}) {final _that = this;
 switch (_that) {
-case AutomationTargetDto_Track() when track != null:
+case AutomationTargetDto_Generator() when generator != null:
+return generator(_that.generatorId,_that.paramId);case AutomationTargetDto_Track() when track != null:
 return track(_that.trackId,_that.trackTarget);case AutomationTargetDto_Bus() when bus != null:
 return bus(_that.busId,_that.mixTarget);case AutomationTargetDto_Master() when master != null:
 return master(_that.field0);case AutomationTargetDto_TempoBpm() when tempoBpm != null:
@@ -684,9 +688,10 @@ return tempoBpm();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int trackId,  TrackAutomationTargetDto trackTarget)  track,required TResult Function( int busId,  MixerChannelParamTargetDto mixTarget)  bus,required TResult Function( MixerChannelParamTargetDto field0)  master,required TResult Function()  tempoBpm,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int generatorId,  int paramId)  generator,required TResult Function( int trackId,  TrackAutomationTargetDto trackTarget)  track,required TResult Function( int busId,  MixerChannelParamTargetDto mixTarget)  bus,required TResult Function( MixerChannelParamTargetDto field0)  master,required TResult Function()  tempoBpm,}) {final _that = this;
 switch (_that) {
-case AutomationTargetDto_Track():
+case AutomationTargetDto_Generator():
+return generator(_that.generatorId,_that.paramId);case AutomationTargetDto_Track():
 return track(_that.trackId,_that.trackTarget);case AutomationTargetDto_Bus():
 return bus(_that.busId,_that.mixTarget);case AutomationTargetDto_Master():
 return master(_that.field0);case AutomationTargetDto_TempoBpm():
@@ -704,9 +709,10 @@ return tempoBpm();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int trackId,  TrackAutomationTargetDto trackTarget)?  track,TResult? Function( int busId,  MixerChannelParamTargetDto mixTarget)?  bus,TResult? Function( MixerChannelParamTargetDto field0)?  master,TResult? Function()?  tempoBpm,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int generatorId,  int paramId)?  generator,TResult? Function( int trackId,  TrackAutomationTargetDto trackTarget)?  track,TResult? Function( int busId,  MixerChannelParamTargetDto mixTarget)?  bus,TResult? Function( MixerChannelParamTargetDto field0)?  master,TResult? Function()?  tempoBpm,}) {final _that = this;
 switch (_that) {
-case AutomationTargetDto_Track() when track != null:
+case AutomationTargetDto_Generator() when generator != null:
+return generator(_that.generatorId,_that.paramId);case AutomationTargetDto_Track() when track != null:
 return track(_that.trackId,_that.trackTarget);case AutomationTargetDto_Bus() when bus != null:
 return bus(_that.busId,_that.mixTarget);case AutomationTargetDto_Master() when master != null:
 return master(_that.field0);case AutomationTargetDto_TempoBpm() when tempoBpm != null:
@@ -715,6 +721,74 @@ return tempoBpm();case _:
 
 }
 }
+
+}
+
+/// @nodoc
+
+
+class AutomationTargetDto_Generator extends AutomationTargetDto {
+  const AutomationTargetDto_Generator({required this.generatorId, required this.paramId}): super._();
+  
+
+ final  int generatorId;
+ final  int paramId;
+
+/// Create a copy of AutomationTargetDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AutomationTargetDto_GeneratorCopyWith<AutomationTargetDto_Generator> get copyWith => _$AutomationTargetDto_GeneratorCopyWithImpl<AutomationTargetDto_Generator>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationTargetDto_Generator&&(identical(other.generatorId, generatorId) || other.generatorId == generatorId)&&(identical(other.paramId, paramId) || other.paramId == paramId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,generatorId,paramId);
+
+@override
+String toString() {
+  return 'AutomationTargetDto.generator(generatorId: $generatorId, paramId: $paramId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AutomationTargetDto_GeneratorCopyWith<$Res> implements $AutomationTargetDtoCopyWith<$Res> {
+  factory $AutomationTargetDto_GeneratorCopyWith(AutomationTargetDto_Generator value, $Res Function(AutomationTargetDto_Generator) _then) = _$AutomationTargetDto_GeneratorCopyWithImpl;
+@useResult
+$Res call({
+ int generatorId, int paramId
+});
+
+
+
+
+}
+/// @nodoc
+class _$AutomationTargetDto_GeneratorCopyWithImpl<$Res>
+    implements $AutomationTargetDto_GeneratorCopyWith<$Res> {
+  _$AutomationTargetDto_GeneratorCopyWithImpl(this._self, this._then);
+
+  final AutomationTargetDto_Generator _self;
+  final $Res Function(AutomationTargetDto_Generator) _then;
+
+/// Create a copy of AutomationTargetDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? generatorId = null,Object? paramId = null,}) {
+  return _then(AutomationTargetDto_Generator(
+generatorId: null == generatorId ? _self.generatorId : generatorId // ignore: cast_nullable_to_non_nullable
+as int,paramId: null == paramId ? _self.paramId : paramId // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
 
 }
 
@@ -2204,30 +2278,70 @@ as double,
 /// @nodoc
 mixin _$TrackAutomationTargetDto {
 
-
+ MixerChannelParamTargetDto get field0;
+/// Create a copy of TrackAutomationTargetDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$TrackAutomationTargetDtoCopyWith<TrackAutomationTargetDto> get copyWith => _$TrackAutomationTargetDtoCopyWithImpl<TrackAutomationTargetDto>(this as TrackAutomationTargetDto, _$identity);
 
 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is TrackAutomationTargetDto);
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is TrackAutomationTargetDto&&(identical(other.field0, field0) || other.field0 == field0));
 }
 
 
 @override
-int get hashCode => runtimeType.hashCode;
+int get hashCode => Object.hash(runtimeType,field0);
 
 @override
 String toString() {
-  return 'TrackAutomationTargetDto()';
+  return 'TrackAutomationTargetDto(field0: $field0)';
 }
 
 
 }
 
 /// @nodoc
-class $TrackAutomationTargetDtoCopyWith<$Res>  {
-$TrackAutomationTargetDtoCopyWith(TrackAutomationTargetDto _, $Res Function(TrackAutomationTargetDto) __);
+abstract mixin class $TrackAutomationTargetDtoCopyWith<$Res>  {
+  factory $TrackAutomationTargetDtoCopyWith(TrackAutomationTargetDto value, $Res Function(TrackAutomationTargetDto) _then) = _$TrackAutomationTargetDtoCopyWithImpl;
+@useResult
+$Res call({
+ MixerChannelParamTargetDto field0
+});
+
+
+$MixerChannelParamTargetDtoCopyWith<$Res> get field0;
+
+}
+/// @nodoc
+class _$TrackAutomationTargetDtoCopyWithImpl<$Res>
+    implements $TrackAutomationTargetDtoCopyWith<$Res> {
+  _$TrackAutomationTargetDtoCopyWithImpl(this._self, this._then);
+
+  final TrackAutomationTargetDto _self;
+  final $Res Function(TrackAutomationTargetDto) _then;
+
+/// Create a copy of TrackAutomationTargetDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? field0 = null,}) {
+  return _then(_self.copyWith(
+field0: null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as MixerChannelParamTargetDto,
+  ));
+}
+/// Create a copy of TrackAutomationTargetDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$MixerChannelParamTargetDtoCopyWith<$Res> get field0 {
+  
+  return $MixerChannelParamTargetDtoCopyWith<$Res>(_self.field0, (value) {
+    return _then(_self.copyWith(field0: value));
+  });
+}
 }
 
 
@@ -2245,11 +2359,10 @@ extension TrackAutomationTargetDtoPatterns on TrackAutomationTargetDto {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( TrackAutomationTargetDto_Generator value)?  generator,TResult Function( TrackAutomationTargetDto_MixerChannel value)?  mixerChannel,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( TrackAutomationTargetDto_MixerChannel value)?  mixerChannel,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
-case TrackAutomationTargetDto_Generator() when generator != null:
-return generator(_that);case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
+case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
 return mixerChannel(_that);case _:
   return orElse();
 
@@ -2268,11 +2381,10 @@ return mixerChannel(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( TrackAutomationTargetDto_Generator value)  generator,required TResult Function( TrackAutomationTargetDto_MixerChannel value)  mixerChannel,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( TrackAutomationTargetDto_MixerChannel value)  mixerChannel,}){
 final _that = this;
 switch (_that) {
-case TrackAutomationTargetDto_Generator():
-return generator(_that);case TrackAutomationTargetDto_MixerChannel():
+case TrackAutomationTargetDto_MixerChannel():
 return mixerChannel(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
@@ -2287,11 +2399,10 @@ return mixerChannel(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( TrackAutomationTargetDto_Generator value)?  generator,TResult? Function( TrackAutomationTargetDto_MixerChannel value)?  mixerChannel,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( TrackAutomationTargetDto_MixerChannel value)?  mixerChannel,}){
 final _that = this;
 switch (_that) {
-case TrackAutomationTargetDto_Generator() when generator != null:
-return generator(_that);case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
+case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
 return mixerChannel(_that);case _:
   return null;
 
@@ -2309,10 +2420,9 @@ return mixerChannel(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int paramId)?  generator,TResult Function( MixerChannelParamTargetDto field0)?  mixerChannel,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( MixerChannelParamTargetDto field0)?  mixerChannel,required TResult orElse(),}) {final _that = this;
 switch (_that) {
-case TrackAutomationTargetDto_Generator() when generator != null:
-return generator(_that.paramId);case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
+case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
 return mixerChannel(_that.field0);case _:
   return orElse();
 
@@ -2331,10 +2441,9 @@ return mixerChannel(_that.field0);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int paramId)  generator,required TResult Function( MixerChannelParamTargetDto field0)  mixerChannel,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( MixerChannelParamTargetDto field0)  mixerChannel,}) {final _that = this;
 switch (_that) {
-case TrackAutomationTargetDto_Generator():
-return generator(_that.paramId);case TrackAutomationTargetDto_MixerChannel():
+case TrackAutomationTargetDto_MixerChannel():
 return mixerChannel(_that.field0);}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -2349,10 +2458,9 @@ return mixerChannel(_that.field0);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int paramId)?  generator,TResult? Function( MixerChannelParamTargetDto field0)?  mixerChannel,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( MixerChannelParamTargetDto field0)?  mixerChannel,}) {final _that = this;
 switch (_that) {
-case TrackAutomationTargetDto_Generator() when generator != null:
-return generator(_that.paramId);case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
+case TrackAutomationTargetDto_MixerChannel() when mixerChannel != null:
 return mixerChannel(_that.field0);case _:
   return null;
 
@@ -2364,81 +2472,15 @@ return mixerChannel(_that.field0);case _:
 /// @nodoc
 
 
-class TrackAutomationTargetDto_Generator extends TrackAutomationTargetDto {
-  const TrackAutomationTargetDto_Generator({required this.paramId}): super._();
-  
-
- final  int paramId;
-
-/// Create a copy of TrackAutomationTargetDto
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$TrackAutomationTargetDto_GeneratorCopyWith<TrackAutomationTargetDto_Generator> get copyWith => _$TrackAutomationTargetDto_GeneratorCopyWithImpl<TrackAutomationTargetDto_Generator>(this, _$identity);
-
-
-
-@override
-bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is TrackAutomationTargetDto_Generator&&(identical(other.paramId, paramId) || other.paramId == paramId));
-}
-
-
-@override
-int get hashCode => Object.hash(runtimeType,paramId);
-
-@override
-String toString() {
-  return 'TrackAutomationTargetDto.generator(paramId: $paramId)';
-}
-
-
-}
-
-/// @nodoc
-abstract mixin class $TrackAutomationTargetDto_GeneratorCopyWith<$Res> implements $TrackAutomationTargetDtoCopyWith<$Res> {
-  factory $TrackAutomationTargetDto_GeneratorCopyWith(TrackAutomationTargetDto_Generator value, $Res Function(TrackAutomationTargetDto_Generator) _then) = _$TrackAutomationTargetDto_GeneratorCopyWithImpl;
-@useResult
-$Res call({
- int paramId
-});
-
-
-
-
-}
-/// @nodoc
-class _$TrackAutomationTargetDto_GeneratorCopyWithImpl<$Res>
-    implements $TrackAutomationTargetDto_GeneratorCopyWith<$Res> {
-  _$TrackAutomationTargetDto_GeneratorCopyWithImpl(this._self, this._then);
-
-  final TrackAutomationTargetDto_Generator _self;
-  final $Res Function(TrackAutomationTargetDto_Generator) _then;
-
-/// Create a copy of TrackAutomationTargetDto
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? paramId = null,}) {
-  return _then(TrackAutomationTargetDto_Generator(
-paramId: null == paramId ? _self.paramId : paramId // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-
-
-}
-
-/// @nodoc
-
-
 class TrackAutomationTargetDto_MixerChannel extends TrackAutomationTargetDto {
   const TrackAutomationTargetDto_MixerChannel(this.field0): super._();
   
 
- final  MixerChannelParamTargetDto field0;
+@override final  MixerChannelParamTargetDto field0;
 
 /// Create a copy of TrackAutomationTargetDto
 /// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
+@override @JsonKey(includeFromJson: false, includeToJson: false)
 @pragma('vm:prefer-inline')
 $TrackAutomationTargetDto_MixerChannelCopyWith<TrackAutomationTargetDto_MixerChannel> get copyWith => _$TrackAutomationTargetDto_MixerChannelCopyWithImpl<TrackAutomationTargetDto_MixerChannel>(this, _$identity);
 
@@ -2464,13 +2506,13 @@ String toString() {
 /// @nodoc
 abstract mixin class $TrackAutomationTargetDto_MixerChannelCopyWith<$Res> implements $TrackAutomationTargetDtoCopyWith<$Res> {
   factory $TrackAutomationTargetDto_MixerChannelCopyWith(TrackAutomationTargetDto_MixerChannel value, $Res Function(TrackAutomationTargetDto_MixerChannel) _then) = _$TrackAutomationTargetDto_MixerChannelCopyWithImpl;
-@useResult
+@override @useResult
 $Res call({
  MixerChannelParamTargetDto field0
 });
 
 
-$MixerChannelParamTargetDtoCopyWith<$Res> get field0;
+@override $MixerChannelParamTargetDtoCopyWith<$Res> get field0;
 
 }
 /// @nodoc
@@ -2483,7 +2525,7 @@ class _$TrackAutomationTargetDto_MixerChannelCopyWithImpl<$Res>
 
 /// Create a copy of TrackAutomationTargetDto
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
   return _then(TrackAutomationTargetDto_MixerChannel(
 null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
 as MixerChannelParamTargetDto,

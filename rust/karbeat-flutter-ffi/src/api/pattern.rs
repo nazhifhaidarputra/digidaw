@@ -189,7 +189,8 @@ pub fn add_notes_batch(
         .iter()
         .map(|n| n.into())
         .collect();
-    Ok(added_notes);
+
+    Ok(added_notes)
 }
 
 /// Delete notes in batch
