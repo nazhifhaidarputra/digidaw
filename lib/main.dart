@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/app.dart';
-import 'package:karbeat/src/rust/frb_generated.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter/services.dart';
 
@@ -40,9 +39,6 @@ Future<void> main() async {
     // This line tells the app to extend its layout behind system bars
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
-  
-
-  await RustLib.init();
 
   runApp(const ProviderScope(child: KarbeatApp()));
 }

@@ -1,3 +1,4 @@
+use crate::commands::AudioCommand;
 use crate::context::DawContext;
 use crate::core::project::track::RemovedTrackType;
 use crate::core::project::AudioTrack;
@@ -15,7 +16,14 @@ where
 }
 
 pub fn add_midi_track_with_generator_id(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<AudioTrack> {
-    let (audio_track, _ ,_) = ctx.app_state.add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
+    let (audio_track, gen_id, generator_plugin) = ctx.app_state.add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
+
+    let _ = ctx.send_audio_command(AudioCommand::AddGenerator {
+        generator_id: gen_id,
+        track_id: audio_track.id,
+        plugin: generator_plugin,
+    });
+
     ctx.broadcast_track_graph();
     Ok(audio_track)
 }
@@ -75,7 +83,13 @@ where
 }
 
 pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
+    let generator_id = ctx.app_state.tracks.get(&track_id).and_then(|t| t.generator.as_ref().map(|g| g.id));
+    
     let deleted_track_type = ctx.app_state.remove_track(track_id)?;
+
+    if let Some(gen_id) = generator_id {
+        let _ = ctx.send_audio_command(AudioCommand::RemoveGenerator { generator_id: gen_id });
+    }
     ctx.broadcast_track_graph();
     Ok(deleted_track_type)
 }
