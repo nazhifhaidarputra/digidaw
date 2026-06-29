@@ -38,7 +38,6 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   // Key to track the exact coordinates of the drawing canvas
   final GlobalKey _overlayKey = GlobalKey();
 
-  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
 
   @override
   void initState() {
@@ -55,8 +54,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // final state = ref.read(mixerStateProvider);
-      await ref.read(mixerStateProvider.notifier).syncMixerState();
+      ref.read(mixerStateProvider.notifier).queryAllMixerChannels();
     });
   }
 
@@ -113,7 +111,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     DawContextAction(
                       title: 'Route to node...',
                       onTap: () {
-                        _showRoutingDialog(context, entry, mixerState);
+                        _showRoutingDialog(context, entry);
                       },
                     ),
                   ],
@@ -241,7 +239,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       title: 'Route to node...',
                       icon: Icons.account_tree,
                       onTap: () {
-                        _showRoutingDialog(context, entry, mixerState);
+                        _showRoutingDialog(context, entry);
                       },
                     ),
                     DawContextAction(
@@ -304,12 +302,12 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     );
   }
 
-  void _showRoutingDialog(BuildContext context, _ChannelEntry entry, UiMixerState mixerState) {
+  void _showRoutingDialog(BuildContext context, _ChannelEntry entry) {
     final sourceNode = entry.isBus ? mixer_api.UiRoutingNode.bus(entry.id) : mixer_api.UiRoutingNode.track(entry.id);
 
     showDialog(
       context: context,
-      builder: (ctx) => _RoutingDialog(sourceNode: sourceNode, sourceName: entry.name, mixerState: mixerState),
+      builder: (ctx) => _RoutingDialog(sourceNode: sourceNode, sourceName: entry.name),
     );
   }
 
@@ -1277,9 +1275,8 @@ class _RoutingPainter extends CustomPainter {
 class _RoutingDialog extends ConsumerStatefulWidget {
   final mixer_api.UiRoutingNode sourceNode;
   final String sourceName;
-  final mixer_api.UiMixerState mixerState;
 
-  const _RoutingDialog({required this.sourceNode, required this.sourceName, required this.mixerState});
+  const _RoutingDialog({required this.sourceNode, required this.sourceName});
 
   @override
   _RoutingDialogState createState() => _RoutingDialogState();
@@ -1394,11 +1391,13 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final mixerState = ref.watch(projectProvider).value?.mixer;
+    if (mixerState == null) return const SizedBox.shrink();
     // 1. Gather Valid Main Outputs (Master + All Buses except self)
     final List<MapEntry<String, mixer_api.UiRoutingNode>> availableMainOutputs = [
       const MapEntry("Master", mixer_api.UiRoutingNode.master()),
     ];
-    for (final bus in widget.mixerState.buses.values) {
+    for (final bus in mixerState.buses.values) {
       final node = mixer_api.UiRoutingNode.bus(bus.id);
       if (!_isSameNode(widget.sourceNode, node)) {
         availableMainOutputs.add(MapEntry(bus.name, node));
@@ -1407,7 +1406,7 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
 
     // 2. Gather Valid Sends (All Buses except self AND except current Main Output)
     final List<MapEntry<String, mixer_api.UiRoutingNode>> availableSends = [];
-    for (final bus in widget.mixerState.buses.values) {
+    for (final bus in mixerState.buses.values) {
       final node = mixer_api.UiRoutingNode.bus(bus.id);
       if (!_isSameNode(widget.sourceNode, node) && (mainRoute == null || !_isSameNode(mainRoute!.destination, node))) {
         availableSends.add(MapEntry(bus.name, node));

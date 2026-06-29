@@ -8,13 +8,12 @@ use std::sync::{Arc, Once};
 use hashbrown::HashMap;
 use karbeat_plugin_api::traits::AudioPlugin;
 use karbeat_plugins::registry::PluginRegistry;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use rtrb::{Consumer, Producer};
 
 use crate::{
     audio::{
-        event::TransportFeedback,
-        render_state::{AudioAutomationLane, AudioGraphState},
+        backend::AudioDeviceConfig, event::TransportFeedback, render_state::{AudioAutomationLane, AudioGraphState}
     },
     commands::{AudioCommand, AudioFeedback},
     core::{
@@ -43,6 +42,10 @@ pub struct DawContext {
 
     /// Plugin factory registry
     pub plugin_registry: PluginRegistry,
+
+    /// The live, thread-safe audio configuration. 
+    /// The UI writes to this, and the background stream monitor reads from it.
+    pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
 }
 
 impl DawContext {
@@ -55,6 +58,7 @@ impl DawContext {
             stream_guard: None,
             position_consumer: Arc::new(Mutex::new(None)),
             plugin_registry: PluginRegistry::new_with_defaults(),
+            active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default()))
         }
     }
 
@@ -105,7 +109,7 @@ impl DawContext {
 
     pub fn broadcast_track_graph(&mut self) {
         let (patterns, tracks) = self.update_track_graph();
-        self.send_audio_command(AudioCommand::UpdateTrackGraph {
+        let _ = self.send_audio_command(AudioCommand::UpdateTrackGraph {
             tracks: tracks,
             patterns: patterns,
         });
@@ -113,7 +117,7 @@ impl DawContext {
 
     pub fn broadcast_full_graph(&mut self) {
         let graph = AudioGraphState::from(&self.app_state);
-        self.send_audio_command(AudioCommand::ReplaceFullGraph { graph });
+        let _ = self.send_audio_command(AudioCommand::ReplaceFullGraph { graph });
     }
 
     pub fn broadcast_automation_lane(&mut self, id: AutomationId) {
@@ -128,7 +132,7 @@ impl DawContext {
             max: lane_arc.max,
             default_value: lane_arc.default_value,
         };
-        self.send_audio_command(AudioCommand::UpdateAutomationLane { id, lane });
+        let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane { id, lane });
     }
 
     pub fn push_history(&mut self, action: ProjectAction) {

@@ -1003,7 +1003,7 @@ impl AudioEngine {
     }
 
     /// Process incoming commands from command queue buffer
-    fn process_command(&mut self, cmd: AudioCommand) {
+    pub fn process_command(&mut self, cmd: AudioCommand) {
         match cmd {
             AudioCommand::PlayOneShot(waveform) => {
                 self.preview_voices.clear();

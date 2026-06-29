@@ -14,7 +14,6 @@ pub fn init_app() {
     log::info!("FRB Base Utilities Initialized");
 }
 
-// Using frb(sync) because memory allocation and basic struct setup is virtually instantaneous.
 #[flutter_rust_bridge::frb(sync)]
 pub fn create_daw_context() -> DawContext {
     let mut context = DawContext::new();
@@ -23,8 +22,6 @@ pub fn create_daw_context() -> DawContext {
     init_engine(&mut context);
 
     log::info!("DAW Engine System Started. Yielding Context to Flutter.");
-
-    // Return the context. FRB converts this into an opaque pointer for Dart!
     context
 }
 

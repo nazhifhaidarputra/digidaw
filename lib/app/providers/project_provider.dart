@@ -192,14 +192,17 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   void _upsertTrackMixChans(Map<int, mixer_api.UiMixerChannel> channels) {
     if (!state.hasValue) return;
     final current = state.requireValue;
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(channels: channels)));
+    final newChannels = Map<int, mixer_api.UiMixerChannel>.from(current.mixer.channels)
+    ..addAll(channels);
+    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(channels: newChannels)));
   }
 
   void _upsertBusMixChans(Map<int, mixer_api.UiBus> buses) {
     if (!state.hasValue) return;
     final current = state.requireValue;
-
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(buses: buses)));
+    final newBuses = Map<int, mixer_api.UiBus>.from(current.mixer.buses)
+      ..addAll(buses);
+    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(buses: newBuses)));
   }
 
   void _upsertMasterChan(mixer_api.UiMixerChannel channel) {
