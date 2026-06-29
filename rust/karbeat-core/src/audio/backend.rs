@@ -98,24 +98,30 @@ macro_rules! run_stream {
 /// - Linux: JACK
 /// - Other platforms: default host
 fn set_host() -> cpal::Host {
-    #[allow(unused_assignments)]
     #[allow(unused_mut)]
     let mut host = cpal::default_host();
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
-            if host_has_output_device(&asio_host) {
-                log::info!("Connected to ASIO Host");
-                return asio_host;
+        // ASIO is only available when the "asio" feature is enabled
+        #[cfg(feature = "asio")]
+        {
+            if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
+                if host_has_output_device(&asio_host) {
+                    log::info!("Connected to ASIO Host");
+                    return asio_host;
+                } else {
+                    log::warn!(
+                        "ASIO host found but no output devices available; falling back to WASAPI"
+                    );
+                }
             } else {
-                log::warn!(
-                    "ASIO host found but no output devices were available; falling back to WASAPI"
-                );
+                log::warn!("ASIO host not available; falling back to WASAPI");
             }
-        } else {
-            log::warn!("ASIO host not available; falling back to WASAPI");
         }
+
+        #[cfg(not(feature = "asio"))]
+        log::debug!("ASIO support not compiled in; using WASAPI");
 
         if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
             log::info!("Connected to WASAPI Host");
@@ -129,35 +135,40 @@ fn set_host() -> cpal::Host {
     {
         match cpal::host_from_id(cpal::HostId::AAudio) {
             Ok(aaudio_host) => {
-                host = aaudio_host;
                 log::info!("Connected to AAudio Host");
+                return aaudio_host;
             }
             Err(e) => {
                 log::warn!("AAudio not available, falling back to default host: {}", e);
-                host = cpal::default_host();
             }
         }
     }
 
     #[cfg(target_os = "linux")]
     {
-        match cpal::host_from_id(cpal::HostId::Jack) {
-            Ok(jack_host) => {
-                host = jack_host;
-                log::info!("Connected to JACK Host");
-            }
-            Err(e) => {
-                log::warn!("JACK not available, falling back to default host: {}", e);
-                host = cpal::default_host();
+        // JACK is only available when the "jack" feature is enabled
+        #[cfg(feature = "jack")]
+        {
+            match cpal::host_from_id(cpal::HostId::Jack) {
+                Ok(jack_host) => {
+                    log::info!("Connected to JACK Host");
+                    return jack_host;
+                }
+                Err(e) => {
+                    log::warn!("JACK not available, falling back to default host: {}", e);
+                }
             }
         }
+
+        #[cfg(not(feature = "jack"))]
+        log::debug!("JACK support not compiled in; using default Linux host (ALSA)");
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-        if let Ok(host) = cpal::host_from_id(cpal::HostId::CoreAudio) {
+        if let Ok(core_audio_host) = cpal::host_from_id(cpal::HostId::CoreAudio) {
             log::info!("Connected to CoreAudio Host");
-            return host;
+            return core_audio_host;
         }
     }
 
@@ -221,6 +232,13 @@ fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
 pub fn get_available_hosts() -> Vec<String> {
     cpal::available_hosts()
         .into_iter()
+        .filter(|h| {
+            match h.name() {
+                "ASIO" => cfg!(feature = "asio"),
+                "JACK" => cfg!(feature = "jack"),
+                _ => true,
+            }
+        })
         .map(|h| h.name().to_string())
         .collect()
 }

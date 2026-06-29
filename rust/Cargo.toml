@@ -23,7 +23,7 @@ karbeat-utils = { path = "karbeat-utils" }
 karbeat-macros = { path = "karbeat-macros" }
 karbeat-plugin-types = { path = "karbeat-plugin-types" }
 anyhow = "1.0.100"
-cpal = { version = "0.17.3", features = ["jack", "asio"] }
+cpal = { version = "0.17.3"}
 env_logger = "0.11"
 fastrand = "2.4"
 flutter_rust_bridge = "=2.11.1"
@@ -52,11 +52,11 @@ itertools = { version = "^0.14" }
 num-complex = "0.4.6"
 parking_lot = "0.12.5"
 uuid = { version = "1.22.0", features = ["v4", "serde"] }
-memmap2 = "0.9.10"
+memmap2 = "0.9.11"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
 zip = "8.5"
-toml = "1.1.2+spec-1.1.0"
+toml = "1.1.2"
 chrono = { version = "0.4.44", features = ["serde"] }
 rmp-serde = "1.3.1"
 derive_builder = "0.20.2"

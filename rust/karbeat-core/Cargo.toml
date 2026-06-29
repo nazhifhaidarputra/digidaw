@@ -49,5 +49,10 @@ mp3lame-encoder = "0.2.4"
 sysinfo = "0.38.4"
 realfft = "3.5.0"
 
+[features]
+default = []
+asio = ["cpal/asio"]
+jack = ["cpal/jack"]
+
 [lints]
 workspace = true
