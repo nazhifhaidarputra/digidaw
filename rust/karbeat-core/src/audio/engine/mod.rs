@@ -232,6 +232,9 @@ pub struct AudioEngine {
     channel_buffers_in: Vec<Vec<f32>>,
     channel_buffers_out: Vec<Vec<f32>>,
     aux_channel_buffers: Vec<Vec<f32>>,
+
+    // Routine trackers
+    samples_since_last_mixer_snapshot: usize,
 }
 
 /// Lightweight voice reference - the actual plugin lives in AudioPluginState
@@ -479,6 +482,7 @@ impl AudioEngine {
             channel_buffers_in,
             channel_buffers_out,
             aux_channel_buffers,
+            samples_since_last_mixer_snapshot: 0,
         }
     }
 
@@ -541,6 +545,8 @@ impl AudioEngine {
             channel_buffers_in: self.channel_buffers_in.clone(),
             channel_buffers_out: self.channel_buffers_out.clone(),
             aux_channel_buffers: self.aux_channel_buffers.clone(),
+
+            samples_since_last_mixer_snapshot: 0,
         }
     }
 
@@ -620,6 +626,17 @@ impl AudioEngine {
 
         // Always Render Previews (Metronome, Browser Preview)
         self.render_previews_to_buffer(output_buffer, channels);
+        
+        // Clock the mixer state snapshot
+        self.samples_since_last_mixer_snapshot += frame_count;
+        let snapshot_interval = (self.sample_rate as usize) / 30; // ~33.3ms interval
+
+        if self.samples_since_last_mixer_snapshot >= snapshot_interval {
+            self.emit_all_mixer_snapshots();
+            // Retain the remainder to keep perfect long-term timing precision
+            self.samples_since_last_mixer_snapshot %= snapshot_interval; 
+        }
+
         let elapsed = start_time.elapsed().as_secs_f32();
 
         let block_size = output_buffer.len() / (self.num_channels as usize); // Assuming stereo
@@ -3590,5 +3607,29 @@ impl AudioEngine {
             "[AudioEngine] Max Sample Index recalculated (Clips only): {}",
             self.current_state.graph.max_sample_index
         );
+    }
+
+    /// Emits snapshots of all active mixer channels to the feedback queue.
+    fn emit_all_mixer_snapshots(&mut self) {
+        // Check capacity to prevent overflowing the feedback ring buffer
+        let required_capacity = 1 + self.mixer_state.track_channels.len() + self.mixer_state.bus_channels.len();
+        
+        if self.feedback_producer.slots() >= required_capacity {
+            // 1. Emit Master
+            let master_snap = self.mixer_state.snapshot(MixerChannelTarget::Master);
+            let _ = self.feedback_producer.push(AudioFeedback::MixerChannelSnapshot(master_snap));
+
+            // 2. Emit Tracks
+            for &track_id in self.mixer_state.track_channels.keys() {
+                let snap = self.mixer_state.snapshot(MixerChannelTarget::Track(track_id));
+                let _ = self.feedback_producer.push(AudioFeedback::MixerChannelSnapshot(snap));
+            }
+
+            // 3. Emit Buses
+            for &bus_id in self.mixer_state.bus_channels.keys() {
+                let snap = self.mixer_state.snapshot(MixerChannelTarget::Bus(bus_id));
+                let _ = self.feedback_producer.push(AudioFeedback::MixerChannelSnapshot(snap));
+            }
+        }
     }
 }

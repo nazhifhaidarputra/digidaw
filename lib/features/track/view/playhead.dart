@@ -59,11 +59,10 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   int _dragSamples = 0;
   int _lastKnownSamples = 0;
 
-  // No initState needed anymore! Riverpod handles stream subscription.
+  UiTransportFeedback? _lastProcessedFeedback;
 
   @override
   Widget build(BuildContext context) {
-    // 2. Watch the FFI Stream natively via Riverpod
     final positionAsync = ref.watch(transportPositionStreamProvider);
 
     return LayoutBuilder(
@@ -73,12 +72,21 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            // 3. Extract the value cleanly instead of using StreamBuilder
             if (positionAsync.hasValue && positionAsync.value != null)
               Builder(
                 builder: (context) {
                   final pos = positionAsync.value!;
                   _lastKnownSamples = widget.sampleSelector(pos);
+
+                  final bool isPlaying = pos.isPlaying || pos.isPatternPlaying;
+
+                  if (!isPlaying && !_isDragging && _lastProcessedFeedback != null) {
+                      _lastKnownSamples = widget.sampleSelector(_lastProcessedFeedback!);
+                  } else {
+                      // Normal update 
+                      _lastKnownSamples = widget.sampleSelector(pos);
+                      _lastProcessedFeedback = pos;
+                  }
 
                   final currentSamples = _isDragging
                       ? _dragSamples

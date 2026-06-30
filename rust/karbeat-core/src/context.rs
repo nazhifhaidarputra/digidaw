@@ -109,10 +109,12 @@ impl DawContext {
 
     pub fn broadcast_track_graph(&mut self) {
         let (patterns, tracks) = self.update_track_graph();
+        let (tracks_len, patterns_len) = (tracks.len(), patterns.len());
         let _ = self.send_audio_command(AudioCommand::UpdateTrackGraph {
             tracks: tracks,
             patterns: patterns,
         });
+        log::debug!("number of tracks: {}, number of patterns: {}", tracks_len, patterns_len);
     }
 
     pub fn broadcast_full_graph(&mut self) {

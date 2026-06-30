@@ -53,9 +53,10 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       ],
     );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      ref.read(mixerStateProvider.notifier).queryAllMixerChannels();
-    });
+    // WidgetsBinding.instance.addPostFrameCallback((_) async {
+    //   ref.read(mixerStateProvider.notifier).queryAllMixerChannels();
+    //   await ref.read(mixerStateProvider.notifier).syncMixerState();
+    // });
   }
 
   @override
@@ -313,6 +314,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(mixerStateProvider);
     final mixerState = ref.watch(projectProvider).value?.mixer;
 
     if (mixerState == null) return const SizedBox.shrink();

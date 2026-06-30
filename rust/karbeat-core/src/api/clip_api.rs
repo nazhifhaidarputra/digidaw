@@ -36,7 +36,14 @@ pub fn add_clip(
     // 1. Mutate state
     let clip = {
         let app = &mut ctx.app_state;
-        app.create_new_clip(source_id, source_type, track_id, start_time)?
+        let res = app.create_new_clip(source_id, source_type, track_id, start_time);
+
+        if let Err(the_err) = res {
+            log::error!("Error creating clip: {:?}", the_err);
+            return Err(the_err);
+        }
+
+        res.unwrap()
     };
 
     // 2. Update history

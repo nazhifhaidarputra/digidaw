@@ -2,10 +2,12 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/src/rust/api/track.dart';
@@ -74,8 +76,12 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Sync a single track by its backend [trackId].
   Future<void> syncTracks() async {
     final result = await AsyncValue.guard(() async {
-      final newTracksMap = await getTracks(ctx: _ctx);
+      final (newTracksMap, newPatternMap) = await (
+        getTracks(ctx: _ctx),
+        getPatterns(ctx: _ctx), // Requires the pattern FFI endpoint
+      ).wait;
       _projectNotifierRead.upsertTracksBulk(newTracksMap);
+      _projectNotifierRead.upsertPatternBulk(newPatternMap);
     });
 
     return result.value;
@@ -93,6 +99,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
         return;
       }
       _projectNotifierRead.upsertTrack(trackId, updatedTrack);
+
+      final newPatternMap = await getPatterns(ctx: _ctx);
+      _projectNotifierRead.upsertPatternBulk(newPatternMap);
     });
 
     return res.value;
@@ -242,6 +251,8 @@ class TrackListNotifier extends Notifier<TrackListState> {
     final createRes = await AsyncValue.guard(() async {
       final newTrack = await addNewAudioTrack(ctx: _ctx);
       _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
+        await ref.read(mixerStateProvider.notifier).syncMixerChannel(newTrack.id);
+        await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
     });
 
     if (createRes.hasError) {
@@ -270,6 +281,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
         );
         _projectNotifierRead.upsertGenerator(newTrack.generatorId!, generator);
       }
+
+      await ref.read(mixerStateProvider.notifier).syncMixerChannel(newTrack.id);
+      await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
     });
 
     if (result.hasError) {
@@ -281,6 +295,8 @@ class TrackListNotifier extends Notifier<TrackListState> {
     final result = await AsyncValue.guard(() async {
       await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
       _projectNotifierRead.removeTrack(trackId);
+
+      await ref.read(mixerStateProvider.notifier).syncMixerState();
     });
 
     if (result.hasError) {
@@ -314,6 +330,15 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
       final updated = track.copyWith(clips: [...track.clips, newClip]);
       _projectNotifierRead.upsertTrack(trackId, updated);
+
+      switch (newClip.source) {
+        case UiClipSource_Midi(:final patternId):
+          final newPattern = await getPattern(ctx: _ctx, patternId: patternId);
+          _projectNotifierRead.upsertPattern(patternId, newPattern);
+        default:
+
+      }
+      
     });
 
     if (result.hasError) {
