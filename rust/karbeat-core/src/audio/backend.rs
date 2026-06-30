@@ -179,7 +179,7 @@ fn set_host() -> cpal::Host {
     host
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AudioDeviceConfig {
     /// The string name of the CPAL host (e.g., "ASIO", "WASAPI", "CoreAudio")
     pub host_name: Option<String>,
@@ -575,10 +575,7 @@ pub fn start_audio_stream(
                 let latest_config = active_config_arc.read().clone();
 
                 // Did the user change settings in the UI?
-                if latest_config.device_id != current_config_pref.device_id
-                    || latest_config.host_name != current_config_pref.host_name
-                    || latest_config.sample_rate != current_config_pref.sample_rate
-                    || latest_config.buffer_size != current_config_pref.buffer_size
+                if latest_config != current_config_pref
                 {
                     log::info!("Monitor: Audio configuration changed by user. Restarting stream...");
                     break;

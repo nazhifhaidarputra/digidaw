@@ -10,9 +10,11 @@ pub mod audio;
 pub mod commands;
 pub mod context;
 pub mod core;
-// pub mod lock;
 pub mod plugin_types;
 pub mod shared;
 pub mod test;
 pub mod utils;
-pub mod new_context;
+
+/// Metronome audio file (both downbeat and offbeat)
+pub const DOWNBEAT_BYTES: &'static[u8] = include_bytes!("../../../assets/audio/metronome_downbeat.wav");
+pub const OFFBEAT_BYTES: &'static[u8] = include_bytes!("../../../assets/audio/metronome_offbeat.wav");
