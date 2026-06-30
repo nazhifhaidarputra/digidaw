@@ -22,8 +22,6 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
 
   @override
   AutomationDataState build() {
-    // TODO: implement build
-    // throw UnimplementedError();
     return AutomationDataState();
   }
 
@@ -81,21 +79,15 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     final originalSources = projectData.modulationSources;
 
     try {
-      // 1. Fetch the new modulation source from Rust
       final newSourceId = await addModulationSource(
         ctx: _ctx,
         source: source,
       );
-
-      // 2. Patch the frontend state optimistically
       final newSources = originalSources.add(newSourceId, source);
-      
-      // Assuming your ProjectNotifier has a method to update modulation sources
       ref.read(projectProvider.notifier).updateAutomations(sources: newSources.unlock);
 
       return const AsyncData(null);
     } catch (e, s) {
-      // 3. Rollback to original state if FFI or UI update fails
       if (ref.read(projectProvider).hasValue) {
         ref.read(projectProvider.notifier).updateAutomations(sources: originalSources.unlock);
       }

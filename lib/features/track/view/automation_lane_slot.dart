@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
