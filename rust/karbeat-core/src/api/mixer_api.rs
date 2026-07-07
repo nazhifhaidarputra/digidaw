@@ -1,16 +1,13 @@
 use karbeat_plugin_types::ParameterSpec;
 
 use crate::{
-    commands::{AudioCommand, EffectTarget, MixerChannelTarget},
-    context::DawContext,
-    core::project::{
+    audio::engine::MixerTelemetrySnapshot, commands::{AudioCommand, EffectTarget, MixerChannelTarget}, context::DawContext, core::project::{
         mixer::{
             BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
             RoutingConnection, RoutingNode,
         },
         TrackId,
-    },
-    shared::id::*,
+    }, shared::id::*
 };
 
 /// **GETTER: Fetch the mixer state from application state and map it to T value**
@@ -369,4 +366,15 @@ pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::
     let routing = ctx.app_state.mixer.update_routing(conn)?;
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
+}
+
+// ===========================================
+// ======= NEW mixer shared pointer API ======
+// ===========================================
+
+pub fn get_mixer_telemetry_sync(ctx: &DawContext) -> MixerTelemetrySnapshot {
+    // .load() gets a lock-free Guard. 
+    // .as_ref() gets the data. 
+    // .clone() creates a fresh detached copy to safely hand over the FFI boundary to Dart.
+    ctx.telemetry_registry.mixer_telemetry.load().as_ref().clone()
 }

@@ -1,31 +1,40 @@
-mod types;
 // Copyright (C) 2026 Haidar Wibowo
 // This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3.
 // This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 // You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 mod helper;
+mod types;
 
 use hashbrown::HashMap;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
 use std::{
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
     time::Instant,
 };
 
 pub use types::*;
 
-
 use crate::{
-    DOWNBEAT_BYTES, OFFBEAT_BYTES, audio::{
-        engine::helper::*, event::{PluginTarget, TransportFeedback}, render_state::{
+    audio::{
+        engine::helper::*,
+        event::{PluginTarget, TransportFeedback},
+        render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
         },
-    }, commands::{
+    },
+    commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
         GeneratorParameterSnapshot, MixerChannelSnapshot, MixerChannelTarget,
-    }, core::project::*, shared::id::*, utils::{apply_simd_mix, apply_simd_mix_gain},
+    },
+    core::project::*,
+    shared::id::*,
+    utils::{apply_simd_mix, apply_simd_mix_gain},
+    DOWNBEAT_BYTES, OFFBEAT_BYTES,
 };
 
 // A global or engine-bound atomic to share with the monitor thread
@@ -234,7 +243,9 @@ pub struct AudioEngine {
     aux_channel_buffers: Vec<Vec<f32>>,
 
     // Routine trackers
-    samples_since_last_mixer_snapshot: usize,
+    samples_since_last_snapshot: usize,
+
+    telemetry: AudioEngineTelemetry,
 }
 
 /// Lightweight voice reference - the actual plugin lives in AudioPluginState
@@ -311,7 +322,6 @@ struct MetronomeState {
 
 impl Default for MetronomeState {
     fn default() -> Self {
-
         Self {
             is_active: false,
             downbeat_buffer: load_internal_wav(DOWNBEAT_BYTES),
@@ -429,6 +439,7 @@ impl AudioEngine {
         num_channels: u16,
         initial_bpm: f32,
         buffer_size: usize,
+        telemetry: AudioEngineTelemetry,
     ) -> Self {
         // Seed the graph snapshot with the real audio config so that
         // AddGenerator / AddEffect commands that arrive before the first
@@ -482,7 +493,8 @@ impl AudioEngine {
             channel_buffers_in,
             channel_buffers_out,
             aux_channel_buffers,
-            samples_since_last_mixer_snapshot: 0,
+            samples_since_last_snapshot: 0,
+            telemetry,
         }
     }
 
@@ -510,8 +522,8 @@ impl AudioEngine {
             pattern_state: self.pattern_state.clone(),
 
             // Clear active voices so the export starts fresh without hanging MIDI notes
-            active_generators: Vec::with_capacity(32),
-            active_oneshots: Vec::with_capacity(16),
+            active_generators: Vec::with_capacity(64),
+            active_oneshots: Vec::with_capacity(32),
             preview_voices: Vec::with_capacity(4),
 
             // Deep clone the plugins to preserve their internal states!
@@ -528,7 +540,7 @@ impl AudioEngine {
 
             metronome_state: MetronomeState::default(),
 
-            // Keep delay states intact! This guarantees exact tail behavior.
+            // ============= TAIL STATES ========================
             track_tails: self.track_tails.clone(),
             bus_tails: self.bus_tails.clone(),
             master_tail: self.master_tail,
@@ -546,7 +558,8 @@ impl AudioEngine {
             channel_buffers_out: self.channel_buffers_out.clone(),
             aux_channel_buffers: self.aux_channel_buffers.clone(),
 
-            samples_since_last_mixer_snapshot: 0,
+            samples_since_last_snapshot: 0,
+            telemetry: self.telemetry.clone(),
         }
     }
 
@@ -626,15 +639,15 @@ impl AudioEngine {
 
         // Always Render Previews (Metronome, Browser Preview)
         self.render_previews_to_buffer(output_buffer, channels);
-        
+
         // Clock the mixer state snapshot
-        self.samples_since_last_mixer_snapshot += frame_count;
+        self.samples_since_last_snapshot += frame_count;
         let snapshot_interval = (self.sample_rate as usize) / 30; // ~33.3ms interval
 
-        if self.samples_since_last_mixer_snapshot >= snapshot_interval {
+        if self.samples_since_last_snapshot >= snapshot_interval {
             self.emit_all_mixer_snapshots();
-            // Retain the remainder to keep perfect long-term timing precision
-            self.samples_since_last_mixer_snapshot %= snapshot_interval; 
+            self.emit_plugin_telemetry();
+            self.samples_since_last_snapshot %= snapshot_interval;
         }
 
         let elapsed = start_time.elapsed().as_secs_f32();
@@ -1205,7 +1218,6 @@ impl AudioEngine {
                         .push(AudioFeedback::GeneratorParameterSnapshot(snapshot));
                 }
             }
-
             AudioCommand::SetMixerChannelParameter { target, param } => {
                 // Audio thread is sole owner of mixer channel DSP values
                 self.mixer_state.apply(&target, &param);
@@ -1352,7 +1364,7 @@ impl AudioEngine {
                         channel_count: channels,
                         is_optional: false,
                     };
-                    plugin.set_io_layout(&[bus.clone()], &[bus]);
+                    plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
 
                     // Since PreparePlugin doesn't pass track_ids directly, we find the
                     // associated track from the newly synced current_state graph.
@@ -1408,7 +1420,7 @@ impl AudioEngine {
                             channel_count: channels,
                             is_optional: false,
                         };
-                        plugin.set_io_layout(&[bus.clone()], &[bus]);
+                        plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
                         self.plugin_state.add_bus_effect(
                             bus_id_index,
                             AudioEffectInstance {
@@ -1436,7 +1448,7 @@ impl AudioEngine {
                         channel_count: channels,
                         is_optional: false,
                     };
-                    plugin.set_io_layout(&[bus.clone()], &[bus]);
+                    plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
                     self.plugin_state.master_effects.push(AudioEffectInstance {
                         id: effect_id,
                         plugin,
@@ -1445,7 +1457,6 @@ impl AudioEngine {
 
                 log::info!("[AudioEngine] Prepared all plugins for the newly loaded project.");
             }
-
             AudioCommand::SetMetronomeActive(active) => {
                 self.metronome_state.is_active = active;
                 log::info!("[AudioEngine] Metronome Active: {}", active);
@@ -1562,7 +1573,6 @@ impl AudioEngine {
                         });
                 }
             }
-
             AudioCommand::QueryZeroCopyBuffer {
                 target,
                 name,
@@ -1627,10 +1637,6 @@ impl AudioEngine {
             AudioCommand::RemoveModulationLink(modulation_link_id) => {
                 self.active_links.retain(|l| l.id != modulation_link_id);
             }
-
-            // ================================================================
-            // Granular Graph-State Updates (replace the old triple-buffer path)
-            // ================================================================
             AudioCommand::UpdateTrackGraph { tracks, patterns } => {
                 // Update only the track/pattern/sample-index portion of the local graph.
                 // Routing and automation lanes are untouched by this command.
@@ -1707,10 +1713,10 @@ impl AudioEngine {
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
                     log::info!(
-                        "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
-                        sr,
-                        buf_size
-                    );
+                                "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                                sr,
+                                buf_size
+                            );
 
                     self.recalculate_max_sample_index();
                 }
@@ -1741,10 +1747,10 @@ impl AudioEngine {
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
                     log::info!(
-                        "[AudioEngine] ReplaceFullGraph sync: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
-                        sr,
-                        buf_size
-                    );
+                                "[AudioEngine] ReplaceFullGraph sync: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                                sr,
+                                buf_size
+                            );
                 }
 
                 // Used for undo/redo. Atomically replace the full graph snapshot
@@ -1763,6 +1769,21 @@ impl AudioEngine {
             }
             AudioCommand::EndEdit { target } => {
                 self.handle_parameter_edit(&target, false);
+            }
+            AudioCommand::SetPluginParamTelemetrySubscription { target, buffers, active } => {
+                if active {
+                    let entry = self.telemetry
+                        .active_telemetry_subscriptions
+                        .entry(target)
+                        .or_default();
+                    for buf in buffers {
+                        entry.insert(buf);
+                    }
+                } else {
+                    self.telemetry
+                        .active_telemetry_subscriptions
+                        .remove(&target);
+                }
             }
         }
     }
@@ -3529,7 +3550,7 @@ impl AudioEngine {
                 channel_count: channels,
                 is_optional: false,
             };
-            gen.plugin.set_io_layout(&[bus.clone()], &[bus]);
+            gen.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
         }
         for effects in self.plugin_state.track_effects.iter_mut() {
             for effect in effects.iter_mut() {
@@ -3539,7 +3560,7 @@ impl AudioEngine {
                     channel_count: channels,
                     is_optional: false,
                 };
-                effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
+                effect.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
             }
         }
         for effects in self.plugin_state.bus_effects.iter_mut() {
@@ -3550,7 +3571,7 @@ impl AudioEngine {
                     channel_count: channels,
                     is_optional: false,
                 };
-                effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
+                effect.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
             }
         }
         for effect in self.plugin_state.master_effects.iter_mut() {
@@ -3560,7 +3581,7 @@ impl AudioEngine {
                 channel_count: channels,
                 is_optional: false,
             };
-            effect.plugin.set_io_layout(&[bus.clone()], &[bus]);
+            effect.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
         }
 
         // 3. Clear delay lines to avoid playing back garbage/pitch-shifted audio
@@ -3611,25 +3632,65 @@ impl AudioEngine {
 
     /// Emits snapshots of all active mixer channels to the feedback queue.
     fn emit_all_mixer_snapshots(&mut self) {
-        // Check capacity to prevent overflowing the feedback ring buffer
-        let required_capacity = 1 + self.mixer_state.track_channels.len() + self.mixer_state.bus_channels.len();
-        
-        if self.feedback_producer.slots() >= required_capacity {
-            // 1. Emit Master
-            let master_snap = self.mixer_state.snapshot(MixerChannelTarget::Master);
-            let _ = self.feedback_producer.push(AudioFeedback::MixerChannelSnapshot(master_snap));
+        if !self.telemetry.mixer_snapshot_active {
+            return;
+        }
+        let mut snapshot = MixerTelemetrySnapshot::default();
+        snapshot.master = Some(self.mixer_state.snapshot(MixerChannelTarget::Master));
 
-            // 2. Emit Tracks
-            for &track_id in self.mixer_state.track_channels.keys() {
-                let snap = self.mixer_state.snapshot(MixerChannelTarget::Track(track_id));
-                let _ = self.feedback_producer.push(AudioFeedback::MixerChannelSnapshot(snap));
-            }
+        // Snapshot Tracks
+        for &track_id in self.mixer_state.track_channels.keys() {
+            snapshot.tracks.insert(
+                track_id,
+                self.mixer_state
+                    .snapshot(MixerChannelTarget::Track(track_id)),
+            );
+        }
 
-            // 3. Emit Buses
-            for &bus_id in self.mixer_state.bus_channels.keys() {
-                let snap = self.mixer_state.snapshot(MixerChannelTarget::Bus(bus_id));
-                let _ = self.feedback_producer.push(AudioFeedback::MixerChannelSnapshot(snap));
+        // Snapshot Buses
+        for &bus_id in self.mixer_state.bus_channels.keys() {
+            snapshot.buses.insert(
+                bus_id,
+                self.mixer_state.snapshot(MixerChannelTarget::Bus(bus_id)),
+            );
+        }
+
+        // SILENTLY WRITE: Atomically overwrite the memory. FFI reads this natively.
+        self.telemetry.mixer_telemetry.store(Arc::new(snapshot));
+    }
+
+    /// Fetches parameters only for plugins the UI is actively watching
+    fn emit_plugin_telemetry(&mut self) {
+        if self.telemetry.active_telemetry_subscriptions.is_empty() {
+            return;
+        }
+
+        let mut snapshot = ActivePluginTelemetrySnapshots::default();
+
+        for (target, buffer_names) in &self.telemetry.active_telemetry_subscriptions {
+            if let Some(plugin) = self.get_plugin(target) {
+                let mut plugin_snap = PluginTelemetrySnapshot::default();
+
+                // 1. Fetch all parameters
+                let specs = plugin.get_parameter_specs();
+                plugin_snap.parameters = specs
+                    .iter()
+                    .map(|s| (s.id, plugin.get_parameter(s.id)))
+                    .collect();
+
+                // 2. Fetch requested zero-copy buffers (e.g., "telemetry" or "magnitude")
+                for name in buffer_names {
+                    if let Some(buf) = plugin.get_zero_copy_buffer(name) {
+                        plugin_snap.buffers.insert(name.clone(), buf);
+                    }
+                }
+
+                // 3. Attach to the master payload
+                snapshot.active_plugins.insert(target.clone(), plugin_snap);
             }
         }
+
+        // SILENTLY WRITE
+        self.telemetry.param_telemetry.store(Arc::new(snapshot));
     }
 }

@@ -1,18 +1,20 @@
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
+use arc_swap::ArcSwap;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     DeviceId, OutputCallbackInfo,
 };
+use hashbrown::HashMap;
 use parking_lot::Mutex;
 use rtrb::{Consumer, RingBuffer};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    audio::{engine::AudioEngine, event::TransportFeedback},
+    audio::{engine::{ActivePluginTelemetrySnapshots, AudioEngine, AudioEngineTelemetry, MixerTelemetrySnapshot}, event::TransportFeedback},
     commands::AudioCommand,
-    context::DawContext,
+    context::DawContext, message::TelemetryRegistry,
 };
 
 #[allow(unused)]
@@ -429,6 +431,17 @@ pub fn start_audio_stream(
 
     let initial_bpm = ctx.app_state.transport.bpm;
 
+    // create the arc swap pointer
+    let mixer_ptr = Arc::new(ArcSwap::from_pointee(MixerTelemetrySnapshot::default()));
+    let param_ptr = Arc::new(ArcSwap::from_pointee(ActivePluginTelemetrySnapshots::default()));
+
+    let engine_telemetry = AudioEngineTelemetry {
+        mixer_telemetry: mixer_ptr.clone(),
+        param_telemetry: param_ptr.clone(),
+        mixer_snapshot_active: false,
+        active_telemetry_subscriptions: HashMap::new(),
+    };
+    
     let engine = AudioEngine::new(
         command_consumer,
         pos_producer,
@@ -437,7 +450,15 @@ pub fn start_audio_stream(
         channels as u16,
         initial_bpm,
         engine_block_size,
+        engine_telemetry
     );
+
+    let telemetry_registry = TelemetryRegistry {
+        mixer_telemetry: mixer_ptr,
+        param_telemetry: param_ptr,
+    };
+
+    ctx.update_telemetry_reg(telemetry_registry);
 
     // Create the engine wrapped in Arc<Mutex> so it outlives dropped streams
     let engine_arc = Arc::new(Mutex::new(engine));

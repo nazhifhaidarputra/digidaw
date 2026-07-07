@@ -14,13 +14,10 @@ use rtrb::{Consumer, Producer};
 use crate::{
     audio::{
         backend::AudioDeviceConfig, event::TransportFeedback, render_state::{AudioAutomationLane, AudioGraphState}
-    },
-    commands::{AudioCommand, AudioFeedback},
-    core::{
+    }, commands::{AudioCommand, AudioFeedback}, core::{
         history::{HistoryManager, ProjectAction},
         project::{ApplicationState, AudioTrack, Pattern},
-    },
-    shared::{AutomationId, PatternId},
+    }, message::TelemetryRegistry, shared::{AutomationId, PatternId}
 };
 
 pub struct DawContext {
@@ -46,6 +43,8 @@ pub struct DawContext {
     /// The live, thread-safe audio configuration. 
     /// The UI writes to this, and the background stream monitor reads from it.
     pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
+
+    pub telemetry_registry: TelemetryRegistry,
 }
 
 impl DawContext {
@@ -58,7 +57,8 @@ impl DawContext {
             stream_guard: None,
             position_consumer: Arc::new(Mutex::new(None)),
             plugin_registry: PluginRegistry::new_with_defaults(),
-            active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default()))
+            active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
+            telemetry_registry: TelemetryRegistry::default(),
         }
     }
 
@@ -149,6 +149,10 @@ impl DawContext {
     /// Extracts the feedback consumer.
     pub fn take_feedback_consumer(&self) -> Option<Consumer<AudioFeedback>> {
         self.feedback_consumer.lock().take()
+    }
+
+    pub fn update_telemetry_reg(&mut self, new_reg: TelemetryRegistry) {
+        self.telemetry_registry =  new_reg;
     }
 }
 

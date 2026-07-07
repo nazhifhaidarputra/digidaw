@@ -130,10 +130,10 @@ pub struct ProcessContext<'a> {
 /// Zero copy buffer used for FFI interoperability
 #[derive(Clone, Debug)]
 pub enum ZeroCopyBuffer {
-    Float32(Arc<Box<[f32]>>),
-    Uint8(Arc<Box<[u8]>>),
-    Int32(Arc<Box<[i32]>>),
-    Int8(Arc<Box<[i8]>>),
+    Float32(Arc<[f32]>),
+    Uint8(Arc<[u8]>),
+    Int32(Arc<[i32]>),
+    Int8(Arc<[i8]>),
 }
 
 /// Avalable Shared Buffer Data Type

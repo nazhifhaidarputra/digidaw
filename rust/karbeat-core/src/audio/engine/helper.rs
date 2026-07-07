@@ -2,7 +2,7 @@ use dasp::slice;
 use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext};
 use karbeat_utils::math::hermite_interp;
 use rodio::math::db_to_linear;
-use wide::f32x4;
+use wide::f32x16;
 
 use crate::{core::project::{RoutingConnection, RoutingNode, audio_waveform::AudioSampleMode}, shared::{BusId, TrackId}};
 
@@ -37,49 +37,51 @@ pub fn render_audio_waveform(
             let start_elapsed = current_elapsed_samples.as_ref().map(|v| **v).unwrap_or(0);
 
             if target_channels == 2 {
-                let mut iter = target_slice.chunks_exact_mut(4);
+                let mut iter = target_slice.chunks_exact_mut(16);
+
                 for chunk in iter.by_ref() {
-                    let elapsed0 = start_elapsed + frames_written;
-                    let rp0 = get_read_pos(
-                        *source_read_index,
-                        (frames_written as f64) * step,
-                        is_looping,
-                        trim_end,
-                        start_bound,
-                        loop_len,
-                    );
-                    let s0 = sample_waveform_dasp(source_buffer, rp0, src_channels);
-                    let fade0 = if current_elapsed_samples.is_some() {
-                        calc_fade(elapsed0, fade_samples, clip_loop_length)
-                    } else {
-                        1.0
-                    } * base_volume;
+                    let mut s = [0.0; 16];
+                    let mut f = [0.0; 16];
 
-                    let elapsed1 = start_elapsed + frames_written + 1;
-                    let rp1 = get_read_pos(
-                        *source_read_index,
-                        ((frames_written + 1) as f64) * step,
-                        is_looping,
-                        trim_end,
-                        start_bound,
-                        loop_len,
-                    );
-                    let s1 = sample_waveform_dasp(source_buffer, rp1, src_channels);
-                    let fade1 = if current_elapsed_samples.is_some() {
-                        calc_fade(elapsed1, fade_samples, clip_loop_length)
-                    } else {
-                        1.0
-                    } * base_volume;
+                    // Let LLVM pipeline the scalar interpolations
+                    for i in 0..8 {
+                        let elapsed = start_elapsed + frames_written + i;
+                        let rp = get_read_pos(
+                            *source_read_index,
+                            ((frames_written + i) as f64) * step,
+                            is_looping,
+                            trim_end,
+                            start_bound,
+                            loop_len,
+                        );
+                        
+                        let s_frame = sample_waveform_dasp(source_buffer, rp, src_channels);
+                        let fade = if current_elapsed_samples.is_some() {
+                            calc_fade(elapsed, fade_samples, clip_loop_length)
+                        } else {
+                            1.0
+                        } * base_volume;
 
-                    let samples = f32x4::new([s0[0], s0[1], s1[0], s1[1]]);
-                    let fades = f32x4::new([fade0, fade0, fade1, fade1]);
-                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                        s[i as usize * 2] = s_frame[0];
+                        s[i as usize * 2 + 1] = s_frame[1];
+                        f[i as usize * 2] = fade;
+                        f[i as usize * 2 + 1] = fade;
+                    }
+
+                    let samples = f32x16::new(s);
+                    let fades = f32x16::new(f);
+                    
+                    let mut chunk_arr = [0.0; 16];
+                    chunk_arr.copy_from_slice(chunk);
+                    let mut out_v = f32x16::new(chunk_arr);
+                    
                     out_v += samples * fades;
                     chunk.copy_from_slice(&out_v.to_array());
 
-                    frames_written += 2;
+                    frames_written += 8;
                 }
 
+                // Handle remaining
                 for chunk in iter.into_remainder().chunks_exact_mut(2) {
                     let elapsed0 = start_elapsed + frames_written;
                     let rp0 = get_read_pos(
@@ -102,12 +104,13 @@ pub fn render_audio_waveform(
                     frames_written += 1;
                 }
             } else {
-                let mut iter = target_slice.chunks_exact_mut(4);
+                // Non-stereo fallback processing 16 mono frames at a time
+                let mut iter = target_slice.chunks_exact_mut(16);
                 for chunk in iter.by_ref() {
-                    let mut s = [0.0; 4];
-                    let mut f = [0.0; 4];
+                    let mut s = [0.0; 16];
+                    let mut f = [0.0; 16];
 
-                    for i in 0..4 {
+                    for i in 0..16 {
                         let elapsed = start_elapsed + frames_written + i;
                         let rp = get_read_pos(
                             *source_read_index,
@@ -117,6 +120,7 @@ pub fn render_audio_waveform(
                             start_bound,
                             loop_len,
                         );
+                        
                         s[i as usize] = sample_waveform_dasp(source_buffer, rp, src_channels)[0];
                         f[i as usize] = if current_elapsed_samples.is_some() {
                             calc_fade(elapsed, fade_samples, clip_loop_length)
@@ -125,15 +129,20 @@ pub fn render_audio_waveform(
                         } * base_volume;
                     }
 
-                    let samples = f32x4::new(s);
-                    let fades = f32x4::new(f);
-                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    let samples = f32x16::new(s);
+                    let fades = f32x16::new(f);
+                    
+                    let mut chunk_arr = [0.0; 16];
+                    chunk_arr.copy_from_slice(chunk);
+                    let mut out_v = f32x16::new(chunk_arr);
+                    
                     out_v += samples * fades;
                     chunk.copy_from_slice(&out_v.to_array());
 
-                    frames_written += 4;
+                    frames_written += 16;
                 }
 
+                // Mono Remainder
                 for chunk in iter.into_remainder().iter_mut() {
                     let elapsed = start_elapsed + frames_written;
                     let rp = get_read_pos(
@@ -144,6 +153,7 @@ pub fn render_audio_waveform(
                         start_bound,
                         loop_len,
                     );
+                    
                     let s0 = sample_waveform_dasp(source_buffer, rp, src_channels);
                     let fade0 = if current_elapsed_samples.is_some() {
                         calc_fade(elapsed, fade_samples, clip_loop_length)
@@ -272,13 +282,18 @@ pub fn load_internal_wav(bytes: &[u8]) -> Vec<f32> {
 
 #[inline(always)]
 pub fn apply_phase_inversion_simd(buffer: &mut [f32]) {
-    let neg_one = f32x4::splat(-1.0);
-    let mut iter = buffer.chunks_exact_mut(4);
+let neg_one = f32x16::splat(-1.0);
+    let mut iter = buffer.chunks_exact_mut(16);
+    
     for chunk in iter.by_ref() {
-        let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        let mut chunk_arr = [0.0; 16];
+        chunk_arr.copy_from_slice(chunk);
+        
+        let mut v = f32x16::new(chunk_arr);
         v *= neg_one;
         chunk.copy_from_slice(&v.to_array());
     }
+    
     for sample in iter.into_remainder() {
         *sample = -*sample;
     }
@@ -295,25 +310,39 @@ pub fn apply_volume_and_pan_simd(buffer: &mut [f32], channels: usize, volume_db:
     };
 
     if channels == 2 {
-        let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
-        let mut iter = buffer.chunks_exact_mut(4);
+        let gains = [
+            left_gain, right_gain, left_gain, right_gain, 
+            left_gain, right_gain, left_gain, right_gain, 
+            left_gain, right_gain, left_gain, right_gain, 
+            left_gain, right_gain, left_gain, right_gain
+        ];
+        let gain_v = f32x16::new(gains);
+        
+        let mut iter = buffer.chunks_exact_mut(16);
         for chunk in iter.by_ref() {
-            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            let mut chunk_arr = [0.0; 16];
+            chunk_arr.copy_from_slice(chunk);
+            let mut v = f32x16::new(chunk_arr);
             v *= gain_v;
             chunk.copy_from_slice(&v.to_array());
         }
+        
         for chunk in iter.into_remainder().chunks_exact_mut(2) {
             chunk[0] *= left_gain;
             chunk[1] *= right_gain;
         }
     } else {
-        let gain_v = f32x4::splat(left_gain);
-        let mut iter = buffer.chunks_exact_mut(4);
+        let gain_v = f32x16::splat(left_gain);
+        
+        let mut iter = buffer.chunks_exact_mut(16);
         for chunk in iter.by_ref() {
-            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            let mut chunk_arr = [0.0; 16];
+            chunk_arr.copy_from_slice(chunk);
+            let mut v = f32x16::new(chunk_arr);
             v *= gain_v;
             chunk.copy_from_slice(&v.to_array());
         }
+        
         for sample in iter.into_remainder() {
             *sample *= left_gain;
         }
@@ -333,7 +362,7 @@ pub fn process_plugin_wrapper(
 ) {
     let frames = interleaved_io.len() / channels;
 
-    // Deinterleave main bus
+    // Resize all necessary buffers upfront
     for c in 0..channels {
         if channel_buffers_in[c].len() < frames {
             channel_buffers_in[c].resize(frames, 0.0);
@@ -341,21 +370,64 @@ pub fn process_plugin_wrapper(
         if channel_buffers_out[c].len() < frames {
             channel_buffers_out[c].resize(frames, 0.0);
         }
-        for i in 0..frames {
-            channel_buffers_in[c][i] = interleaved_io[i * channels + c];
+        if aux_interleaved.is_some() {
+            if aux_channel_buffers[c].len() < frames {
+                aux_channel_buffers[c].resize(frames, 0.0);
+            }
         }
     }
 
+    // Deinterleave Main & Aux Buses
+    if channels == 2 {
+        // FAST PATH: Stereo (Auto-Vectorized by LLVM into SIMD Shuffles)
+        let (left_split, right_split) = channel_buffers_in.split_at_mut(1);
+        let left_in = &mut left_split[0][..frames];
+        let right_in = &mut right_split[0][..frames];
+
+        for (i, chunk) in interleaved_io.chunks_exact(2).enumerate() {
+            left_in[i] = chunk[0];
+            right_in[i] = chunk[1];
+        }
+
+        if let Some(aux) = aux_interleaved {
+            let (aux_l_split, aux_r_split) = aux_channel_buffers.split_at_mut(1);
+            let aux_l = &mut aux_l_split[0][..frames];
+            let aux_r = &mut aux_r_split[0][..frames];
+
+            for (i, chunk) in aux.chunks_exact(2).enumerate() {
+                aux_l[i] = chunk[0];
+                aux_r[i] = chunk[1];
+            }
+        }
+    } else {
+        // SLOW PATH: Surround / Multi-channel fallback
+        for i in 0..frames {
+            for c in 0..channels {
+                channel_buffers_in[c][i] = interleaved_io[i * channels + c];
+            }
+        }
+        if let Some(aux) = aux_interleaved {
+            for i in 0..frames {
+                for c in 0..channels {
+                    aux_channel_buffers[c][i] = aux[i * channels + c];
+                }
+            }
+        }
+    }
+
+    // Setup Pointers for the Plugin API
     let mut in_ptrs: Vec<&mut [f32]> = channel_buffers_in
         .iter_mut()
         .take(channels)
         .map(|v| &mut v[..frames])
         .collect();
+        
     let mut out_ptrs: Vec<&mut [f32]> = channel_buffers_out
         .iter_mut()
         .take(channels)
         .map(|v| &mut v[..frames])
         .collect();
+
     let mut main_in = [AudioBusBuffer {
         channel_data: &mut in_ptrs,
         is_silent: false,
@@ -365,18 +437,9 @@ pub fn process_plugin_wrapper(
         is_silent: false,
     }];
 
-    // Deinterleave aux/sidechain bus
-    let mut aux_in_ptrs: Vec<&mut [f32]> = vec![];
     let mut aux_in_bus = vec![];
-    if let Some(aux) = aux_interleaved {
-        for c in 0..channels {
-            if aux_channel_buffers[c].len() < frames {
-                aux_channel_buffers[c].resize(frames, 0.0);
-            }
-            for i in 0..frames {
-                aux_channel_buffers[c][i] = aux[i * channels + c];
-            }
-        }
+    let mut aux_in_ptrs: Vec<&mut [f32]>;
+    if aux_interleaved.is_some() {
         aux_in_ptrs = aux_channel_buffers
             .iter_mut()
             .take(channels)
@@ -395,12 +458,26 @@ pub fn process_plugin_wrapper(
         aux_outputs: &mut [],
     };
 
+    // Execute Plugin DSP
     plugin.process(&mut buffers, ctx);
 
-    // Re-interleave main bus
-    for c in 0..channels {
+    // Re-interleave Main Bus
+    if channels == 2 {
+        // FAST PATH: Stereo (Auto-Vectorized by LLVM into SIMD Shuffles)
+        let (left_split, right_split) = channel_buffers_out.split_at_mut(1);
+        let left_out = &left_split[0][..frames];
+        let right_out = &right_split[0][..frames];
+
+        for (i, chunk) in interleaved_io.chunks_exact_mut(2).enumerate() {
+            chunk[0] = left_out[i];
+            chunk[1] = right_out[i];
+        }
+    } else {
+        // SLOW PATH: Surround / Multi-channel fallback
         for i in 0..frames {
-            interleaved_io[i * channels + c] = channel_buffers_out[c][i];
+            for c in 0..channels {
+                interleaved_io[i * channels + c] = channel_buffers_out[c][i];
+            }
         }
     }
 }

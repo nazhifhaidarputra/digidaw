@@ -338,8 +338,8 @@ pub struct DigiParametricEQ {
     //////////////////////////////////////////
     // Shared Memory buffer
     //////////////////////////////////////////
-    pub magnitude_buffer: Arc<Box<[f32]>>,
-    pub spectrum_buffer: Arc<Box<[f32]>>,
+    pub magnitude_buffer: Arc<[f32]>,
+    pub spectrum_buffer: Arc<[f32]>,
 
     /// Determines if the FFT and ring buffer should collect data
     enable_spectrum_analyzer: bool,
@@ -380,8 +380,8 @@ impl DigiParametricEQ {
             48000.0,
         )));
         engine.scratch = Box::new(AnalyzerScratch::new());
-        engine.magnitude_buffer = Arc::new(Box::new([]));
-        engine.spectrum_buffer = Arc::new(Box::new([]));
+        engine.magnitude_buffer = Arc::new([]);
+        engine.spectrum_buffer = Arc::new([]);
         engine.enable_spectrum_analyzer = false;
         engine.enable_magnitude_curve = false;
         engine.active_parameter_edits = hashbrown::HashSet::new();
@@ -399,10 +399,8 @@ impl DigiParametricEQ {
     fn handle_side_effects(&mut self, _id: u32) {
         self.update_all_nodes();
         if self.enable_magnitude_curve {
-            self.magnitude_buffer = Arc::new(
-                self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS)
-                    .into_boxed_slice(),
-            );
+            self.magnitude_buffer = self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS)
+                    .into();
         }
     }
 
@@ -583,7 +581,7 @@ impl DigiParametricEQ {
         // This is the only remaining allocation per call (~2.4 kB for 300 points).
         // A lock-free ring of pre-allocated Arcs could eliminate it entirely,
         // but for a 33 ms update interval the single clone is negligible.
-        self.spectrum_buffer = Arc::new(flat.clone().into_boxed_slice());
+        self.spectrum_buffer = flat.clone().into();
     }
 
     fn process_dsp(&mut self, buffers: &mut AudioBuffers) {
@@ -726,10 +724,9 @@ impl AudioPlugin for DigiParametricEQ {
 
                     // If the UI was just opened, calculate it immediately so it's ready!
                     if active {
-                        self.magnitude_buffer = Arc::new(
+                        self.magnitude_buffer = 
                             self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS)
-                                .into_boxed_slice(),
-                        );
+                                .into();
                     }
                 }
                 None

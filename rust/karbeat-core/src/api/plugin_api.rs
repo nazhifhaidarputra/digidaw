@@ -2,11 +2,11 @@ use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 
 use crate::{
-    audio::event::PluginTarget,
+    audio::{engine::PluginTelemetrySnapshot, event::PluginTarget},
     commands::{AudioCommand, EffectTarget},
     context::DawContext,
     core::project::{
-        AutomationTarget, EffectAutomationTarget, GeneratorId, GeneratorInstance, MixerChannelParamTarget, TrackAutomationTarget, TrackId, generator::GeneratorInstanceType, mixer::EffectInstance
+        generator::GeneratorInstanceType, mixer::EffectInstance, AutomationTarget, EffectAutomationTarget, GeneratorId, GeneratorInstance, MixerChannelParamTarget, TrackAutomationTarget, TrackId
     },
     shared::id::*,
 };
@@ -645,4 +645,16 @@ pub fn end_effect_parameter_edit(
     };
 
     ctx.send_audio_command(AudioCommand::EndEdit { target })
+}
+
+// =============================================================
+// ========= NEW shared pointer plugin telemetry getter ========
+// =============================================================
+
+/// Synchronously fetches the parameters and buffers for a specific plugin.
+pub fn get_plugin_telemetry_sync(ctx: &DawContext, target: PluginTarget) -> Option<PluginTelemetrySnapshot> {
+    let all_plugins_snap = ctx.telemetry_registry.param_telemetry.load();
+    
+    // Extract only the requested plugin's snapshot to send to Dart
+    all_plugins_snap.active_plugins.get(&target).cloned()
 }

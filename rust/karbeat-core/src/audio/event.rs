@@ -28,7 +28,7 @@ pub struct TransportFeedback {
     pub pattern_bar: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash, Eq)]
 pub enum PluginTarget {
     Generator(GeneratorId),
     TrackEffect(TrackId, EffectId),

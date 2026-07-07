@@ -43,6 +43,7 @@ pub fn add_clip(
             return Err(the_err);
         }
 
+        #[allow(clippy::unwrap_used)]
         res.unwrap()
     };
 

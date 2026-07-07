@@ -1,13 +1,10 @@
 use itertools::Itertools;
 use karbeat_plugin_api::traits::AudioPlugin;
 use karbeat_plugins::registry::PluginRegistry;
-use std::{collections::BTreeSet, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commands::AudioCommand,
-    // context::ctx,
     core::project::{
         clip::ClipTimeUnit, ApplicationState, Clip, DawSource, GeneratorInstance,
         GeneratorInstanceType, PluginInstance, ResizeEdge, TrackMixerChannel,
