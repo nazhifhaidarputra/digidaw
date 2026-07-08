@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use karbeat_dsp::filter::{
     BiquadCoefficients, BiquadFilterType, FilterMode, SingleBiquadFilterStage,
 };
@@ -5,7 +6,7 @@ use karbeat_dsp::filter::{
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
 use karbeat_utils::hash::hash_str;
-use num_complex::{Complex, Complex32};
+use num_complex::{Complex32};
 use realfft::{RealFftPlanner, RealToComplex};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -338,8 +339,13 @@ pub struct DigiParametricEQ {
     //////////////////////////////////////////
     // Shared Memory buffer
     //////////////////////////////////////////
-    pub magnitude_buffer: Arc<[f32]>,
-    pub spectrum_buffer: Arc<[f32]>,
+    // Internal cache for magnitude so it isn't recalculated every 30ms
+    #[serde(skip)]
+    cached_magnitude: Vec<f32>,
+    
+    // Single contiguous telemetry buffer (Header + Spectrum + Magnitude)
+    #[serde(skip)]
+    telemetry_buffer: Arc<[f32]>,
 
     /// Determines if the FFT and ring buffer should collect data
     enable_spectrum_analyzer: bool,
@@ -380,8 +386,8 @@ impl DigiParametricEQ {
             48000.0,
         )));
         engine.scratch = Box::new(AnalyzerScratch::new());
-        engine.magnitude_buffer = Arc::new([]);
-        engine.spectrum_buffer = Arc::new([]);
+        engine.cached_magnitude = Vec::new();
+        engine.telemetry_buffer = Arc::new([]);
         engine.enable_spectrum_analyzer = false;
         engine.enable_magnitude_curve = false;
         engine.active_parameter_edits = hashbrown::HashSet::new();
@@ -399,9 +405,26 @@ impl DigiParametricEQ {
     fn handle_side_effects(&mut self, _id: u32) {
         self.update_all_nodes();
         if self.enable_magnitude_curve {
-            self.magnitude_buffer = self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS)
-                    .into();
+            self.cached_magnitude = self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS);
+            self.publish_telemetry();
         }
+    }
+
+    fn publish_telemetry(&mut self) {
+        let spectrum = &self.scratch.flat;
+        let magnitude = &self.cached_magnitude;
+
+        let total_len = 2 + spectrum.len() + magnitude.len();
+        let mut flat_buffer = Vec::with_capacity(total_len);
+
+        flat_buffer.push(spectrum.len() as f32);
+        flat_buffer.push(magnitude.len() as f32);
+
+        flat_buffer.extend_from_slice(spectrum);
+        flat_buffer.extend_from_slice(magnitude);
+
+
+        self.telemetry_buffer = flat_buffer.into();
     }
 
     /// Computes the combined EQ magnitude curve over `num_points` log-spaced
@@ -577,11 +600,7 @@ impl DigiParametricEQ {
             flat.push(smoothed);
         }
 
-        // 5. Publish — clone the flat buffer into a new Arc<Box<[f32]>>
-        // This is the only remaining allocation per call (~2.4 kB for 300 points).
-        // A lock-free ring of pre-allocated Arcs could eliminate it entirely,
-        // but for a 33 ms update interval the single clone is negligible.
-        self.spectrum_buffer = flat.clone().into();
+        self.publish_telemetry();
     }
 
     fn process_dsp(&mut self, buffers: &mut AudioBuffers) {
@@ -724,9 +743,8 @@ impl AudioPlugin for DigiParametricEQ {
 
                     // If the UI was just opened, calculate it immediately so it's ready!
                     if active {
-                        self.magnitude_buffer = 
-                            self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS)
-                                .into();
+                        self.cached_magnitude = self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS);
+                        self.publish_telemetry();
                     }
                 }
                 None
@@ -749,14 +767,14 @@ impl AudioPlugin for DigiParametricEQ {
     }
 
     fn get_zero_copy_buffer(&self, name: &str) -> Option<ZeroCopyBuffer> {
-        match name {
-            "magnitude" => Some(ZeroCopyBuffer::Float32(self.magnitude_buffer.clone())),
-            "spectrum" => Some(ZeroCopyBuffer::Float32(self.spectrum_buffer.clone())),
-            _ => None,
+        if name == "telemetry" {
+            Some(ZeroCopyBuffer::Float32(self.telemetry_buffer.clone()))
+        } else {
+            None
         }
     }
 
-    fn set_io_layout(&mut self, inputs: &[BusConfig], outputs: &[BusConfig]) {
+    fn set_io_layout(&mut self, inputs: &[BusConfig], _outputs: &[BusConfig]) {
         let new_channels = inputs.first().map(|b| b.channel_count).unwrap_or(2);
         if self.channels != new_channels {
             self.channels = new_channels;

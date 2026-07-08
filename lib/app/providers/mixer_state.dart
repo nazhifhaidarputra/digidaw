@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:karbeat/app/providers/daw_stream_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/shared/enums/global.dart';
-import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
@@ -60,15 +58,6 @@ class MixerNotifier extends Notifier<MixerEditorState> {
 
   @override
   MixerEditorState build() {
-    ref.listen(masterAudioFeedbackProvider, (previous, next) {
-      if (next.hasValue && next.value != null) {
-        final feedback = next.value!;
-        if (feedback case UiAudioFeedback_MixerChannelSnapshot snap) {
-          _applySnapshot(snap);
-        }
-      }
-    });
-
     return const MixerEditorState();
   }
 
@@ -132,55 +121,80 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   /// Apply a real-time DSP snapshot pushed from the audio thread.
   /// Params listed in [MixerEditorState.touchedParams] are ignored to prevent
   /// in-flight slider values from being overwritten.
-  void _applySnapshot(UiAudioFeedback_MixerChannelSnapshot snapshot) {
+  /// Called 60 times a second by the UI Ticker.
+  /// Reads the lock-free ArcSwap pointer from Rust instantly.
+  void pollTelemetry() {
     final mixer = _mixerState;
     if (mixer == null) return;
 
+    // 1. Instantly load the shared pointer from Rust
+    final snapshot = getMixerTelemetrySync(ctx: _ctx);
     final touched = state.touchedParams;
 
-    if (snapshot.isMaster) {
+    // 2. MASTER BUS
+    var newMaster = mixer.masterBus;
+    if (snapshot.master != null) {
+      final snap = snapshot.master!;
       const int masterSentinel = 4294967294; // u32::MAX - 1
-      final ch = mixer.masterBus;
-      final updated = mixer_api.UiMixerChannel(
-        volume: touched.contains((masterSentinel, 'volume')) ? ch.volume : snapshot.volume,
-        pan: touched.contains((masterSentinel, 'pan')) ? ch.pan : snapshot.pan,
-        mute: touched.contains((masterSentinel, 'mute')) ? ch.mute : snapshot.mute,
-        solo: touched.contains((masterSentinel, 'solo')) ? ch.solo : snapshot.solo,
-        invertedPhase: snapshot.invertedPhase,
-        effects: ch.effects,
+      newMaster = mixer_api.UiMixerChannel(
+        volume: touched.contains((masterSentinel, 'volume')) ? newMaster.volume : snap.volume,
+        pan: touched.contains((masterSentinel, 'pan')) ? newMaster.pan : snap.pan,
+        mute: touched.contains((masterSentinel, 'mute')) ? newMaster.mute : snap.mute,
+        solo: touched.contains((masterSentinel, 'solo')) ? newMaster.solo : snap.solo,
+        invertedPhase: snap.invertedPhase,
+        effects: newMaster.effects,
       );
-      _projectNotifier.upsertMixerChannels(MixerTarget.master(updated));
-    } else if (snapshot.targetBusId != null) {
-      final busId = snapshot.targetBusId!;
-      final bus = mixer.buses[busId];
-      if (bus == null) return;
-      final ch = bus.channel;
-      final updated = mixer_api.UiMixerChannel(
-        volume: touched.contains((busId, 'volume')) ? ch.volume : snapshot.volume,
-        pan: touched.contains((busId, 'pan')) ? ch.pan : snapshot.pan,
-        mute: touched.contains((busId, 'mute')) ? ch.mute : snapshot.mute,
-        solo: touched.contains((busId, 'solo')) ? ch.solo : snapshot.solo,
-        invertedPhase: snapshot.invertedPhase,
-        effects: ch.effects,
-      );
-
-      final updatedBus = bus.copyWith(channel: updated);
-      _projectNotifier.upsertBusMixerChannel(busId, updatedBus);
-    } else {
-      final trackId = snapshot.targetTrackId;
-      if (trackId == null) return;
-      final ch = mixer.channels[trackId];
-      if (ch == null) return;
-      final updated = mixer_api.UiMixerChannel(
-        volume: touched.contains((trackId, 'volume')) ? ch.volume : snapshot.volume,
-        pan: touched.contains((trackId, 'pan')) ? ch.pan : snapshot.pan,
-        mute: touched.contains((trackId, 'mute')) ? ch.mute : snapshot.mute,
-        solo: touched.contains((trackId, 'solo')) ? ch.solo : snapshot.solo,
-        invertedPhase: snapshot.invertedPhase,
-        effects: ch.effects,
-      );
-      _projectNotifier.upsertTrackMixerChannel(trackId, updated);
     }
+
+    // 3. TRACK CHANNELS
+    final newTracks = Map<int, mixer_api.UiMixerChannel>.from(mixer.channels);
+    for (final entry in snapshot.tracks.entries) {
+      final trackId = entry.key;
+      final snap = entry.value;
+      final currentCh = newTracks[trackId];
+      
+      if (currentCh != null) {
+        newTracks[trackId] = mixer_api.UiMixerChannel(
+          volume: touched.contains((trackId, 'volume')) ? currentCh.volume : snap.volume,
+          pan: touched.contains((trackId, 'pan')) ? currentCh.pan : snap.pan,
+          mute: touched.contains((trackId, 'mute')) ? currentCh.mute : snap.mute,
+          solo: touched.contains((trackId, 'solo')) ? currentCh.solo : snap.solo,
+          invertedPhase: snap.invertedPhase,
+          effects: currentCh.effects,
+        );
+      }
+    }
+
+    // 4. BUS CHANNELS
+    final newBuses = Map<int, mixer_api.UiBus>.from(mixer.buses);
+    for (final entry in snapshot.buses.entries) {
+      final busId = entry.key;
+      final snap = entry.value;
+      final currentBus = newBuses[busId];
+      
+      if (currentBus != null) {
+        final currentCh = currentBus.channel;
+        newBuses[busId] = currentBus.copyWith(
+          channel: mixer_api.UiMixerChannel(
+            volume: touched.contains((busId, 'volume')) ? currentCh.volume : snap.volume,
+            pan: touched.contains((busId, 'pan')) ? currentCh.pan : snap.pan,
+            mute: touched.contains((busId, 'mute')) ? currentCh.mute : snap.mute,
+            solo: touched.contains((busId, 'solo')) ? currentCh.solo : snap.solo,
+            invertedPhase: snap.invertedPhase,
+            effects: currentCh.effects,
+          )
+        );
+      }
+    }
+
+    // 5. BULK UPDATE: Fire a single state change to Riverpod to prevent UI stutter
+    _projectNotifier.updateMixer(
+      mixer.copyWith(
+        masterBus: newMaster,
+        channels: newTracks,
+        buses: newBuses,
+      )
+    );
   }
 
   // ------------------------------------------------------------------

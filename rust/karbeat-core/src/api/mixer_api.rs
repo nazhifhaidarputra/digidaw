@@ -389,3 +389,10 @@ pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot 
         MixerTelemetrySnapshot::default()
     }
 }
+
+pub fn set_mixer_telemetry_subs(
+    ctx: &mut DawContext,
+    active: bool
+) -> anyhow::Result<()> {
+    ctx.send_audio_command(AudioCommand::SetMixerTelemetrySubscription { active })
+}

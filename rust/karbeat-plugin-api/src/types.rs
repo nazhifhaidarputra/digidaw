@@ -137,6 +137,7 @@ pub enum ZeroCopyBuffer {
 }
 
 /// Avalable Shared Buffer Data Type
+#[derive(Clone)]
 pub enum BufferDataType {
     Float32,
     Uint8,

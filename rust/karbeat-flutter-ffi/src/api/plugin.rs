@@ -1,4 +1,4 @@
-use crate::api::plugins::opaque::ZeroCopyHandle;
+use crate::api::plugins::PluginTelemetrySnapshotDto;
 use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
 use flutter_rust_bridge::frb;
 use karbeat_core::api::plugin_api::{self, IntoParamId};
@@ -11,18 +11,6 @@ use karbeat_plugins::registry::PluginInfo;
 use karbeat_utils::parser::FromPluginCommand;
 pub use parking_lot::Mutex;
 use std::sync::Arc;
-
-#[frb(opaque)]
-pub struct PluginBufferHandle(Arc<Mutex<Vec<f32>>>);
-
-impl PluginBufferHandle {
-    /// Reads the current buffer state directly into a Dart Float32List.
-    /// This bypasses JSON entirely and takes less than a microsecond.
-    #[frb(sync)]
-    pub fn read(&self) -> Vec<f32> {
-        self.0.lock().clone()
-    }
-}
 
 // ============================================================================
 // UI TYPES FOR FLUTTER RUST BRIDGE
@@ -91,7 +79,59 @@ impl IntoParamId for UiParamId {
 }
 
 // ============================================================================
-// PLUGIN API FUNCTIONS
+// TARGET IDENTIFICATION
+// ============================================================================
+
+/// Identifies which live plugin instance on the audio thread to target.
+/// Mirrors `karbeat_core::audio::event::PluginTarget` for FRB exposure.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub enum UiPluginTarget {
+    /// A generator plugin identified by its GeneratorId
+    Generator(u32),
+    /// A track effect identified by (TrackId, EffectId)
+    TrackEffect { track_id: u32, effect_id: u32 },
+    /// A bus effect identified by (BusId, EffectId)
+    BusEffect { bus_id: u32, effect_id: u32 },
+    /// An effect on the master bus
+    MasterEffect(u32),
+}
+
+impl From<UiPluginTarget> for PluginTarget {
+    fn from(val: UiPluginTarget) -> Self {
+        match val {
+            UiPluginTarget::Generator(id) => PluginTarget::Generator(GeneratorId::from(id)),
+            UiPluginTarget::TrackEffect {
+                track_id,
+                effect_id,
+            } => PluginTarget::TrackEffect(TrackId::from(track_id), EffectId::from(effect_id)),
+            UiPluginTarget::BusEffect { bus_id, effect_id } => {
+                PluginTarget::BusEffect(BusId::from(bus_id), EffectId::from(effect_id))
+            }
+            UiPluginTarget::MasterEffect(id) => PluginTarget::MasterEffect(EffectId::from(id)),
+        }
+    }
+}
+
+impl From<&PluginTarget> for UiPluginTarget {
+    fn from(value: &PluginTarget) -> Self {
+        match value {
+            PluginTarget::Generator(generator_id) => Self::Generator(generator_id.to_u32()),
+            PluginTarget::TrackEffect(track_id, effect_id) => Self::TrackEffect {
+                track_id: track_id.to_u32(),
+                effect_id: effect_id.to_u32(),
+            },
+            PluginTarget::BusEffect(bus_id, effect_id) => Self::BusEffect {
+                bus_id: bus_id.to_u32(),
+                effect_id: effect_id.to_u32(),
+            },
+            PluginTarget::MasterEffect(effect_id) => Self::MasterEffect(effect_id.to_u32()),
+        }
+    }
+}
+
+// ============================================================================
+// PLUGIN METADATA & REGISTRY API
 // ============================================================================
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -99,6 +139,7 @@ pub enum KarbeatPluginType {
     Generator,
     Effect,
 }
+
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct UiPluginInfo {
@@ -152,15 +193,6 @@ impl From<PluginInfo> for UiPluginInfo {
             plugin_type,
         }
     }
-}
-
-/// A response message arriving from the audio thread containing the zero-copy buffer.
-/// Dart uses the `request_id` to correlate with the original command sent via `query_zero_copy_buffer`.
-pub struct UiZeroCopyBufferResponse {
-    pub request_id: u32,
-    /// The opaque handle that Dart can use to read raw memory.
-    /// It is `None` if the plugin did not recognize the buffer name.
-    pub handle: Option<ZeroCopyHandle>,
 }
 
 /// Get all available generators with their registry IDs (preferred for UI)
@@ -222,123 +254,18 @@ pub fn get_master_effects(ctx: &DawContext) -> Vec<UiEffectInstance> {
     plugin_api::get_master_effects(ctx, |e| UiEffectInstance::from(e))
 }
 
-/// Get parameter specifications for a generator plugin.
-pub fn get_generator_parameter_specs(
+// ============================================================================
+// UNIFIED PARAMETER MANIPULATION API
+// ============================================================================
+
+/// Get parameter specifications for ANY plugin type (Generator or Effect)
+pub fn get_plugin_parameter_specs(
     ctx: &DawContext,
-    generator_id: u32,
+    target: UiPluginTarget,
 ) -> Result<Vec<UiPluginParameter>, String> {
-    let gen_id = GeneratorId::from(generator_id);
-    plugin_api::get_generator_parameter_specs(ctx, &gen_id, |p, value| UiPluginParameter {
-        id: p.id,
-        path: p.path,
-        name: p.name,
-        group: p.group,
-        value,
-        min: p.min as f32,
-        max: p.max as f32,
-        default_value: p.default_value as f32,
-        step: p.step as f32,
-        param_type: UiParameterType::from(p.value_type),
-        choices: p.choices,
-    })
-}
+    let plugin_target = target.into();
 
-/// Set a parameter on a generator plugin.
-pub fn set_generator_parameter(
-    ctx: &mut DawContext,
-    generator_id: u32,
-    param_id: UiParamId,
-    value: f32,
-) -> Result<(), String> {
-    let gen_id = GeneratorId::from(generator_id);
-    plugin_api::set_generator_parameter(ctx, &gen_id, param_id.resolve(), value)
-}
-
-/// Get a parameter value from a generator plugin.
-pub fn get_generator_parameter(generator_id: u32, param_id: UiParamId) -> Result<f32, String> {
-    let gen_id = GeneratorId::from(generator_id);
-    plugin_api::get_generator_parameter(&gen_id, param_id.resolve())
-}
-
-// ============================================================================
-// PARAMETER FEEDBACK API (Audio -> UI)
-// ============================================================================
-
-/// Parameter snapshot from the audio thread (DTO)
-#[derive(Clone, Debug)]
-#[frb(dart_metadata=("freezed"))]
-pub struct UiGeneratorParameterSnapshot {
-    pub generator_id: u32,
-    pub parameters: Vec<UiParameterValue>,
-}
-
-#[derive(Clone, Debug)]
-#[frb(dart_metadata=("freezed"))]
-pub enum UiEffectTarget {
-    Track(u32),
-    Master,
-    Bus(u32),
-}
-
-impl From<karbeat_core::commands::EffectTarget> for UiEffectTarget {
-    fn from(target: karbeat_core::commands::EffectTarget) -> Self {
-        match target {
-            karbeat_core::commands::EffectTarget::Track(track_id) => {
-                UiEffectTarget::Track(track_id.into())
-            }
-            karbeat_core::commands::EffectTarget::Master => UiEffectTarget::Master,
-            karbeat_core::commands::EffectTarget::Bus(bus_id) => UiEffectTarget::Bus(bus_id.into()),
-        }
-    }
-}
-
-impl From<UiEffectTarget> for karbeat_core::commands::EffectTarget {
-    fn from(val: UiEffectTarget) -> Self {
-        match val {
-            UiEffectTarget::Track(id) => {
-                karbeat_core::commands::EffectTarget::Track(TrackId::from(id))
-            }
-            UiEffectTarget::Master => karbeat_core::commands::EffectTarget::Master,
-            UiEffectTarget::Bus(id) => karbeat_core::commands::EffectTarget::Bus(BusId::from(id)),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-#[frb(dart_metadata=("freezed"))]
-pub struct UiEffectParameterSnapshot {
-    pub target: UiEffectTarget,
-    pub effect_id: u32,
-    pub parameters: Vec<UiParameterValue>,
-}
-
-/// Single parameter value from the audio thread
-#[derive(Clone, Debug)]
-#[frb(dart_metadata=("freezed"))]
-pub struct UiParameterValue {
-    pub param_id: u32,
-    pub value: f32,
-}
-
-/// Request a parameter snapshot from the audio thread.
-pub fn query_generator_parameters(ctx: &mut DawContext, generator_id: u32) -> Result<(), String> {
-    let gen_id = GeneratorId::from(generator_id);
-    plugin_api::query_generator_parameters(ctx, &gen_id)
-}
-
-// ============================================================================
-// EFFECT PARAMETER API
-// ============================================================================
-
-pub fn get_effect_parameter_specs(
-    ctx: &DawContext,
-    target: UiEffectTarget,
-    effect_id: u32,
-) -> Result<Vec<UiPluginParameter>, String> {
-    let effect_target = target.into();
-    let effect_id_typed = EffectId::from(effect_id);
-
-    plugin_api::get_effect_parameter_specs(ctx, &effect_target, &effect_id_typed, |p, value| {
+    plugin_api::get_plugin_parameter_specs(ctx, &plugin_target, |p, value| {
         UiPluginParameter {
             id: p.id,
             path: p.path,
@@ -353,104 +280,50 @@ pub fn get_effect_parameter_specs(
             choices: p.choices,
         }
     })
+    .map_err(|e| e.to_string())
 }
 
-pub fn set_effect_parameter(
+/// Set a parameter on ANY plugin type (Generator or Effect)
+pub fn set_plugin_parameter(
     ctx: &mut DawContext,
-    target: UiEffectTarget,
-    effect_id: u32,
+    target: UiPluginTarget,
     param_id: UiParamId,
     value: f32,
 ) -> Result<(), String> {
-    let effect_target = target.into();
-    let effect_id_typed = EffectId::from(effect_id);
-    plugin_api::set_effect_parameter(
-        ctx,
-        &effect_target,
-        &effect_id_typed,
-        param_id.resolve(),
-        value,
-    )
+    plugin_api::set_plugin_parameter(ctx, &target.into(), param_id.resolve(), value)
+        .map_err(|e| e.to_string())
 }
 
-pub fn query_effect_parameters(
+/// Signals the start of a parameter edit gesture (e.g., user clicks a knob)
+pub fn begin_plugin_parameter_edit(
     ctx: &mut DawContext,
-    target: UiEffectTarget,
-    effect_id: u32,
+    target: UiPluginTarget,
+    param_id: UiParamId,
 ) -> Result<(), String> {
-    let effect_target = target.into();
-    let effect_id_typed = EffectId::from(effect_id);
-    plugin_api::query_effect_parameters(ctx, &effect_target, &effect_id_typed)
+    plugin_api::begin_plugin_parameter_edit(ctx, &target.into(), param_id.resolve())
+        .map_err(|e| e.to_string())
 }
 
-// ============================================================================
-// 1. STATELESS COMMANDS (Operates on defaults from the Registry)
-// ============================================================================
-
-pub fn execute_plugin_command_generator(
+/// Signals the end of a parameter edit gesture (e.g., user releases a knob)
+pub fn end_plugin_parameter_edit(
     ctx: &mut DawContext,
-    gen_registry_id: u32,
-    command: String,
-    payload_json: String,
-) -> Option<String> {
-    let payload_value: serde_json::Value =
-        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
-
-    plugin_api::execute_plugin_command_generator(ctx, gen_registry_id, &command, &payload_value)
-        .map(|v| v.to_string())
-}
-
-pub fn execute_plugin_command_effect(
-    ctx: &mut DawContext,
-    effect_registry_id: u32,
-    command: String,
-    payload_json: String,
-) -> Option<String> {
-    let payload_value: serde_json::Value =
-        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
-
-    plugin_api::execute_plugin_command_effect(ctx, effect_registry_id, &command, &payload_value)
-        .map(|v| v.to_string())
+    target: UiPluginTarget,
+    param_id: UiParamId,
+) -> Result<(), String> {
+    plugin_api::end_plugin_parameter_edit(ctx, &target.into(), param_id.resolve())
+        .map_err(|e| e.to_string())
 }
 
 // ============================================================================
-// 2. STATEFUL COMMANDS (Operates on active instances with User Parameters applied)
+// CUSTOM PLUGIN COMMAND API
 // ============================================================================
 
-pub fn execute_effect_instance_command(
-    ctx: &DawContext,
-    target: UiEffectTarget,
-    effect_id: u32,
-    command: String,
-    payload_json: String,
-) -> Result<String, String> {
-    let effect_target = target.into();
-    let effect_id_typed = EffectId::from(effect_id);
-    let payload_value: serde_json::Value =
-        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
-
-    plugin_api::execute_effect_instance_command(
-        ctx,
-        &effect_target,
-        &effect_id_typed,
-        &command,
-        &payload_value,
-    )
-    .map(|v| v.to_string())
-}
-
-pub fn execute_generator_instance_command(
-    ctx: &DawContext,
-    generator_id: u32,
-    command: String,
-    payload_json: String,
-) -> Result<String, String> {
-    let gen_id_typed = GeneratorId::from(generator_id);
-    let payload_value: serde_json::Value =
-        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
-
-    plugin_api::execute_generator_instance_command(ctx, &gen_id_typed, &command, &payload_value)
-        .map(|v| v.to_string())
+/// A response message arriving from the audio thread to Flutter.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiPluginCommandResponse {
+    pub request_id: u32,
+    pub response_json: String,
 }
 
 #[frb(ignore)]
@@ -461,87 +334,42 @@ pub fn parse_plugin_response<T: FromPluginCommand>(json_str: &str) -> Result<T, 
     T::from_json(&payload)
 }
 
-// ============================================================================
-// Real-time Plugin Command Channel (UI → Audio → UI via StreamSink)
-// ============================================================================
+/// 1. STATELESS COMMANDS (Operates on defaults from the Registry)
+pub fn execute_plugin_command_by_registry_id(
+    ctx: &mut DawContext,
+    registry_id: u32,
+    command: String,
+    payload_json: String,
+) -> Option<String> {
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-/// Identifies which live plugin instance on the audio thread to target.
-/// Mirrors `karbeat_core::audio::event::PluginTarget` for FRB exposure.
-#[derive(Clone, Debug)]
-#[frb(dart_metadata=("freezed"))]
-pub enum UiPluginTarget {
-    /// A generator plugin identified by its GeneratorId
-    Generator(u32),
-    /// A track effect identified by (TrackId, EffectId)
-    TrackEffect { track_id: u32, effect_id: u32 },
-    /// A bus effect identified by (BusId, EffectId)
-    BusEffect { bus_id: u32, effect_id: u32 },
-    /// An effect on the master bus
-    MasterEffect(u32),
+    plugin_api::execute_plugin_command_by_registry_id(ctx, registry_id, &command, &payload_value)
+        .map(|v| v.to_string())
 }
 
-impl From<UiPluginTarget> for PluginTarget {
-    fn from(val: UiPluginTarget) -> Self {
-        match val {
-            UiPluginTarget::Generator(id) => PluginTarget::Generator(GeneratorId::from(id)),
-            UiPluginTarget::TrackEffect {
-                track_id,
-                effect_id,
-            } => PluginTarget::TrackEffect(TrackId::from(track_id), EffectId::from(effect_id)),
-            UiPluginTarget::BusEffect { bus_id, effect_id } => {
-                PluginTarget::BusEffect(BusId::from(bus_id), EffectId::from(effect_id))
-            }
-            UiPluginTarget::MasterEffect(id) => PluginTarget::MasterEffect(EffectId::from(id)),
-        }
-    }
+/// 2. STATEFUL COMMANDS (Operates on active instances via Main Thread Sync)
+pub fn execute_plugin_instance_command(
+    ctx: &DawContext,
+    target: UiPluginTarget,
+    command: String,
+    payload_json: String,
+) -> Result<String, String> {
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
+
+    plugin_api::execute_plugin_instance_command(
+        ctx,
+        &target.into(),
+        &command,
+        &payload_value,
+    )
+    .map(|v| v.to_string())
+    .map_err(|e| e.to_string())
 }
 
-impl From<&PluginTarget> for UiPluginTarget {
-    fn from(value: &PluginTarget) -> Self {
-        match value {
-            PluginTarget::Generator(generator_id) => Self::Generator(generator_id.to_u32()),
-            PluginTarget::TrackEffect(track_id, effect_id) => Self::TrackEffect {
-                track_id: track_id.to_u32(),
-                effect_id: effect_id.to_u32(),
-            },
-            PluginTarget::BusEffect(bus_id, effect_id) => Self::BusEffect {
-                bus_id: bus_id.to_u32(),
-                effect_id: effect_id.to_u32(),
-            },
-            PluginTarget::MasterEffect(effect_id) => Self::MasterEffect(effect_id.to_u32()),
-        }
-    }
-}
-
-/// A response message arriving from the audio thread to Flutter.
-/// Flutter uses the `request_id` to correlate with the original command sent
-/// via `execute_realtime_plugin_command`.
-#[derive(Clone, Debug)]
-#[frb(dart_metadata=("freezed"))]
-pub struct UiPluginCommandResponse {
-    /// Matches the `request_id` returned by `execute_realtime_plugin_command`
-    pub request_id: u32,
-    /// JSON-encoded response from the plugin's `execute_custom_command`
-    pub response_json: String,
-}
-
-/// Dispatches a real-time command to a live plugin instance on the audio thread.
-///
-/// The plugin's `execute_custom_command` is called from within the audio callback,
-/// so the command and payload must be cheap to process. The response arrives
-/// asynchronously via the `StreamSink` opened by `create_plugin_message_stream`.
-///
-/// # Parameters
-/// - `target`: Which plugin instance to target.
-/// - `command`: Command key string (e.g. `"get_meter"`, `"get_spectrum"`).
-/// - `payload_json`: JSON string sent as the command argument. Defaults to `{}`
-///   if the string is not valid JSON.
-///
-/// # Returns
-/// `Ok(request_id)` — correlate this with `UiPluginCommandResponse.request_id`
-/// in the stream. Returns `Err` if the audio stream is not active or the
-/// command queue is full.
-pub fn execute_realtime_plugin_command(
+/// 3. REAL-TIME COMMANDS (Dispatched to the audio thread)
+pub fn execute_live_plugin_command(
     ctx: &mut DawContext,
     target: UiPluginTarget,
     command: String,
@@ -550,99 +378,32 @@ pub fn execute_realtime_plugin_command(
     let payload: serde_json::Value =
         serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    plugin_api::execute_plugin_command(ctx, target.into(), command, payload)
+    plugin_api::execute_live_plugin_command(ctx, target.into(), command, payload)
+        .map_err(|e| e.to_string())
 }
 
-/// Dispatches a request to the audio thread to fetch a zero-copy buffer from a live plugin.
-///
-/// # Parameters
-/// - `target`: Which plugin instance to target.
-/// - `name`: The requested buffer name (e.g., `"magnitude"` or `"spectrum"`).
-///
-/// # Returns
-/// `Ok(request_id)` — correlate this with `UiZeroCopyBufferResponse.request_id` in the stream.
-#[frb]
-pub fn query_live_plugin_zero_copy_buf(
+// ============================================================================
+// ZERO-QUEUE / LOCK-FREE TELEMETRY API
+// ============================================================================
+
+/// Get the snapshot telemetry from the audio engine. 
+/// This utilizes an atomic ArcSwap which enables lock-free reading.
+/// If empty, it means that the snapshot is not currently available.
+#[frb(sync)]
+pub fn get_plugin_snapshot_telemetry_sync(
+    ctx: &DawContext, 
+    target: UiPluginTarget
+) -> Option<PluginTelemetrySnapshotDto> {
+    plugin_api::get_plugin_telemetry_sync(ctx, target.into()).map(|t| t.into())
+}
+
+/// Start or stop the telemetry packing for a specific plugin on the audio thread.
+pub fn set_plugin_telemetry_subs(
     ctx: &mut DawContext,
     target: UiPluginTarget,
-    name: String,
-) -> Result<u32, String> {
-    plugin_api::query_zero_copy_buffer_from_live_plugin(ctx, target.into(), name)
-}
-
-// =============================================
-// Parameter edit API
-// =============================================
-
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as edited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-pub fn begin_generator_parameter_edit(
-    ctx: &mut DawContext,
-    generator_id: u32,
-    param_id: UiParamId,
+    buffers: Vec<String>,
+    active: bool,
 ) -> Result<(), String> {
-    let generator_id: GeneratorId = generator_id.into();
-
-    plugin_api::begin_generator_parameter_edit(ctx, &generator_id, param_id)
-        .map_err(|e| e.to_string())
-}
-
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as unedited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-pub fn end_generator_parameter_edit(
-    ctx: &mut DawContext,
-    generator_id: u32,
-    param_id: UiParamId,
-) -> Result<(), String> {
-    let generator_id: GeneratorId = generator_id.into();
-    plugin_api::end_generator_parameter_edit(ctx, &generator_id, param_id)
-        .map_err(|e| e.to_string())
-}
-
-// =============================================
-// Parameter edit API
-// =============================================
-
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as edited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-pub fn begin_effect_parameter_edit(
-    ctx: &mut DawContext,
-    effect_target: UiEffectTarget,
-    effect_id: u32,
-    param_id: UiParamId,
-) -> Result<(), String> {
-    let effect_target = &(effect_target.into());
-    let effect_id = &(effect_id.into());
-    plugin_api::begin_effect_parameter_edit(ctx, effect_target, effect_id, param_id)
-        .map_err(|e| e.to_string())
-}
-
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as unedited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-pub fn end_effect_parameter_edit(
-    ctx: &mut DawContext,
-    effect_target: UiEffectTarget,
-    effect_id: u32,
-    param_id: UiParamId,
-) -> Result<(), String> {
-    let effect_target = &(effect_target.into());
-    let effect_id = &(effect_id.into());
-    plugin_api::end_effect_parameter_edit(ctx, effect_target, effect_id, param_id)
+    plugin_api::set_plugin_telemetry_subs(ctx, target.into(), buffers, active)
         .map_err(|e| e.to_string())
 }

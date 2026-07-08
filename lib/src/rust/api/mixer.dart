@@ -9,8 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'mixer.freezed.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiMixerChannelSnapshot`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Set a single DSP parameter on a mixer channel.
 /// Routes through the audio thread ring buffer; AppState is only updated on save.
@@ -204,6 +203,27 @@ Future<void> updateRouting({
   required UiRoutingConnection conn,
 }) => RustLib.instance.api.crateApiMixerUpdateRouting(ctx: ctx, conn: conn);
 
+/// Get the mixer snapshot telemetry. this uses a lock-free atomic ArcSwap pointer
+MixerTelemetrySnapshotDto getMixerTelemetrySync({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiMixerGetMixerTelemetrySync(ctx: ctx);
+
+Future<void> setMixerTelemetrySubs({
+  required DawContext ctx,
+  required bool active,
+}) => RustLib.instance.api.crateApiMixerSetMixerTelemetrySubs(
+  ctx: ctx,
+  active: active,
+);
+
+@freezed
+sealed class MixerTelemetrySnapshotDto with _$MixerTelemetrySnapshotDto {
+  const factory MixerTelemetrySnapshotDto({
+    required Map<int, UiMixerChannelSnapshot> tracks,
+    required Map<int, UiMixerChannelSnapshot> buses,
+    UiMixerChannelSnapshot? master,
+  }) = _MixerTelemetrySnapshotDto;
+}
+
 @freezed
 sealed class ParameterSpecDTO with _$ParameterSpecDTO {
   const factory ParameterSpecDTO({
@@ -319,6 +339,20 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
       UiMixerChannelParams_InvertedPhase;
   const factory UiMixerChannelParams.solo(bool field0) =
       UiMixerChannelParams_Solo;
+}
+
+/// Full DSP state snapshot of a mixer channel, polled via
+/// poll_mixer_channel_feedback() after calling query_mixer_channel().
+@freezed
+sealed class UiMixerChannelSnapshot with _$UiMixerChannelSnapshot {
+  const factory UiMixerChannelSnapshot({
+    required UiMixerChannelTarget target,
+    required double volume,
+    required double pan,
+    required bool mute,
+    required bool solo,
+    required bool invertedPhase,
+  }) = _UiMixerChannelSnapshot;
 }
 
 @freezed

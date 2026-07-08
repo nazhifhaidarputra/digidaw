@@ -1871,7 +1871,7 @@ impl AudioEngine {
             AudioCommand::EndEdit { target } => {
                 self.handle_parameter_edit(&target, false);
             }
-            AudioCommand::SetPluginParamTelemetrySubscription { target, buffers, active } => {
+            AudioCommand::SetPluginTelemetrySubscription { target, buffers, active } => {
                 if active {
                     let entry = self.telemetry
                         .active_telemetry_subscriptions
@@ -1886,6 +1886,9 @@ impl AudioEngine {
                         .remove(&target);
                 }
             }
+            AudioCommand::SetMixerTelemetrySubscription { active } => {
+                self.telemetry.mixer_snapshot_active = active
+            },
         }
     }
 

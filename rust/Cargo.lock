@@ -1651,6 +1651,7 @@ dependencies = [
 name = "karbeat-plugins"
 version = "0.3.0"
 dependencies = [
+ "arc-swap",
  "dasp",
  "fastrand",
  "hashbrown 0.17.1",

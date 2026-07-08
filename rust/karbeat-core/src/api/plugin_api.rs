@@ -6,7 +6,9 @@ use crate::{
     commands::{AudioCommand, EffectTarget},
     context::DawContext,
     core::project::{
-        generator::GeneratorInstanceType, mixer::EffectInstance, AutomationTarget, EffectAutomationTarget, GeneratorId, GeneratorInstance, MixerChannelParamTarget, TrackAutomationTarget, TrackId
+        generator::GeneratorInstanceType, mixer::EffectInstance, AutomationTarget,
+        EffectAutomationTarget, GeneratorId, GeneratorInstance, MixerChannelParamTarget,
+        TrackAutomationTarget, TrackId,
     },
     shared::id::*,
 };
@@ -229,7 +231,9 @@ where
         }
     };
 
-    let specs = ctx.plugin_registry.get_plugin_parameter_specs_by_id(plugin_registry_id);
+    let specs = ctx
+        .plugin_registry
+        .get_plugin_parameter_specs_by_id(plugin_registry_id);
 
     if let Some(specs) = specs {
         let result: Vec<T> = specs
@@ -248,205 +252,242 @@ where
     }
 }
 
-pub fn set_generator_parameter(
-    ctx: &mut DawContext,
-    generator_id: &GeneratorId,
-    param_id: impl IntoParamId,
-    value: f32,
-) -> Result<(), String> {
-    let param_id = param_id.into_id();
-    ctx.send_audio_command(AudioCommand::SetGeneratorParameter {
-        generator_id: *generator_id,
-        param_id,
-        value,
-    });
+// ============================================================================
+// UNIFIED PLUGIN STATE & PARAMETER SPECS
+// ============================================================================
 
-    Ok(())
-}
-
-pub fn set_generator_parameter_to_default(
-    _generator_id: &GeneratorId,
-    _param_id: impl IntoParamId,
-) {
-}
-
-pub fn get_generator_parameter(
-    _generator_id: &GeneratorId,
-    _param_id: impl IntoParamId,
-) -> Result<f32, String> {
-    // Parameter tracking has been moved entirely to the audio thread.
-    // If Dart needs the value, it should fetch it from the audio thread parameter snapshot.
-    Err("ApplicationState no longer tracks parameters in real-time".to_string())
-}
-
-pub fn set_effect_parameter(
-    ctx: &mut DawContext,
-    target: &EffectTarget,
-    effect_id: &EffectId,
-    param_id: impl IntoParamId,
-    value: f32,
-) -> Result<(), String> {
-    let param_id = param_id.into_id();
-    let _ = ctx.send_audio_command(AudioCommand::SetEffectParameter {
-        target: target.clone(),
-        effect_id: *effect_id,
-        param_id,
-        value,
-    });
-
-    Ok(())
-}
-
-pub fn query_generator_parameters(ctx: &mut DawContext, generator_id: &GeneratorId) -> Result<(), String> {
-    if let Some(sender) = ctx.command_sender.lock().as_mut() {
-        sender
-            .push(AudioCommand::QueryGeneratorParameters {
-                generator_id: *generator_id,
-            })
-            .map_err(|_| "Command queue full".to_string())?;
-        Ok(())
-    } else {
-        Err("Audio stream not initialized".to_string())
-    }
-}
-
-pub fn query_effect_parameters(ctx: &mut DawContext, target: &EffectTarget, effect_id: &EffectId) -> Result<(), String> {
-    if let Some(sender) = ctx.command_sender.lock().as_mut() {
-        let _ = sender.push(AudioCommand::QueryEffectParameters {
-            target: target.clone(),
-            effect_id: *effect_id,
-        });
-        Ok(())
-    } else {
-        Err("Audio stream not initialized".to_string())
-    }
-}
-
-// Syncing parameters to state is no longer done in real-time.
-pub fn execute_plugin_command_generator(
-    ctx: &mut DawContext,
-    gen_registry_id: u32,
-    command: &str,
-    payload_value: &serde_json::Value,
-) -> Option<serde_json::Value> {
-    let registry = &mut ctx.plugin_registry;
-    let (mut plugin, _) = registry.create_plugin_by_id(gen_registry_id)?;
-    plugin.execute_custom_command(command, payload_value)
-}
-
-pub fn execute_plugin_command_effect(
-    ctx: &mut DawContext,
-    effect_registry_id: u32,
-    command: &str,
-    payload_value: &serde_json::Value,
-) -> Option<serde_json::Value> {
-    let registry = &mut ctx.plugin_registry;
-    let (mut plugin, _) = registry.create_plugin_by_id(effect_registry_id)?;
-    plugin.execute_custom_command(command, payload_value)
-}
-
-pub fn execute_effect_instance_command(
+/// Unified method to get parameter specs for ANY plugin type
+pub fn get_plugin_parameter_specs<F, T>(
     ctx: &DawContext,
-    target: &EffectTarget,
-    effect_id: &EffectId,
-    command: &str,
-    payload_value: &serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let app = &ctx.app_state;
-
-    let (plugin_name, plugin_registry_id, plugin_state) = match target {
-        EffectTarget::Track(track_id) => {
-            let channel = app
+    target: &PluginTarget,
+    mapper: F,
+) -> anyhow::Result<Vec<T>>
+where
+    F: Fn(ParameterSpec, f32) -> T,
+{
+    let (plugin_name, plugin_registry_id) = match target {
+        PluginTarget::Generator(gen_id) => {
+            let gen = ctx
+                .app_state
+                .generator_pool
+                .get(gen_id)
+                .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id.0))?;
+                
+            if let GeneratorInstanceType::Plugin(ref p) = gen.instance_type {
+                (p.name.clone(), p.registry_id)
+            } else {
+                return Err(anyhow::anyhow!("Generator is not a plugin type"));
+            }
+        }
+        PluginTarget::TrackEffect(track_id, effect_id) => {
+            let channel = ctx
+                .app_state
                 .mixer
                 .channels
                 .get(track_id)
-                .ok_or_else(|| format!("Track channel {} not found", track_id.0))?;
+                .ok_or_else(|| anyhow::anyhow!("Track {} not found", track_id.0))?;
             let effect = channel
                 .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.plugin_state.clone(),
-            )
+                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id.0))?;
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
-        EffectTarget::Bus(bus_id) => {
-            let bus = app
+        PluginTarget::BusEffect(bus_id, effect_id) => {
+            let bus = ctx
+                .app_state
                 .mixer
                 .buses
                 .get(bus_id)
-                .ok_or_else(|| format!("Bus {} not found", bus_id.0))?;
+                .ok_or_else(|| anyhow::anyhow!("Bus {} not found", bus_id.0))?;
             let effect = bus
                 .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.plugin_state.clone(),
-            )
+                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id.0))?;
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
-        EffectTarget::Master => {
-            let effect = app
+        PluginTarget::MasterEffect(effect_id) => {
+            let effect = ctx
+                .app_state
                 .mixer
                 .master_bus
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.plugin_state.clone(),
-            )
+                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id.0))?;
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
     };
 
-    let registry = &ctx.plugin_registry;
-    let mut temp_plugin = (registry
-        .create_plugin_by_id(plugin_registry_id)
-        .map(|(p, _)| p))
-    .ok_or_else(|| format!("Effect '{}' not found in registry", plugin_name))?;
+    let specs = ctx
+        .plugin_registry
+        .get_plugin_parameter_specs_by_id(plugin_registry_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Plugin '{}' (registry_id={}) not found in registry",
+                plugin_name,
+                plugin_registry_id
+            )
+        })?;
 
-    if !plugin_state.is_empty() {
-        temp_plugin.set_state(&plugin_state);
-    }
+    let result: Vec<T> = specs
+        .into_iter()
+        .map(|p| {
+            let value = p.default_value as f32;
+            mapper(p, value)
+        })
+        .collect();
 
-    temp_plugin
-        .execute_custom_command(command, payload_value)
-        .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))
+    Ok(result)
 }
 
-pub fn execute_generator_instance_command(
-    ctx: &DawContext,
-    generator_id: &GeneratorId,
+// ============================================================================
+// UNIFIED PARAMETER MUTATIONS
+// ============================================================================
+
+/// Unified method to set a parameter for ANY plugin type
+pub fn set_plugin_parameter(
+    ctx: &mut DawContext,
+    target: &PluginTarget,
+    param_id: impl IntoParamId,
+    value: f32,
+) -> anyhow::Result<()> {
+    let param_id = param_id.into_id();
+    
+    let command = match target {
+        PluginTarget::Generator(gen_id) => AudioCommand::SetGeneratorParameter {
+            generator_id: *gen_id,
+            param_id,
+            value,
+        },
+        PluginTarget::TrackEffect(track_id, effect_id) => AudioCommand::SetEffectParameter {
+            target: EffectTarget::Track(*track_id),
+            effect_id: *effect_id,
+            param_id,
+            value,
+        },
+        PluginTarget::BusEffect(bus_id, effect_id) => AudioCommand::SetEffectParameter {
+            target: EffectTarget::Bus(*bus_id),
+            effect_id: *effect_id,
+            param_id,
+            value,
+        },
+        PluginTarget::MasterEffect(effect_id) => AudioCommand::SetEffectParameter {
+            target: EffectTarget::Master,
+            effect_id: *effect_id,
+            param_id,
+            value,
+        },
+    };
+
+    ctx.send_audio_command(command)?;
+    Ok(())
+}
+
+/// Signals the start of a parameter edit gesture for ANY plugin
+pub fn begin_plugin_parameter_edit(
+    ctx: &mut DawContext,
+    target: &PluginTarget,
+    param_id: impl IntoParamId,
+) -> anyhow::Result<()> {
+    let auto_target = map_target_to_automation(target, param_id.into_id());
+    ctx.send_audio_command(AudioCommand::BeginEdit { target: auto_target })
+}
+
+/// Signals the end of a parameter edit gesture for ANY plugin
+pub fn end_plugin_parameter_edit(
+    ctx: &mut DawContext,
+    target: &PluginTarget,
+    param_id: impl IntoParamId,
+) -> anyhow::Result<()> {
+    let auto_target = map_target_to_automation(target, param_id.into_id());
+    ctx.send_audio_command(AudioCommand::EndEdit { target: auto_target })
+}
+
+#[inline(always)]
+fn map_target_to_automation(target: &PluginTarget, param_id: u32) -> AutomationTarget {
+    match target {
+        PluginTarget::Generator(id) => AutomationTarget::Generator {
+            generator_id: *id,
+            param_id,
+        },
+        PluginTarget::TrackEffect(track_id, effect_id) => AutomationTarget::Track {
+            track_id: *track_id,
+            track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Plugin {
+                effect_id: *effect_id,
+                target: EffectAutomationTarget::PluginParam { param_id },
+            }),
+        },
+        PluginTarget::BusEffect(bus_id, effect_id) => AutomationTarget::Bus {
+            bus_id: *bus_id,
+            mix_target: MixerChannelParamTarget::Plugin {
+                effect_id: *effect_id,
+                target: EffectAutomationTarget::PluginParam { param_id },
+            },
+        },
+        PluginTarget::MasterEffect(effect_id) => {
+            AutomationTarget::Master(MixerChannelParamTarget::Plugin {
+                effect_id: *effect_id,
+                target: EffectAutomationTarget::PluginParam { param_id },
+            })
+        }
+    }
+}
+
+// ============================================================================
+// UNIFIED PLUGIN COMMANDS (MAIN THREAD & AUDIO THREAD)
+// ============================================================================
+
+/// Executes a command on an uninstantiated plugin straight from the registry
+pub fn execute_plugin_command_by_registry_id(
+    ctx: &mut DawContext,
+    registry_id: u32,
     command: &str,
     payload_value: &serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let app = &ctx.app_state;
+) -> Option<serde_json::Value> {
+    let (mut plugin, _) = ctx.plugin_registry.create_plugin_by_id(registry_id)?;
+    plugin.execute_custom_command(command, payload_value)
+}
 
-    let gen_arc = app
-        .generator_pool
-        .get(generator_id)
-        .ok_or_else(|| format!("Generator {} not found", generator_id.0))?;
-
-    let (plugin_name, plugin_registry_id, plugin_state) = match &gen_arc.instance_type {
-        GeneratorInstanceType::Plugin(p) => (p.name.clone(), p.registry_id, p.plugin_state.clone()),
-        _ => {
-            return Err("Generator is not a plugin".into());
+/// Executes a command synchronously on the main thread using an instantiated plugin's saved state
+pub fn execute_plugin_instance_command(
+    ctx: &DawContext,
+    target: &PluginTarget,
+    command: &str,
+    payload_value: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let (plugin_name, plugin_registry_id, plugin_state) = match target {
+        PluginTarget::Generator(gen_id) => {
+            let gen = ctx.app_state.generator_pool.get(gen_id)
+                .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id.0))?;
+            match &gen.instance_type {
+                GeneratorInstanceType::Plugin(p) => (p.name.clone(), p.registry_id, p.plugin_state.clone()),
+                _ => return Err(anyhow::anyhow!("Generator is not a plugin")),
+            }
+        }
+        PluginTarget::TrackEffect(t_id, e_id) => {
+            let ch = ctx.app_state.mixer.channels.get(t_id).ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+            let ef = ch.channel.effects.iter().find(|e| e.id == *e_id).ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
+            (ef.instance.name.clone(), ef.instance.registry_id, ef.instance.plugin_state.clone())
+        }
+        PluginTarget::BusEffect(b_id, e_id) => {
+            let bus = ctx.app_state.mixer.buses.get(b_id).ok_or_else(|| anyhow::anyhow!("Bus not found"))?;
+            let ef = bus.channel.effects.iter().find(|e| e.id == *e_id).ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
+            (ef.instance.name.clone(), ef.instance.registry_id, ef.instance.plugin_state.clone())
+        }
+        PluginTarget::MasterEffect(e_id) => {
+            let ef = ctx.app_state.mixer.master_bus.effects.iter().find(|e| e.id == *e_id).ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
+            (ef.instance.name.clone(), ef.instance.registry_id, ef.instance.plugin_state.clone())
         }
     };
 
-    let registry = &ctx.plugin_registry;
-    let mut temp_plugin = (registry
+    let mut temp_plugin = (ctx.plugin_registry
         .create_plugin_by_id(plugin_registry_id)
         .map(|(p, _)| p))
-    .ok_or_else(|| format!("Generator '{}' not found in registry", plugin_name))?;
+        .ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found in registry", plugin_name))?;
 
     if !plugin_state.is_empty() {
         temp_plugin.set_state(&plugin_state);
@@ -454,107 +495,43 @@ pub fn execute_generator_instance_command(
 
     temp_plugin
         .execute_custom_command(command, payload_value)
-        .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))
+        .ok_or_else(|| anyhow::anyhow!("Command '{}' not supported by '{}'", command, plugin_name))
 }
 
-// ============================================================================
-// Real-time Plugin Command Channel
-// ============================================================================
-
 /// Monotonically increasing counter used to generate unique request IDs.
-/// Each call to `execute_plugin_command` claims one ID so that the caller
-/// can match the eventual `PluginCommandResponse` that arrives on the stream.
 static PLUGIN_COMMAND_REQUEST_ID: AtomicU32 = AtomicU32::new(1);
 
-/// Dispatches a custom command to a live plugin instance running on the audio
-/// thread. The audio engine will invoke `execute_custom_command` on the
-/// target plugin and push an `AudioFeedback::PluginCommandResponse` back
-/// through the feedback channel.
-///
-/// # Parameters
-/// - `target`: Which plugin instance to target (Generator, TrackEffect, etc.).
-/// - `command`: A string key identifying the command (e.g. `"get_meter"`).
-/// - `payload`: Arbitrary JSON value sent as the command argument.
-///
-/// # Returns
-/// `Ok(request_id)` on success. Use this ID to correlate the response that
-/// arrives via the feedback stream. Returns `Err` if the audio stream is not
-/// initialised or the command queue is full.
-pub fn execute_plugin_command(
+/// Dispatches a custom command to a live plugin instance running on the audio thread.
+pub fn execute_live_plugin_command(
     ctx: &mut DawContext,
     target: PluginTarget,
     command: String,
     payload: serde_json::Value,
-) -> Result<u32, String> {
+) -> anyhow::Result<u32> {
     let request_id = PLUGIN_COMMAND_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
 
-    if let Some(sender) = ctx.command_sender.lock().as_mut() {
-        sender
-            .push(AudioCommand::ExecutePluginCommand {
-                target,
-                command,
-                payload,
-                request_id,
-            })
-            .map_err(|_| "Command queue full".to_string())?;
-        Ok(request_id)
-    } else {
-        Err("Audio stream not initialised".to_string())
-    }
+    ctx.send_audio_command(AudioCommand::ExecutePluginCommand {
+        target,
+        command,
+        payload,
+        request_id,
+    })?;
+    
+    Ok(request_id)
 }
 
+// ============================================================================
+// ZERO-QUEUE / LOCK-FREE TELEMETRY
+// ============================================================================
 
-static ZERO_COPY_REQUEST_ID: AtomicU32 = AtomicU32::new(1);
-
-/// Dispatches a command to the audio thread to fetch a ZeroCopyBuffer from a specific plugin.
-///
-/// # Parameters
-/// - `target`: Which plugin instance to target (Generator, TrackEffect, etc.).
-/// - `name`: The specific buffer name to request from the plugin (e.g., "spectrum").
-///
-/// # Returns
-/// `Ok(request_id)` on success. Use this ID to correlate the response that
-/// arrives via the unified `create_feedback_stream`. Returns `Err` if the audio stream
-/// is not initialised or the command queue is full.
-pub fn query_zero_copy_buffer_from_live_plugin(
+/// Toggles whether the audio thread should generate and pack telemetry data for this plugin.
+pub fn set_plugin_telemetry_subs(
     ctx: &mut DawContext,
     target: PluginTarget,
-    name: String,
-) -> Result<u32, String> {
-    let request_id = ZERO_COPY_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-
-    if let Some(sender) = ctx.command_sender.lock().as_mut() {
-        sender
-            .push(AudioCommand::QueryZeroCopyBuffer {
-                target,
-                name,
-                request_id,
-            })
-            .map_err(|_| "Command queue full".to_string())?;
-        Ok(request_id)
-    } else {
-        Err("Audio stream not initialised".to_string())
-    }
-}
-
-// =====================================
-// Human interaction parameter editing
-// =====================================
-
-/// Signals the start of a parameter edit gesture (e.g., user clicks a knob).
-pub fn begin_generator_parameter_edit(
-    ctx: &mut DawContext,
-    generator_id: &GeneratorId,
-    param_id: impl IntoParamId,
+    buffers: Vec<String>,
+    active: bool,
 ) -> anyhow::Result<()> {
-    let param_id = param_id.into_id();
-    
-    let target = AutomationTarget::Generator {
-        generator_id: *generator_id,
-        param_id,
-    };
-
-    ctx.send_audio_command(AudioCommand::BeginEdit { target })
+    ctx.send_audio_command(AudioCommand::SetPluginTelemetrySubscription { target, buffers, active })
 }
 
 /// Signals the end of a parameter edit gesture (e.g., user releases a knob).
@@ -568,80 +545,6 @@ pub fn end_generator_parameter_edit(
     let target = AutomationTarget::Generator {
         generator_id: *generator_id,
         param_id,
-    };
-
-    ctx.send_audio_command(AudioCommand::EndEdit { target })
-}
-
-/// Signals the start of an effect parameter edit gesture.
-pub fn begin_effect_parameter_edit(
-    ctx: &mut DawContext,
-    effect_target: &EffectTarget,
-    effect_id: &EffectId,
-    param_id: impl IntoParamId,
-) -> anyhow::Result<()> {
-    let param_id = param_id.into_id();
-    
-    let target = match effect_target {
-        EffectTarget::Track(track_id) => AutomationTarget::Track {
-            track_id: *track_id,
-            track_target: TrackAutomationTarget::MixerChannel(
-                MixerChannelParamTarget::Plugin { 
-                    effect_id: *effect_id, 
-                    target: EffectAutomationTarget::PluginParam { param_id } 
-                }
-            ),
-        },
-        EffectTarget::Bus(bus_id) => AutomationTarget::Bus {
-            bus_id: *bus_id,
-            mix_target: MixerChannelParamTarget::Plugin { 
-                effect_id: *effect_id, 
-                target: EffectAutomationTarget::PluginParam { param_id } 
-            },
-        },
-        EffectTarget::Master => AutomationTarget::Master(
-            MixerChannelParamTarget::Plugin { 
-                effect_id: *effect_id, 
-                target: EffectAutomationTarget::PluginParam { param_id } 
-            }
-        ),
-    };
-
-    ctx.send_audio_command(AudioCommand::BeginEdit { target })
-}
-
-/// Signals the end of an effect parameter edit gesture.
-pub fn end_effect_parameter_edit(
-    ctx: &mut DawContext,
-    effect_target: &EffectTarget,
-    effect_id: &EffectId,
-    param_id: impl IntoParamId,
-) -> anyhow::Result<()> {
-    let param_id = param_id.into_id();
-    
-    let target = match effect_target {
-        EffectTarget::Track(track_id) => AutomationTarget::Track {
-            track_id: *track_id,
-            track_target: TrackAutomationTarget::MixerChannel(
-                MixerChannelParamTarget::Plugin { 
-                    effect_id: *effect_id, 
-                    target: EffectAutomationTarget::PluginParam { param_id } 
-                }
-            ),
-        },
-        EffectTarget::Bus(bus_id) => AutomationTarget::Bus {
-            bus_id: *bus_id,
-            mix_target: MixerChannelParamTarget::Plugin { 
-                effect_id: *effect_id, 
-                target: EffectAutomationTarget::PluginParam { param_id } 
-            },
-        },
-        EffectTarget::Master => AutomationTarget::Master(
-            MixerChannelParamTarget::Plugin { 
-                effect_id: *effect_id, 
-                target: EffectAutomationTarget::PluginParam { param_id } 
-            }
-        ),
     };
 
     ctx.send_audio_command(AudioCommand::EndEdit { target })

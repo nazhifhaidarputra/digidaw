@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_core::shared::id::*;
+use karbeat_core::{audio::engine::MixerTelemetrySnapshot, commands::MixerChannelSnapshot, shared::id::*};
 pub use karbeat_core::{
     core::project::TrackId,
     plugin_types::{ParameterSpec, ParameterValueType},
@@ -25,6 +25,7 @@ use karbeat_core::core::project::mixer::{
 
 /// UI-facing mixer channel target — identifies which channel to address.
 #[frb]
+#[derive(Clone, Debug)]
 pub enum UiMixerChannelTarget {
     Track(u32),
     Bus(u32),
@@ -41,19 +42,60 @@ impl From<&UiMixerChannelTarget> for MixerChannelTarget {
     }
 }
 
+impl From< MixerChannelTarget> for UiMixerChannelTarget {
+    fn from(value: MixerChannelTarget) -> Self {
+        match value {
+            MixerChannelTarget::Track(track_id) => Self::Track(track_id.into()),
+            MixerChannelTarget::Bus(bus_id) => Self::Bus(bus_id.into()),
+            MixerChannelTarget::Master => Self::Master,
+        }        
+    }
+}
+ 
 /// Full DSP state snapshot of a mixer channel, polled via
 /// poll_mixer_channel_feedback() after calling query_mixer_channel().
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct UiMixerChannelSnapshot {
-    pub track_id: u32, // u32::MAX for buses, u32::MAX - 1 for master
-    pub bus_id: Option<u32>,
-    pub is_master: bool,
+    pub target: UiMixerChannelTarget, // u32::MAX for buses, u32::MAX - 1 for master
     pub volume: f32,
     pub pan: f32,
     pub mute: bool,
     pub solo: bool,
     pub inverted_phase: bool,
+}
+
+impl From<MixerChannelSnapshot> for UiMixerChannelSnapshot {
+    fn from(m: MixerChannelSnapshot) -> Self {
+        Self {
+            target: m.target.into(),
+            volume: m.volume,
+            pan: m.pan,
+            mute: m.mute,
+            solo: m.solo,
+            inverted_phase: m.inverted_phase,
+        }
+    }
+}
+
+
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct MixerTelemetrySnapshotDto {
+    pub tracks: HashMap<u32, UiMixerChannelSnapshot>,
+    pub buses: HashMap<u32, UiMixerChannelSnapshot>,
+    pub master: Option<UiMixerChannelSnapshot>
+}
+
+
+impl From<MixerTelemetrySnapshot> for MixerTelemetrySnapshotDto {
+    fn from(snapshot: MixerTelemetrySnapshot) -> Self {
+        Self {
+            tracks: snapshot.tracks.iter().map(|(id, snap)| (id.to_u32(), snap.clone().into())).collect(),
+            buses: snapshot.buses.iter().map(|(id, snap)| (id.to_u32(), snap.clone().into())).collect(),
+            master: snapshot.master.map(|s| s.into()),
+        }
+    }
 }
 
 /// UI representation of a mixer channel.
@@ -555,4 +597,17 @@ pub fn update_routing(
     conn: UiRoutingConnection
 ) -> Result<(), String> {
     mixer_api::update_routing(ctx, conn.into()).map_err(|e| e.to_string())
+}
+
+/// Get the mixer snapshot telemetry. this uses a lock-free atomic ArcSwap pointer
+#[frb(sync)]
+pub fn get_mixer_telemetry_sync(ctx: &DawContext) -> MixerTelemetrySnapshotDto {
+    mixer_api::get_mixer_telemetry_sync(ctx).into()
+}
+
+pub fn set_mixer_telemetry_subs(
+    ctx: &mut DawContext,
+    active: bool
+) -> Result<(), String> {
+    mixer_api::set_mixer_telemetry_subs(ctx, active).map_err(|e| e.to_string())
 }

@@ -12,6 +12,299 @@ part of 'mixer.dart';
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
+mixin _$MixerTelemetrySnapshotDto {
+
+ Map<int, UiMixerChannelSnapshot> get tracks; Map<int, UiMixerChannelSnapshot> get buses; UiMixerChannelSnapshot? get master;
+/// Create a copy of MixerTelemetrySnapshotDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$MixerTelemetrySnapshotDtoCopyWith<MixerTelemetrySnapshotDto> get copyWith => _$MixerTelemetrySnapshotDtoCopyWithImpl<MixerTelemetrySnapshotDto>(this as MixerTelemetrySnapshotDto, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is MixerTelemetrySnapshotDto&&const DeepCollectionEquality().equals(other.tracks, tracks)&&const DeepCollectionEquality().equals(other.buses, buses)&&(identical(other.master, master) || other.master == master));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(tracks),const DeepCollectionEquality().hash(buses),master);
+
+@override
+String toString() {
+  return 'MixerTelemetrySnapshotDto(tracks: $tracks, buses: $buses, master: $master)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $MixerTelemetrySnapshotDtoCopyWith<$Res>  {
+  factory $MixerTelemetrySnapshotDtoCopyWith(MixerTelemetrySnapshotDto value, $Res Function(MixerTelemetrySnapshotDto) _then) = _$MixerTelemetrySnapshotDtoCopyWithImpl;
+@useResult
+$Res call({
+ Map<int, UiMixerChannelSnapshot> tracks, Map<int, UiMixerChannelSnapshot> buses, UiMixerChannelSnapshot? master
+});
+
+
+$UiMixerChannelSnapshotCopyWith<$Res>? get master;
+
+}
+/// @nodoc
+class _$MixerTelemetrySnapshotDtoCopyWithImpl<$Res>
+    implements $MixerTelemetrySnapshotDtoCopyWith<$Res> {
+  _$MixerTelemetrySnapshotDtoCopyWithImpl(this._self, this._then);
+
+  final MixerTelemetrySnapshotDto _self;
+  final $Res Function(MixerTelemetrySnapshotDto) _then;
+
+/// Create a copy of MixerTelemetrySnapshotDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? tracks = null,Object? buses = null,Object? master = freezed,}) {
+  return _then(_self.copyWith(
+tracks: null == tracks ? _self.tracks : tracks // ignore: cast_nullable_to_non_nullable
+as Map<int, UiMixerChannelSnapshot>,buses: null == buses ? _self.buses : buses // ignore: cast_nullable_to_non_nullable
+as Map<int, UiMixerChannelSnapshot>,master: freezed == master ? _self.master : master // ignore: cast_nullable_to_non_nullable
+as UiMixerChannelSnapshot?,
+  ));
+}
+/// Create a copy of MixerTelemetrySnapshotDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiMixerChannelSnapshotCopyWith<$Res>? get master {
+    if (_self.master == null) {
+    return null;
+  }
+
+  return $UiMixerChannelSnapshotCopyWith<$Res>(_self.master!, (value) {
+    return _then(_self.copyWith(master: value));
+  });
+}
+}
+
+
+/// Adds pattern-matching-related methods to [MixerTelemetrySnapshotDto].
+extension MixerTelemetrySnapshotDtoPatterns on MixerTelemetrySnapshotDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _MixerTelemetrySnapshotDto value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _MixerTelemetrySnapshotDto() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _MixerTelemetrySnapshotDto value)  $default,){
+final _that = this;
+switch (_that) {
+case _MixerTelemetrySnapshotDto():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _MixerTelemetrySnapshotDto value)?  $default,){
+final _that = this;
+switch (_that) {
+case _MixerTelemetrySnapshotDto() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( Map<int, UiMixerChannelSnapshot> tracks,  Map<int, UiMixerChannelSnapshot> buses,  UiMixerChannelSnapshot? master)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _MixerTelemetrySnapshotDto() when $default != null:
+return $default(_that.tracks,_that.buses,_that.master);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( Map<int, UiMixerChannelSnapshot> tracks,  Map<int, UiMixerChannelSnapshot> buses,  UiMixerChannelSnapshot? master)  $default,) {final _that = this;
+switch (_that) {
+case _MixerTelemetrySnapshotDto():
+return $default(_that.tracks,_that.buses,_that.master);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( Map<int, UiMixerChannelSnapshot> tracks,  Map<int, UiMixerChannelSnapshot> buses,  UiMixerChannelSnapshot? master)?  $default,) {final _that = this;
+switch (_that) {
+case _MixerTelemetrySnapshotDto() when $default != null:
+return $default(_that.tracks,_that.buses,_that.master);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _MixerTelemetrySnapshotDto implements MixerTelemetrySnapshotDto {
+  const _MixerTelemetrySnapshotDto({required final  Map<int, UiMixerChannelSnapshot> tracks, required final  Map<int, UiMixerChannelSnapshot> buses, this.master}): _tracks = tracks,_buses = buses;
+  
+
+ final  Map<int, UiMixerChannelSnapshot> _tracks;
+@override Map<int, UiMixerChannelSnapshot> get tracks {
+  if (_tracks is EqualUnmodifiableMapView) return _tracks;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableMapView(_tracks);
+}
+
+ final  Map<int, UiMixerChannelSnapshot> _buses;
+@override Map<int, UiMixerChannelSnapshot> get buses {
+  if (_buses is EqualUnmodifiableMapView) return _buses;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableMapView(_buses);
+}
+
+@override final  UiMixerChannelSnapshot? master;
+
+/// Create a copy of MixerTelemetrySnapshotDto
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$MixerTelemetrySnapshotDtoCopyWith<_MixerTelemetrySnapshotDto> get copyWith => __$MixerTelemetrySnapshotDtoCopyWithImpl<_MixerTelemetrySnapshotDto>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _MixerTelemetrySnapshotDto&&const DeepCollectionEquality().equals(other._tracks, _tracks)&&const DeepCollectionEquality().equals(other._buses, _buses)&&(identical(other.master, master) || other.master == master));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_tracks),const DeepCollectionEquality().hash(_buses),master);
+
+@override
+String toString() {
+  return 'MixerTelemetrySnapshotDto(tracks: $tracks, buses: $buses, master: $master)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$MixerTelemetrySnapshotDtoCopyWith<$Res> implements $MixerTelemetrySnapshotDtoCopyWith<$Res> {
+  factory _$MixerTelemetrySnapshotDtoCopyWith(_MixerTelemetrySnapshotDto value, $Res Function(_MixerTelemetrySnapshotDto) _then) = __$MixerTelemetrySnapshotDtoCopyWithImpl;
+@override @useResult
+$Res call({
+ Map<int, UiMixerChannelSnapshot> tracks, Map<int, UiMixerChannelSnapshot> buses, UiMixerChannelSnapshot? master
+});
+
+
+@override $UiMixerChannelSnapshotCopyWith<$Res>? get master;
+
+}
+/// @nodoc
+class __$MixerTelemetrySnapshotDtoCopyWithImpl<$Res>
+    implements _$MixerTelemetrySnapshotDtoCopyWith<$Res> {
+  __$MixerTelemetrySnapshotDtoCopyWithImpl(this._self, this._then);
+
+  final _MixerTelemetrySnapshotDto _self;
+  final $Res Function(_MixerTelemetrySnapshotDto) _then;
+
+/// Create a copy of MixerTelemetrySnapshotDto
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? tracks = null,Object? buses = null,Object? master = freezed,}) {
+  return _then(_MixerTelemetrySnapshotDto(
+tracks: null == tracks ? _self._tracks : tracks // ignore: cast_nullable_to_non_nullable
+as Map<int, UiMixerChannelSnapshot>,buses: null == buses ? _self._buses : buses // ignore: cast_nullable_to_non_nullable
+as Map<int, UiMixerChannelSnapshot>,master: freezed == master ? _self.master : master // ignore: cast_nullable_to_non_nullable
+as UiMixerChannelSnapshot?,
+  ));
+}
+
+/// Create a copy of MixerTelemetrySnapshotDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiMixerChannelSnapshotCopyWith<$Res>? get master {
+    if (_self.master == null) {
+    return null;
+  }
+
+  return $UiMixerChannelSnapshotCopyWith<$Res>(_self.master!, (value) {
+    return _then(_self.copyWith(master: value));
+  });
+}
+}
+
+/// @nodoc
 mixin _$ParameterSpecDTO {
 
  int get id; String get name; String get group; double get value; double get min; double get max; double get defaultValue; double get step; ParameterValueTypeDTO get valueType; List<String> get choices;
@@ -1312,6 +1605,290 @@ as bool,
 }
 
 
+}
+
+/// @nodoc
+mixin _$UiMixerChannelSnapshot {
+
+ UiMixerChannelTarget get target; double get volume; double get pan; bool get mute; bool get solo; bool get invertedPhase;
+/// Create a copy of UiMixerChannelSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiMixerChannelSnapshotCopyWith<UiMixerChannelSnapshot> get copyWith => _$UiMixerChannelSnapshotCopyWithImpl<UiMixerChannelSnapshot>(this as UiMixerChannelSnapshot, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelSnapshot&&(identical(other.target, target) || other.target == target)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.solo, solo) || other.solo == solo)&&(identical(other.invertedPhase, invertedPhase) || other.invertedPhase == invertedPhase));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,target,volume,pan,mute,solo,invertedPhase);
+
+@override
+String toString() {
+  return 'UiMixerChannelSnapshot(target: $target, volume: $volume, pan: $pan, mute: $mute, solo: $solo, invertedPhase: $invertedPhase)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiMixerChannelSnapshotCopyWith<$Res>  {
+  factory $UiMixerChannelSnapshotCopyWith(UiMixerChannelSnapshot value, $Res Function(UiMixerChannelSnapshot) _then) = _$UiMixerChannelSnapshotCopyWithImpl;
+@useResult
+$Res call({
+ UiMixerChannelTarget target, double volume, double pan, bool mute, bool solo, bool invertedPhase
+});
+
+
+$UiMixerChannelTargetCopyWith<$Res> get target;
+
+}
+/// @nodoc
+class _$UiMixerChannelSnapshotCopyWithImpl<$Res>
+    implements $UiMixerChannelSnapshotCopyWith<$Res> {
+  _$UiMixerChannelSnapshotCopyWithImpl(this._self, this._then);
+
+  final UiMixerChannelSnapshot _self;
+  final $Res Function(UiMixerChannelSnapshot) _then;
+
+/// Create a copy of UiMixerChannelSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? target = null,Object? volume = null,Object? pan = null,Object? mute = null,Object? solo = null,Object? invertedPhase = null,}) {
+  return _then(_self.copyWith(
+target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
+as UiMixerChannelTarget,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
+as double,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double,mute: null == mute ? _self.mute : mute // ignore: cast_nullable_to_non_nullable
+as bool,solo: null == solo ? _self.solo : solo // ignore: cast_nullable_to_non_nullable
+as bool,invertedPhase: null == invertedPhase ? _self.invertedPhase : invertedPhase // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+/// Create a copy of UiMixerChannelSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiMixerChannelTargetCopyWith<$Res> get target {
+  
+  return $UiMixerChannelTargetCopyWith<$Res>(_self.target, (value) {
+    return _then(_self.copyWith(target: value));
+  });
+}
+}
+
+
+/// Adds pattern-matching-related methods to [UiMixerChannelSnapshot].
+extension UiMixerChannelSnapshotPatterns on UiMixerChannelSnapshot {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiMixerChannelSnapshot value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiMixerChannelSnapshot() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiMixerChannelSnapshot value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiMixerChannelSnapshot():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiMixerChannelSnapshot value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiMixerChannelSnapshot() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiMixerChannelTarget target,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiMixerChannelSnapshot() when $default != null:
+return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiMixerChannelTarget target,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)  $default,) {final _that = this;
+switch (_that) {
+case _UiMixerChannelSnapshot():
+return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiMixerChannelTarget target,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)?  $default,) {final _that = this;
+switch (_that) {
+case _UiMixerChannelSnapshot() when $default != null:
+return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiMixerChannelSnapshot implements UiMixerChannelSnapshot {
+  const _UiMixerChannelSnapshot({required this.target, required this.volume, required this.pan, required this.mute, required this.solo, required this.invertedPhase});
+  
+
+@override final  UiMixerChannelTarget target;
+@override final  double volume;
+@override final  double pan;
+@override final  bool mute;
+@override final  bool solo;
+@override final  bool invertedPhase;
+
+/// Create a copy of UiMixerChannelSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiMixerChannelSnapshotCopyWith<_UiMixerChannelSnapshot> get copyWith => __$UiMixerChannelSnapshotCopyWithImpl<_UiMixerChannelSnapshot>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiMixerChannelSnapshot&&(identical(other.target, target) || other.target == target)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.solo, solo) || other.solo == solo)&&(identical(other.invertedPhase, invertedPhase) || other.invertedPhase == invertedPhase));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,target,volume,pan,mute,solo,invertedPhase);
+
+@override
+String toString() {
+  return 'UiMixerChannelSnapshot(target: $target, volume: $volume, pan: $pan, mute: $mute, solo: $solo, invertedPhase: $invertedPhase)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiMixerChannelSnapshotCopyWith<$Res> implements $UiMixerChannelSnapshotCopyWith<$Res> {
+  factory _$UiMixerChannelSnapshotCopyWith(_UiMixerChannelSnapshot value, $Res Function(_UiMixerChannelSnapshot) _then) = __$UiMixerChannelSnapshotCopyWithImpl;
+@override @useResult
+$Res call({
+ UiMixerChannelTarget target, double volume, double pan, bool mute, bool solo, bool invertedPhase
+});
+
+
+@override $UiMixerChannelTargetCopyWith<$Res> get target;
+
+}
+/// @nodoc
+class __$UiMixerChannelSnapshotCopyWithImpl<$Res>
+    implements _$UiMixerChannelSnapshotCopyWith<$Res> {
+  __$UiMixerChannelSnapshotCopyWithImpl(this._self, this._then);
+
+  final _UiMixerChannelSnapshot _self;
+  final $Res Function(_UiMixerChannelSnapshot) _then;
+
+/// Create a copy of UiMixerChannelSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? target = null,Object? volume = null,Object? pan = null,Object? mute = null,Object? solo = null,Object? invertedPhase = null,}) {
+  return _then(_UiMixerChannelSnapshot(
+target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
+as UiMixerChannelTarget,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
+as double,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double,mute: null == mute ? _self.mute : mute // ignore: cast_nullable_to_non_nullable
+as bool,solo: null == solo ? _self.solo : solo // ignore: cast_nullable_to_non_nullable
+as bool,invertedPhase: null == invertedPhase ? _self.invertedPhase : invertedPhase // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+/// Create a copy of UiMixerChannelSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiMixerChannelTargetCopyWith<$Res> get target {
+  
+  return $UiMixerChannelTargetCopyWith<$Res>(_self.target, (value) {
+    return _then(_self.copyWith(target: value));
+  });
+}
 }
 
 /// @nodoc

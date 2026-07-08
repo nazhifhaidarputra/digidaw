@@ -1,21 +1,25 @@
 use flutter_rust_bridge::frb;
 pub use karbeat_plugin_api::types::{BufferDataType, ZeroCopyBuffer};
 
+use crate::api::plugins::BufferDataTypeDto;
+
 #[frb(opaque)]
 #[derive(Clone)]
 pub struct ZeroCopyHandle {
     buffer: ZeroCopyBuffer,
 }
+
 impl ZeroCopyHandle {
     /// Tells Dart what kind of TypedList to create
     #[frb(sync)]
-    pub fn data_type(&self) -> BufferDataType {
-        match &self.buffer {
+    pub fn data_type(&self) -> BufferDataTypeDto {
+        let data_type_want = match &self.buffer {
             ZeroCopyBuffer::Float32(_) => BufferDataType::Float32,
             ZeroCopyBuffer::Uint8(_) => BufferDataType::Uint8,
             ZeroCopyBuffer::Int32(_) => BufferDataType::Int32,
             ZeroCopyBuffer::Int8(_) => BufferDataType::Int8,
-        }
+        };
+        data_type_want.into()
     }
     /// Gets the raw memory address
     #[frb(sync)]
