@@ -1,22 +1,13 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:ffi' as ffi;
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/daw_stream_provider.dart';
-import 'package:karbeat/app/providers/project_provider.dart';
-import 'package:karbeat/core/utils/logger.dart';
-import 'dart:math';
-
-import 'package:karbeat/features/plugins/effects/abstract_effect_screen.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
-import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/features/plugins/abstract_plugin_screen.dart'; // Unified base class
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
-import 'package:karbeat/generated/plugins/param_eq.dart';
-import 'package:karbeat/src/rust/api/plugins/opaque.dart' as plugin_api;
-import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/plugins/opaque.dart';
+import 'package:karbeat/src/rust/api/plugins/types.dart';
 
 /// Math helpers for Logarithmic Frequency Mapping
 const double minFreq = 20.0;
@@ -49,7 +40,7 @@ double _yToGain(double y, double height) {
   return (normalized * (maxGain - minGain)) + minGain;
 }
 
-/// Data model for an EQ Band matching `parametric_eq.rs`
+/// Data model for an EQ Band
 class EqBand {
   bool active;
   int filterType;
@@ -68,46 +59,26 @@ class EqBand {
   });
 }
 
-class KarbeatParametricEq extends AbstractEffectScreen {
+class KarbeatParametricEq extends AbstractPluginScreen {
   const KarbeatParametricEq({
     super.key,
     required super.target,
-    required super.effectId,
+    required super.pluginId,
   });
 
   @override
   KarbeatParametricEqState createState() => KarbeatParametricEqState();
 }
 
-class KarbeatParametricEqState
-    extends AbstractEffectScreenState<KarbeatParametricEq> {
+class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametricEq> {
   // EQ-specific state
   double masterGain = 0.0;
   late List<EqBand> bands;
   int? _draggingNodeIndex;
 
-  // Backend-computed response curve
-  /// Latest magnitude (EQ response) buffer received from Rust.
+  // Backend-computed response curve (Zero-Copy lock-free buffers)
   Float32List? _magnitudeBuffer;
-
-  /// Latest spectrum (FFT analyser) buffer received from Rust.
   Float32List? _spectrumBuffer;
-
-  /// Map to handle all pending requests and its names.
-  /// This ensures that every requests is handled
-  final Map<int, String> _pendingRequests = {};
-
-  late final DawContext _dawContext;
-
-  // ======================================
-  // Real-time Plugin Command Stream
-  // ======================================
-
-  /// Subscription to the plugin command response stream.
-  // StreamSubscription<plugin_api.UiZeroCopyBufferResponse>? _zeroCopyStreamSub;
-
-  /// Timer that re-fires GET_SPECTRUM at a FPS to drive the analyzer.
-  Timer? _spectrumPollTimer;
 
   final List<Color> _bandColors = [
     Colors.redAccent,
@@ -121,103 +92,58 @@ class KarbeatParametricEqState
   ];
 
   @override
-  String get effectName => 'Parametric EQ';
+  String get pluginName => 'Parametric EQ';
+
+  // 1. Tell the base class we want the 'telemetry' blob packed by Rust
+  @override
+  List<String> getRequestedZeroCopyBuffers() => ['telemetry'];
 
   @override
   void initState() {
     super.initState();
-    _dawContext = ref.read(projectProvider.notifier).dawContext;
     _initBandsFromParameters();
-
-    // Request the initial magnitude response after the first frame so that
-    // the widget.target and widget.effectId are fully bound.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sendMagnitudeRequest();
-      _togglePluginActive(true);
-    });
-
-    // Re-fire GET_SPECTRUM at ~30 FPS to drive the real-time spectrum analyzer.
-    _spectrumPollTimer = Timer.periodic(
-      const Duration(milliseconds: 33),
-      (_) => _sendSpectrumRequest(),
-    );
   }
 
+  // 2. The base class's 60 FPS Ticker automatically feeds us the lock-free data
   @override
-  void dispose() {
-    _togglePluginActive(false);
-    _spectrumPollTimer?.cancel();
-    super.dispose();
-  }
+  void onZeroCopyBuffersReceived(Map<String, ZeroCopyHandle> buffers) {
+    final telemetryBuf = buffers['telemetry'];
+    if (telemetryBuf == null) return;
 
-  void _togglePluginActive(bool active) {
-    plugin_api.executeRealtimePluginCommand(
-      ctx: _dawContext,
-      target: _toPluginTarget(),
-      command: 'SET_SPECTRUM_ACTIVE',
-      payloadJson: jsonEncode({'active': active}),
-    );
-    plugin_api.executeRealtimePluginCommand(
-      ctx: _dawContext,
-      target: _toPluginTarget(),
-      command: 'SET_MAGNITUDE_ACTIVE',
-      payloadJson: jsonEncode({'active': active}),
-    );
-  }
+    // FRB maps Rust's `ZeroCopyBuffer::Float32(Arc<[f32]>)` to this Dart subclass
+    switch (telemetryBuf.dataType()) {
 
-  // ======================================
-  // Real-time Plugin Command Helpers
-  // ======================================
+      case BufferDataTypeDto.float32:
+        final int length = telemetryBuf.lengthElements();
+        
+        // Ensure we have at least the RIFF-style header
+        if (length < 2) return;
 
-  /// Converts the abstract [UiEffectTarget] + effectId pair into a
-  /// [UiPluginTarget] understood by the real-time command channel.
-  plugin_api.UiPluginTarget _toPluginTarget() {
-    final t = widget.target;
-    return t.when(
-      track: (id) => plugin_api.UiPluginTarget.trackEffect(
-        trackId: id,
-        effectId: widget.effectId,
-      ),
-      bus: (id) => plugin_api.UiPluginTarget.busEffect(
-        busId: id,
-        effectId: widget.effectId,
-      ),
-      master: () => plugin_api.UiPluginTarget.masterEffect(widget.effectId),
-    );
-  }
+        // Cast the raw integer address into a C-style Float pointer
+        final ptr = ffi.Pointer<ffi.Float>.fromAddress(telemetryBuf.memoryAddress());
 
-  /// Sends GET_MAGNITUDE_RESPONSE to the live plugin instance.
-  /// The response arrives via [_onPluginMessage].
-  void _sendMagnitudeRequest() {
-    plugin_api
-        .queryLivePluginZeroCopyBuf(
-          ctx: _dawContext,
-          target: _toPluginTarget(),
-          name: 'magnitude',
-        )
-        .then((id) {
-          _pendingRequests[id] = 'magnitude';
-        })
-        .catchError((Object e) {
-          AppLogger.error('EQ magnitude request failed: $e');
+        // Create a zero-cost Dart view directly over the Rust memory space
+        // This does NOT copy the array; it just creates a viewing window!
+        final flatData = ptr.asTypedList(length);
+
+        // Parse the header
+        final int spectrumLen = flatData[0].toInt();
+        final int magnitudeLen = flatData[1].toInt();
+
+        final int spectrumStart = 2;
+        final int magnitudeStart = spectrumStart + spectrumLen;
+
+        // Safety bounds check
+        if (flatData.length < magnitudeStart + magnitudeLen) return;
+
+        setState(() {
+          // ZERO-COST SPLIT: SublistView creates smaller windows into the main window
+          _spectrumBuffer = Float32List.sublistView(flatData, spectrumStart, spectrumStart + spectrumLen);
+          _magnitudeBuffer = Float32List.sublistView(flatData, magnitudeStart, magnitudeStart + magnitudeLen);
         });
-  }
-
-  /// Sends GET_SPECTRUM to the live plugin instance.
-  /// Fired at ~30 FPS by [_spectrumPollTimer].
-  void _sendSpectrumRequest() {
-    plugin_api
-        .queryLivePluginZeroCopyBuf(
-          ctx: _dawContext,
-          target: _toPluginTarget(),
-          name: 'spectrum',
-        )
-        .then((id) {
-          _pendingRequests[id] = 'spectrum';
-        })
-        .catchError((Object _) {
-          /* Ignore dropped frames */
-        });
+        break;
+      default:
+    }
   }
 
   @override
@@ -227,7 +153,6 @@ class KarbeatParametricEqState
   }
 
   void _initBandsFromParameters() {
-    // Determine how many bands the API actually provided by scanning the paths
     int maxBandIndex = -1;
     for (final p in parameters) {
       final match = RegExp(r'band(\d+)/').firstMatch(p.path);
@@ -237,10 +162,8 @@ class KarbeatParametricEqState
       }
     }
 
-    // Create the exact number of bands (fallback to 8 if none found)
     final numBands = maxBandIndex >= 0 ? maxBandIndex + 1 : 8;
 
-    // Initialize with generic safe defaults
     bands = List.generate(
       numBands,
       (i) => EqBand(
@@ -252,19 +175,16 @@ class KarbeatParametricEqState
       ),
     );
 
-    // Immediately apply the actual API values from the parameters list
     _applyParametersToState();
   }
 
   void _applyParametersToState() {
     for (final p in parameters) {
-      // 1. Direct path check for base_gain
       if (p.path == 'base_gain') {
         masterGain = p.value;
         continue;
       }
 
-      // 2. Extract the band index and parameter name from the string path
       final match = RegExp(r'band(\d+)/(.+)').firstMatch(p.path);
       if (match != null) {
         final bandIndex = int.parse(match.group(1)!);
@@ -302,8 +222,8 @@ class KarbeatParametricEqState
 
   void _updateMasterGain(double value) {
     setState(() => masterGain = value);
-    setParameterString('base_gain', value);
-    _sendMagnitudeRequest();
+    // Base class handles the FFI push natively
+    setParameter(parameters.firstWhere((p) => p.path == 'base_gain').id, value);
   }
 
   void _updateBandParam(int bandIdx, int paramType, double value) {
@@ -339,16 +259,13 @@ class KarbeatParametricEqState
       }
     });
 
-    // Easily reconstruct the string path mapped in the JSON manifest
     final path = "band$bandIdx/$suffix";
-    setParameterString(path, value);
-    _sendMagnitudeRequest();
+    setParameter(parameters.firstWhere((p) => p.path == path).id, value);
   }
 
   // === Graph Interaction ===
 
   void _onGraphPanStart(DragStartDetails details, BoxConstraints constraints) {
-    // Find the closest node to the tap
     final localPos = details.localPosition;
     double minDistance = double.infinity;
     int? closestIndex;
@@ -361,7 +278,6 @@ class KarbeatParametricEqState
 
       final dist = sqrt(pow(nx - localPos.dx, 2) + pow(ny - localPos.dy, 2));
       if (dist < 30.0 && dist < minDistance) {
-        // 30px hit radius
         minDistance = dist;
         closestIndex = i;
       }
@@ -369,18 +285,14 @@ class KarbeatParametricEqState
 
     if (closestIndex != null) {
       setState(() => _draggingNodeIndex = closestIndex);
+      // Optional: signal beginParameterEdit for frequency and gain here if desired
     }
   }
 
-  void _onGraphPanUpdate(
-    DragUpdateDetails details,
-    BoxConstraints constraints,
-  ) {
+  void _onGraphPanUpdate(DragUpdateDetails details, BoxConstraints constraints) {
     if (_draggingNodeIndex == null) return;
 
     final localPos = details.localPosition;
-
-    // Convert pixels back to values
     final newFreq = _xToFreq(localPos.dx, constraints.maxWidth);
     final newGain = _yToGain(localPos.dy, constraints.maxHeight);
 
@@ -389,63 +301,12 @@ class KarbeatParametricEqState
   }
 
   void _onGraphPanEnd(DragEndDetails details) {
+    // Optional: signal endParameterEdit here
     setState(() => _draggingNodeIndex = null);
   }
 
   @override
-  void initParameterListener() {
-    super.initParameterListener();
-    ref.listen(masterAudioFeedbackProvider, (previous, next) {
-      if (!next.hasValue || next.value == null) return;
-
-      final feedback = next.value!;
-      feedback.maybeWhen(
-        zeroCopyBufferResponse: (requestId, handle) {
-          _processBuffer(requestId, handle);
-        },
-        orElse: () {},
-      );
-    });
-  }
-
-  /// Copies the zero-copy buffer into a [Float32List] and routes it to the
-  /// correct field so the painter can consume it on the next frame.
-  ///
-  /// The Rust side serialises the data as interleaved f32 pairs:
-  ///   [freq₀, db₀, freq₁, db₁, …]
-  /// The painter reads this layout directly — no CurvePoint allocation needed.
-  void _processBuffer(int requestId, plugin_api.ZeroCopyHandle? handle) {
-    final type = _pendingRequests.remove(requestId);
-
-    if (type == null) return;
-
-    if (handle == null) return;
-
-    final ptr = ffi.Pointer<ffi.Float>.fromAddress(handle.memoryAddress());
-    // Copy immediately – the Rust side may reclaim the buffer after this call.
-    final data = Float32List.fromList(ptr.asTypedList(handle.lengthElements()));
-
-    // Must be pairs; discard a trailing orphan element if present.
-    if (data.length < 2) return;
-    final safeData = data.length.isEven
-        ? data
-        : Float32List.sublistView(data, 0, data.length - 1);
-
-    setState(() {
-      switch (type) {
-        case 'magnitude':
-          _magnitudeBuffer = safeData;
-          break;
-
-        case 'spectrum':
-          _spectrumBuffer = safeData;
-          break;
-      }
-    });
-  }
-
-  @override
-  Widget buildEffectBody(BuildContext context) {
+  Widget buildPluginBody(BuildContext context) {
     return Container(
       color: Colors.grey.shade900,
       child: Column(
@@ -503,7 +364,6 @@ class KarbeatParametricEqState
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                   Expanded(
-                    // Replaced ListView.builder with a tight-hugging scrollable row
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
@@ -540,7 +400,7 @@ class KarbeatParametricEqState
     final slopeChoices = slopeParam?.choices ?? [];
 
     return Container(
-      width: 120, // Assigned a strict boundary to prevent horizontal overflow
+      width: 120, 
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
@@ -551,7 +411,6 @@ class KarbeatParametricEqState
         ),
       ),
       child: SingleChildScrollView(
-        // Removed the IntrinsicWidth wrapper completely
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
@@ -599,7 +458,7 @@ class KarbeatParametricEqState
               ],
             ),
 
-            // Type Dropdown (compact)
+            // Type Dropdown
             SizedBox(
               height: 28,
               child: PopupMenuButton<int>(
@@ -614,10 +473,7 @@ class KarbeatParametricEqState
                     height: 32,
                     child: Text(
                       filterChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
-                      ),
+                      style: const TextStyle(color: Colors.white70, fontSize: 9),
                     ),
                   ),
                 ),
@@ -626,22 +482,14 @@ class KarbeatParametricEqState
                   children: [
                     Expanded(
                       child: Text(
-                        filterChoices.isNotEmpty &&
-                                band.filterType < filterChoices.length
+                        filterChoices.isNotEmpty && band.filterType < filterChoices.length
                             ? filterChoices[band.filterType]
                             : "",
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 9,
-                        ),
+                        style: const TextStyle(color: Colors.white54, fontSize: 9),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
+                    const Icon(Icons.arrow_drop_down, size: 12, color: Colors.white54),
                   ],
                 ),
               ),
@@ -656,7 +504,6 @@ class KarbeatParametricEqState
               "band$i/freq",
               (v) => _updateBandParam(i, 0, v),
               suffix: "Hz",
-              parameterName: "Frequency",
             ),
             _buildParamControl(
               "Gain",
@@ -664,7 +511,6 @@ class KarbeatParametricEqState
               "band$i/gain",
               (v) => _updateBandParam(i, 1, v),
               suffix: "dB",
-              parameterName: "Gain",
             ),
             _buildParamControl(
               "Q",
@@ -672,7 +518,6 @@ class KarbeatParametricEqState
               "band$i/q",
               (v) => _updateBandParam(i, 2, v),
               suffix: "",
-              parameterName: "Q Bandwidth",
             ),
 
             // Slope dropdown
@@ -691,10 +536,7 @@ class KarbeatParametricEqState
                     height: 32,
                     child: Text(
                       slopeChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
-                      ),
+                      style: const TextStyle(color: Colors.white70, fontSize: 9),
                     ),
                   ),
                 ),
@@ -703,22 +545,14 @@ class KarbeatParametricEqState
                   children: [
                     Expanded(
                       child: Text(
-                        slopeChoices.isNotEmpty &&
-                                band.order < slopeChoices.length
+                        slopeChoices.isNotEmpty && band.order < slopeChoices.length
                             ? slopeChoices[band.order]
                             : "",
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 9,
-                        ),
+                        style: const TextStyle(color: Colors.white54, fontSize: 9),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
+                    const Icon(Icons.arrow_drop_down, size: 12, color: Colors.white54),
                   ],
                 ),
               ),
@@ -742,18 +576,12 @@ class KarbeatParametricEqState
     final pMax = p?.max ?? maxGain;
     final pDef = p?.defaultValue ?? 0.0;
     final pStep = p?.step ?? 0.1;
-    final pName = p?.name ?? 'Gain';
-    // the fallback ID is not an invalid ID because at the Rust side, the ID is represented by u32.
-    // this will probably crash the app if we did not handle it gracefully
     final pId = p?.id ?? -1;
     final pValue = p?.value ?? 0.0;
 
     return Container(
       width: 80,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 4,
-        vertical: 8,
-      ), // Tighter padding
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Column(
         children: [
           const FittedBox(
@@ -767,13 +595,13 @@ class KarbeatParametricEqState
               ),
             ),
           ),
-          const SizedBox(height: 8), // Reduced gap
+          const SizedBox(height: 8),
           Expanded(
             child: RotatedBox(
               quarterTurns: 3,
               child: DawFloatParam(
                 paramId: pId,
-                name: pName,
+                name: 'Gain',
                 value: pValue,
                 min: pMin,
                 max: pMax,
@@ -803,7 +631,6 @@ class KarbeatParametricEqState
     String paramPath,
     ValueChanged<double> onChanged, {
     String suffix = "",
-    String parameterName = "",
   }) {
     plugin_api.UiPluginParameter? p;
     for (final param in parameters) {
@@ -837,16 +664,11 @@ class KarbeatParametricEqState
 }
 
 /// Custom graph painter to render the frequency response curve and interactable nodes
-
 class _EqResponsePainter extends CustomPainter {
   final List<EqBand> bands;
   final List<Color> bandColors;
   final int? activeNodeIndex;
-
-  /// Interleaved [freq₀, db₀, freq₁, db₁, …] from the magnitude zero-copy buf.
   final Float32List? magnitudeBuffer;
-
-  /// Interleaved [freq₀, db₀, freq₁, db₁, …] from the spectrum zero-copy buf.
   final Float32List? spectrumBuffer;
 
   _EqResponsePainter({
@@ -857,12 +679,6 @@ class _EqResponsePainter extends CustomPainter {
     required this.spectrumBuffer,
   });
 
-  // ---------------------------------------------------------------------------
-  // Helpers: decode buffer → screen offsets without intermediate objects
-  // ---------------------------------------------------------------------------
-
-  /// Iterates the interleaved buffer and projects each (freq, db) pair onto
-  /// canvas coordinates using the supplied [yMapper].
   List<Offset> _bufferToOffsets(
     Float32List buf,
     double w,
@@ -873,15 +689,11 @@ class _EqResponsePainter extends CustomPainter {
     for (int i = 0; i + 1 < buf.length; i += 2) {
       final freq = buf[i].toDouble();
       final db = buf[i + 1].toDouble();
-      if (freq <= 0) continue; // skip sentinel / padding entries
+      if (freq <= 0) continue; 
       pts.add(Offset(_freqToX(freq, w), yMapper(db, h)));
     }
     return pts;
   }
-
-  // ---------------------------------------------------------------------------
-  // paint
-  // ---------------------------------------------------------------------------
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -932,7 +744,6 @@ class _EqResponsePainter extends CustomPainter {
   }
 
   void _drawSpectrum(Canvas canvas, double w, double h) {
-    // Spectrum Y: maps dB to height where 24 dB = top, -100 dB = bottom
     double spectrumY(double db, double height) {
       const floor = -100.0;
       const ceil = 24.0;
@@ -945,7 +756,6 @@ class _EqResponsePainter extends CustomPainter {
 
     final curvePath = _buildSmoothPath(pts);
 
-    // Filled area under the spectrum line
     final fillPath = Path.from(curvePath)
       ..lineTo(w, h)
       ..lineTo(0, h)
@@ -981,7 +791,6 @@ class _EqResponsePainter extends CustomPainter {
 
     final curvePath = _buildSmoothPath(pts);
 
-    // Filled area between the curve and the 0 dB centre line
     final fillPath = Path.from(curvePath)
       ..lineTo(w, h / 2)
       ..lineTo(0, h / 2)
@@ -1016,7 +825,6 @@ class _EqResponsePainter extends CustomPainter {
       final isDragging = activeNodeIndex == i;
       final radius = isDragging ? 8.0 : 6.0;
 
-      // Vertical drop line to 0 dB axis
       canvas.drawLine(
         Offset(x, y),
         Offset(x, h / 2),
@@ -1025,7 +833,6 @@ class _EqResponsePainter extends CustomPainter {
           ..strokeWidth = 1,
       );
 
-      // Filled circle
       canvas.drawCircle(
         Offset(x, y),
         radius,
@@ -1034,7 +841,6 @@ class _EqResponsePainter extends CustomPainter {
           ..style = PaintingStyle.fill,
       );
 
-      // White border
       canvas.drawCircle(
         Offset(x, y),
         radius,
@@ -1044,7 +850,6 @@ class _EqResponsePainter extends CustomPainter {
           ..strokeWidth = 1,
       );
 
-      // Band number label
       tp.text = TextSpan(
         text: '${i + 1}',
         style: const TextStyle(
@@ -1088,7 +893,6 @@ Path _buildSmoothPath(List<Offset> pts) {
     final p2 = pAt(i + 1);
     final p3 = pAt(i + 2);
 
-    // Catmull-Rom -> cubic Bezier
     final c1 = Offset(
       p1.dx + (p2.dx - p0.dx) / 6.0,
       p1.dy + (p2.dy - p0.dy) / 6.0,

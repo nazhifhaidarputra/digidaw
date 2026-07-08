@@ -10,6 +10,7 @@ import 'api/monitor.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
 import 'api/plugins/opaque.dart';
+import 'api/plugins/types.dart';
 import 'api/project.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
@@ -41,16 +42,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioPropertiesPtr;
 
   CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_BufferDataTypePtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataTypePtr;
-
-  CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_DawContextPtr => wire
       ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContextPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_PluginBufferHandlePtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandlePtr;
 
   CrossPlatformFinalizerArg
   get rust_arc_decrement_strong_count_WaveformHandlePtr => wire
@@ -70,20 +63,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  BufferDataType
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    dynamic raw,
-  );
-
-  @protected
   DawContext
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
-    dynamic raw,
-  );
-
-  @protected
-  PluginBufferHandle
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
     dynamic raw,
   );
 
@@ -130,12 +111,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  PluginBufferHandle
-  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-    dynamic raw,
-  );
-
-  @protected
   WaveformHandle
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     dynamic raw,
@@ -155,6 +130,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_CastedPrimitive_usize(dynamic raw);
+
+  @protected
+  Map<String, ZeroCopyHandle>
+  dco_decode_Map_String_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle_None(
+    dynamic raw,
+  );
 
   @protected
   Map<int, WaveformHandle>
@@ -195,6 +176,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Map<int, UiMixerChannelSnapshot>
+  dco_decode_Map_u_32_ui_mixer_channel_snapshot_None(dynamic raw);
+
+  @protected
   Map<int, UiPattern> dco_decode_Map_u_32_ui_pattern_None(dynamic raw);
 
   @protected
@@ -213,20 +198,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  BufferDataType
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    dynamic raw,
-  );
-
-  @protected
   DawContext
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
-    dynamic raw,
-  );
-
-  @protected
-  PluginBufferHandle
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
     dynamic raw,
   );
 
@@ -344,6 +317,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw);
 
   @protected
+  PluginTelemetrySnapshotDto
+  dco_decode_box_autoadd_plugin_telemetry_snapshot_dto(dynamic raw);
+
+  @protected
   (int, int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw);
 
   @protected
@@ -358,13 +335,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_8(dynamic raw);
 
   @protected
-  UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw);
-
-  @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
   @protected
   UiMixerChannelParams dco_decode_box_autoadd_ui_mixer_channel_params(
+    dynamic raw,
+  );
+
+  @protected
+  UiMixerChannelSnapshot dco_decode_box_autoadd_ui_mixer_channel_snapshot(
     dynamic raw,
   );
 
@@ -393,6 +372,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw);
+
+  @protected
+  BufferDataTypeDto dco_decode_buffer_data_type_dto(dynamic raw);
 
   @protected
   EffectAutomationTargetDto dco_decode_effect_automation_target_dto(
@@ -430,9 +412,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
 
   @protected
-  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
-
-  @protected
   List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
   @protected
@@ -440,6 +419,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<(String, ZeroCopyHandle)>
+  dco_decode_list_record_string_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_zero_copy_handle(
+    dynamic raw,
+  );
 
   @protected
   List<(int, AudioWaveformUiForSourceList)>
@@ -493,6 +478,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, UiMixerChannelSnapshot)>
+  dco_decode_list_record_u_32_ui_mixer_channel_snapshot(dynamic raw);
+
+  @protected
   List<(int, UiPattern)> dco_decode_list_record_u_32_ui_pattern(dynamic raw);
 
   @protected
@@ -527,6 +516,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MixerChannelParamTargetDto dco_decode_mixer_channel_param_target_dto(
+    dynamic raw,
+  );
+
+  @protected
+  MixerTelemetrySnapshotDto dco_decode_mixer_telemetry_snapshot_dto(
     dynamic raw,
   );
 
@@ -592,10 +586,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PluginTelemetrySnapshotDto?
+  dco_decode_opt_box_autoadd_plugin_telemetry_snapshot_dto(dynamic raw);
+
+  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
+
+  @protected
+  UiMixerChannelSnapshot? dco_decode_opt_box_autoadd_ui_mixer_channel_snapshot(
+    dynamic raw,
+  );
 
   @protected
   UiTrack? dco_decode_opt_box_autoadd_ui_track(dynamic raw);
@@ -614,6 +617,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaybackModeDto dco_decode_playback_mode_dto(dynamic raw);
+
+  @protected
+  PluginTelemetrySnapshotDto dco_decode_plugin_telemetry_snapshot_dto(
+    dynamic raw,
+  );
+
+  @protected
+  (String, ZeroCopyHandle)
+  dco_decode_record_string_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_zero_copy_handle(
+    dynamic raw,
+  );
 
   @protected
   (int, AudioWaveformUiForSourceList)
@@ -664,6 +678,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, UiMixerChannel) dco_decode_record_u_32_ui_mixer_channel(dynamic raw);
+
+  @protected
+  (int, UiMixerChannelSnapshot)
+  dco_decode_record_u_32_ui_mixer_channel_snapshot(dynamic raw);
 
   @protected
   (int, UiPattern) dco_decode_record_u_32_ui_pattern(dynamic raw);
@@ -730,9 +748,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiEffectSummary dco_decode_ui_effect_summary(dynamic raw);
 
   @protected
-  UiEffectTarget dco_decode_ui_effect_target(dynamic raw);
-
-  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
@@ -743,6 +758,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw);
+
+  @protected
+  UiMixerChannelSnapshot dco_decode_ui_mixer_channel_snapshot(dynamic raw);
 
   @protected
   UiMixerChannelTarget dco_decode_ui_mixer_channel_target(dynamic raw);
@@ -820,20 +838,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  BufferDataType
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   DawContext
   sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  PluginBufferHandle
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
     SseDeserializer deserializer,
   );
 
@@ -880,12 +886,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  PluginBufferHandle
-  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   WaveformHandle
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     SseDeserializer deserializer,
@@ -905,6 +905,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer);
+
+  @protected
+  Map<String, ZeroCopyHandle>
+  sse_decode_Map_String_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle_None(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<int, WaveformHandle>
@@ -947,6 +953,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Map<int, UiMixerChannelSnapshot>
+  sse_decode_Map_u_32_ui_mixer_channel_snapshot_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Map<int, UiPattern> sse_decode_Map_u_32_ui_pattern_None(
     SseDeserializer deserializer,
   );
@@ -969,20 +981,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  BufferDataType
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   DawContext
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  PluginBufferHandle
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
     SseDeserializer deserializer,
   );
 
@@ -1128,6 +1128,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PluginTelemetrySnapshotDto
+  sse_decode_box_autoadd_plugin_telemetry_snapshot_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, int) sse_decode_box_autoadd_record_u_8_u_8(
     SseDeserializer deserializer,
   );
@@ -1144,17 +1150,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_box_autoadd_u_8(SseDeserializer deserializer);
 
   @protected
-  UiEffectTarget sse_decode_box_autoadd_ui_effect_target(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
     SseDeserializer deserializer,
   );
 
   @protected
   UiMixerChannelParams sse_decode_box_autoadd_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelSnapshot sse_decode_box_autoadd_ui_mixer_channel_snapshot(
     SseDeserializer deserializer,
   );
 
@@ -1191,6 +1197,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BufferDataTypeDto sse_decode_buffer_data_type_dto(
     SseDeserializer deserializer,
   );
 
@@ -1236,9 +1247,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
-
-  @protected
   List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
   @protected
@@ -1246,6 +1254,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<(String, ZeroCopyHandle)>
+  sse_decode_list_record_string_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_zero_copy_handle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<(int, AudioWaveformUiForSourceList)>
@@ -1311,6 +1325,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, UiMixerChannelSnapshot)>
+  sse_decode_list_record_u_32_ui_mixer_channel_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(int, UiPattern)> sse_decode_list_record_u_32_ui_pattern(
     SseDeserializer deserializer,
   );
@@ -1359,6 +1379,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MixerChannelParamTargetDto sse_decode_mixer_channel_param_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MixerTelemetrySnapshotDto sse_decode_mixer_telemetry_snapshot_dto(
     SseDeserializer deserializer,
   );
 
@@ -1432,10 +1457,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PluginTelemetrySnapshotDto?
+  sse_decode_opt_box_autoadd_plugin_telemetry_snapshot_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
+  UiMixerChannelSnapshot? sse_decode_opt_box_autoadd_ui_mixer_channel_snapshot(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiTrack? sse_decode_opt_box_autoadd_ui_track(SseDeserializer deserializer);
@@ -1460,6 +1496,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaybackModeDto sse_decode_playback_mode_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginTelemetrySnapshotDto sse_decode_plugin_telemetry_snapshot_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (String, ZeroCopyHandle)
+  sse_decode_record_string_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_zero_copy_handle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   (int, AudioWaveformUiForSourceList)
@@ -1516,6 +1563,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, UiMixerChannel) sse_decode_record_u_32_ui_mixer_channel(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, UiMixerChannelSnapshot)
+  sse_decode_record_u_32_ui_mixer_channel_snapshot(
     SseDeserializer deserializer,
   );
 
@@ -1596,9 +1649,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer);
 
   @protected
-  UiEffectTarget sse_decode_ui_effect_target(SseDeserializer deserializer);
-
-  @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
     SseDeserializer deserializer,
   );
@@ -1613,6 +1663,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannelParams sse_decode_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelSnapshot sse_decode_ui_mixer_channel_snapshot(
     SseDeserializer deserializer,
   );
 
@@ -1709,22 +1764,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    BufferDataType self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
     DawContext self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-    PluginBufferHandle self,
     SseSerializer serializer,
   );
 
@@ -1779,13 +1820,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-    PluginBufferHandle self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     WaveformHandle self,
     SseSerializer serializer,
@@ -1806,6 +1840,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer);
+
+  @protected
+  void
+  sse_encode_Map_String_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle_None(
+    Map<String, ZeroCopyHandle> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
@@ -1857,6 +1898,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_Map_u_32_ui_mixer_channel_snapshot_None(
+    Map<int, UiMixerChannelSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_Map_u_32_ui_pattern_None(
     Map<int, UiPattern> self,
     SseSerializer serializer,
@@ -1884,22 +1931,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    BufferDataType self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
     DawContext self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-    PluginBufferHandle self,
     SseSerializer serializer,
   );
 
@@ -2068,6 +2101,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_plugin_telemetry_snapshot_dto(
+    PluginTelemetrySnapshotDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_record_u_8_u_8(
     (int, int) self,
     SseSerializer serializer,
@@ -2086,12 +2125,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_ui_effect_target(
-    UiEffectTarget self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_box_autoadd_ui_mixer_channel(
     UiMixerChannel self,
     SseSerializer serializer,
@@ -2100,6 +2133,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_mixer_channel_params(
     UiMixerChannelParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_mixer_channel_snapshot(
+    UiMixerChannelSnapshot self,
     SseSerializer serializer,
   );
 
@@ -2149,6 +2188,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_buffer_data_type_dto(
+    BufferDataTypeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_effect_automation_target_dto(
     EffectAutomationTargetDto self,
     SseSerializer serializer,
@@ -2194,12 +2239,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_prim_f_32_strict(
-    Float32List self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_prim_u_32_loose(
     List<int> self,
     SseSerializer serializer,
@@ -2214,6 +2253,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_list_record_string_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_zero_copy_handle(
+    List<(String, ZeroCopyHandle)> self,
     SseSerializer serializer,
   );
 
@@ -2291,6 +2337,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_ui_mixer_channel_snapshot(
+    List<(int, UiMixerChannelSnapshot)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_ui_pattern(
     List<(int, UiPattern)> self,
     SseSerializer serializer,
@@ -2348,6 +2400,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_mixer_channel_param_target_dto(
     MixerChannelParamTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_mixer_telemetry_snapshot_dto(
+    MixerTelemetrySnapshotDto self,
     SseSerializer serializer,
   );
 
@@ -2430,10 +2488,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_plugin_telemetry_snapshot_dto(
+    PluginTelemetrySnapshotDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_mixer_channel_snapshot(
+    UiMixerChannelSnapshot? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ui_track(
@@ -2468,6 +2538,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_playback_mode_dto(
     PlaybackModeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_telemetry_snapshot_dto(
+    PluginTelemetrySnapshotDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_record_string_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_zero_copy_handle(
+    (String, ZeroCopyHandle) self,
     SseSerializer serializer,
   );
 
@@ -2541,6 +2624,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_ui_mixer_channel(
     (int, UiMixerChannel) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_ui_mixer_channel_snapshot(
+    (int, UiMixerChannelSnapshot) self,
     SseSerializer serializer,
   );
 
@@ -2641,12 +2730,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_ui_effect_target(
-    UiEffectTarget self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_ui_generator_instance(
     UiGeneratorInstance self,
     SseSerializer serializer,
@@ -2667,6 +2750,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_mixer_channel_params(
     UiMixerChannelParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_mixer_channel_snapshot(
+    UiMixerChannelSnapshot self,
     SseSerializer serializer,
   );
 
@@ -2850,40 +2939,6 @@ class RustLibWire implements BaseWire {
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataTypePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_karbeat_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataTypePtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataTypePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_karbeat_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataTypePtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
   rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
     ffi.Pointer<ffi.Void> ptr,
   ) {
@@ -2915,40 +2970,6 @@ class RustLibWire implements BaseWire {
       );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContextPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandlePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_karbeat_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandlePtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandlePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_karbeat_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandlePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void

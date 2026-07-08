@@ -7,11 +7,13 @@ import '../frb_generated.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'plugins/opaque.dart';
+import 'plugins/types.dart';
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectParameterSnapshot`, `UiGeneratorParameterSnapshot`, `UiParameterValue`, `UiPluginCommandResponse`, `UiZeroCopyBufferResponse`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`, `into_id`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiPluginCommandResponse`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `hash`, `into_id`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
 /// Get all available generators with their registry IDs (preferred for UI)
@@ -67,261 +69,114 @@ Future<List<UiEffectInstance>> getEffectsFromTrack({
 Future<List<UiEffectInstance>> getMasterEffects({required DawContext ctx}) =>
     RustLib.instance.api.crateApiPluginGetMasterEffects(ctx: ctx);
 
-/// Get parameter specifications for a generator plugin.
-Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
+/// Get parameter specifications for ANY plugin type (Generator or Effect)
+Future<List<UiPluginParameter>> getPluginParameterSpecs({
   required DawContext ctx,
-  required int generatorId,
-}) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(
+  required UiPluginTarget target,
+}) => RustLib.instance.api.crateApiPluginGetPluginParameterSpecs(
   ctx: ctx,
-  generatorId: generatorId,
+  target: target,
 );
 
-/// Set a parameter on a generator plugin.
-Future<void> setGeneratorParameter({
+/// Set a parameter on ANY plugin type (Generator or Effect)
+Future<void> setPluginParameter({
   required DawContext ctx,
-  required int generatorId,
+  required UiPluginTarget target,
   required UiParamId paramId,
   required double value,
-}) => RustLib.instance.api.crateApiPluginSetGeneratorParameter(
+}) => RustLib.instance.api.crateApiPluginSetPluginParameter(
   ctx: ctx,
-  generatorId: generatorId,
+  target: target,
   paramId: paramId,
   value: value,
 );
 
-/// Get a parameter value from a generator plugin.
-Future<double> getGeneratorParameter({
-  required int generatorId,
+/// Signals the start of a parameter edit gesture (e.g., user clicks a knob)
+Future<void> beginPluginParameterEdit({
+  required DawContext ctx,
+  required UiPluginTarget target,
   required UiParamId paramId,
-}) => RustLib.instance.api.crateApiPluginGetGeneratorParameter(
-  generatorId: generatorId,
+}) => RustLib.instance.api.crateApiPluginBeginPluginParameterEdit(
+  ctx: ctx,
+  target: target,
   paramId: paramId,
 );
 
-/// Request a parameter snapshot from the audio thread.
-Future<void> queryGeneratorParameters({
+/// Signals the end of a parameter edit gesture (e.g., user releases a knob)
+Future<void> endPluginParameterEdit({
   required DawContext ctx,
-  required int generatorId,
-}) => RustLib.instance.api.crateApiPluginQueryGeneratorParameters(
-  ctx: ctx,
-  generatorId: generatorId,
-);
-
-Future<List<UiPluginParameter>> getEffectParameterSpecs({
-  required DawContext ctx,
-  required UiEffectTarget target,
-  required int effectId,
-}) => RustLib.instance.api.crateApiPluginGetEffectParameterSpecs(
-  ctx: ctx,
-  target: target,
-  effectId: effectId,
-);
-
-Future<void> setEffectParameter({
-  required DawContext ctx,
-  required UiEffectTarget target,
-  required int effectId,
+  required UiPluginTarget target,
   required UiParamId paramId,
-  required double value,
-}) => RustLib.instance.api.crateApiPluginSetEffectParameter(
+}) => RustLib.instance.api.crateApiPluginEndPluginParameterEdit(
   ctx: ctx,
   target: target,
-  effectId: effectId,
   paramId: paramId,
-  value: value,
 );
 
-Future<void> queryEffectParameters({
+/// 1. STATELESS COMMANDS (Operates on defaults from the Registry)
+Future<String?> executePluginCommandByRegistryId({
   required DawContext ctx,
-  required UiEffectTarget target,
-  required int effectId,
-}) => RustLib.instance.api.crateApiPluginQueryEffectParameters(
-  ctx: ctx,
-  target: target,
-  effectId: effectId,
-);
-
-Future<String?> executePluginCommandGenerator({
-  required DawContext ctx,
-  required int genRegistryId,
+  required int registryId,
   required String command,
   required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecutePluginCommandGenerator(
+}) => RustLib.instance.api.crateApiPluginExecutePluginCommandByRegistryId(
   ctx: ctx,
-  genRegistryId: genRegistryId,
+  registryId: registryId,
   command: command,
   payloadJson: payloadJson,
 );
 
-Future<String?> executePluginCommandEffect({
-  required DawContext ctx,
-  required int effectRegistryId,
-  required String command,
-  required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecutePluginCommandEffect(
-  ctx: ctx,
-  effectRegistryId: effectRegistryId,
-  command: command,
-  payloadJson: payloadJson,
-);
-
-Future<String> executeEffectInstanceCommand({
-  required DawContext ctx,
-  required UiEffectTarget target,
-  required int effectId,
-  required String command,
-  required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecuteEffectInstanceCommand(
-  ctx: ctx,
-  target: target,
-  effectId: effectId,
-  command: command,
-  payloadJson: payloadJson,
-);
-
-Future<String> executeGeneratorInstanceCommand({
-  required DawContext ctx,
-  required int generatorId,
-  required String command,
-  required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecuteGeneratorInstanceCommand(
-  ctx: ctx,
-  generatorId: generatorId,
-  command: command,
-  payloadJson: payloadJson,
-);
-
-/// Dispatches a real-time command to a live plugin instance on the audio thread.
-///
-/// The plugin's `execute_custom_command` is called from within the audio callback,
-/// so the command and payload must be cheap to process. The response arrives
-/// asynchronously via the `StreamSink` opened by `create_plugin_message_stream`.
-///
-/// # Parameters
-/// - `target`: Which plugin instance to target.
-/// - `command`: Command key string (e.g. `"get_meter"`, `"get_spectrum"`).
-/// - `payload_json`: JSON string sent as the command argument. Defaults to `{}`
-///   if the string is not valid JSON.
-///
-/// # Returns
-/// `Ok(request_id)` — correlate this with `UiPluginCommandResponse.request_id`
-/// in the stream. Returns `Err` if the audio stream is not active or the
-/// command queue is full.
-Future<int> executeRealtimePluginCommand({
+/// 2. STATEFUL COMMANDS (Operates on active instances via Main Thread Sync)
+Future<String> executePluginInstanceCommand({
   required DawContext ctx,
   required UiPluginTarget target,
   required String command,
   required String payloadJson,
-}) => RustLib.instance.api.crateApiPluginExecuteRealtimePluginCommand(
+}) => RustLib.instance.api.crateApiPluginExecutePluginInstanceCommand(
   ctx: ctx,
   target: target,
   command: command,
   payloadJson: payloadJson,
 );
 
-/// Dispatches a request to the audio thread to fetch a zero-copy buffer from a live plugin.
-///
-/// # Parameters
-/// - `target`: Which plugin instance to target.
-/// - `name`: The requested buffer name (e.g., `"magnitude"` or `"spectrum"`).
-///
-/// # Returns
-/// `Ok(request_id)` — correlate this with `UiZeroCopyBufferResponse.request_id` in the stream.
-Future<int> queryLivePluginZeroCopyBuf({
+/// 3. REAL-TIME COMMANDS (Dispatched to the audio thread)
+Future<int> executeLivePluginCommand({
   required DawContext ctx,
   required UiPluginTarget target,
-  required String name,
-}) => RustLib.instance.api.crateApiPluginQueryLivePluginZeroCopyBuf(
+  required String command,
+  required String payloadJson,
+}) => RustLib.instance.api.crateApiPluginExecuteLivePluginCommand(
   ctx: ctx,
   target: target,
-  name: name,
+  command: command,
+  payloadJson: payloadJson,
 );
 
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as edited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-Future<void> beginGeneratorParameterEdit({
+/// Get the snapshot telemetry from the audio engine.
+/// This utilizes an atomic ArcSwap which enables lock-free reading.
+/// If empty, it means that the snapshot is not currently available.
+PluginTelemetrySnapshotDto? getPluginSnapshotTelemetrySync({
   required DawContext ctx,
-  required int generatorId,
-  required UiParamId paramId,
-}) => RustLib.instance.api.crateApiPluginBeginGeneratorParameterEdit(
+  required UiPluginTarget target,
+}) => RustLib.instance.api.crateApiPluginGetPluginSnapshotTelemetrySync(
   ctx: ctx,
-  generatorId: generatorId,
-  paramId: paramId,
+  target: target,
 );
 
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as unedited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-Future<void> endGeneratorParameterEdit({
+/// Start or stop the telemetry packing for a specific plugin on the audio thread.
+Future<void> setPluginTelemetrySubs({
   required DawContext ctx,
-  required int generatorId,
-  required UiParamId paramId,
-}) => RustLib.instance.api.crateApiPluginEndGeneratorParameterEdit(
+  required UiPluginTarget target,
+  required List<String> buffers,
+  required bool active,
+}) => RustLib.instance.api.crateApiPluginSetPluginTelemetrySubs(
   ctx: ctx,
-  generatorId: generatorId,
-  paramId: paramId,
+  target: target,
+  buffers: buffers,
+  active: active,
 );
-
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as edited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-Future<void> beginEffectParameterEdit({
-  required DawContext ctx,
-  required UiEffectTarget effectTarget,
-  required int effectId,
-  required UiParamId paramId,
-}) => RustLib.instance.api.crateApiPluginBeginEffectParameterEdit(
-  ctx: ctx,
-  effectTarget: effectTarget,
-  effectId: effectId,
-  paramId: paramId,
-);
-
-/// Begin a parameter edit from user touch, or other input
-///
-/// This will flag the affected plugin parameter as unedited.
-///
-/// The behavior during which the plugin's parameter are
-/// edited, are determined by the plugin's internal implementation
-Future<void> endEffectParameterEdit({
-  required DawContext ctx,
-  required UiEffectTarget effectTarget,
-  required int effectId,
-  required UiParamId paramId,
-}) => RustLib.instance.api.crateApiPluginEndEffectParameterEdit(
-  ctx: ctx,
-  effectTarget: effectTarget,
-  effectId: effectId,
-  paramId: paramId,
-);
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>>
-abstract class PluginBufferHandle implements RustOpaqueInterface {
-  /// Reads the current buffer state directly into a Dart Float32List.
-  /// This bypasses JSON entirely and takes less than a microsecond.
-  Float32List read();
-}
 
 enum KarbeatPluginType { generator, effect }
-
-@freezed
-sealed class UiEffectTarget with _$UiEffectTarget {
-  const UiEffectTarget._();
-
-  const factory UiEffectTarget.track(int field0) = UiEffectTarget_Track;
-  const factory UiEffectTarget.master() = UiEffectTarget_Master;
-  const factory UiEffectTarget.bus(int field0) = UiEffectTarget_Bus;
-}
 
 @freezed
 sealed class UiParamId with _$UiParamId {

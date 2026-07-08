@@ -17,6 +17,7 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/project.dart' show DawContext;
 import 'package:multi_split_view/multi_split_view.dart';
+import 'package:flutter/scheduler.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
   const MixerScreen({super.key});
@@ -38,6 +39,8 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   // Key to track the exact coordinates of the drawing canvas
   final GlobalKey _overlayKey = GlobalKey();
 
+  late final Ticker _ticker;
+
 
   @override
   void initState() {
@@ -53,6 +56,16 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       ],
     );
 
+    _ticker = Ticker((elapsed) {
+      // Synchronously poll the Rust memory pointer and push it into the UI
+      ref.read(mixerStateProvider.notifier).pollTelemetry();
+    });
+    
+    // Start pumping telemetry
+    _ticker.start();
+
+    setMixerTelemetrySubs(ctx: ref.read(projectProvider.notifier).dawContext, active: true);
+
     // WidgetsBinding.instance.addPostFrameCallback((_) async {
     //   ref.read(mixerStateProvider.notifier).queryAllMixerChannels();
     //   await ref.read(mixerStateProvider.notifier).syncMixerState();
@@ -61,6 +74,8 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
   @override
   void dispose() {
+    setMixerTelemetrySubs(ctx: ref.read(projectProvider.notifier).dawContext, active: false);
+    _ticker.dispose();
     _trackScrollController.dispose();
     _busScrollController.dispose();
     super.dispose();
