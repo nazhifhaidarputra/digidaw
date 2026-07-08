@@ -652,9 +652,10 @@ pub fn end_effect_parameter_edit(
 // =============================================================
 
 /// Synchronously fetches the parameters and buffers for a specific plugin.
-pub fn get_plugin_telemetry_sync(ctx: &DawContext, target: PluginTarget) -> Option<PluginTelemetrySnapshot> {
-    let all_plugins_snap = ctx.telemetry_registry.param_telemetry.load();
-    
-    // Extract only the requested plugin's snapshot to send to Dart
-    all_plugins_snap.active_plugins.get(&target).cloned()
+pub fn get_plugin_telemetry_sync(ctx: &mut DawContext, target: PluginTarget) -> Option<PluginTelemetrySnapshot> {
+    ctx.telemetry_registry
+        .as_mut()?
+        .param_telemetry_consumers
+        .get_mut(&target)
+        .map(|consumer| consumer.read().clone())
 }

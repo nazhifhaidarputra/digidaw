@@ -1,7 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
-use arc_swap::ArcSwap;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     DeviceId, OutputCallbackInfo,
@@ -12,8 +11,8 @@ use rtrb::{Consumer, RingBuffer};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    audio::{engine::{ActivePluginTelemetrySnapshots, AudioEngine, AudioEngineTelemetry, MixerTelemetrySnapshot}, event::TransportFeedback},
-    commands::AudioCommand,
+    audio::{engine::{AudioEngine, AudioEngineTelemetry}, event::TransportFeedback},
+    commands::{AudioCommand, TelemetryRegistration},
     context::DawContext, message::TelemetryRegistry,
 };
 
@@ -431,17 +430,17 @@ pub fn start_audio_stream(
 
     let initial_bpm = ctx.app_state.transport.bpm;
 
-    // create the arc swap pointer
-    let mixer_ptr = Arc::new(ArcSwap::from_pointee(MixerTelemetrySnapshot::default()));
-    let param_ptr = Arc::new(ArcSwap::from_pointee(ActivePluginTelemetrySnapshots::default()));
+    // Build the engine telemetry.  The constructor returns both the engine-side
+    // producers AND the UI-side mixer consumer in one step.
+    let (engine_telemetry, mixer_consumer) = AudioEngineTelemetry::new();
 
-    let engine_telemetry = AudioEngineTelemetry {
-        mixer_telemetry: mixer_ptr.clone(),
-        param_telemetry: param_ptr.clone(),
-        mixer_snapshot_active: false,
-        active_telemetry_subscriptions: HashMap::new(),
-    };
-    
+    // Dedicated channel for handing per-plugin triple-buffer Output consumers
+    // from the audio thread back to DawContext on the main thread.
+    // Capacity of 64 is generous; in practice only a handful of plugins are
+    // added/removed between UI polls.
+    let (telemetry_reg_sender, telemetry_reg_receiver) =
+        std::sync::mpsc::sync_channel::<TelemetryRegistration>(64);
+
     let engine = AudioEngine::new(
         command_consumer,
         pos_producer,
@@ -450,15 +449,14 @@ pub fn start_audio_stream(
         channels as u16,
         initial_bpm,
         engine_block_size,
-        engine_telemetry
+        engine_telemetry,
+        telemetry_reg_sender,
     );
 
-    let telemetry_registry = TelemetryRegistry {
-        mixer_telemetry: mixer_ptr,
-        param_telemetry: param_ptr,
-    };
+    let telemetry_registry = TelemetryRegistry::new(mixer_consumer);
 
     ctx.update_telemetry_reg(telemetry_registry);
+    ctx.telemetry_reg_receiver = Some(Mutex::new(telemetry_reg_receiver));
 
     // Create the engine wrapped in Arc<Mutex> so it outlives dropped streams
     let engine_arc = Arc::new(Mutex::new(engine));

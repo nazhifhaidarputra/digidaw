@@ -24,10 +24,15 @@ abstract class AbstractEffectScreen extends ConsumerStatefulWidget {
   final plugin_api.UiEffectTarget target;
   final int effectId;
 
-  const AbstractEffectScreen({super.key, required this.target, required this.effectId});
+  const AbstractEffectScreen({
+    super.key,
+    required this.target,
+    required this.effectId,
+  });
 }
 
-abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends ConsumerState<T> {
+abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
+    extends ConsumerState<T> {
   List<plugin_api.UiPluginParameter> parameters = [];
   bool isLoading = true;
   String? errorMessage;
@@ -63,7 +68,11 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends
     try {
       // Just tell Rust we are watching this effect.
       // The stream will handle the actual data delivery.
-      await plugin_api.queryEffectParameters(ctx: _ctx, target: widget.target, effectId: widget.effectId);
+      await plugin_api.queryEffectParameters(
+        ctx: _ctx,
+        target: widget.target,
+        effectId: widget.effectId,
+      );
     } catch (e) {
       debugPrint('Failed to request effect parameters: $e');
     }
@@ -245,7 +254,10 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends
 
     if (errorMessage != null) {
       return Center(
-        child: Text(errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+        child: Text(
+          errorMessage!,
+          style: const TextStyle(color: Colors.redAccent),
+        ),
       );
     }
 
@@ -264,7 +276,10 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: entry.value.map((param) {
-                    return Padding(padding: const EdgeInsets.only(bottom: 16), child: buildParameterWidget(param));
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: buildParameterWidget(param),
+                    );
                   }).toList(),
                 ),
               ),
@@ -330,7 +345,12 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         title,
-        style: const TextStyle(color: Colors.cyanAccent, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+        style: const TextStyle(
+          color: Colors.cyanAccent,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -363,9 +383,11 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends
       // Helper to verify this stream event belongs to THIS specific effect widget
       bool isMatchingTarget(int? streamTrackId, int? streamBusId) {
         if (widget.target is plugin_api.UiEffectTarget_Track) {
-          return streamTrackId == (widget.target as plugin_api.UiEffectTarget_Track).field0;
+          return streamTrackId ==
+              (widget.target as plugin_api.UiEffectTarget_Track).field0;
         } else if (widget.target is plugin_api.UiEffectTarget_Bus) {
-          return streamBusId == (widget.target as plugin_api.UiEffectTarget_Bus).field0;
+          return streamBusId ==
+              (widget.target as plugin_api.UiEffectTarget_Bus).field0;
         } else if (widget.target is plugin_api.UiEffectTarget_Master) {
           return streamTrackId == null && streamBusId == null;
         }
@@ -374,62 +396,66 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends
 
       feedback.maybeWhen(
         // 1. Handle Bulk Parameter Snapshots
-        effectParameterSnapshot: (targetTrackId, targetBusId, snapshotEffectId, snapshotParams) {
-          if (snapshotEffectId != widget.effectId ||
-              !isMatchingTarget(targetTrackId, targetBusId) ||
-              snapshotParams.isEmpty)
-            return;
+        effectParameterSnapshot:
+            (targetTrackId, targetBusId, snapshotEffectId, snapshotParams) {
+              if (snapshotEffectId != widget.effectId ||
+                  !isMatchingTarget(targetTrackId, targetBusId) ||
+                  snapshotParams.isEmpty)
+                return;
 
-          setState(() {
-            for (final paramTuple in snapshotParams) {
-              final paramId = paramTuple.$1;
-              final paramValue = paramTuple.$2;
+              setState(() {
+                for (final paramTuple in snapshotParams) {
+                  final paramId = paramTuple.$1;
+                  final paramValue = paramTuple.$2;
 
-              final index = parameters.indexWhere((p) => p.id == paramId);
-              if (index != -1) {
-                parameters[index] = plugin_api.UiPluginParameter(
-                  id: parameters[index].id,
-                  path: parameters[index].path,
-                  name: parameters[index].name,
-                  group: parameters[index].group,
-                  value: paramValue,
-                  min: parameters[index].min,
-                  max: parameters[index].max,
-                  defaultValue: parameters[index].defaultValue,
-                  step: parameters[index].step,
-                  paramType: parameters[index].paramType,
-                  choices: parameters[index].choices,
-                );
-              }
-            }
-          });
-          onParametersUpdated();
-        },
+                  final index = parameters.indexWhere((p) => p.id == paramId);
+                  if (index != -1) {
+                    parameters[index] = plugin_api.UiPluginParameter(
+                      id: parameters[index].id,
+                      path: parameters[index].path,
+                      name: parameters[index].name,
+                      group: parameters[index].group,
+                      value: paramValue,
+                      min: parameters[index].min,
+                      max: parameters[index].max,
+                      defaultValue: parameters[index].defaultValue,
+                      step: parameters[index].step,
+                      paramType: parameters[index].paramType,
+                      choices: parameters[index].choices,
+                    );
+                  }
+                }
+              });
+              onParametersUpdated();
+            },
 
         // 2. Handle Single Parameter Changes
-        effectParameterChanged: (targetTrackId, targetBusId, changedEffectId, paramId, value) {
-          if (changedEffectId != widget.effectId || !isMatchingTarget(targetTrackId, targetBusId)) return;
+        effectParameterChanged:
+            (targetTrackId, targetBusId, changedEffectId, paramId, value) {
+              if (changedEffectId != widget.effectId ||
+                  !isMatchingTarget(targetTrackId, targetBusId))
+                return;
 
-          setState(() {
-            final index = parameters.indexWhere((p) => p.id == paramId);
-            if (index != -1) {
-              parameters[index] = plugin_api.UiPluginParameter(
-                id: parameters[index].id,
-                path: parameters[index].path,
-                name: parameters[index].name,
-                group: parameters[index].group,
-                value: value,
-                min: parameters[index].min,
-                max: parameters[index].max,
-                defaultValue: parameters[index].defaultValue,
-                step: parameters[index].step,
-                paramType: parameters[index].paramType,
-                choices: parameters[index].choices,
-              );
-            }
-          });
-          onParametersUpdated();
-        },
+              setState(() {
+                final index = parameters.indexWhere((p) => p.id == paramId);
+                if (index != -1) {
+                  parameters[index] = plugin_api.UiPluginParameter(
+                    id: parameters[index].id,
+                    path: parameters[index].path,
+                    name: parameters[index].name,
+                    group: parameters[index].group,
+                    value: value,
+                    min: parameters[index].min,
+                    max: parameters[index].max,
+                    defaultValue: parameters[index].defaultValue,
+                    step: parameters[index].step,
+                    paramType: parameters[index].paramType,
+                    choices: parameters[index].choices,
+                  );
+                }
+              });
+              onParametersUpdated();
+            },
 
         // 3. Ignore Generator, Mixer, and other events
         orElse: () {},
@@ -445,7 +471,10 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen> extends
         backgroundColor: const Color(0xFF16213E),
         elevation: 0,
         foregroundColor: Colors.white,
-        title: Text(effectName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        title: Text(
+          effectName,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
       ),
       body: body,
     );

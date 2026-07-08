@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
-use arc_swap::ArcSwap;
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_api::types::ZeroCopyBuffer;
+use triple_buffer::Input;
 
 use crate::{audio::event::PluginTarget, commands::MixerChannelSnapshot, shared::*};
 
@@ -22,21 +20,53 @@ pub struct MixerTelemetrySnapshot {
     pub master: Option<MixerChannelSnapshot>,
 }
 
-/// A snapshot of plugin parameters.
-/// Because querying 100+ plugins is heavy, this will only contain plugins the UI is actively watching.
-#[derive(Clone, Default)]
-pub struct ActivePluginTelemetrySnapshots {
-    pub active_plugins: HashMap<PluginTarget, PluginTelemetrySnapshot>,
-}
-
-#[derive(Clone, Default)]
+/// Audio-thread-owned telemetry state.
+/// The engine writes into triple-buffer `Input` producers; the UI thread reads
+/// from the matching `Output` consumers held in `TelemetryRegistry`.
 pub struct AudioEngineTelemetry {
-    pub mixer_telemetry: Arc<ArcSwap<MixerTelemetrySnapshot>>,
-    pub param_telemetry: Arc<ArcSwap<ActivePluginTelemetrySnapshots>>,
+    /// Triple-buffer producer for the full mixer snapshot (all tracks + buses + master).
+    pub mixer_telemetry_producer: Input<MixerTelemetrySnapshot>,
+
+    /// Per-plugin triple-buffer producers — keyed by `PluginTarget`.
+    /// A new entry is inserted when a plugin is added, and removed when it is removed.
+    pub param_telemetry_producers: HashMap<PluginTarget, Input<PluginTelemetrySnapshot>>,
 
     /// Flag to check whether the UI really needs this data (e.g opening mixer screen)
     pub mixer_snapshot_active: bool,
 
     /// Track the subscription
     pub active_telemetry_subscriptions: HashMap<PluginTarget, HashSet<String>>,
+}
+
+impl AudioEngineTelemetry {
+    /// Create a new telemetry instance.
+    /// Returns the matching `Output` consumers that should be placed in `TelemetryRegistry`.
+    pub fn new() -> (Self, triple_buffer::Output<MixerTelemetrySnapshot>) {
+        let (mixer_input, mixer_output) =
+            triple_buffer::triple_buffer(&MixerTelemetrySnapshot::default());
+
+        let this = Self {
+            mixer_telemetry_producer: mixer_input,
+            param_telemetry_producers: HashMap::new(),
+            mixer_snapshot_active: false,
+            active_telemetry_subscriptions: HashMap::new(),
+        };
+
+        (this, mixer_output)
+    }
+
+    /// Create a fresh, detached instance for use in the export engine.
+    /// The export engine never needs to push telemetry to the UI, so these
+    /// producers are simply discarded after export.
+    pub fn new_for_export() -> Self {
+        let (mixer_input, _) =
+            triple_buffer::triple_buffer(&MixerTelemetrySnapshot::default());
+
+        Self {
+            mixer_telemetry_producer: mixer_input,
+            param_telemetry_producers: HashMap::new(),
+            mixer_snapshot_active: false,
+            active_telemetry_subscriptions: HashMap::new(),
+        }
+    }
 }

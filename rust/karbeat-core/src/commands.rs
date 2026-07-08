@@ -4,7 +4,7 @@ use karbeat_plugin_api::types::ZeroCopyBuffer;
 
 use crate::{
     audio::{
-        engine::PlaybackMode,
+        engine::{PlaybackMode, PluginTelemetrySnapshot},
         event::PluginTarget,
         render_state::{AudioAutomationLane, AudioGraphState},
     },
@@ -380,6 +380,33 @@ pub enum AudioFeedback {
 
     ZeroCopyBufferResponse {
         request_id: u32,
-        buffer: Option<ZeroCopyBuffer>, // Wrap it in your opaque type
+        buffer: Option<ZeroCopyBuffer>,
     },
 }
+
+// ============================================================
+// Telemetry consumer registration — dedicated mpsc channel
+// ============================================================
+
+/// Messages sent from the audio thread to `DawContext` via a dedicated
+/// `std::sync::mpsc` channel to register/unregister per-plugin telemetry consumers.
+///
+/// These travel on a **separate** channel from `AudioFeedback` so that
+/// `AudioFeedback` can remain `Clone + Debug` and be processed on the
+/// background feedback-stream thread without issue.
+pub enum TelemetryRegistration {
+    /// A plugin was added — hand the UI-side consumer over to `DawContext`.
+    Registered {
+        target: PluginTarget,
+        consumer: Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
+    },
+    /// A plugin was removed — `DawContext` should drop the corresponding consumer.
+    Removed {
+        target: PluginTarget,
+    },
+    /// `HydratePlugin` completed — replace **all** consumers at once.
+    BatchRegistered {
+        consumers: HashMap<PluginTarget, Box<triple_buffer::Output<PluginTelemetrySnapshot>>>,
+    },
+}
+

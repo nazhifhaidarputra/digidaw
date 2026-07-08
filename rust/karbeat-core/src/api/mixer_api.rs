@@ -1,13 +1,17 @@
 use karbeat_plugin_types::ParameterSpec;
 
 use crate::{
-    audio::engine::MixerTelemetrySnapshot, commands::{AudioCommand, EffectTarget, MixerChannelTarget}, context::DawContext, core::project::{
+    audio::engine::MixerTelemetrySnapshot,
+    commands::{AudioCommand, EffectTarget, MixerChannelTarget},
+    context::DawContext,
+    core::project::{
         mixer::{
             BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
             RoutingConnection, RoutingNode,
         },
         TrackId,
-    }, shared::id::*
+    },
+    shared::id::*,
 };
 
 /// **GETTER: Fetch the mixer state from application state and map it to T value**
@@ -372,9 +376,16 @@ pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::
 // ======= NEW mixer shared pointer API ======
 // ===========================================
 
-pub fn get_mixer_telemetry_sync(ctx: &DawContext) -> MixerTelemetrySnapshot {
-    // .load() gets a lock-free Guard. 
-    // .as_ref() gets the data. 
-    // .clone() creates a fresh detached copy to safely hand over the FFI boundary to Dart.
-    ctx.telemetry_registry.mixer_telemetry.load().as_ref().clone()
+pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot {
+    // Drain any pending telemetry consumer registrations first, so plugin consumers
+    // are up to date before anyone calls get_plugin_telemetry_sync.
+    ctx.drain_telemetry_registrations();
+
+    // triple_buffer::Output::read() requires &mut self but is lock-free and wait-free.
+    // .clone() gives the caller an owned copy safe to pass across the FFI boundary.
+    if let Some(reg) = ctx.telemetry_registry.as_mut() {
+        reg.mixer_telemetry_consumer.read().clone()
+    } else {
+        MixerTelemetrySnapshot::default()
+    }
 }

@@ -3,7 +3,7 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
-use std::sync::{Arc, Once};
+use std::sync::{mpsc, Arc, Once};
 
 use hashbrown::HashMap;
 use karbeat_plugin_api::traits::AudioPlugin;
@@ -14,7 +14,8 @@ use rtrb::{Consumer, Producer};
 use crate::{
     audio::{
         backend::AudioDeviceConfig, event::TransportFeedback, render_state::{AudioAutomationLane, AudioGraphState}
-    }, commands::{AudioCommand, AudioFeedback}, core::{
+    }, commands::{AudioCommand, AudioFeedback,TelemetryRegistration},
+    core::{
         history::{HistoryManager, ProjectAction},
         project::{ApplicationState, AudioTrack, Pattern},
     }, message::TelemetryRegistry, shared::{AutomationId, PatternId}
@@ -44,7 +45,14 @@ pub struct DawContext {
     /// The UI writes to this, and the background stream monitor reads from it.
     pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
 
-    pub telemetry_registry: TelemetryRegistry,
+    pub telemetry_registry: Option<TelemetryRegistry>,
+
+    /// Receiver for per-plugin triple-buffer `Output` consumers sent from the audio thread.
+    ///
+    /// The audio thread sends a `TelemetryRegistration` message whenever a plugin is
+    /// added or removed. The UI thread polls this receiver (e.g. on every frame) to
+    /// keep `telemetry_registry.param_telemetry_consumers` in sync.
+    pub telemetry_reg_receiver: Option<Mutex<mpsc::Receiver<TelemetryRegistration>>>,
 }
 
 impl DawContext {
@@ -58,7 +66,8 @@ impl DawContext {
             position_consumer: Arc::new(Mutex::new(None)),
             plugin_registry: PluginRegistry::new_with_defaults(),
             active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
-            telemetry_registry: TelemetryRegistry::default(),
+            telemetry_registry: None,
+            telemetry_reg_receiver: None,
         }
     }
 
@@ -152,7 +161,37 @@ impl DawContext {
     }
 
     pub fn update_telemetry_reg(&mut self, new_reg: TelemetryRegistry) {
-        self.telemetry_registry =  new_reg;
+        self.telemetry_registry = Some(new_reg);
+    }
+
+    /// Drain all pending `TelemetryRegistration` messages from the audio thread and
+    /// apply them to `telemetry_registry`.
+    ///
+    /// Call this on every UI frame (e.g. alongside `get_mixer_telemetry_sync`).
+    /// It is entirely non-blocking: if no messages are pending it returns immediately.
+    pub fn drain_telemetry_registrations(&mut self) {
+        let Some(receiver_mutex) = &self.telemetry_reg_receiver else { return };
+        
+        // Lock the receiver to poll messages
+        let receiver = receiver_mutex.lock(); 
+        let Some(reg) = &mut self.telemetry_registry else { return };
+
+        while let Ok(msg) = receiver.try_recv() {
+            match msg {
+                TelemetryRegistration::Registered { target, consumer } => {
+                    reg.insert_plugin_consumer(target, *consumer);
+                }
+                TelemetryRegistration::Removed { target } => {
+                    reg.remove_plugin_consumer(&target);
+                }
+                TelemetryRegistration::BatchRegistered { consumers } => {
+                    reg.param_telemetry_consumers.clear();
+                    for (target, consumer) in consumers {
+                        reg.insert_plugin_consumer(target, *consumer);
+                    }
+                }
+            }
+        }
     }
 }
 
