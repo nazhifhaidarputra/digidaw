@@ -25,6 +25,7 @@ num-complex.workspace = true
 rmp-serde.workspace = true
 parking_lot.workspace = true
 realfft = "3.5.0"
+arc-swap = "1.9.2"
 
 [lints]
 workspace = true

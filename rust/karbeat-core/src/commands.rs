@@ -254,10 +254,13 @@ pub enum AudioCommand {
     EndEdit {target: AutomationTarget},
 
     // =========== TELEMETRY RELATED =====================
-    SetPluginParamTelemetrySubscription {
+    SetPluginTelemetrySubscription {
         target: PluginTarget,
         buffers: Vec<String>,
         active: bool,
+    },
+    SetMixerTelemetrySubscription {
+        active: bool
     },
 }
 

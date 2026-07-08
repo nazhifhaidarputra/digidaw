@@ -378,3 +378,10 @@ pub fn get_mixer_telemetry_sync(ctx: &DawContext) -> MixerTelemetrySnapshot {
     // .clone() creates a fresh detached copy to safely hand over the FFI boundary to Dart.
     ctx.telemetry_registry.mixer_telemetry.load().as_ref().clone()
 }
+
+pub fn set_mixer_telemetry_subs(
+    ctx: &mut DawContext,
+    active: bool
+) -> anyhow::Result<()> {
+    ctx.send_audio_command(AudioCommand::SetMixerTelemetrySubscription { active })
+}
