@@ -384,6 +384,7 @@ pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot 
     // triple_buffer::Output::read() requires &mut self but is lock-free and wait-free.
     // .clone() gives the caller an owned copy safe to pass across the FFI boundary.
     if let Some(reg) = ctx.telemetry_registry.as_mut() {
+        reg.mixer_telemetry_consumer.update();
         reg.mixer_telemetry_consumer.read().clone()
     } else {
         MixerTelemetrySnapshot::default()

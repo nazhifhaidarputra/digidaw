@@ -26,7 +26,7 @@ class MixerScreen extends ConsumerStatefulWidget {
   ConsumerState<MixerScreen> createState() => _MixerScreenState();
 }
 
-class _MixerScreenState extends ConsumerState<MixerScreen> {
+class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProviderStateMixin {
   // Track the currently selected channel ID (or -1 for Master)
   int? _selectedChannelId;
   bool _isSelectedBus = false;
@@ -41,9 +41,13 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
   late final Ticker _ticker;
 
+  late final DawContext _dawContext;
+
   @override
   void initState() {
     super.initState();
+
+    _dawContext = ref.read(projectProvider.notifier).dawContext;
 
     _trackScrollController = ScrollController();
     _busScrollController = ScrollController();
@@ -62,7 +66,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       ],
     );
 
-    _ticker = Ticker((elapsed) {
+    _ticker = createTicker((elapsed) {
       // Synchronously poll the Rust memory pointer and push it into the UI
       ref.read(mixerStateProvider.notifier).pollTelemetry();
     });
@@ -71,7 +75,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     _ticker.start();
 
     setMixerTelemetrySubs(
-      ctx: ref.read(projectProvider.notifier).dawContext,
+      ctx: _dawContext,
       active: true,
     );
 
@@ -84,7 +88,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   @override
   void dispose() {
     setMixerTelemetrySubs(
-      ctx: ref.read(projectProvider.notifier).dawContext,
+      ctx: _dawContext,
       active: false,
     );
     _ticker.dispose();

@@ -272,7 +272,7 @@ where
                 .generator_pool
                 .get(gen_id)
                 .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id.0))?;
-                
+
             if let GeneratorInstanceType::Plugin(ref p) = gen.instance_type {
                 (p.name.clone(), p.registry_id)
             } else {
@@ -356,7 +356,7 @@ pub fn set_plugin_parameter(
     value: f32,
 ) -> anyhow::Result<()> {
     let param_id = param_id.into_id();
-    
+
     let command = match target {
         PluginTarget::Generator(gen_id) => AudioCommand::SetGeneratorParameter {
             generator_id: *gen_id,
@@ -394,7 +394,9 @@ pub fn begin_plugin_parameter_edit(
     param_id: impl IntoParamId,
 ) -> anyhow::Result<()> {
     let auto_target = map_target_to_automation(target, param_id.into_id());
-    ctx.send_audio_command(AudioCommand::BeginEdit { target: auto_target })
+    ctx.send_audio_command(AudioCommand::BeginEdit {
+        target: auto_target,
+    })
 }
 
 /// Signals the end of a parameter edit gesture for ANY plugin
@@ -404,7 +406,9 @@ pub fn end_plugin_parameter_edit(
     param_id: impl IntoParamId,
 ) -> anyhow::Result<()> {
     let auto_target = map_target_to_automation(target, param_id.into_id());
-    ctx.send_audio_command(AudioCommand::EndEdit { target: auto_target })
+    ctx.send_audio_command(AudioCommand::EndEdit {
+        target: auto_target,
+    })
 }
 
 #[inline(always)]
@@ -461,33 +465,78 @@ pub fn execute_plugin_instance_command(
 ) -> anyhow::Result<serde_json::Value> {
     let (plugin_name, plugin_registry_id, plugin_state) = match target {
         PluginTarget::Generator(gen_id) => {
-            let gen = ctx.app_state.generator_pool.get(gen_id)
+            let gen = ctx
+                .app_state
+                .generator_pool
+                .get(gen_id)
                 .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id.0))?;
             match &gen.instance_type {
-                GeneratorInstanceType::Plugin(p) => (p.name.clone(), p.registry_id, p.plugin_state.clone()),
+                GeneratorInstanceType::Plugin(p) => {
+                    (p.name.clone(), p.registry_id, p.plugin_state.clone())
+                }
                 _ => return Err(anyhow::anyhow!("Generator is not a plugin")),
             }
         }
         PluginTarget::TrackEffect(t_id, e_id) => {
-            let ch = ctx.app_state.mixer.channels.get(t_id).ok_or_else(|| anyhow::anyhow!("Track not found"))?;
-            let ef = ch.channel.effects.iter().find(|e| e.id == *e_id).ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
-            (ef.instance.name.clone(), ef.instance.registry_id, ef.instance.plugin_state.clone())
+            let ch = ctx
+                .app_state
+                .mixer
+                .channels
+                .get(t_id)
+                .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+            let ef = ch
+                .channel
+                .effects
+                .iter()
+                .find(|e| e.id == *e_id)
+                .ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
+            (
+                ef.instance.name.clone(),
+                ef.instance.registry_id,
+                ef.instance.plugin_state.clone(),
+            )
         }
         PluginTarget::BusEffect(b_id, e_id) => {
-            let bus = ctx.app_state.mixer.buses.get(b_id).ok_or_else(|| anyhow::anyhow!("Bus not found"))?;
-            let ef = bus.channel.effects.iter().find(|e| e.id == *e_id).ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
-            (ef.instance.name.clone(), ef.instance.registry_id, ef.instance.plugin_state.clone())
+            let bus = ctx
+                .app_state
+                .mixer
+                .buses
+                .get(b_id)
+                .ok_or_else(|| anyhow::anyhow!("Bus not found"))?;
+            let ef = bus
+                .channel
+                .effects
+                .iter()
+                .find(|e| e.id == *e_id)
+                .ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
+            (
+                ef.instance.name.clone(),
+                ef.instance.registry_id,
+                ef.instance.plugin_state.clone(),
+            )
         }
         PluginTarget::MasterEffect(e_id) => {
-            let ef = ctx.app_state.mixer.master_bus.effects.iter().find(|e| e.id == *e_id).ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
-            (ef.instance.name.clone(), ef.instance.registry_id, ef.instance.plugin_state.clone())
+            let ef = ctx
+                .app_state
+                .mixer
+                .master_bus
+                .effects
+                .iter()
+                .find(|e| e.id == *e_id)
+                .ok_or_else(|| anyhow::anyhow!("Effect not found"))?;
+            (
+                ef.instance.name.clone(),
+                ef.instance.registry_id,
+                ef.instance.plugin_state.clone(),
+            )
         }
     };
 
-    let mut temp_plugin = (ctx.plugin_registry
+    let mut temp_plugin = (ctx
+        .plugin_registry
         .create_plugin_by_id(plugin_registry_id)
         .map(|(p, _)| p))
-        .ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found in registry", plugin_name))?;
+    .ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found in registry", plugin_name))?;
 
     if !plugin_state.is_empty() {
         temp_plugin.set_state(&plugin_state);
@@ -516,7 +565,7 @@ pub fn execute_live_plugin_command(
         payload,
         request_id,
     })?;
-    
+
     Ok(request_id)
 }
 
@@ -531,7 +580,11 @@ pub fn set_plugin_telemetry_subs(
     buffers: Vec<String>,
     active: bool,
 ) -> anyhow::Result<()> {
-    ctx.send_audio_command(AudioCommand::SetPluginTelemetrySubscription { target, buffers, active })
+    ctx.send_audio_command(AudioCommand::SetPluginTelemetrySubscription {
+        target,
+        buffers,
+        active,
+    })
 }
 
 /// Signals the end of a parameter edit gesture (e.g., user releases a knob).
@@ -541,7 +594,7 @@ pub fn end_generator_parameter_edit(
     param_id: impl IntoParamId,
 ) -> anyhow::Result<()> {
     let param_id = param_id.into_id();
-    
+
     let target = AutomationTarget::Generator {
         generator_id: *generator_id,
         param_id,
@@ -555,10 +608,18 @@ pub fn end_generator_parameter_edit(
 // =============================================================
 
 /// Synchronously fetches the parameters and buffers for a specific plugin.
-pub fn get_plugin_telemetry_sync(ctx: &mut DawContext, target: PluginTarget) -> Option<PluginTelemetrySnapshot> {
+pub fn get_plugin_telemetry_sync(
+    ctx: &mut DawContext,
+    target: PluginTarget,
+) -> Option<PluginTelemetrySnapshot> {
+    ctx.drain_telemetry_registrations();
+    
     ctx.telemetry_registry
         .as_mut()?
         .param_telemetry_consumers
         .get_mut(&target)
-        .map(|consumer| consumer.read().clone())
+        .map(|consumer| {
+            consumer.update();
+            consumer.read().clone()
+        })
 }

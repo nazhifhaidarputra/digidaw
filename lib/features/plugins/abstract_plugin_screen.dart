@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
-import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/plugins/opaque.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -33,7 +32,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   final Set<int> _touchedParams = {};
 
   late final Ticker _ticker;
-  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
+  late final DawContext _ctx;
 
   String get pluginName => 'Plugin';
 
@@ -51,6 +50,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   @override
   void initState() {
     super.initState();
+    _ctx = ref.read(projectProvider.notifier).dawContext;
     _loadParameterSpecs();
 
     // Subscribe to the 30 FPS Rust Audio Engine stream for this specific plugin

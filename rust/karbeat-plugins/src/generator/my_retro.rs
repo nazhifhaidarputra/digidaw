@@ -59,11 +59,7 @@ pub struct MyRetro {
     pub sample_rate: f32,
     pub channels: usize,
 
-    #[serde(skip)]
-    pub scratch_buffer: Vec<f32>,
-
-    #[serde(skip)]
-    pub interleaved_buffer: Vec<f32>,
+    pub mix_buffer: Vec<f32>,
 }
 
 impl Default for MyRetro {
@@ -87,8 +83,7 @@ impl Default for MyRetro {
         engine.sample_rate = 48000.0;
         engine.channels = 2;
 
-        engine.scratch_buffer = vec![0.0; 4096];
-        engine.interleaved_buffer = vec![0.0; 8192];
+        engine.mix_buffer = vec![0.0; 4096];
 
         engine
     }
@@ -97,6 +92,59 @@ impl Default for MyRetro {
 impl MyRetro {
     pub fn new() -> Self {
         Self::default()
+    }
+    
+    /// Processes in pure Mono and ACCUMULATES directly into the mix buffer
+    pub fn accumulate_voice_block(
+        oscillators: &[Oscillator; 2],
+        amp_envelope: &EnvelopeSettings,
+        crush_steps: f32,
+        sample_rate: f32,
+        voice: &mut SynthVoice,
+        mono_buffer: &mut [f32],
+        base_freq: f32,
+    ) {
+        let actual_freq = base_freq as f64 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
+        let velocity_gain = (voice.velocity as f32) / 127.0;
+
+        for sample in mono_buffer.iter_mut() {
+            if !voice.is_active {
+                break; // Instantly skip the rest of the block if dead
+            }
+
+            let env_level = voice.adsr.process(amp_envelope);
+
+            if voice.adsr.state == EnvelopeState::Idle {
+                voice.is_active = false;
+                break; // Massive CPU save: don't iterate remaining frames!
+            }
+
+            let current_gain = velocity_gain * env_level;
+            let mut temp_sample = 0.0;
+
+            for (i, osc) in oscillators.iter().enumerate() {
+                let mut phase = voice.phase[i];
+                let mut filter_state = voice.filter_state[i];
+
+                let mut osc_output = [0.0; 2];
+                osc.output_wave(
+                    &mut osc_output,
+                    sample_rate as u32,
+                    2,
+                    actual_freq,
+                    &mut phase,
+                    &mut filter_state,
+                );
+
+                voice.phase[i] = phase;
+                temp_sample += osc_output[0]; // We only care about Mono L
+            }
+
+            let crushed_sample = (temp_sample * crush_steps).round() / crush_steps;
+            
+            // ACCUMULATE directly into the shared block buffer
+            *sample += crushed_sample * current_gain;
+        }
     }
 
     /// Pure associated function (no `&self`).
@@ -192,7 +240,6 @@ impl AudioPlugin for MyRetro {
     }
 
     fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext) {
-        // 1. Process sample-accurate automation
         for param_change in context.param_changes {
             self.set_parameter(param_change.param_id, param_change.normalized_value);
         }
@@ -204,22 +251,17 @@ impl AudioPlugin for MyRetro {
 
         if self.channels == 0 || total_frames == 0 { return; }
 
-        // Resize internal buffers if necessary (no allocations if already large enough)
-        let required_len = total_frames * self.channels;
-        if self.interleaved_buffer.len() < required_len {
-            self.interleaved_buffer.resize(required_len, 0.0);
+        // Ensure mono mix buffer is large enough and cleared
+        if self.mix_buffer.len() < total_frames {
+            self.mix_buffer.resize(total_frames, 0.0);
         }
-        if self.scratch_buffer.len() < required_len {
-            self.scratch_buffer.resize(required_len, 0.0);
-        }
-        
-        self.interleaved_buffer[..required_len].fill(0.0);
+        self.mix_buffer[..total_frames].fill(0.0);
 
         let midi_events = context.midi_events;
 
-        // Extract primitives outside the loop
         let master_gain = self.gain.get();
         let crush_steps = self.bitcrush_resolution.get().max(2.0);
+        let base_freq = self.base_freq.get();
 
         let mut current_frame = 0;
         let mut event_idx = 0;
@@ -235,45 +277,34 @@ impl AudioPlugin for MyRetro {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice =
-                    &mut self.interleaved_buffer[current_frame * self.channels..end_frame * self.channels];
+                let out_slice = &mut self.mix_buffer[current_frame..end_frame];
 
-                // Destructure `self` to separate mutable voices from immutable parameters
                 let MyRetro {
                     active_voices,
                     oscillators,
                     amp_envelope,
                     sample_rate,
-                    channels,
-                    scratch_buffer,
                     ..
                 } = self;
 
+                // 1. Process all voices directly into the out_slice
                 for voice in active_voices.iter_mut() {
                     if !voice.is_active {
                         continue;
                     }
 
-                    let scratch_slice = &mut scratch_buffer[0..block_len * *channels];
-
-                    Self::generate_voice_block(
+                    Self::accumulate_voice_block(
                         oscillators,
                         amp_envelope,
                         crush_steps,
                         *sample_rate,
-                        *channels,
                         voice,
-                        scratch_slice,
-                        self.base_freq.get(),
+                        out_slice,
+                        base_freq,
                     );
-
-                    // Mix the voice scratch buffer into the main interleaved output
-                    for (i, &sample) in scratch_slice.iter().enumerate() {
-                        out_slice[i] += sample;
-                    }
                 }
 
-                // Apply Master Synth Gain
+                // 2. Apply Master Gain once to the combined mono block
                 for sample in out_slice.iter_mut() {
                     *sample *= master_gain;
                 }
@@ -283,7 +314,6 @@ impl AudioPlugin for MyRetro {
             while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
             {
                 match midi_events[event_idx].data {
-                    // Ignore the new channel field with `..`
                     MidiMessage::NoteOn { key, velocity, .. } => {
                         if velocity > 0 {
                             let mut voice = SynthVoice::new(
@@ -322,11 +352,9 @@ impl AudioPlugin for MyRetro {
 
         self.active_voices.retain(|v| v.is_active);
 
-        // 2. Finally, de-interleave the result into the provided AudioBuffers
+        // 3. Ultra-fast SIMD copy: duplicate the finished mono mix to Left and Right
         for c in 0..self.channels {
-            for i in 0..total_frames {
-                outputs[c][i] = self.interleaved_buffer[i * self.channels + c];
-            }
+            outputs[c][..total_frames].copy_from_slice(&self.mix_buffer[..total_frames]);
         }
     }
 
