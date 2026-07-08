@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1843887709;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1862954840;
 
 // Section: executor
 
@@ -5610,18 +5610,18 @@ fn wire__crate__api__mixer__get_mixer_telemetry_sync_impl(
                 let decode_indices_ =
                     flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
                         flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                            &api_ctx, 0, false,
+                            &api_ctx, 0, true,
                         ),
                     ]);
                 for i in decode_indices_ {
                     match i {
-                        0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                        0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
                         _ => unreachable!(),
                     }
                 }
-                let api_ctx_guard = api_ctx_guard.unwrap();
+                let mut api_ctx_guard = api_ctx_guard.unwrap();
                 let output_ok = Result::<_, ()>::Ok(crate::api::mixer::get_mixer_telemetry_sync(
-                    &*api_ctx_guard,
+                    &mut *api_ctx_guard,
                 ))?;
                 Ok(output_ok)
             })())
@@ -5918,19 +5918,19 @@ fn wire__crate__api__plugin__get_plugin_snapshot_telemetry_sync_impl(
                 let decode_indices_ =
                     flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
                         flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                            &api_ctx, 0, false,
+                            &api_ctx, 0, true,
                         ),
                     ]);
                 for i in decode_indices_ {
                     match i {
-                        0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref()),
+                        0 => api_ctx_guard = Some(api_ctx.lockable_decode_sync_ref_mut()),
                         _ => unreachable!(),
                     }
                 }
-                let api_ctx_guard = api_ctx_guard.unwrap();
+                let mut api_ctx_guard = api_ctx_guard.unwrap();
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::plugin::get_plugin_snapshot_telemetry_sync(
-                        &*api_ctx_guard,
+                        &mut *api_ctx_guard,
                         api_target,
                     ))?;
                 Ok(output_ok)
@@ -10119,18 +10119,6 @@ impl SseDecode for Vec<crate::api::mixer::ParameterSpecDTO> {
     }
 }
 
-impl SseDecode for Vec<f32> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<f32>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for Vec<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10159,7 +10147,7 @@ impl SseDecode for Vec<(String, ZeroCopyHandle)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
+        let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<(String, ZeroCopyHandle)>::sse_decode(deserializer));
         }
@@ -10325,7 +10313,7 @@ impl SseDecode for Vec<(u32, crate::api::mixer::UiMixerChannelSnapshot)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
+        let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<(u32, crate::api::mixer::UiMixerChannelSnapshot)>::sse_decode(deserializer));
         }

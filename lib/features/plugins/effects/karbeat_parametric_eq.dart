@@ -63,7 +63,6 @@ class KarbeatParametricEq extends AbstractPluginScreen {
   const KarbeatParametricEq({
     super.key,
     required super.target,
-    required super.pluginId,
   });
 
   @override

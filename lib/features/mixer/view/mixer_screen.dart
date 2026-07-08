@@ -6,7 +6,7 @@ import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
-import 'package:karbeat/features/plugins/effects/effect_registry.dart';
+import 'package:karbeat/features/plugins/plugin_registry.dart';
 import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' hide removeRouting;
@@ -41,7 +41,6 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
   late final Ticker _ticker;
 
-
   @override
   void initState() {
     super.initState();
@@ -51,8 +50,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
     _splitController = MultiSplitViewController(
       areas: [
-        Area(size: 400, min: 150, builder: (context, area) => _buildTracksArea(context, area)),
-        Area(min: 0.1, builder: (context, area) => _buildBusesArea(context, area)),
+        Area(
+          size: 400,
+          min: 150,
+          builder: (context, area) => _buildTracksArea(context, area),
+        ),
+        Area(
+          min: 0.1,
+          builder: (context, area) => _buildBusesArea(context, area),
+        ),
       ],
     );
 
@@ -60,11 +66,14 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       // Synchronously poll the Rust memory pointer and push it into the UI
       ref.read(mixerStateProvider.notifier).pollTelemetry();
     });
-    
+
     // Start pumping telemetry
     _ticker.start();
 
-    setMixerTelemetrySubs(ctx: ref.read(projectProvider.notifier).dawContext, active: true);
+    setMixerTelemetrySubs(
+      ctx: ref.read(projectProvider.notifier).dawContext,
+      active: true,
+    );
 
     // WidgetsBinding.instance.addPostFrameCallback((_) async {
     //   ref.read(mixerStateProvider.notifier).queryAllMixerChannels();
@@ -74,7 +83,10 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
   @override
   void dispose() {
-    setMixerTelemetrySubs(ctx: ref.read(projectProvider.notifier).dawContext, active: false);
+    setMixerTelemetrySubs(
+      ctx: ref.read(projectProvider.notifier).dawContext,
+      active: false,
+    );
     _ticker.dispose();
     _trackScrollController.dispose();
     _busScrollController.dispose();
@@ -97,14 +109,24 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         for (final trackId in sortedTrackIds) {
           final channel = mixerState.channels[trackId]!;
           final trackName = tracks[trackId]?.name ?? 'Track $trackId';
-          channelEntries.add(_ChannelEntry(id: trackId, name: trackName, channel: channel, isMaster: false));
+          channelEntries.add(
+            _ChannelEntry(
+              id: trackId,
+              name: trackName,
+              channel: channel,
+              isMaster: false,
+            ),
+          );
         }
 
         if (channelEntries.isEmpty) {
           return Center(
             child: Text(
               'No channels',
-              style: TextStyle(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           );
         }
@@ -117,7 +139,10 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           itemBuilder: (context, index) {
             final entry = channelEntries[index];
             return Container(
-              key: _stripKeys.putIfAbsent('track_${entry.id}', () => GlobalKey()),
+              key: _stripKeys.putIfAbsent(
+                'track_${entry.id}',
+                () => GlobalKey(),
+              ),
               child: KeyedSubtree(
                 key: ValueKey('mixer_track_${entry.id}'),
                 child: ContextMenuWrapper(
@@ -136,31 +161,47 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     onVolumeChanged: (value) {
                       ref
                           .read(mixerStateProvider.notifier)
-                          .setMixerChannelParam(trackId: entry.id, param: UiMixerChannelParams.volume(value));
+                          .setMixerChannelParam(
+                            trackId: entry.id,
+                            param: UiMixerChannelParams.volume(value),
+                          );
                     },
                     onVolumeChangeStart: () {
-                      ref.read(mixerStateProvider.notifier).markParamTouched(entry.id, 'volume');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamTouched(entry.id, 'volume');
                     },
                     onVolumeChangeEnd: () {
-                      ref.read(mixerStateProvider.notifier).markParamReleased(entry.id, 'volume');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamReleased(entry.id, 'volume');
                     },
                     onPanChanged: (value) {
                       ref
                           .read(mixerStateProvider.notifier)
-                          .setMixerChannelParam(trackId: entry.id, param: UiMixerChannelParams.pan(value));
+                          .setMixerChannelParam(
+                            trackId: entry.id,
+                            param: UiMixerChannelParams.pan(value),
+                          );
                     },
                     onPanChangeStart: () {
-                      ref.read(mixerStateProvider.notifier).markParamTouched(entry.id, 'pan');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamTouched(entry.id, 'pan');
                     },
                     onPanChangeEnd: () {
-                      ref.read(mixerStateProvider.notifier).markParamReleased(entry.id, 'pan');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamReleased(entry.id, 'pan');
                     },
                     onMuteToggled: () {
                       ref
                           .read(mixerStateProvider.notifier)
                           .setMixerChannelParam(
                             trackId: entry.id,
-                            param: UiMixerChannelParams.mute(!entry.channel.mute),
+                            param: UiMixerChannelParams.mute(
+                              !entry.channel.mute,
+                            ),
                           );
                     },
                     onSoloToggled: () {
@@ -168,10 +209,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                           .read(mixerStateProvider.notifier)
                           .setMixerChannelParam(
                             trackId: entry.id,
-                            param: UiMixerChannelParams.solo(!entry.channel.solo),
+                            param: UiMixerChannelParams.solo(
+                              !entry.channel.solo,
+                            ),
                           );
                     },
-                    isSelected: _selectedChannelId == entry.id && !_isSelectedBus && !entry.isMaster,
+                    isSelected:
+                        _selectedChannelId == entry.id &&
+                        !_isSelectedBus &&
+                        !entry.isMaster,
                     onTap: () {
                       setState(() {
                         _selectedChannelId = entry.id;
@@ -199,7 +245,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
         final busEntries = <_ChannelEntry>[];
         for (final bus in mixerState.buses.values) {
-          busEntries.add(_ChannelEntry(id: bus.id, name: bus.name, channel: bus.channel, isMaster: false, isBus: true));
+          busEntries.add(
+            _ChannelEntry(
+              id: bus.id,
+              name: bus.name,
+              channel: bus.channel,
+              isMaster: false,
+              isBus: true,
+            ),
+          );
         }
 
         return ListView.builder(
@@ -213,7 +267,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               return GestureDetector(
                 onTap: () async {
                   final busCount = busEntries.length + 1;
-                  await ref.read(mixerStateProvider.notifier).createNewBusChannel(name: "Bus $busCount");
+                  await ref
+                      .read(mixerStateProvider.notifier)
+                      .createNewBusChannel(name: "Bus $busCount");
                 },
                 child: Container(
                   width: 72,
@@ -221,12 +277,19 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.02),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      width: 1,
+                    ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.add_rounded, color: Colors.white.withValues(alpha: 0.25), size: 28),
+                      Icon(
+                        Icons.add_rounded,
+                        color: Colors.white.withValues(alpha: 0.25),
+                        size: 28,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         'Add Bus',
@@ -263,7 +326,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       icon: Icons.delete,
                       isDestructive: true,
                       onTap: () {
-                        ref.read(mixerStateProvider.notifier).removeBus(busId: entry.id);
+                        ref
+                            .read(mixerStateProvider.notifier)
+                            .removeBus(busId: entry.id);
                       },
                     ),
                   ],
@@ -272,36 +337,61 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     onVolumeChanged: (value) {
                       ref
                           .read(mixerStateProvider.notifier)
-                          .setBusChannelParam(busId: entry.id, param: UiMixerChannelParams.volume(value));
+                          .setBusChannelParam(
+                            busId: entry.id,
+                            param: UiMixerChannelParams.volume(value),
+                          );
                     },
                     onVolumeChangeStart: () {
-                      ref.read(mixerStateProvider.notifier).markParamTouched(entry.id, 'volume');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamTouched(entry.id, 'volume');
                     },
                     onVolumeChangeEnd: () {
-                      ref.read(mixerStateProvider.notifier).markParamReleased(entry.id, 'volume');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamReleased(entry.id, 'volume');
                     },
                     onPanChanged: (value) {
                       ref
                           .read(mixerStateProvider.notifier)
-                          .setBusChannelParam(busId: entry.id, param: UiMixerChannelParams.pan(value));
+                          .setBusChannelParam(
+                            busId: entry.id,
+                            param: UiMixerChannelParams.pan(value),
+                          );
                     },
                     onPanChangeStart: () {
-                      ref.read(mixerStateProvider.notifier).markParamTouched(entry.id, 'pan');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamTouched(entry.id, 'pan');
                     },
                     onPanChangeEnd: () {
-                      ref.read(mixerStateProvider.notifier).markParamReleased(entry.id, 'pan');
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .markParamReleased(entry.id, 'pan');
                     },
                     onMuteToggled: () {
                       ref
                           .read(mixerStateProvider.notifier)
-                          .setBusChannelParam(busId: entry.id, param: UiMixerChannelParams.mute(!entry.channel.mute));
+                          .setBusChannelParam(
+                            busId: entry.id,
+                            param: UiMixerChannelParams.mute(
+                              !entry.channel.mute,
+                            ),
+                          );
                     },
                     onSoloToggled: () {
                       ref
                           .read(mixerStateProvider.notifier)
-                          .setBusChannelParam(busId: entry.id, param: UiMixerChannelParams.solo(!entry.channel.solo));
+                          .setBusChannelParam(
+                            busId: entry.id,
+                            param: UiMixerChannelParams.solo(
+                              !entry.channel.solo,
+                            ),
+                          );
                     },
-                    isSelected: _selectedChannelId == entry.id && _isSelectedBus,
+                    isSelected:
+                        _selectedChannelId == entry.id && _isSelectedBus,
                     onTap: () {
                       setState(() {
                         _selectedChannelId = entry.id;
@@ -319,11 +409,14 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   }
 
   void _showRoutingDialog(BuildContext context, _ChannelEntry entry) {
-    final sourceNode = entry.isBus ? mixer_api.UiRoutingNode.bus(entry.id) : mixer_api.UiRoutingNode.track(entry.id);
+    final sourceNode = entry.isBus
+        ? mixer_api.UiRoutingNode.bus(entry.id)
+        : mixer_api.UiRoutingNode.track(entry.id);
 
     showDialog(
       context: context,
-      builder: (ctx) => _RoutingDialog(sourceNode: sourceNode, sourceName: entry.name),
+      builder: (ctx) =>
+          _RoutingDialog(sourceNode: sourceNode, sourceName: entry.name),
     );
   }
 
@@ -363,40 +456,68 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
                     // === Master Channel (fixed) ===
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 12,
+                      ),
                       child: _ChannelStrip(
-                        entry: _ChannelEntry(id: -1, name: 'Master', channel: mixerState.masterBus, isMaster: true),
+                        entry: _ChannelEntry(
+                          id: -1,
+                          name: 'Master',
+                          channel: mixerState.masterBus,
+                          isMaster: true,
+                        ),
                         onVolumeChanged: (value) {
                           ref
                               .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(param: UiMixerChannelParams.volume(value));
+                              .setMasterBusParam(
+                                param: UiMixerChannelParams.volume(value),
+                              );
                         },
                         onVolumeChangeStart: () {
-                          ref.read(mixerStateProvider.notifier).markParamTouched(4294967295, 'volume');
+                          ref
+                              .read(mixerStateProvider.notifier)
+                              .markParamTouched(4294967295, 'volume');
                         },
                         onVolumeChangeEnd: () {
-                          ref.read(mixerStateProvider.notifier).markParamReleased(4294967295, 'volume');
+                          ref
+                              .read(mixerStateProvider.notifier)
+                              .markParamReleased(4294967295, 'volume');
                         },
                         onPanChanged: (value) {
                           ref
                               .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(param: UiMixerChannelParams.pan(value));
+                              .setMasterBusParam(
+                                param: UiMixerChannelParams.pan(value),
+                              );
                         },
                         onPanChangeStart: () {
-                          ref.read(mixerStateProvider.notifier).markParamTouched(4294967295, 'pan');
+                          ref
+                              .read(mixerStateProvider.notifier)
+                              .markParamTouched(4294967295, 'pan');
                         },
                         onPanChangeEnd: () {
-                          ref.read(mixerStateProvider.notifier).markParamReleased(4294967295, 'pan');
+                          ref
+                              .read(mixerStateProvider.notifier)
+                              .markParamReleased(4294967295, 'pan');
                         },
                         onMuteToggled: () {
                           ref
                               .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(param: UiMixerChannelParams.mute(!mixerState.masterBus.mute));
+                              .setMasterBusParam(
+                                param: UiMixerChannelParams.mute(
+                                  !mixerState.masterBus.mute,
+                                ),
+                              );
                         },
                         onSoloToggled: () {
                           ref
                               .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(param: UiMixerChannelParams.solo(!mixerState.masterBus.solo));
+                              .setMasterBusParam(
+                                param: UiMixerChannelParams.solo(
+                                  !mixerState.masterBus.solo,
+                                ),
+                              );
                         },
                         isSelected: _selectedChannelId == -1 && !_isSelectedBus,
                         onTap: () {
@@ -422,7 +543,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 width: double.infinity,
                 decoration: const BoxDecoration(
                   color: Color(0xFF0C0C0F), // Darker trench
-                  border: Border(top: BorderSide(color: Colors.black, width: 4)),
+                  border: Border(
+                    top: BorderSide(color: Colors.black, width: 4),
+                  ),
                 ),
                 child: Stack(
                   children: [
@@ -449,7 +572,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           Positioned.fill(
             child: IgnorePointer(
               child: AnimatedBuilder(
-                animation: Listenable.merge([_trackScrollController, _busScrollController, _splitController]),
+                animation: Listenable.merge([
+                  _trackScrollController,
+                  _busScrollController,
+                  _splitController,
+                ]),
                 builder: (context, child) {
                   return CustomPaint(
                     painter: _RoutingPainter(
@@ -496,7 +623,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
     final channelName = isMaster
         ? 'Master'
-        : (_isSelectedBus ? 'Bus $_selectedChannelId' : 'Track $_selectedChannelId');
+        : (_isSelectedBus
+              ? 'Bus $_selectedChannelId'
+              : 'Track $_selectedChannelId');
 
     return Container(
       width: 250,
@@ -531,7 +660,10 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 ? const Center(
                     child: Text(
                       'No effects',
-                      style: TextStyle(color: Colors.white38, fontStyle: FontStyle.italic),
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   )
                 : ListView.builder(
@@ -548,35 +680,57 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                         ),
                         child: ListTile(
                           dense: true,
-                          title: Text(effect.name, style: const TextStyle(color: Colors.white)),
-                          subtitle: Text('ID: ${effect.id}', style: const TextStyle(color: Colors.white54)),
-                          trailing: const Icon(Icons.settings, color: Colors.white54, size: 16),
+                          title: Text(
+                            effect.name,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            'ID: ${effect.id}',
+                            style: const TextStyle(color: Colors.white54),
+                          ),
+                          trailing: const Icon(
+                            Icons.settings,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
                           onTap: () async {
                             try {
-                              
-
                               final target = isMaster
-                                  ? const plugin_api.UiEffectTarget.master()
+                                  ? plugin_api.UiPluginTarget.masterEffect(effect.id)
                                   : _isSelectedBus
-                                  ? plugin_api.UiEffectTarget.bus(_selectedChannelId!)
-                                  : plugin_api.UiEffectTarget.track(_selectedChannelId!);
+                                  ? plugin_api.UiPluginTarget.busEffect(
+                                      busId: _selectedChannelId!,
+                                      effectId: effect.id,
+                                    )
+                                  : plugin_api.UiPluginTarget.trackEffect(
+                                      trackId: _selectedChannelId!,
+                                      effectId: effect.id,
+                                    );
+                              final availableEffects = await ref
+                                  .read(audioPluginProvider.notifier)
+                                  .getAvailableEffects();
+                              final registryId = availableEffects
+                                  .firstWhere((p) => p.id == effect.registryId)
+                                  .id;
 
-                              final availableEffects = await ref.read(audioPluginProvider.notifier).getAvailableEffects();
-                              final registryId = availableEffects.firstWhere((p) => p.id == effect.registryId).id;
-
-                              final screen = EffectRegistry.getScreen(
+                              final screen = PluginRegistryFlutter.getScreen(
                                 registryId: registryId,
                                 instanceId: effect.id,
                                 target: target,
                               );
                               if (!context.mounted) return;
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => screen),
+                              );
                             } catch (_) {
                               // Feedback for effects that don't have a UI yet
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('${effect.name} UI is not implemented yet.'),
+                                  content: Text(
+                                    '${effect.name} UI is not implemented yet.',
+                                  ),
                                   duration: const Duration(seconds: 2),
                                 ),
                               );
@@ -609,7 +763,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   }
 
   void _showEffectBrowser(BuildContext context) async {
-    final availablePlugins = await ref.read(audioPluginProvider.notifier).getAvailableEffects();
+    final availablePlugins = await ref
+        .read(audioPluginProvider.notifier)
+        .getAvailableEffects();
 
     if (!context.mounted) return;
 
@@ -626,21 +782,37 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
             children: [
               // Category header: Karbeat Native
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    Icon(Icons.extension, size: 16, color: Colors.deepOrangeAccent),
+                    Icon(
+                      Icons.extension,
+                      size: 16,
+                      color: Colors.deepOrangeAccent,
+                    ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.deepOrangeAccent.withAlpha(30),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.deepOrangeAccent.withAlpha(80)),
+                        border: Border.all(
+                          color: Colors.deepOrangeAccent.withAlpha(80),
+                        ),
                       ),
                       child: const Text(
                         "Karbeat Native",
-                        style: TextStyle(color: Colors.deepOrangeAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: Colors.deepOrangeAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -651,14 +823,24 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               if (availablePlugins.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Text("No effects found", style: TextStyle(color: Colors.grey)),
+                  child: Text(
+                    "No effects found",
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 )
               else
-                ...availablePlugins.map((plugin) => _buildEffectBrowserItem(ctx, plugin)),
+                ...availablePlugins.map(
+                  (plugin) => _buildEffectBrowserItem(ctx, plugin),
+                ),
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel"))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+        ],
       ),
     );
   }
@@ -668,14 +850,22 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       onTap: () {
         Navigator.pop(ctx);
         if (plugin.pluginType != KarbeatPluginType.effect) {
-          ScaffoldMessenger.of(
-            ctx,
-          ).showSnackBar(const SnackBar(content: Text('Only effects can be added from the mixer panel for now.')));
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Only effects can be added from the mixer panel for now.',
+              ),
+            ),
+          );
           return;
         }
         if (_selectedChannelId == null) {
           ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(content: Text('No channel selected. Please select a channel before adding an effect.')),
+            const SnackBar(
+              content: Text(
+                'No channel selected. Please select a channel before adding an effect.',
+              ),
+            ),
           );
           return;
         }
@@ -686,9 +876,13 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         }
 
         if (_isSelectedBus) {
-          ref.read(mixerStateProvider.notifier).addEffectToBusChannel(_selectedChannelId!, plugin.id);
+          ref
+              .read(mixerStateProvider.notifier)
+              .addEffectToBusChannel(_selectedChannelId!, plugin.id);
         } else {
-          ref.read(mixerStateProvider.notifier).addEffectToMixerChannel(_selectedChannelId!, plugin.id);
+          ref
+              .read(mixerStateProvider.notifier)
+              .addEffectToMixerChannel(_selectedChannelId!, plugin.id);
         }
       },
       child: Padding(
@@ -701,9 +895,18 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(plugin.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  Text(
+                    plugin.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  const Text("Karbeat Native", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const Text(
+                    "Karbeat Native",
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
@@ -766,7 +969,7 @@ class _ChannelStrip extends ConsumerStatefulWidget {
   });
 
   @override
- _ChannelStripState createState() => _ChannelStripState();
+  _ChannelStripState createState() => _ChannelStripState();
 }
 
 class _ChannelStripState extends ConsumerState<_ChannelStrip> {
@@ -786,9 +989,15 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
       if (widget.entry.isMaster) {
         fetchedSpecs = await getMasterChannelSpecs(ctx: _ctx);
       } else if (widget.entry.isBus) {
-        fetchedSpecs = await getBusMixerChannelSpecs(ctx: _ctx, busId: widget.entry.id);
+        fetchedSpecs = await getBusMixerChannelSpecs(
+          ctx: _ctx,
+          busId: widget.entry.id,
+        );
       } else {
-        fetchedSpecs = await getTrackMixerChannelSpecs(ctx: _ctx, trackId: widget.entry.id);
+        fetchedSpecs = await getTrackMixerChannelSpecs(
+          ctx: _ctx,
+          trackId: widget.entry.id,
+        );
       }
     } catch (e) {
       AppLogger.error("Failed to load channel specs: $e");
@@ -805,14 +1014,20 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
   // (Prevents the UI from glitching or throwing layout errors during the microsecond load)
   ParameterSpecDTO _getVolumeSpec() {
     if (_specs != null) {
-      return _specs!.firstWhere((s) => s.id == 1, orElse: () => _defaultVolumeSpec());
+      return _specs!.firstWhere(
+        (s) => s.id == 1,
+        orElse: () => _defaultVolumeSpec(),
+      );
     }
     return _defaultVolumeSpec();
   }
 
   ParameterSpecDTO _getPanSpec() {
     if (_specs != null) {
-      return _specs!.firstWhere((s) => s.id == 2, orElse: () => _defaultPanSpec());
+      return _specs!.firstWhere(
+        (s) => s.id == 2,
+        orElse: () => _defaultPanSpec(),
+      );
     }
     return _defaultPanSpec();
   }
@@ -845,22 +1060,32 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
 
   // Helper function to build the correct AutomationTarget instance based on track/bus/master
   AutomationTargetDto _getAutomationTarget({required bool isPan}) {
-    final mixTarget = isPan ? const MixerChannelParamTargetDto.pan() : const MixerChannelParamTargetDto.volume();
+    final mixTarget = isPan
+        ? const MixerChannelParamTargetDto.pan()
+        : const MixerChannelParamTargetDto.volume();
 
     if (widget.entry.isMaster) {
       return AutomationTargetDto.master(mixTarget);
     } else if (widget.entry.isBus) {
-      return AutomationTargetDto.bus(busId: widget.entry.id, mixTarget: mixTarget);
+      return AutomationTargetDto.bus(
+        busId: widget.entry.id,
+        mixTarget: mixTarget,
+      );
     } else {
       final trackTarget = TrackAutomationTargetDto.mixerChannel(mixTarget);
-      return AutomationTargetDto.track(trackId: widget.entry.id, trackTarget: trackTarget);
+      return AutomationTargetDto.track(
+        trackId: widget.entry.id,
+        trackTarget: trackTarget,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
-    final accentColor = entry.isMaster ? const Color(0xFFFFD700) : const Color(0xFF00E5FF);
+    final accentColor = entry.isMaster
+        ? const Color(0xFFFFD700)
+        : const Color(0xFF00E5FF);
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -868,16 +1093,26 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
         width: 72,
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          color: entry.isMaster ? const Color(0xFF2A2040) : const Color(0xFF16213E),
+          color: entry.isMaster
+              ? const Color(0xFF2A2040)
+              : const Color(0xFF16213E),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: widget.isSelected
                 ? accentColor
-                : (entry.isMaster ? Colors.amber.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.06)),
+                : (entry.isMaster
+                      ? Colors.amber.withValues(alpha: 0.3)
+                      : Colors.white.withValues(alpha: 0.06)),
             width: widget.isSelected ? 2 : 1,
           ),
           boxShadow: widget.isSelected
-              ? [BoxShadow(color: accentColor.withValues(alpha: 0.2), blurRadius: 8, spreadRadius: 1)]
+              ? [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
               : null,
         ),
         child: Column(
@@ -888,13 +1123,20 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: accentColor.withValues(alpha: 0.15),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(9),
+                ),
               ),
               child: Text(
                 entry.name,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: accentColor, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                style: TextStyle(
+                  color: accentColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
 
@@ -931,7 +1173,11 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
             // === dB readout ===
             Text(
               _volumeToDb(entry.channel.volume),
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 9, fontFamily: 'monospace'),
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 9,
+                fontFamily: 'monospace',
+              ),
             ),
 
             const SizedBox(height: 6),
@@ -1004,7 +1250,11 @@ class _PanKnob extends ConsumerWidget {
       children: [
         Text(
           label,
-          style: TextStyle(color: Colors.grey.shade500, fontSize: 9, fontFamily: 'monospace'),
+          style: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 9,
+            fontFamily: 'monospace',
+          ),
         ),
         const SizedBox(height: 2),
         SizedBox(
@@ -1028,14 +1278,18 @@ class _PanKnob extends ConsumerWidget {
               step: spec.step == 0.0 ? 0.01 : spec.step, // Safe fallback step
               onChanged: onChanged,
               onAddAutomation: () async {
-                AppLogger.info("Create automation for ${spec.name} (ID: ${spec.id})");
-                ref.read(automationProvider.notifier).handleAddAutomationForTarget(
-                  target: automationTarget,
-                  label: spec.name,
-                  min: spec.min,
-                  max: spec.max,
-                  defaultValue: spec.defaultValue,
+                AppLogger.info(
+                  "Create automation for ${spec.name} (ID: ${spec.id})",
                 );
+                ref
+                    .read(automationProvider.notifier)
+                    .handleAddAutomationForTarget(
+                      target: automationTarget,
+                      label: spec.name,
+                      min: spec.min,
+                      max: spec.max,
+                      defaultValue: spec.defaultValue,
+                    );
               },
               child: Slider(
                 value: value,
@@ -1043,7 +1297,9 @@ class _PanKnob extends ConsumerWidget {
                 max: spec.max,
                 onChanged: onChanged,
                 allowedInteraction: SliderInteraction.slideOnly,
-                onChangeStart: onChangeStart != null ? (_) => onChangeStart!() : null,
+                onChangeStart: onChangeStart != null
+                    ? (_) => onChangeStart!()
+                    : null,
                 onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
               ),
             ),
@@ -1097,14 +1353,18 @@ class _VolumeFader extends ConsumerWidget {
             step: spec.step == 0.0 ? 0.1 : spec.step,
             onChanged: onChanged,
             onAddAutomation: () async {
-              AppLogger.info("Create automation for ${spec.name} (ID: ${spec.id})");
-              ref.read(automationProvider.notifier).handleAddAutomationForTarget(
-                target: automationTarget,
-                label: spec.name,
-                min: spec.min,
-                max: spec.max,
-                defaultValue: spec.defaultValue,
+              AppLogger.info(
+                "Create automation for ${spec.name} (ID: ${spec.id})",
               );
+              ref
+                  .read(automationProvider.notifier)
+                  .handleAddAutomationForTarget(
+                    target: automationTarget,
+                    label: spec.name,
+                    min: spec.min,
+                    max: spec.max,
+                    defaultValue: spec.defaultValue,
+                  );
             },
             child: SizedBox(
               width: sliderWidth,
@@ -1112,12 +1372,16 @@ class _VolumeFader extends ConsumerWidget {
               child: SliderTheme(
                 data: SliderThemeData(
                   trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 7,
+                  ),
                   activeTrackColor: accentColor,
                   inactiveTrackColor: Colors.white10,
                   thumbColor: accentColor,
                   overlayColor: accentColor.withValues(alpha: 0.15),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 12,
+                  ),
                 ),
                 child: Slider(
                   value: value.clamp(visualMin, spec.max),
@@ -1125,8 +1389,12 @@ class _VolumeFader extends ConsumerWidget {
                   max: spec.max,
                   onChanged: onChanged,
                   allowedInteraction: SliderInteraction.slideThumb,
-                  onChangeStart: onChangeStart != null ? (_) => onChangeStart!() : null,
-                  onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+                  onChangeStart: onChangeStart != null
+                      ? (_) => onChangeStart!()
+                      : null,
+                  onChangeEnd: onChangeEnd != null
+                      ? (_) => onChangeEnd!()
+                      : null,
                 ),
               ),
             ),
@@ -1147,7 +1415,12 @@ class _ToggleButton extends StatelessWidget {
   final Color activeColor;
   final VoidCallback onTap;
 
-  const _ToggleButton({required this.label, required this.isActive, required this.activeColor, required this.onTap});
+  const _ToggleButton({
+    required this.label,
+    required this.isActive,
+    required this.activeColor,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1157,9 +1430,16 @@ class _ToggleButton extends StatelessWidget {
         width: 26,
         height: 22,
         decoration: BoxDecoration(
-          color: isActive ? activeColor.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.06),
+          color: isActive
+              ? activeColor.withValues(alpha: 0.85)
+              : Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: isActive ? activeColor : Colors.white.withValues(alpha: 0.12), width: 1),
+          border: Border.all(
+            color: isActive
+                ? activeColor
+                : Colors.white.withValues(alpha: 0.12),
+            width: 1,
+          ),
         ),
         alignment: Alignment.center,
         child: Text(
@@ -1238,18 +1518,40 @@ class _RoutingPainter extends CustomPainter {
       final dstPos = dstBox.localToGlobal(Offset.zero, ancestor: overlayBox);
 
       // Start perfectly at the bottom center of the UI element
-      final start = Offset(srcPos.dx + srcBox.size.width / 2, srcPos.dy + srcBox.size.height);
-      final end = Offset(dstPos.dx + dstBox.size.width / 2, dstPos.dy + dstBox.size.height);
+      final start = Offset(
+        srcPos.dx + srcBox.size.width / 2,
+        srcPos.dy + srcBox.size.height,
+      );
+      final end = Offset(
+        dstPos.dx + dstBox.size.width / 2,
+        dstPos.dy + dstBox.size.height,
+      );
 
       // Draw little physical "plugs" extending down from the strip
-      canvas.drawRect(Rect.fromCenter(center: Offset(start.dx, start.dy + 4), width: 8, height: 8), plugPaint);
-      canvas.drawRect(Rect.fromCenter(center: Offset(end.dx, end.dy + 4), width: 8, height: 8), plugPaint);
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(start.dx, start.dy + 4),
+          width: 8,
+          height: 8,
+        ),
+        plugPaint,
+      );
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(end.dx, end.dy + 4),
+          width: 8,
+          height: 8,
+        ),
+        plugPaint,
+      );
 
       bool isActive = false;
       if (selectedChannelId != null) {
         final selectedStr = selectedChannelId == -1
             ? 'master'
-            : (isSelectedBus ? 'bus_$selectedChannelId' : 'track_$selectedChannelId');
+            : (isSelectedBus
+                  ? 'bus_$selectedChannelId'
+                  : 'track_$selectedChannelId');
         if (srcStr == selectedStr || dstStr == selectedStr) {
           isActive = true;
         }
@@ -1270,7 +1572,14 @@ class _RoutingPainter extends CustomPainter {
       final controlPoint1 = Offset(wireStart.dx, wireStart.dy + drop); // + drop
       final controlPoint2 = Offset(wireEnd.dx, wireEnd.dy + drop); // + drop
 
-      path.cubicTo(controlPoint1.dx, controlPoint1.dy, controlPoint2.dx, controlPoint2.dy, wireEnd.dx, wireEnd.dy);
+      path.cubicTo(
+        controlPoint1.dx,
+        controlPoint1.dy,
+        controlPoint2.dx,
+        controlPoint2.dy,
+        wireEnd.dx,
+        wireEnd.dy,
+      );
 
       canvas.drawPath(path, isActive ? activePaint : inactivePaint);
 
@@ -1314,7 +1623,9 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
   }
 
   void _refreshData() {
-    currentRoutes = ref.read(mixerStateProvider.notifier).getMixerChannelDest(source: widget.sourceNode);
+    currentRoutes = ref
+        .read(mixerStateProvider.notifier)
+        .getMixerChannelDest(source: widget.sourceNode);
     mainRoute = currentRoutes.where((r) => !r.isSend).firstOrNull;
     sends = currentRoutes.where((r) => r.isSend).toList();
 
@@ -1351,12 +1662,14 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
   }
 
   Future<void> _setMainOutput(mixer_api.UiRoutingNode newDest) async {
-    final result = await ref.read(mixerStateProvider.notifier).updateRoutingCall(
-      src: widget.sourceNode,
-      dest: newDest,
-      sendLvl: 1.0,
-      isSend: false,
-    );
+    final result = await ref
+        .read(mixerStateProvider.notifier)
+        .updateRoutingCall(
+          src: widget.sourceNode,
+          dest: newDest,
+          sendLvl: 1.0,
+          isSend: false,
+        );
 
     _handleRoutingResult(result);
 
@@ -1369,16 +1682,24 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
 
   Future<void> _toggleSend(mixer_api.UiRoutingNode dest, bool enable) async {
     if (enable) {
-      final result = await ref.read(mixerStateProvider.notifier).updateRoutingCall(
-        src: widget.sourceNode,
-        dest: dest,
-        sendLvl: 0.5, // Default start level (50%)
-        isSend: true,
-      );
+      final result = await ref
+          .read(mixerStateProvider.notifier)
+          .updateRoutingCall(
+            src: widget.sourceNode,
+            dest: dest,
+            sendLvl: 0.5, // Default start level (50%)
+            isSend: true,
+          );
       _handleRoutingResult(result);
     } else {
       // We still use removeRouting here because updateRoutingCall only UPSERTS
-      final result = await ref.read(mixerStateProvider.notifier).removeRouting(source: widget.sourceNode, destination: dest, isSend: true);
+      final result = await ref
+          .read(mixerStateProvider.notifier)
+          .removeRouting(
+            source: widget.sourceNode,
+            destination: dest,
+            isSend: true,
+          );
       _handleRoutingResult(result);
     }
 
@@ -1389,13 +1710,18 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
     }
   }
 
-  Future<void> _updateSendLevel(mixer_api.UiRoutingNode dest, double level) async {
-    final result = await ref.read(mixerStateProvider.notifier).updateRoutingCall(
-      src: widget.sourceNode,
-      dest: dest,
-      sendLvl: level,
-      isSend: true,
-    );
+  Future<void> _updateSendLevel(
+    mixer_api.UiRoutingNode dest,
+    double level,
+  ) async {
+    final result = await ref
+        .read(mixerStateProvider.notifier)
+        .updateRoutingCall(
+          src: widget.sourceNode,
+          dest: dest,
+          sendLvl: level,
+          isSend: true,
+        );
 
     _handleRoutingResult(result);
 
@@ -1411,9 +1737,8 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
     final mixerState = ref.watch(projectProvider).value?.mixer;
     if (mixerState == null) return const SizedBox.shrink();
     // 1. Gather Valid Main Outputs (Master + All Buses except self)
-    final List<MapEntry<String, mixer_api.UiRoutingNode>> availableMainOutputs = [
-      const MapEntry("Master", mixer_api.UiRoutingNode.master()),
-    ];
+    final List<MapEntry<String, mixer_api.UiRoutingNode>> availableMainOutputs =
+        [const MapEntry("Master", mixer_api.UiRoutingNode.master())];
     for (final bus in mixerState.buses.values) {
       final node = mixer_api.UiRoutingNode.bus(bus.id);
       if (!_isSameNode(widget.sourceNode, node)) {
@@ -1425,7 +1750,8 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
     final List<MapEntry<String, mixer_api.UiRoutingNode>> availableSends = [];
     for (final bus in mixerState.buses.values) {
       final node = mixer_api.UiRoutingNode.bus(bus.id);
-      if (!_isSameNode(widget.sourceNode, node) && (mainRoute == null || !_isSameNode(mainRoute!.destination, node))) {
+      if (!_isSameNode(widget.sourceNode, node) &&
+          (mainRoute == null || !_isSameNode(mainRoute!.destination, node))) {
         availableSends.add(MapEntry(bus.name, node));
       }
     }
@@ -1433,7 +1759,11 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
     return AlertDialog(
       title: Text("Routing: ${widget.sourceName}"),
       backgroundColor: Colors.grey.shade900,
-      titleTextStyle: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+      titleTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
       content: SizedBox(
         width: 400,
         child: Column(
@@ -1443,24 +1773,38 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
             // --- MAIN OUTPUT ---
             const Text(
               "MAIN OUTPUT (Pre-Fader)",
-              style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(4),
+              ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: mainRoute != null ? _getNodeKeyStr(mainRoute!.destination) : null,
+                  value: mainRoute != null
+                      ? _getNodeKeyStr(mainRoute!.destination)
+                      : null,
                   isExpanded: true,
                   dropdownColor: Colors.black,
                   style: const TextStyle(color: Colors.cyanAccent),
                   items: availableMainOutputs.map((entry) {
-                    return DropdownMenuItem<String>(value: _getNodeKeyStr(entry.value), child: Text(entry.key));
+                    return DropdownMenuItem<String>(
+                      value: _getNodeKeyStr(entry.value),
+                      child: Text(entry.key),
+                    );
                   }).toList(),
                   onChanged: (val) {
                     if (val == null) return;
-                    final node = availableMainOutputs.firstWhere((e) => _getNodeKeyStr(e.value) == val).value;
+                    final node = availableMainOutputs
+                        .firstWhere((e) => _getNodeKeyStr(e.value) == val)
+                        .value;
                     _setMainOutput(node);
                   },
                 ),
@@ -1472,17 +1816,26 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
             // --- SENDS ---
             const Text(
               "SENDS (Post-Fader)",
-              style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
             if (availableSends.isEmpty)
               const Text(
                 "No available buses to send to.",
-                style: TextStyle(color: Colors.white24, fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  color: Colors.white24,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ...availableSends.map((entry) {
               final destKey = _getNodeKeyStr(entry.value)!;
-              final existingSend = sends.where((s) => _isSameNode(s.destination, entry.value)).firstOrNull;
+              final existingSend = sends
+                  .where((s) => _isSameNode(s.destination, entry.value))
+                  .firstOrNull;
               final isEnabled = existingSend != null;
               final level = _localSendLevels[destKey] ?? 0.0;
 
@@ -1499,7 +1852,9 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                       width: 80,
                       child: Text(
                         entry.key,
-                        style: TextStyle(color: isEnabled ? Colors.white : Colors.white38),
+                        style: TextStyle(
+                          color: isEnabled ? Colors.white : Colors.white38,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -1510,7 +1865,9 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                           inactiveTrackColor: Colors.white10,
                           thumbColor: Colors.cyanAccent,
                           trackHeight: 2,
-                          thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+                          thumbShape: RoundSliderThumbShape(
+                            enabledThumbRadius: 6,
+                          ),
                         ),
                         child: Slider(
                           value: level.clamp(0.0, 1.0),
@@ -1521,7 +1878,9 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                                   });
                                 }
                               : null,
-                          onChangeEnd: isEnabled ? (v) => _updateSendLevel(entry.value, v) : null,
+                          onChangeEnd: isEnabled
+                              ? (v) => _updateSendLevel(entry.value, v)
+                              : null,
                         ),
                       ),
                     ),
@@ -1530,7 +1889,10 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                       child: Text(
                         "${(level * 100).toInt()}%",
                         textAlign: TextAlign.right,
-                        style: TextStyle(color: isEnabled ? Colors.white54 : Colors.white24, fontSize: 10),
+                        style: TextStyle(
+                          color: isEnabled ? Colors.white54 : Colors.white24,
+                          fontSize: 10,
+                        ),
                       ),
                     ),
                   ],

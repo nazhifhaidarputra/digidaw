@@ -19,6 +19,8 @@ use karbeat_core::core::project::mixer::{
 // Type Definitions
 // ======================================
 
+
+
 // ======================================
 // MixerChannelTarget DTO
 // ======================================
@@ -601,7 +603,7 @@ pub fn update_routing(
 
 /// Get the mixer snapshot telemetry. this uses a lock-free atomic ArcSwap pointer
 #[frb(sync)]
-pub fn get_mixer_telemetry_sync(ctx: &DawContext) -> MixerTelemetrySnapshotDto {
+pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshotDto {
     mixer_api::get_mixer_telemetry_sync(ctx).into()
 }
 

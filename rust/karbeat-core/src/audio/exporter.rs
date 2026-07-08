@@ -71,7 +71,8 @@ where
         position_producer: pos_producer,
         feedback_producer: feedback_producer,
         response_tx: engine_tx,
-    });
+    })
+    .map_err(|_| AudioExportError::new("Engine", "Failed to Query audio engine"))?;
 
     let mut offline_engine = *engine_rx.recv().map_err(|_| {
         AudioExportError::new("QueryEngineReceiver", "Failed to received offline engine")

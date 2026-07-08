@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/features/plugins/plugin_registry.dart';
 import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
 import 'package:karbeat/features/plugins/view/dynamic_plugin_screen.dart';
-import 'package:karbeat/features/plugins/generators/synth_registry.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
+import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/app/providers/clip_placement_state.dart';
@@ -113,14 +114,14 @@ class SourceListScreen extends ConsumerWidget {
                         .firstWhere((p) => p.id == genInstance?.registryId)
                         .id;
                     // final builder = SynthRegistry.getSynthBuilder(registryId);
-                    screen = SynthRegistry.getScreen(
+                    screen = PluginRegistryFlutter.getGeneratorScreen(
                       registryId: registryId,
                       instanceId: id,
                     );
                   } catch (_) {
                     screen = DynamicPluginScreen(
-                      generatorId: id,
-                      generatorName: name,
+                      target: UiPluginTarget.generator(id),
+                      pluginName: name,
                     );
                   }
 

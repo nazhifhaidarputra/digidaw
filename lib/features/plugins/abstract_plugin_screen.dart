@@ -14,14 +14,11 @@ import 'package:karbeat/src/rust/api/project.dart';
 abstract class AbstractPluginScreen extends ConsumerStatefulWidget {
   /// The generic target (e.g. Generator(id), TrackEffect(trackId, effectId), etc.)
   final plugin_api.UiPluginTarget target;
-  
-  /// The specific ID of this plugin instance
-  final int pluginId;
+
 
   const AbstractPluginScreen({
     super.key,
-    required this.target,
-    required this.pluginId,
+    required this.target
   });
 }
 

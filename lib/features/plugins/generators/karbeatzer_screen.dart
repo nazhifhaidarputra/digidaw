@@ -1,7 +1,7 @@
-import 'package:karbeat/features/plugins/generators/abstract_generator_screen.dart';
+import 'package:karbeat/features/plugins/abstract_plugin_screen.dart';
 
-class KarbeatzerScreen extends AbstractGeneratorScreen {
-  const KarbeatzerScreen({super.key, required super.generatorId});
+class KarbeatzerScreen extends AbstractPluginScreen {
+  const KarbeatzerScreen({super.key, required super.target});
 
   @override
   KarbeatzerScreenState createState() {
@@ -9,8 +9,8 @@ class KarbeatzerScreen extends AbstractGeneratorScreen {
   }
 }
 
-class KarbeatzerScreenState extends AbstractGeneratorScreenState<KarbeatzerScreen> {
+class KarbeatzerScreenState extends AbstractPluginScreenState<KarbeatzerScreen> {
   @override
-  String get generatorName => 'Karbeatzer V2';
+  String get pluginName => 'Karbeatzer V2';
 
 }
