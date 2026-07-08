@@ -391,7 +391,7 @@ pub fn execute_live_plugin_command(
 /// If empty, it means that the snapshot is not currently available.
 #[frb(sync)]
 pub fn get_plugin_snapshot_telemetry_sync(
-    ctx: &DawContext, 
+    ctx: &mut DawContext, 
     target: UiPluginTarget
 ) -> Option<PluginTelemetrySnapshotDto> {
     plugin_api::get_plugin_telemetry_sync(ctx, target.into()).map(|t| t.into())
