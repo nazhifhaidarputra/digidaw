@@ -601,7 +601,7 @@ pub fn update_routing(
     mixer_api::update_routing(ctx, conn.into()).map_err(|e| e.to_string())
 }
 
-/// Get the mixer snapshot telemetry. this uses a lock-free atomic ArcSwap pointer
+/// Get the mixer snapshot telemetry. this uses a triple buffer last snapshot
 #[frb(sync)]
 pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshotDto {
     mixer_api::get_mixer_telemetry_sync(ctx).into()

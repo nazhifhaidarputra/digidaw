@@ -122,7 +122,7 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   /// Params listed in [MixerEditorState.touchedParams] are ignored to prevent
   /// in-flight slider values from being overwritten.
   /// Called 60 times a second by the UI Ticker.
-  /// Reads the lock-free ArcSwap pointer from Rust instantly.
+  /// Reads the latest snapshot from triple_buffer SPSC ring buffer
   void pollTelemetry() {
     final mixer = _mixerState;
     if (mixer == null) return;

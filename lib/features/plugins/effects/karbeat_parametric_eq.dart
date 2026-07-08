@@ -4,8 +4,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
-import 'package:karbeat/features/plugins/abstract_plugin_screen.dart'; // Unified base class
+import 'package:karbeat/features/plugins/abstract_plugin_screen.dart';
+import 'package:karbeat/generated/plugins/param_eq.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
+import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugins/opaque.dart';
 import 'package:karbeat/src/rust/api/plugins/types.dart';
 
@@ -40,6 +42,95 @@ double _yToGain(double y, double height) {
   return (normalized * (maxGain - minGain)) + minGain;
 }
 
+/// Bundles the 6 generated UiPluginParameter specs that make up one EQ band.
+/// This replaces path-string construction (e.g. "band$i/freq") with direct
+/// references to the generated constants.
+class _BandSpecs {
+  final UiPluginParameter freq;
+  final UiPluginParameter gain;
+  final UiPluginParameter q;
+  final UiPluginParameter active;
+  final UiPluginParameter type;
+  final UiPluginParameter slope;
+
+  const _BandSpecs({
+    required this.freq,
+    required this.gain,
+    required this.q,
+    required this.active,
+    required this.type,
+    required this.slope,
+  });
+}
+
+/// Ordered list of band specs, indexed 0..7, built from the generated class.
+final List<_BandSpecs> _bandSpecs = [
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band0Freq,
+    gain: DigiParametricEQSpecs.band0Gain,
+    q: DigiParametricEQSpecs.band0Q,
+    active: DigiParametricEQSpecs.band0Active,
+    type: DigiParametricEQSpecs.band0Type,
+    slope: DigiParametricEQSpecs.band0Slope,
+  ),
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band1Freq,
+    gain: DigiParametricEQSpecs.band1Gain,
+    q: DigiParametricEQSpecs.band1Q,
+    active: DigiParametricEQSpecs.band1Active,
+    type: DigiParametricEQSpecs.band1Type,
+    slope: DigiParametricEQSpecs.band1Slope,
+  ),
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band2Freq,
+    gain: DigiParametricEQSpecs.band2Gain,
+    q: DigiParametricEQSpecs.band2Q,
+    active: DigiParametricEQSpecs.band2Active,
+    type: DigiParametricEQSpecs.band2Type,
+    slope: DigiParametricEQSpecs.band2Slope,
+  ),
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band3Freq,
+    gain: DigiParametricEQSpecs.band3Gain,
+    q: DigiParametricEQSpecs.band3Q,
+    active: DigiParametricEQSpecs.band3Active,
+    type: DigiParametricEQSpecs.band3Type,
+    slope: DigiParametricEQSpecs.band3Slope,
+  ),
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band4Freq,
+    gain: DigiParametricEQSpecs.band4Gain,
+    q: DigiParametricEQSpecs.band4Q,
+    active: DigiParametricEQSpecs.band4Active,
+    type: DigiParametricEQSpecs.band4Type,
+    slope: DigiParametricEQSpecs.band4Slope,
+  ),
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band5Freq,
+    gain: DigiParametricEQSpecs.band5Gain,
+    q: DigiParametricEQSpecs.band5Q,
+    active: DigiParametricEQSpecs.band5Active,
+    type: DigiParametricEQSpecs.band5Type,
+    slope: DigiParametricEQSpecs.band5Slope,
+  ),
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band6Freq,
+    gain: DigiParametricEQSpecs.band6Gain,
+    q: DigiParametricEQSpecs.band6Q,
+    active: DigiParametricEQSpecs.band6Active,
+    type: DigiParametricEQSpecs.band6Type,
+    slope: DigiParametricEQSpecs.band6Slope,
+  ),
+  _BandSpecs(
+    freq: DigiParametricEQSpecs.band7Freq,
+    gain: DigiParametricEQSpecs.band7Gain,
+    q: DigiParametricEQSpecs.band7Q,
+    active: DigiParametricEQSpecs.band7Active,
+    type: DigiParametricEQSpecs.band7Type,
+    slope: DigiParametricEQSpecs.band7Slope,
+  ),
+];
+
 /// Data model for an EQ Band
 class EqBand {
   bool active;
@@ -57,21 +148,31 @@ class EqBand {
     required this.q,
     this.order = 0,
   });
+
+  /// Builds a band initialized from the generated default values for band [index].
+  factory EqBand.fromSpecs(_BandSpecs specs) {
+    return EqBand(
+      active: specs.active.defaultValue > 0.5,
+      filterType: specs.type.defaultValue.toInt(),
+      freq: specs.freq.defaultValue,
+      gain: specs.gain.defaultValue,
+      q: specs.q.defaultValue,
+      order: specs.slope.defaultValue.toInt(),
+    );
+  }
 }
 
 class KarbeatParametricEq extends AbstractPluginScreen {
-  const KarbeatParametricEq({
-    super.key,
-    required super.target,
-  });
+  const KarbeatParametricEq({super.key, required super.target});
 
   @override
   KarbeatParametricEqState createState() => KarbeatParametricEqState();
 }
 
-class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametricEq> {
+class KarbeatParametricEqState
+    extends AbstractPluginScreenState<KarbeatParametricEq> {
   // EQ-specific state
-  double masterGain = 0.0;
+  double masterGain = DigiParametricEQSpecs.baseGain.defaultValue;
   late List<EqBand> bands;
   int? _draggingNodeIndex;
 
@@ -91,7 +192,7 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
   ];
 
   @override
-  String get pluginName => 'Parametric EQ';
+  String get pluginName => DigiParametricEQSpecs.name;
 
   // 1. Tell the base class we want the 'telemetry' blob packed by Rust
   @override
@@ -111,15 +212,16 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
 
     // FRB maps Rust's `ZeroCopyBuffer::Float32(Arc<[f32]>)` to this Dart subclass
     switch (telemetryBuf.dataType()) {
-
       case BufferDataTypeDto.float32:
         final int length = telemetryBuf.lengthElements();
-        
+
         // Ensure we have at least the RIFF-style header
         if (length < 2) return;
 
         // Cast the raw integer address into a C-style Float pointer
-        final ptr = ffi.Pointer<ffi.Float>.fromAddress(telemetryBuf.memoryAddress());
+        final ptr = ffi.Pointer<ffi.Float>.fromAddress(
+          telemetryBuf.memoryAddress(),
+        );
 
         // Create a zero-cost Dart view directly over the Rust memory space
         // This does NOT copy the array; it just creates a viewing window!
@@ -137,8 +239,16 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
 
         setState(() {
           // ZERO-COST SPLIT: SublistView creates smaller windows into the main window
-          _spectrumBuffer = Float32List.sublistView(flatData, spectrumStart, spectrumStart + spectrumLen);
-          _magnitudeBuffer = Float32List.sublistView(flatData, magnitudeStart, magnitudeStart + magnitudeLen);
+          _spectrumBuffer = Float32List.sublistView(
+            flatData,
+            spectrumStart,
+            spectrumStart + spectrumLen,
+          );
+          _magnitudeBuffer = Float32List.sublistView(
+            flatData,
+            magnitudeStart,
+            magnitudeStart + magnitudeLen,
+          );
         });
         break;
       default:
@@ -152,68 +262,38 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
   }
 
   void _initBandsFromParameters() {
-    int maxBandIndex = -1;
-    for (final p in parameters) {
-      final match = RegExp(r'band(\d+)/').firstMatch(p.path);
-      if (match != null) {
-        final idx = int.parse(match.group(1)!);
-        if (idx > maxBandIndex) maxBandIndex = idx;
-      }
-    }
-
-    final numBands = maxBandIndex >= 0 ? maxBandIndex + 1 : 8;
-
-    bands = List.generate(
-      numBands,
-      (i) => EqBand(
-        active: true,
-        filterType: 0,
-        freq: 1000.0,
-        gain: 0.0,
-        q: 0.707,
-      ),
-    );
-
+    bands = _bandSpecs.map((specs) => EqBand.fromSpecs(specs)).toList();
     _applyParametersToState();
   }
 
   void _applyParametersToState() {
-    for (final p in parameters) {
-      if (p.path == 'base_gain') {
-        masterGain = p.value;
-        continue;
-      }
+    final valuesById = {for (final p in parameters) p.id: p.value};
 
-      final match = RegExp(r'band(\d+)/(.+)').firstMatch(p.path);
-      if (match != null) {
-        final bandIndex = int.parse(match.group(1)!);
+    if (valuesById.containsKey(DigiParametricEQSpecs.baseGain.id)) {
+      masterGain = valuesById[DigiParametricEQSpecs.baseGain.id]!;
+    }
 
-        if (bandIndex >= 0 && bandIndex < bands.length) {
-          final band = bands[bandIndex];
-          final paramName = match.group(2)!;
+    for (int i = 0; i < bands.length && i < _bandSpecs.length; i++) {
+      final specs = _bandSpecs[i];
+      final band = bands[i];
 
-          switch (paramName) {
-            case 'active':
-              band.active = p.value > 0.5;
-              break;
-            case 'type':
-              band.filterType = p.value.toInt();
-              break;
-            case 'freq':
-              band.freq = p.value;
-              break;
-            case 'q':
-              band.q = p.value;
-              break;
-            case 'gain':
-              band.gain = p.value;
-              break;
-            case 'slope':
-              band.order = p.value.toInt();
-              break;
-          }
-        }
-      }
+      final activeVal = valuesById[specs.active.id];
+      if (activeVal != null) band.active = activeVal > 0.5;
+
+      final typeVal = valuesById[specs.type.id];
+      if (typeVal != null) band.filterType = typeVal.toInt();
+
+      final freqVal = valuesById[specs.freq.id];
+      if (freqVal != null) band.freq = freqVal;
+
+      final qVal = valuesById[specs.q.id];
+      if (qVal != null) band.q = qVal;
+
+      final gainVal = valuesById[specs.gain.id];
+      if (gainVal != null) band.gain = gainVal;
+
+      final slopeVal = valuesById[specs.slope.id];
+      if (slopeVal != null) band.order = slopeVal.toInt();
     }
   }
 
@@ -221,45 +301,46 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
 
   void _updateMasterGain(double value) {
     setState(() => masterGain = value);
-    // Base class handles the FFI push natively
-    setParameter(parameters.firstWhere((p) => p.path == 'base_gain').id, value);
+    setParameter(DigiParametricEQSpecs.baseGain.id, value);
   }
 
   void _updateBandParam(int bandIdx, int paramType, double value) {
-    String suffix = "";
+    final specs = _bandSpecs[bandIdx];
+    late final UiPluginParameter targetParam;
 
     setState(() {
       final band = bands[bandIdx];
       switch (paramType) {
         case 0:
           band.freq = value;
-          suffix = "freq";
+          targetParam = specs.freq;
           break;
         case 1:
           band.gain = value;
-          suffix = "gain";
+          targetParam = specs.gain;
           break;
         case 2:
           band.q = value;
-          suffix = "q";
+          targetParam = specs.q;
           break;
         case 3:
           band.active = value > 0.5;
-          suffix = "active";
+          targetParam = specs.active;
           break;
         case 4:
           band.filterType = value.toInt();
-          suffix = "type";
+          targetParam = specs.type;
           break;
         case 5:
           band.order = value.toInt();
-          suffix = "slope";
+          targetParam = specs.slope;
           break;
+        default:
+          throw ArgumentError('Unknown paramType: $paramType');
       }
     });
 
-    final path = "band$bandIdx/$suffix";
-    setParameter(parameters.firstWhere((p) => p.path == path).id, value);
+    setParameter(targetParam.id, value);
   }
 
   // === Graph Interaction ===
@@ -288,7 +369,10 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
     }
   }
 
-  void _onGraphPanUpdate(DragUpdateDetails details, BoxConstraints constraints) {
+  void _onGraphPanUpdate(
+    DragUpdateDetails details,
+    BoxConstraints constraints,
+  ) {
     if (_draggingNodeIndex == null) return;
 
     final localPos = details.localPosition;
@@ -387,19 +471,24 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
   Widget _buildBandStrip(int i) {
     final band = bands[i];
     final color = _bandColors[i % _bandColors.length];
+    final specs = _bandSpecs[i];
 
+    // Find the live parameter (for current value/min/max) matching the
+    // generated type/slope spec ids, falling back to the generated spec itself.
     plugin_api.UiPluginParameter? typeParam;
     plugin_api.UiPluginParameter? slopeParam;
     for (final p in parameters) {
-      if (p.path == 'band$i/type') typeParam = p;
-      if (p.path == 'band$i/slope') slopeParam = p;
+      if (p.id == specs.type.id) typeParam = p;
+      if (p.id == specs.slope.id) slopeParam = p;
     }
+    typeParam ??= specs.type;
+    slopeParam ??= specs.slope;
 
-    final filterChoices = typeParam?.choices ?? [];
-    final slopeChoices = slopeParam?.choices ?? [];
+    final filterChoices = typeParam.choices;
+    final slopeChoices = slopeParam.choices;
 
     return Container(
-      width: 120, 
+      width: 120,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
@@ -472,7 +561,10 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
                     height: 32,
                     child: Text(
                       filterChoices[idx],
-                      style: const TextStyle(color: Colors.white70, fontSize: 9),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9,
+                      ),
                     ),
                   ),
                 ),
@@ -481,14 +573,22 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
                   children: [
                     Expanded(
                       child: Text(
-                        filterChoices.isNotEmpty && band.filterType < filterChoices.length
+                        filterChoices.isNotEmpty &&
+                                band.filterType < filterChoices.length
                             ? filterChoices[band.filterType]
                             : "",
-                        style: const TextStyle(color: Colors.white54, fontSize: 9),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 9,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(Icons.arrow_drop_down, size: 12, color: Colors.white54),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 12,
+                      color: Colors.white54,
+                    ),
                   ],
                 ),
               ),
@@ -500,21 +600,21 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
             _buildParamControl(
               "Freq",
               band.freq,
-              "band$i/freq",
+              specs.freq,
               (v) => _updateBandParam(i, 0, v),
               suffix: "Hz",
             ),
             _buildParamControl(
               "Gain",
               band.gain,
-              "band$i/gain",
+              specs.gain,
               (v) => _updateBandParam(i, 1, v),
               suffix: "dB",
             ),
             _buildParamControl(
               "Q",
               band.q,
-              "band$i/q",
+              specs.q,
               (v) => _updateBandParam(i, 2, v),
               suffix: "",
             ),
@@ -535,7 +635,10 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
                     height: 32,
                     child: Text(
                       slopeChoices[idx],
-                      style: const TextStyle(color: Colors.white70, fontSize: 9),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9,
+                      ),
                     ),
                   ),
                 ),
@@ -544,14 +647,22 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
                   children: [
                     Expanded(
                       child: Text(
-                        slopeChoices.isNotEmpty && band.order < slopeChoices.length
+                        slopeChoices.isNotEmpty &&
+                                band.order < slopeChoices.length
                             ? slopeChoices[band.order]
                             : "",
-                        style: const TextStyle(color: Colors.white54, fontSize: 9),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 9,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(Icons.arrow_drop_down, size: 12, color: Colors.white54),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 12,
+                      color: Colors.white54,
+                    ),
                   ],
                 ),
               ),
@@ -565,18 +676,13 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
   Widget _buildMasterStrip() {
     plugin_api.UiPluginParameter? p;
     for (final param in parameters) {
-      if (param.path == 'base_gain') {
+      if (param.id == DigiParametricEQSpecs.baseGain.id) {
         p = param;
         break;
       }
     }
+    p ??= DigiParametricEQSpecs.baseGain;
 
-    final pMin = p?.min ?? minGain;
-    final pMax = p?.max ?? maxGain;
-    final pDef = p?.defaultValue ?? 0.0;
-    final pStep = p?.step ?? 0.1;
-    final pId = p?.id ?? -1;
-    final pValue = p?.value ?? 0.0;
 
     return Container(
       width: 80,
@@ -599,13 +705,13 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
             child: RotatedBox(
               quarterTurns: 3,
               child: DawFloatParam(
-                paramId: pId,
+                paramId: p.id,
                 name: 'Gain',
-                value: pValue,
-                min: pMin,
-                max: pMax,
-                defaultValue: pDef,
-                step: pStep,
+                value: p.value,
+                min: p.min,
+                max: p.max,
+                defaultValue: p.defaultValue,
+                step: p.step,
                 suffix: "dB",
                 onChanged: _updateMasterGain,
               ),
@@ -627,34 +733,30 @@ class KarbeatParametricEqState extends AbstractPluginScreenState<KarbeatParametr
   Widget _buildParamControl(
     String label,
     double val,
-    String paramPath,
+    UiPluginParameter spec,
     ValueChanged<double> onChanged, {
     String suffix = "",
   }) {
     plugin_api.UiPluginParameter? p;
     for (final param in parameters) {
-      if (param.path == paramPath) {
+      if (param.id == spec.id) {
         p = param;
         break;
       }
     }
+    p ??= spec;
 
-    final pMin = p?.min ?? 0.0;
-    final pMax = p?.max ?? 1.0;
-    final pDef = p?.defaultValue ?? 0.0;
-    final pStep = p?.step ?? 0.1;
-    final pId = p?.id ?? -1;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6.0),
       child: DawFloatParam(
-        paramId: pId,
+        paramId: p.id,
         name: label,
         value: val,
-        min: pMin,
-        max: pMax,
-        defaultValue: pDef,
-        step: pStep,
+        min: p.min,
+        max: p.max,
+        defaultValue: p.defaultValue,
+        step: p.step,
         suffix: suffix,
         onChanged: onChanged,
       ),
@@ -688,7 +790,7 @@ class _EqResponsePainter extends CustomPainter {
     for (int i = 0; i + 1 < buf.length; i += 2) {
       final freq = buf[i].toDouble();
       final db = buf[i + 1].toDouble();
-      if (freq <= 0) continue; 
+      if (freq <= 0) continue;
       pts.add(Offset(_freqToX(freq, w), yMapper(db, h)));
     }
     return pts;
