@@ -45,7 +45,7 @@ double _yToGain(double y, double height) {
 /// Bundles the 6 generated UiPluginParameter specs that make up one EQ band.
 /// This replaces path-string construction (e.g. "band$i/freq") with direct
 /// references to the generated constants.
-class _BandSpecs {
+class BandSpecs {
   final UiPluginParameter freq;
   final UiPluginParameter gain;
   final UiPluginParameter q;
@@ -53,7 +53,7 @@ class _BandSpecs {
   final UiPluginParameter type;
   final UiPluginParameter slope;
 
-  const _BandSpecs({
+  const BandSpecs({
     required this.freq,
     required this.gain,
     required this.q,
@@ -64,8 +64,8 @@ class _BandSpecs {
 }
 
 /// Ordered list of band specs, indexed 0..7, built from the generated class.
-final List<_BandSpecs> _bandSpecs = [
-  _BandSpecs(
+final List<BandSpecs> _bandSpecs = [
+  BandSpecs(
     freq: DigiParametricEQSpecs.band0Freq,
     gain: DigiParametricEQSpecs.band0Gain,
     q: DigiParametricEQSpecs.band0Q,
@@ -73,7 +73,7 @@ final List<_BandSpecs> _bandSpecs = [
     type: DigiParametricEQSpecs.band0Type,
     slope: DigiParametricEQSpecs.band0Slope,
   ),
-  _BandSpecs(
+  BandSpecs(
     freq: DigiParametricEQSpecs.band1Freq,
     gain: DigiParametricEQSpecs.band1Gain,
     q: DigiParametricEQSpecs.band1Q,
@@ -81,7 +81,7 @@ final List<_BandSpecs> _bandSpecs = [
     type: DigiParametricEQSpecs.band1Type,
     slope: DigiParametricEQSpecs.band1Slope,
   ),
-  _BandSpecs(
+  BandSpecs(
     freq: DigiParametricEQSpecs.band2Freq,
     gain: DigiParametricEQSpecs.band2Gain,
     q: DigiParametricEQSpecs.band2Q,
@@ -89,7 +89,7 @@ final List<_BandSpecs> _bandSpecs = [
     type: DigiParametricEQSpecs.band2Type,
     slope: DigiParametricEQSpecs.band2Slope,
   ),
-  _BandSpecs(
+  BandSpecs(
     freq: DigiParametricEQSpecs.band3Freq,
     gain: DigiParametricEQSpecs.band3Gain,
     q: DigiParametricEQSpecs.band3Q,
@@ -97,7 +97,7 @@ final List<_BandSpecs> _bandSpecs = [
     type: DigiParametricEQSpecs.band3Type,
     slope: DigiParametricEQSpecs.band3Slope,
   ),
-  _BandSpecs(
+  BandSpecs(
     freq: DigiParametricEQSpecs.band4Freq,
     gain: DigiParametricEQSpecs.band4Gain,
     q: DigiParametricEQSpecs.band4Q,
@@ -105,7 +105,7 @@ final List<_BandSpecs> _bandSpecs = [
     type: DigiParametricEQSpecs.band4Type,
     slope: DigiParametricEQSpecs.band4Slope,
   ),
-  _BandSpecs(
+  BandSpecs(
     freq: DigiParametricEQSpecs.band5Freq,
     gain: DigiParametricEQSpecs.band5Gain,
     q: DigiParametricEQSpecs.band5Q,
@@ -113,7 +113,7 @@ final List<_BandSpecs> _bandSpecs = [
     type: DigiParametricEQSpecs.band5Type,
     slope: DigiParametricEQSpecs.band5Slope,
   ),
-  _BandSpecs(
+  BandSpecs(
     freq: DigiParametricEQSpecs.band6Freq,
     gain: DigiParametricEQSpecs.band6Gain,
     q: DigiParametricEQSpecs.band6Q,
@@ -121,7 +121,7 @@ final List<_BandSpecs> _bandSpecs = [
     type: DigiParametricEQSpecs.band6Type,
     slope: DigiParametricEQSpecs.band6Slope,
   ),
-  _BandSpecs(
+  BandSpecs(
     freq: DigiParametricEQSpecs.band7Freq,
     gain: DigiParametricEQSpecs.band7Gain,
     q: DigiParametricEQSpecs.band7Q,
@@ -150,7 +150,7 @@ class EqBand {
   });
 
   /// Builds a band initialized from the generated default values for band [index].
-  factory EqBand.fromSpecs(_BandSpecs specs) {
+  factory EqBand.fromSpecs(BandSpecs specs) {
     return EqBand(
       active: specs.active.defaultValue > 0.5,
       filterType: specs.type.defaultValue.toInt(),
@@ -202,6 +202,36 @@ class KarbeatParametricEqState
   void initState() {
     super.initState();
     _initBandsFromParameters();
+
+    plugin_api.executeLivePluginCommand(
+      ctx: ctx,
+      target: widget.target,
+      command: "SET_MAGNITUDE_ACTIVE",
+      payloadJson: '{"active": true}',
+    );
+    plugin_api.executeLivePluginCommand(
+      ctx: ctx,
+      target: widget.target,
+      command: "SET_SPECTRUM_ACTIVE",
+      payloadJson: '{"active": true}',
+    );
+  }
+
+  @override
+  void dispose() {
+    plugin_api.executeLivePluginCommand(
+      ctx: ctx,
+      target: widget.target,
+      command: "SET_MAGNITUDE_ACTIVE",
+      payloadJson: '{"active": false}',
+    );
+    plugin_api.executeLivePluginCommand(
+      ctx: ctx,
+      target: widget.target,
+      command: "SET_SPECTRUM_ACTIVE",
+      payloadJson: '{"active": false}',
+    );
+    super.dispose();
   }
 
   // 2. The base class's 60 FPS Ticker automatically feeds us the lock-free data

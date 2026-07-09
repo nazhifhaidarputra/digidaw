@@ -10,7 +10,6 @@ use karbeat_core::shared::id::*;
 use karbeat_plugins::registry::PluginInfo;
 use karbeat_utils::parser::FromPluginCommand;
 pub use parking_lot::Mutex;
-use std::sync::Arc;
 
 // ============================================================================
 // UI TYPES FOR FLUTTER RUST BRIDGE

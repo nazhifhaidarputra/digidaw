@@ -736,6 +736,8 @@ impl AudioEngine {
             } else {
                 // If not looping, stop playback normally
                 self.stop_playback();
+                self.render_voices_to_buffer(output_buffer, channels, false);
+                self.cleanup_finished_voices(frame_count);
             }
         } else {
             self.process_block_song_mode(frame_count, output_buffer, channels);
@@ -856,7 +858,12 @@ impl AudioEngine {
         self.song_state.is_playing = false;
         self.pattern_state.is_playing = false;
         self.stop_all_active_generators();
+        
         self.reset_playhead();
+        self.reset_pattern_state();
+        
+        // Emit exactly ONCE after both playheads are perfectly zeroed out
+        self.emit_static_position();
     }
 
     fn stop_all_active_generators(&mut self) {
@@ -974,8 +981,9 @@ impl AudioEngine {
 
     fn reset_pattern_state(&mut self) {
         self.pattern_state.playhead_samples = 0;
+        self.pattern_state.current_beat = 1;
+        self.pattern_state.current_bar = 1;
         self.pattern_state.last_emitted_samples = 0;
-        self.recalculate_pattern_beat_bar();
     }
 
     /// Process incoming commands from command queue buffer
@@ -1013,9 +1021,7 @@ impl AudioEngine {
                 self.emit_current_playback_position();
             }
             AudioCommand::StopAndReset => {
-                if matches!(self.playback_mode, PlaybackMode::Song) {
-                    self.stop_playback();
-                }
+                self.stop_playback();
             }
             AudioCommand::SetPlayhead(samples) => {
                 log::debug!(
@@ -1916,7 +1922,6 @@ impl AudioEngine {
         self.song_state.current_beat = 1;
         self.song_state.current_bar = 1;
         self.song_state.last_emitted_samples = 0;
-        self.emit_static_position();
     }
 
     fn emit_playback_position(&mut self) {

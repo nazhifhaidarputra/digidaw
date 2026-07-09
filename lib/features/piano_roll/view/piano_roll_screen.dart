@@ -1196,7 +1196,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
               final localPos = renderBox.globalToLocal(details.globalPosition);
 
               // Hit test edge for resizing
-              const edgeThreshold = 3.0;
+              const edgeThreshold = 10.0;
 
               setState(() {
                 if (localPos.dx > _localWidth - edgeThreshold) {

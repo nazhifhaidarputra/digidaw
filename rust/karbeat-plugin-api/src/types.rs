@@ -6,16 +6,30 @@ pub struct MidiEvent {
 }
 
 pub enum MidiMessage {
-    NoteOn { channel: u8, key: u8, velocity: u8 },
-    NoteOff { channel: u8, key: u8 },
-    ControlChange { channel: u8, controller: u8, value: u8 },
-    PitchBend { channel: u8, value: i16 },
-    
+    NoteOn {
+        channel: u8,
+        key: u8,
+        velocity: u8,
+    },
+    NoteOff {
+        channel: u8,
+        key: u8,
+    },
+    ControlChange {
+        channel: u8,
+        controller: u8,
+        value: u8,
+    },
+    PitchBend {
+        channel: u8,
+        value: i16,
+    },
+
     /// Allows per-note modulation (e.g., individual pitch bend or pressure per key).
     NoteExpression {
         note_id: u32, // Unique ID to track overlapping notes
         expression: NoteExpressionType,
-        value: f32,   // Normalized 0.0 to 1.0
+        value: f32, // Normalized 0.0 to 1.0
     },
 }
 
@@ -23,14 +37,14 @@ pub enum MidiMessage {
 pub enum NoteExpressionType {
     Volume,
     Pan,
-    Tuning,    // Per-note pitch bend
+    Tuning, // Per-note pitch bend
     Vibrato,
     Brightness,
     Pressure,
 }
 
 /// Represents a sample-accurate parameter change.
-/// Instead of changing a parameter once per block, the engine passes an array 
+/// Instead of changing a parameter once per block, the engine passes an array
 /// of these so the plugin can apply the change at the exact `sample_offset`.
 #[derive(Debug, Clone, Copy)]
 pub struct ParamChange {
@@ -53,7 +67,7 @@ pub enum ProcessingMode {
 /// Represents a single audio bus (e.g., Main Input, Sidechain, Multi-Out).
 /// Audio is non-interleaved: `channel_data` contains a separate slice for each channel.
 pub struct AudioBusBuffer<'a> {
-    /// Slices of audio data, one for each channel. 
+    /// Slices of audio data, one for each channel.
     /// e.g., for stereo: `&mut [&mut [f32], &mut [f32]]` (Left, Right)
     pub channel_data: &'a mut [&'a mut [f32]],
     /// True if the host/engine has determined this bus is completely silent.
@@ -66,7 +80,7 @@ pub struct AudioBusBuffer<'a> {
 pub struct AudioBuffers<'a> {
     pub main_inputs: &'a mut [AudioBusBuffer<'a>],
     pub main_outputs: &'a mut [AudioBusBuffer<'a>],
-    pub aux_inputs: &'a mut [AudioBusBuffer<'a>],  // Sidechains
+    pub aux_inputs: &'a mut [AudioBusBuffer<'a>], // Sidechains
     pub aux_outputs: &'a mut [AudioBusBuffer<'a>], // Multi-outs
 }
 
@@ -78,11 +92,10 @@ pub struct BusConfig {
     pub name: String,
     /// The number of audio channels in this bus (e.g., 1 for Mono, 2 for Stereo).
     pub channel_count: usize,
-    /// Whether this bus is optional. 
+    /// Whether this bus is optional.
     /// For example, sidechain inputs are usually optional, while main outputs are not.
     pub is_optional: bool,
 }
-
 
 /// Tells the DAW how to route audio/MIDI to this plugin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,16 +127,15 @@ pub struct ProcessContext<'a> {
     /// Continuous bar position (e.g., 2.25 is exactly a quarter into bar 2).
     pub bar_position: f64,
 
-        /// Loop points in beats (if looping is active).
+    /// Loop points in beats (if looping is active).
     pub loop_start_beat: Option<f64>,
     pub loop_end_beat: Option<f64>,
 
     // --- Events & Automation ---
     pub midi_events: &'a [MidiEvent],
-    
+
     /// Sample-accurate parameter changes that occur *within* this audio block.
     pub param_changes: &'a [ParamChange],
-    
     // pub aux_buffer: Cell<Option<&'a [f32]>>,
 }
 
@@ -134,6 +146,17 @@ pub enum ZeroCopyBuffer {
     Uint8(Arc<[u8]>),
     Int32(Arc<[i32]>),
     Int8(Arc<[i8]>),
+}
+
+impl ZeroCopyBuffer {
+    pub fn len(&self) -> usize {
+        match self {
+            ZeroCopyBuffer::Float32(items) => items.len(),
+            ZeroCopyBuffer::Uint8(items) => items.len(),
+            ZeroCopyBuffer::Int32(items) => items.len(),
+            ZeroCopyBuffer::Int8(items) => items.len(),
+        }
+    }
 }
 
 /// Avalable Shared Buffer Data Type

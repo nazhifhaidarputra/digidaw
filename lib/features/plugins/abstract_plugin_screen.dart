@@ -32,7 +32,9 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   final Set<int> _touchedParams = {};
 
   late final Ticker _ticker;
-  late final DawContext _ctx;
+  
+  @protected
+  late final DawContext ctx;
 
   String get pluginName => 'Plugin';
 
@@ -50,12 +52,12 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   @override
   void initState() {
     super.initState();
-    _ctx = ref.read(projectProvider.notifier).dawContext;
+    ctx = ref.read(projectProvider.notifier).dawContext;
     _loadParameterSpecs();
 
     // Subscribe to the 30 FPS Rust Audio Engine stream for this specific plugin
     plugin_api.setPluginTelemetrySubs(
-      ctx: _ctx, 
+      ctx: ctx, 
       target: widget.target, 
       buffers: getRequestedZeroCopyBuffers(), 
       active: true,
@@ -72,7 +74,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     
     // Unsubscribe from telemetry to save CPU when UI is closed
     plugin_api.setPluginTelemetrySubs(
-      ctx: _ctx, 
+      ctx: ctx, 
       target: widget.target, 
       buffers: [], 
       active: false,
@@ -94,7 +96,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     if (isLoading) return;
 
     // Instantly reads the ArcSwap pointer across the FFI boundary
-    final telemetry = plugin_api.getPluginSnapshotTelemetrySync(ctx: _ctx, target: widget.target);
+    final telemetry = plugin_api.getPluginSnapshotTelemetrySync(ctx: ctx, target: widget.target);
     if (telemetry == null) return;
 
     bool paramsChanged = false;
@@ -139,7 +141,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   Future<void> _loadParameterSpecs() async {
     try {
       final specs = await plugin_api.getPluginParameterSpecs(
-        ctx: _ctx,
+        ctx: ctx,
         target: widget.target,
       );
       
@@ -185,7 +187,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
 
     try {
       await plugin_api.setPluginParameter(
-        ctx: _ctx,
+        ctx: ctx,
         target: widget.target,
         paramId: plugin_api.UiParamId.id(paramId),
         value: value,
@@ -200,7 +202,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     _touchedParams.add(paramId);
     try {
       plugin_api.beginPluginParameterEdit(
-        ctx: _ctx,
+        ctx: ctx,
         target: widget.target,
         paramId: plugin_api.UiParamId.id(paramId),
       );
@@ -214,7 +216,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     _touchedParams.remove(paramId);
     try {
       plugin_api.endPluginParameterEdit(
-        ctx: _ctx,
+        ctx: ctx,
         target: widget.target,
         paramId: plugin_api.UiParamId.id(paramId),
       );

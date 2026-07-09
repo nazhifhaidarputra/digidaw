@@ -1,58 +1,38 @@
-import 'dart:developer' as dev;
-
-enum KarbeatLoggerLogType { info, error, warn }
-
-String _mapLogTypeToString(KarbeatLoggerLogType logType) {
-  switch (logType) {
-    case KarbeatLoggerLogType.info:
-      return "INFO";
-    case KarbeatLoggerLogType.error:
-      return 'ERROR';
-    case KarbeatLoggerLogType.warn:
-      return 'WARN';
-  }
-}
+import 'package:logger/logger.dart';
 
 class AppLogger {
-  static void log({
-    required String message,
-    KarbeatLoggerLogType logType = KarbeatLoggerLogType.info,
-    int stackFrameOffset = 1,
-  }) {
-    // Stack frame offset accounts for the call stack:
-    // [0] = current line, [1] = log(), [2+] = caller or helper method
-    final stackLines = StackTrace.current.toString().split('\n');
-    final stackTrace = stackLines[stackFrameOffset];
-    final timestamp = DateTime.now().toIso8601String();
-    final fileInfo = stackTrace.substring(stackTrace.indexOf('package:'));
+  static final Logger _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 2,
+      errorMethodCount: 8,
+      lineLength: 120,
+      colors: true,
+      printEmojis: true,
+      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
+    ),
+  );
 
-    dev.log(
-      "[$timestamp $fileInfo] $message",
-      name: _mapLogTypeToString(logType),
-    );
+  static void debug(String message) {
+    _logger.d(message);
   }
 
   static void info(String message) {
-    AppLogger.log(
-      message: message,
-      logType: KarbeatLoggerLogType.info,
-      stackFrameOffset: 2,
-    );
+    _logger.i(message);
   }
 
   static void warn(String message) {
-    AppLogger.log(
-      message: message,
-      logType: KarbeatLoggerLogType.warn,
-      stackFrameOffset: 2,
-    );
+    _logger.w(message);
   }
 
-  static void error(String message) {
-    AppLogger.log(
-      message: message,
-      logType: KarbeatLoggerLogType.error,
-      stackFrameOffset: 2,
-    );
+  static void error(String message, {Object? error, StackTrace? stackTrace}) {
+    _logger.e(message, error: error, stackTrace: stackTrace);
+  }
+
+  static void trace(String message) {
+    _logger.t(message);
+  }
+
+  static void fatal(String message, {Object? error, StackTrace? stackTrace}) {
+    _logger.f(message, error: error, stackTrace: stackTrace);
   }
 }

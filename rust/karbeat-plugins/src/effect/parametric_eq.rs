@@ -388,6 +388,10 @@ impl DigiParametricEQ {
         engine.scratch = Box::new(AnalyzerScratch::new());
         engine.cached_magnitude = Vec::new();
         engine.telemetry_buffer = Arc::new([]);
+
+        engine.cached_magnitude = engine.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS);
+        engine.publish_telemetry();
+        
         engine.enable_spectrum_analyzer = false;
         engine.enable_magnitude_curve = false;
         engine.active_parameter_edits = hashbrown::HashSet::new();
@@ -768,8 +772,10 @@ impl AudioPlugin for DigiParametricEQ {
 
     fn get_zero_copy_buffer(&self, name: &str) -> Option<ZeroCopyBuffer> {
         if name == "telemetry" {
+            // log::debug!("received request for \"telemetry\" buffer for Parametric EQ");
             Some(ZeroCopyBuffer::Float32(self.telemetry_buffer.clone()))
         } else {
+            log::warn!("Does not send any buffer");
             None
         }
     }
