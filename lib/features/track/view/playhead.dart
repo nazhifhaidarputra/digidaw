@@ -78,16 +78,8 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                   final pos = positionAsync.value!;
                   _lastKnownSamples = widget.sampleSelector(pos);
 
-                  final bool isPlaying = pos.isPlaying || pos.isPatternPlaying;
-
-                  if (!isPlaying && !_isDragging && _lastProcessedFeedback != null) {
-                      _lastKnownSamples = widget.sampleSelector(_lastProcessedFeedback!);
-                  } else {
-                      // Normal update 
-                      _lastKnownSamples = widget.sampleSelector(pos);
-                      _lastProcessedFeedback = pos;
-                  }
-
+                  // If the user is actively dragging, use their finger position.
+                  // Otherwise, snap to the actual engine position.
                   final currentSamples = _isDragging
                       ? _dragSamples
                       : _lastKnownSamples;
