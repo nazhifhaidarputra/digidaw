@@ -22,7 +22,7 @@ karbeat-plugins = { path = "karbeat-plugins" }
 karbeat-utils = { path = "karbeat-utils" }
 karbeat-macros = { path = "karbeat-macros" }
 karbeat-plugin-types = { path = "karbeat-plugin-types" }
-anyhow = "1.0.100"
+anyhow = "1.0.103"
 cpal = { version = "0.17.3"}
 env_logger = "0.11"
 fastrand = "2.4"

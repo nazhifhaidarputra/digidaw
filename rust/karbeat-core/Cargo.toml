@@ -51,10 +51,12 @@ realfft = "3.5.0"
 arc-swap = "1.9.2"
 triple_buffer.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { workspace = true, features = ["jack"] }
+
 [features]
 default = []
 asio = ["cpal/asio"]
-jack = ["cpal/jack"]
 
 [lints]
 workspace = true
