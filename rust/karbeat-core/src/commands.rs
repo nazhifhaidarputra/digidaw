@@ -58,9 +58,9 @@ pub enum AudioCommand {
     RemoveGenerator {
         generator_id: GeneratorId,
     },
-    /// Set a parameter on a generator plugin
-    SetGeneratorParameter {
-        generator_id: GeneratorId,
+    /// Set a parameter on a target plugin
+    SetParameter {
+        target: PluginTarget,
         param_id: u32,
         value: f32,
     },
@@ -88,13 +88,7 @@ pub enum AudioCommand {
         target: EffectTarget,
         effect_id: EffectId,
     },
-    /// Set a parameter on a target effect
-    SetEffectParameter {
-        target: EffectTarget,
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
+
     /// Request parameter feedback for a target effect (triggers EffectParameterSnapshot response)
     QueryEffectParameters {
         target: EffectTarget,
@@ -262,6 +256,7 @@ pub enum AudioCommand {
     SetMixerTelemetrySubscription {
         active: bool
     },
+    ResumeAutomation { target: AutomationTarget },
 }
 
 // ============================================================================

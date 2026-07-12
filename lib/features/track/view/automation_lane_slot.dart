@@ -34,7 +34,7 @@ class AutomationLaneSlot extends ConsumerWidget {
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: Colors.black.withAlpha(80), // Slightly darker than main track
+        color: Colors.black.withAlpha(80),
         border: Border(
           bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
           right: BorderSide(color: Colors.white.withAlpha(16), width: 1),

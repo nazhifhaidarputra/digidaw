@@ -402,8 +402,9 @@
                   );
                 }).toList(),
                 onChanged: (val) {
-                  if (val != null)
+                  if (val != null) {
                     ref.read(workspaceStateProvider.notifier).setGridSize(val);
+                  }
                 },
               ),
               const SizedBox(width: 16),

@@ -357,30 +357,10 @@ pub fn set_plugin_parameter(
 ) -> anyhow::Result<()> {
     let param_id = param_id.into_id();
 
-    let command = match target {
-        PluginTarget::Generator(gen_id) => AudioCommand::SetGeneratorParameter {
-            generator_id: *gen_id,
-            param_id,
-            value,
-        },
-        PluginTarget::TrackEffect(track_id, effect_id) => AudioCommand::SetEffectParameter {
-            target: EffectTarget::Track(*track_id),
-            effect_id: *effect_id,
-            param_id,
-            value,
-        },
-        PluginTarget::BusEffect(bus_id, effect_id) => AudioCommand::SetEffectParameter {
-            target: EffectTarget::Bus(*bus_id),
-            effect_id: *effect_id,
-            param_id,
-            value,
-        },
-        PluginTarget::MasterEffect(effect_id) => AudioCommand::SetEffectParameter {
-            target: EffectTarget::Master,
-            effect_id: *effect_id,
-            param_id,
-            value,
-        },
+    let command = AudioCommand::SetParameter {
+        target: target.clone(),
+        param_id,
+        value,
     };
 
     ctx.send_audio_command(command)?;
@@ -613,7 +593,7 @@ pub fn get_plugin_telemetry_sync(
     target: PluginTarget,
 ) -> Option<PluginTelemetrySnapshot> {
     ctx.drain_telemetry_registrations();
-    
+
     ctx.telemetry_registry
         .as_mut()?
         .param_telemetry_consumers

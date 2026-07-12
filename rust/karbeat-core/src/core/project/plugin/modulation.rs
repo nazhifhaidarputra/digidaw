@@ -449,13 +449,13 @@ impl ApplicationState {
         // Find the link's current position among its siblings
         if let Some(current_pos) = sibling_links
             .iter()
-            .position(|link| link.prop.id == link_id) {        
-                // Move the link in the sorted vector
-                let target_idx = new_idx.min(sibling_links.len().saturating_sub(1));
-                let link = sibling_links.remove(current_pos);
-                sibling_links.insert(target_idx, link);
-            }
-
+            .position(|link| link.prop.id == link_id)
+        {
+            // Move the link in the sorted vector
+            let target_idx = new_idx.min(sibling_links.len().saturating_sub(1));
+            let link = sibling_links.remove(current_pos);
+            sibling_links.insert(target_idx, link);
+        }
 
         // Write the new sequential indices back to the global HashMap
         for (i, sibling) in sibling_links.iter().enumerate() {

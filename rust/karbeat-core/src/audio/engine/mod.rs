@@ -6,7 +6,7 @@
 mod helper;
 mod types;
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
 use std::{
@@ -29,7 +29,8 @@ use crate::{
     },
     commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
-        GeneratorParameterSnapshot, MixerChannelSnapshot, MixerChannelTarget, TelemetryRegistration,
+        GeneratorParameterSnapshot, MixerChannelSnapshot, MixerChannelTarget,
+        TelemetryRegistration,
     },
     core::project::*,
     shared::id::*,
@@ -208,6 +209,8 @@ pub struct AudioEngine {
     // =========================
     active_sources: HashMap<ModulationId, (LiveModulationSource, f32)>,
     active_links: Vec<ModulationLink>,
+    /// Targets whose absolute automation has been manually overridden by the user
+    suspended_targets: HashSet<AutomationTarget>,
 
     /// Tracks the continuous phase of active LFOs
     lfo_phases: HashMap<AutomationTarget, f32>,
@@ -501,6 +504,7 @@ impl AudioEngine {
             samples_since_last_snapshot: 0,
             telemetry,
             telemetry_reg_sender,
+            suspended_targets: HashSet::new()
         }
     }
 
@@ -571,6 +575,8 @@ impl AudioEngine {
             // The export engine is not connected to DawContext.
             // Create a disconnected dummy sender — sends will fail silently.
             telemetry_reg_sender: mpsc::sync_channel(0).0,
+
+            suspended_targets: self.suspended_targets.clone(),
         }
     }
 
@@ -858,10 +864,10 @@ impl AudioEngine {
         self.song_state.is_playing = false;
         self.pattern_state.is_playing = false;
         self.stop_all_active_generators();
-        
+
         self.reset_playhead();
         self.reset_pattern_state();
-        
+
         // Emit exactly ONCE after both playheads are perfectly zeroed out
         self.emit_static_position();
     }
@@ -1109,11 +1115,15 @@ impl AudioEngine {
                 let target = PluginTarget::Generator(generator_id);
                 let (input, output) =
                     triple_buffer::triple_buffer(&PluginTelemetrySnapshot::default());
-                self.telemetry.param_telemetry_producers.insert(target.clone(), input);
-                let _ = self.telemetry_reg_sender.try_send(TelemetryRegistration::Registered {
-                    target,
-                    consumer: Box::new(output),
-                });
+                self.telemetry
+                    .param_telemetry_producers
+                    .insert(target.clone(), input);
+                let _ = self
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Registered {
+                        target,
+                        consumer: Box::new(output),
+                    });
 
                 log::info!(
                     "[AudioEngine] Added generator {:?} for track {:?}",
@@ -1130,26 +1140,67 @@ impl AudioEngine {
                 // Remove the telemetry producer and notify DawContext.
                 let target = PluginTarget::Generator(generator_id);
                 self.telemetry.param_telemetry_producers.remove(&target);
-                self.telemetry.active_telemetry_subscriptions.remove(&target);
-                let _ = self.telemetry_reg_sender.try_send(TelemetryRegistration::Removed { target });
+                self.telemetry
+                    .active_telemetry_subscriptions
+                    .remove(&target);
+                let _ = self
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Removed { target });
 
                 log::info!("[AudioEngine] Removed generator {:?}", generator_id);
             }
-            AudioCommand::SetGeneratorParameter {
-                generator_id,
+            AudioCommand::SetParameter {
+                target,
                 param_id,
                 value,
             } => {
-                if let Some(gen_instance) = self
-                    .plugin_state
-                    .get_generator_mut(generator_id.to_u32() as usize)
-                {
-                    gen_instance.plugin.set_parameter(param_id, value);
+                match target {
+                    PluginTarget::Generator(generator_id) => {
+                        if let Some(gen_instance) = self
+                            .plugin_state
+                            .get_generator_mut(generator_id.to_u32() as usize)
+                        {
+                            gen_instance.plugin.set_parameter(param_id, value);
+                        }
+                    }
+                    PluginTarget::TrackEffect(track_id, effect_id) => {
+                        if let Some(effects) =
+                            self.get_effect_list_mut(&EffectTarget::Track(track_id))
+                        {
+                            if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                                effect.plugin.set_parameter(param_id, value);
+                            }
+                        }
+                    }
+                    PluginTarget::BusEffect(bus_id, effect_id) => {
+                        if let Some(effects) = self.get_effect_list_mut(&EffectTarget::Bus(bus_id))
+                        {
+                            if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                                effect.plugin.set_parameter(param_id, value);
+                            }
+                        }
+                    }
+                    PluginTarget::MasterEffect(effect_id) => {
+                        if let Some(effects) = self.get_effect_list_mut(&EffectTarget::Master) {
+                            if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                                effect.plugin.set_parameter(param_id, value);
+                            }
+                        }
+                    }
                 }
+                // update the base_value of the parameter in the active_links map
 
-                // This should Send updated param specifications to ApplicationState in business logic thread
-                // Since they are also needs to be updated to reflect this change.
-                // However because the logic in FFI assume that this is handled, we don't have to do it
+                let our_target = target.to_automation_target(param_id);
+
+                self.suspended_targets.insert(our_target.clone());
+
+                if let Some(link) = self
+                    .active_links
+                    .iter_mut()
+                    .find(|l| l.target == our_target)
+                {
+                    link.base_value = value;
+                }
             }
             AudioCommand::UpdateGeneratorTrack {
                 generator_id,
@@ -1196,12 +1247,8 @@ impl AudioEngine {
                     EffectTarget::Track(track_id) => {
                         PluginTarget::TrackEffect(*track_id, effect_id)
                     }
-                    EffectTarget::Bus(bus_id) => {
-                        PluginTarget::BusEffect(*bus_id, effect_id)
-                    }
-                    EffectTarget::Master => {
-                        PluginTarget::MasterEffect(effect_id)
-                    }
+                    EffectTarget::Bus(bus_id) => PluginTarget::BusEffect(*bus_id, effect_id),
+                    EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
                 };
 
                 match target {
@@ -1228,11 +1275,15 @@ impl AudioEngine {
                 // Register a new triple-buffer pair for this effect's telemetry.
                 let (input, output) =
                     triple_buffer::triple_buffer(&PluginTelemetrySnapshot::default());
-                self.telemetry.param_telemetry_producers.insert(plugin_target.clone(), input);
-                let _ = self.telemetry_reg_sender.try_send(TelemetryRegistration::Registered {
-                    target: plugin_target,
-                    consumer: Box::new(output),
-                });
+                self.telemetry
+                    .param_telemetry_producers
+                    .insert(plugin_target.clone(), input);
+                let _ = self
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Registered {
+                        target: plugin_target,
+                        consumer: Box::new(output),
+                    });
             }
             AudioCommand::RemoveEffect { target, effect_id } => {
                 if let Some(effects) = self.get_effect_list_mut(&target) {
@@ -1243,28 +1294,25 @@ impl AudioEngine {
 
                 // Remove telemetry pair and notify DawContext.
                 let plugin_target = match &target {
-                    EffectTarget::Track(track_id) => PluginTarget::TrackEffect(*track_id, effect_id),
-                    EffectTarget::Bus(bus_id)     => PluginTarget::BusEffect(*bus_id, effect_id),
-                    EffectTarget::Master           => PluginTarget::MasterEffect(effect_id),
-                };
-                self.telemetry.param_telemetry_producers.remove(&plugin_target);
-                self.telemetry.active_telemetry_subscriptions.remove(&plugin_target);
-                let _ = self.telemetry_reg_sender.try_send(TelemetryRegistration::Removed {
-                    target: plugin_target,
-                });
-            }
-            AudioCommand::SetEffectParameter {
-                target,
-                effect_id,
-                param_id,
-                value,
-            } => {
-                if let Some(effects) = self.get_effect_list_mut(&target) {
-                    if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
-                        effect.plugin.set_parameter(param_id, value);
+                    EffectTarget::Track(track_id) => {
+                        PluginTarget::TrackEffect(*track_id, effect_id)
                     }
-                }
+                    EffectTarget::Bus(bus_id) => PluginTarget::BusEffect(*bus_id, effect_id),
+                    EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
+                };
+                self.telemetry
+                    .param_telemetry_producers
+                    .remove(&plugin_target);
+                self.telemetry
+                    .active_telemetry_subscriptions
+                    .remove(&plugin_target);
+                let _ = self
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Removed {
+                        target: plugin_target,
+                    });
             }
+
             AudioCommand::QueryGeneratorParameters { generator_id } => {
                 // Get all parameter values from the generator and send back
                 if let Some(gen_instance) = self
@@ -1291,6 +1339,20 @@ impl AudioEngine {
             AudioCommand::SetMixerChannelParameter { target, param } => {
                 // Audio thread is sole owner of mixer channel DSP values
                 self.mixer_state.apply(&target, &param);
+                
+                
+                let (our_target, value) = resolve_target_mixer_param(&target, &param);
+
+                if let Some(our_target) = our_target {
+                    if let Some(link) = self
+                        .active_links
+                        .iter_mut()
+                        .find(|l| l.target == our_target)
+                    {
+                        link.base_value = value;
+                    }
+                }
+                
                 log::debug!(
                     "[AudioEngine] SetMixerChannelParameter: {:?} — {:?}",
                     target,
@@ -1431,8 +1493,10 @@ impl AudioEngine {
                 };
 
                 // Accumulate all new consumers to send in one batch.
-                let mut new_consumers: HashMap<PluginTarget, Box<triple_buffer::Output<PluginTelemetrySnapshot>>> =
-                    HashMap::new();
+                let mut new_consumers: HashMap<
+                    PluginTarget,
+                    Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
+                > = HashMap::new();
 
                 // Batch load Generators
                 for (gen_id, mut plugin) in generators.into_iter() {
@@ -1467,7 +1531,9 @@ impl AudioEngine {
                     let target = PluginTarget::Generator(gen_id);
                     let (input, output) =
                         triple_buffer::triple_buffer(&PluginTelemetrySnapshot::default());
-                    self.telemetry.param_telemetry_producers.insert(target.clone(), input);
+                    self.telemetry
+                        .param_telemetry_producers
+                        .insert(target.clone(), input);
                     new_consumers.insert(target, Box::new(output));
                 }
 
@@ -1492,7 +1558,9 @@ impl AudioEngine {
                         let target = PluginTarget::TrackEffect(track_id, effect_id);
                         let (input, output) =
                             triple_buffer::triple_buffer(&PluginTelemetrySnapshot::default());
-                        self.telemetry.param_telemetry_producers.insert(target.clone(), input);
+                        self.telemetry
+                            .param_telemetry_producers
+                            .insert(target.clone(), input);
                         new_consumers.insert(target, Box::new(output));
                     }
                 }
@@ -1522,7 +1590,9 @@ impl AudioEngine {
                         let target = PluginTarget::BusEffect(bus_id, effect_id);
                         let (input, output) =
                             triple_buffer::triple_buffer(&PluginTelemetrySnapshot::default());
-                        self.telemetry.param_telemetry_producers.insert(target.clone(), input);
+                        self.telemetry
+                            .param_telemetry_producers
+                            .insert(target.clone(), input);
                         new_consumers.insert(target, Box::new(output));
                     }
                 }
@@ -1553,14 +1623,18 @@ impl AudioEngine {
                     let target = PluginTarget::MasterEffect(effect_id);
                     let (input, output) =
                         triple_buffer::triple_buffer(&PluginTelemetrySnapshot::default());
-                    self.telemetry.param_telemetry_producers.insert(target.clone(), input);
+                    self.telemetry
+                        .param_telemetry_producers
+                        .insert(target.clone(), input);
                     new_consumers.insert(target, Box::new(output));
                 }
 
                 // Send all new consumers to DawContext in one batch via the dedicated channel.
-                let _ = self.telemetry_reg_sender.try_send(
-                    TelemetryRegistration::BatchRegistered { consumers: new_consumers },
-                );
+                let _ =
+                    self.telemetry_reg_sender
+                        .try_send(TelemetryRegistration::BatchRegistered {
+                            consumers: new_consumers,
+                        });
 
                 log::info!("[AudioEngine] Prepared all plugins for the newly loaded project.");
             }
@@ -1877,9 +1951,14 @@ impl AudioEngine {
             AudioCommand::EndEdit { target } => {
                 self.handle_parameter_edit(&target, false);
             }
-            AudioCommand::SetPluginTelemetrySubscription { target, buffers, active } => {
+            AudioCommand::SetPluginTelemetrySubscription {
+                target,
+                buffers,
+                active,
+            } => {
                 if active {
-                    let entry = self.telemetry
+                    let entry = self
+                        .telemetry
                         .active_telemetry_subscriptions
                         .entry(target)
                         .or_default();
@@ -1894,6 +1973,9 @@ impl AudioEngine {
             }
             AudioCommand::SetMixerTelemetrySubscription { active } => {
                 self.telemetry.mixer_snapshot_active = active
+            }
+            AudioCommand::ResumeAutomation { target } => {
+                self.suspended_targets.remove(&target);
             },
         }
     }
@@ -3406,19 +3488,50 @@ impl AudioEngine {
             }
         }
 
-        // Sum the Cables
-        let mut parameter_accumulators: HashMap<AutomationTarget, f32> = HashMap::new();
+        let parameter_accumulators: HashMap<AutomationTarget, (Option<f32>, f32)> =
+            self.active_links.iter().fold(
+                HashMap::<AutomationTarget, (Option<f32>, f32)>::new(),
+                |mut p_acc, link| {
+                    if let Some((source_type, generator_output)) =
+                        self.active_sources.get(&link.source_id)
+                    {
+                        let entry = p_acc.entry(link.target.clone()).or_insert((None, 0.0));
 
-        for link in &self.active_links {
-            if let Some((_, generator_output)) = self.active_sources.get(&link.source_id) {
-                let modulation_delta = generator_output * link.depth;
-                *parameter_accumulators
-                    .entry(link.target.clone())
-                    .or_insert(link.base_value) += modulation_delta;
-            }
-        }
+                        match source_type {
+                            LiveModulationSource::Automation { .. } => {
+                                if !self.suspended_targets.contains(&link.target) {
+                                    entry.0 = Some(*generator_output);
+                                }
+                            }
+                            _ => {
+                                let modulation_delta = generator_output * link.depth;
+                                entry.1 += modulation_delta;
+                            }
+                        }
+                    }
+                    p_acc
+                },
+            );
 
-        for (target, final_value) in parameter_accumulators {
+        for (target, (automation_override, lfo_accumulator)) in parameter_accumulators {
+            // Find the base value. If an automation lane is present, it becomes the new base.
+            // If not, we need to query the plugin/mixer for its actual static base value.
+
+            let base = if let Some(auto_val) = automation_override {
+                auto_val
+            } else {
+                // For now, we assume you update `link.base_value` via a command when the knob turns.
+                self.active_links
+                    .iter()
+                    .find(|l| l.target == target)
+                    .map(|l| l.base_value)
+                    .unwrap_or(0.0)
+            };
+
+            // Add the LFOs to the base and clamp it!
+            // Assuming parameters are normalized 0.0 to 1.0 at this stage.
+            let final_value = (base + lfo_accumulator).clamp(0.0, 1.0);
+
             self.apply_parameter_change(&target, final_value);
         }
     }
@@ -3659,7 +3772,8 @@ impl AudioEngine {
                 channel_count: channels,
                 is_optional: false,
             };
-            gen.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
+            gen.plugin
+                .set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
         }
         for effects in self.plugin_state.track_effects.iter_mut() {
             for effect in effects.iter_mut() {
@@ -3669,7 +3783,9 @@ impl AudioEngine {
                     channel_count: channels,
                     is_optional: false,
                 };
-                effect.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
+                effect
+                    .plugin
+                    .set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
             }
         }
         for effects in self.plugin_state.bus_effects.iter_mut() {
@@ -3680,7 +3796,9 @@ impl AudioEngine {
                     channel_count: channels,
                     is_optional: false,
                 };
-                effect.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
+                effect
+                    .plugin
+                    .set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
             }
         }
         for effect in self.plugin_state.master_effects.iter_mut() {
@@ -3690,7 +3808,9 @@ impl AudioEngine {
                 channel_count: channels,
                 is_optional: false,
             };
-            effect.plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
+            effect
+                .plugin
+                .set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
         }
 
         // 3. Clear delay lines to avoid playing back garbage/pitch-shifted audio

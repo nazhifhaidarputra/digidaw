@@ -25,7 +25,7 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     return AutomationDataState();
   }
 
-  Future<AsyncValue<void>> handleAddAutomationForTarget({
+Future<AsyncValue<void>> handleAddAutomationForTarget({
     required AutomationTargetDto target,
     required String label,
     required double min,
@@ -38,12 +38,14 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
       return AsyncError("Project state is missing", StackTrace.current);
     }
 
-    // Capture the original state before any modifications
+    // Capture the original state before any modifications for a safe rollback
     final originalPool = projectData.automationPool;
+    final originalLinks = projectData.modulationLinks;
+    final originalSources = projectData.modulationSources;
 
     try {
-      // Fetch the new lane from Rust (Rust generates the ID)
-      final newLane = await addAutomationLane(
+      // Fetch the new lane and link from Rust
+      final (newLane, link) = await addAutomationLane(
         ctx: _ctx,
         target: target,
         label: label,
@@ -52,17 +54,34 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
         defaultValue: defaultValue,
       );
 
+      // Fetch the generated source based on the new link
+      final source = await getModulationSource(ctx: _ctx, id: link.sourceId);
+      
+      if (source == null) {
+        throw Exception("Failed to retrieve the new modulation source from Rust.");
+      }
+
+      // Create the updated immutable maps
       final newPool = originalPool.add(newLane.id, newLane);
-      ref
-          .read(projectProvider.notifier)
-          .updateAutomations(pool: newPool.unlock);
+      final newLinks = originalLinks.add(link.id, link);
+      final newSources = originalSources.add(link.sourceId, source);
+
+      // Push the full patch to the project provider
+      ref.read(projectProvider.notifier).updateAutomations(
+            pool: newPool,
+            links: newLinks,
+            sources: newSources,
+          );
 
       return const AsyncData(null);
     } catch (e, s) {
+      // Rollback all three maps if anything fails
       if (ref.read(projectProvider).hasValue) {
-        ref
-            .read(projectProvider.notifier)
-            .updateAutomations(pool: originalPool.unlock);
+        ref.read(projectProvider.notifier).updateAutomations(
+              pool: originalPool,
+              links: originalLinks,
+              sources: originalSources,
+            );
       }
       return AsyncError(e, s);
     }
@@ -84,12 +103,12 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
         source: source,
       );
       final newSources = originalSources.add(newSourceId, source);
-      ref.read(projectProvider.notifier).updateAutomations(sources: newSources.unlock);
+      ref.read(projectProvider.notifier).updateAutomations(sources: newSources);
 
       return const AsyncData(null);
     } catch (e, s) {
       if (ref.read(projectProvider).hasValue) {
-        ref.read(projectProvider.notifier).updateAutomations(sources: originalSources.unlock);
+        ref.read(projectProvider.notifier).updateAutomations(sources: originalSources);
       }
       return AsyncError(e, s);
     }

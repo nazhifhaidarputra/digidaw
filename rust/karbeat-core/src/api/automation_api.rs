@@ -1,3 +1,5 @@
+use anyhow::Context;
+
 use crate::{
     commands::AudioCommand,
     context::{DawContext},
@@ -51,17 +53,19 @@ pub fn add_automation_lane(
     min: f32,
     max: f32,
     default_value: f32
-) -> anyhow::Result<AutomationLane> {
-    let (lane, _link_id) = {
+) -> anyhow::Result<(AutomationLane, ModulationLinkForOrderedLaneView)> {
+    let (lane, link_id) = {
         let app = &mut ctx.app_state;
         app.add_automation_lane(target, label, min, max, default_value)?
     };
 
     ctx.broadcast_automation_lane(lane.id);
 
+    // Fetch the modulation link
+    let mod_link = ctx.app_state.modulation_links.get(&link_id).with_context(|| "Modulation link not found")?; 
     // TODO: add history
 
-    Ok(lane)
+    Ok((lane, mod_link.clone()))
 }
 
 pub fn add_automation_lane_for_bus(

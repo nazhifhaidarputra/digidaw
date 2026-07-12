@@ -7,10 +7,9 @@
 use karbeat_dsp::interpolation::lerp;
 use serde::{Deserialize, Serialize};
 
-use crate::shared::{
-    id::{AutomationId, BusId, EffectId, TrackId},
-    types::FractionF32, GeneratorId,
-};
+use crate::{audio::event::PluginTarget, shared::{
+    GeneratorId, id::{AutomationId, BusId, EffectId, TrackId}, types::FractionF32,
+}};
 
 // ============================================================================
 // AUTOMATION TARGET
@@ -22,7 +21,10 @@ use crate::shared::{
 /// generator, or effect slot).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AutomationTarget {
-    Generator { generator_id: GeneratorId, param_id: u32 },
+    Generator {
+        generator_id: GeneratorId,
+        param_id: u32,
+    },
     Track {
         track_id: TrackId,
         track_target: TrackAutomationTarget,
@@ -79,12 +81,43 @@ impl AutomationTarget {
     /// Checks if two targets belong in the same UI accordion/drawer
     pub fn belongs_to_same_drawer_as(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Generator { generator_id: id1, .. }, Self::Generator { generator_id: id2, .. }) => id1 == id2,
+            (
+                Self::Generator {
+                    generator_id: id1, ..
+                },
+                Self::Generator {
+                    generator_id: id2, ..
+                },
+            ) => id1 == id2,
             (Self::Track { track_id: id1, .. }, Self::Track { track_id: id2, .. }) => id1 == id2,
             (Self::Bus { bus_id: id1, .. }, Self::Bus { bus_id: id2, .. }) => id1 == id2,
             (Self::Master(_), Self::Master(_)) => true,
             (Self::TempoBpm, Self::TempoBpm) => true,
             _ => false,
+        }
+    }
+
+    pub fn as_plugin_target(&self) -> Option<PluginTarget> {
+        match self {
+            AutomationTarget::Generator { generator_id, .. } => {
+                Some(PluginTarget::Generator(*generator_id))
+            }
+            AutomationTarget::Track {
+                track_id,
+                track_target:
+                    TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Plugin {
+                        effect_id,
+                        ..
+                    }),
+            } => Some(PluginTarget::TrackEffect(*track_id, *effect_id)),
+            AutomationTarget::Bus {
+                bus_id,
+                mix_target: MixerChannelParamTarget::Plugin { effect_id, .. },
+            } => Some(PluginTarget::BusEffect(*bus_id, *effect_id)),
+            AutomationTarget::Master(MixerChannelParamTarget::Plugin { effect_id, .. }) => {
+                Some(PluginTarget::MasterEffect(*effect_id))
+            }
+            _ => None,
         }
     }
 }

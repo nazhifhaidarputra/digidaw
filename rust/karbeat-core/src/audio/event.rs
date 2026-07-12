@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::shared::id::*;
+use crate::{core::project::{AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget}, shared::id::*};
 
 /// Transport feedback struct sent from the audio thread to Flutter.
 /// This is the single source of truth for all runtime transport state.
@@ -34,4 +34,48 @@ pub enum PluginTarget {
     TrackEffect(TrackId, EffectId),
     BusEffect(BusId, EffectId),
     MasterEffect(EffectId),
+}
+
+impl TryFrom<&AutomationTarget> for PluginTarget {
+    type Error = &'static str;
+
+    fn try_from(target: &AutomationTarget) -> Result<Self, Self::Error> {
+        target
+            .as_plugin_target()
+            .ok_or("AutomationTarget does not map to a PluginTarget")
+    }
+}
+
+
+impl PluginTarget {
+    pub fn to_automation_target(&self, param_id: u32) -> AutomationTarget {
+        match self {
+            PluginTarget::Generator(generator_id) => AutomationTarget::Generator {
+                generator_id: *generator_id,
+                param_id,
+            },
+            PluginTarget::TrackEffect(track_id, effect_id) => AutomationTarget::Track {
+                track_id: *track_id,
+                track_target: TrackAutomationTarget::MixerChannel(
+                    MixerChannelParamTarget::Plugin {
+                        effect_id: *effect_id,
+                        target: EffectAutomationTarget::PluginParam { param_id },
+                    },
+                ),
+            },
+            PluginTarget::BusEffect(bus_id, effect_id) => AutomationTarget::Bus {
+                bus_id: *bus_id,
+                mix_target: MixerChannelParamTarget::Plugin {
+                    effect_id: *effect_id,
+                    target: EffectAutomationTarget::PluginParam { param_id },
+                },
+            },
+            PluginTarget::MasterEffect(effect_id) => {
+                AutomationTarget::Master(MixerChannelParamTarget::Plugin {
+                    effect_id: *effect_id,
+                    target: EffectAutomationTarget::PluginParam { param_id },
+                })
+            }
+        }
+    }
 }

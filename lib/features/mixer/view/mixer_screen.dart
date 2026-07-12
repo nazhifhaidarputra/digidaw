@@ -675,71 +675,73 @@ class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProv
                     itemCount: channel.effects.length,
                     itemBuilder: (context, index) {
                       final effect = channel.effects[index];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(10),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white.withAlpha(20)),
-                        ),
-                        child: ListTile(
-                          dense: true,
-                          title: Text(
-                            effect.name,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          subtitle: Text(
-                            'ID: ${effect.id}',
-                            style: const TextStyle(color: Colors.white54),
-                          ),
-                          trailing: const Icon(
-                            Icons.settings,
-                            color: Colors.white54,
-                            size: 16,
-                          ),
-                          onTap: () async {
-                            try {
-                              final target = isMaster
-                                  ? plugin_api.UiPluginTarget.masterEffect(effect.id)
-                                  : _isSelectedBus
-                                  ? plugin_api.UiPluginTarget.busEffect(
-                                      busId: _selectedChannelId!,
-                                      effectId: effect.id,
-                                    )
-                                  : plugin_api.UiPluginTarget.trackEffect(
-                                      trackId: _selectedChannelId!,
-                                      effectId: effect.id,
-                                    );
-                              final availableEffects = await ref
-                                  .read(audioPluginProvider.notifier)
-                                  .getAvailableEffects();
-                              final registryId = availableEffects
-                                  .firstWhere((p) => p.id == effect.registryId)
-                                  .id;
-
-                              final screen = PluginRegistryFlutter.getScreen(
-                                registryId: registryId,
-                                instanceId: effect.id,
-                                target: target,
-                              );
-                              if (!context.mounted) return;
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => screen),
-                              );
-                            } catch (_) {
-                              // Feedback for effects that don't have a UI yet
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${effect.name} UI is not implemented yet.',
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Material(
+                            color: Colors.white.withAlpha(10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              side: BorderSide(color: Colors.white.withAlpha(20)),
+                            ),
+                          child: ListTile(
+                            dense: true,
+                            title: Text(
+                              effect.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              'ID: ${effect.id}',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            trailing: const Icon(
+                              Icons.settings,
+                              color: Colors.white54,
+                              size: 16,
+                            ),
+                            onTap: () async {
+                              try {
+                                final target = isMaster
+                                    ? plugin_api.UiPluginTarget.masterEffect(effect.id)
+                                    : _isSelectedBus
+                                    ? plugin_api.UiPluginTarget.busEffect(
+                                        busId: _selectedChannelId!,
+                                        effectId: effect.id,
+                                      )
+                                    : plugin_api.UiPluginTarget.trackEffect(
+                                        trackId: _selectedChannelId!,
+                                        effectId: effect.id,
+                                      );
+                                final availableEffects = await ref
+                                    .read(audioPluginProvider.notifier)
+                                    .getAvailableEffects();
+                                final registryId = availableEffects
+                                    .firstWhere((p) => p.id == effect.registryId)
+                                    .id;
+                        
+                                final screen = PluginRegistryFlutter.getScreen(
+                                  registryId: registryId,
+                                  instanceId: effect.id,
+                                  target: target,
+                                );
+                                if (!context.mounted) return;
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => screen),
+                                );
+                              } catch (_) {
+                                // Feedback for effects that don't have a UI yet
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${effect.name} UI is not implemented yet.',
+                                    ),
+                                    duration: const Duration(seconds: 2),
                                   ),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          },
+                                );
+                              }
+                            },
+                          ),
                         ),
                       );
                     },

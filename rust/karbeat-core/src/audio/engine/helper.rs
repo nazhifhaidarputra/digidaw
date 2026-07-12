@@ -4,7 +4,7 @@ use karbeat_utils::math::hermite_interp;
 use rodio::math::db_to_linear;
 use wide::f32x16;
 
-use crate::{core::project::{RoutingConnection, RoutingNode, audio_waveform::AudioSampleMode}, shared::{BusId, TrackId}};
+use crate::{commands::MixerChannelTarget, core::project::{AutomationTarget, MixerChannelParamTarget, MixerChannelParams, RoutingConnection, RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode}, shared::{BusId, TrackId}};
 
 /// Unified entry point to render an audio waveform slice.
 /// Safely delegates to the correct DSP algorithm based on the chosen sample mode.
@@ -541,4 +541,33 @@ pub fn compute_routing_order(
 
     order.push(RoutingNode::Master);
     order
+}
+
+pub fn resolve_target_mixer_param(
+    target: &MixerChannelTarget,
+    param: &MixerChannelParams,
+) -> (Option<AutomationTarget>, f32) {
+    // First, extract the generic mixer target and the float value
+    let (mix_target, val) = match param {
+        MixerChannelParams::Volume(v) => (Some(MixerChannelParamTarget::Volume), *v),
+        MixerChannelParams::Pan(v) => (Some(MixerChannelParamTarget::Pan), *v),
+        MixerChannelParams::Mute(v) => (None, if *v { 1.0 } else { 0.0 }),
+        MixerChannelParams::InvertedPhase(v) => (None, if *v { 1.0 } else { 0.0 }),
+        MixerChannelParams::Solo(v) => (None, if *v { 1.0 } else { 0.0 }),
+    };
+
+    // If it's an automatable parameter, wrap it in its specific track/bus/master parent
+    let automation_target = mix_target.map(|mt| match target {
+        MixerChannelTarget::Track(track_id) => AutomationTarget::Track {
+            track_id: *track_id,
+            track_target: TrackAutomationTarget::MixerChannel(mt),
+        },
+        MixerChannelTarget::Bus(bus_id) => AutomationTarget::Bus {
+            bus_id: *bus_id,
+            mix_target: mt,
+        },
+        MixerChannelTarget::Master => AutomationTarget::Master(mt),
+    });
+
+    (automation_target, val)
 }

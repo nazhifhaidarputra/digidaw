@@ -155,16 +155,16 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   }
 
   void updateAutomations({
-    Map<int, ModulationLinkDto>? links,
-    Map<int, AutomationLaneDto>? pool,
-    Map<int, ModulationSourceDto>? sources,
+    IMap<int, ModulationLinkDto>? links,
+    IMap<int, AutomationLaneDto>? pool,
+    IMap<int, ModulationSourceDto>? sources,
   }) {
     if (state.hasValue) {
       state = AsyncValue.data(
         state.requireValue.copyWith(
-          modulationLinks: links?.lock ?? state.requireValue.modulationLinks,
-          automationPool: pool?.lock ?? state.requireValue.automationPool,
-          modulationSources: sources?.lock ?? state.requireValue.modulationSources,
+          modulationLinks: links ?? state.requireValue.modulationLinks,
+          automationPool: pool ?? state.requireValue.automationPool,
+          modulationSources: sources ?? state.requireValue.modulationSources,
         ),
       );
     }

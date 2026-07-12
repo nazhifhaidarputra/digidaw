@@ -370,11 +370,12 @@ pub fn add_automation_lane(
     min: f32,
     max: f32,
     default_value: f32,
-) -> Result<AutomationLaneDto, String> {
+) -> Result<(AutomationLaneDto, ModulationLinkDto), String> {
     match automation_api::add_automation_lane(ctx, target.into(), label, min, max, default_value) {
-        Ok(lane) => {
+        Ok((lane, mod_link)) => {
             let lane_dto = AutomationLaneDto::from(&lane);
-            Ok(lane_dto)
+            let mod_link_dto = ModulationLinkDto::from(&mod_link);
+            Ok((lane_dto, mod_link_dto))
         }
         Err(e) => Err(e.to_string()),
     }

@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn add_new_automation_point_happy_path() {
         let mut ctx = make_ctx();
-        let lane = automation_api::add_automation_lane(
+        let (lane, _) = automation_api::add_automation_lane(
             &mut ctx,
             master_volume_target(),
             "Vol",
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn remove_automation_point_happy_path() {
         let mut ctx = make_ctx();
-        let lane = automation_api::add_automation_lane(
+        let (lane, _) = automation_api::add_automation_lane(
             &mut ctx,
             master_volume_target(),
             "Vol",
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn remove_automation_point_out_of_bounds_returns_err() {
         let mut ctx = make_ctx();
-        let lane = automation_api::add_automation_lane(
+        let (lane, _) = automation_api::add_automation_lane(
             &mut ctx,
             master_volume_target(),
             "Vol",
@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn update_automation_point_returns_new_index() {
         let mut ctx = make_ctx();
-        let lane = automation_api::add_automation_lane(
+        let (lane, _) = automation_api::add_automation_lane(
             &mut ctx,
             master_volume_target(),
             "Vol",
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn get_automation_lane_happy_path() {
         let mut ctx = make_ctx();
-        let lane = automation_api::add_automation_lane(
+        let (lane, _) = automation_api::add_automation_lane(
             &mut ctx,
             master_volume_target(),
             "Test",
