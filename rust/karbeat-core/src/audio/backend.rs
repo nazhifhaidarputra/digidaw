@@ -5,7 +5,6 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     DeviceId, OutputCallbackInfo,
 };
-use hashbrown::HashMap;
 use parking_lot::Mutex;
 use rtrb::{Consumer, RingBuffer};
 use serde::{Deserialize, Serialize};
@@ -151,8 +150,6 @@ fn set_host() -> cpal::Host {
 
     #[cfg(target_os = "linux")]
     {
-        // JACK is only available when the "jack" feature is enabled
-        #[cfg(feature = "jack")]
         {
             match cpal::host_from_id(cpal::HostId::Jack) {
                 Ok(jack_host) => {
@@ -165,7 +162,6 @@ fn set_host() -> cpal::Host {
             }
         }
 
-        #[cfg(not(feature = "jack"))]
         log::debug!("JACK support not compiled in; using default Linux host (ALSA)");
     }
 
@@ -239,7 +235,6 @@ pub fn get_available_hosts() -> Vec<String> {
         .into_iter()
         .filter(|h| match h.name() {
             "ASIO" => cfg!(feature = "asio"),
-            "JACK" => cfg!(feature = "jack"),
             _ => true,
         })
         .map(|h| h.name().to_string())

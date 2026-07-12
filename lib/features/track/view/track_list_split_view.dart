@@ -1137,9 +1137,8 @@
           },
           child: Opacity(
             opacity: 0.7,
-            // REMOVE IgnorePointer so it can catch the Drag events
             child: MouseRegion(
-              cursor: SystemMouseCursors.move, // Indicate draggable
+              cursor: SystemMouseCursors.move,
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.cyanAccent.withAlpha(100),
