@@ -70,8 +70,93 @@ class AutomationLaneSlot extends ConsumerWidget {
               ),
             ),
           ),
+
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (details) {
+                _handlePointInteraction(context, ref, details.localPosition);
+              },
+              onPanUpdate: (details) {
+                _handlePointDrag(
+                  context,
+                  ref,
+                  details.localPosition,
+                  details.delta,
+                );
+              },
+              onPanEnd: (details) {
+                _finalizePointDrag(context, ref);
+              },
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  void _handlePointInteraction(
+    BuildContext context,
+    WidgetRef ref,
+    Offset localPos,
+  ) {
+    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    double scrollX = 0;
+    if (horizontalScrollController.hasClients) {
+      scrollX = horizontalScrollController.offset;
+    }
+
+    final absoluteX = localPos.dx + scrollX;
+
+    // 1. Math: Convert Screen Pixels to Data Space
+    final ticks = (absoluteX * zoomLevel).toInt();
+
+    // Y=0 is top of screen, Y=height is bottom. Normalized value is 0.0 (bottom) to 1.0 (top)
+    final normalizedValue = 1.0 - (localPos.dy / height).clamp(0.0, 1.0);
+
+    // 2. Hit-testing: Did they click near an existing point?
+    final existingPointIndex = _findPointIndexAt(
+      ticks,
+      normalizedValue,
+      zoomLevel,
+    );
+
+    // TODO: if existingPointIndex != null => Select point for dragging or right-click to delete
+    // TODO: if existingPointIndex == null => Create a NEW point at `ticks` and `normalizedValue`
+  }
+
+  void _handlePointDrag(
+    BuildContext context,
+    WidgetRef ref,
+    Offset localPos,
+    Offset delta,
+  ) {
+    // TODO: If a point is selected, update its local position visually and snap to grid if enabled
+  }
+
+  void _finalizePointDrag(BuildContext context, WidgetRef ref) {
+    // TODO: Send the updated point position to Rust via FFI `updateAutomationPoint`
+  }
+
+  /// Returns the index of the point if the user clicked within ~15 pixels of it
+  int? _findPointIndexAt(
+    int targetTicks,
+    double targetValue,
+    double zoomLevel,
+  ) {
+    const hitBoxPixels = 15.0;
+
+    for (int i = 0; i < lane.points.length; i++) {
+      final p = lane.points[i];
+
+      // Convert point to pixel distance
+      final pixelDistX = ((p.timeTicks - targetTicks) / zoomLevel).abs();
+      final pixelDistY = ((p.value - targetValue) * height).abs();
+
+      if (pixelDistX <= hitBoxPixels && pixelDistY <= hitBoxPixels) {
+        return i;
+      }
+    }
+    return null;
   }
 }

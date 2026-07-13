@@ -4,12 +4,19 @@
 // Provides both project-level automation lane data (saved with the project)
 // and a runtime AutomationManager used by plugin wrappers during audio processing.
 
+use std::sync::atomic::{AtomicU32, AtomicU64};
+
 use karbeat_dsp::interpolation::lerp;
 use serde::{Deserialize, Serialize};
 
-use crate::{audio::event::PluginTarget, shared::{
-    GeneratorId, id::{AutomationId, BusId, EffectId, TrackId}, types::FractionF32,
-}};
+use crate::{
+    audio::event::PluginTarget,
+    shared::{
+        id::{self, AutomationId, BusId, EffectId, TrackId},
+        types::FractionF32,
+        GeneratorId,
+    },
+};
 
 // ============================================================================
 // AUTOMATION TARGET
@@ -148,6 +155,7 @@ pub enum AutomationCurveType {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AutomationPoint {
+    pub id: u64,
     /// Position in ticks (relative to project start)
     pub time_ticks: u32,
     /// Normalized parameter value (0.0–1.0)
@@ -158,9 +166,16 @@ pub struct AutomationPoint {
     pub tension: FractionF32,
 }
 
+static POINT_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
 impl AutomationPoint {
+    fn next_id() -> u64 {
+        POINT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub fn new(time_ticks: u32, value: f32) -> Self {
         Self {
+            id: Self::next_id(),
             time_ticks,
             value: value.clamp(0.0, 1.0),
             curve_type: AutomationCurveType::Linear,
@@ -176,6 +191,7 @@ impl AutomationPoint {
         max: f32,
     ) -> Self {
         Self {
+            id: Self::next_id(),
             time_ticks,
             value: value.clamp(min, max),
             curve_type,
@@ -239,28 +255,22 @@ impl AutomationLane {
     }
 
     /// Remove a point at the given index.
-    pub fn remove_point(&mut self, index: usize) -> Option<AutomationPoint> {
-        if index < self.points.len() {
-            Some(self.points.remove(index))
-        } else {
-            None
-        }
+    pub fn remove_point(&mut self, id: u64) -> Option<AutomationPoint> {
+        let index = self.points.iter().position(|p| p.id == id)?;
+        Some(self.points.remove(index))
     }
 
     /// Update a point at the given index.
     pub fn update_point(
         &mut self,
-        index: usize,
+        id: u64,
         time_ticks: u32,
         value: f32,
         tension: f32,
     ) -> Option<usize> {
-        if index >= self.points.len() {
-            return None;
-        }
+        let index = self.points.iter().position(|p| p.id == id)?;
 
         let mut point = self.points.remove(index);
-
         point.time_ticks = time_ticks;
         point.value = value;
         point.tension = tension.into();
@@ -274,6 +284,7 @@ impl AutomationLane {
         };
 
         self.points.insert(new_index, point);
+
         Some(new_index)
     }
 

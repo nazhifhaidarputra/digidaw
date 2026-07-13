@@ -289,7 +289,7 @@ as double,
 /// @nodoc
 mixin _$AutomationPointDto {
 
- int get timeTicks; double get value; AutomationCurveTypeDto get curveType; double get tension;
+ int get id; int get timeTicks; double get value; AutomationCurveTypeDto get curveType; double get tension;
 /// Create a copy of AutomationPointDto
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -300,16 +300,16 @@ $AutomationPointDtoCopyWith<AutomationPointDto> get copyWith => _$AutomationPoin
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationPointDto&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationPointDto&&(identical(other.id, id) || other.id == id)&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,timeTicks,value,curveType,tension);
+int get hashCode => Object.hash(runtimeType,id,timeTicks,value,curveType,tension);
 
 @override
 String toString() {
-  return 'AutomationPointDto(timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
+  return 'AutomationPointDto(id: $id, timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
 }
 
 
@@ -320,7 +320,7 @@ abstract mixin class $AutomationPointDtoCopyWith<$Res>  {
   factory $AutomationPointDtoCopyWith(AutomationPointDto value, $Res Function(AutomationPointDto) _then) = _$AutomationPointDtoCopyWithImpl;
 @useResult
 $Res call({
- int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
+ int id, int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
 });
 
 
@@ -337,9 +337,10 @@ class _$AutomationPointDtoCopyWithImpl<$Res>
 
 /// Create a copy of AutomationPointDto
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
   return _then(_self.copyWith(
-timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
 as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
 as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
 as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable
@@ -425,10 +426,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AutomationPointDto() when $default != null:
-return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
+return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
   return orElse();
 
 }
@@ -446,10 +447,10 @@ return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);case 
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)  $default,) {final _that = this;
 switch (_that) {
 case _AutomationPointDto():
-return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);}
+return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -463,10 +464,10 @@ return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,) {final _that = this;
 switch (_that) {
 case _AutomationPointDto() when $default != null:
-return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
+return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
   return null;
 
 }
@@ -478,9 +479,10 @@ return $default(_that.timeTicks,_that.value,_that.curveType,_that.tension);case 
 
 
 class _AutomationPointDto implements AutomationPointDto {
-  const _AutomationPointDto({required this.timeTicks, required this.value, required this.curveType, required this.tension});
+  const _AutomationPointDto({required this.id, required this.timeTicks, required this.value, required this.curveType, required this.tension});
   
 
+@override final  int id;
 @override final  int timeTicks;
 @override final  double value;
 @override final  AutomationCurveTypeDto curveType;
@@ -496,16 +498,16 @@ _$AutomationPointDtoCopyWith<_AutomationPointDto> get copyWith => __$AutomationP
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationPointDto&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationPointDto&&(identical(other.id, id) || other.id == id)&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,timeTicks,value,curveType,tension);
+int get hashCode => Object.hash(runtimeType,id,timeTicks,value,curveType,tension);
 
 @override
 String toString() {
-  return 'AutomationPointDto(timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
+  return 'AutomationPointDto(id: $id, timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
 }
 
 
@@ -516,7 +518,7 @@ abstract mixin class _$AutomationPointDtoCopyWith<$Res> implements $AutomationPo
   factory _$AutomationPointDtoCopyWith(_AutomationPointDto value, $Res Function(_AutomationPointDto) _then) = __$AutomationPointDtoCopyWithImpl;
 @override @useResult
 $Res call({
- int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
+ int id, int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
 });
 
 
@@ -533,9 +535,10 @@ class __$AutomationPointDtoCopyWithImpl<$Res>
 
 /// Create a copy of AutomationPointDto
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
   return _then(_AutomationPointDto(
-timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
 as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
 as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
 as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable

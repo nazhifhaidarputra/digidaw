@@ -98,7 +98,7 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   defaultValue: defaultValue,
 );
 
-Future<AutomationPointDto> addNewAutomationPoint({
+Future<AutomationLaneDto> addNewAutomationPoint({
   required DawContext ctx,
   required int automationId,
   required int timeTicks,
@@ -110,27 +110,27 @@ Future<AutomationPointDto> addNewAutomationPoint({
   value: value,
 );
 
-Future<void> removeAutomationPoint({
+Future<AutomationLaneDto> removeAutomationPoint({
   required DawContext ctx,
   required int automationId,
-  required int index,
+  required int id,
 }) => RustLib.instance.api.crateApiAutomationRemoveAutomationPoint(
   ctx: ctx,
   automationId: automationId,
-  index: index,
+  id: id,
 );
 
 Future<int> updateAutomationPoint({
   required DawContext ctx,
   required int automationId,
-  required int index,
+  required int id,
   required int timeTicks,
   required double value,
   required double tension,
 }) => RustLib.instance.api.crateApiAutomationUpdateAutomationPoint(
   ctx: ctx,
   automationId: automationId,
-  index: index,
+  id: id,
   timeTicks: timeTicks,
   value: value,
   tension: tension,
@@ -224,6 +224,7 @@ sealed class AutomationLaneDto with _$AutomationLaneDto {
 @freezed
 sealed class AutomationPointDto with _$AutomationPointDto {
   const factory AutomationPointDto({
+    required int id,
     required int timeTicks,
     required double value,
     required AutomationCurveTypeDto curveType,

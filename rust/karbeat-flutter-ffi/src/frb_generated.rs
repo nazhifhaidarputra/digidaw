@@ -7360,7 +7360,7 @@ fn wire__crate__api__automation__remove_automation_point_impl(
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
-            let api_index = <usize>::sse_decode(&mut deserializer);
+            let api_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -7381,7 +7381,7 @@ fn wire__crate__api__automation__remove_automation_point_impl(
                     let output_ok = crate::api::automation::remove_automation_point(
                         &mut *api_ctx_guard,
                         api_automation_id,
-                        api_index,
+                        api_id,
                     )?;
                     Ok(output_ok)
                 })())
@@ -9408,7 +9408,7 @@ fn wire__crate__api__automation__update_automation_point_impl(
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
-            let api_index = <usize>::sse_decode(&mut deserializer);
+            let api_id = <u64>::sse_decode(&mut deserializer);
             let api_time_ticks = <u32>::sse_decode(&mut deserializer);
             let api_value = <f32>::sse_decode(&mut deserializer);
             let api_tension = <f32>::sse_decode(&mut deserializer);
@@ -9432,7 +9432,7 @@ fn wire__crate__api__automation__update_automation_point_impl(
                     let output_ok = crate::api::automation::update_automation_point(
                         &mut *api_ctx_guard,
                         api_automation_id,
-                        api_index,
+                        api_id,
                         api_time_ticks,
                         api_value,
                         api_tension,
@@ -9904,12 +9904,14 @@ impl SseDecode for crate::api::automation::AutomationLaneDto {
 impl SseDecode for crate::api::automation::AutomationPointDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_timeTicks = <u32>::sse_decode(deserializer);
         let mut var_value = <f32>::sse_decode(deserializer);
         let mut var_curveType =
             <crate::api::automation::AutomationCurveTypeDto>::sse_decode(deserializer);
         let mut var_tension = <f32>::sse_decode(deserializer);
         return crate::api::automation::AutomationPointDto {
+            id: var_id,
             time_ticks: var_timeTicks,
             value: var_value,
             curve_type: var_curveType,
@@ -12611,6 +12613,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::automation::AutomationLaneDto
 impl flutter_rust_bridge::IntoDart for crate::api::automation::AutomationPointDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.id.into_into_dart().into_dart(),
             self.time_ticks.into_into_dart().into_dart(),
             self.value.into_into_dart().into_dart(),
             self.curve_type.into_into_dart().into_dart(),
@@ -14355,6 +14358,7 @@ impl SseEncode for crate::api::automation::AutomationLaneDto {
 impl SseEncode for crate::api::automation::AutomationPointDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.id, serializer);
         <u32>::sse_encode(self.time_ticks, serializer);
         <f32>::sse_encode(self.value, serializer);
         <crate::api::automation::AutomationCurveTypeDto>::sse_encode(self.curve_type, serializer);

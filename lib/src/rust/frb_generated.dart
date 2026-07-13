@@ -322,7 +322,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<UiTrack> crateApiProjectAddNewAudioTrack({required DawContext ctx});
 
-  Future<AutomationPointDto> crateApiAutomationAddNewAutomationPoint({
+  Future<AutomationLaneDto> crateApiAutomationAddNewAutomationPoint({
     required DawContext ctx,
     required int automationId,
     required int timeTicks,
@@ -814,10 +814,10 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiSessionRedo({required DawContext ctx});
 
-  Future<void> crateApiAutomationRemoveAutomationPoint({
+  Future<AutomationLaneDto> crateApiAutomationRemoveAutomationPoint({
     required DawContext ctx,
     required int automationId,
-    required int index,
+    required int id,
   });
 
   Future<void> crateApiMixerRemoveEffectFromMasterBus({
@@ -1020,7 +1020,7 @@ abstract class RustLibApi extends BaseApi {
   Future<int> crateApiAutomationUpdateAutomationPoint({
     required DawContext ctx,
     required int automationId,
-    required int index,
+    required int id,
     required int timeTicks,
     required double value,
     required double tension,
@@ -2763,7 +2763,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "add_new_audio_track", argNames: ["ctx"]);
 
   @override
-  Future<AutomationPointDto> crateApiAutomationAddNewAutomationPoint({
+  Future<AutomationLaneDto> crateApiAutomationAddNewAutomationPoint({
     required DawContext ctx,
     required int automationId,
     required int timeTicks,
@@ -2788,7 +2788,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_automation_point_dto,
+          decodeSuccessData: sse_decode_automation_lane_dto,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAutomationAddNewAutomationPointConstMeta,
@@ -6368,10 +6368,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "redo", argNames: ["ctx"]);
 
   @override
-  Future<void> crateApiAutomationRemoveAutomationPoint({
+  Future<AutomationLaneDto> crateApiAutomationRemoveAutomationPoint({
     required DawContext ctx,
     required int automationId,
-    required int index,
+    required int id,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -6382,7 +6382,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_u_32(automationId, serializer);
-          sse_encode_CastedPrimitive_usize(index, serializer);
+          sse_encode_CastedPrimitive_u_64(id, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -6391,11 +6391,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_automation_lane_dto,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAutomationRemoveAutomationPointConstMeta,
-        argValues: [ctx, automationId, index],
+        argValues: [ctx, automationId, id],
         apiImpl: this,
       ),
     );
@@ -6404,7 +6404,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAutomationRemoveAutomationPointConstMeta =>
       const TaskConstMeta(
         debugName: "remove_automation_point",
-        argNames: ["ctx", "automationId", "index"],
+        argNames: ["ctx", "automationId", "id"],
       );
 
   @override
@@ -7874,7 +7874,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<int> crateApiAutomationUpdateAutomationPoint({
     required DawContext ctx,
     required int automationId,
-    required int index,
+    required int id,
     required int timeTicks,
     required double value,
     required double tension,
@@ -7888,7 +7888,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_u_32(automationId, serializer);
-          sse_encode_CastedPrimitive_usize(index, serializer);
+          sse_encode_CastedPrimitive_u_64(id, serializer);
           sse_encode_u_32(timeTicks, serializer);
           sse_encode_f_32(value, serializer);
           sse_encode_f_32(tension, serializer);
@@ -7904,7 +7904,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAutomationUpdateAutomationPointConstMeta,
-        argValues: [ctx, automationId, index, timeTicks, value, tension],
+        argValues: [ctx, automationId, id, timeTicks, value, tension],
         apiImpl: this,
       ),
     );
@@ -7916,7 +7916,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: [
           "ctx",
           "automationId",
-          "index",
+          "id",
           "timeTicks",
           "value",
           "tension",
@@ -8451,13 +8451,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AutomationPointDto dco_decode_automation_point_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return AutomationPointDto(
-      timeTicks: dco_decode_u_32(arr[0]),
-      value: dco_decode_f_32(arr[1]),
-      curveType: dco_decode_automation_curve_type_dto(arr[2]),
-      tension: dco_decode_f_32(arr[3]),
+      id: dco_decode_CastedPrimitive_u_64(arr[0]),
+      timeTicks: dco_decode_u_32(arr[1]),
+      value: dco_decode_f_32(arr[2]),
+      curveType: dco_decode_automation_curve_type_dto(arr[3]),
+      tension: dco_decode_f_32(arr[4]),
     );
   }
 
@@ -10658,11 +10659,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_CastedPrimitive_u_64(deserializer);
     var var_timeTicks = sse_decode_u_32(deserializer);
     var var_value = sse_decode_f_32(deserializer);
     var var_curveType = sse_decode_automation_curve_type_dto(deserializer);
     var var_tension = sse_decode_f_32(deserializer);
     return AutomationPointDto(
+      id: var_id,
       timeTicks: var_timeTicks,
       value: var_value,
       curveType: var_curveType,
@@ -13375,6 +13378,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_CastedPrimitive_u_64(self.id, serializer);
     sse_encode_u_32(self.timeTicks, serializer);
     sse_encode_f_32(self.value, serializer);
     sse_encode_automation_curve_type_dto(self.curveType, serializer);

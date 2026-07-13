@@ -361,7 +361,7 @@ impl ApplicationState {
         lane_id: AutomationId,
         time_ticks: u32,
         value: f32,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<AutomationLane> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
@@ -374,47 +374,45 @@ impl ApplicationState {
             lane.max,
         );
         lane.add_point(point);
-        Ok(())
+        Ok(lane.clone())
     }
 
     pub fn remove_automation_point(
         &mut self,
         lane_id: AutomationId,
-        point_index: usize,
-    ) -> anyhow::Result<AutomationPoint> {
+        point_id: u64,
+    ) -> anyhow::Result<AutomationLane> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
-        lane.remove_point(point_index).ok_or_else(|| {
-            anyhow!(
-                "Point index {} out of bounds (lane has {} points)",
-                point_index,
-                lane.points.len()
-            )
-        })
+        let _ = lane
+            .remove_point(point_id)
+            .ok_or_else(|| anyhow!("Point ID {} not found in lane {:?}", point_id, lane_id));
+
+        Ok(lane.clone())
     }
 
     pub fn update_automation_point(
         &mut self,
         lane_id: AutomationId,
-        point_index: usize,
+        point_id: u64,
         time_ticks: u32,
         value: f32,
         tension: f32,
-    ) -> anyhow::Result<(usize, usize)> {
+    ) -> anyhow::Result<usize> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
-        match lane.update_point(point_index, time_ticks, value, tension) {
-            Some(new_index) => Ok((point_index, new_index)),
+        match lane.update_point(point_id, time_ticks, value, tension) {
+            Some(new_index) => Ok(new_index),
             None => Err(anyhow!(
-                "Point index {} out of bounds (lane has {} points)",
-                point_index,
-                lane.points.len()
+                "Point ID {} not found in lane {:?}",
+                point_id,
+                lane_id
             )),
         }
     }

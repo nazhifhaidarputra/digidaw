@@ -29,6 +29,7 @@ pub struct AutomationLaneDto {
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct AutomationPointDto {
+    pub id: u64,
     pub time_ticks: u32,
     pub value: f32,
     pub curve_type: AutomationCurveTypeDto,
@@ -176,6 +177,7 @@ impl From<AutomationCurveTypeDto> for AutomationCurveType {
 impl From<AutomationPointDto> for AutomationPoint {
     fn from(point: AutomationPointDto) -> Self {
         Self {
+            id: point.id,
             time_ticks: point.time_ticks,
             value: point.value,
             curve_type: point.curve_type.into(),
@@ -187,6 +189,7 @@ impl From<AutomationPointDto> for AutomationPoint {
 impl From<AutomationPoint> for AutomationPointDto {
     fn from(p: AutomationPoint) -> Self {
         Self {
+            id: p.id,
             time_ticks: p.time_ticks,
             value: p.value,
             curve_type: p.curve_type.into(),
@@ -285,7 +288,13 @@ impl From<&AutomationTarget> for AutomationTargetDto {
                 Self::Master(MixerChannelParamTargetDto::from(mix_target))
             }
             AutomationTarget::TempoBpm => Self::TempoBpm,
-            AutomationTarget::Generator { generator_id, param_id } => Self::Generator { generator_id: (*generator_id).into(), param_id: *param_id },
+            AutomationTarget::Generator {
+                generator_id,
+                param_id,
+            } => Self::Generator {
+                generator_id: (*generator_id).into(),
+                param_id: *param_id,
+            },
         }
     }
 }
@@ -334,14 +343,23 @@ impl From<AutomationTargetDto> for AutomationTarget {
                 Self::Master(MixerChannelParamTarget::from(mix_target))
             }
             AutomationTargetDto::TempoBpm => Self::TempoBpm,
-            AutomationTargetDto::Generator { generator_id, param_id } => Self::Generator { generator_id: generator_id.into(), param_id },
+            AutomationTargetDto::Generator {
+                generator_id,
+                param_id,
+            } => Self::Generator {
+                generator_id: generator_id.into(),
+                param_id,
+            },
         }
     }
 }
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
-pub fn get_automation_lanes_for_track(ctx: &DawContext, track_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
+pub fn get_automation_lanes_for_track(
+    ctx: &DawContext,
+    track_id: u32,
+) -> Vec<(u32, u32, AutomationLaneDto)> {
     automation_api::get_automation_lanes_for_track(ctx, track_id.into())
         .into_iter()
         .map(|(mod_id, automation_id, lane)| {
@@ -353,7 +371,10 @@ pub fn get_automation_lanes_for_track(ctx: &DawContext, track_id: u32) -> Vec<(u
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given bus id
-pub fn get_automation_lanes_for_bus(ctx: &DawContext, bus_id: u32) -> Vec<(u32, u32, AutomationLaneDto)> {
+pub fn get_automation_lanes_for_bus(
+    ctx: &DawContext,
+    bus_id: u32,
+) -> Vec<(u32, u32, AutomationLaneDto)> {
     automation_api::get_automation_lanes_for_bus(ctx, bus_id.into())
         .into_iter()
         .map(|(mod_id, automation_id, lane)| {
@@ -383,11 +404,13 @@ pub fn add_automation_lane(
 
 /// Fetch all automation lanes across all targets
 pub fn get_automations_lanes_all(ctx: &DawContext) -> HashMap<u32, AutomationLaneDto> {
-    automation_api::get_automations_lanes_all(ctx, |lane| (lane.id.into(), AutomationLaneDto::from(lane)))
+    automation_api::get_automations_lanes_all(ctx, |lane| {
+        (lane.id.into(), AutomationLaneDto::from(lane))
+    })
 }
 
 /// Fetch a single automation lane
-pub fn get_automation_lane(ctx: &DawContext, lane_id: u32) -> Option<AutomationLaneDto>{
+pub fn get_automation_lane(ctx: &DawContext, lane_id: u32) -> Option<AutomationLaneDto> {
     automation_api::get_automation_lane(ctx, lane_id).map(|l| (&l).into())
 }
 
@@ -452,26 +475,39 @@ pub fn add_new_automation_point(
     automation_id: u32,
     time_ticks: u32,
     value: f32,
-) -> Result<AutomationPointDto, String> {
+) -> Result<AutomationLaneDto, String> {
     automation_api::add_new_automation_point(ctx, automation_id.into(), time_ticks, value)
-        .map(|point| point.into())
+        .map(|lane| lane.into())
         .map_err(|e| e.to_string())
 }
 
-pub fn remove_automation_point(ctx: &mut DawContext, automation_id: u32, index: usize) -> Result<(), String> {
-    automation_api::remove_automation_point(ctx, automation_id.into(), index).map_err(|e| e.to_string())
+pub fn remove_automation_point(
+    ctx: &mut DawContext,
+    automation_id: u32,
+    id: u64,
+) -> Result<AutomationLaneDto, String> {
+    automation_api::remove_automation_point(ctx, automation_id.into(), id)
+        .map(|l| l.into())
+        .map_err(|e| e.to_string())
 }
 
 pub fn update_automation_point(
     ctx: &mut DawContext,
     automation_id: u32,
-    index: usize,
+    id: u64,
     time_ticks: u32,
     value: f32,
     tension: f32,
 ) -> Result<usize, String> {
-    automation_api::update_automation_point(ctx, automation_id.into(), index, time_ticks, value, tension)
-        .map_err(|e| e.to_string())
+    automation_api::update_automation_point(
+        ctx,
+        automation_id.into(),
+        id,
+        time_ticks,
+        value,
+        tension,
+    )
+    .map_err(|e| e.to_string())
 }
 
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
@@ -480,7 +516,9 @@ pub fn update_automation_point(
 
 /// Get all modulations in the project
 pub fn get_all_linked_modulation_params(ctx: &DawContext) -> HashMap<u32, ModulationLinkDto> {
-    automation_api::get_all_linked_modulation_params(ctx, |id, mod_link| (id.to_u32(), mod_link.into()))
+    automation_api::get_all_linked_modulation_params(ctx, |id, mod_link| {
+        (id.to_u32(), mod_link.into())
+    })
 }
 
 /// Add generic modulation source
@@ -518,10 +556,7 @@ pub fn link_this_param_to_controller(
     .and_then(|v| Ok(v.to_u32()))
 }
 
-pub fn get_modulation_link_by_id(
-    ctx: &DawContext,
-    link_id: u32
-) -> Option<ModulationLinkDto> {
+pub fn get_modulation_link_by_id(ctx: &DawContext, link_id: u32) -> Option<ModulationLinkDto> {
     automation_api::get_modulation_link_by_id(ctx, link_id).map(|m| (&m).into())
 }
 
@@ -532,3 +567,4 @@ pub fn get_all_modulation_sources(ctx: &DawContext) -> HashMap<u32, ModulationSo
 pub fn get_modulation_source(ctx: &DawContext, id: u32) -> Option<ModulationSourceDto> {
     automation_api::get_modulation_source(ctx, id)
 }
+

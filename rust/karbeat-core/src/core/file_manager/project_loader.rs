@@ -221,6 +221,8 @@ fn parse_embedded_audio_path(zip_name: &str) -> Option<(u32, String)> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
+#[allow(clippy::unwrap_used)]
 mod test {
     use super::*;
     use std::io::{Read, Write};
