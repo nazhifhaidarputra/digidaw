@@ -9409,9 +9409,13 @@ fn wire__crate__api__automation__update_automation_point_impl(
             >>::sse_decode(&mut deserializer);
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
             let api_id = <u64>::sse_decode(&mut deserializer);
-            let api_time_ticks = <u32>::sse_decode(&mut deserializer);
-            let api_value = <f32>::sse_decode(&mut deserializer);
-            let api_tension = <f32>::sse_decode(&mut deserializer);
+            let api_time_ticks = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_value = <Option<f32>>::sse_decode(&mut deserializer);
+            let api_tension = <Option<f32>>::sse_decode(&mut deserializer);
+            let api_curve_type =
+                <Option<crate::api::automation::AutomationCurveTypeDto>>::sse_decode(
+                    &mut deserializer,
+                );
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -9436,6 +9440,7 @@ fn wire__crate__api__automation__update_automation_point_impl(
                         api_time_ticks,
                         api_value,
                         api_tension,
+                        api_curve_type,
                     )?;
                     Ok(output_ok)
                 })())
@@ -10647,6 +10652,19 @@ impl SseDecode for Option<ZeroCopyHandle> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<ZeroCopyHandle>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::automation::AutomationCurveTypeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::automation::AutomationCurveTypeDto>::sse_decode(deserializer),
+            );
         } else {
             return None;
         }
@@ -14972,6 +14990,16 @@ impl SseEncode for Option<ZeroCopyHandle> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <ZeroCopyHandle>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::automation::AutomationCurveTypeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::automation::AutomationCurveTypeDto>::sse_encode(value, serializer);
         }
     }
 }

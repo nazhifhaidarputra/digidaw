@@ -361,7 +361,7 @@ impl ApplicationState {
         lane_id: AutomationId,
         time_ticks: u32,
         value: f32,
-    ) -> anyhow::Result<AutomationLane> {
+    ) -> anyhow::Result<(AutomationLane, u64)> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
@@ -373,8 +373,11 @@ impl ApplicationState {
             lane.min,
             lane.max,
         );
+
+        let point_id = point.id;
+
         lane.add_point(point);
-        Ok(lane.clone())
+        Ok((lane.clone(), point_id))
     }
 
     pub fn remove_automation_point(
@@ -398,16 +401,17 @@ impl ApplicationState {
         &mut self,
         lane_id: AutomationId,
         point_id: u64,
-        time_ticks: u32,
-        value: f32,
-        tension: f32,
+        time_ticks: Option<u32>,
+        value: Option<f32>,
+        tension: Option<f32>,
+        curve_type: Option<AutomationCurveType>
     ) -> anyhow::Result<usize> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
-        match lane.update_point(point_id, time_ticks, value, tension) {
+        match lane.update_point(point_id, time_ticks, value, tension, curve_type) {
             Some(new_index) => Ok(new_index),
             None => Err(anyhow!(
                 "Point ID {} not found in lane {:?}",

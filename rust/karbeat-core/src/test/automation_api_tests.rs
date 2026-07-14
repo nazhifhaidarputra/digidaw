@@ -6,7 +6,7 @@ mod tests {
     use crate::core::project::automation::{
         AutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
     };
-    use crate::core::project::ModulationSource;
+    use crate::core::project::{AutomationCurveType, ModulationSource};
     use crate::shared::id::{AutomationId, BusId, ModulationId, TrackId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
@@ -148,9 +148,17 @@ mod tests {
         )
         .unwrap();
 
-        let point = automation_api::add_new_automation_point(&mut ctx, lane.id, 100, 0.75);
-        assert!(point.is_ok());
-        let p = point.unwrap();
+        let results = automation_api::add_new_automation_point(&mut ctx, lane.id, 100, 0.75);
+        assert!(results.is_ok());
+        let (l, p_id) = results.unwrap();
+
+        // find our inserted point from the Lane
+        let p = l
+            .points
+            .iter()
+            .find(|point| point.id == p_id)
+            .expect("Couldn't find our point in the points list");
+
         assert_eq!(p.time_ticks, 100);
         assert_eq!(p.value, 0.75);
     }
@@ -217,7 +225,15 @@ mod tests {
         automation_api::add_new_automation_point(&mut ctx, lane.id, 300, 0.8).unwrap();
 
         // Move the first point to time 400 → should now be the last
-        let new_idx = automation_api::update_automation_point(&mut ctx, lane.id, 0, 400, 0.5, 0.0);
+        let new_idx = automation_api::update_automation_point(
+            &mut ctx,
+            lane.id,
+            0,
+            Some(400),
+            Some(0.5),
+            Some(0.0),
+            Some(AutomationCurveType::Linear),
+        );
         assert!(new_idx.is_ok());
         assert_eq!(
             new_idx.unwrap(),

@@ -1,13 +1,9 @@
 use anyhow::Context;
 
 use crate::{
-    commands::AudioCommand,
-    context::DawContext,
-    core::project::{
-        automation::{AutomationLane, AutomationPoint, AutomationTarget},
-        ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource,
-    },
-    shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
+    commands::AudioCommand, context::DawContext, core::project::{
+        AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource, automation::{AutomationLane, AutomationPoint, AutomationTarget},
+    }, shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
 
 /// Get all automations lane for all types
@@ -95,14 +91,14 @@ pub fn add_new_automation_point(
     automation_id: AutomationId,
     time_ticks: u32,
     value: f32,
-) -> anyhow::Result<AutomationLane> {
+) -> anyhow::Result<(AutomationLane, u64)> {
     let app = &mut ctx.app_state;
-    let auto_lane = app.add_automation_point(automation_id, time_ticks, value)?;
+    let (auto_lane, point_id) = app.add_automation_point(automation_id, time_ticks, value)?;
 
     ctx.broadcast_automation_lane(automation_id);
 
     // TODO: Add history
-    Ok(auto_lane)
+    Ok((auto_lane, point_id))
 }
 
 pub fn remove_automation_point(
@@ -121,15 +117,16 @@ pub fn update_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
     id: u64,
-    time_ticks: u32,
-    value: f32,
-    tension: f32,
+    time_ticks: Option<u32>,
+    value: Option<f32>,
+    tension: Option<f32>,
+    curve_type: Option<AutomationCurveType>
 ) -> anyhow::Result<usize> {
     let new_index = {
         let app = &mut ctx.app_state;
 
         let new_index =
-            app.update_automation_point(automation_id, id, time_ticks, value, tension)?;
+            app.update_automation_point(automation_id, id, time_ticks, value, tension, curve_type)?;
         new_index
     };
 

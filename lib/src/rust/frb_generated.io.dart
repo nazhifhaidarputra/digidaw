@@ -284,6 +284,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AutomationCurveTypeDto dco_decode_box_autoadd_automation_curve_type_dto(
+    dynamic raw,
+  );
+
+  @protected
   AutomationLaneDto dco_decode_box_autoadd_automation_lane_dto(dynamic raw);
 
   @protected
@@ -561,6 +566,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ZeroCopyHandle?
   dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    dynamic raw,
+  );
+
+  @protected
+  AutomationCurveTypeDto? dco_decode_opt_box_autoadd_automation_curve_type_dto(
     dynamic raw,
   );
 
@@ -1085,6 +1095,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AutomationCurveTypeDto sse_decode_box_autoadd_automation_curve_type_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AutomationLaneDto sse_decode_box_autoadd_automation_lane_dto(
     SseDeserializer deserializer,
   );
@@ -1436,6 +1451,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ZeroCopyHandle?
   sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AutomationCurveTypeDto? sse_decode_opt_box_autoadd_automation_curve_type_dto(
     SseDeserializer deserializer,
   );
 
@@ -2057,6 +2077,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_automation_curve_type_dto(
+    AutomationCurveTypeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_automation_lane_dto(
     AutomationLaneDto self,
     SseSerializer serializer,
@@ -2470,6 +2496,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     ZeroCopyHandle? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_automation_curve_type_dto(
+    AutomationCurveTypeDto? self,
     SseSerializer serializer,
   );
 

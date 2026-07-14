@@ -1021,9 +1021,10 @@ abstract class RustLibApi extends BaseApi {
     required DawContext ctx,
     required int automationId,
     required int id,
-    required int timeTicks,
-    required double value,
-    required double tension,
+    int? timeTicks,
+    double? value,
+    double? tension,
+    AutomationCurveTypeDto? curveType,
   });
 
   Future<void> crateApiMixerUpdateRouting({
@@ -7875,9 +7876,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required DawContext ctx,
     required int automationId,
     required int id,
-    required int timeTicks,
-    required double value,
-    required double tension,
+    int? timeTicks,
+    double? value,
+    double? tension,
+    AutomationCurveTypeDto? curveType,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -7889,9 +7891,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_u_32(automationId, serializer);
           sse_encode_CastedPrimitive_u_64(id, serializer);
-          sse_encode_u_32(timeTicks, serializer);
-          sse_encode_f_32(value, serializer);
-          sse_encode_f_32(tension, serializer);
+          sse_encode_opt_box_autoadd_u_32(timeTicks, serializer);
+          sse_encode_opt_box_autoadd_f_32(value, serializer);
+          sse_encode_opt_box_autoadd_f_32(tension, serializer);
+          sse_encode_opt_box_autoadd_automation_curve_type_dto(
+            curveType,
+            serializer,
+          );
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -7904,7 +7910,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAutomationUpdateAutomationPointConstMeta,
-        argValues: [ctx, automationId, id, timeTicks, value, tension],
+        argValues: [
+          ctx,
+          automationId,
+          id,
+          timeTicks,
+          value,
+          tension,
+          curveType,
+        ],
         apiImpl: this,
       ),
     );
@@ -7920,6 +7934,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "timeTicks",
           "value",
           "tension",
+          "curveType",
         ],
       );
 
@@ -8557,6 +8572,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AutomationCurveTypeDto dco_decode_box_autoadd_automation_curve_type_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_automation_curve_type_dto(raw);
+  }
+
+  @protected
   AutomationLaneDto dco_decode_box_autoadd_automation_lane_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_automation_lane_dto(raw);
@@ -9180,6 +9203,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         : dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
             raw,
           );
+  }
+
+  @protected
+  AutomationCurveTypeDto? dco_decode_opt_box_autoadd_automation_curve_type_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_automation_curve_type_dto(raw);
   }
 
   @protected
@@ -10781,6 +10814,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AutomationCurveTypeDto sse_decode_box_autoadd_automation_curve_type_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_automation_curve_type_dto(deserializer));
+  }
+
+  @protected
   AutomationLaneDto sse_decode_box_autoadd_automation_lane_dto(
     SseDeserializer deserializer,
   ) {
@@ -11664,6 +11705,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       return (sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
         deserializer,
       ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AutomationCurveTypeDto? sse_decode_opt_box_autoadd_automation_curve_type_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_automation_curve_type_dto(deserializer));
     } else {
       return null;
     }
@@ -13498,6 +13552,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_automation_curve_type_dto(
+    AutomationCurveTypeDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_automation_curve_type_dto(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_automation_lane_dto(
     AutomationLaneDto self,
     SseSerializer serializer,
@@ -14326,6 +14389,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         self,
         serializer,
       );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_automation_curve_type_dto(
+    AutomationCurveTypeDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_automation_curve_type_dto(self, serializer);
     }
   }
 

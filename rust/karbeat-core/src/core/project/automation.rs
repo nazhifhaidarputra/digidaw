@@ -264,16 +264,26 @@ impl AutomationLane {
     pub fn update_point(
         &mut self,
         id: u64,
-        time_ticks: u32,
-        value: f32,
-        tension: f32,
+        time_ticks: Option<u32>,
+        value: Option<f32>,
+        tension: Option<f32>,
+        curve_type: Option<AutomationCurveType>,
     ) -> Option<usize> {
         let index = self.points.iter().position(|p| p.id == id)?;
 
         let mut point = self.points.remove(index);
-        point.time_ticks = time_ticks;
-        point.value = value;
-        point.tension = tension.into();
+        if let Some(tt) = time_ticks {
+            point.time_ticks = tt;
+        }
+        if let Some(v) = value {
+            point.value = v;
+        }
+        if let Some(t) = tension {
+            point.tension = t.into();
+        }
+        if let Some(ct) = curve_type {
+            point.curve_type = ct;
+        }
 
         let new_index = match self
             .points

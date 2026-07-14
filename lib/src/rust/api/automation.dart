@@ -124,9 +124,10 @@ Future<int> updateAutomationPoint({
   required DawContext ctx,
   required int automationId,
   required int id,
-  required int timeTicks,
-  required double value,
-  required double tension,
+  int? timeTicks,
+  double? value,
+  double? tension,
+  AutomationCurveTypeDto? curveType,
 }) => RustLib.instance.api.crateApiAutomationUpdateAutomationPoint(
   ctx: ctx,
   automationId: automationId,
@@ -134,6 +135,7 @@ Future<int> updateAutomationPoint({
   timeTicks: timeTicks,
   value: value,
   tension: tension,
+  curveType: curveType,
 );
 
 /// Get all modulations in the project

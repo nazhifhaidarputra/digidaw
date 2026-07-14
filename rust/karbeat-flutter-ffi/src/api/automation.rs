@@ -466,10 +466,6 @@ pub fn add_automation_lane_for_bus(
     }
 }
 
-// pub fn remove_automation_lane(automation_id: u32) -> Result<(), String> {
-//     automation_api::remove_automation_lane(automation_id.into()).map_err(|e| e.to_string())
-// }
-
 pub fn add_new_automation_point(
     ctx: &mut DawContext,
     automation_id: u32,
@@ -477,7 +473,7 @@ pub fn add_new_automation_point(
     value: f32,
 ) -> Result<AutomationLaneDto, String> {
     automation_api::add_new_automation_point(ctx, automation_id.into(), time_ticks, value)
-        .map(|lane| lane.into())
+        .map(|(lane, _)| (&lane).into())
         .map_err(|e| e.to_string())
 }
 
@@ -487,7 +483,7 @@ pub fn remove_automation_point(
     id: u64,
 ) -> Result<AutomationLaneDto, String> {
     automation_api::remove_automation_point(ctx, automation_id.into(), id)
-        .map(|l| l.into())
+        .map(|l| (&l).into())
         .map_err(|e| e.to_string())
 }
 
@@ -495,9 +491,10 @@ pub fn update_automation_point(
     ctx: &mut DawContext,
     automation_id: u32,
     id: u64,
-    time_ticks: u32,
-    value: f32,
-    tension: f32,
+    time_ticks: Option<u32>,
+    value: Option<f32>,
+    tension: Option<f32>,
+    curve_type: Option<AutomationCurveTypeDto>,
 ) -> Result<usize, String> {
     automation_api::update_automation_point(
         ctx,
@@ -506,6 +503,7 @@ pub fn update_automation_point(
         time_ticks,
         value,
         tension,
+        curve_type.map(|ct| ct.into())
     )
     .map_err(|e| e.to_string())
 }

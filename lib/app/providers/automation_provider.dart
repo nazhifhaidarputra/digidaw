@@ -176,6 +176,90 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     );
     ref.read(projectProvider.notifier).updateAutomations(pool: updatedLanes);
   }
+
+  Future<void> updatePoint({
+    required int automationLaneId,
+    required int pointId,
+    int? timeTicks,
+    double? value,
+    double? tension,
+    AutomationCurveTypeDto? curveType,
+  }) async {
+    final projectData = ref.read(projectProvider).value;
+
+    if (projectData == null) {
+      AppLogger.error("Project state is missing");
+      return;
+    }
+
+    final updateRes = await AsyncValue.guard(() async {
+      return await updateAutomationPoint(
+        ctx: _ctx,
+        automationId: automationLaneId,
+        id: pointId,
+        timeTicks: timeTicks,
+        value: value,
+        tension: tension,
+        curveType: curveType,
+      );
+    });
+
+    if (updateRes.hasError) {
+      if (updateRes.error != null) {
+        AppLogger.error(
+          "Error when calling update automation point to Rust: ${updateRes.error.toString()}",
+        );
+        return;
+      }
+    }
+
+    if (!updateRes.hasValue) return;
+
+    final newIndex = updateRes.value!;
+
+    final lane = projectData.automationPool[automationLaneId];
+    if (lane == null) {
+      AppLogger.error("Automation lane $automationLaneId not found in pool.");
+      return;
+    }
+
+    // Copy the points for mutation
+    final updatedPoints = List<AutomationPointDto>.from(lane.points);
+
+    final oldIndex = updatedPoints.indexWhere((p) => p.id == pointId);
+    if (oldIndex == -1) {
+      AppLogger.error("Point ID $pointId not found in lane $automationLaneId.");
+      return;
+    }
+
+    // Construct the updated point containing the new coordinates
+    final oldPoint = updatedPoints[oldIndex];
+
+    final finalTimeTicks = timeTicks ?? oldPoint.timeTicks;
+    final finalValue = value ?? oldPoint.value;
+    final finalTension = tension ?? oldPoint.tension;
+    final finalCurveType = curveType ?? oldPoint.curveType;
+
+    final newPoint = oldPoint.copyWith(
+      value: finalValue,
+      timeTicks: finalTimeTicks,
+      tension: finalTension,
+      curveType: finalCurveType,
+    );
+
+    updatedPoints.removeAt(oldIndex);
+
+    final safeInsertIndex = newIndex.clamp(0, updatedPoints.length);
+    updatedPoints.insert(safeInsertIndex, newPoint);
+
+    final updatedLane = lane.copyWith(points: updatedPoints);
+    final updatedPool = projectData.automationPool.add(
+      automationLaneId,
+      updatedLane,
+    );
+
+    ref.read(projectProvider.notifier).updateAutomations(pool: updatedPool);
+  }
 }
 
 // ==========================================================

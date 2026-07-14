@@ -30,6 +30,11 @@ enum GridSize {
     GridSize.sixtyfourth => '1/64',
     GridSize.infinity => 'None',
   };
+
+  double get sizeInBeat => switch (this) {
+      GridSize.infinity => 1 / 960,
+      _ => 1 / value
+  };
 }
 
 enum MusicalBeatSize {
