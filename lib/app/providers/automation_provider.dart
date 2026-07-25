@@ -147,6 +147,8 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     final updatedLanes = projectData.automationPool.add(laneId, result.value!);
 
     ref.read(projectProvider.notifier).updateAutomations(pool: updatedLanes);
+
+    AppLogger.info("Successfully add new point for lane $laneId at $timeTicks with value $value");
   }
 
   Future<void> removePoint(int laneId, int pointId) async {

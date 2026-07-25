@@ -14,10 +14,8 @@ use rtrb::{Consumer, Producer};
 use crate::{
     audio::{
         backend::AudioDeviceConfig, event::TransportFeedback, render_state::{AudioAutomationLane, AudioGraphState}
-    }, commands::{AudioCommand, AudioFeedback,TelemetryRegistration},
-    core::{
-        history::{HistoryManager, ProjectAction},
-        project::{ApplicationState, AudioTrack, Pattern},
+    }, commands::{AudioCommand, AudioFeedback,TelemetryRegistration}, core::{
+        history::{HistoryManager, ProjectAction}, project::{ApplicationState, AudioTrack, AutomationLane, Pattern},
     }, message::TelemetryRegistry, shared::{AutomationId, PatternId}
 };
 
@@ -131,19 +129,15 @@ impl DawContext {
         let _ = self.send_audio_command(AudioCommand::ReplaceFullGraph { graph });
     }
 
-    pub fn broadcast_automation_lane(&mut self, id: AutomationId) {
-        let app = &self.app_state;
-        let Some(lane_arc) = app.automation_pool.get(&id) else {
-            return;
+    pub fn broadcast_automation_lane(&mut self, id: AutomationId, lane: &AutomationLane) {
+        let lane_audio_graph = AudioAutomationLane {
+            points: lane.points.clone(),
+            enabled: lane.enabled,
+            min: lane.min,
+            max: lane.max,
+            default_value: lane.default_value,
         };
-        let lane = AudioAutomationLane {
-            points: lane_arc.points.clone(),
-            enabled: lane_arc.enabled,
-            min: lane_arc.min,
-            max: lane_arc.max,
-            default_value: lane_arc.default_value,
-        };
-        let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane { id, lane });
+        let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane { id, lane: lane_audio_graph });
     }
 
     pub fn push_history(&mut self, action: ProjectAction) {

@@ -78,7 +78,37 @@ struct ParamDef {
     min: f64,
     max: f64,
     step: f64,
-    default: f64,
+    default: ParamDefault,
+}
+
+#[derive(Clone)]
+enum ParamDefault {
+    Float(f64),
+    EnumPath(syn::Expr)
+}
+
+impl Default for ParamDefault {
+    fn default() -> Self {
+        Self::Float(0.0)
+    }
+}
+
+fn parse_numeric_expr(expr: &syn::Expr) -> Result<f64, syn::Error> {
+    match expr {
+        // Standard positive float/int
+        syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Float(f), .. }) => f.base10_parse(),
+        syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(i), .. }) => i.base10_parse(),
+        
+        // Negative float/int (e.g. -24.0)
+        syn::Expr::Unary(syn::ExprUnary { op: syn::UnOp::Neg(_), expr: inner, .. }) => {
+            match &**inner {
+                syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Float(f), .. }) => Ok(-f.base10_parse::<f64>()?),
+                syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(i), .. }) => Ok(-i.base10_parse::<f64>()?),
+                _ => Err(syn::Error::new_spanned(inner, "Expected numeric literal after minus sign")),
+            }
+        }
+        _ => Err(syn::Error::new_spanned(expr, "Expected a numeric value")),
+    }
 }
 
 /// # Overview
@@ -121,7 +151,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let mut p_group = String::new();
                     let mut p_min = 0.0;
                     let mut p_max = 1.0;
-                    let mut p_default = 0.0;
+                    let mut p_default = ParamDefault::default();
                     let mut p_step = 0.0;
 
                     let res = attr.parse_nested_meta(|meta| {
@@ -166,10 +196,22 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 p_max = lit_float.base10_parse()?;
                             }
                         } else if meta.path.is_ident("default") {
-                            let value = meta.value()?.parse::<Lit>()?;
-                            if let Lit::Float(lit_float) = value {
-                                p_default = lit_float.base10_parse()?;
-                            }
+                            let value_expr: syn::Expr = meta.value()?.parse()?;
+                            if let Ok(num) = parse_numeric_expr(&value_expr) {
+                                p_default = ParamDefault::Float(num);
+                            } 
+                            else if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Bool(b), .. }) = &value_expr {
+                                p_default = ParamDefault::Float(if b.value { 1.0 } else { 0.0 });
+                            } 
+                            else if let syn::Expr::Path(_) = &value_expr {
+                                p_default = ParamDefault::EnumPath(value_expr.clone());
+                            } 
+                            else {
+                                return Err(syn::Error::new_spanned(
+                                    &value_expr,
+                                    "`default` must be a numeric literal (e.g. `0.0`, `-6.0`), a boolean (`true`/`false`), or an enum variant path (e.g. `Waveform::Sine`)",
+                                ));
+                            }                    
                         } else if meta.path.is_ident("step") {
                             let value = meta.value()?.parse::<Lit>()?;
                             if let Lit::Float(lit_float) = value {
@@ -453,6 +495,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     });
 
     let mut default_field_inits = Vec::new();
+    let mut default_init_errors: Vec<syn::Error> = Vec::new();
 
     if let Data::Struct(data_struct) = &ast.data
         && let Fields::Named(fields) = &data_struct.fields
@@ -465,7 +508,6 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let id = &p.id_str;
                 let name = &p.name;
                 let group = &p.group;
-                let default_val = p.default;
                 let min = p.min;
                 let max = p.max;
                 let step = p.step;
@@ -485,43 +527,99 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 let local_hash = quote! { ::karbeat_utils::hash::hash_str(#id) };
 
-                let param_init = if type_ident == "f32" {
-                    // Cast to f32 BEFORE quote! so it generates the `f32` literal suffix natively
-                    let default_f32 = default_val as f32;
-                    let min_f32 = min as f32;
-                    let max_f32 = max as f32;
-                    let step_f32 = step as f32;
+                let numeric_default = |kind: &str| -> Result<f64, syn::Error> {
+                    match &p.default {
+                        ParamDefault::Float(f) => Ok(*f),
+                        ParamDefault::EnumPath(expr) => Err(syn::Error::new_spanned(
+                            expr,
+                            format!(
+                                "enum-variant `default` is only valid for Enum parameters, not `{}`",
+                                kind
+                            ),
+                        )),
+                    }
+                };
 
-                    quote! {
-                        ::karbeat_plugin_types::parameter::Param::new_f32(#local_hash, #name, #group, #default_f32, #min_f32, #max_f32, #step_f32)
+                let param_init = if type_ident == "f32" {
+                   match numeric_default("f32") {
+                        Ok(default_val) => {
+                            let default_f32 = default_val as f32;
+                            let min_f32 = min as f32;
+                            let max_f32 = max as f32;
+                            let step_f32 = step as f32;
+                            quote! {
+                                ::karbeat_plugin_types::parameter::Param::new_f32(#local_hash, #name, #group, #default_f32, #min_f32, #max_f32, #step_f32)
+                            }
+                        }
+                        Err(e) => {
+                            default_init_errors.push(e);
+                            quote! {}
+                        }
                     }
                 } else if type_ident == "f64" {
-                    quote! {
-                        ::karbeat_plugin_types::parameter::Param::new_f64(#local_hash, #name, #group, #default_val, #min, #max, #step)
+                    match numeric_default("f64") {
+                        Ok(default_val) => {
+                            quote! {
+                                ::karbeat_plugin_types::parameter::Param::new_f64(#local_hash, #name, #group, #default_val, #min, #max, #step)
+                            }
+                        }
+                        Err(e) => {
+                            default_init_errors.push(e);
+                            quote! {}
+                        }
                     }
                 } else if type_ident == "i32" {
-                    let default_i32 = default_val as i32;
-                    let min_i32 = min as i32;
-                    let max_i32 = max as i32;
-                    let step_i32 = step as i32;
-
-                    quote! {
-                        ::karbeat_plugin_types::parameter::Param::new_i32(#local_hash, #name, #group, #default_i32, #min_i32, #max_i32, #step_i32)
+                    match numeric_default("i32") {
+                        Ok(default_val) => {
+                            let default_i32 = default_val as i32;
+                            let min_i32 = min as i32;
+                            let max_i32 = max as i32;
+                            let step_i32 = step as i32;
+                            quote! {
+                                ::karbeat_plugin_types::parameter::Param::new_i32(#local_hash, #name, #group, #default_i32, #min_i32, #max_i32, #step_i32)
+                            }
+                        }
+                        Err(e) => {
+                            default_init_errors.push(e);
+                            quote! {}
+                        }
                     }
                 } else if type_ident == "bool" {
-                    let default_bool = default_val >= 0.5;
-                    quote! {
-                        ::karbeat_plugin_types::parameter::Param::new_bool(#local_hash, #name, #group, #default_bool)
-                    }
+                    match numeric_default("bool") {
+                        Ok(default_val) => {
+                            let default_bool = default_val >= 0.5;
+                            quote! {
+                                ::karbeat_plugin_types::parameter::Param::new_bool(#local_hash, #name, #group, #default_bool)
+                            }
+                        }
+                        Err(e) => {
+                            default_init_errors.push(e);
+                            quote! {}
+                        }
+                    }                
                 } else {
-                    let default_idx = default_val as usize;
-                    quote! {
-                        ::karbeat_plugin_types::parameter::Param::<#ty>::new_enum(
-                            #local_hash,
-                            #name,
-                            #group,
-                            <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_idx)
-                        )
+                    match &p.default {
+                        ParamDefault::Float(f) => {
+                            let default_idx = *f as usize;
+                            quote! {
+                                ::karbeat_plugin_types::parameter::Param::<#ty>::new_enum(
+                                    #local_hash,
+                                    #name,
+                                    #group,
+                                    <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_idx)
+                                )
+                            }
+                        },
+                        ParamDefault::EnumPath(expr) => {
+                            quote! {
+                                ::karbeat_plugin_types::parameter::Param::<#ty>::new_enum(
+                                    #local_hash,
+                                    #name,
+                                    #group,
+                                    #expr
+                                )
+                            }
+                        },
                     }
                 };
 
@@ -535,6 +633,13 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 });
             }
         }
+    }
+
+    if let Some(first) = default_init_errors.into_iter().reduce(|mut acc, e| {
+        acc.combine(e);
+        acc
+    }) {
+        return TokenStream::from(first.to_compile_error());
     }
 
     // Conditionally generate the enum only if there are parameters

@@ -55,7 +55,7 @@ pub struct AudioEngine {
 
     // Audio-thread-owned mixer channel DSP state.
     // Updated via SetMixerChannelParameter commands; queried via QueryMixerChannel.
-    mixer_state: AudioMixerState,
+    pub mixer_state: AudioMixerState,
 
     // Real-time Command Queue (UI → Audio)
     command_consumer: Consumer<AudioCommand>,
@@ -727,6 +727,7 @@ impl AudioEngine {
                 self.song_state.playhead_samples = samples;
                 self.recalculate_beat_bar();
                 self.song_state.last_emitted_samples = self.song_state.playhead_samples;
+                self.evaluate_pre_block_modulations(0);
                 self.emit_current_playback_position();
             }
             AudioCommand::PlayPreviewNote {
@@ -1520,7 +1521,9 @@ impl AudioEngine {
                 self.recalculate_max_sample_index();
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {
+                log::info!("Receive update automation lane of Id {}", id);
                 self.current_state.graph.automation_lanes.insert(id, lane);
+
             }
             AudioCommand::RemoveAutomationLane { id } => {
                 self.current_state.graph.automation_lanes.remove(&id);
@@ -3159,6 +3162,7 @@ impl AudioEngine {
                 }
                 LiveModulationSource::Automation { lane_id } => {
                     if let Some(lane) = self.current_state.graph.automation_lanes.get(lane_id) {
+                        // log::debug!("This line prints means the value is being ticked");
                         *current_output = lane.value_at_ticks(current_tick);
                     }
                 }
@@ -3502,7 +3506,7 @@ impl AudioEngine {
         let sample_rate = self.sample_rate as f64;
         let mut max_clip_end: u32 = 0;
 
-        // 1. Find the absolute furthest boundary of any clip on the timeline
+        // Find the absolute furthest boundary of any clip on the timeline
         for track in self.current_state.graph.tracks.iter() {
             for clip in track.clips.iter() {
                 let end_sample = match &clip.time {
@@ -3527,7 +3531,7 @@ impl AudioEngine {
             }
         }
 
-        // 2. Set max_sample_index to ONLY the end of the clips (No Tails)
+        // Set max_sample_index to ONLY the end of the clips (No Tails)
         // This ensures looping and song-stop behaves perfectly in the UI.
         self.current_state.graph.max_sample_index = max_clip_end;
 
@@ -3586,21 +3590,21 @@ impl AudioEngine {
             if let Some(plugin) = self.get_plugin(&target) {
                 let mut plugin_snap = PluginTelemetrySnapshot::default();
 
-                // 1. Fetch all parameters
+                // Fetch all parameters
                 let specs = plugin.get_parameter_specs();
                 plugin_snap.parameters = specs
                     .iter()
                     .map(|s| (s.id, plugin.get_parameter(s.id)))
                     .collect();
 
-                // 2. Fetch requested zero-copy buffers (e.g., "telemetry" or "magnitude")
+                // Fetch requested zero-copy buffers (e.g., "telemetry" or "magnitude")
                 for name in &buffer_names {
                     if let Some(buf) = plugin.get_zero_copy_buffer(name) {
                         plugin_snap.buffers.insert(name.clone(), buf);
                     }
                 }
 
-                // 3. Write directly into the per-plugin triple-buffer producer.
+                // Write directly into the per-plugin triple-buffer producer.
                 if let Some(producer) = self.telemetry.param_telemetry_producers.get_mut(&target) {
                     *producer.input_buffer_mut() = plugin_snap;
                     producer.publish();

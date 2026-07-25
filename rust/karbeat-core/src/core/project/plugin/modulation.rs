@@ -405,14 +405,14 @@ impl ApplicationState {
         value: Option<f32>,
         tension: Option<f32>,
         curve_type: Option<AutomationCurveType>
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<(AutomationLane, usize)> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
         match lane.update_point(point_id, time_ticks, value, tension, curve_type) {
-            Some(new_index) => Ok(new_index),
+            Some(new_index) => Ok((lane.clone(), new_index)),
             None => Err(anyhow!(
                 "Point ID {} not found in lane {:?}",
                 point_id,

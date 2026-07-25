@@ -146,8 +146,6 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
           timeTicks: snappedTicks,
           value: value,
         );
-        // Optional: you can sort _localPoints here if you want lines to uncross 
-        // mid-drag, but it's often cleaner to just let the backend fix it on drop.
       });
     }
   }

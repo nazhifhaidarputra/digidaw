@@ -1,3 +1,6 @@
+pub mod helper;
+pub mod noise;
+pub mod distortion;
 pub mod bit_crush;
 pub mod chorus;
 pub mod compressor;
@@ -12,5 +15,5 @@ pub mod reverb;
 pub mod stretcher;
 pub mod voice;
 pub mod windowing;
-
+pub mod lfo;
 pub mod prelude;

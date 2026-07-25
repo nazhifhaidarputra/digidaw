@@ -1,9 +1,13 @@
 use anyhow::Context;
 
 use crate::{
-    commands::AudioCommand, context::DawContext, core::project::{
-        AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource, automation::{AutomationLane, AutomationPoint, AutomationTarget},
-    }, shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
+    commands::AudioCommand,
+    context::DawContext,
+    core::project::{
+        automation::{AutomationLane, AutomationPoint, AutomationTarget},
+        AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource,
+    },
+    shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
 
 /// Get all automations lane for all types
@@ -17,6 +21,8 @@ where
     app.automation_pool.values().map(|a| mapper(a)).collect()
 }
 
+
+
 pub fn add_automation_lane_for_track(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -26,13 +32,14 @@ pub fn add_automation_lane_for_track(
     max: f32,
     default_value: f32,
 ) -> anyhow::Result<AutomationLane> {
-    let (lane, _link_id) = {
-        let app = &mut ctx.app_state;
-        app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?
-    };
+
+    let app = &mut ctx.app_state;
+    let (lane, link_id) = app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?;
+
+    broadcast_modulations(ctx, link_id)?;    
 
     // Broadcast the new lane to the audio thread by its AutomationId
-    ctx.broadcast_automation_lane(lane.id);
+    ctx.broadcast_automation_lane(lane.id, &lane);
 
     // TODO: add history
 
@@ -52,7 +59,11 @@ pub fn add_automation_lane(
         app.add_automation_lane(target, label, min, max, default_value)?
     };
 
-    ctx.broadcast_automation_lane(lane.id);
+    broadcast_modulations(ctx, link_id)?;
+        
+    ctx.broadcast_automation_lane(lane.id, &lane);
+
+    
 
     // Fetch the modulation link
     let mod_link = ctx
@@ -74,12 +85,14 @@ pub fn add_automation_lane_for_bus(
     max: f32,
     default_value: f32,
 ) -> anyhow::Result<AutomationLane> {
-    let (lane, _link_id) = {
+    let (lane, link_id) = {
         let app = &mut ctx.app_state;
         app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
     };
 
-    ctx.broadcast_automation_lane(lane.id);
+        broadcast_modulations(ctx, link_id)?;    
+
+    ctx.broadcast_automation_lane(lane.id, &lane);
 
     // TODO: add history
 
@@ -95,7 +108,7 @@ pub fn add_new_automation_point(
     let app = &mut ctx.app_state;
     let (auto_lane, point_id) = app.add_automation_point(automation_id, time_ticks, value)?;
 
-    ctx.broadcast_automation_lane(automation_id);
+    ctx.broadcast_automation_lane(automation_id, &auto_lane);
 
     // TODO: Add history
     Ok((auto_lane, point_id))
@@ -109,7 +122,7 @@ pub fn remove_automation_point(
     let app = &mut ctx.app_state;
     let lane = app.remove_automation_point(automation_id, id)?;
 
-    ctx.broadcast_automation_lane(automation_id);
+    ctx.broadcast_automation_lane(automation_id, &lane);
     Ok(lane)
 }
 
@@ -120,17 +133,14 @@ pub fn update_automation_point(
     time_ticks: Option<u32>,
     value: Option<f32>,
     tension: Option<f32>,
-    curve_type: Option<AutomationCurveType>
+    curve_type: Option<AutomationCurveType>,
 ) -> anyhow::Result<usize> {
-    let new_index = {
-        let app = &mut ctx.app_state;
+    let app = &mut ctx.app_state;
 
-        let new_index =
-            app.update_automation_point(automation_id, id, time_ticks, value, tension, curve_type)?;
-        new_index
-    };
+    let (lane, new_index) =
+        app.update_automation_point(automation_id, id, time_ticks, value, tension, curve_type)?;
 
-    ctx.broadcast_automation_lane(automation_id);
+    ctx.broadcast_automation_lane(automation_id, &lane);
     Ok(new_index)
 }
 
@@ -277,4 +287,25 @@ pub fn link_this_param_to_controller(
 
     let _ = ctx.send_audio_command(AudioCommand::AddModulationLink { id, link });
     Ok(id)
+}
+
+fn broadcast_modulations(ctx: &mut DawContext, link_id: ModulationLinkId) -> anyhow::Result<()> {
+        let link = ctx
+        .app_state
+        .modulation_links
+        .get(&link_id)
+        .ok_or_else(|| anyhow::anyhow!("Modulation link not found"))?;
+
+    let source = ctx.app_state.modulation_sources.get(&link.prop.source_id).ok_or_else(|| anyhow::anyhow!("Modulation source not found"))?;
+
+
+    let commands = vec![
+        AudioCommand::AddModulationSource { id: link.prop.source_id, source: source.to_owned() },
+        AudioCommand::AddModulationLink {
+            id: link_id,
+            link: link.prop.to_owned(),
+        },
+    ];
+
+    ctx.try_send_audio_command_chain(commands)
 }
