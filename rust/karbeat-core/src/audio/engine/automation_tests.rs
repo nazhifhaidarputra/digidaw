@@ -14,7 +14,8 @@ use crate::audio::render_state::{AudioGraphState};
     use crate::shared::ModulationId;
 use crate::shared::id::{AutomationId, ModulationLinkId, TrackId};
     use karbeat_utils::color::Color;
-    use rtrb::RingBuffer;
+    use karbeat_utils::types::NormalizedF64;
+use rtrb::RingBuffer;
     use std::sync::mpsc;
     // use crate::audio::;
 
@@ -69,7 +70,7 @@ use crate::shared::id::{AutomationId, ModulationLinkId, TrackId};
 
         let mut automation_lane = AutomationLane::new(automation_id, "Volume", 0.0, 1.0, 0.5);
         // Set point at 0 ticks with value 0.75
-        automation_lane.add_point(AutomationPoint::new(0, 0.75));
+        automation_lane.add_point(AutomationPoint::new(0, NormalizedF64::new(0.75)));
 
         app_state
             .automation_pool

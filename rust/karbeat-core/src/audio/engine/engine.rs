@@ -539,6 +539,8 @@ impl AudioEngine {
 
         gen_voice.midi_events.sort_by_key(|e| e.sample_offset);
 
+        self.evaluate_pre_block_modulations(frame_count);
+
         // Render voices to buffer
         self.render_voices_to_buffer(output_buffer, channels, true);
 
@@ -1030,7 +1032,7 @@ impl AudioEngine {
                 // Audio thread is sole owner of mixer channel DSP values
                 self.mixer_state.apply(&target, &param);
 
-                let (our_target, value) = resolve_target_mixer_param(&target, &param);
+                let (our_target, norm_value) = resolve_target_mixer_param(&target, &param);
 
                 if let Some(our_target) = our_target {
                     if let Some(link) = self
@@ -1038,7 +1040,7 @@ impl AudioEngine {
                         .iter_mut()
                         .find(|l| l.target == our_target)
                     {
-                        link.base_value = value;
+                        link.base_value = norm_value;
                     }
                 }
 
@@ -1061,6 +1063,9 @@ impl AudioEngine {
                 let id_index = bus_id.to_u32() as usize;
                 self.plugin_state.add_bus(id_index);
                 self.bus_buffers.insert(bus_id, Vec::new());
+
+                // FIX: Initialize the missing bus mixer channel!
+                self.mixer_state.bus_channels.entry(bus_id).or_default();
 
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.bus_buffers.keys().copied();
@@ -1512,6 +1517,11 @@ impl AudioEngine {
                 // Routing and automation lanes are untouched by this command.
                 self.current_state.graph.tracks = tracks;
                 self.current_state.graph.patterns = patterns;
+
+                // Guarantee every track in the new graph has an initialized mixer channel!
+                for track in self.current_state.graph.tracks.iter() {
+                    self.mixer_state.track_channels.entry(track.id).or_default();
+                }
 
                 // Recompute routing order so new tracks are included in the DSP loop!
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
@@ -3163,7 +3173,9 @@ impl AudioEngine {
                 LiveModulationSource::Automation { lane_id } => {
                     if let Some(lane) = self.current_state.graph.automation_lanes.get(lane_id) {
                         // log::debug!("This line prints means the value is being ticked");
-                        *current_output = lane.value_at_ticks(current_tick);
+                        let norm_val  = lane.value_at_ticks(current_tick) as f32;
+                        // log::debug!("Automated normalized value of lane {} = {}", lane_id, norm_val);
+                        *current_output = norm_val;
                     }
                 }
                 LiveModulationSource::PeakController { .. } => {} // Already handled above
@@ -3238,12 +3250,13 @@ impl AudioEngine {
                 TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Volume => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            ch.volume = final_value;
+                            ch.volume = -60.0 + (final_value * 66.0);
+
                         }
                     }
                     MixerChannelParamTarget::Pan => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            ch.pan = final_value;
+                            ch.pan = -1.0 + (final_value * 2.0);
                         }
                     }
                     MixerChannelParamTarget::Plugin { effect_id, target } => match target {
@@ -3264,12 +3277,13 @@ impl AudioEngine {
             AutomationTarget::Bus { bus_id, mix_target } => match mix_target {
                 MixerChannelParamTarget::Volume => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        ch.volume = final_value;
+                        ch.volume = -60.0 + (final_value * 66.0)
+                        
                     }
                 }
                 MixerChannelParamTarget::Pan => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        ch.pan = final_value;
+                        ch.pan = -1.0 + (final_value * 2.0);
                     }
                 }
                 MixerChannelParamTarget::Plugin { effect_id, target } => match target {
@@ -3288,10 +3302,10 @@ impl AudioEngine {
             },
             AutomationTarget::Master(mix_target) => match mix_target {
                 MixerChannelParamTarget::Volume => {
-                    self.mixer_state.master.volume = final_value;
+                    self.mixer_state.master.volume = -60.0 + (final_value * 66.0);
                 }
                 MixerChannelParamTarget::Pan => {
-                    self.mixer_state.master.pan = final_value;
+                    self.mixer_state.master.pan = -1.0 + (final_value * 2.0);
                 }
                 MixerChannelParamTarget::Plugin { effect_id, target } => match target {
                     EffectAutomationTarget::Mix => todo!(),

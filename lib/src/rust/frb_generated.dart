@@ -2398,9 +2398,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_box_autoadd_automation_target_dto(target, serializer);
           sse_encode_String(label, serializer);
-          sse_encode_f_32(min, serializer);
-          sse_encode_f_32(max, serializer);
-          sse_encode_f_32(defaultValue, serializer);
+          sse_encode_f_64(min, serializer);
+          sse_encode_f_64(max, serializer);
+          sse_encode_f_64(defaultValue, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2447,9 +2447,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(busId, serializer);
           sse_encode_box_autoadd_automation_target_dto(target, serializer);
           sse_encode_String(label, serializer);
-          sse_encode_f_32(min, serializer);
-          sse_encode_f_32(max, serializer);
-          sse_encode_f_32(defaultValue, serializer);
+          sse_encode_f_64(min, serializer);
+          sse_encode_f_64(max, serializer);
+          sse_encode_f_64(defaultValue, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2503,9 +2503,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(trackId, serializer);
           sse_encode_box_autoadd_automation_target_dto(target, serializer);
           sse_encode_String(label, serializer);
-          sse_encode_f_32(min, serializer);
-          sse_encode_f_32(max, serializer);
-          sse_encode_f_32(defaultValue, serializer);
+          sse_encode_f_64(min, serializer);
+          sse_encode_f_64(max, serializer);
+          sse_encode_f_64(defaultValue, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2780,7 +2780,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
           sse_encode_u_32(automationId, serializer);
           sse_encode_u_32(timeTicks, serializer);
-          sse_encode_f_32(value, serializer);
+          sse_encode_f_64(value, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -7892,8 +7892,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(automationId, serializer);
           sse_encode_CastedPrimitive_u_64(id, serializer);
           sse_encode_opt_box_autoadd_u_32(timeTicks, serializer);
-          sse_encode_opt_box_autoadd_f_32(value, serializer);
-          sse_encode_opt_box_autoadd_f_32(tension, serializer);
+          sse_encode_opt_box_autoadd_f_64(value, serializer);
+          sse_encode_opt_box_autoadd_f_64(tension, serializer);
           sse_encode_opt_box_autoadd_automation_curve_type_dto(
             curveType,
             serializer,
@@ -8456,9 +8456,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       label: dco_decode_String(arr[1]),
       points: dco_decode_list_automation_point_dto(arr[2]),
       enabled: dco_decode_bool(arr[3]),
-      min: dco_decode_f_32(arr[4]),
-      max: dco_decode_f_32(arr[5]),
-      defaultValue: dco_decode_f_32(arr[6]),
+      min: dco_decode_f_64(arr[4]),
+      max: dco_decode_f_64(arr[5]),
+      defaultValue: dco_decode_f_64(arr[6]),
     );
   }
 
@@ -8471,9 +8471,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return AutomationPointDto(
       id: dco_decode_CastedPrimitive_u_64(arr[0]),
       timeTicks: dco_decode_u_32(arr[1]),
-      value: dco_decode_f_32(arr[2]),
+      value: dco_decode_f_64(arr[2]),
       curveType: dco_decode_automation_curve_type_dto(arr[3]),
-      tension: dco_decode_f_32(arr[4]),
+      tension: dco_decode_f_64(arr[4]),
     );
   }
 
@@ -8609,6 +8609,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   double dco_decode_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
   }
@@ -9233,6 +9239,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double? dco_decode_opt_box_autoadd_f_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_f_32(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
   }
 
   @protected
@@ -10673,9 +10685,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_label = sse_decode_String(deserializer);
     var var_points = sse_decode_list_automation_point_dto(deserializer);
     var var_enabled = sse_decode_bool(deserializer);
-    var var_min = sse_decode_f_32(deserializer);
-    var var_max = sse_decode_f_32(deserializer);
-    var var_defaultValue = sse_decode_f_32(deserializer);
+    var var_min = sse_decode_f_64(deserializer);
+    var var_max = sse_decode_f_64(deserializer);
+    var var_defaultValue = sse_decode_f_64(deserializer);
     return AutomationLaneDto(
       id: var_id,
       label: var_label,
@@ -10694,9 +10706,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_CastedPrimitive_u_64(deserializer);
     var var_timeTicks = sse_decode_u_32(deserializer);
-    var var_value = sse_decode_f_32(deserializer);
+    var var_value = sse_decode_f_64(deserializer);
     var var_curveType = sse_decode_automation_curve_type_dto(deserializer);
-    var var_tension = sse_decode_f_32(deserializer);
+    var var_tension = sse_decode_f_64(deserializer);
     return AutomationPointDto(
       id: var_id,
       timeTicks: var_timeTicks,
@@ -10855,6 +10867,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_f_32(deserializer));
+  }
+
+  @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
   }
 
   @protected
@@ -11753,6 +11771,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_f_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
     } else {
       return null;
     }
@@ -13421,9 +13450,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.label, serializer);
     sse_encode_list_automation_point_dto(self.points, serializer);
     sse_encode_bool(self.enabled, serializer);
-    sse_encode_f_32(self.min, serializer);
-    sse_encode_f_32(self.max, serializer);
-    sse_encode_f_32(self.defaultValue, serializer);
+    sse_encode_f_64(self.min, serializer);
+    sse_encode_f_64(self.max, serializer);
+    sse_encode_f_64(self.defaultValue, serializer);
   }
 
   @protected
@@ -13434,9 +13463,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_CastedPrimitive_u_64(self.id, serializer);
     sse_encode_u_32(self.timeTicks, serializer);
-    sse_encode_f_32(self.value, serializer);
+    sse_encode_f_64(self.value, serializer);
     sse_encode_automation_curve_type_dto(self.curveType, serializer);
-    sse_encode_f_32(self.tension, serializer);
+    sse_encode_f_64(self.tension, serializer);
   }
 
   @protected
@@ -13597,6 +13626,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
   }
 
   @protected
@@ -14435,6 +14470,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_f_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
     }
   }
 

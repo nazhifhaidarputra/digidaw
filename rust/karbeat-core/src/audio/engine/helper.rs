@@ -549,8 +549,8 @@ pub fn resolve_target_mixer_param(
 ) -> (Option<AutomationTarget>, f32) {
     // First, extract the generic mixer target and the float value
     let (mix_target, val) = match param {
-        MixerChannelParams::Volume(v) => (Some(MixerChannelParamTarget::Volume), *v),
-        MixerChannelParams::Pan(v) => (Some(MixerChannelParamTarget::Pan), *v),
+        MixerChannelParams::Volume(v) => (Some(MixerChannelParamTarget::Volume), ((*v - (-60.0)) / 66.0).clamp(0.0, 1.0)),
+        MixerChannelParams::Pan(v) => (Some(MixerChannelParamTarget::Pan), ((*v - (-1.0)) / 2.0).clamp(0.0, 1.0)),
         MixerChannelParams::Mute(v) => (None, if *v { 1.0 } else { 0.0 }),
         MixerChannelParams::InvertedPhase(v) => (None, if *v { 1.0 } else { 0.0 }),
         MixerChannelParams::Solo(v) => (None, if *v { 1.0 } else { 0.0 }),

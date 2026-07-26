@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use karbeat_utils::types::{BipolarF64, NormalizedF32, NormalizedF64};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -162,9 +163,9 @@ impl ApplicationState {
         &mut self,
         target: AutomationTarget,
         label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32,
+        min: f64,
+        max: f64,
+        default_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         // === PREVENT DUPLICATES ===
         // Check if this exact target already has an Automation source linked to it.
@@ -212,9 +213,9 @@ impl ApplicationState {
         track_id: TrackId,
         target: AutomationTarget,
         label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32,
+        min: f64,
+        max: f64,
+        default_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_track(track_id) {
             return Err(anyhow!("Target does not reference the specified track"));
@@ -280,9 +281,9 @@ impl ApplicationState {
         bus_id: BusId,
         target: AutomationTarget,
         label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32,
+        min: f64,
+        max: f64,
+        default_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_bus(bus_id) {
             return Err(anyhow!("Target does not reference the specified bus"));
@@ -355,25 +356,19 @@ impl ApplicationState {
     // =========================================================================
     // AUTOMATION POINT MANAGEMENT
     // =========================================================================
-
-    pub fn add_automation_point(
+pub fn add_automation_point(
         &mut self,
         lane_id: AutomationId,
         time_ticks: u32,
-        value: f32,
+        value: NormalizedF64,
     ) -> anyhow::Result<(AutomationLane, u64)> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-        let point = AutomationPoint::with_curve(
-            time_ticks,
-            value,
-            AutomationCurveType::Linear,
-            lane.min,
-            lane.max,
-        );
 
+        // AutomationPoint::new applies Linear curve and clamps safely to 0.0..1.0
+        let point = AutomationPoint::new(time_ticks, value);
         let point_id = point.id;
 
         lane.add_point(point);
@@ -402,14 +397,15 @@ impl ApplicationState {
         lane_id: AutomationId,
         point_id: u64,
         time_ticks: Option<u32>,
-        value: Option<f32>,
-        tension: Option<f32>,
+        value: Option<NormalizedF64>,
+        tension: Option<BipolarF64>,
         curve_type: Option<AutomationCurveType>
     ) -> anyhow::Result<(AutomationLane, usize)> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+
 
         match lane.update_point(point_id, time_ticks, value, tension, curve_type) {
             Some(new_index) => Ok((lane.clone(), new_index)),

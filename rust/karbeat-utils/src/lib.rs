@@ -1,3 +1,4 @@
+pub mod types;
 pub mod audio;
 pub mod audio_utils;
 pub mod color;

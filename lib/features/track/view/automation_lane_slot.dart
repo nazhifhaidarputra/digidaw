@@ -49,10 +49,18 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     return (localX + scrollX) * zoomLevel;
   }
 
+  /// Calculates the purely normalized value (0.0 to 1.0) from the Y pixel coordinate.
+  /// This perfectly maps to the backend's NormalizedF64 newtype.
   double _getValueFromY(double localY) {
     // Y=0 is top (1.0), Y=height is bottom (0.0)
     final normalized = 1.0 - (localY / widget.height);
     return normalized.clamp(0.0, 1.0);
+  }
+
+  /// Optional: Use this if you ever need to draw a UI tooltip while dragging
+  /// to show the user the real-world parameter value (e.g., " -6.0 dB").
+  double _getDenormalizedValue(double normalizedValue) {
+    return widget.lane.min + normalizedValue * (widget.lane.max - widget.lane.min);
   }
 
   int _snapTicks(int ticks) {

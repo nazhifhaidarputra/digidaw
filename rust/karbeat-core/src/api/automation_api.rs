@@ -1,4 +1,5 @@
 use anyhow::Context;
+use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
 use crate::{
     commands::AudioCommand,
@@ -28,9 +29,9 @@ pub fn add_automation_lane_for_track(
     track_id: TrackId,
     target: AutomationTarget,
     label: impl Into<String>,
-    min: f32,
-    max: f32,
-    default_value: f32,
+    min: f64,
+    max: f64,
+    default_value: f64,
 ) -> anyhow::Result<AutomationLane> {
 
     let app = &mut ctx.app_state;
@@ -50,14 +51,12 @@ pub fn add_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTarget,
     label: impl Into<String>,
-    min: f32,
-    max: f32,
-    default_value: f32,
+    min: f64,
+    max: f64,
+    default_value: f64,
 ) -> anyhow::Result<(AutomationLane, ModulationLinkForOrderedLaneView)> {
-    let (lane, link_id) = {
-        let app = &mut ctx.app_state;
-        app.add_automation_lane(target, label, min, max, default_value)?
-    };
+    let app = &mut ctx.app_state;
+    let (lane, link_id) = app.add_automation_lane(target, label, min, max, default_value)?;
 
     broadcast_modulations(ctx, link_id)?;
         
@@ -81,9 +80,9 @@ pub fn add_automation_lane_for_bus(
     bus_id: BusId,
     target: AutomationTarget,
     label: impl Into<String>,
-    min: f32,
-    max: f32,
-    default_value: f32,
+    min: f64,
+    max: f64,
+    default_value: f64,
 ) -> anyhow::Result<AutomationLane> {
     let (lane, link_id) = {
         let app = &mut ctx.app_state;
@@ -103,7 +102,7 @@ pub fn add_new_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
     time_ticks: u32,
-    value: f32,
+    value: NormalizedF64,
 ) -> anyhow::Result<(AutomationLane, u64)> {
     let app = &mut ctx.app_state;
     let (auto_lane, point_id) = app.add_automation_point(automation_id, time_ticks, value)?;
@@ -131,8 +130,8 @@ pub fn update_automation_point(
     automation_id: AutomationId,
     id: u64,
     time_ticks: Option<u32>,
-    value: Option<f32>,
-    tension: Option<f32>,
+    value: Option<NormalizedF64>,
+    tension: Option<BipolarF64>,
     curve_type: Option<AutomationCurveType>,
 ) -> anyhow::Result<usize> {
     let app = &mut ctx.app_state;

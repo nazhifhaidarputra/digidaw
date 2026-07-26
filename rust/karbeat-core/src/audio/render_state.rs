@@ -9,6 +9,7 @@ use crate::core::project::{
 use crate::shared::id::*;
 use hashbrown::HashMap;
 use karbeat_utils::math::is_power_of_two;
+use karbeat_utils::types::NormalizedF64;
 
 // =============================================================================
 // Audio Thread Owned Plugin State
@@ -153,9 +154,9 @@ impl AudioPluginState {
 pub struct AudioAutomationLane {
     pub points: Vec<AutomationPoint>,
     pub enabled: bool,
-    pub min: f32,
-    pub max: f32,
-    pub default_value: f32,
+    pub min: f64,
+    pub max: f64,
+    pub default_value: NormalizedF64,
 }
 
 impl From<AutomationLane> for AudioAutomationLane {
@@ -165,33 +166,32 @@ impl From<AutomationLane> for AudioAutomationLane {
             enabled: l.enabled,
             min: l.min,
             max: l.max,
-            default_value: l.default_value,
+            default_value: l.default_value
         }
     }
 }
 
 impl AudioAutomationLane {
-    /// Get the denormalized value at a given time in ticks.
-    /// Returns `default_value` (denormalized) if disabled or no points.
+    /// Get the normalized value at a given time in ticks.
+    /// Returns `default_value` (normalized) if disabled or no points.
     #[inline]
-    pub fn value_at_ticks(&self, time_ticks: u32) -> f32 {
+    pub fn value_at_ticks(&self, time_ticks: u32) -> f64 {
         if !self.enabled || self.points.is_empty() {
-            return self.denormalize(self.default_value);
+            return *self.default_value;
         }
-        let normalized = interpolate_points(&self.points, time_ticks);
-        self.denormalize(normalized)
+        *interpolate_points(&self.points, time_ticks)
     }
 
     #[inline]
-    fn denormalize(&self, normalized: f32) -> f32 {
-        self.min + normalized * (self.max - self.min)
+    fn denormalize(&self, normalized: NormalizedF64) -> f64 {
+        normalized.to_range(self.min, self.max)
     }
 }
 
 /// Interpolate sorted automation points at the given time in ticks.
 /// Returns a normalized value (0.0–1.0).
 #[inline]
-fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
+fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> NormalizedF64 {
     // Before first point
     if time_ticks <= points[0].time_ticks {
         return points[0].value;
@@ -219,14 +219,14 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
         return p1.value;
     }
 
-    let t = ((time_ticks - p1.time_ticks) as f32) / (duration as f32);
+    let t = ((time_ticks - p1.time_ticks) as f64) / (duration as f64);
 
     match p1.curve_type {
-        AutomationCurveType::Linear => p1.value + (p2.value - p1.value) * t,
+        AutomationCurveType::Linear => NormalizedF64::new(p1.value.get() + (p2.value.get() - p1.value.get()) * t),
         AutomationCurveType::Exponential => {
             let v1 = p1.value.max(0.0001);
             let v2 = p2.value.max(0.0001);
-            v1 * (v2 / v1).powf(t)
+            NormalizedF64::new(v1 * (v2 / v1).powf(t))
         }
         AutomationCurveType::Step => p1.value,
     }
