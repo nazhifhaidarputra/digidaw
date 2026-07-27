@@ -4,7 +4,7 @@
 mod tests {
     use crate::api::track_api;
     use crate::shared::id::TrackId;
-    use crate::test::helpers::{make_ctx, make_seeded_ctx, karbeatzer_v2_registry_id};
+    use crate::test::helpers::{karbeatzer_v2_registry_id, make_ctx, make_seeded_ctx};
 
     // ─── get_track ───────────────────────────────────────────────────────────
 
@@ -42,10 +42,14 @@ mod tests {
     #[test]
     fn add_midi_track_with_generator_id_happy_path() {
         let mut ctx = make_ctx();
-        let result = track_api::add_midi_track_with_generator_id(&mut ctx, karbeatzer_v2_registry_id());
+        let result =
+            track_api::add_midi_track_with_generator_id(&mut ctx, karbeatzer_v2_registry_id());
         assert!(result.is_ok(), "Should add MIDI track: {:?}", result.err());
         let track = result.unwrap();
-        assert!(track.generator.is_some(), "MIDI track must have a generator");
+        assert!(
+            track.generator.is_some(),
+            "MIDI track must have a generator"
+        );
     }
 
     #[test]
@@ -162,7 +166,10 @@ mod tests {
             .expect("get_tracks_ordered should succeed");
         let mut sorted = ordered.clone();
         sorted.sort();
-        assert_eq!(ordered, sorted, "Tracks should be in ascending order_idx order");
+        assert_eq!(
+            ordered, sorted,
+            "Tracks should be in ascending order_idx order"
+        );
     }
 
     // ─── delete_track ────────────────────────────────────────────────────────

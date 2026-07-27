@@ -53,7 +53,10 @@ mod tests {
         // Clipboard is still empty (never copied)
         let result = clipboard_api::paste_notes(&mut ctx, pattern_id, 0, None, |n| n.id);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty(), "Paste with empty clipboard should return empty");
+        assert!(
+            result.unwrap().is_empty(),
+            "Paste with empty clipboard should return empty"
+        );
     }
 
     #[test]
@@ -71,7 +74,10 @@ mod tests {
         // Paste at tick 2000
         let result = clipboard_api::paste_notes(&mut ctx, pattern_id, 2000, None, |n| n.id);
         assert!(result.is_ok(), "{:?}", result.err());
-        assert!(!result.unwrap().is_empty(), "Paste should return pasted notes");
+        assert!(
+            !result.unwrap().is_empty(),
+            "Paste should return pasted notes"
+        );
     }
 
     #[test]
@@ -91,7 +97,10 @@ mod tests {
         let keys = result.unwrap();
         assert!(!keys.is_empty());
         // All pasted notes should have key=48
-        assert!(keys.iter().all(|&k| k == 48), "All notes should be remapped to key 48");
+        assert!(
+            keys.iter().all(|&k| k == 48),
+            "All notes should be remapped to key 48"
+        );
     }
 
     // ─── cut_notes ───────────────────────────────────────────────────────────
@@ -122,8 +131,9 @@ mod tests {
             ctx.app_state.pattern_pool[&pattern_id].notes.is_empty(),
             "All notes should have been cut"
         );
-        let has_notes =
-            clipboard_api::get_clipboard_contents(&ctx, |cb| matches!(cb, ClipboardContent::Notes(_)));
+        let has_notes = clipboard_api::get_clipboard_contents(&ctx, |cb| {
+            matches!(cb, ClipboardContent::Notes(_))
+        });
         assert!(has_notes, "Clipboard should contain notes after cut");
     }
 
@@ -147,8 +157,9 @@ mod tests {
             .map(|c| c.id)
             .collect();
         clipboard_api::copy_clips(&mut ctx, midi_id, &clip_ids);
-        let has_clips =
-            clipboard_api::get_clipboard_contents(&ctx, |cb| matches!(cb, ClipboardContent::Clips(_)));
+        let has_clips = clipboard_api::get_clipboard_contents(&ctx, |cb| {
+            matches!(cb, ClipboardContent::Clips(_))
+        });
         assert!(has_clips, "Clipboard should contain clips after copy");
     }
 
@@ -171,7 +182,10 @@ mod tests {
             .collect();
         let count = clip_ids.len();
         clipboard_api::cut_clips(&mut ctx, midi_id, clip_ids);
-        assert!(ctx.app_state.tracks[&midi_id].clips.is_empty(), "All clips should be cut");
+        assert!(
+            ctx.app_state.tracks[&midi_id].clips.is_empty(),
+            "All clips should be cut"
+        );
     }
 
     #[test]

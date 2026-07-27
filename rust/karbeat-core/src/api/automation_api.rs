@@ -22,8 +22,6 @@ where
     app.automation_pool.values().map(|a| mapper(a)).collect()
 }
 
-
-
 pub fn add_automation_lane_for_track(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -33,11 +31,11 @@ pub fn add_automation_lane_for_track(
     max: f64,
     default_value: f64,
 ) -> anyhow::Result<AutomationLane> {
-
     let app = &mut ctx.app_state;
-    let (lane, link_id) = app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?;
+    let (lane, link_id) =
+        app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?;
 
-    broadcast_modulations(ctx, link_id)?;    
+    broadcast_modulations(ctx, link_id)?;
 
     // Broadcast the new lane to the audio thread by its AutomationId
     ctx.broadcast_automation_lane(lane.id, &lane);
@@ -59,10 +57,8 @@ pub fn add_automation_lane(
     let (lane, link_id) = app.add_automation_lane(target, label, min, max, default_value)?;
 
     broadcast_modulations(ctx, link_id)?;
-        
-    ctx.broadcast_automation_lane(lane.id, &lane);
 
-    
+    ctx.broadcast_automation_lane(lane.id, &lane);
 
     // Fetch the modulation link
     let mod_link = ctx
@@ -89,7 +85,7 @@ pub fn add_automation_lane_for_bus(
         app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
     };
 
-        broadcast_modulations(ctx, link_id)?;    
+    broadcast_modulations(ctx, link_id)?;
 
     ctx.broadcast_automation_lane(lane.id, &lane);
 
@@ -289,17 +285,23 @@ pub fn link_this_param_to_controller(
 }
 
 fn broadcast_modulations(ctx: &mut DawContext, link_id: ModulationLinkId) -> anyhow::Result<()> {
-        let link = ctx
+    let link = ctx
         .app_state
         .modulation_links
         .get(&link_id)
         .ok_or_else(|| anyhow::anyhow!("Modulation link not found"))?;
 
-    let source = ctx.app_state.modulation_sources.get(&link.prop.source_id).ok_or_else(|| anyhow::anyhow!("Modulation source not found"))?;
-
+    let source = ctx
+        .app_state
+        .modulation_sources
+        .get(&link.prop.source_id)
+        .ok_or_else(|| anyhow::anyhow!("Modulation source not found"))?;
 
     let commands = vec![
-        AudioCommand::AddModulationSource { id: link.prop.source_id, source: source.to_owned() },
+        AudioCommand::AddModulationSource {
+            id: link.prop.source_id,
+            source: source.to_owned(),
+        },
         AudioCommand::AddModulationLink {
             id: link_id,
             link: link.prop.to_owned(),

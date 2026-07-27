@@ -6,6 +6,7 @@ license = "Apache-2.0 OR MIT"
 
 [dependencies]
 serde.workspace = true
+karbeat-utils.workspace = true
 
 [lints]
 workspace = true

@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     commands::{AudioCommand, EffectTarget},
     context::DawContext,
-    core::project::{ApplicationState, PluginInstance, TrackId, plugin::AudioPlugin},
+    core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
     shared::{BusId, EffectId, SidechainRouteId},
 };
 
@@ -278,7 +278,8 @@ impl MixerState {
             .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        let (effect_plugin, effect_name, effect_id) = mixer_channel.channel.add_effect(registry, registry_id)?;
+        let (effect_plugin, effect_name, effect_id) =
+            mixer_channel.channel.add_effect(registry, registry_id)?;
 
         // // Push to the audio thread
         // ctx.send_audio_command(AudioCommand::AddEffect {
@@ -334,7 +335,11 @@ impl MixerState {
         Ok(mixer_channel.channel.effects.to_vec())
     }
 
-    pub fn add_effect_to_master_bus(&mut self, registry: &mut PluginRegistry,  registry_id: u32) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
+    pub fn add_effect_to_master_bus(
+        &mut self,
+        registry: &mut PluginRegistry,
+        registry_id: u32,
+    ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
         let channel = &mut self.master_bus;
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
 
@@ -436,7 +441,8 @@ impl MixerState {
             .get_mut(&bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
-        let (effect_plugin, effect_name, effect_id) = bus.channel.add_effect(registry, registry_id)?;
+        let (effect_plugin, effect_name, effect_id) =
+            bus.channel.add_effect(registry, registry_id)?;
 
         // send_audio_command(AudioCommand::AddEffect {
         //     target: crate::commands::EffectTarget::Bus(bus_id),

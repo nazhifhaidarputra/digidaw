@@ -210,7 +210,11 @@ impl TryFrom<AutomationLaneDto> for AutomationLane {
             id: l.id.into(),
             label: l.label,
             // (Assuming points also use TryFrom for their internal NormalizedF64 values)
-            points: l.points.into_iter().filter_map(|p| p.try_into().ok()).collect(),
+            points: l
+                .points
+                .into_iter()
+                .filter_map(|p| p.try_into().ok())
+                .collect(),
             enabled: l.enabled,
             min: l.min,
             max: l.max,
@@ -480,7 +484,7 @@ pub fn add_new_automation_point(
     value: f64,
 ) -> Result<AutomationLaneDto, String> {
     // we will warn if the value is not in normalized value
-    if value > 1.0 || value <0.0 {
+    if value > 1.0 || value < 0.0 {
         log::warn!("Value are not in correct range. it will be clamped");
     }
     let normalized_val = NormalizedF64::new(value);
@@ -508,9 +512,8 @@ pub fn update_automation_point(
     tension: Option<f64>,
     curve_type: Option<AutomationCurveTypeDto>,
 ) -> Result<usize, String> {
-
     let some_value = value.map(|v| {
-        if v > 1.0 || v <0.0 {
+        if v > 1.0 || v < 0.0 {
             log::warn!("Value are not in correct range. it will be clamped");
         }
 
@@ -532,7 +535,7 @@ pub fn update_automation_point(
         time_ticks,
         some_value,
         some_tension,
-        curve_type.map(|ct| ct.into())
+        curve_type.map(|ct| ct.into()),
     )
     .map_err(|e| e.to_string())
 }
@@ -594,4 +597,3 @@ pub fn get_all_modulation_sources(ctx: &DawContext) -> HashMap<u32, ModulationSo
 pub fn get_modulation_source(ctx: &DawContext, id: u32) -> Option<ModulationSourceDto> {
     automation_api::get_modulation_source(ctx, id)
 }
-

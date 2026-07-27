@@ -15,8 +15,6 @@ pub mod project_api;
 pub mod track_api;
 pub mod transport_api;
 
-
-
 pub fn undo(ctx: &mut DawContext) -> Result<(), String> {
     ctx.history.undo(&mut ctx.app_state)?;
     ctx.broadcast_full_graph();

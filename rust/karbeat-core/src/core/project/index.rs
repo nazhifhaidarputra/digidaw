@@ -187,7 +187,6 @@ impl Default for AudioHardwareConfig {
 }
 
 impl ApplicationState {
-
     /// Deletes an audio source and removes all clips referencing it.
     pub fn remove_audio_source(
         &mut self,

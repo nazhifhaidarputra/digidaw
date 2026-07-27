@@ -9,14 +9,17 @@ pub fn get_track<T, F>(ctx: &DawContext, track_id: TrackId, mapper: F) -> Option
 where
     F: Fn(&AudioTrack) -> T,
 {
-    let track = ctx.app_state
-        .tracks
-        .get(&track_id)?;
+    let track = ctx.app_state.tracks.get(&track_id)?;
     Some(mapper(track))
 }
 
-pub fn add_midi_track_with_generator_id(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<AudioTrack> {
-    let (audio_track, gen_id, generator_plugin) = ctx.app_state.add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
+pub fn add_midi_track_with_generator_id(
+    ctx: &mut DawContext,
+    registry_id: u32,
+) -> anyhow::Result<AudioTrack> {
+    let (audio_track, gen_id, generator_plugin) = ctx
+        .app_state
+        .add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
 
     let _ = ctx.send_audio_command(AudioCommand::AddGenerator {
         generator_id: gen_id,
@@ -28,11 +31,16 @@ pub fn add_midi_track_with_generator_id(ctx: &mut DawContext, registry_id: u32) 
     Ok(audio_track)
 }
 
-pub fn change_track_name(ctx: &mut DawContext, track_id: TrackId, new_name: &str) -> anyhow::Result<()> {
+pub fn change_track_name(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    new_name: &str,
+) -> anyhow::Result<()> {
     if new_name.len() > 20 {
         return Err(anyhow::anyhow!("Track name cannot exceed 20 characters"));
     }
-    let track = ctx.app_state
+    let track = ctx
+        .app_state
         .tracks
         .get_mut(&track_id)
         .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
@@ -40,8 +48,13 @@ pub fn change_track_name(ctx: &mut DawContext, track_id: TrackId, new_name: &str
     Ok(())
 }
 
-pub fn change_track_color(ctx: &mut DawContext, track_id: TrackId, new_color: &str) -> anyhow::Result<()> {
-    let track = ctx.app_state
+pub fn change_track_color(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    new_color: &str,
+) -> anyhow::Result<()> {
+    let track = ctx
+        .app_state
         .tracks
         .get_mut(&track_id)
         .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
@@ -75,7 +88,8 @@ where
     M: Fn(u32, &AudioTrack) -> U,
     C: FromIterator<U>,
 {
-    Ok(ctx.app_state
+    Ok(ctx
+        .app_state
         .get_track_ordered_by_index()
         .iter()
         .map(|t| mapper(t.id.into(), t))
@@ -83,18 +97,28 @@ where
 }
 
 pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
-    let generator_id = ctx.app_state.tracks.get(&track_id).and_then(|t| t.generator.as_ref().map(|g| g.id));
-    
+    let generator_id = ctx
+        .app_state
+        .tracks
+        .get(&track_id)
+        .and_then(|t| t.generator.as_ref().map(|g| g.id));
+
     let deleted_track_type = ctx.app_state.remove_track(track_id)?;
 
     if let Some(gen_id) = generator_id {
-        let _ = ctx.send_audio_command(AudioCommand::RemoveGenerator { generator_id: gen_id });
+        let _ = ctx.send_audio_command(AudioCommand::RemoveGenerator {
+            generator_id: gen_id,
+        });
     }
     ctx.broadcast_track_graph();
     Ok(deleted_track_type)
 }
 
 /// Update track order
-pub fn update_track_order(ctx: &mut DawContext, track_id: TrackId, new_idx: usize) -> anyhow::Result<()> {
+pub fn update_track_order(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    new_idx: usize,
+) -> anyhow::Result<()> {
     ctx.app_state.update_track_order(track_id, new_idx)
 }

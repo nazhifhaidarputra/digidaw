@@ -2,20 +2,20 @@
 mod tests {
     use crate::audio::engine::{AudioEngine, AudioEngineTelemetry};
     use crate::audio::event::TransportFeedback;
-use crate::audio::render_state::{AudioGraphState};
+    use crate::audio::render_state::AudioGraphState;
     use crate::commands::{AudioCommand, AudioFeedback, TelemetryRegistration};
     use crate::core::project::automation::{
-        AutomationLane, AutomationPoint, AutomationTarget,
-        MixerChannelParamTarget, TrackAutomationTarget,
+        AutomationLane, AutomationPoint, AutomationTarget, MixerChannelParamTarget,
+        TrackAutomationTarget,
     };
     use crate::core::project::modulation::{ModulationLink, ModulationSource};
     use crate::core::project::track::AudioTrack;
     use crate::core::project::{ApplicationState, ModulationLinkForOrderedLaneView, TrackType};
+    use crate::shared::id::{AutomationId, ModulationLinkId, TrackId};
     use crate::shared::ModulationId;
-use crate::shared::id::{AutomationId, ModulationLinkId, TrackId};
     use karbeat_utils::color::Color;
     use karbeat_utils::types::NormalizedF64;
-use rtrb::RingBuffer;
+    use rtrb::RingBuffer;
     use std::sync::mpsc;
     // use crate::audio::;
 
@@ -106,7 +106,6 @@ use rtrb::RingBuffer;
         new_val.volume.set_base(0.5);
         engine.mixer_state.track_channels.insert(track_id, new_val);
 
-        
         engine.process_command(AudioCommand::AddModulationSource {
             id: mod_source_id,
             source: ModulationSource::Automation {

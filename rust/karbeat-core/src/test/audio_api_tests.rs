@@ -5,7 +5,7 @@ mod tests {
     use crate::api::audio_api;
     use crate::api::track_api;
     use crate::shared::id::{AudioSourceId, TrackId};
-    use crate::test::helpers::{make_ctx, make_seeded_ctx, karbeatzer_v2_registry_id};
+    use crate::test::helpers::{karbeatzer_v2_registry_id, make_ctx, make_seeded_ctx};
 
     // ─── get_audio_source ────────────────────────────────────────────────────
 
@@ -63,7 +63,10 @@ mod tests {
     fn drain_position_feedback_returns_empty_when_no_stream() {
         let mut ctx = make_ctx();
         let results: Vec<u64> = audio_api::drain_position_feedback(&mut ctx, |_| 0u64);
-        assert!(results.is_empty(), "Should return empty vec when consumer is None");
+        assert!(
+            results.is_empty(),
+            "Should return empty vec when consumer is None"
+        );
     }
 
     // ─── play_preview_note ───────────────────────────────────────────────────
@@ -94,6 +97,9 @@ mod tests {
         use crate::shared::id::GeneratorId;
         let gen_id = GeneratorId::from(1);
         let result = audio_api::play_preview_note_generator(&mut ctx, gen_id, 60, 100, true);
-        assert!(result.is_ok(), "Direct generator path should always succeed");
+        assert!(
+            result.is_ok(),
+            "Direct generator path should always succeed"
+        );
     }
 }

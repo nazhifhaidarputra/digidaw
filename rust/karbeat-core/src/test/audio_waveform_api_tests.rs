@@ -35,11 +35,12 @@ mod tests {
     fn get_audio_waveform_for_clip_only_in_specific_track_missing_track_returns_none() {
         let ctx = make_ctx();
         let bogus_id = TrackId::from(99999);
-        let result: Option<Vec<u32>> = audio_waveform_api::get_audio_waveform_for_clip_only_in_specific_track(
-            &ctx,
-            &bogus_id,
-            |id, _w| id.to_u32(),
-        );
+        let result: Option<Vec<u32>> =
+            audio_waveform_api::get_audio_waveform_for_clip_only_in_specific_track(
+                &ctx,
+                &bogus_id,
+                |id, _w| id.to_u32(),
+            );
         assert!(result.is_none(), "Missing TrackId should return None");
     }
 
@@ -47,11 +48,12 @@ mod tests {
     fn get_audio_waveform_for_clip_only_in_specific_track_midi_track_returns_empty() {
         // MIDI tracks are not audio tracks → should return Some(empty), not None
         let (ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let result: Option<Vec<u32>> = audio_waveform_api::get_audio_waveform_for_clip_only_in_specific_track(
-            &ctx,
-            &midi_id,
-            |id, _w| id.to_u32(),
-        );
+        let result: Option<Vec<u32>> =
+            audio_waveform_api::get_audio_waveform_for_clip_only_in_specific_track(
+                &ctx,
+                &midi_id,
+                |id, _w| id.to_u32(),
+            );
         assert!(result.is_some(), "MIDI track should return Some(...)");
         assert!(
             result.unwrap().is_empty(),
@@ -65,8 +67,11 @@ mod tests {
     fn get_audio_waveform_for_clip_all_available_in_tracks_empty_state() {
         let ctx = make_ctx();
         let result: Vec<u32> =
-            audio_waveform_api::get_audio_waveform_for_clip_all_available_in_tracks(&ctx, |id, _w| id)
-                .expect("Should succeed");
+            audio_waveform_api::get_audio_waveform_for_clip_all_available_in_tracks(
+                &ctx,
+                |id, _w| id,
+            )
+            .expect("Should succeed");
         assert!(result.is_empty());
     }
 

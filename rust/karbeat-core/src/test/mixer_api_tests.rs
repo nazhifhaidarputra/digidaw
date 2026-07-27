@@ -171,15 +171,22 @@ mod tests {
     fn add_effect_to_mixer_channel_invalid_track_returns_err() {
         let mut ctx = make_ctx();
         let bogus_id = TrackId::from(99999);
-        let result = mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, bogus_id, param_eq_registry_id());
+        let result = mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            bogus_id,
+            param_eq_registry_id(),
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn add_effect_to_mixer_channel_happy_path() {
         let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
-        let result =
-            mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, audio_id, param_eq_registry_id());
+        let result = mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            audio_id,
+            param_eq_registry_id(),
+        );
         assert!(result.is_ok(), "{:?}", result.err());
         let effects_count = ctx
             .app_state
@@ -202,7 +209,8 @@ mod tests {
     #[test]
     fn remove_effect_from_mixer_channel_happy_path() {
         let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
-        mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, audio_id, param_eq_registry_id()).unwrap();
+        mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, audio_id, param_eq_registry_id())
+            .unwrap();
         let effect_id = ctx.app_state.mixer.channels[&audio_id]
             .channel
             .effects
@@ -211,7 +219,10 @@ mod tests {
             .id;
         let result = mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id);
         assert!(result.is_ok());
-        assert!(ctx.app_state.mixer.channels[&audio_id].channel.effects.is_empty());
+        assert!(ctx.app_state.mixer.channels[&audio_id]
+            .channel
+            .effects
+            .is_empty());
     }
 
     #[test]

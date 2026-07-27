@@ -374,7 +374,9 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     for (bus_id, bus_arc) in &ctx.app_state.mixer.buses {
         let mut bus_chain = IndexMap::new();
         for effect in &bus_arc.channel.effects {
-            if let Some((mut plugin, _)) = ctx.plugin_registry.create_plugin_by_id(effect.instance.registry_id)
+            if let Some((mut plugin, _)) = ctx
+                .plugin_registry
+                .create_plugin_by_id(effect.instance.registry_id)
             {
                 if !effect.instance.plugin_state.is_empty() {
                     plugin.set_state(&effect.instance.plugin_state);
@@ -394,7 +396,10 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
 
     // 4. Hydrate Master Effects
     for effect in &ctx.app_state.mixer.master_bus.effects {
-        if let Some((mut plugin, _)) = ctx.plugin_registry.create_plugin_by_id(effect.instance.registry_id) {
+        if let Some((mut plugin, _)) = ctx
+            .plugin_registry
+            .create_plugin_by_id(effect.instance.registry_id)
+        {
             if !effect.instance.plugin_state.is_empty() {
                 plugin.set_state(&effect.instance.plugin_state);
             }

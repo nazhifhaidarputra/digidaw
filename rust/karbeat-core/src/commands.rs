@@ -9,9 +9,12 @@ use crate::{
         render_state::{AudioAutomationLane, AudioGraphState},
     },
     core::project::{
-        AutomationTarget, GeneratorId, ModulationLink, ModulationSource, mixer::{MixerChannelParams, RoutingConnection}, plugin::AudioPlugin, track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern}
+        mixer::{MixerChannelParams, RoutingConnection},
+        plugin::AudioPlugin,
+        track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack},
+        AutomationTarget, GeneratorId, ModulationLink, ModulationSource,
     },
-    shared::{AutomationId, ModulationId, PatternId, id::*},
+    shared::{id::*, AutomationId, ModulationId, PatternId},
 };
 
 pub enum AudioCommand {
@@ -244,8 +247,12 @@ pub enum AudioCommand {
     RemoveModulationLink(ModulationLinkId),
 
     /// Automation tracker
-    BeginEdit {target: AutomationTarget},
-    EndEdit {target: AutomationTarget},
+    BeginEdit {
+        target: AutomationTarget,
+    },
+    EndEdit {
+        target: AutomationTarget,
+    },
 
     // =========== TELEMETRY RELATED =====================
     SetPluginTelemetrySubscription {
@@ -254,9 +261,11 @@ pub enum AudioCommand {
         active: bool,
     },
     SetMixerTelemetrySubscription {
-        active: bool
+        active: bool,
     },
-    ResumeAutomation { target: AutomationTarget },
+    ResumeAutomation {
+        target: AutomationTarget,
+    },
 }
 
 // ============================================================================
@@ -399,12 +408,9 @@ pub enum TelemetryRegistration {
         consumer: Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
     },
     /// A plugin was removed — `DawContext` should drop the corresponding consumer.
-    Removed {
-        target: PluginTarget,
-    },
+    Removed { target: PluginTarget },
     /// `HydratePlugin` completed — replace **all** consumers at once.
     BatchRegistered {
         consumers: HashMap<PluginTarget, Box<triple_buffer::Output<PluginTelemetrySnapshot>>>,
     },
 }
-

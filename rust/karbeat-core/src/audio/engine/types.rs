@@ -7,7 +7,13 @@ use karbeat_utils::hash::hash_str;
 use smallvec::SmallVec;
 use triple_buffer::Input;
 
-use crate::{DOWNBEAT_BYTES, OFFBEAT_BYTES, audio::{engine::helper::load_internal_wav, event::PluginTarget}, commands::{MixerChannelSnapshot, MixerChannelTarget}, core::project::{AudioWaveform, MixerChannel, MixerChannelParams, }, shared::*};
+use crate::{
+    audio::{engine::helper::load_internal_wav, event::PluginTarget},
+    commands::{MixerChannelSnapshot, MixerChannelTarget},
+    core::project::{AudioWaveform, MixerChannel, MixerChannelParams},
+    shared::*,
+    DOWNBEAT_BYTES, OFFBEAT_BYTES,
+};
 
 /// A snapshot of a single plugin's current state (Params + Custom Buffers)
 #[derive(Clone, Default)]
@@ -64,8 +70,7 @@ impl AudioEngineTelemetry {
     /// The export engine never needs to push telemetry to the UI, so these
     /// producers are simply discarded after export.
     pub fn new_for_export() -> Self {
-        let (mixer_input, _) =
-            triple_buffer::triple_buffer(&MixerTelemetrySnapshot::default());
+        let (mixer_input, _) = triple_buffer::triple_buffer(&MixerTelemetrySnapshot::default());
 
         Self {
             mixer_telemetry_producer: mixer_input,
@@ -292,23 +297,52 @@ pub struct AudioMixerChannelValues {
 impl Default for AudioMixerChannelValues {
     fn default() -> Self {
         Self {
-            volume: Param::new_f32(hash_str("mix_chan_vol"), "Mixer Channel Volume", "", 0.0, -100.0, 6.0, 0.1), // 0 dB = unity gain
-            pan: Param::new_f32(hash_str("mix_chan_pan"), "Mixer Channel Pan", "", 0.0, -1.0, 1.0, 0.01),
+            volume: Param::new_f32(
+                hash_str("mix_chan_vol"),
+                "Mixer Channel Volume",
+                "",
+                0.0,
+                -100.0,
+                6.0,
+                0.1,
+            ), // 0 dB = unity gain
+            pan: Param::new_f32(
+                hash_str("mix_chan_pan"),
+                "Mixer Channel Pan",
+                "",
+                0.0,
+                -1.0,
+                1.0,
+                0.01,
+            ),
             mute: false,
             solo: false,
             inverted_phase: false,
         }
     }
-
-
 }
 
 impl AudioMixerChannelValues {
-
     pub fn new(volume: f32, pan: f32, mute: bool, solo: bool, inverted_phase: bool) -> Self {
         Self {
-            volume: Param::new_f32(hash_str("mix_chan_vol"), "Mixer Channel Volume", "", volume, -100.0, 6.0, 0.1), // 0 dB = unity gain
-            pan: Param::new_f32(hash_str("mix_chan_pan"), "Mixer Channel Pan", "", pan, -1.0, 1.0, 0.01),
+            volume: Param::new_f32(
+                hash_str("mix_chan_vol"),
+                "Mixer Channel Volume",
+                "",
+                volume,
+                -100.0,
+                6.0,
+                0.1,
+            ), // 0 dB = unity gain
+            pan: Param::new_f32(
+                hash_str("mix_chan_pan"),
+                "Mixer Channel Pan",
+                "",
+                pan,
+                -1.0,
+                1.0,
+                0.01,
+            ),
             mute,
             solo,
             inverted_phase,

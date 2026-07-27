@@ -105,7 +105,12 @@ pub fn soft_clip_poly(sample: f64) -> f64 {
 /// - `ratio`: Compression ratio (e.g., 4.0 for 4:1)
 /// - `knee_db`: Width of the soft knee in dB (use 0.0 for hard knee)
 #[inline]
-pub fn compressor_gain_reduction(level_db: f64, threshold_db: f64, ratio: f64, knee_db: f64) -> f64 {
+pub fn compressor_gain_reduction(
+    level_db: f64,
+    threshold_db: f64,
+    ratio: f64,
+    knee_db: f64,
+) -> f64 {
     let half_knee = knee_db / 2.0;
     let knee_start = threshold_db - half_knee;
     let knee_end = threshold_db + half_knee;
@@ -158,7 +163,7 @@ pub fn linear_crossfade(a: f64, b: f64, mix: f64) -> f64 {
 
 /// Simple 1-pole DC blocker (high-pass filter).
 /// Removes low-frequency drift / DC offset from a signal.
-/// 
+///
 /// - `sample`: Current input sample
 /// - `prev_out`: Mutable reference to previous output sample (initialize to 0.0)
 /// - `prev_in`: Mutable reference to previous input sample (initialize to 0.0)
@@ -173,10 +178,10 @@ pub fn dc_blocker(sample: f64, prev_out: &mut f64, prev_in: &mut f64, alpha: f64
 
 /// One-pole lowpass smoothing filter (exponential moving average).
 /// Useful for smoothing parameter changes to avoid zipper noise.
-/// 
+///
 /// - `current`: Current smoothed value
 /// - `target`: Target value to reach
-/// - `coefficient`: Smoothing factor (0.0 = no change, 1.0 = instant change). 
+/// - `coefficient`: Smoothing factor (0.0 = no change, 1.0 = instant change).
 ///   Typical audio rate: `1.0 - exp(-2.0 * PI * cutoff_freq / sample_rate)`
 #[inline]
 pub fn smooth_step(current: f64, target: f64, coefficient: f64) -> f64 {

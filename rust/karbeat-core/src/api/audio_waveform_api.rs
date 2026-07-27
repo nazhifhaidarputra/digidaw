@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use crate::{
-    context::{DawContext},
+    context::DawContext,
     core::{
         file_manager::audio_loader::AudioLoader,
         project::{AudioSourceId, AudioWaveform, DawSource, TrackId, TrackType},

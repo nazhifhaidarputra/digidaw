@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::api::{self, note_api, clip_api};
+    use crate::api::{self, clip_api, note_api};
     use crate::core::history::ProjectAction;
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
@@ -36,9 +36,12 @@ mod tests {
         let before = ctx.app_state.pattern_pool[&pattern_id].notes.len();
 
         // Add a note
-        let note = note_api::add_note(&mut ctx, pattern_id, 72, 50000, Some(480))
-            .expect("add note");
-        assert_eq!(ctx.app_state.pattern_pool[&pattern_id].notes.len(), before + 1);
+        let note =
+            note_api::add_note(&mut ctx, pattern_id, 72, 50000, Some(480)).expect("add note");
+        assert_eq!(
+            ctx.app_state.pattern_pool[&pattern_id].notes.len(),
+            before + 1
+        );
 
         // Undo → note should be gone
         api::undo(&mut ctx).expect("undo should succeed");
@@ -66,8 +69,7 @@ mod tests {
         let original_start = clip.time.start_time_raw();
 
         // Move clip to a different position
-        clip_api::move_clip(&mut ctx, midi_id, midi_id, clip.id, 9600)
-            .expect("move clip");
+        clip_api::move_clip(&mut ctx, midi_id, midi_id, clip.id, 9600).expect("move clip");
         let moved_start = ctx.app_state.tracks[&midi_id]
             .clips
             .iter()
@@ -84,7 +86,10 @@ mod tests {
             .find(|c| c.id == clip.id)
             .map(|c| c.time.start_time_raw())
             .expect("clip should still exist after undo");
-        assert_eq!(after_undo, original_start, "Undo should restore original position");
+        assert_eq!(
+            after_undo, original_start,
+            "Undo should restore original position"
+        );
 
         // Redo → clip moved again
         api::redo(&mut ctx).expect("redo move clip");
@@ -137,7 +142,10 @@ mod tests {
         // Add and undo a note
         note_api::add_note(&mut ctx, pattern_id, 60, 50000, Some(480)).unwrap();
         api::undo(&mut ctx).unwrap();
-        assert!(!ctx.history.redo_stack.is_empty(), "Redo stack should be non-empty after undo");
+        assert!(
+            !ctx.history.redo_stack.is_empty(),
+            "Redo stack should be non-empty after undo"
+        );
 
         // Add another note → redo stack should be cleared
         note_api::add_note(&mut ctx, pattern_id, 62, 51000, Some(480)).unwrap();

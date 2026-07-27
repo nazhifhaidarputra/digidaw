@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_core::{audio::engine::MixerTelemetrySnapshot, commands::MixerChannelSnapshot, shared::id::*};
+use karbeat_core::{
+    audio::engine::MixerTelemetrySnapshot, commands::MixerChannelSnapshot, shared::id::*,
+};
 pub use karbeat_core::{
     core::project::TrackId,
     plugin_types::{ParameterSpec, ParameterValueType},
@@ -18,8 +20,6 @@ use karbeat_core::core::project::mixer::{
 // ======================================
 // Type Definitions
 // ======================================
-
-
 
 // ======================================
 // MixerChannelTarget DTO
@@ -44,16 +44,16 @@ impl From<&UiMixerChannelTarget> for MixerChannelTarget {
     }
 }
 
-impl From< MixerChannelTarget> for UiMixerChannelTarget {
+impl From<MixerChannelTarget> for UiMixerChannelTarget {
     fn from(value: MixerChannelTarget) -> Self {
         match value {
             MixerChannelTarget::Track(track_id) => Self::Track(track_id.into()),
             MixerChannelTarget::Bus(bus_id) => Self::Bus(bus_id.into()),
             MixerChannelTarget::Master => Self::Master,
-        }        
+        }
     }
 }
- 
+
 /// Full DSP state snapshot of a mixer channel, polled via
 /// poll_mixer_channel_feedback() after calling query_mixer_channel().
 #[derive(Clone, Debug)]
@@ -80,21 +80,27 @@ impl From<MixerChannelSnapshot> for UiMixerChannelSnapshot {
     }
 }
 
-
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct MixerTelemetrySnapshotDto {
     pub tracks: HashMap<u32, UiMixerChannelSnapshot>,
     pub buses: HashMap<u32, UiMixerChannelSnapshot>,
-    pub master: Option<UiMixerChannelSnapshot>
+    pub master: Option<UiMixerChannelSnapshot>,
 }
-
 
 impl From<MixerTelemetrySnapshot> for MixerTelemetrySnapshotDto {
     fn from(snapshot: MixerTelemetrySnapshot) -> Self {
         Self {
-            tracks: snapshot.tracks.iter().map(|(id, snap)| (id.to_u32(), snap.clone().into())).collect(),
-            buses: snapshot.buses.iter().map(|(id, snap)| (id.to_u32(), snap.clone().into())).collect(),
+            tracks: snapshot
+                .tracks
+                .iter()
+                .map(|(id, snap)| (id.to_u32(), snap.clone().into()))
+                .collect(),
+            buses: snapshot
+                .buses
+                .iter()
+                .map(|(id, snap)| (id.to_u32(), snap.clone().into()))
+                .collect(),
             master: snapshot.master.map(|s| s.into()),
         }
     }
@@ -184,7 +190,7 @@ impl From<UiRoutingConnection> for RoutingConnection {
             source: value.source.into(),
             destination: value.destination.into(),
             send_level: value.send_level,
-            is_send: value.is_send
+            is_send: value.is_send,
         }
     }
 }
@@ -376,7 +382,11 @@ impl From<&ParameterSpec> for ParameterSpecDTO {
 
 /// Set a single DSP parameter on a mixer channel.
 /// Routes through the audio thread ring buffer; AppState is only updated on save.
-pub fn set_mixer_channel_param(ctx: &mut DawContext, target: UiMixerChannelTarget, param: UiMixerChannelParams) {
+pub fn set_mixer_channel_param(
+    ctx: &mut DawContext,
+    target: UiMixerChannelTarget,
+    param: UiMixerChannelParams,
+) {
     let core_target = MixerChannelTarget::from(&target);
     let core_param = MixerChannelParams::from(&param);
     mixer_api::set_mixer_channel_param(ctx, core_target, core_param);
@@ -439,7 +449,10 @@ pub fn get_routing_matrix(ctx: &DawContext) -> Vec<UiRoutingConnection> {
 }
 
 /// Get track channel's parameter specs
-pub fn get_track_mixer_channel_specs(ctx: &DawContext, track_id: u32) -> Option<Vec<ParameterSpecDTO>> {
+pub fn get_track_mixer_channel_specs(
+    ctx: &DawContext,
+    track_id: u32,
+) -> Option<Vec<ParameterSpecDTO>> {
     mixer_api::get_track_mixer_channel_specs(ctx, &TrackId(track_id), |param_spec| {
         ParameterSpecDTO::from(param_spec)
     })
@@ -462,7 +475,11 @@ pub fn get_master_channel_specs(ctx: &DawContext) -> Vec<ParameterSpecDTO> {
 // ======================================
 
 /// Add an effect to a mixer channel by its registry ID (preferred method).
-pub fn add_effect_to_mixer_channel_by_id(ctx: &mut DawContext, track_id: u32, registry_id: u32) -> Result<(), String> {
+pub fn add_effect_to_mixer_channel_by_id(
+    ctx: &mut DawContext,
+    track_id: u32,
+    registry_id: u32,
+) -> Result<(), String> {
     mixer_api::add_effect_to_mixer_channel_by_id(ctx, TrackId::from(track_id), registry_id)
         .map_err(|e| e.to_string())?;
     log::info!(
@@ -501,7 +518,10 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> Resul
     Ok(())
 }
 
-pub fn remove_effect_from_master_bus(ctx: &mut DawContext, effect_instance_id: u32) -> Result<(), String> {
+pub fn remove_effect_from_master_bus(
+    ctx: &mut DawContext,
+    effect_instance_id: u32,
+) -> Result<(), String> {
     mixer_api::remove_effect_from_master_bus(ctx, EffectId::from(effect_instance_id))
         .map_err(|e| e.to_string())?;
     log::info!(
@@ -532,8 +552,13 @@ pub fn delete_bus(ctx: &mut DawContext, bus_id: u32) -> Result<(), String> {
 // ======================================
 
 /// Add an effect to a bus by its registry ID.
-pub fn add_effect_to_bus(ctx: &mut DawContext, bus_id: u32, registry_id: u32) -> Result<(), String> {
-    mixer_api::add_effect_to_bus(ctx, BusId::from(bus_id), registry_id).map_err(|e| e.to_string())?;
+pub fn add_effect_to_bus(
+    ctx: &mut DawContext,
+    bus_id: u32,
+    registry_id: u32,
+) -> Result<(), String> {
+    mixer_api::add_effect_to_bus(ctx, BusId::from(bus_id), registry_id)
+        .map_err(|e| e.to_string())?;
     log::info!(
         "Added effect with registry ID {} to bus {}",
         registry_id,
@@ -550,7 +575,11 @@ pub fn rename_bus(ctx: &mut DawContext, bus_id: u32, new_name: String) -> Result
 // ROUTING APIs
 // ======================================
 
-pub fn get_channel_destinations(ctx: &DawContext, is_bus: bool, channel_id: u32) -> Vec<UiRoutingConnection> {
+pub fn get_channel_destinations(
+    ctx: &DawContext,
+    is_bus: bool,
+    channel_id: u32,
+) -> Vec<UiRoutingConnection> {
     let source_node = if is_bus {
         RoutingNode::Bus(BusId::from(channel_id))
     } else {
@@ -594,10 +623,7 @@ pub fn remove_routing(
         .map_err(|e| e.to_string())
 }
 
-pub fn update_routing(
-    ctx: &mut DawContext,
-    conn: UiRoutingConnection
-) -> Result<(), String> {
+pub fn update_routing(ctx: &mut DawContext, conn: UiRoutingConnection) -> Result<(), String> {
     mixer_api::update_routing(ctx, conn.into()).map_err(|e| e.to_string())
 }
 
@@ -607,9 +633,6 @@ pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshotD
     mixer_api::get_mixer_telemetry_sync(ctx).into()
 }
 
-pub fn set_mixer_telemetry_subs(
-    ctx: &mut DawContext,
-    active: bool
-) -> Result<(), String> {
+pub fn set_mixer_telemetry_subs(ctx: &mut DawContext, active: bool) -> Result<(), String> {
     mixer_api::set_mixer_telemetry_subs(ctx, active).map_err(|e| e.to_string())
 }

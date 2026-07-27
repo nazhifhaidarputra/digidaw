@@ -4,7 +4,14 @@ use karbeat_utils::math::hermite_interp;
 use rodio::math::db_to_linear;
 use wide::f32x16;
 
-use crate::{commands::MixerChannelTarget, core::project::{AutomationTarget, MixerChannelParamTarget, MixerChannelParams, RoutingConnection, RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode}, shared::{BusId, TrackId}};
+use crate::{
+    commands::MixerChannelTarget,
+    core::project::{
+        audio_waveform::AudioSampleMode, AutomationTarget, MixerChannelParamTarget,
+        MixerChannelParams, RoutingConnection, RoutingNode, TrackAutomationTarget,
+    },
+    shared::{BusId, TrackId},
+};
 
 /// Unified entry point to render an audio waveform slice.
 /// Safely delegates to the correct DSP algorithm based on the chosen sample mode.
@@ -54,7 +61,7 @@ pub fn render_audio_waveform(
                             start_bound,
                             loop_len,
                         );
-                        
+
                         let s_frame = sample_waveform_dasp(source_buffer, rp, src_channels);
                         let fade = if current_elapsed_samples.is_some() {
                             calc_fade(elapsed, fade_samples, clip_loop_length)
@@ -70,11 +77,11 @@ pub fn render_audio_waveform(
 
                     let samples = f32x16::new(s);
                     let fades = f32x16::new(f);
-                    
+
                     let mut chunk_arr = [0.0; 16];
                     chunk_arr.copy_from_slice(chunk);
                     let mut out_v = f32x16::new(chunk_arr);
-                    
+
                     out_v += samples * fades;
                     chunk.copy_from_slice(&out_v.to_array());
 
@@ -120,7 +127,7 @@ pub fn render_audio_waveform(
                             start_bound,
                             loop_len,
                         );
-                        
+
                         s[i as usize] = sample_waveform_dasp(source_buffer, rp, src_channels)[0];
                         f[i as usize] = if current_elapsed_samples.is_some() {
                             calc_fade(elapsed, fade_samples, clip_loop_length)
@@ -131,11 +138,11 @@ pub fn render_audio_waveform(
 
                     let samples = f32x16::new(s);
                     let fades = f32x16::new(f);
-                    
+
                     let mut chunk_arr = [0.0; 16];
                     chunk_arr.copy_from_slice(chunk);
                     let mut out_v = f32x16::new(chunk_arr);
-                    
+
                     out_v += samples * fades;
                     chunk.copy_from_slice(&out_v.to_array());
 
@@ -153,7 +160,7 @@ pub fn render_audio_waveform(
                         start_bound,
                         loop_len,
                     );
-                    
+
                     let s0 = sample_waveform_dasp(source_buffer, rp, src_channels);
                     let fade0 = if current_elapsed_samples.is_some() {
                         calc_fade(elapsed, fade_samples, clip_loop_length)
@@ -282,18 +289,18 @@ pub fn load_internal_wav(bytes: &[u8]) -> Vec<f32> {
 
 #[inline(always)]
 pub fn apply_phase_inversion_simd(buffer: &mut [f32]) {
-let neg_one = f32x16::splat(-1.0);
+    let neg_one = f32x16::splat(-1.0);
     let mut iter = buffer.chunks_exact_mut(16);
-    
+
     for chunk in iter.by_ref() {
         let mut chunk_arr = [0.0; 16];
         chunk_arr.copy_from_slice(chunk);
-        
+
         let mut v = f32x16::new(chunk_arr);
         v *= neg_one;
         chunk.copy_from_slice(&v.to_array());
     }
-    
+
     for sample in iter.into_remainder() {
         *sample = -*sample;
     }
@@ -316,13 +323,12 @@ pub fn apply_volume_and_pan_simd(buffer: &mut [f32], channels: usize, volume_db:
 
     if channels == 2 {
         let gains = [
-            left_gain, right_gain, left_gain, right_gain, 
-            left_gain, right_gain, left_gain, right_gain, 
-            left_gain, right_gain, left_gain, right_gain, 
-            left_gain, right_gain, left_gain, right_gain
+            left_gain, right_gain, left_gain, right_gain, left_gain, right_gain, left_gain,
+            right_gain, left_gain, right_gain, left_gain, right_gain, left_gain, right_gain,
+            left_gain, right_gain,
         ];
         let gain_v = f32x16::new(gains);
-        
+
         let mut iter = buffer.chunks_exact_mut(16);
         for chunk in iter.by_ref() {
             let mut chunk_arr = [0.0; 16];
@@ -331,14 +337,14 @@ pub fn apply_volume_and_pan_simd(buffer: &mut [f32], channels: usize, volume_db:
             v *= gain_v;
             chunk.copy_from_slice(&v.to_array());
         }
-        
+
         for chunk in iter.into_remainder().chunks_exact_mut(2) {
             chunk[0] *= left_gain;
             chunk[1] *= right_gain;
         }
     } else {
         let gain_v = f32x16::splat(left_gain);
-        
+
         let mut iter = buffer.chunks_exact_mut(16);
         for chunk in iter.by_ref() {
             let mut chunk_arr = [0.0; 16];
@@ -347,7 +353,7 @@ pub fn apply_volume_and_pan_simd(buffer: &mut [f32], channels: usize, volume_db:
             v *= gain_v;
             chunk.copy_from_slice(&v.to_array());
         }
-        
+
         for sample in iter.into_remainder() {
             *sample *= left_gain;
         }
@@ -426,7 +432,7 @@ pub fn process_plugin_wrapper(
         .take(channels)
         .map(|v| &mut v[..frames])
         .collect();
-        
+
     let mut out_ptrs: Vec<&mut [f32]> = channel_buffers_out
         .iter_mut()
         .take(channels)
@@ -554,8 +560,14 @@ pub fn resolve_target_mixer_param(
 ) -> (Option<AutomationTarget>, f32) {
     // First, extract the generic mixer target and the float value
     let (mix_target, val) = match param {
-        MixerChannelParams::Volume(v) => (Some(MixerChannelParamTarget::Volume), ((*v - (-60.0)) / 66.0).clamp(0.0, 1.0)),
-        MixerChannelParams::Pan(v) => (Some(MixerChannelParamTarget::Pan), ((*v - (-1.0)) / 2.0).clamp(0.0, 1.0)),
+        MixerChannelParams::Volume(v) => (
+            Some(MixerChannelParamTarget::Volume),
+            ((*v - (-60.0)) / 66.0).clamp(0.0, 1.0),
+        ),
+        MixerChannelParams::Pan(v) => (
+            Some(MixerChannelParamTarget::Pan),
+            ((*v - (-1.0)) / 2.0).clamp(0.0, 1.0),
+        ),
         MixerChannelParams::Mute(v) => (None, if *v { 1.0 } else { 0.0 }),
         MixerChannelParams::InvertedPhase(v) => (None, if *v { 1.0 } else { 0.0 }),
         MixerChannelParams::Solo(v) => (None, if *v { 1.0 } else { 0.0 }),

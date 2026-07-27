@@ -5,7 +5,10 @@ use crate::{
     audio::{
         render_state::AudioRenderState,
         writer::{create_writer, AudioExportConfig, AudioWriter},
-    }, commands::AudioCommand, context::DawContext, core::project::ApplicationState
+    },
+    commands::AudioCommand,
+    context::DawContext,
+    core::project::ApplicationState,
 };
 
 #[derive(Debug, Clone, Error)]

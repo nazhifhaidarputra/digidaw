@@ -1,4 +1,3 @@
-use crate::core::project::{AutomationLane, ModulationLink, ModulationSource};
 use crate::core::project::{
     automation::{AutomationCurveType, AutomationPoint},
     mixer::RoutingConnection,
@@ -6,6 +5,7 @@ use crate::core::project::{
     track::{midi::Pattern, AudioTrack},
     ApplicationState, AssetLibrary, GeneratorId, TrackId,
 };
+use crate::core::project::{AutomationLane, ModulationLink, ModulationSource};
 use crate::shared::id::*;
 use hashbrown::HashMap;
 use karbeat_utils::math::is_power_of_two;
@@ -166,7 +166,7 @@ impl From<AutomationLane> for AudioAutomationLane {
             enabled: l.enabled,
             min: l.min,
             max: l.max,
-            default_value: l.default_value
+            default_value: l.default_value,
         }
     }
 }
@@ -222,7 +222,9 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> Normalized
     let t = ((time_ticks - p1.time_ticks) as f64) / (duration as f64);
 
     match p1.curve_type {
-        AutomationCurveType::Linear => NormalizedF64::new(p1.value.get() + (p2.value.get() - p1.value.get()) * t),
+        AutomationCurveType::Linear => {
+            NormalizedF64::new(p1.value.get() + (p2.value.get() - p1.value.get()) * t)
+        }
         AutomationCurveType::Exponential => {
             let v1 = p1.value.max(0.0001);
             let v2 = p2.value.max(0.0001);
@@ -264,7 +266,6 @@ impl From<&ApplicationState> for AudioGraphState {
             .map(|(&id, view)| (id, view.prop.clone()))
             .collect();
 
-
         // 3. Append explicit user modulations (LFOs, Peak Controllers) from ApplicationState
         // (Assuming you added `pub modulations: Vec<ModulationEvent>` to ApplicationState)
         // modulation_events.extend(app.modulations.clone());
@@ -275,7 +276,12 @@ impl From<&ApplicationState> for AudioGraphState {
             routing: app.mixer.routing.clone().into_boxed_slice(),
             bus_ids: app.mixer.buses.keys().copied().collect(),
             asset_library: app.asset_library.clone(),
-            automation_lanes: app.automation_pool.clone().into_iter().map(|(id, l)| (id, l.into())).collect(),
+            automation_lanes: app
+                .automation_pool
+                .clone()
+                .into_iter()
+                .map(|(id, l)| (id, l.into()))
+                .collect(),
             max_sample_index: 0,
             sample_rate: app.audio_config.sample_rate,
             buffer_size: if is_power_of_two(app.audio_config.buffer_size.into()) {

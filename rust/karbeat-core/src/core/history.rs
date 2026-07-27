@@ -187,7 +187,8 @@ impl HistoryManager {
                 ..
             } => {
                 // Inverse: Move clip back to old_track_id with old_start_time
-                app.move_clip(*new_track_id, *old_track_id, *clip_id, *old_start_time).map_err(|e| e.to_string())?;
+                app.move_clip(*new_track_id, *old_track_id, *clip_id, *old_start_time)
+                    .map_err(|e| e.to_string())?;
             }
             ProjectAction::ResizeClip {
                 track_id, old_clip, ..
@@ -199,9 +200,14 @@ impl HistoryManager {
                 if let Some(idx) = track.clips.iter().position(|c| c.id == old_clip.id) {
                     track.clips.remove(idx);
                 }
-                
+
                 // Re-insert the old clip using Binary Search to maintain sorted order
-                let pos = track.clips.binary_search_by_key(&old_clip.time.start_time_raw(), |c| c.time.start_time_raw()).unwrap_or_else(|e| e);
+                let pos = track
+                    .clips
+                    .binary_search_by_key(&old_clip.time.start_time_raw(), |c| {
+                        c.time.start_time_raw()
+                    })
+                    .unwrap_or_else(|e| e);
                 track.clips.insert(pos, old_clip.clone());
             }
         }
@@ -298,7 +304,8 @@ impl HistoryManager {
                 ..
             } => {
                 // Forward: Move clip from old_track_id to new_track_id with new_start_time
-                app.move_clip(*old_track_id, *new_track_id, *clip_id, *new_start_time).map_err(|e| e.to_string())?;
+                app.move_clip(*old_track_id, *new_track_id, *clip_id, *new_start_time)
+                    .map_err(|e| e.to_string())?;
             }
             ProjectAction::ResizeClip {
                 track_id, new_clip, ..
@@ -310,9 +317,14 @@ impl HistoryManager {
                 if let Some(idx) = track.clips.iter().position(|c| c.id == new_clip.id) {
                     track.clips.remove(idx);
                 }
-                
+
                 // Re-insert the new clip using Binary Search to maintain sorted order
-                let pos = track.clips.binary_search_by_key(&new_clip.time.start_time_raw(), |c| c.time.start_time_raw()).unwrap_or_else(|e| e);
+                let pos = track
+                    .clips
+                    .binary_search_by_key(&new_clip.time.start_time_raw(), |c| {
+                        c.time.start_time_raw()
+                    })
+                    .unwrap_or_else(|e| e);
                 track.clips.insert(pos, new_clip.clone());
             }
         }

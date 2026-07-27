@@ -356,7 +356,7 @@ impl ApplicationState {
     // =========================================================================
     // AUTOMATION POINT MANAGEMENT
     // =========================================================================
-pub fn add_automation_point(
+    pub fn add_automation_point(
         &mut self,
         lane_id: AutomationId,
         time_ticks: u32,
@@ -399,13 +399,12 @@ pub fn add_automation_point(
         time_ticks: Option<u32>,
         value: Option<NormalizedF64>,
         tension: Option<BipolarF64>,
-        curve_type: Option<AutomationCurveType>
+        curve_type: Option<AutomationCurveType>,
     ) -> anyhow::Result<(AutomationLane, usize)> {
         let lane = self
             .automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-
 
         match lane.update_point(point_id, time_ticks, value, tension, curve_type) {
             Some(new_index) => Ok((lane.clone(), new_index)),

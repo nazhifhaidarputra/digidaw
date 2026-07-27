@@ -68,7 +68,7 @@ macro_rules! bounded_fixed {
     };
 
     // Shared internal implementation for constructors, traits, and deref
-    (@base 
+    (@base
         $(#[$meta:meta])*
         $name:ident($inner:ty), min = $min:expr, max = $max:expr, default = $default:expr
     ) => {

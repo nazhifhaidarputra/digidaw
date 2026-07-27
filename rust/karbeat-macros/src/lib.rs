@@ -84,7 +84,7 @@ struct ParamDef {
 #[derive(Clone)]
 enum ParamDefault {
     Float(f64),
-    EnumPath(syn::Expr)
+    EnumPath(syn::Expr),
 }
 
 impl Default for ParamDefault {
@@ -96,17 +96,34 @@ impl Default for ParamDefault {
 fn parse_numeric_expr(expr: &syn::Expr) -> Result<f64, syn::Error> {
     match expr {
         // Standard positive float/int
-        syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Float(f), .. }) => f.base10_parse(),
-        syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(i), .. }) => i.base10_parse(),
-        
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Float(f),
+            ..
+        }) => f.base10_parse(),
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(i),
+            ..
+        }) => i.base10_parse(),
+
         // Negative float/int (e.g. -24.0)
-        syn::Expr::Unary(syn::ExprUnary { op: syn::UnOp::Neg(_), expr: inner, .. }) => {
-            match &**inner {
-                syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Float(f), .. }) => Ok(-f.base10_parse::<f64>()?),
-                syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(i), .. }) => Ok(-i.base10_parse::<f64>()?),
-                _ => Err(syn::Error::new_spanned(inner, "Expected numeric literal after minus sign")),
-            }
-        }
+        syn::Expr::Unary(syn::ExprUnary {
+            op: syn::UnOp::Neg(_),
+            expr: inner,
+            ..
+        }) => match &**inner {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Float(f),
+                ..
+            }) => Ok(-f.base10_parse::<f64>()?),
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Int(i),
+                ..
+            }) => Ok(-i.base10_parse::<f64>()?),
+            _ => Err(syn::Error::new_spanned(
+                inner,
+                "Expected numeric literal after minus sign",
+            )),
+        },
         _ => Err(syn::Error::new_spanned(expr, "Expected a numeric value")),
     }
 }
@@ -541,7 +558,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 };
 
                 let param_init = if type_ident == "f32" {
-                   match numeric_default("f32") {
+                    match numeric_default("f32") {
                         Ok(default_val) => {
                             let default_f32 = default_val as f32;
                             let min_f32 = min as f32;
@@ -596,7 +613,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             default_init_errors.push(e);
                             quote! {}
                         }
-                    }                
+                    }
                 } else {
                     match &p.default {
                         ParamDefault::Float(f) => {
@@ -609,7 +626,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     <#ty as ::karbeat_plugin_types::parameter::EnumParam>::from_index(#default_idx)
                                 )
                             }
-                        },
+                        }
                         ParamDefault::EnumPath(expr) => {
                             quote! {
                                 ::karbeat_plugin_types::parameter::Param::<#ty>::new_enum(
@@ -619,7 +636,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     #expr
                                 )
                             }
-                        },
+                        }
                     }
                 };
 
