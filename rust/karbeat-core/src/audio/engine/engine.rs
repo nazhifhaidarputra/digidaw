@@ -1518,6 +1518,18 @@ impl AudioEngine {
                 self.current_state.graph.tracks = tracks;
                 self.current_state.graph.patterns = patterns;
 
+                let valid_track_ids: HashSet<_> = self
+                    .current_state
+                    .graph
+                    .tracks
+                    .iter()
+                    .map(|t| t.id)
+                    .collect();
+
+                self.mixer_state
+                    .track_channels
+                    .retain(|track_id, _| valid_track_ids.contains(track_id));
+
                 // Guarantee every track in the new graph has an initialized mixer channel!
                 for track in self.current_state.graph.tracks.iter() {
                     self.mixer_state.track_channels.entry(track.id).or_default();

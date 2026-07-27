@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:karbeat/src/rust/api/automation.dart'; // Adjust path if needed
+import 'package:karbeat/src/rust/api/automation.dart';
 import 'dart:math' as math;
 
 class AutomationCurvePainter extends CustomPainter {
@@ -17,11 +17,17 @@ class AutomationCurvePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-if (zoomLevel <= 0) return;
+    if (zoomLevel <= 0) return;
 
     double scrollX = 0;
+    double viewportWidth = size.width;
+
     if (scrollController.hasClients) {
-      scrollX = scrollController.offset;
+      final position = scrollController.positions.first;
+      scrollX = position.pixels;
+      if (position.hasViewportDimension) {
+        viewportWidth = position.viewportDimension;
+      }
     }
 
     final linePaint = Paint()
@@ -39,7 +45,7 @@ if (zoomLevel <= 0) return;
     final defaultY = size.height - (lane.defaultValue.clamp(0.0, 1.0) * size.height);
     
     // Project start X (Tick 0)
-    final projectStartX = 0 - scrollX;
+    final projectStartX = 0.0;
 
     if (lane.points.isEmpty) {
       // If there are no points, draw a continuous plateau at the default value
@@ -55,7 +61,7 @@ if (zoomLevel <= 0) return;
 
     // Calculate pixel coordinates for a point
     Offset getPixelCoords(AutomationPointDto p) {
-      final x = (p.timeTicks / zoomLevel) - scrollX;
+      final x = (p.timeTicks / zoomLevel);
       // Value is 0.0 - 1.0. Y=0 is the top of the canvas in Flutter.
       final y = size.height - (p.value.clamp(0.0, 1.0) * size.height);
       return Offset(x, y);
@@ -96,7 +102,7 @@ if (zoomLevel <= 0) return;
                 p1.timeTicks + (p2.timeTicks - p1.timeTicks) * t;
             final currentValue = v1 * math.pow((v2 / v1), t);
 
-            final curX = (currentTick / zoomLevel) - scrollX;
+            final curX = currentTick / zoomLevel;
             final curY =
                 size.height - (currentValue.clamp(0.0, 1.0) * size.height);
             path.lineTo(curX, curY);
@@ -121,11 +127,14 @@ if (zoomLevel <= 0) return;
     // Draw the final path
     canvas.drawPath(path, linePaint);
 
-    // Draw the interactive points
+    // Draw the interactive points (with culling based on viewport)
+    final minVisibleX = scrollX - 20;
+    final maxVisibleX = scrollX + viewportWidth + 20;
+
     for (final p in points) {
       final pos = getPixelCoords(p);
       // Only draw points that are visibly on screen (plus a small buffer)
-      if (pos.dx >= -10 && pos.dx <= size.width + 10) {
+      if (pos.dx >= minVisibleX && pos.dx <= maxVisibleX) {
         canvas.drawCircle(pos, 4.0, pointPaint);
         canvas.drawCircle(
           pos,
@@ -139,7 +148,7 @@ if (zoomLevel <= 0) return;
   @override
   bool shouldRepaint(covariant AutomationCurvePainter oldDelegate) {
     return oldDelegate.zoomLevel != zoomLevel ||
-        oldDelegate.lane.points.length != lane.points.length ||
+        oldDelegate.lane != lane || 
         oldDelegate.scrollController != scrollController;
   }
 }
