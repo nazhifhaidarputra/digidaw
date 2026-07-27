@@ -220,43 +220,51 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
           right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
         ),
       ),
-      child: Listener(
+      child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onPointerDown: _onPointerDown,
-        onPointerMove: _onPointerMove,
-        onPointerUp: _onPointerUp,
-        onPointerCancel: (_) => _onPointerCancel(),
-        child: Stack(
-          children: [
-            // 1. Background Grid
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: GridPainter(
-                    zoomLevel: zoomLevel,
-                    gridSize: gridSize,
-                    tempo: tempo,
-                    sampleRate: safeSampleRate,
-                    scrollController: widget.horizontalScrollController,
+        // Empty callbacks absorb the drag gestures, preventing the parent 
+        // horizontalScrollController from scrolling while interacting here.
+        onHorizontalDragStart: (_) {},
+        onHorizontalDragUpdate: (_) {},
+        onHorizontalDragEnd: (_) {},
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: _onPointerDown,
+          onPointerMove: _onPointerMove,
+          onPointerUp: _onPointerUp,
+          onPointerCancel: (_) => _onPointerCancel(),
+          child: Stack(
+            children: [
+              // 1. Background Grid
+              Positioned.fill(
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: GridPainter(
+                      zoomLevel: zoomLevel,
+                      gridSize: gridSize,
+                      tempo: tempo,
+                      sampleRate: safeSampleRate,
+                      scrollController: widget.horizontalScrollController,
+                    ),
                   ),
                 ),
               ),
-            ),
-        
-            // 2. Automation Curve Overlay
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: AutomationCurvePainter(
-                    lane: displayLane,
-                    zoomLevel: zoomLevel,
-                    scrollController: widget.horizontalScrollController,
-                    trackColor: widget.trackColor,
+          
+              // 2. Automation Curve Overlay
+              Positioned.fill(
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: AutomationCurvePainter(
+                      lane: displayLane,
+                      zoomLevel: zoomLevel,
+                      scrollController: widget.horizontalScrollController,
+                      trackColor: widget.trackColor,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

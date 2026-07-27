@@ -1,16 +1,14 @@
 use dasp::slice;
 use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext};
+use karbeat_plugin_types::{Param, SmoothableParam};
 use karbeat_utils::math::hermite_interp;
 use rodio::math::db_to_linear;
 use wide::f32x16;
 
 use crate::{
-    commands::MixerChannelTarget,
-    core::project::{
-        audio_waveform::AudioSampleMode, AutomationTarget, MixerChannelParamTarget,
-        MixerChannelParams, RoutingConnection, RoutingNode, TrackAutomationTarget,
-    },
-    shared::{BusId, TrackId},
+    commands::MixerChannelTarget, core::project::{
+        AutomationTarget, MixerChannelParamTarget, MixerChannelParams, RoutingConnection, RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
+    }, shared::{BusId, TrackId},
 };
 
 /// Unified entry point to render an audio waveform slice.
@@ -307,55 +305,35 @@ pub fn apply_phase_inversion_simd(buffer: &mut [f32]) {
 }
 
 #[inline(always)]
-pub fn apply_volume_and_pan_simd(buffer: &mut [f32], channels: usize, volume_db: f32, pan: f32) {
-    if volume_db <= -60.0 {
-        buffer.fill(0.0);
-        return;
-    }
-
-    let volume = db_to_linear(volume_db);
-    let (left_gain, right_gain) = if channels == 2 {
-        let p = (pan + 1.0) * 0.5;
-        ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
-    } else {
-        (volume, volume)
-    };
+pub fn apply_volume_and_pan_simd(
+    buffer: &mut [f32], 
+    channels: usize, 
+    vol_param: &mut Param<f32>, 
+    pan_param: &mut Param<f32>
+) {
+    let mut iter = buffer.chunks_exact_mut(channels);
 
     if channels == 2 {
-        let gains = [
-            left_gain, right_gain, left_gain, right_gain, left_gain, right_gain, left_gain,
-            right_gain, left_gain, right_gain, left_gain, right_gain, left_gain, right_gain,
-            left_gain, right_gain,
-        ];
-        let gain_v = f32x16::new(gains);
+        for chunk in iter {
+            let vol_db = vol_param.next_smoothed();
+            let pan = pan_param.next_smoothed();
 
-        let mut iter = buffer.chunks_exact_mut(16);
-        for chunk in iter.by_ref() {
-            let mut chunk_arr = [0.0; 16];
-            chunk_arr.copy_from_slice(chunk);
-            let mut v = f32x16::new(chunk_arr);
-            v *= gain_v;
-            chunk.copy_from_slice(&v.to_array());
-        }
+            // Handle the true silence threshold natively per-sample
+            let vol = if vol_db <= -100.0 { 0.0 } else { db_to_linear(vol_db as f32) };
+            
+            let p = (pan as f32 + 1.0) * 0.5;
+            let left_gain = (1.0 - p).sqrt() * vol;
+            let right_gain = p.sqrt() * vol;
 
-        for chunk in iter.into_remainder().chunks_exact_mut(2) {
             chunk[0] *= left_gain;
             chunk[1] *= right_gain;
         }
     } else {
-        let gain_v = f32x16::splat(left_gain);
-
-        let mut iter = buffer.chunks_exact_mut(16);
-        for chunk in iter.by_ref() {
-            let mut chunk_arr = [0.0; 16];
-            chunk_arr.copy_from_slice(chunk);
-            let mut v = f32x16::new(chunk_arr);
-            v *= gain_v;
-            chunk.copy_from_slice(&v.to_array());
-        }
-
-        for sample in iter.into_remainder() {
-            *sample *= left_gain;
+        // Mono fallback
+        for chunk in iter {
+            let vol_db = vol_param.next_smoothed();
+            let vol = if vol_db <= -100.0 { 0.0 } else { db_to_linear(vol_db as f32) };
+            chunk[0] *= vol;
         }
     }
 }

@@ -70,8 +70,8 @@ class AutomationCurvePainter extends CustomPainter {
     final firstPos = getPixelCoords(points.first);
 
     // 1. Plateau BEFORE the first point
-    path.moveTo(projectStartX, defaultY);
-    path.lineTo(firstPos.dx, defaultY);
+    path.moveTo(projectStartX, firstPos.dy);
+    path.lineTo(firstPos.dx, firstPos.dy);
     // Vertical jump to the actual first point value
     path.lineTo(firstPos.dx, firstPos.dy);
 
@@ -120,7 +120,7 @@ class AutomationCurvePainter extends CustomPainter {
     // Ensure we are at the end of the last point's path
     path.moveTo(lastPos.dx, lastPos.dy); 
     // Vertical jump down/up to the default value
-    path.lineTo(lastPos.dx, defaultY);
+    path.lineTo(lastPos.dx, lastPos.dy);
     // Extend the line infinitely to the right (or at least to screen edge)
     path.lineTo(math.max(lastPos.dx, size.width), defaultY);
 

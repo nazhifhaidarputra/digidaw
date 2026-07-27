@@ -15,6 +15,7 @@ use crate::{
     utils::{apply_simd_mix, apply_simd_mix_gain},
 };
 use hashbrown::{HashMap, HashSet};
+use karbeat_plugin_types::SmoothableParam;
 use karbeat_utils::types::NormalizedF64;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
@@ -2034,19 +2035,15 @@ impl AudioEngine {
             param_changes: &[],
         };
 
+
         // Iterate through tracks, buses, and master in topological order
         for node in self.cached_routing_order.clone().iter() {
             match node {
                 RoutingNode::Track(track_id) => {
                     // Read channel DSP values from audio-thread-owned mixer state
-                    let channel_values = self
-                        .mixer_state
-                        .track_channels
-                        .get(track_id)
-                        .cloned()
-                        .unwrap_or_default();
-                    let mut channel = channel_values.to_mixer_channel();
-                    let channel_mut = &mut channel;
+                    let channel_mut = self.mixer_state.track_channels.entry(*track_id).or_default();
+                    channel_mut.volume.set_smoothing_time(0.015, self.sample_rate as f64);
+                    channel_mut.pan.set_smoothing_time(0.015, self.sample_rate as f64);
 
                     // Check mute/solo
                     if channel_mut.mute {
@@ -2146,7 +2143,7 @@ impl AudioEngine {
                     // Apply track mixer channel (volume/pan/phase) and effects
                     // Effects receive an empty MIDI slice — track routing is audio-only at this stage
                     Self::apply_mixer_channel_with_effects(
-                        channel_mut,
+                        &mut self.mixer_state.track_channels.entry(*track_id).or_default(),
                         &mut self.plugin_state.track_effects,
                         *track_id,
                         &mut self.mix_buffer,
@@ -2219,14 +2216,9 @@ impl AudioEngine {
                     self.bus_temp_buffer.copy_from_slice(bus_buf);
 
                     // Get bus channel settings from audio-thread-owned mixer state
-                    let bus_values = self
-                        .mixer_state
-                        .bus_channels
-                        .get(bus_id)
-                        .cloned()
-                        .unwrap_or_default();
-                    let mut bus_channel_temp = bus_values.to_mixer_channel();
-                    let bus_settings_channel = &mut bus_channel_temp;
+                    let bus_settings_channel = self.mixer_state.bus_channels.entry(*bus_id).or_default();
+                    bus_settings_channel.volume.set_smoothing_time(0.015, self.sample_rate as f64);
+                    bus_settings_channel.pan.set_smoothing_time(0.015, self.sample_rate as f64);
 
                     // Skip if muted
                     if bus_settings_channel.mute {
@@ -2280,8 +2272,6 @@ impl AudioEngine {
                     }
                     self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
 
-                    let bus_volume = &mut bus_settings_channel.volume;
-                    let bus_pan = &mut bus_settings_channel.pan;
 
                     // Apply bus effects
                     if let Some(effects) = self
@@ -2309,10 +2299,8 @@ impl AudioEngine {
                         delay_line.process_block(&mut self.mix_buffer, channels);
                     }
 
-                    // Apply volume and pan (volume is stored in dB)
-                    let pan = bus_pan.get();
-                    let volume_db = bus_volume.get();
-                    apply_volume_and_pan_simd(&mut self.mix_buffer, channels, volume_db, pan);
+
+                    apply_volume_and_pan_simd(&mut self.mix_buffer, channels, &mut bus_settings_channel.volume, &mut bus_settings_channel.pan);
 
                     // Route bus output to destinations
                     let bus_routes: Vec<_> = routing
@@ -2379,8 +2367,10 @@ impl AudioEngine {
                     }
 
                     if master_has_signal || self.master_tail > 0 {
-                        let mut master_channel = self.mixer_state.master.to_mixer_channel();
-                        let master_bus_mut = &mut master_channel;
+                        let master_bus_mut = &mut self.mixer_state.master;
+                        master_bus_mut.volume.set_smoothing_time(0.015, self.sample_rate as f64);
+                        master_bus_mut.pan.set_smoothing_time(0.015, self.sample_rate as f64);
+
                         Self::apply_master_bus_with_effects(
                             master_bus_mut,
                             &mut self.plugin_state.master_effects,
@@ -2496,7 +2486,7 @@ impl AudioEngine {
 
     /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
     fn apply_mixer_channel_with_effects<'a>(
-        mixer_channel: &mut MixerChannel,
+        mixer_channel: &mut AudioMixerChannelValues,
         track_effects: &mut Vec<Vec<AudioEffectInstance>>,
         track_id: TrackId,
         buffer: &mut [f32],
@@ -2507,10 +2497,6 @@ impl AudioEngine {
         channel_buffers_out: &mut [Vec<f32>],
         aux_channel_buffers: &mut [Vec<f32>],
     ) {
-        // Extract base values from the current UI state
-        let track_volume = &mut mixer_channel.volume;
-        let track_pan = &mut mixer_channel.pan;
-
         // ==== SIMD Phase Inversion ====
         if mixer_channel.inverted_phase {
             apply_phase_inversion_simd(buffer);
@@ -2535,11 +2521,7 @@ impl AudioEngine {
             }
         }
 
-        // Apply calculated Volume and Pan
-        let pan = track_pan.get();
-        let volume_db = track_volume.get();
-
-        apply_volume_and_pan_simd(buffer, channels, volume_db, pan);
+        apply_volume_and_pan_simd(buffer, channels, &mut mixer_channel.volume, &mut mixer_channel.pan);
     }
 
     /// Apply master bus settings (volume, pan, phase) and effects from plugin_state
@@ -2551,7 +2533,7 @@ impl AudioEngine {
     /// * `buffer` - The buffer to apply the master bus settings to
     /// * `channels` - The number of channels in the buffer
     fn apply_master_bus_with_effects<'a>(
-        master_bus: &mut MixerChannel,
+        master_bus: &mut AudioMixerChannelValues,
         master_effects: &mut [AudioEffectInstance],
         buffer: &mut [f32],
         channels: usize,
@@ -2586,12 +2568,9 @@ impl AudioEngine {
             );
         }
 
-        // Volume and Pan (volume is stored in dB)
-        let pan = master_pan.get();
-        let volume_db = master_volume.get();
 
         // ==== SIMD Apply Gain and Pan ====
-        apply_volume_and_pan_simd(buffer, channels, volume_db, pan);
+        apply_volume_and_pan_simd(buffer, channels, &mut master_bus.volume, &mut master_bus.pan);
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
