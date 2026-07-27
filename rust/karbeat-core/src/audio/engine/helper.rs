@@ -301,6 +301,11 @@ let neg_one = f32x16::splat(-1.0);
 
 #[inline(always)]
 pub fn apply_volume_and_pan_simd(buffer: &mut [f32], channels: usize, volume_db: f32, pan: f32) {
+    if volume_db <= -60.0 {
+        buffer.fill(0.0);
+        return;
+    }
+
     let volume = db_to_linear(volume_db);
     let (left_gain, right_gain) = if channels == 2 {
         let p = (pan + 1.0) * 0.5;

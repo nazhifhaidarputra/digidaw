@@ -2,6 +2,11 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
+pub trait Normalizable: ParamType {}
+impl Normalizable for f32 {}
+impl Normalizable for f64 {}
+impl Normalizable for i32 {}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ParameterValueType {
     Float,
@@ -510,4 +515,57 @@ pub trait AutoParams {
     fn auto_apply_automation<V: ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool;
     fn auto_clear_automation(&mut self, prefix_hash: u32, id: u32) -> bool;
     fn auto_get_parameter_specs(&self, prefix_hash: u32, prefix_str: &str) -> Vec<ParameterSpec>;
+}
+
+impl<T: Normalizable> Param<T> {
+    /// Normalize any value of type `T` to the [0.0, 1.0] range based on parameter bounds.
+    pub fn normalize_value(&self, value: T) -> f64 {
+        match &self.bounds {
+            ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
+                let min_f = min.to_f64();
+                let max_f = max.to_f64();
+                let range = max_f - min_f;
+                if range > 0.0 {
+                    ((value.to_f64() - min_f) / range).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                }
+            }
+            // Unreachable for Normalizable types, but kept for exhaustiveness
+            _ => 0.0,
+        }
+    }
+
+    /// Normalize the current (automation-applied) value to [0.0, 1.0].
+    #[inline]
+    pub fn normalize(&self) -> f64 {
+        self.normalize_value(self.current_value)
+    }
+
+    /// Normalize the base (UI) value to [0.0, 1.0].
+    #[inline]
+    pub fn normalize_base(&self) -> f64 {
+        self.normalize_value(self.base_value)
+    }
+
+    /// Convert a normalized [0.0, 1.0] value back to the parameter's native type `T`.
+    pub fn denormalize(&self, normalized: f64) -> T {
+        let normalized = normalized.clamp(0.0, 1.0);
+        match &self.bounds {
+            ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
+                let min_f = min.to_f64();
+                let max_f = max.to_f64();
+                T::from_f64_clamped(min_f + normalized * (max_f - min_f), &self.bounds)
+            }
+            // Unreachable for Normalizable types, but kept for exhaustiveness
+            _ => T::from_f64_clamped(0.0, &self.bounds),
+        }
+    }
+
+    /// Set the base value from a normalized [0.0, 1.0] input.
+    /// Respects automation state (only updates `current_value` if not automated).
+    pub fn set_base_normalized(&mut self, normalized: f64) {
+        let value = self.denormalize(normalized);
+        self.set_base(value);
+    }
 }

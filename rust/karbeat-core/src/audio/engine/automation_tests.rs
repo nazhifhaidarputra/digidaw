@@ -101,10 +101,10 @@ use rtrb::RingBuffer;
         engine.process_command(AudioCommand::ReplaceFullGraph {
             graph: AudioGraphState::from(&app_state),
         });
-        engine.mixer_state.track_channels.insert(track_id, crate::audio::engine::AudioMixerChannelValues {
-            volume: 0.5,
-            ..Default::default()
-        });
+
+        let mut new_val = crate::audio::engine::AudioMixerChannelValues::default();
+        new_val.volume.set_base(0.5);
+        engine.mixer_state.track_channels.insert(track_id, new_val);
 
         
         engine.process_command(AudioCommand::AddModulationSource {
@@ -141,6 +141,6 @@ use rtrb::RingBuffer;
             .track_channels
             .get(&track_id)
             .expect("Track channel not found");
-        assert_eq!(ch.volume, 0.75, "Volume should be automated to 0.75");
+        assert_eq!(ch.volume.get(), 0.75, "Volume should be automated to 0.75");
     }
 }

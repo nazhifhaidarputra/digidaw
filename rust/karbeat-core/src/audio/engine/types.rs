@@ -2,6 +2,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_api::types::{MidiEvent, ZeroCopyBuffer};
+use karbeat_plugin_types::Param;
+use karbeat_utils::hash::hash_str;
 use smallvec::SmallVec;
 use triple_buffer::Input;
 
@@ -280,8 +282,8 @@ impl Default for MetronomeState {
 /// audio thread. Volume is stored in dB (same units as MixerChannel).
 #[derive(Clone, Debug)]
 pub struct AudioMixerChannelValues {
-    pub volume: f32,
-    pub pan: f32,
+    pub volume: Param<f32>,
+    pub pan: Param<f32>,
     pub mute: bool,
     pub solo: bool,
     pub inverted_phase: bool,
@@ -290,22 +292,34 @@ pub struct AudioMixerChannelValues {
 impl Default for AudioMixerChannelValues {
     fn default() -> Self {
         Self {
-            volume: 0.0, // 0 dB = unity gain
-            pan: 0.0,
+            volume: Param::new_f32(hash_str("mix_chan_vol"), "Mixer Channel Volume", "", 0.0, -100.0, 6.0, 0.1), // 0 dB = unity gain
+            pan: Param::new_f32(hash_str("mix_chan_pan"), "Mixer Channel Pan", "", 0.0, -1.0, 1.0, 0.01),
             mute: false,
             solo: false,
             inverted_phase: false,
         }
     }
+
+
 }
 
 impl AudioMixerChannelValues {
+
+    pub fn new(volume: f32, pan: f32, mute: bool, solo: bool, inverted_phase: bool) -> Self {
+        Self {
+            volume: Param::new_f32(hash_str("mix_chan_vol"), "Mixer Channel Volume", "", volume, -100.0, 6.0, 0.1), // 0 dB = unity gain
+            pan: Param::new_f32(hash_str("mix_chan_pan"), "Mixer Channel Pan", "", pan, -1.0, 1.0, 0.01),
+            mute,
+            solo,
+            inverted_phase,
+        }
+    }
     /// Construct a temporary MixerChannel for use in existing DSP functions.
     /// The returned channel has no effects — only volume/pan/flags are set.
     pub fn to_mixer_channel(&self) -> MixerChannel {
         let mut ch = MixerChannel::default();
-        ch.volume.set_base(self.volume);
-        ch.pan.set_base(self.pan);
+        ch.volume.set_base(self.volume.get());
+        ch.pan.set_base(self.pan.get());
         ch.mute = self.mute;
         ch.solo = self.solo;
         ch.inverted_phase = self.inverted_phase;
@@ -332,10 +346,10 @@ impl AudioMixerState {
         };
         match param {
             MixerChannelParams::Volume(v) => {
-                values.volume = *v;
+                values.volume.set_base(*v);
             }
             MixerChannelParams::Pan(v) => {
-                values.pan = *v;
+                values.pan.set_base(*v);
             }
             MixerChannelParams::Mute(v) => {
                 values.mute = *v;
@@ -360,8 +374,8 @@ impl AudioMixerState {
         };
         MixerChannelSnapshot {
             target,
-            volume: values.volume,
-            pan: values.pan,
+            volume: values.volume.get(),
+            pan: values.pan.get(),
             mute: values.mute,
             solo: values.solo,
             inverted_phase: values.inverted_phase,

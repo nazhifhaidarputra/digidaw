@@ -1157,34 +1157,34 @@ impl AudioEngine {
                 for (track_id, seed) in &track_channels {
                     self.mixer_state.track_channels.insert(
                         *track_id,
-                        AudioMixerChannelValues {
-                            volume: seed.volume,
-                            pan: seed.pan,
-                            mute: seed.mute,
-                            solo: seed.solo,
-                            inverted_phase: seed.inverted_phase,
-                        },
+                        AudioMixerChannelValues::new(
+                            seed.volume,
+                            seed.pan,
+                            seed.mute,
+                            seed.solo,
+                            seed.inverted_phase,
+                        ),
                     );
                 }
                 for (bus_id, seed) in &bus_channels {
                     self.mixer_state.bus_channels.insert(
                         *bus_id,
-                        AudioMixerChannelValues {
-                            volume: seed.volume,
-                            pan: seed.pan,
-                            mute: seed.mute,
-                            solo: seed.solo,
-                            inverted_phase: seed.inverted_phase,
-                        },
+                        AudioMixerChannelValues::new(
+                            seed.volume,
+                            seed.pan,
+                            seed.mute,
+                            seed.solo,
+                            seed.inverted_phase,
+                        ),
                     );
                 }
-                self.mixer_state.master = AudioMixerChannelValues {
-                    volume: master_channel.volume,
-                    pan: master_channel.pan,
-                    mute: master_channel.mute,
-                    solo: master_channel.solo,
-                    inverted_phase: master_channel.inverted_phase,
-                };
+                self.mixer_state.master = AudioMixerChannelValues::new(
+                    master_channel.volume,
+                    master_channel.pan,
+                    master_channel.mute,
+                    master_channel.solo,
+                    master_channel.inverted_phase,
+                );
 
                 // Accumulate all new consumers to send in one batch.
                 let mut new_consumers: HashMap<
@@ -1545,7 +1545,6 @@ impl AudioEngine {
             AudioCommand::UpdateAutomationLane { id, lane } => {
                 log::info!("Receive update automation lane of Id {}", id);
                 self.current_state.graph.automation_lanes.insert(id, lane);
-
             }
             AudioCommand::RemoveAutomationLane { id } => {
                 self.current_state.graph.automation_lanes.remove(&id);
@@ -3185,7 +3184,7 @@ impl AudioEngine {
                 LiveModulationSource::Automation { lane_id } => {
                     if let Some(lane) = self.current_state.graph.automation_lanes.get(lane_id) {
                         // log::debug!("This line prints means the value is being ticked");
-                        let norm_val  = lane.value_at_ticks(current_tick) as f32;
+                        let norm_val = lane.value_at_ticks(current_tick) as f32;
                         // log::debug!("Automated normalized value of lane {} = {}", lane_id, norm_val);
                         *current_output = norm_val;
                     }
@@ -3262,13 +3261,23 @@ impl AudioEngine {
                 TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Volume => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            ch.volume = -60.0 + (final_value * 66.0);
+                            let amplitude = (final_value as f32).powi(3);
+                            let target_db = if amplitude <= 0.001 {
+                                -100.0 
+                            } else {
+                                20.0 * amplitude.log10()
+                            };
 
+                            // Clamp the final dB to the parameter bounds
+                            let clamped_db = target_db.clamp(-100.0, 6.0);
+                            
+                            ch.volume.apply_automation(clamped_db);
                         }
                     }
                     MixerChannelParamTarget::Pan => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            ch.pan = -1.0 + (final_value * 2.0);
+                            ch.pan
+                                .apply_automation(ch.pan.denormalize(final_value as f64));
                         }
                     }
                     MixerChannelParamTarget::Plugin { effect_id, target } => match target {
@@ -3289,13 +3298,23 @@ impl AudioEngine {
             AutomationTarget::Bus { bus_id, mix_target } => match mix_target {
                 MixerChannelParamTarget::Volume => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        ch.volume = -60.0 + (final_value * 66.0)
-                        
+                        let amplitude = (final_value as f32).powi(3);
+                            let target_db = if amplitude <= 0.001 {
+                                -100.0 
+                            } else {
+                                20.0 * amplitude.log10()
+                            };
+
+                            // Clamp the final dB to the parameter bounds
+                            let clamped_db = target_db.clamp(-100.0, 6.0);
+                            
+                            ch.volume.apply_automation(clamped_db);
                     }
                 }
                 MixerChannelParamTarget::Pan => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        ch.pan = -1.0 + (final_value * 2.0);
+                        ch.pan
+                            .apply_automation(ch.pan.denormalize(final_value as f64));
                     }
                 }
                 MixerChannelParamTarget::Plugin { effect_id, target } => match target {
@@ -3314,10 +3333,22 @@ impl AudioEngine {
             },
             AutomationTarget::Master(mix_target) => match mix_target {
                 MixerChannelParamTarget::Volume => {
-                    self.mixer_state.master.volume = -60.0 + (final_value * 66.0);
+                    let amplitude = (final_value as f32).powi(3);
+                    let target_db = if amplitude <= 0.001 {
+                        -100.0 
+                    } else {
+                        20.0 * amplitude.log10()
+                    };
+
+                    // Clamp the final dB to the parameter bounds
+                    let clamped_db = target_db.clamp(-100.0, 6.0);
+                    
+                    self.mixer_state.master.volume.apply_automation(clamped_db);
                 }
                 MixerChannelParamTarget::Pan => {
-                    self.mixer_state.master.pan = -1.0 + (final_value * 2.0);
+                    self.mixer_state.master.pan.apply_automation(
+                        self.mixer_state.master.pan.denormalize(final_value as f64),
+                    );
                 }
                 MixerChannelParamTarget::Plugin { effect_id, target } => match target {
                     EffectAutomationTarget::Mix => todo!(),
