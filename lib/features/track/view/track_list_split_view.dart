@@ -466,7 +466,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 return Consumer(
                   builder: (context, ref, _) {
                     final lanes = ref.watch(masterAutomationProvider).toIList();
-                    final isExpanded = ref.watch(automationProvider).isMasterAutomationDrawerOpened;
+                    final isExpanded = ref
+                        .watch(automationProvider)
+                        .isMasterAutomationDrawerOpened;
                     final trackColor = const Color.fromRGBO(200, 100, 50, 1.0);
 
                     if (lanes.isEmpty) return const SizedBox();
@@ -481,21 +483,30 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                           color: Colors.grey.shade900,
                           child: const Text(
                             "Master Track",
-                            style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         AutomationExpandBar(
                           isExpanded: isExpanded,
                           laneCount: lanes.length,
                           trackColor: trackColor,
-                          onTap: () => ref.read(automationProvider.notifier).toggleMasterAutomationDrawer(),
+                          onTap: () => ref
+                              .read(automationProvider.notifier)
+                              .toggleMasterAutomationDrawer(),
                         ),
                         if (isExpanded)
                           ...lanes.map(
-                            (entry) => AutomationLaneHeader(
-                              lane: entry.$3,
-                              itemHeight: 60,
-                              trackColor: trackColor,
+                            (entry) => Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: AutomationLaneHeader(
+                                lane: entry.$3,
+                                itemHeight: 60,
+                                trackColor: trackColor,
+                              ),
                             ),
                           ),
                       ],
@@ -669,213 +680,322 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       setState(() {});
                     }
                   },
-                  onPointerSignal: (event) {
-                    if (event is PointerScrollEvent && _isCtrlPressed) {
-                      final double multiplier = event.scrollDelta.dy > 0
-                          ? 0.9
-                          : 1.1;
+                  child: DawInputDetector(
+                    onCtrlScroll: (delta, localPosition) {
+                      final double multiplier = delta > 0 ? 0.9 : 1.1;
                       _updateZoom(
                         horizontalZoom * multiplier,
-                        event.localPosition.dx,
+                        localPosition.dx,
                       );
-                    }
-                  },
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onPanUpdate: (details) {
-                      if (selectedTool == ToolSelection.select) {
-                        _updateRangeSelect(details.localPosition);
-                        return;
-                      }
-                      if (selectedTool == ToolSelection.zoom) {
-                        final double multiplier = details.delta.dy > 0
-                            ? 0.9
-                            : 1.1;
-                        _updateZoom(
-                          horizontalZoom * multiplier,
-                          details.localPosition.dx,
-                        );
-                        return;
-                      }
-                      if (selectedTool == ToolSelection.draw || isPlacing) {
-                        setState(() => _mousePos = details.localPosition);
-                        _updatePlacementTarget();
-                      }
                     },
-                    onTapDown: isPlacing
-                        ? (details) {
-                            setState(() => _mousePos = details.localPosition);
-                            _updatePlacementTarget();
-                          }
-                        : (details) => _handleTimelineGesture(
-                            context,
-                            details.localPosition,
-                          ),
-                    onPanStart: (details) {
-                      if (selectedTool == ToolSelection.select) {
-                        _startRangeSelect(details.localPosition);
-                      }
+                    onPinchZoom: (details) {
+                      _updateZoom(
+                        horizontalZoom * details.scale,
+                        details.focalPoint.dx,
+                      );
                     },
-                    onPanEnd: (details) {
-                      if (selectedTool == ToolSelection.select &&
-                          _isRangeSelecting) {
-                        _confirmRangeSelect();
-                      }
-                    },
-                    child: ScrollConfiguration(
-                      behavior: (selectedTool == ToolSelection.pointer)
-                          ? DragScrollBehavior()
-                          : ScrollConfiguration.of(context).copyWith(
-                              dragDevices: {
-                                PointerDeviceKind.touch,
-                                PointerDeviceKind.trackpad,
-                              },
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onPanUpdate: (details) {
+                        if (selectedTool == ToolSelection.select) {
+                          _updateRangeSelect(details.localPosition);
+                          return;
+                        }
+                        if (selectedTool == ToolSelection.zoom) {
+                          final double multiplier = details.delta.dy > 0
+                              ? 0.9
+                              : 1.1;
+                          _updateZoom(
+                            horizontalZoom * multiplier,
+                            details.localPosition.dx,
+                          );
+                          return;
+                        }
+                        if (selectedTool == ToolSelection.draw || isPlacing) {
+                          setState(() => _mousePos = details.localPosition);
+                          _updatePlacementTarget();
+                        }
+                      },
+                      onTapDown: isPlacing
+                          ? (details) {
+                              setState(() => _mousePos = details.localPosition);
+                              _updatePlacementTarget();
+                            }
+                          : (details) => _handleTimelineGesture(
+                              context,
+                              details.localPosition,
                             ),
-                      child: Scrollbar(
-                        controller: _trackContentController,
-                        thumbVisibility: true,
-                        trackVisibility: true,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
+                      onPanStart: (details) {
+                        if (selectedTool == ToolSelection.select) {
+                          _startRangeSelect(details.localPosition);
+                        }
+                      },
+                      onPanEnd: (details) {
+                        if (selectedTool == ToolSelection.select &&
+                            _isRangeSelecting) {
+                          _confirmRangeSelect();
+                        }
+                      },
+                      child: ScrollConfiguration(
+                        behavior: (selectedTool == ToolSelection.pointer)
+                            ? DragScrollBehavior()
+                            : ScrollConfiguration.of(context).copyWith(
+                                dragDevices: {
+                                  PointerDeviceKind.touch,
+                                  PointerDeviceKind.trackpad,
+                                },
+                              ),
+                        child: Scrollbar(
                           controller: _trackContentController,
-                          physics: isZooming
-                              ? const UnclampedNeverScrollableScrollPhysics()
-                              : const ClampingScrollPhysics(),
-                          child: SizedBox(
-                            width: _timelineWidth,
-                            child: ContextMenuWrapper(
-                              title: "Track Options",
-                              actions: [
-                                DawContextAction(
-                                  title: "Paste",
-                                  icon: Icons.paste,
-                                  onTap: () async {
-                                    final targetPos = _lastRightClickPos;
-                                    if (targetPos == null) return;
+                          thumbVisibility: true,
+                          trackVisibility: true,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            controller: _trackContentController,
+                            physics: isZooming
+                                ? const UnclampedNeverScrollableScrollPhysics()
+                                : const ClampingScrollPhysics(),
+                            child: SizedBox(
+                              width: _timelineWidth,
+                              child: ContextMenuWrapper(
+                                title: "Track Options",
+                                actions: [
+                                  DawContextAction(
+                                    title: "Paste",
+                                    icon: Icons.paste,
+                                    onTap: () async {
+                                      final targetPos = _lastRightClickPos;
+                                      if (targetPos == null) return;
 
-                                    double scrollY =
-                                        _timelineController.hasClients
-                                        ? _timelineController.offset
-                                        : 0;
-                                    double absoluteY = targetPos.dy + scrollY;
-                                    int trackIndex =
-                                        (absoluteY / widget.itemHeight).floor();
-                                    trackIndex = trackIndex.clamp(
-                                      0,
-                                      widget.trackIds.length - 1,
-                                    );
-
-                                    final targetTrackId =
-                                        widget.trackIds[trackIndex];
-                                    final track = ref
-                                        .read(projectProvider)
-                                        .value
-                                        ?.tracks[targetTrackId];
-                                    if (track == null) return;
-
-                                    double scrollX =
-                                        _trackContentController.hasClients
-                                        ? _trackContentController.offset
-                                        : 0;
-                                    double absoluteX = (targetPos.dx + scrollX)
-                                        .clamp(0, double.infinity);
-                                    double ticks = absoluteX * horizontalZoom;
-
-                                    if (workspaceState.snapToGrid) {
-                                      ticks = _snapTick(
-                                        ticks.toInt(),
-                                        workspaceState,
-                                      ).toDouble();
-                                    }
-
-                                    int pasteStartTime;
-                                    if (track.trackType == UiTrackType.audio) {
-                                      final sr =
-                                          ref
-                                              .read(transportProvider)
-                                              .value
-                                              ?.sampleRate ??
-                                          48000;
-                                      final tempo =
-                                          ref
-                                              .read(transportProvider)
-                                              .value
-                                              ?.state
-                                              ?.bpm ??
-                                          120.0;
-                                      pasteStartTime = ticksToSamples(
-                                        ticks.toInt(),
-                                        tempo,
-                                        sr,
+                                      double scrollY =
+                                          _timelineController.hasClients
+                                          ? _timelineController.offset
+                                          : 0;
+                                      double absoluteY = targetPos.dy + scrollY;
+                                      int trackIndex =
+                                          (absoluteY / widget.itemHeight)
+                                              .floor();
+                                      trackIndex = trackIndex.clamp(
+                                        0,
+                                        widget.trackIds.length - 1,
                                       );
-                                    } else {
-                                      pasteStartTime = ticks.toInt();
-                                    }
 
-                                    final result = await ref
-                                        .read(trackListStateProvider.notifier)
-                                        .pasteClips(
-                                          targetTrackId: targetTrackId,
-                                          pasteStartTime: pasteStartTime,
-                                          trackType: track.trackType,
+                                      final targetTrackId =
+                                          widget.trackIds[trackIndex];
+                                      final track = ref
+                                          .read(projectProvider)
+                                          .value
+                                          ?.tracks[targetTrackId];
+                                      if (track == null) return;
+
+                                      double scrollX =
+                                          _trackContentController.hasClients
+                                          ? _trackContentController.offset
+                                          : 0;
+                                      double absoluteX =
+                                          (targetPos.dx + scrollX).clamp(
+                                            0,
+                                            double.infinity,
+                                          );
+                                      double ticks = absoluteX * horizontalZoom;
+
+                                      if (workspaceState.snapToGrid) {
+                                        ticks = _snapTick(
+                                          ticks.toInt(),
+                                          workspaceState,
+                                        ).toDouble();
+                                      }
+
+                                      int pasteStartTime;
+                                      if (track.trackType ==
+                                          UiTrackType.audio) {
+                                        final sr =
+                                            ref
+                                                .read(transportProvider)
+                                                .value
+                                                ?.sampleRate ??
+                                            48000;
+                                        final tempo =
+                                            ref
+                                                .read(transportProvider)
+                                                .value
+                                                ?.state
+                                                ?.bpm ??
+                                            120.0;
+                                        pasteStartTime = ticksToSamples(
+                                          ticks.toInt(),
+                                          tempo,
+                                          sr,
                                         );
+                                      } else {
+                                        pasteStartTime = ticks.toInt();
+                                      }
 
-                                    if (result.isErr() && context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            (result as Error<void>)
-                                                .toErrorMessage(),
+                                      final result = await ref
+                                          .read(trackListStateProvider.notifier)
+                                          .pasteClips(
+                                            targetTrackId: targetTrackId,
+                                            pasteStartTime: pasteStartTime,
+                                            trackType: track.trackType,
+                                          );
+
+                                      if (result.isErr() && context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              (result as Error<void>)
+                                                  .toErrorMessage(),
+                                            ),
                                           ),
-                                        ),
-                                      );
-                                    } else if (result.isOk()) {
-                                      AppLogger.info("Paste clip");
-                                      setState(() => _lastRightClickPos = null);
+                                        );
+                                      } else if (result.isOk()) {
+                                        AppLogger.info("Paste clip");
+                                        setState(
+                                          () => _lastRightClickPos = null,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                                child: ListView.builder(
+                                  controller: _timelineController,
+                                  physics: isZooming
+                                      ? const UnclampedNeverScrollableScrollPhysics()
+                                      : const ClampingScrollPhysics(),
+                                  padding: EdgeInsets.zero,
+                                  itemCount: itemCount,
+                                  itemBuilder: (context, index) {
+                                    if (index == widget.trackIds.length) {
+                                      return const SizedBox(height: 60);
                                     }
-                                  },
-                                ),
-                              ],
-                              child: ListView.builder(
-                                controller: _timelineController,
-                                physics: isZooming
-                                    ? const UnclampedNeverScrollableScrollPhysics()
-                                    : const ClampingScrollPhysics(),
-                                padding: EdgeInsets.zero,
-                                itemCount: itemCount,
-                                itemBuilder: (context, index) {
-                                  if (index == widget.trackIds.length) {
-                                    return const SizedBox(height: 60);
-                                  }
-                                  if (index == widget.trackIds.length + 1) {
+                                    if (index == widget.trackIds.length + 1) {
+                                      return Consumer(
+                                        builder: (context, ref, _) {
+                                          final lanes = ref
+                                              .watch(masterAutomationProvider)
+                                              .toIList();
+                                          final isExpanded = ref
+                                              .watch(automationProvider)
+                                              .isMasterAutomationDrawerOpened;
+                                          final trackColor =
+                                              const Color.fromRGBO(
+                                                200,
+                                                100,
+                                                50,
+                                                1.0,
+                                              );
+                                          final sr =
+                                              ref
+                                                  .read(transportProvider)
+                                                  .value
+                                                  ?.sampleRate ??
+                                              48000;
+
+                                          if (lanes.isEmpty)
+                                            return const SizedBox();
+
+                                          return Column(
+                                            children: [
+                                              // Empty space to perfectly align with the "Master Track" title block on the left
+                                              const SizedBox(height: 30),
+                                              // AutomationExpandBar is duplicated here as a spacer to keep the layout aligned with the header side
+                                              AutomationExpandBar(
+                                                isExpanded: isExpanded,
+                                                laneCount: lanes.length,
+                                                trackColor: trackColor,
+                                                onTap: () => ref
+                                                    .read(
+                                                      automationProvider
+                                                          .notifier,
+                                                    )
+                                                    .toggleMasterAutomationDrawer(),
+                                              ),
+                                              if (isExpanded)
+                                                ...lanes.map(
+                                                  (entry) => Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          top: 4.0,
+                                                        ),
+                                                    child: AutomationLaneSlot(
+                                                      lane: entry.$3,
+                                                      height: 60,
+                                                      horizontalScrollController:
+                                                          _trackContentController,
+                                                      trackColor: trackColor,
+                                                      sampleRate: sr,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          );
+                                        },
+                                      );
+                                    }
+                                    final trackId = widget.trackIds[index];
                                     return Consumer(
                                       builder: (context, ref, _) {
-                                        final lanes = ref.watch(masterAutomationProvider).toIList();
-                                        final isExpanded = ref.watch(automationProvider).isMasterAutomationDrawerOpened;
-                                        final trackColor = const Color.fromRGBO(200, 100, 50, 1.0);
-                                        final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
+                                        final isExpanded = ref.watch(
+                                          trackAutomationExpandedProvider(
+                                            trackId,
+                                          ),
+                                        );
+                                        final lanes = ref.watch(
+                                          trackAutomationProvider(trackId),
+                                        );
+                                        final trackColor = ref.watch(
+                                          projectProvider.select(
+                                            (s) =>
+                                                s.value?.tracks[trackId]?.color
+                                                    .toColor() ??
+                                                Colors.grey,
+                                          ),
+                                        );
 
-                                        if (lanes.isEmpty) return const SizedBox();
+                                        final sr =
+                                            ref
+                                                .read(transportProvider)
+                                                .value
+                                                ?.sampleRate ??
+                                            48000;
 
                                         return Column(
                                           children: [
-                                            // Empty space to perfectly align with the "Master Track" title block on the left
-                                            const SizedBox(height: 30), 
-                                            // AutomationExpandBar is duplicated here as a spacer to keep the layout aligned with the header side
-                                            AutomationExpandBar(
-                                              isExpanded: isExpanded,
-                                              laneCount: lanes.length,
-                                              trackColor: trackColor,
-                                              onTap: () => ref.read(automationProvider.notifier).toggleMasterAutomationDrawer(),
+                                            IgnorePointer(
+                                              ignoring: isPlacing,
+                                              child: AudioTrackSlot(
+                                                trackId: trackId,
+                                                height: widget.itemHeight,
+                                                horizontalScrollController:
+                                                    _trackContentController,
+                                                sampleRate: sr,
+                                                clipDragController:
+                                                    _clipDragController,
+                                              ),
                                             ),
+                                            if (lanes.isNotEmpty)
+                                              AutomationExpandBar(
+                                                isExpanded: isExpanded,
+                                                laneCount: lanes.length,
+                                                trackColor: trackColor,
+                                                onTap: () => ref
+                                                    .read(
+                                                      automationProvider
+                                                          .notifier,
+                                                    )
+                                                    .toggleTrackAutomationExpanded(
+                                                      trackId,
+                                                    ),
+                                              ),
                                             if (isExpanded)
                                               ...lanes.map(
                                                 (entry) => AutomationLaneSlot(
                                                   lane: entry.$3,
                                                   height: 60,
-                                                  horizontalScrollController: _trackContentController,
+                                                  horizontalScrollController:
+                                                      _trackContentController,
                                                   trackColor: trackColor,
                                                   sampleRate: sr,
                                                 ),
@@ -884,77 +1004,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                         );
                                       },
                                     );
-                                  }
-                                  final trackId = widget.trackIds[index];
-                                  return Consumer(
-                                    builder: (context, ref, _) {
-                                      final isExpanded = ref.watch(
-                                        trackAutomationExpandedProvider(
-                                          trackId,
-                                        ),
-                                      );
-                                      final lanes = ref.watch(
-                                        trackAutomationProvider(trackId),
-                                      );
-                                      final trackColor = ref.watch(
-                                        projectProvider.select(
-                                          (s) =>
-                                              s.value?.tracks[trackId]?.color
-                                                  .toColor() ??
-                                              Colors.grey,
-                                        ),
-                                      );
-
-                                      final sr =
-                                          ref
-                                              .read(transportProvider)
-                                              .value
-                                              ?.sampleRate ??
-                                          48000;
-
-                                      return Column(
-                                        children: [
-                                          IgnorePointer(
-                                            ignoring: isPlacing,
-                                            child: AudioTrackSlot(
-                                              trackId: trackId,
-                                              height: widget.itemHeight,
-                                              horizontalScrollController:
-                                                  _trackContentController,
-                                              sampleRate: sr,
-                                              clipDragController:
-                                                  _clipDragController,
-                                            ),
-                                          ),
-                                          if (lanes.isNotEmpty)
-                                            AutomationExpandBar(
-                                              isExpanded: isExpanded,
-                                              laneCount: lanes.length,
-                                              trackColor: trackColor,
-                                              onTap: () => ref
-                                                  .read(
-                                                    automationProvider.notifier,
-                                                  )
-                                                  .toggleTrackAutomationExpanded(
-                                                    trackId,
-                                                  ),
-                                            ),
-                                          if (isExpanded)
-                                            ...lanes.map(
-                                              (entry) => AutomationLaneSlot(
-                                                lane: entry.$3,
-                                                height: 60,
-                                                horizontalScrollController:
-                                                    _trackContentController,
-                                                trackColor: trackColor,
-                                                sampleRate: sr,
-                                              ),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                  );
-                                },
+                                  },
+                                ),
                               ),
                             ),
                           ),
@@ -1530,7 +1581,7 @@ class AutomationExpandBar extends StatelessWidget {
   final VoidCallback onTap;
 
   const AutomationExpandBar({
-    super.key, 
+    super.key,
     required this.isExpanded,
     required this.laneCount,
     required this.trackColor,

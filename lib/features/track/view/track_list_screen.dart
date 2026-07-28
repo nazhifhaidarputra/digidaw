@@ -19,6 +19,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/daw_input_detector.dart';
 import 'package:karbeat/features/track/view/midi_drawer.dart';
 import 'package:karbeat/features/track/view/waveform_painter.dart';
 import 'package:karbeat/features/track/view/clip_drag_controller.dart';
