@@ -74,12 +74,14 @@ impl PluginTarget {
                     target: EffectAutomationTarget::PluginParam { param_id },
                 },
             },
-            PluginTarget::MasterEffect(effect_id) => {
-                AutomationTarget::Master(MixerChannelParamTarget::Plugin {
-                    effect_id: *effect_id,
-                    target: EffectAutomationTarget::PluginParam { param_id },
-                })
-            }
+            PluginTarget::MasterEffect(effect_id) => AutomationTarget::Master(
+                crate::core::project::MasterAutomationTarget::MixerChannel(
+                    MixerChannelParamTarget::Plugin {
+                        effect_id: *effect_id,
+                        target: EffectAutomationTarget::PluginParam { param_id },
+                    },
+                ),
+            ),
         }
     }
 }

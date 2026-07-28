@@ -57,7 +57,7 @@ pub struct AudioEngine {
 
     // Audio-thread-owned mixer channel DSP state.
     // Updated via SetMixerChannelParameter commands; queried via QueryMixerChannel.
-    pub mixer_state: AudioMixerState,
+    pub(super) mixer_state: AudioMixerState,
 
     // Real-time Command Queue (UI → Audio)
     command_consumer: Consumer<AudioCommand>,
@@ -2035,15 +2035,22 @@ impl AudioEngine {
             param_changes: &[],
         };
 
-
         // Iterate through tracks, buses, and master in topological order
         for node in self.cached_routing_order.clone().iter() {
             match node {
                 RoutingNode::Track(track_id) => {
                     // Read channel DSP values from audio-thread-owned mixer state
-                    let channel_mut = self.mixer_state.track_channels.entry(*track_id).or_default();
-                    channel_mut.volume.set_smoothing_time(0.015, self.sample_rate as f64);
-                    channel_mut.pan.set_smoothing_time(0.015, self.sample_rate as f64);
+                    let channel_mut = self
+                        .mixer_state
+                        .track_channels
+                        .entry(*track_id)
+                        .or_default();
+                    channel_mut
+                        .volume
+                        .set_smoothing_time(0.015, self.sample_rate as f64);
+                    channel_mut
+                        .pan
+                        .set_smoothing_time(0.015, self.sample_rate as f64);
 
                     // Check mute/solo
                     if channel_mut.mute {
@@ -2143,7 +2150,11 @@ impl AudioEngine {
                     // Apply track mixer channel (volume/pan/phase) and effects
                     // Effects receive an empty MIDI slice — track routing is audio-only at this stage
                     Self::apply_mixer_channel_with_effects(
-                        &mut self.mixer_state.track_channels.entry(*track_id).or_default(),
+                        &mut self
+                            .mixer_state
+                            .track_channels
+                            .entry(*track_id)
+                            .or_default(),
                         &mut self.plugin_state.track_effects,
                         *track_id,
                         &mut self.mix_buffer,
@@ -2216,9 +2227,14 @@ impl AudioEngine {
                     self.bus_temp_buffer.copy_from_slice(bus_buf);
 
                     // Get bus channel settings from audio-thread-owned mixer state
-                    let bus_settings_channel = self.mixer_state.bus_channels.entry(*bus_id).or_default();
-                    bus_settings_channel.volume.set_smoothing_time(0.015, self.sample_rate as f64);
-                    bus_settings_channel.pan.set_smoothing_time(0.015, self.sample_rate as f64);
+                    let bus_settings_channel =
+                        self.mixer_state.bus_channels.entry(*bus_id).or_default();
+                    bus_settings_channel
+                        .volume
+                        .set_smoothing_time(0.015, self.sample_rate as f64);
+                    bus_settings_channel
+                        .pan
+                        .set_smoothing_time(0.015, self.sample_rate as f64);
 
                     // Skip if muted
                     if bus_settings_channel.mute {
@@ -2272,7 +2288,6 @@ impl AudioEngine {
                     }
                     self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
 
-
                     // Apply bus effects
                     if let Some(effects) = self
                         .plugin_state
@@ -2299,8 +2314,12 @@ impl AudioEngine {
                         delay_line.process_block(&mut self.mix_buffer, channels);
                     }
 
-
-                    apply_volume_and_pan_simd(&mut self.mix_buffer, channels, &mut bus_settings_channel.volume, &mut bus_settings_channel.pan);
+                    apply_volume_and_pan_simd(
+                        &mut self.mix_buffer,
+                        channels,
+                        &mut bus_settings_channel.volume,
+                        &mut bus_settings_channel.pan,
+                    );
 
                     // Route bus output to destinations
                     let bus_routes: Vec<_> = routing
@@ -2368,8 +2387,12 @@ impl AudioEngine {
 
                     if master_has_signal || self.master_tail > 0 {
                         let master_bus_mut = &mut self.mixer_state.master;
-                        master_bus_mut.volume.set_smoothing_time(0.015, self.sample_rate as f64);
-                        master_bus_mut.pan.set_smoothing_time(0.015, self.sample_rate as f64);
+                        master_bus_mut
+                            .volume
+                            .set_smoothing_time(0.015, self.sample_rate as f64);
+                        master_bus_mut
+                            .pan
+                            .set_smoothing_time(0.015, self.sample_rate as f64);
 
                         Self::apply_master_bus_with_effects(
                             master_bus_mut,
@@ -2521,7 +2544,12 @@ impl AudioEngine {
             }
         }
 
-        apply_volume_and_pan_simd(buffer, channels, &mut mixer_channel.volume, &mut mixer_channel.pan);
+        apply_volume_and_pan_simd(
+            buffer,
+            channels,
+            &mut mixer_channel.volume,
+            &mut mixer_channel.pan,
+        );
     }
 
     /// Apply master bus settings (volume, pan, phase) and effects from plugin_state
@@ -2543,9 +2571,6 @@ impl AudioEngine {
         channel_buffers_out: &mut [Vec<f32>],
         aux_channel_buffers: &mut [Vec<f32>],
     ) {
-        let master_volume = &mut master_bus.volume;
-        let master_pan = &mut master_bus.pan;
-
         // ==== SIMD Phase Inversion ====
         if master_bus.inverted_phase {
             apply_phase_inversion_simd(buffer);
@@ -2568,9 +2593,13 @@ impl AudioEngine {
             );
         }
 
-
         // ==== SIMD Apply Gain and Pan ====
-        apply_volume_and_pan_simd(buffer, channels, &mut master_bus.volume, &mut master_bus.pan);
+        apply_volume_and_pan_simd(
+            buffer,
+            channels,
+            &mut master_bus.volume,
+            &mut master_bus.pan,
+        );
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
@@ -3313,45 +3342,47 @@ impl AudioEngine {
                     }
                 },
             },
-            AutomationTarget::Master(mix_target) => match mix_target {
-                MixerChannelParamTarget::Volume => {
-                    let amplitude = (final_value as f32).powi(3);
-                    let target_db = if amplitude <= 0.001 {
-                        -100.0
-                    } else {
-                        20.0 * amplitude.log10()
-                    };
+            AutomationTarget::Master(master_target) => match master_target {
+                MasterAutomationTarget::MixerChannel(mix_target) => match mix_target {
+                    MixerChannelParamTarget::Volume => {
+                        let amplitude = (final_value as f32).powi(3);
+                        let target_db = if amplitude <= 0.001 {
+                            -100.0
+                        } else {
+                            20.0 * amplitude.log10()
+                        };
 
-                    // Clamp the final dB to the parameter bounds
-                    let clamped_db = target_db.clamp(-100.0, 6.0);
+                        // Clamp the final dB to the parameter bounds
+                        let clamped_db = target_db.clamp(-100.0, 6.0);
 
-                    self.mixer_state.master.volume.apply_automation(clamped_db);
-                }
-                MixerChannelParamTarget::Pan => {
-                    self.mixer_state.master.pan.apply_automation(
-                        self.mixer_state
-                            .master
-                            .pan
-                            .denormalize(NormalizedF64::new(final_value as f64)),
-                    );
-                }
-                MixerChannelParamTarget::Plugin { effect_id, target } => match target {
-                    EffectAutomationTarget::Mix => todo!(),
-                    EffectAutomationTarget::PluginParam { param_id } => {
-                        if let Some(e) = self
-                            .plugin_state
-                            .master_effects
-                            .iter_mut()
-                            .find(|e| e.id == *effect_id)
-                        {
-                            e.plugin.apply_automation(*param_id, final_value);
-                        }
+                        self.mixer_state.master.volume.apply_automation(clamped_db);
                     }
+                    MixerChannelParamTarget::Pan => {
+                        self.mixer_state.master.pan.apply_automation(
+                            self.mixer_state
+                                .master
+                                .pan
+                                .denormalize(NormalizedF64::new(final_value as f64)),
+                        );
+                    }
+                    MixerChannelParamTarget::Plugin { effect_id, target } => match target {
+                        EffectAutomationTarget::Mix => todo!(),
+                        EffectAutomationTarget::PluginParam { param_id } => {
+                            if let Some(e) = self
+                                .plugin_state
+                                .master_effects
+                                .iter_mut()
+                                .find(|e| e.id == *effect_id)
+                            {
+                                e.plugin.apply_automation(*param_id, final_value);
+                            }
+                        }
+                    },
                 },
+                MasterAutomationTarget::TempoBpm => {
+                    self.bpm = final_value;
+                }
             },
-            AutomationTarget::TempoBpm => {
-                self.bpm = final_value;
-            }
         }
     }
 
@@ -3417,27 +3448,29 @@ impl AudioEngine {
                 },
                 _ => {}
             },
-            AutomationTarget::Master(mix_target) => match mix_target {
-                MixerChannelParamTarget::Plugin { effect_id, target } => match target {
-                    EffectAutomationTarget::Mix => {}
-                    EffectAutomationTarget::PluginParam { param_id } => {
-                        if let Some(e) = self
-                            .plugin_state
-                            .master_effects
-                            .iter_mut()
-                            .find(|e| e.id == *effect_id)
-                        {
-                            if is_begin {
-                                e.plugin.begin_parameter_edit(*param_id);
-                            } else {
-                                e.plugin.end_parameter_edit(*param_id);
+            AutomationTarget::Master(master_target) => match master_target {
+                MasterAutomationTarget::MixerChannel(mix_target) => match mix_target {
+                    MixerChannelParamTarget::Plugin { effect_id, target } => match target {
+                        EffectAutomationTarget::Mix => {}
+                        EffectAutomationTarget::PluginParam { param_id } => {
+                            if let Some(e) = self
+                                .plugin_state
+                                .master_effects
+                                .iter_mut()
+                                .find(|e| e.id == *effect_id)
+                            {
+                                if is_begin {
+                                    e.plugin.begin_parameter_edit(*param_id);
+                                } else {
+                                    e.plugin.end_parameter_edit(*param_id);
+                                }
                             }
                         }
-                    }
+                    },
+                    _ => {}
                 },
-                _ => {}
+                MasterAutomationTarget::TempoBpm => {}
             },
-            AutomationTarget::TempoBpm => {}
         }
     }
 
@@ -3653,5 +3686,149 @@ impl AudioEngine {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::audio::engine::{AudioEngine, AudioEngineTelemetry};
+    use crate::audio::event::TransportFeedback;
+    use crate::audio::render_state::AudioGraphState;
+    use crate::commands::{AudioCommand, AudioFeedback, TelemetryRegistration};
+    use crate::core::project::automation::{
+        AutomationLane, AutomationPoint, AutomationTarget, MixerChannelParamTarget,
+        TrackAutomationTarget,
+    };
+    use crate::core::project::modulation::{ModulationLink, ModulationSource};
+    use crate::core::project::track::AudioTrack;
+    use crate::core::project::{ApplicationState, ModulationLinkForOrderedLaneView, TrackType};
+    use crate::shared::id::{AutomationId, ModulationLinkId, TrackId};
+    use crate::shared::ModulationId;
+    use karbeat_utils::color::Color;
+    use karbeat_utils::types::NormalizedF64;
+    use rtrb::RingBuffer;
+    use std::sync::mpsc;
+    // use crate::audio::;
+
+    #[test]
+    fn test_automation_lane_applied_to_mixer_volume() {
+        // Setup Audio Engine
+        let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
+        let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+        let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+        let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(1024);
+
+        let mut track_id_inc = 0;
+        let mut automation_id_inc = 0;
+
+        let mut mod_source_id_inc = 0;
+        let mut mod_link_id_inc = 0;
+        let mut engine = AudioEngine::new(
+            cmd_consumer,
+            pos_producer,
+            fb_producer,
+            44100,
+            2,
+            120.0,
+            512,
+            AudioEngineTelemetry::new_for_export(),
+            telemetry_tx,
+        );
+
+        let track_id = TrackId::next(&mut track_id_inc);
+        let automation_id = AutomationId::next(&mut automation_id_inc);
+        let mod_source_id = ModulationId::next(&mut mod_source_id_inc);
+        let mod_link_id = ModulationLinkId::next(&mut mod_link_id_inc);
+
+        // Target: Track Volume
+        let target = AutomationTarget::Track {
+            track_id,
+            track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Volume),
+        };
+
+        // Setup Track
+        let track = AudioTrack::new(
+            track_id,
+            "Test Track",
+            Color::new_from_rgb(0, 0, 0),
+            TrackType::Audio,
+        );
+        // Ensure track has a channel in the mixer state
+        let mut app_state = ApplicationState::default();
+        app_state.tracks.insert(track_id, track);
+
+        let mut automation_lane = AutomationLane::new(automation_id, "Volume", 0.0, 1.0, 0.5);
+        // Set point at 0 ticks with value 0.75
+        automation_lane.add_point(AutomationPoint::new(0, NormalizedF64::new(0.75)));
+
+        app_state
+            .automation_pool
+            .insert(automation_id, automation_lane.clone());
+
+        // Setup modulation source and link
+        app_state.modulation_sources.insert(
+            mod_source_id,
+            ModulationSource::Automation {
+                lane_id: automation_id,
+            },
+        );
+        app_state.modulation_links.insert(
+            mod_link_id,
+            ModulationLinkForOrderedLaneView {
+                order_idx: 0,
+                prop: ModulationLink {
+                    id: mod_link_id,
+                    source_id: mod_source_id,
+                    target: target.clone(),
+                    depth: 1.0,
+                    base_value: 0.5,
+                },
+            },
+        );
+
+        // Initialize Engine State
+        engine.process_command(AudioCommand::ReplaceFullGraph {
+            graph: AudioGraphState::from(&app_state),
+        });
+
+        let mut new_val = crate::audio::engine::AudioMixerChannelValues::default();
+        new_val.volume.set_base(0.5);
+        engine.mixer_state.track_channels.insert(track_id, new_val);
+
+        engine.process_command(AudioCommand::AddModulationSource {
+            id: mod_source_id,
+            source: ModulationSource::Automation {
+                lane_id: automation_id,
+            },
+        });
+        engine.process_command(AudioCommand::AddModulationLink {
+            id: mod_link_id,
+            link: ModulationLink {
+                id: mod_link_id,
+                source_id: mod_source_id,
+                target: target.clone(),
+                depth: 1.0,
+                base_value: 0.5,
+            },
+        });
+        engine.process_command(AudioCommand::UpdateAutomationLane {
+            id: automation_id,
+            lane: automation_lane.into(),
+        });
+
+        // Let's set playhead to 0 and playback mode
+        engine.process_command(AudioCommand::SetPlayhead(0));
+
+        // Run one process block
+        let mut output_buffer = vec![0.0; 512 * 2];
+        engine.process(&mut output_buffer);
+
+        //  Check if MixerChannel Volume was updated to 0.75
+        let ch = engine
+            .mixer_state
+            .track_channels
+            .get(&track_id)
+            .expect("Track channel not found");
+        assert_eq!(ch.volume.get(), 0.75, "Volume should be automated to 0.75");
     }
 }

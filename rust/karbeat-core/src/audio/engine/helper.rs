@@ -311,7 +311,7 @@ pub fn apply_volume_and_pan_simd(
     vol_param: &mut Param<f32>, 
     pan_param: &mut Param<f32>
 ) {
-    let mut iter = buffer.chunks_exact_mut(channels);
+    let iter = buffer.chunks_exact_mut(channels);
 
     if channels == 2 {
         for chunk in iter {
@@ -561,7 +561,7 @@ pub fn resolve_target_mixer_param(
             bus_id: *bus_id,
             mix_target: mt,
         },
-        MixerChannelTarget::Master => AutomationTarget::Master(mt),
+        MixerChannelTarget::Master => AutomationTarget::Master(crate::core::project::MasterAutomationTarget::MixerChannel(mt)),
     });
 
     (automation_target, val)

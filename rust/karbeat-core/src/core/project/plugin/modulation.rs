@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use karbeat_utils::types::{BipolarF64, NormalizedF32, NormalizedF64};
+use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use serde::{Deserialize, Serialize};
 
 use crate::{

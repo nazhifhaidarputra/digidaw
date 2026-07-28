@@ -2,14 +2,12 @@ use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::{Param, ParameterSpec};
 use karbeat_plugins::registry::PluginRegistry;
 use smallvec::SmallVec;
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    commands::{AudioCommand, EffectTarget},
-    context::DawContext,
+    commands::EffectTarget,
     core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
     shared::{BusId, EffectId, SidechainRouteId},
 };

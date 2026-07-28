@@ -231,7 +231,7 @@ pub struct WavetableOsc {
     )]
     pub destination: FilterDestination,
 
-    buffer: Vec<Vec<f64>>,
+    // buffer: Vec<Vec<f64>>,
 }
 
 impl Default for WavetableOsc {
@@ -550,7 +550,7 @@ impl AudioPlugin for DigiWavetableSynth {
         PluginCategory::Instrument
     }
 
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
+    fn prepare(&mut self, _sample_rate: f32, _max_buffer_size: usize) {
         todo!()
     }
 
@@ -560,16 +560,16 @@ impl AudioPlugin for DigiWavetableSynth {
 
     fn set_io_layout(
         &mut self,
-        inputs: &[karbeat_plugin_api::prelude::BusConfig],
+        _inputs: &[karbeat_plugin_api::prelude::BusConfig],
         outputs: &[BusConfig],
     ) {
-        let new_channels = outputs.first().map(|b| b.channel_count).unwrap_or(2);
+        let _new_channels = outputs.first().map(|b| b.channel_count).unwrap_or(2);
     }
 
     fn process(
         &mut self,
-        buffers: &mut karbeat_plugin_api::prelude::AudioBuffers,
-        context: &ProcessContext,
+        _buffers: &mut karbeat_plugin_api::prelude::AudioBuffers,
+        _context: &ProcessContext,
     ) {
         todo!()
     }

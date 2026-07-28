@@ -8502,10 +8502,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         );
       case 3:
         return AutomationTargetDto_Master(
-          dco_decode_box_autoadd_mixer_channel_param_target_dto(raw[1]),
+          dco_decode_box_autoadd_master_automation_target_dto(raw[1]),
         );
-      case 4:
-        return AutomationTargetDto_TempoBpm();
       default:
         throw Exception("unreachable");
     }
@@ -8617,6 +8615,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double dco_decode_box_autoadd_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  MasterAutomationTargetDto dco_decode_box_autoadd_master_automation_target_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_master_automation_target_dto(raw);
   }
 
   @protected
@@ -9062,6 +9068,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (raw as List<dynamic>)
         .map(dco_decode_ui_routing_connection)
         .toList();
+  }
+
+  @protected
+  MasterAutomationTargetDto dco_decode_master_automation_target_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return MasterAutomationTargetDto_MixerChannel(
+          dco_decode_box_autoadd_mixer_channel_param_target_dto(raw[1]),
+        );
+      case 1:
+        return MasterAutomationTargetDto_TempoBpm();
+      default:
+        throw Exception("unreachable");
+    }
   }
 
   @protected
@@ -10750,12 +10773,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           mixTarget: var_mixTarget,
         );
       case 3:
-        var var_field0 = sse_decode_box_autoadd_mixer_channel_param_target_dto(
+        var var_field0 = sse_decode_box_autoadd_master_automation_target_dto(
           deserializer,
         );
         return AutomationTargetDto_Master(var_field0);
-      case 4:
-        return AutomationTargetDto_TempoBpm();
       default:
         throw UnimplementedError('');
     }
@@ -10873,6 +10894,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_f_64(deserializer));
+  }
+
+  @protected
+  MasterAutomationTargetDto sse_decode_box_autoadd_master_automation_target_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_master_automation_target_dto(deserializer));
   }
 
   @protected
@@ -11524,6 +11553,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_ui_routing_connection(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  MasterAutomationTargetDto sse_decode_master_automation_target_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_box_autoadd_mixer_channel_param_target_dto(
+          deserializer,
+        );
+        return MasterAutomationTargetDto_MixerChannel(var_field0);
+      case 1:
+        return MasterAutomationTargetDto_TempoBpm();
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -13504,12 +13553,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         );
       case AutomationTargetDto_Master(field0: final field0):
         sse_encode_i_32(3, serializer);
-        sse_encode_box_autoadd_mixer_channel_param_target_dto(
-          field0,
-          serializer,
-        );
-      case AutomationTargetDto_TempoBpm():
-        sse_encode_i_32(4, serializer);
+        sse_encode_box_autoadd_master_automation_target_dto(field0, serializer);
     }
   }
 
@@ -13632,6 +13676,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_master_automation_target_dto(
+    MasterAutomationTargetDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_master_automation_target_dto(self, serializer);
   }
 
   @protected
@@ -14242,6 +14295,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_ui_routing_connection(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_master_automation_target_dto(
+    MasterAutomationTargetDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case MasterAutomationTargetDto_MixerChannel(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_box_autoadd_mixer_channel_param_target_dto(
+          field0,
+          serializer,
+        );
+      case MasterAutomationTargetDto_TempoBpm():
+        sse_encode_i_32(1, serializer);
     }
   }
 

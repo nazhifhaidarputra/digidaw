@@ -309,6 +309,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
+  MasterAutomationTargetDto dco_decode_box_autoadd_master_automation_target_dto(
+    dynamic raw,
+  );
+
+  @protected
   MixerChannelParamTargetDto
   dco_decode_box_autoadd_mixer_channel_param_target_dto(dynamic raw);
 
@@ -521,6 +526,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
+
+  @protected
+  MasterAutomationTargetDto dco_decode_master_automation_target_dto(
+    dynamic raw,
+  );
 
   @protected
   MixerChannelParamTargetDto dco_decode_mixer_channel_param_target_dto(
@@ -1130,6 +1140,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
+  MasterAutomationTargetDto sse_decode_box_autoadd_master_automation_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   MixerChannelParamTargetDto
   sse_decode_box_autoadd_mixer_channel_param_target_dto(
     SseDeserializer deserializer,
@@ -1402,6 +1417,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MasterAutomationTargetDto sse_decode_master_automation_target_dto(
     SseDeserializer deserializer,
   );
 
@@ -2122,6 +2142,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_master_automation_target_dto(
+    MasterAutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_mixer_channel_param_target_dto(
     MixerChannelParamTargetDto self,
     SseSerializer serializer,
@@ -2445,6 +2471,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_routing_connection(
     List<UiRoutingConnection> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_master_automation_target_dto(
+    MasterAutomationTargetDto self,
     SseSerializer serializer,
   );
 

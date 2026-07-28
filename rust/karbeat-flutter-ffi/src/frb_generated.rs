@@ -9958,11 +9958,8 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
             }
             3 => {
                 let mut var_field0 =
-                    <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
+                    <crate::api::automation::MasterAutomationTargetDto>::sse_decode(deserializer);
                 return crate::api::automation::AutomationTargetDto::Master(var_field0);
-            }
-            4 => {
-                return crate::api::automation::AutomationTargetDto::TempoBpm;
             }
             _ => {
                 unimplemented!("");
@@ -10458,6 +10455,26 @@ impl SseDecode for Vec<crate::api::mixer::UiRoutingConnection> {
             ));
         }
         return ans_;
+    }
+}
+
+impl SseDecode for crate::api::automation::MasterAutomationTargetDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_field0 =
+                    <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
+                return crate::api::automation::MasterAutomationTargetDto::MixerChannel(var_field0);
+            }
+            1 => {
+                return crate::api::automation::MasterAutomationTargetDto::TempoBpm;
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 
@@ -12693,7 +12710,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::automation::AutomationTargetD
             crate::api::automation::AutomationTargetDto::Master(field0) => {
                 [3.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::automation::AutomationTargetDto::TempoBpm => [4.into_dart()].into_dart(),
             _ => {
                 unimplemented!("");
             }
@@ -12804,6 +12820,33 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::KarbeatPluginType>
     for crate::api::plugin::KarbeatPluginType
 {
     fn into_into_dart(self) -> crate::api::plugin::KarbeatPluginType {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::automation::MasterAutomationTargetDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::automation::MasterAutomationTargetDto::MixerChannel(field0) => {
+                [0.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::automation::MasterAutomationTargetDto::TempoBpm => {
+                [1.into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::automation::MasterAutomationTargetDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::automation::MasterAutomationTargetDto>
+    for crate::api::automation::MasterAutomationTargetDto
+{
+    fn into_into_dart(self) -> crate::api::automation::MasterAutomationTargetDto {
         self
     }
 }
@@ -14427,12 +14470,7 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
             }
             crate::api::automation::AutomationTargetDto::Master(field0) => {
                 <i32>::sse_encode(3, serializer);
-                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
-                    field0, serializer,
-                );
-            }
-            crate::api::automation::AutomationTargetDto::TempoBpm => {
-                <i32>::sse_encode(4, serializer);
+                <crate::api::automation::MasterAutomationTargetDto>::sse_encode(field0, serializer);
             }
             _ => {
                 unimplemented!("");
@@ -14849,6 +14887,26 @@ impl SseEncode for Vec<crate::api::mixer::UiRoutingConnection> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::mixer::UiRoutingConnection>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for crate::api::automation::MasterAutomationTargetDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::automation::MasterAutomationTargetDto::MixerChannel(field0) => {
+                <i32>::sse_encode(0, serializer);
+                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
+                    field0, serializer,
+                );
+            }
+            crate::api::automation::MasterAutomationTargetDto::TempoBpm => {
+                <i32>::sse_encode(1, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
         }
     }
 }

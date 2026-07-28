@@ -4,7 +4,7 @@
 // Provides both project-level automation lane data (saved with the project)
 // and a runtime AutomationManager used by plugin wrappers during audio processing.
 
-use std::sync::atomic::{AtomicU32, AtomicU64};
+use std::sync::atomic::AtomicU64;
 
 use karbeat_dsp::interpolation::lerp;
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     audio::event::PluginTarget,
     shared::{
-        id::{self, AutomationId, BusId, EffectId, TrackId},
+        id::{AutomationId, BusId, EffectId, TrackId},
         GeneratorId,
     },
 };
@@ -42,15 +42,18 @@ pub enum AutomationTarget {
         mix_target: MixerChannelParamTarget,
     },
 
-    Master(MixerChannelParamTarget),
-
-    // Global Targets
-    TempoBpm,
+    Master(MasterAutomationTarget),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TrackAutomationTarget {
     MixerChannel(MixerChannelParamTarget),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum MasterAutomationTarget {
+    MixerChannel(MixerChannelParamTarget),
+    TempoBpm,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -99,7 +102,6 @@ impl AutomationTarget {
             (Self::Track { track_id: id1, .. }, Self::Track { track_id: id2, .. }) => id1 == id2,
             (Self::Bus { bus_id: id1, .. }, Self::Bus { bus_id: id2, .. }) => id1 == id2,
             (Self::Master(_), Self::Master(_)) => true,
-            (Self::TempoBpm, Self::TempoBpm) => true,
             _ => false,
         }
     }
@@ -121,9 +123,17 @@ impl AutomationTarget {
                 bus_id,
                 mix_target: MixerChannelParamTarget::Plugin { effect_id, .. },
             } => Some(PluginTarget::BusEffect(*bus_id, *effect_id)),
-            AutomationTarget::Master(MixerChannelParamTarget::Plugin { effect_id, .. }) => {
-                Some(PluginTarget::MasterEffect(*effect_id))
-            }
+            AutomationTarget::Master(master_target) => match master_target {
+                MasterAutomationTarget::MixerChannel(mixer_channel_param_target) => {
+                    match mixer_channel_param_target {
+                        MixerChannelParamTarget::Plugin { effect_id, .. } => {
+                            Some(PluginTarget::MasterEffect(*effect_id))
+                        }
+                        _ => None,
+                    }
+                }
+                MasterAutomationTarget::TempoBpm => None,
+            },
             _ => None,
         }
     }

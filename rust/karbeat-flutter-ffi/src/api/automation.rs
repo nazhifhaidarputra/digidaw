@@ -6,7 +6,7 @@ use karbeat_core::{
     context::DawContext,
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
-        EffectAutomationTarget, MixerChannelParamTarget, ModulationLink,
+        EffectAutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
         ModulationLinkForOrderedLaneView, ModulationSource, TrackAutomationTarget,
     },
     shared::{BusId, EffectId, TrackId},
@@ -51,7 +51,12 @@ pub enum AutomationTargetDto {
         bus_id: u32,
         mix_target: MixerChannelParamTargetDto,
     },
-    Master(MixerChannelParamTargetDto),
+    Master(MasterAutomationTargetDto),
+}
+
+#[derive(Clone, Debug)]
+pub enum MasterAutomationTargetDto {
+    MixerChannel(MixerChannelParamTargetDto),
     TempoBpm,
 }
 
@@ -295,10 +300,20 @@ impl From<&AutomationTarget> for AutomationTargetDto {
                 bus_id: bus_id.to_u32(),
                 mix_target: MixerChannelParamTargetDto::from(mix_target),
             },
-            AutomationTarget::Master(mix_target) => {
-                Self::Master(MixerChannelParamTargetDto::from(mix_target))
+            AutomationTarget::Master(master_target) => {
+                match master_target {
+                    karbeat_core::core::project::MasterAutomationTarget::MixerChannel(
+                        mix_target,
+                    ) => Self::Master(MasterAutomationTargetDto::MixerChannel(
+                        MixerChannelParamTargetDto::from(mix_target),
+                    )),
+                    karbeat_core::core::project::MasterAutomationTarget::TempoBpm => {
+                        Self::Master(MasterAutomationTargetDto::TempoBpm)
+                    }
+                }
+
+                // MixerChannelParamTargetDto::from(mix_target)
             }
-            AutomationTarget::TempoBpm => Self::TempoBpm,
             AutomationTarget::Generator {
                 generator_id,
                 param_id,
@@ -350,10 +365,14 @@ impl From<AutomationTargetDto> for AutomationTarget {
                 bus_id: BusId::from(bus_id),
                 mix_target: MixerChannelParamTarget::from(mix_target),
             },
-            AutomationTargetDto::Master(mix_target) => {
-                Self::Master(MixerChannelParamTarget::from(mix_target))
-            }
-            AutomationTargetDto::TempoBpm => Self::TempoBpm,
+            AutomationTargetDto::Master(master_target) => match master_target {
+                MasterAutomationTargetDto::MixerChannel(mix_target) => Self::Master(
+                    MasterAutomationTarget::MixerChannel(MixerChannelParamTarget::from(mix_target)),
+                ),
+                MasterAutomationTargetDto::TempoBpm => {
+                    Self::Master(MasterAutomationTarget::TempoBpm)
+                }
+            },
             AutomationTargetDto::Generator {
                 generator_id,
                 param_id,

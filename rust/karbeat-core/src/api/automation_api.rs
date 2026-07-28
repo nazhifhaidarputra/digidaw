@@ -5,7 +5,7 @@ use crate::{
     commands::AudioCommand,
     context::DawContext,
     core::project::{
-        automation::{AutomationLane, AutomationPoint, AutomationTarget},
+        automation::{AutomationLane, AutomationTarget},
         AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource,
     },
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},

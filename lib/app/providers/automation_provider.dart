@@ -1,3 +1,4 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
@@ -9,7 +10,17 @@ part 'automation_provider.freezed.dart';
 
 @freezed
 abstract class AutomationDataState with _$AutomationDataState {
-  const factory AutomationDataState() = _AutomationDataState;
+  const factory AutomationDataState({
+    @Default(false) bool isMasterAutomationDrawerOpened,
+    
+    /// Tracks which track automations are collapsed. 
+    /// If a trackId is NOT in this set, it is considered expanded (defaults to true).
+    @Default({}) ISet<int> collapsedTrackAutomations,
+    
+    /// Optional: Tracks the currently selected/highlighted automation lane in the UI
+    int? selectedAutomationLaneId,
+
+  }) = _AutomationDataState;
 }
 
 typedef ChannelAutomationEntry = (
@@ -25,6 +36,37 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
   AutomationDataState build() {
     return AutomationDataState();
   }
+
+  // =========================================================================
+  // UI STATE MANAGEMENT
+  // =========================================================================
+
+  void toggleMasterAutomationDrawer() {
+    state = state.copyWith(
+      isMasterAutomationDrawerOpened: !state.isMasterAutomationDrawerOpened,
+    );
+  }
+
+  void toggleTrackAutomationExpanded(int trackId) {
+    final collapsed = state.collapsedTrackAutomations;
+    if (collapsed.contains(trackId)) {
+      state = state.copyWith(
+        collapsedTrackAutomations: collapsed.remove(trackId),
+      );
+    } else {
+      state = state.copyWith(
+        collapsedTrackAutomations: collapsed.add(trackId),
+      );
+    }
+  }
+
+  void selectAutomationLane(int? laneId) {
+    state = state.copyWith(selectedAutomationLaneId: laneId);
+  }
+
+  // =========================================================================
+  // BACKEND INTERACTION
+  // =========================================================================
 
   Future<AsyncValue<void>> handleAddAutomationForTarget({
     required AutomationTargetDto target,
@@ -268,6 +310,18 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
 // Reactive UI Providers
 // ==========================================================
 
+/// Tracks whether a track's automation accordion is expanded.
+/// Defaults to true unless explicitly collapsed in the AutomationDataState.
+final trackAutomationExpandedProvider = Provider.family<bool, int>(
+  (ref, trackId) {
+    final collapsed = ref.watch(
+      automationProvider.select((s) => s.collapsedTrackAutomations),
+    );
+    return !collapsed.contains(trackId);
+  },
+);
+
+
 /// Provider to get all automation lanes for a specific Bus ID.
 /// Usage in Widget: `final lanes = ref.watch(busAutomationProvider(busId));`
 final busAutomationProvider =
@@ -377,6 +431,38 @@ final allBusesAutomationProvider =
 
       return map;
     });
+
+final masterAutomationProvider = Provider<List<ChannelAutomationEntry>>((ref) {
+  final projectData = ref.watch(projectProvider).value;
+  if (projectData == null) return const [];
+
+  final lanes = <ChannelAutomationEntry>[];
+
+  for (final link in projectData.modulationLinks.values) {
+    final target = link.target;
+
+    if (target is AutomationTargetDto_Master) {
+      final source = projectData.modulationSources[link.sourceId];
+
+      if (source is ModulationSourceDto_Automation) {
+        final laneId = source.laneId;
+        final lane = projectData.automationPool[laneId];
+
+        if (lane != null) {
+          lanes.add((laneId, link.id, lane));
+        }
+      }
+    }
+  }
+
+  lanes.sort((a, b) {
+    final linkA = projectData.modulationLinks[a.$2]!;
+    final linkB = projectData.modulationLinks[b.$2]!;
+    return linkA.orderIdx.compareTo(linkB.orderIdx);
+  });
+
+  return lanes;
+});
 
 final automationProvider =
     NotifierProvider<AutomationNotifier, AutomationDataState>(

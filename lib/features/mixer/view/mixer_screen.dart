@@ -1071,7 +1071,7 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
         : const MixerChannelParamTargetDto.volume();
 
     if (widget.entry.isMaster) {
-      return AutomationTargetDto.master(mixTarget);
+      return AutomationTargetDto.master(MasterAutomationTargetDto.mixerChannel(mixTarget));
     } else if (widget.entry.isBus) {
       return AutomationTargetDto.bus(
         busId: widget.entry.id,

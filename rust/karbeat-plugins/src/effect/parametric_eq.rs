@@ -1,4 +1,3 @@
-use arc_swap::ArcSwap;
 use karbeat_dsp::filter::{
     BiquadCoefficients, BiquadFilterType, FilterMode, SingleBiquadFilterStage,
 };
@@ -801,7 +800,7 @@ impl AudioPlugin for DigiParametricEQ {
         "1.0.0"
     }
 
-    fn can_apply_io_layout(&self, inputs: &[BusConfig], outputs: &[BusConfig]) -> bool {
+    fn can_apply_io_layout(&self, _inputs: &[BusConfig], _outputs: &[BusConfig]) -> bool {
         true // Default: accept any layout
     }
 
@@ -819,11 +818,11 @@ impl AudioPlugin for DigiParametricEQ {
         self.active_parameter_edits.remove(&id);
     }
 
-    fn plain_to_normalized(&self, id: u32, plain: f32) -> f32 {
+    fn plain_to_normalized(&self, _id: u32, plain: f32) -> f32 {
         plain
     }
 
-    fn normalized_to_plain(&self, id: u32, normalized: f32) -> f32 {
+    fn normalized_to_plain(&self, _id: u32, normalized: f32) -> f32 {
         normalized
     }
 

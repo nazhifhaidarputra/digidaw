@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
@@ -46,18 +45,18 @@ part 'track_list_interactive_clip.dart';
 part 'track_list_clip_renderer.dart';
 part 'track_list_grouped_batch_overlay.dart';
 
-final trackWaveformProvider =
-    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
-      // Re-evaluate whenever the track changes (e.g. clips added/removed)
-      ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
-      final ctx = ref.read(projectProvider.notifier).dawContext;
-      return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
-    });
+// final trackWaveformProvider =
+//     Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+//       // Re-evaluate whenever the track changes (e.g. clips added/removed)
+//       ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
+//       final ctx = ref.read(projectProvider.notifier).dawContext;
+//       return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
+//     });
 
-/// Tracks whether a track's automation accordion is expanded
-final trackAccordionExpandedProvider = StateProvider.family<bool, int>(
-  (ref, trackId) => true,
-);
+// /// Tracks whether a track's automation accordion is expanded
+// final trackAccordionExpandedProvider = StateProvider.family<bool, int>(
+//   (ref, trackId) => true,
+// );
 
 class TrackListScreen extends ConsumerWidget {
   const TrackListScreen({super.key});

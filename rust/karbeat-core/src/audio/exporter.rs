@@ -2,13 +2,9 @@ use rtrb::RingBuffer;
 use thiserror::Error;
 
 use crate::{
-    audio::{
-        render_state::AudioRenderState,
-        writer::{create_writer, AudioExportConfig, AudioWriter},
-    },
+    audio::writer::{create_writer, AudioExportConfig, AudioWriter},
     commands::AudioCommand,
     context::DawContext,
-    core::project::ApplicationState,
 };
 
 #[derive(Debug, Clone, Error)]
