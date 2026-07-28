@@ -266,10 +266,6 @@ impl From<&ApplicationState> for AudioGraphState {
             .map(|(&id, view)| (id, view.prop.clone()))
             .collect();
 
-        // 3. Append explicit user modulations (LFOs, Peak Controllers) from ApplicationState
-        // (Assuming you added `pub modulations: Vec<ModulationEvent>` to ApplicationState)
-        // modulation_events.extend(app.modulations.clone());
-
         Self {
             tracks: tracks_vec.into_boxed_slice(),
             patterns: app.pattern_pool.clone(),

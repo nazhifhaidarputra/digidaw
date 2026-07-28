@@ -1152,6 +1152,37 @@ impl AudioEngine {
                 self.telemetry.active_telemetry_subscriptions.clear();
 
                 // =========================================================
+                // REINITIALIZE MODULATION SOURCES & LINKS
+                // =========================================================
+                self.active_sources.clear();
+                self.active_links.clear();
+                self.suspended_targets.clear();
+                self.lfo_phases.clear();
+
+                for (&id, source) in &self.current_state.graph.modulation_sources {
+                    let live_source = match source {
+                        crate::core::project::ModulationSource::LFO { rate_hz } => {
+                            LiveModulationSource::LFO(LiveLfo {
+                                rate_hz: *rate_hz,
+                                phase: 0.0,
+                            })
+                        }
+                        crate::core::project::ModulationSource::Automation { lane_id } => {
+                            LiveModulationSource::Automation { lane_id: *lane_id }
+                        }
+                        crate::core::project::ModulationSource::PeakController { source } => {
+                            LiveModulationSource::PeakController {
+                                source: source.clone(),
+                            }
+                        }
+                    };
+                    self.active_sources.insert(id, (live_source, 0.0));
+                }
+
+                self.active_links
+                    .extend(self.current_state.graph.modulation_links.values().cloned());
+
+                // =========================================================
                 // Seed audio-thread mixer channel state from project values
                 // =========================================================
                 self.mixer_state = AudioMixerState::default();
@@ -1654,7 +1685,37 @@ impl AudioEngine {
                 let bus_ids = graph.bus_ids.iter().copied();
                 self.cached_routing_order =
                     compute_routing_order(track_ids, bus_ids, &graph.routing);
+                
                 self.current_state.graph = graph;
+
+                // =========================================================
+                // REINITIALIZE MODULATION SOURCES & LINKS
+                // =========================================================
+                self.active_sources.clear();
+                self.active_links.clear();
+                self.suspended_targets.clear();
+                self.lfo_phases.clear();
+
+                for (&id, source) in &self.current_state.graph.modulation_sources {
+                    let live_source = match source {
+                        crate::core::project::ModulationSource::LFO { rate_hz } => {
+                            LiveModulationSource::LFO(LiveLfo {
+                                rate_hz: *rate_hz,
+                                phase: 0.0,
+                            })
+                        }
+                        crate::core::project::ModulationSource::Automation { lane_id } => {
+                            LiveModulationSource::Automation { lane_id: *lane_id }
+                        }
+                        crate::core::project::ModulationSource::PeakController { source } => {
+                            LiveModulationSource::PeakController { source: source.clone() }
+                        }
+                    };
+                    self.active_sources.insert(id, (live_source, 0.0));
+                }
+
+                // Extract the values from the HashMap and push them directly into the active links array
+                self.active_links.extend(self.current_state.graph.modulation_links.values().cloned());
 
                 log::debug!("[AudioEngine] ReplaceFullGraph applied");
                 self.recalculate_max_sample_index();
