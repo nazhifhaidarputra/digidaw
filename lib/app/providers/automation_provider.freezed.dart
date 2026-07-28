@@ -211,7 +211,7 @@ return $default(_that.isMasterAutomationDrawerOpened,_that.collapsedTrackAutomat
 
 
 class _AutomationDataState implements AutomationDataState {
-  const _AutomationDataState({this.isMasterAutomationDrawerOpened = false, this.collapsedTrackAutomations = const {}, this.selectedAutomationLaneId});
+  const _AutomationDataState({this.isMasterAutomationDrawerOpened = false, this.collapsedTrackAutomations = const ISetConst({}), this.selectedAutomationLaneId});
   
 
 @override@JsonKey() final  bool isMasterAutomationDrawerOpened;

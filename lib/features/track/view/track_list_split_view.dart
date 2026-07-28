@@ -849,6 +849,42 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                   if (index == widget.trackIds.length) {
                                     return const SizedBox(height: 60);
                                   }
+                                  if (index == widget.trackIds.length + 1) {
+                                    return Consumer(
+                                      builder: (context, ref, _) {
+                                        final lanes = ref.watch(masterAutomationProvider).toIList();
+                                        final isExpanded = ref.watch(automationProvider).isMasterAutomationDrawerOpened;
+                                        final trackColor = const Color.fromRGBO(200, 100, 50, 1.0);
+                                        final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
+
+                                        if (lanes.isEmpty) return const SizedBox();
+
+                                        return Column(
+                                          children: [
+                                            // Empty space to perfectly align with the "Master Track" title block on the left
+                                            const SizedBox(height: 30), 
+                                            // AutomationExpandBar is duplicated here as a spacer to keep the layout aligned with the header side
+                                            AutomationExpandBar(
+                                              isExpanded: isExpanded,
+                                              laneCount: lanes.length,
+                                              trackColor: trackColor,
+                                              onTap: () => ref.read(automationProvider.notifier).toggleMasterAutomationDrawer(),
+                                            ),
+                                            if (isExpanded)
+                                              ...lanes.map(
+                                                (entry) => AutomationLaneSlot(
+                                                  lane: entry.$3,
+                                                  height: 60,
+                                                  horizontalScrollController: _trackContentController,
+                                                  trackColor: trackColor,
+                                                  sampleRate: sr,
+                                                ),
+                                              ),
+                                          ],
+                                        );
+                                      },
+                                    );
+                                  }
                                   final trackId = widget.trackIds[index];
                                   return Consumer(
                                     builder: (context, ref, _) {

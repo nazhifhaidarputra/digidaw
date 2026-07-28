@@ -15,7 +15,7 @@ abstract class AutomationDataState with _$AutomationDataState {
     
     /// Tracks which track automations are collapsed. 
     /// If a trackId is NOT in this set, it is considered expanded (defaults to true).
-    @Default({}) ISet<int> collapsedTrackAutomations,
+    @Default(ISetConst({})) ISet<int> collapsedTrackAutomations,
     
     /// Optional: Tracks the currently selected/highlighted automation lane in the UI
     int? selectedAutomationLaneId,
