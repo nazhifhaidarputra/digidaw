@@ -40,10 +40,11 @@ class AutomationCurvePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final path = Path();
-    
+
     // Default Y coordinate (0.0 - 1.0 clamped)
-    final defaultY = size.height - (lane.defaultValue.clamp(0.0, 1.0) * size.height);
-    
+    final defaultY =
+        size.height - (lane.defaultValue.clamp(0.0, 1.0) * size.height);
+
     // Project start X (Tick 0)
     final projectStartX = 0.0;
 
@@ -116,9 +117,9 @@ class AutomationCurvePainter extends CustomPainter {
 
     // 3. Plateau AFTER the last point
     final lastPos = getPixelCoords(points.last);
-    
+
     // Ensure we are at the end of the last point's path
-    path.moveTo(lastPos.dx, lastPos.dy); 
+    path.moveTo(lastPos.dx, lastPos.dy);
     // Vertical jump down/up to the default value
     path.lineTo(lastPos.dx, lastPos.dy);
     // Extend the line infinitely to the right (or at least to screen edge)
@@ -148,7 +149,7 @@ class AutomationCurvePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant AutomationCurvePainter oldDelegate) {
     return oldDelegate.zoomLevel != zoomLevel ||
-        oldDelegate.lane != lane || 
+        oldDelegate.lane != lane ||
         oldDelegate.scrollController != scrollController;
   }
 }

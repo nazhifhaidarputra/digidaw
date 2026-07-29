@@ -28,6 +28,7 @@ class AutomationLaneSlot extends ConsumerStatefulWidget {
   @override
   ConsumerState<AutomationLaneSlot> createState() => _AutomationLaneSlotState();
 }
+
 class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   // Optimistic UI state
   IList<AutomationPointDto>? _localPoints;
@@ -58,7 +59,8 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   /// Optional: Use this if you ever need to draw a UI tooltip while dragging
   /// to show the user the real-world parameter value (e.g., " -6.0 dB").
   double _getDenormalizedValue(double normalizedValue) {
-    return widget.lane.min + normalizedValue * (widget.lane.max - widget.lane.min);
+    return widget.lane.min +
+        normalizedValue * (widget.lane.max - widget.lane.min);
   }
 
   int _snapTicks(int ticks) {
@@ -103,13 +105,12 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     if (isRightClick) {
       if (pointId != null) {
         // DELETE POINT
-        ref.read(automationProvider.notifier).removePoint(
-              widget.lane.id,
-              pointId,
-            );
+        ref
+            .read(automationProvider.notifier)
+            .removePoint(widget.lane.id, pointId);
       }
       return;
-    } 
+    }
 
     // Left Click Logic
     if (pointId != null) {
@@ -153,10 +154,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
         final p = _localPoints![index];
         _localPoints = _localPoints!.replace(
           index,
-          p.copyWith(
-            timeTicks: snappedTicks,
-            value: value,
-          ),
+          p.copyWith(timeTicks: snappedTicks, value: value),
         );
       });
     }
@@ -168,14 +166,14 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
 
       if (_draggedPointId! < 0) {
         // A. It was a temporary point -> Tell Rust to ADD it officially
-        ref.read(automationProvider.notifier).addPoint(
-              widget.lane.id,
-              p.timeTicks,
-              p.value,
-            );
+        ref
+            .read(automationProvider.notifier)
+            .addPoint(widget.lane.id, p.timeTicks, p.value);
       } else {
         // B. It was an existing point -> Tell Rust to UPDATE it
-        ref.read(automationProvider.notifier).updatePoint(
+        ref
+            .read(automationProvider.notifier)
+            .updatePoint(
               automationLaneId: widget.lane.id,
               pointId: p.id,
               timeTicks: p.timeTicks,
@@ -222,7 +220,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       ),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        // Empty callbacks absorb the drag gestures, preventing the parent 
+        // Empty callbacks absorb the drag gestures, preventing the parent
         // horizontalScrollController from scrolling while interacting here.
         onHorizontalDragStart: (_) {},
         onHorizontalDragUpdate: (_) {},
@@ -249,7 +247,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                   ),
                 ),
               ),
-          
+
               // 2. Automation Curve Overlay
               Positioned.fill(
                 child: RepaintBoundary(

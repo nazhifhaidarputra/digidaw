@@ -22,7 +22,7 @@ import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/daw_input_detector.dart';
 import 'package:karbeat/features/track/view/midi_drawer.dart';
 import 'package:karbeat/features/track/view/waveform_painter.dart';
-import 'package:karbeat/features/track/view/clip_drag_controller.dart';
+
 import 'package:karbeat/features/track/view/playhead.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;

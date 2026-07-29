@@ -46,9 +46,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   int? _rangeSelectTrackId; // Track ID where the range selection started
 
   // ==========================================================================
-  // BATCH CLIP DRAG STATE (centralized for cross-track coordination)
+  // BATCH CLIP DRAG STATE (handled by ClipPlacementNotifier now)
   // ==========================================================================
-  final ClipDragController _clipDragController = ClipDragController();
 
   @override
   void initState() {
@@ -69,29 +68,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _trackContentController = _horizontalControllers.addAndGet();
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
-
-    // Listen to batch drag controller for overlay updates
-    _clipDragController.addListener(_onBatchDragUpdate);
   }
 
   @override
   void dispose() {
     _trackSplitViewController.dispose();
-    _clipDragController.removeListener(_onBatchDragUpdate);
-    _clipDragController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
     _headerController.dispose();
     _timelineController.dispose();
     _rulerController.dispose();
     _trackContentController.dispose();
     super.dispose();
-  }
-
-  /// Called when batch drag controller updates - triggers overlay repaint
-  void _onBatchDragUpdate() {
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   bool _handleKeyEvents(KeyEvent event) {
@@ -971,8 +958,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                                 horizontalScrollController:
                                                     _trackContentController,
                                                 sampleRate: sr,
-                                                clipDragController:
-                                                    _clipDragController,
                                               ),
                                             ),
                                             if (lanes.isNotEmpty)
@@ -1029,7 +1014,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           itemHeight: widget.itemHeight,
           horizontalScrollController: _trackContentController,
           timelineController: _timelineController,
-          clipDragController: _clipDragController,
         ),
 
         Positioned.fill(
