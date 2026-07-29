@@ -61,7 +61,19 @@ class _GroupedBatchOverlay extends ConsumerWidget {
             48000;
         final screenLeft =
             (clip.startTimeInTicks(bpm, sr) / zoomLevel) - scrollX;
-        final screenTop = (targetTrackIndex * itemHeight) - scrollY + 30 + 2;
+        double trackTopY = 0.0;
+        for (int i = 0; i < targetTrackIndex; i++) {
+          final tId = trackIds[i];
+          trackTopY += itemHeight;
+          final lanes = ref.read(trackAutomationProvider(tId));
+          if (lanes.isNotEmpty) {
+            trackTopY += 24;
+            if (ref.read(trackAutomationExpandedProvider(tId))) {
+              trackTopY += lanes.length * 60;
+            }
+          }
+        }
+        final screenTop = trackTopY - scrollY + 30 + 2;
         final clipWidth = clip.loopLengthInTicks(bpm, sr) / zoomLevel;
 
         double activeWidth = clipWidth;

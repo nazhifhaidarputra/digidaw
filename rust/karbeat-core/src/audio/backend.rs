@@ -515,9 +515,31 @@ pub fn start_audio_stream(
             let tx_clone = restart_tx.clone();
 
             // Callback triggered by CPAL if the stream dies natively (e.g. unplugging a USB interface)
-            let err_fn = move |err| {
-                log::error!("Audio stream error: {}. Triggering restart...", err);
-                let _ = tx_clone.send(());
+            let err_fn = move |err: cpal::StreamError| {
+                match err {
+                    cpal::StreamError::DeviceNotAvailable => {
+                        log::error!("Audio device disconnected: {}. Triggering restart...", err);
+                        let _ = tx_clone.send(());
+                    }
+                    cpal::StreamError::BackendSpecific { ref err } => {
+                        let err_msg = err.to_string().to_lowercase();
+                        // Ignore transient CPU lags / buffer starvations
+                        if err_msg.contains("underrun") || err_msg.contains("overrun") {
+                            log::warn!("Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally...");
+                        } else {
+                            log::error!("Audio stream backend error: {}. Triggering restart...", err_msg);
+                            let _ = tx_clone.send(());
+                        }
+                    }
+                    cpal::StreamError::BufferUnderrun => {
+                        log::warn!("Native buffer underrun detected due to CPU lag. Recovering naturally...");
+                    }
+                    cpal::StreamError::StreamInvalidated => {
+                        // Stream is permanently dead (e.g., OS changed sample rate or audio routing)
+                        log::error!("Audio stream invalidated by the OS. Triggering restart...");
+                        let _ = tx_clone.send(());
+                    }
+                }
             };
 
             let stream_result = match sample_format {

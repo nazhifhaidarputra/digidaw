@@ -39,11 +39,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   bool _isCtrlPressed = false;
 
-  // Range selection state
-  bool _isRangeSelecting = false;
-  Offset? _rangeSelectStart; // Position in absolute pixels (including scroll)
-  Offset? _rangeSelectEnd;
-  int? _rangeSelectTrackId; // Track ID where the range selection started
+  // Range selection state is now managed by rangeSelectProvider.
+  // No local state needed here — the per-track TrackRangeSelectOverlay
+  // widget renders the rect directly in each track's coordinate space.
 
   // ==========================================================================
   // BATCH CLIP DRAG STATE (handled by ClipPlacementNotifier now)
@@ -188,7 +186,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         setState(() {
           _mousePos = localPosition;
         });
-        _updatePlacementTarget();
         break;
       case ToolSelection.pointer:
       case ToolSelection.slice:
@@ -197,80 +194,62 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  /// Starts a range selection when select tool is active
+  /// Starts a range selection when select tool is active.
   void _startRangeSelect(Offset localPosition) {
-    // Calculate absolute position (including scroll)
-    double scrollX = 0;
-    double scrollY = 0;
-    if (_trackContentController.hasClients) {
-      scrollX = _trackContentController.offset;
-    }
-    if (_timelineController.hasClients) {
-      scrollY = _timelineController.offset;
-    }
+    if (widget.trackIds.isEmpty) return;
+
+    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    final scrollX = _trackContentController.hasClients
+        ? _trackContentController.offset
+        : 0.0;
+    final scrollY = _timelineController.hasClients
+        ? _timelineController.offset
+        : 0.0;
 
     final absoluteX = localPosition.dx + scrollX;
     final absoluteY = localPosition.dy + scrollY;
 
-    // Determine which track the selection starts on
+    // Determine which track the drag started on.
     int trackIndex = (absoluteY / widget.itemHeight).floor();
     trackIndex = trackIndex.clamp(0, widget.trackIds.length - 1);
 
-    setState(() {
-      _isRangeSelecting = true;
-      _rangeSelectStart = Offset(absoluteX, absoluteY);
-      _rangeSelectEnd = Offset(absoluteX, absoluteY);
-      _rangeSelectTrackId = widget.trackIds[trackIndex];
-    });
+    // Convert absolute pixel X to ticks so the overlay can render without
+    // needing the scroll offset.
+    final startTick = absoluteX * zoomLevel;
+    ref
+        .read(rangeSelectProvider.notifier)
+        .start(widget.trackIds[trackIndex], startTick);
   }
 
-  /// Updates the range selection rectangle during drag
+  /// Updates the range selection as the user drags.
   void _updateRangeSelect(Offset localPosition) {
-    if (!_isRangeSelecting || _rangeSelectStart == null) return;
+    if (!ref.read(rangeSelectProvider).isSelecting) return;
 
-    double scrollX = 0;
-    double scrollY = 0;
-    if (_trackContentController.hasClients) {
-      scrollX = _trackContentController.offset;
-    }
-    if (_timelineController.hasClients) {
-      scrollY = _timelineController.offset;
-    }
+    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    final scrollX = _trackContentController.hasClients
+        ? _trackContentController.offset
+        : 0.0;
 
     final absoluteX = localPosition.dx + scrollX;
-    final absoluteY = localPosition.dy + scrollY;
-
-    setState(() {
-      _rangeSelectEnd = Offset(absoluteX, absoluteY);
-    });
+    ref.read(rangeSelectProvider.notifier).update(absoluteX * zoomLevel);
   }
 
-  /// Confirms the range selection and selects all clips within the time range
+  /// Confirms the range selection and selects all clips within the time range.
   void _confirmRangeSelect() {
-    if (!_isRangeSelecting ||
-        _rangeSelectStart == null ||
-        _rangeSelectEnd == null ||
-        _rangeSelectTrackId == null) {
+    final rangeState = ref.read(rangeSelectProvider);
+    if (!rangeState.isSelecting || rangeState.trackId == -1) {
       _cancelRangeSelect();
       return;
     }
 
-    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
-
-    // Get time range in ticks
-    final startX = _rangeSelectStart!.dx;
-    final endX = _rangeSelectEnd!.dx;
-    final minX = startX < endX ? startX : endX;
-    final maxX = startX > endX ? startX : endX;
-
-    final startTimeTicks = (minX * zoomLevel).toInt();
-    final endTimeTicks = (maxX * zoomLevel).toInt();
+    final minTick = math.min(rangeState.startTick, rangeState.endTick).toInt();
+    final maxTick = math.max(rangeState.startTick, rangeState.endTick).toInt();
 
     final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
     final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
-    // Find clips in the target track that overlap with the selection range
-    final track = ref.read(projectProvider).value?.tracks[_rangeSelectTrackId!];
+    final track =
+        ref.read(projectProvider).value?.tracks[rangeState.trackId];
     if (track == null) {
       _cancelRangeSelect();
       return;
@@ -280,18 +259,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     for (final clip in track.clips) {
       final clipStart = clip.startTimeInTicks(bpm, sr);
       final clipEnd = clipStart + clip.loopLengthInTicks(bpm, sr);
-
-      // Check if clip overlaps with selection range
-      if (clipEnd > startTimeTicks && clipStart < endTimeTicks) {
+      if (clipEnd > minTick && clipStart < maxTick) {
         selectedClipIds.add(clip.id);
       }
     }
 
-    // Select the clips
     if (selectedClipIds.isNotEmpty) {
-      ref
-          .read(trackListStateProvider.notifier)
-          .selectClips(trackId: _rangeSelectTrackId!, clipIds: selectedClipIds);
+      ref.read(trackListStateProvider.notifier).selectClips(
+        trackId: rangeState.trackId,
+        clipIds: selectedClipIds,
+      );
     } else {
       ref.read(trackListStateProvider.notifier).deselectAllClips();
     }
@@ -299,14 +276,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _cancelRangeSelect();
   }
 
-  /// Cancels/resets the range selection state
+  /// Cancels/resets the range selection.
   void _cancelRangeSelect() {
-    setState(() {
-      _isRangeSelecting = false;
-      _rangeSelectStart = null;
-      _rangeSelectEnd = null;
-      _rangeSelectTrackId = null;
-    });
+    ref.read(rangeSelectProvider.notifier).cancel();
   }
 
   /// Helper method to build the cut helper line
@@ -698,13 +670,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                         }
                         if (selectedTool == ToolSelection.draw || isPlacing) {
                           setState(() => _mousePos = details.localPosition);
-                          _updatePlacementTarget();
                         }
                       },
                       onTapDown: isPlacing
                           ? (details) {
                               setState(() => _mousePos = details.localPosition);
-                              _updatePlacementTarget();
                             }
                           : (details) => _handleTimelineGesture(
                               context,
@@ -717,12 +687,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       },
                       onPanEnd: (details) {
                         if (selectedTool == ToolSelection.select &&
-                            _isRangeSelecting) {
+                            ref.read(rangeSelectProvider).isSelecting) {
                           _confirmRangeSelect();
                         }
                       },
                       child: ScrollConfiguration(
-                        behavior: (selectedTool == ToolSelection.pointer)
+                        behavior:
+                            (selectedTool == ToolSelection.pointer &&
+                                !isPlacing)
                             ? DragScrollBehavior()
                             : ScrollConfiguration.of(context).copyWith(
                                 dragDevices: {
@@ -757,6 +729,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                           ? _timelineController.offset
                                           : 0;
                                       double absoluteY = targetPos.dy + scrollY;
+
+                                      if (widget.trackIds.isEmpty) return;
                                       int trackIndex =
                                           (absoluteY / widget.itemHeight)
                                               .floor();
@@ -764,7 +738,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                         0,
                                         widget.trackIds.length - 1,
                                       );
-
                                       final targetTrackId =
                                           widget.trackIds[trackIndex];
                                       final track = ref
@@ -885,15 +858,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
                                             return Column(
                                               children: [
-                                                IgnorePointer(
-                                                  ignoring: isPlacing,
-                                                  child: AudioTrackSlot(
-                                                    trackId: trackId,
-                                                    height: widget.itemHeight,
-                                                    horizontalScrollController:
-                                                        _trackContentController,
-                                                    sampleRate: sr,
-                                                  ),
+                                                AudioTrackSlot(
+                                                  trackId: trackId,
+                                                  height: widget.itemHeight,
+                                                  horizontalScrollController:
+                                                      _trackContentController,
+                                                  sampleRate: sr,
                                                 ),
                                                 if (lanes.isNotEmpty)
                                                   AutomationExpandBar(
@@ -1011,8 +981,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         ),
 
         // Overlays inside the Timeline Stack
-        if (isPlacing && _mousePos != null) _buildGhostClip(context),
-        if (_isRangeSelecting) _buildRangeSelectRect(context),
+        // (Range selection rect is rendered per-track inside AudioTrackSlot via TrackRangeSelectOverlay)
         _buildCutHelperLine(context),
 
         _GroupedBatchOverlay(
@@ -1048,49 +1017,43 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           ),
         ),
 
-        if (isPlacing)
-          Positioned(
-            bottom: 30,
-            right: 30,
-            child: Row(
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'cancel_place',
-                  label: const Text("Cancel"),
-                  icon: const Icon(Icons.close),
-                  backgroundColor: Colors.redAccent,
-                  onPressed: () {
-                    setState(() => _mousePos = null);
-                    ref.read(clipPlacementProvider.notifier).cancelPlacement();
-                  },
-                ),
-                const SizedBox(width: 16),
-                FloatingActionButton.extended(
-                  onPressed: () async {
-                    final result = await ref
-                        .read(clipPlacementProvider.notifier)
-                        .confirmPlacement();
-                    if (!context.mounted) return;
-                    switch (result) {
-                      case Ok<void>():
-                        if (!ref.read(clipPlacementProvider).isPlacing) {
-                          setState(() => _mousePos = null);
-                        }
-                      case Error<void>():
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(result.toErrorMessage())),
-                        );
-                    }
-                  },
-                  label: const Text('Confirm'),
-                  heroTag: 'confirm_place',
-                  icon: const Icon(Icons.check),
-                  backgroundColor: Colors.greenAccent,
-                ),
-              ],
-            ),
-          ),
-
+        // if (isPlacing)
+        //   Positioned(
+        //     bottom: 30,
+        //     right: 30,
+        //     child: Row(
+        //       children: [
+        //         FloatingActionButton.extended(
+        //           heroTag: 'cancel_place',
+        //           label: const Text("Cancel"),
+        //           icon: const Icon(Icons.close),
+        //           backgroundColor: Colors.redAccent,
+        //           onPressed: () {
+        //             ref.read(clipPlacementProvider.notifier).cancelPlacement();
+        //           },
+        //         ),
+        //         const SizedBox(width: 16),
+        //         FloatingActionButton.extended(
+        //           heroTag: 'confirm_place',
+        //           onPressed: () async {
+        //             final result = await ref
+        //                 .read(clipPlacementProvider.notifier)
+        //                 .confirmPlacement();
+        //             if (result.isErr() && context.mounted) {
+        //               ScaffoldMessenger.of(context).showSnackBar(
+        //                 SnackBar(
+        //                   content: Text((result as Error).toErrorMessage()),
+        //                 ),
+        //               );
+        //             }
+        //           },
+        //           label: const Text('Confirm'),
+        //           icon: const Icon(Icons.check),
+        //           backgroundColor: Colors.greenAccent,
+        //         ),
+        //       ],
+        //     ),
+        //   ),
         if (selectedClipIds.isNotEmpty)
           FloatingContextPanel(
             actions: [
@@ -1164,176 +1127,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  void _updatePlacementTarget() {
-    if (_mousePos == null) return;
 
-    // Calculate Absolute Y (Mouse + Scroll)
-    double scrollY = 0;
-    if (_timelineController.hasClients) {
-      scrollY = _timelineController.offset;
-    }
-    double absoluteY = _mousePos!.dy + scrollY;
-
-    // Determine Track Index
-    int trackIndex = (absoluteY / widget.itemHeight).floor();
-    trackIndex = trackIndex.clamp(0, widget.trackIds.length - 1);
-    final targetTrack = widget.trackIds[trackIndex];
-
-    // Calculate Absolute X (Mouse + Scroll)
-    double scrollX = 0;
-    if (_trackContentController.hasClients) {
-      scrollX = _trackContentController.offset;
-    }
-    double absoluteX = (_mousePos!.dx + scrollX).clamp(0, double.infinity);
-
-    // Convert X Pixels -> Ticks
-    final state = ref.read(workspaceStateProvider);
-    final zoomLevel = state.horizontalZoomLevel;
-    double ticks = absoluteX * zoomLevel;
-
-    if (state.snapToGrid) {
-      ticks = _snapTick(ticks.toInt(), state).toDouble();
-    }
-    ref
-        .read(clipPlacementProvider.notifier)
-        .updatePlacementTarget(targetTrack, ticks);
-  }
-
-  Widget _buildGhostClip(BuildContext context) {
-    // We map the absolute coordinates back to screen coordinates
-    // This is essentially just drawing where the mouse is, but snapped to rows
-
-    // We need logic to snap the ghost Y to the row, but let X float
-    // Get current Scroll Offset Y to align grid
-    double scrollY = 0;
-    if (_timelineController.hasClients) {
-      scrollY = _timelineController.offset;
-    }
-    double absoluteY = _mousePos!.dy + scrollY;
-    int trackIndex = (absoluteY / widget.itemHeight).floor();
-    trackIndex = trackIndex.clamp(0, widget.trackIds.length - 1);
-
-    double topY = (trackIndex * widget.itemHeight) - scrollY;
-
-    // Offset by header height (approx) + Header Row
-    topY += 30;
-
-    double scrollX = 0;
-    if (_trackContentController.hasClients) {
-      scrollX = _trackContentController.offset;
-    }
-
-    final state = ref.read(workspaceStateProvider);
-    double absoluteX = _mousePos!.dx + scrollX;
-    if (absoluteX < 0) absoluteX = 0;
-
-    double ticks = absoluteX * state.horizontalZoomLevel;
-    if (state.snapToGrid) {
-      ticks = _snapTick(ticks.toInt(), state).toDouble();
-    }
-
-    // Convert the snapped position back into a screen pixel coordinate
-    double snappedAbsoluteX = ticks / state.horizontalZoomLevel;
-    double left = math.max(snappedAbsoluteX - scrollX, 0);
-
-    return Positioned(
-      left: left,
-      top: topY,
-      width: 150, // Preview width
-      height: widget.itemHeight - 4,
-      child: GestureDetector(
-        // ENABLE Dragging on the ghost itself
-        onPanUpdate: (details) {
-          setState(() {
-            // Update _mousePos relative to the drag delta
-            if (_mousePos != null) {
-              _mousePos = _mousePos! + details.delta;
-            }
-          });
-          // Update the logic state
-          _updatePlacementTarget();
-        },
-        child: Opacity(
-          opacity: 0.7,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.move,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.cyanAccent.withAlpha(100),
-                border: Border.all(color: Colors.cyanAccent, width: 2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Center(
-                child: Text(
-                  "Place Here",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 2)],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Builds the visual rectangle overlay for range selection
-  Widget _buildRangeSelectRect(BuildContext context) {
-    if (_rangeSelectStart == null ||
-        _rangeSelectEnd == null ||
-        _rangeSelectTrackId == null) {
-      return const SizedBox();
-    }
-
-    // Get scroll offsets
-    double scrollX = 0;
-    double scrollY = 0;
-    if (_trackContentController.hasClients) {
-      scrollX = _trackContentController.offset;
-    }
-    if (_timelineController.hasClients) {
-      scrollY = _timelineController.offset;
-    }
-
-    // Find the track index for the starting track
-    final trackIndex = widget.trackIds.indexWhere(
-      (t) => t == _rangeSelectTrackId,
-    );
-    if (trackIndex < 0) return const SizedBox();
-
-    // Calculate the rectangle bounds (only horizontal matters, vertical is fixed to the track)
-    final startX = _rangeSelectStart!.dx;
-    final endX = _rangeSelectEnd!.dx;
-    final minX = startX < endX ? startX : endX;
-    final maxX = startX > endX ? startX : endX;
-
-    // Convert from absolute coordinates to screen coordinates
-    final screenLeft = minX - scrollX;
-    final screenWidth = maxX - minX;
-
-    // Track row position (fixed to the starting track)
-    final screenTop =
-        (trackIndex * widget.itemHeight) - scrollY + 30; // +30 for ruler height
-
-    return Positioned(
-      left: screenLeft,
-      top: screenTop,
-      width: screenWidth < 2 ? 2 : screenWidth,
-      height: widget.itemHeight - 4,
-      child: IgnorePointer(
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.blueAccent.withAlpha(50),
-            border: Border.all(color: Colors.blueAccent, width: 2),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildAddButton() {
     return SizedBox(

@@ -191,9 +191,21 @@ class SourceListScreen extends ConsumerWidget {
                         ),
                       );
                     },
-                    onPlace: () => ref
-                        .read(clipPlacementProvider.notifier)
-                        .startPlacement(id, type: UiSourceType.audio),
+                    onPlace: () {
+                      final firstTrackId = ref
+                          .read(projectProvider)
+                          .value
+                          ?.tracks
+                          .keys
+                          .firstOrNull;
+                      ref
+                          .read(clipPlacementProvider.notifier)
+                          .startPlacement(
+                            id,
+                            type: UiSourceType.audio,
+                            initialTrackId: firstTrackId,
+                          );
+                    },
                   );
                 }, childCount: audioSources.length),
               );
@@ -260,9 +272,21 @@ class SourceListScreen extends ConsumerWidget {
                 onTap: () {
                   ref.read(pianoRollProvider.notifier).openPattern(id);
                 },
-                onPlace: () => ref
-                    .read(clipPlacementProvider.notifier)
-                    .startPlacement(id, type: UiSourceType.midi),
+                onPlace: () {
+                  final firstTrackId = ref
+                      .read(projectProvider)
+                      .value
+                      ?.tracks
+                      .keys
+                      .firstOrNull;
+                  ref
+                      .read(clipPlacementProvider.notifier)
+                      .startPlacement(
+                        id,
+                        type: UiSourceType.midi,
+                        initialTrackId: firstTrackId,
+                      );
+                },
               );
             }, childCount: patterns.length),
           ),

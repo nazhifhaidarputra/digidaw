@@ -16,7 +16,7 @@ use crate::{
     DOWNBEAT_BYTES, OFFBEAT_BYTES,
 };
 
-pub const MAX_AMPLITUDE: f64 = 10.0_f64.powf(6.0 / 20.0);
+pub const MAX_AMPLITUDE: f64 = 1.99526231497;
 
 /// A snapshot of a single plugin's current state (Params + Custom Buffers)
 #[derive(Clone, Default)]
@@ -327,7 +327,11 @@ impl Default for AudioMixerChannelValues {
 
 impl AudioMixerChannelValues {
     pub fn new(volume: f32, pan: f32, mute: bool, solo: bool, inverted_phase: bool) -> Self {
-        let _initial_vol = if volume <= -100.0 { 0.0 } else { db_to_linear(volume) };
+        let _initial_vol = if volume <= -100.0 {
+            0.0
+        } else {
+            db_to_linear(volume)
+        };
         Self {
             volume: Param::new_f32(
                 hash_str("mix_chan_vol"),
@@ -349,7 +353,7 @@ impl AudioMixerChannelValues {
             ),
             mute,
             solo,
-            inverted_phase
+            inverted_phase,
         }
     }
     /// Construct a temporary MixerChannel for use in existing DSP functions.

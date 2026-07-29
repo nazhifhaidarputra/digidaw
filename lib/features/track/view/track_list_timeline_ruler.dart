@@ -21,14 +21,22 @@ class _TimelineRuler extends ConsumerWidget {
     final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
 
     return RepaintBoundary(
-      child: CustomPaint(
-        size: Size.zero,
-        painter: _TimelineRulerPainter(
-          zoomLevel: zoomLevel,
-          tempo: tempo,
-          sampleRate: safeSampleRate,
-          scrollController: scrollController,
-        ),
+      // LayoutBuilder gives us the real viewport width on every layout pass
+      // (including first paint and window resize), so the painter never falls
+      // back to an invalid scrollController.viewportDimension.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return CustomPaint(
+            size: Size.zero,
+            painter: _TimelineRulerPainter(
+              zoomLevel: zoomLevel,
+              tempo: tempo,
+              sampleRate: safeSampleRate,
+              scrollController: scrollController,
+              viewportWidth: constraints.maxWidth,
+            ),
+          );
+        },
       ),
     );
   }
@@ -39,12 +47,17 @@ class _TimelineRulerPainter extends CustomPainter {
   final double tempo;
   final int sampleRate;
   final ScrollController scrollController;
+  /// The pixel width of the visible viewport. Supplied by the widget's
+  /// LayoutBuilder so it is accurate on first paint and after every window
+  /// resize, without depending on scrollController.viewportDimension.
+  final double viewportWidth;
 
   _TimelineRulerPainter({
     required this.zoomLevel,
     required this.tempo,
     required this.sampleRate,
     required this.scrollController,
+    required this.viewportWidth,
   }) : super(repaint: scrollController);
 
   @override
@@ -78,16 +91,11 @@ class _TimelineRulerPainter extends CustomPainter {
     double startPixel = 0.0;
     double endPixel = size.width;
 
-    // Handle multiple clients safely
     if (scrollController.hasClients) {
       // When a controller is attached to multiple views, .offset throws.
       // We must access specific positions. Since they are synced, taking the first is fine.
       final position = scrollController.positions.first;
-
       final offset = position.pixels;
-      final viewportWidth = position.hasViewportDimension
-          ? position.viewportDimension
-          : 1000.0;
 
       const double buffer = 200.0;
       startPixel = (offset - buffer).clamp(0.0, double.infinity);
@@ -146,6 +154,7 @@ class _TimelineRulerPainter extends CustomPainter {
     return oldDelegate.zoomLevel != zoomLevel ||
         oldDelegate.tempo != tempo ||
         oldDelegate.sampleRate != sampleRate ||
+        oldDelegate.viewportWidth != viewportWidth ||
         oldDelegate.scrollController != scrollController;
   }
 }

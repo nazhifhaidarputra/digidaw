@@ -236,14 +236,19 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
               // 1. Background Grid
               Positioned.fill(
                 child: RepaintBoundary(
-                  child: CustomPaint(
-                    painter: GridPainter(
-                      zoomLevel: zoomLevel,
-                      gridSize: gridSize,
-                      tempo: tempo,
-                      sampleRate: safeSampleRate,
-                      scrollController: widget.horizontalScrollController,
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraint) {
+                      return CustomPaint(
+                        painter: GridPainter(
+                          zoomLevel: zoomLevel,
+                          gridSize: gridSize,
+                          tempo: tempo,
+                          sampleRate: safeSampleRate,
+                          scrollController: widget.horizontalScrollController,
+                          viewportWidth: constraint.maxWidth,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),

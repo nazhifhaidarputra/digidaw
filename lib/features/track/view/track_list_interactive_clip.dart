@@ -527,6 +527,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
           _previousSnappedDelta = snappedTotalDelta;
 
+          // Clamp: prevent any clip from moving left of the timeline origin (x < 0).
+          // _leaderBaseStartTime is the leftmost clip in the selection, so
+          // leaderBaseStart + delta >= 0  =>  delta >= -leaderBaseStartTime.
+          if (snappedTotalDelta < -_leaderBaseStartTime) {
+            snappedTotalDelta = -_leaderBaseStartTime;
+          }
+          _previousSnappedDelta = snappedTotalDelta;
+
           final placementState = ref.read(clipPlacementProvider);
           ref
               .read(clipPlacementProvider.notifier)

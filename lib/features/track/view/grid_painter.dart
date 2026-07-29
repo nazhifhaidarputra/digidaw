@@ -7,6 +7,11 @@ class GridPainter extends CustomPainter {
   final double tempo;
   final int sampleRate;
   final ScrollController scrollController;
+  /// The pixel width of the visible viewport, passed from the widget's
+  /// LayoutBuilder so it is always correct — even on the very first paint
+  /// and after a window resize (before the scroll controller reports a
+  /// valid viewportDimension).
+  final double viewportWidth;
 
   GridPainter({
     required this.zoomLevel,
@@ -14,6 +19,7 @@ class GridPainter extends CustomPainter {
     required this.tempo,
     required this.sampleRate,
     required this.scrollController,
+    required this.viewportWidth,
   }) : super(repaint: scrollController);
 
   @override
@@ -45,12 +51,6 @@ class GridPainter extends CustomPainter {
     if (scrollController.hasClients) {
       final position = scrollController.positions.first;
       final double offset = position.pixels;
-      double viewportWidth = size.width;
-      // Use the local `position` variable — scrollController.position throws
-      // when multiple scroll views share the same controller.
-      if (position.hasViewportDimension) {
-        viewportWidth = position.viewportDimension;
-      }
 
       const double buffer = 200.0;
       startX = (offset - buffer).clamp(0.0, double.infinity);
@@ -101,6 +101,7 @@ class GridPainter extends CustomPainter {
         oldDelegate.gridSize != gridSize ||
         oldDelegate.tempo != tempo ||
         oldDelegate.sampleRate != sampleRate ||
+        oldDelegate.viewportWidth != viewportWidth ||
         oldDelegate.scrollController != scrollController;
   }
 }
