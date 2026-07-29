@@ -16,6 +16,8 @@ use crate::{
     DOWNBEAT_BYTES, OFFBEAT_BYTES,
 };
 
+pub const MAX_AMPLITUDE: f64 = 10.0_f64.powf(6.0 / 20.0);
+
 /// A snapshot of a single plugin's current state (Params + Custom Buffers)
 #[derive(Clone, Default)]
 pub struct PluginTelemetrySnapshot {

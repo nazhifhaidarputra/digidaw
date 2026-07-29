@@ -12,14 +12,13 @@ part 'automation_provider.freezed.dart';
 abstract class AutomationDataState with _$AutomationDataState {
   const factory AutomationDataState({
     @Default(false) bool isMasterAutomationDrawerOpened,
-    
-    /// Tracks which track automations are collapsed. 
+
+    /// Tracks which track automations are collapsed.
     /// If a trackId is NOT in this set, it is considered expanded (defaults to true).
     @Default(ISetConst({})) ISet<int> collapsedTrackAutomations,
-    
+
     /// Optional: Tracks the currently selected/highlighted automation lane in the UI
     int? selectedAutomationLaneId,
-
   }) = _AutomationDataState;
 }
 
@@ -54,9 +53,7 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
         collapsedTrackAutomations: collapsed.remove(trackId),
       );
     } else {
-      state = state.copyWith(
-        collapsedTrackAutomations: collapsed.add(trackId),
-      );
+      state = state.copyWith(collapsedTrackAutomations: collapsed.add(trackId));
     }
   }
 
@@ -95,6 +92,10 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
         min: min,
         max: max,
         defaultValue: defaultValue,
+      );
+
+      AppLogger.debug(
+        "Add automation lane for $target with $min - $max default: $defaultValue",
       );
 
       // Fetch the generated source based on the new link
@@ -190,7 +191,9 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
 
     ref.read(projectProvider.notifier).updateAutomations(pool: updatedLanes);
 
-    AppLogger.info("Successfully add new point for lane $laneId at $timeTicks with value $value");
+    AppLogger.info(
+      "Successfully add new point for lane $laneId at $timeTicks with value $value",
+    );
   }
 
   Future<void> removePoint(int laneId, int pointId) async {
@@ -312,15 +315,15 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
 
 /// Tracks whether a track's automation accordion is expanded.
 /// Defaults to true unless explicitly collapsed in the AutomationDataState.
-final trackAutomationExpandedProvider = Provider.family<bool, int>(
-  (ref, trackId) {
-    final collapsed = ref.watch(
-      automationProvider.select((s) => s.collapsedTrackAutomations),
-    );
-    return !collapsed.contains(trackId);
-  },
-);
-
+final trackAutomationExpandedProvider = Provider.family<bool, int>((
+  ref,
+  trackId,
+) {
+  final collapsed = ref.watch(
+    automationProvider.select((s) => s.collapsedTrackAutomations),
+  );
+  return !collapsed.contains(trackId);
+});
 
 /// Provider to get all automation lanes for a specific Bus ID.
 /// Usage in Widget: `final lanes = ref.watch(busAutomationProvider(busId));`

@@ -3331,7 +3331,8 @@ impl AudioEngine {
                 TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Volume => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            let amplitude = (final_value as f32).powi(3);
+                            // let max_amp = 10.0f32.powf(6.0 / 20.0);
+                            let amplitude = (final_value as f64).powi(3) * MAX_AMPLITUDE;
                             let target_db = if amplitude <= 0.001 {
                                 -100.0
                             } else {
@@ -3341,7 +3342,7 @@ impl AudioEngine {
                             // Clamp the final dB to the parameter bounds
                             let clamped_db = target_db.clamp(-100.0, 6.0);
 
-                            ch.volume.apply_automation(clamped_db);
+                            ch.volume.apply_automation(clamped_db as f32);
                         }
                     }
                     MixerChannelParamTarget::Pan => {
@@ -3369,7 +3370,7 @@ impl AudioEngine {
             AutomationTarget::Bus { bus_id, mix_target } => match mix_target {
                 MixerChannelParamTarget::Volume => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        let amplitude = (final_value as f32).powi(3);
+                        let amplitude = (final_value as f64).powi(3) * MAX_AMPLITUDE;
                         let target_db = if amplitude <= 0.001 {
                             -100.0
                         } else {
@@ -3379,7 +3380,7 @@ impl AudioEngine {
                         // Clamp the final dB to the parameter bounds
                         let clamped_db = target_db.clamp(-100.0, 6.0);
 
-                        ch.volume.apply_automation(clamped_db);
+                        ch.volume.apply_automation(clamped_db as f32);
                     }
                 }
                 MixerChannelParamTarget::Pan => {
@@ -3406,7 +3407,7 @@ impl AudioEngine {
             AutomationTarget::Master(master_target) => match master_target {
                 MasterAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Volume => {
-                        let amplitude = (final_value as f32).powi(3);
+                        let amplitude = (final_value as f64).powi(3) * MAX_AMPLITUDE;
                         let target_db = if amplitude <= 0.001 {
                             -100.0
                         } else {
@@ -3416,7 +3417,7 @@ impl AudioEngine {
                         // Clamp the final dB to the parameter bounds
                         let clamped_db = target_db.clamp(-100.0, 6.0);
 
-                        self.mixer_state.master.volume.apply_automation(clamped_db);
+                        self.mixer_state.master.volume.apply_automation(clamped_db as f32);
                     }
                     MixerChannelParamTarget::Pan => {
                         self.mixer_state.master.pan.apply_automation(
