@@ -33,7 +33,9 @@ class ControlPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         border: Border(bottom: BorderSide(color: Colors.grey.shade800)),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+        ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: ScrollConfiguration(
@@ -43,7 +45,11 @@ class ControlPanel extends StatelessWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: items),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: items,
+            ),
           ),
         ),
       ),
@@ -64,7 +70,12 @@ class ControlPanelBuilder {
 
   void addDivider() {
     _items.add(
-      Container(margin: const EdgeInsets.symmetric(horizontal: 8), width: 1, height: 30, color: Colors.grey.shade700),
+      Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        width: 1,
+        height: 30,
+        color: Colors.grey.shade700,
+      ),
     );
   }
 
@@ -121,11 +132,18 @@ class ControlPanelToolbarItem extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: isActive ? color : color.withAlpha(165), size: iconSize),
+                Icon(
+                  icon,
+                  color: isActive ? color : color.withAlpha(165),
+                  size: iconSize,
+                ),
                 const SizedBox(height: 2),
                 Text(
                   name,
-                  style: TextStyle(color: isActive ? color : color.withAlpha(165), fontSize: fontSize),
+                  style: TextStyle(
+                    color: isActive ? color : color.withAlpha(165),
+                    fontSize: fontSize,
+                  ),
                 ),
               ],
             ),
@@ -185,7 +203,11 @@ class ControlPanelDropdown<T> extends StatelessWidget {
               ],
             ),
             const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, color: color.withAlpha(150), size: dropdownArrowSize),
+            Icon(
+              Icons.arrow_drop_down,
+              color: color.withAlpha(150),
+              size: dropdownArrowSize,
+            ),
           ],
         ),
       ),
@@ -200,7 +222,9 @@ class DefaultControlPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final transportState = ref.watch(transportProvider).value;
     final pianoRollState = ref.watch(pianoRollProvider);
-    final workspaceState = ref.watch(workspaceStateProvider); // For currentView, selectedTool, etc.
+    final workspaceState = ref.watch(
+      workspaceStateProvider,
+    ); // For currentView, selectedTool, etc.
 
     // 2. Consume the FFI Stream natively via Riverpod (No StreamBuilder needed!)
     final pos = ref.watch(transportPositionStreamProvider).value;
@@ -210,7 +234,8 @@ class DefaultControlPanel extends ConsumerWidget {
     // 0. Pre-calculate layout constraints for the entire panel
     final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
     final double itemHeight = isSmallScreen ? 40.0 : 50.0;
-    final double panelHeight = itemHeight + 12.0; // Panel height with 6px padding top/bottom
+    final double panelHeight =
+        itemHeight + 12.0; // Panel height with 6px padding top/bottom
 
     // 1. Screen Navigation Dropdown
     builder.addItem(
@@ -218,7 +243,8 @@ class DefaultControlPanel extends ConsumerWidget {
         name: _getViewName(workspaceState.currentView),
         icon: _getViewIcon(workspaceState.currentView),
         color: Colors.cyanAccent,
-        onSelected: (view) => ref.read(workspaceStateProvider.notifier).navigateTo(view),
+        onSelected: (view) =>
+            ref.read(workspaceStateProvider.notifier).navigateTo(view),
         items: const [
           PopupMenuItem(
             value: WorkspaceView.trackList,
@@ -272,7 +298,10 @@ class DefaultControlPanel extends ConsumerWidget {
               try {
                 // Pass the context to the FFI call
                 final ctx = ref.read(projectProvider.notifier).dawContext;
-                togglePlaybackWithMode(ctx: ctx, playbackMode: const PlaybackModeDto.song());
+                togglePlaybackWithMode(
+                  ctx: ctx,
+                  playbackMode: const PlaybackModeDto.song(),
+                );
               } catch (e) {
                 AppLogger.error("Failed to toggle playback: $e");
               }
@@ -302,8 +331,9 @@ class DefaultControlPanel extends ConsumerWidget {
             name: "Snap to Grid",
             icon: Icons.grid_on,
             color: Colors.blueAccent,
-            isActive: pianoRollState.snapToGrid,
-            onTap: () => ref.read(workspaceStateProvider.notifier).toggleSnapToGrid(),
+            isActive: workspaceState.snapToGrid,
+            onTap: () =>
+                ref.read(workspaceStateProvider.notifier).toggleSnapToGrid(),
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
@@ -311,7 +341,8 @@ class DefaultControlPanel extends ConsumerWidget {
             icon: MdiIcons.metronome,
             color: Colors.blueAccent,
             isActive: transportState?.isMetronomeActive ?? false,
-            onTap: () => ref.read(transportProvider.notifier).toggleMetronomeActive(),
+            onTap: () =>
+                ref.read(transportProvider.notifier).toggleMetronomeActive(),
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
@@ -319,7 +350,9 @@ class DefaultControlPanel extends ConsumerWidget {
             icon: Icons.piano,
             color: Colors.deepPurpleAccent,
             isActive: workspaceState.floatingMidiKeyboardState.showed,
-            onTap: () => ref.read(workspaceStateProvider.notifier).toggleFloatingMidiKeyboard(),
+            onTap: () => ref
+                .read(workspaceStateProvider.notifier)
+                .toggleFloatingMidiKeyboard(),
           ),
         ],
       ),
@@ -332,7 +365,9 @@ class DefaultControlPanel extends ConsumerWidget {
     builder.addDivider();
 
     // AspectRatio bounds constraint injection!
-    builder.addWidget(SizedBox(height: itemHeight, child: const DawPerformanceMonitor()));
+    builder.addWidget(
+      SizedBox(height: itemHeight, child: const DawPerformanceMonitor()),
+    );
 
     builder.addDivider();
 
@@ -341,8 +376,11 @@ class DefaultControlPanel extends ConsumerWidget {
       ControlPanelDropdown<ToolSelection>(
         name: _getToolName(workspaceState.selectedTool),
         icon: _getToolIcon(workspaceState.selectedTool),
-        color: workspaceState.selectedTool == ToolSelection.delete ? Colors.red : Colors.blueAccent,
-        onSelected: (tool) => ref.read(workspaceStateProvider.notifier).selectTool(tool),
+        color: workspaceState.selectedTool == ToolSelection.delete
+            ? Colors.red
+            : Colors.blueAccent,
+        onSelected: (tool) =>
+            ref.read(workspaceStateProvider.notifier).selectTool(tool),
         items: const [
           PopupMenuItem(
             value: ToolSelection.pointer,
@@ -388,7 +426,10 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.select,
             child: ListTile(
               leading: Icon(Icons.crop_free, color: Colors.blueAccent),
-              title: Text("Range Select", style: TextStyle(color: Colors.white)),
+              title: Text(
+                "Range Select",
+                style: TextStyle(color: Colors.white),
+              ),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -503,7 +544,11 @@ class DefaultControlPanel extends ConsumerWidget {
             SizedBox(width: isSmallScreen ? 6 : 10),
             _buildInfoText("BEAT", beat.toString(), isSmallScreen),
             VerticalDivider(color: Colors.grey, width: dividerWidth),
-            _buildInfoText("TIME", formatTimeFromSamples(samples, sampleRate), isSmallScreen),
+            _buildInfoText(
+              "TIME",
+              formatTimeFromSamples(samples, sampleRate),
+              isSmallScreen,
+            ),
             VerticalDivider(color: Colors.grey, width: dividerWidth),
             const BpmControl(),
             VerticalDivider(color: Colors.grey, width: dividerWidth),
@@ -521,11 +566,19 @@ class DefaultControlPanel extends ConsumerWidget {
       children: [
         Text(
           label,
-          style: TextStyle(color: Colors.grey, fontSize: isSmallScreen ? 6 : 8, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.grey,
+            fontSize: isSmallScreen ? 6 : 8,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         Text(
           value,
-          style: TextStyle(color: Colors.lightGreenAccent, fontSize: isSmallScreen ? 11 : 14, fontFamily: 'monospace'),
+          style: TextStyle(
+            color: Colors.lightGreenAccent,
+            fontSize: isSmallScreen ? 11 : 14,
+            fontFamily: 'monospace',
+          ),
         ),
       ],
     );
@@ -537,7 +590,9 @@ class BpmControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bpm = ref.watch(transportProvider.select((s) => s.value?.state?.bpm ?? 120.0));
+    final bpm = ref.watch(
+      transportProvider.select((s) => s.value?.state?.bpm ?? 120.0),
+    );
     final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
 
     return FineGrainedInputWrapper<double>(
@@ -571,7 +626,11 @@ class BpmControl extends ConsumerWidget {
                 children: [
                   Text(
                     "BPM",
-                    style: TextStyle(color: Colors.grey, fontSize: isSmallScreen ? 6 : 8, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: isSmallScreen ? 6 : 8,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   Text(
                     bpm.toStringAsFixed(1),

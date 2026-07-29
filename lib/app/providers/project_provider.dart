@@ -65,28 +65,29 @@ abstract class ApplicationDataStore with _$ApplicationDataStore {
 /// The top-level provider responsible for owning the optimized data store.
 /// It coordinates the initialization, saving, and loading of projects.
 class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
-  late final DawContext _dawContext;
+  DawContext? _dawContext;
 
-  DawContext get dawContext => _dawContext;
+  DawContext get dawContext => _dawContext!;
 
   @override
   Future<ApplicationDataStore> build() async {
     // 1. Initialize a blank project from the Rust backend on boot
-    _dawContext = createDawContext();
-    final uiState = await serialization_api.newBlankProject(ctx: _dawContext);
+    _dawContext ??= createDawContext();
+    final uiState = await serialization_api.newBlankProject(ctx: dawContext);
     return await _fetchFullState(uiState, null);
   }
 
   Future<void> newBlankProject() async {
-    final uiState = await serialization_api.newBlankProject(ctx: _dawContext);
-    await _fetchFullState(uiState, null);
+    state = const AsyncValue.loading();
+    final uiState = await serialization_api.newBlankProject(ctx: dawContext);
+    state = AsyncValue.data(await _fetchFullState(uiState, null));
   }
 
   /// Load a project from disk relying on the injected `SerializerService`.
   Future<Result<void>> loadProject(String path) async {
     final result = await AsyncValue.guard(() async {
       final serializer = ref.read(serializerServiceProvider);
-      final uiState = await serializer.loadProject(ctx: _dawContext, pathName: path);
+      final uiState = await serializer.loadProject(ctx: dawContext, pathName: path);
       return _fetchFullState(uiState, path);
     });
     state = result;
@@ -139,7 +140,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   Future<Result<void>> saveProject(String path) async {
     try {
       final serializer = ref.read(serializerServiceProvider);
-      await serializer.saveProject(ctx: _dawContext, pathName: path);
+      await serializer.saveProject(ctx: dawContext, pathName: path);
 
       // Softly update the current path immediately
       if (state.hasValue) {
@@ -302,9 +303,9 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     // Modulations might not be deeply nested in UiApplicationState,
     // so we fetch them alongside the main state load to ensure consistency.
     final (links, lanes, sources) = await (
-      getAllLinkedModulationParams(ctx: _dawContext),
-      getAutomationsLanesAll(ctx: _dawContext),
-      getAllModulationSources(ctx: _dawContext),
+      getAllLinkedModulationParams(ctx: dawContext),
+      getAutomationsLanesAll(ctx: dawContext),
+      getAllModulationSources(ctx: dawContext),
     ).wait;
 
     return ApplicationDataStore(

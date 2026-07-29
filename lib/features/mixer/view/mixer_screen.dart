@@ -1071,7 +1071,7 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
         : const MixerChannelParamTargetDto.volume();
 
     if (widget.entry.isMaster) {
-      return AutomationTargetDto.master(mixTarget);
+      return AutomationTargetDto.master(MasterAutomationTargetDto.mixerChannel(mixTarget));
     } else if (widget.entry.isBus) {
       return AutomationTargetDto.bus(
         busId: widget.entry.id,
@@ -1346,7 +1346,7 @@ class _VolumeFader extends ConsumerWidget {
         final sliderWidth = constraints.maxHeight;
 
         // Ensure the visual slider stops at -60dB even if the internal `NEG_INFINITY` is lower
-        final visualMin = spec.min < -60.0 ? -60.0 : spec.min;
+        final visualMin = spec.min < -100.0 ? -100.0 : spec.min;
 
         return RotatedBox(
           quarterTurns: 3,

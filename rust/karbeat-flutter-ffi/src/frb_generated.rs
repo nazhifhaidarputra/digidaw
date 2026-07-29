@@ -1906,9 +1906,9 @@ fn wire__crate__api__automation__add_automation_lane_impl(
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
             let api_label = <String>::sse_decode(&mut deserializer);
-            let api_min = <f32>::sse_decode(&mut deserializer);
-            let api_max = <f32>::sse_decode(&mut deserializer);
-            let api_default_value = <f32>::sse_decode(&mut deserializer);
+            let api_min = <f64>::sse_decode(&mut deserializer);
+            let api_max = <f64>::sse_decode(&mut deserializer);
+            let api_default_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -1969,9 +1969,9 @@ fn wire__crate__api__automation__add_automation_lane_for_bus_impl(
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
             let api_label = <String>::sse_decode(&mut deserializer);
-            let api_min = <f32>::sse_decode(&mut deserializer);
-            let api_max = <f32>::sse_decode(&mut deserializer);
-            let api_default_value = <f32>::sse_decode(&mut deserializer);
+            let api_min = <f64>::sse_decode(&mut deserializer);
+            let api_max = <f64>::sse_decode(&mut deserializer);
+            let api_default_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -2033,9 +2033,9 @@ fn wire__crate__api__automation__add_automation_lane_for_track_impl(
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
             let api_label = <String>::sse_decode(&mut deserializer);
-            let api_min = <f32>::sse_decode(&mut deserializer);
-            let api_max = <f32>::sse_decode(&mut deserializer);
-            let api_default_value = <f32>::sse_decode(&mut deserializer);
+            let api_min = <f64>::sse_decode(&mut deserializer);
+            let api_max = <f64>::sse_decode(&mut deserializer);
+            let api_default_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -2417,7 +2417,7 @@ fn wire__crate__api__automation__add_new_automation_point_impl(
             >>::sse_decode(&mut deserializer);
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
             let api_time_ticks = <u32>::sse_decode(&mut deserializer);
-            let api_value = <f32>::sse_decode(&mut deserializer);
+            let api_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -9410,8 +9410,8 @@ fn wire__crate__api__automation__update_automation_point_impl(
             let api_automation_id = <u32>::sse_decode(&mut deserializer);
             let api_id = <u64>::sse_decode(&mut deserializer);
             let api_time_ticks = <Option<u32>>::sse_decode(&mut deserializer);
-            let api_value = <Option<f32>>::sse_decode(&mut deserializer);
-            let api_tension = <Option<f32>>::sse_decode(&mut deserializer);
+            let api_value = <Option<f64>>::sse_decode(&mut deserializer);
+            let api_tension = <Option<f64>>::sse_decode(&mut deserializer);
             let api_curve_type =
                 <Option<crate::api::automation::AutomationCurveTypeDto>>::sse_decode(
                     &mut deserializer,
@@ -9891,9 +9891,9 @@ impl SseDecode for crate::api::automation::AutomationLaneDto {
         let mut var_points =
             <Vec<crate::api::automation::AutomationPointDto>>::sse_decode(deserializer);
         let mut var_enabled = <bool>::sse_decode(deserializer);
-        let mut var_min = <f32>::sse_decode(deserializer);
-        let mut var_max = <f32>::sse_decode(deserializer);
-        let mut var_defaultValue = <f32>::sse_decode(deserializer);
+        let mut var_min = <f64>::sse_decode(deserializer);
+        let mut var_max = <f64>::sse_decode(deserializer);
+        let mut var_defaultValue = <f64>::sse_decode(deserializer);
         return crate::api::automation::AutomationLaneDto {
             id: var_id,
             label: var_label,
@@ -9911,10 +9911,10 @@ impl SseDecode for crate::api::automation::AutomationPointDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_timeTicks = <u32>::sse_decode(deserializer);
-        let mut var_value = <f32>::sse_decode(deserializer);
+        let mut var_value = <f64>::sse_decode(deserializer);
         let mut var_curveType =
             <crate::api::automation::AutomationCurveTypeDto>::sse_decode(deserializer);
-        let mut var_tension = <f32>::sse_decode(deserializer);
+        let mut var_tension = <f64>::sse_decode(deserializer);
         return crate::api::automation::AutomationPointDto {
             id: var_id,
             time_ticks: var_timeTicks,
@@ -9958,11 +9958,8 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
             }
             3 => {
                 let mut var_field0 =
-                    <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
+                    <crate::api::automation::MasterAutomationTargetDto>::sse_decode(deserializer);
                 return crate::api::automation::AutomationTargetDto::Master(var_field0);
-            }
-            4 => {
-                return crate::api::automation::AutomationTargetDto::TempoBpm;
             }
             _ => {
                 unimplemented!("");
@@ -10461,6 +10458,26 @@ impl SseDecode for Vec<crate::api::mixer::UiRoutingConnection> {
     }
 }
 
+impl SseDecode for crate::api::automation::MasterAutomationTargetDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_field0 =
+                    <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
+                return crate::api::automation::MasterAutomationTargetDto::MixerChannel(var_field0);
+            }
+            1 => {
+                return crate::api::automation::MasterAutomationTargetDto::TempoBpm;
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for crate::api::automation::MixerChannelParamTargetDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10700,6 +10717,17 @@ impl SseDecode for Option<f32> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<f32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<f64>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -12682,7 +12710,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::automation::AutomationTargetD
             crate::api::automation::AutomationTargetDto::Master(field0) => {
                 [3.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::automation::AutomationTargetDto::TempoBpm => [4.into_dart()].into_dart(),
             _ => {
                 unimplemented!("");
             }
@@ -12793,6 +12820,33 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::KarbeatPluginType>
     for crate::api::plugin::KarbeatPluginType
 {
     fn into_into_dart(self) -> crate::api::plugin::KarbeatPluginType {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::automation::MasterAutomationTargetDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::automation::MasterAutomationTargetDto::MixerChannel(field0) => {
+                [0.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::automation::MasterAutomationTargetDto::TempoBpm => {
+                [1.into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::automation::MasterAutomationTargetDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::automation::MasterAutomationTargetDto>
+    for crate::api::automation::MasterAutomationTargetDto
+{
+    fn into_into_dart(self) -> crate::api::automation::MasterAutomationTargetDto {
         self
     }
 }
@@ -14367,9 +14421,9 @@ impl SseEncode for crate::api::automation::AutomationLaneDto {
         <String>::sse_encode(self.label, serializer);
         <Vec<crate::api::automation::AutomationPointDto>>::sse_encode(self.points, serializer);
         <bool>::sse_encode(self.enabled, serializer);
-        <f32>::sse_encode(self.min, serializer);
-        <f32>::sse_encode(self.max, serializer);
-        <f32>::sse_encode(self.default_value, serializer);
+        <f64>::sse_encode(self.min, serializer);
+        <f64>::sse_encode(self.max, serializer);
+        <f64>::sse_encode(self.default_value, serializer);
     }
 }
 
@@ -14378,9 +14432,9 @@ impl SseEncode for crate::api::automation::AutomationPointDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
         <u32>::sse_encode(self.time_ticks, serializer);
-        <f32>::sse_encode(self.value, serializer);
+        <f64>::sse_encode(self.value, serializer);
         <crate::api::automation::AutomationCurveTypeDto>::sse_encode(self.curve_type, serializer);
-        <f32>::sse_encode(self.tension, serializer);
+        <f64>::sse_encode(self.tension, serializer);
     }
 }
 
@@ -14416,12 +14470,7 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
             }
             crate::api::automation::AutomationTargetDto::Master(field0) => {
                 <i32>::sse_encode(3, serializer);
-                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
-                    field0, serializer,
-                );
-            }
-            crate::api::automation::AutomationTargetDto::TempoBpm => {
-                <i32>::sse_encode(4, serializer);
+                <crate::api::automation::MasterAutomationTargetDto>::sse_encode(field0, serializer);
             }
             _ => {
                 unimplemented!("");
@@ -14842,6 +14891,26 @@ impl SseEncode for Vec<crate::api::mixer::UiRoutingConnection> {
     }
 }
 
+impl SseEncode for crate::api::automation::MasterAutomationTargetDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::automation::MasterAutomationTargetDto::MixerChannel(field0) => {
+                <i32>::sse_encode(0, serializer);
+                <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
+                    field0, serializer,
+                );
+            }
+            crate::api::automation::MasterAutomationTargetDto::TempoBpm => {
+                <i32>::sse_encode(1, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseEncode for crate::api::automation::MixerChannelParamTargetDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15030,6 +15099,16 @@ impl SseEncode for Option<f32> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <f32>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <f64>::sse_encode(value, serializer);
         }
     }
 }

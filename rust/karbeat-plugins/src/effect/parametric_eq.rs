@@ -1,4 +1,3 @@
-use arc_swap::ArcSwap;
 use karbeat_dsp::filter::{
     BiquadCoefficients, BiquadFilterType, FilterMode, SingleBiquadFilterStage,
 };
@@ -6,7 +5,7 @@ use karbeat_dsp::filter::{
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use karbeat_plugin_api::prelude::*;
 use karbeat_utils::hash::hash_str;
-use num_complex::{Complex32};
+use num_complex::Complex32;
 use realfft::{RealFftPlanner, RealToComplex};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -342,7 +341,7 @@ pub struct DigiParametricEQ {
     // Internal cache for magnitude so it isn't recalculated every 30ms
     #[serde(skip)]
     cached_magnitude: Vec<f32>,
-    
+
     // Single contiguous telemetry buffer (Header + Spectrum + Magnitude)
     #[serde(skip)]
     telemetry_buffer: Arc<[f32]>,
@@ -391,7 +390,7 @@ impl DigiParametricEQ {
 
         engine.cached_magnitude = engine.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS);
         engine.publish_telemetry();
-        
+
         engine.enable_spectrum_analyzer = false;
         engine.enable_magnitude_curve = false;
         engine.active_parameter_edits = hashbrown::HashSet::new();
@@ -426,7 +425,6 @@ impl DigiParametricEQ {
 
         flat_buffer.extend_from_slice(spectrum);
         flat_buffer.extend_from_slice(magnitude);
-
 
         self.telemetry_buffer = flat_buffer.into();
     }
@@ -628,10 +626,12 @@ impl DigiParametricEQ {
 
         let inputs = &buffers.main_inputs[0].channel_data;
         let outputs = &mut buffers.main_outputs[0].channel_data;
-        
+
         let channels = std::cmp::min(inputs.len(), outputs.len());
-        if channels == 0 { return; }
-        
+        if channels == 0 {
+            return;
+        }
+
         let frames = inputs[0].len();
 
         for i in 0..frames {
@@ -662,7 +662,7 @@ impl AudioPlugin for DigiParametricEQ {
         PluginCategory::Effect
     }
 
-    fn prepare(&mut self, sample_rate: f32,  _max_buffer_size: usize) {
+    fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
         let needs_update = (sample_rate - self.last_sample_rate).abs() > 0.1;
         if needs_update {
             self.last_sample_rate = sample_rate;
@@ -695,15 +695,18 @@ impl AudioPlugin for DigiParametricEQ {
             self.set_parameter(param_change.param_id, param_change.normalized_value);
         }
 
-        let num_frames = buffers.main_outputs.first().map_or(0, |b| b.channel_data.first().map_or(0, |ch| ch.len()));
-        
+        let num_frames = buffers
+            .main_outputs
+            .first()
+            .map_or(0, |b| b.channel_data.first().map_or(0, |ch| ch.len()));
+
         if self.channels == 0 || num_frames == 0 {
             return;
         }
-        
+
         // 2. Process non-interleaved audio
         self.process_dsp(buffers);
-        
+
         // 3. Handle spectrum analyzer scheduling
         if self.enable_spectrum_analyzer {
             self.samples_since_last_fft += num_frames;
@@ -747,7 +750,8 @@ impl AudioPlugin for DigiParametricEQ {
 
                     // If the UI was just opened, calculate it immediately so it's ready!
                     if active {
-                        self.cached_magnitude = self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS);
+                        self.cached_magnitude =
+                            self.compute_magnitude_response_flat(Self::MAGNITUDE_POINTS);
                         self.publish_telemetry();
                     }
                 }
@@ -787,58 +791,70 @@ impl AudioPlugin for DigiParametricEQ {
             self.update_all_nodes();
         }
     }
-    
-    fn vendor(&self) -> &str { "Digidaw" }
-    
-    fn version(&self) -> &str { "1.0.0" }
-    
-    fn can_apply_io_layout(&self, inputs: &[BusConfig], outputs: &[BusConfig]) -> bool {
+
+    fn vendor(&self) -> &str {
+        "Digidaw"
+    }
+
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+
+    fn can_apply_io_layout(&self, _inputs: &[BusConfig], _outputs: &[BusConfig]) -> bool {
         true // Default: accept any layout
     }
-    
+
     fn set_bypass(&mut self, _bypass: bool) {}
-    
-    fn has_latency_changed(&mut self) -> bool { false }
-    
+
+    fn has_latency_changed(&mut self) -> bool {
+        false
+    }
+
     fn begin_parameter_edit(&mut self, id: u32) {
         self.active_parameter_edits.insert(id);
     }
-    
+
     fn end_parameter_edit(&mut self, id: u32) {
         self.active_parameter_edits.remove(&id);
     }
-    
-    fn plain_to_normalized(&self, id: u32, plain: f32) -> f32 { plain }
-    
-    fn normalized_to_plain(&self, id: u32, normalized: f32) -> f32 { normalized }
-    
-    fn value_to_string(&self, id: u32, normalized: f32) -> String { 
-        std::format!("{:.2}", self.normalized_to_plain(id, normalized)) 
+
+    fn plain_to_normalized(&self, _id: u32, plain: f32) -> f32 {
+        plain
     }
-    
-    fn string_to_value(&self, id: u32, text: &str) -> Option<f32> { 
-        text.parse::<f32>().ok().map(|p| self.plain_to_normalized(id, p)) 
+
+    fn normalized_to_plain(&self, _id: u32, normalized: f32) -> f32 {
+        normalized
     }
-    
+
+    fn value_to_string(&self, id: u32, normalized: f32) -> String {
+        std::format!("{:.2}", self.normalized_to_plain(id, normalized))
+    }
+
+    fn string_to_value(&self, id: u32, text: &str) -> Option<f32> {
+        text.parse::<f32>()
+            .ok()
+            .map(|p| self.plain_to_normalized(id, p))
+    }
+
     fn get_state(&self) -> Vec<u8> {
         let mut current_params: hashbrown::HashMap<u32, f32> = hashbrown::HashMap::new();
-    
+
         let specs = self.get_parameter_specs();
         for spec in specs {
             current_params.insert(spec.id, self.get_parameter(spec.id));
         }
-    
+
         rmp_serde::to_vec(&current_params).unwrap_or_else(|err| {
             log::error!("Failed to serialize Plugin state: {}", err);
             Vec::new()
         })
     }
-    
+
     fn set_state(&mut self, state: &[u8]) {
         if state.is_empty() {
             return;
         }
-    
+
         match rmp_serde::from_slice::<hashbrown::HashMap<u32, f32>>(state) {
             Ok(saved_params) => {
                 for (id, value) in saved_params {
@@ -850,13 +866,13 @@ impl AudioPlugin for DigiParametricEQ {
             }
         }
     }
-    
+
     fn get_factory_presets(&self) -> Vec<(String, Vec<u8>)> {
         Vec::new()
     }
-    
+
     fn load_preset(&mut self, _index: usize) {}
-    
+
     fn current_preset_index(&self) -> Option<usize> {
         None
     }

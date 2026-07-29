@@ -4,16 +4,16 @@
 // Provides both project-level automation lane data (saved with the project)
 // and a runtime AutomationManager used by plugin wrappers during audio processing.
 
-use std::sync::atomic::{AtomicU32, AtomicU64};
+use std::sync::atomic::AtomicU64;
 
 use karbeat_dsp::interpolation::lerp;
+use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     audio::event::PluginTarget,
     shared::{
-        id::{self, AutomationId, BusId, EffectId, TrackId},
-        types::FractionF32,
+        id::{AutomationId, BusId, EffectId, TrackId},
         GeneratorId,
     },
 };
@@ -42,15 +42,18 @@ pub enum AutomationTarget {
         mix_target: MixerChannelParamTarget,
     },
 
-    Master(MixerChannelParamTarget),
-
-    // Global Targets
-    TempoBpm,
+    Master(MasterAutomationTarget),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TrackAutomationTarget {
     MixerChannel(MixerChannelParamTarget),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum MasterAutomationTarget {
+    MixerChannel(MixerChannelParamTarget),
+    TempoBpm,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -99,7 +102,6 @@ impl AutomationTarget {
             (Self::Track { track_id: id1, .. }, Self::Track { track_id: id2, .. }) => id1 == id2,
             (Self::Bus { bus_id: id1, .. }, Self::Bus { bus_id: id2, .. }) => id1 == id2,
             (Self::Master(_), Self::Master(_)) => true,
-            (Self::TempoBpm, Self::TempoBpm) => true,
             _ => false,
         }
     }
@@ -121,9 +123,17 @@ impl AutomationTarget {
                 bus_id,
                 mix_target: MixerChannelParamTarget::Plugin { effect_id, .. },
             } => Some(PluginTarget::BusEffect(*bus_id, *effect_id)),
-            AutomationTarget::Master(MixerChannelParamTarget::Plugin { effect_id, .. }) => {
-                Some(PluginTarget::MasterEffect(*effect_id))
-            }
+            AutomationTarget::Master(master_target) => match master_target {
+                MasterAutomationTarget::MixerChannel(mixer_channel_param_target) => {
+                    match mixer_channel_param_target {
+                        MixerChannelParamTarget::Plugin { effect_id, .. } => {
+                            Some(PluginTarget::MasterEffect(*effect_id))
+                        }
+                        _ => None,
+                    }
+                }
+                MasterAutomationTarget::TempoBpm => None,
+            },
             _ => None,
         }
     }
@@ -159,11 +169,11 @@ pub struct AutomationPoint {
     /// Position in ticks (relative to project start)
     pub time_ticks: u32,
     /// Normalized parameter value (0.0–1.0)
-    pub value: f32,
+    pub value: NormalizedF64,
     /// Interpolation curve to the NEXT point
     pub curve_type: AutomationCurveType,
-
-    pub tension: FractionF32,
+    /// Bipolar tension control (-1.0 to 1.0)
+    pub tension: BipolarF64,
 }
 
 static POINT_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -173,29 +183,28 @@ impl AutomationPoint {
         POINT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn new(time_ticks: u32, value: f32) -> Self {
+    pub fn new(time_ticks: u32, value: NormalizedF64) -> Self {
         Self {
             id: Self::next_id(),
             time_ticks,
-            value: value.clamp(0.0, 1.0),
+            value,
             curve_type: AutomationCurveType::Linear,
-            tension: 0.0.into(),
+            tension: BipolarF64::default(),
         }
     }
 
+    /// Creates a point with a specific curve.
     pub fn with_curve(
         time_ticks: u32,
-        value: f32,
+        value: NormalizedF64,
         curve_type: AutomationCurveType,
-        min: f32,
-        max: f32,
     ) -> Self {
         Self {
             id: Self::next_id(),
             time_ticks,
-            value: value.clamp(min, max),
+            value,
             curve_type,
-            tension: 0.0.into(),
+            tension: BipolarF64::default(),
         }
     }
 }
@@ -211,18 +220,18 @@ impl AutomationPoint {
 #[serde(default)]
 pub struct AutomationLane {
     pub id: AutomationId,
-    /// Human-readable label (e.g. "Volume", "Filter Cutoff")w
+    /// Human-readable label (e.g. "Volume", "Filter Cutoff")
     pub label: String,
     /// Automation points sorted by time
     pub points: Vec<AutomationPoint>,
     /// Whether this lane is active
     pub enabled: bool,
     /// Minimum value of the target parameter (for display/denormalization)
-    pub min: f32,
+    pub min: f64,
     /// Maximum value of the target parameter (for display/denormalization)
-    pub max: f32,
+    pub max: f64,
     /// Default value of the target parameter (normalized 0.0–1.0)
-    pub default_value: f32,
+    pub default_value: NormalizedF64,
 }
 
 impl AutomationLane {
@@ -230,10 +239,11 @@ impl AutomationLane {
     pub fn new(
         id: AutomationId,
         label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32,
+        min: f64,
+        max: f64,
+        default_value: f64,
     ) -> Self {
+        let normalized_value = NormalizedF64::from_range(default_value, min, max);
         Self {
             id,
             label: label.into(),
@@ -241,7 +251,7 @@ impl AutomationLane {
             enabled: true,
             min,
             max,
-            default_value,
+            default_value: normalized_value,
         }
     }
 
@@ -265,8 +275,8 @@ impl AutomationLane {
         &mut self,
         id: u64,
         time_ticks: Option<u32>,
-        value: Option<f32>,
-        tension: Option<f32>,
+        value: Option<NormalizedF64>,
+        tension: Option<BipolarF64>,
         curve_type: Option<AutomationCurveType>,
     ) -> Option<usize> {
         let index = self.points.iter().position(|p| p.id == id)?;
@@ -279,7 +289,7 @@ impl AutomationLane {
             point.value = v;
         }
         if let Some(t) = tension {
-            point.tension = t.into();
+            point.tension = t;
         }
         if let Some(ct) = curve_type {
             point.curve_type = ct;
@@ -300,7 +310,7 @@ impl AutomationLane {
 
     /// Get the interpolated normalized value (0.0–1.0) at a given time in ticks.
     /// Returns `None` if the lane is disabled or has no points.
-    pub fn value_at(&self, time_ticks: u32) -> Option<f32> {
+    pub fn value_at(&self, time_ticks: u32) -> Option<NormalizedF64> {
         if !self.enabled || self.points.is_empty() {
             return None;
         }
@@ -336,57 +346,49 @@ impl AutomationLane {
             return Some(p1.value);
         }
 
-        let t = ((time_ticks - p1.time_ticks) as f32) / (duration as f32);
+        let t = ((time_ticks - p1.time_ticks) as f64) / (duration as f64);
         let tension = p1.tension.get();
 
         // Interpolate based on curve type of the FIRST point
         let value = match p1.curve_type {
             AutomationCurveType::Linear => {
-                // Apply a cubic ease via tension-weighted Hermite tangents.
-                // tension = 0  → linear (t)
-                // tension < 0  → ease-in  (slow start, fast end)
-                // tension > 0  → ease-out (fast start, slow end)
                 let t_shaped = apply_tension_to_t(t, tension);
-                lerp(t_shaped, p1.value, p2.value)
+                lerp(t_shaped, p1.value.get(), p2.value.get())
             }
             AutomationCurveType::Exponential => {
-                // Bias the exponent so tension shifts the curve's inflection.
-                // tension = 0  → standard (v1 * (v2/v1)^t)
-                // tension < 0  → exponent biased toward a steeper early rise
-                // tension > 0  → exponent biased toward a steeper late rise
-                let v1 = p1.value.max(1e-4);
-                let v2 = p2.value.max(1e-4);
+                let v1 = p1.value.get().max(1e-4);
+                let v2 = p2.value.get().max(1e-4);
                 let t_biased = apply_tension_to_t(t, -tension); // inverted: feels natural
                 v1 * (v2 / v1).powf(t_biased)
             }
             AutomationCurveType::Step => {
                 let jump_at = 0.5 + tension * 0.5; // maps [-1,1] → [0,1]
                 if t < jump_at {
-                    p1.value
+                    p1.value.get()
                 } else {
-                    p2.value
+                    p2.value.get()
                 }
             }
         };
 
-        Some(value)
+        Some(NormalizedF64::new(value))
     }
 
     /// Convert a normalized value (0.0–1.0) to the actual parameter value.
-    pub fn denormalize(&self, normalized: f32) -> f32 {
-        self.min + normalized * (self.max - self.min)
+    pub fn denormalize(&self, normalized: NormalizedF64) -> f64 {
+        self.min + normalized.get() * (self.max - self.min)
     }
 
     /// Convert an actual parameter value to normalized (0.0–1.0).
-    pub fn normalize(&self, value: f32) -> f32 {
-        if (self.max - self.min).abs() < f32::EPSILON {
-            return 0.0;
+    pub fn normalize(&self, value: f64) -> NormalizedF64 {
+        if (self.max - self.min).abs() < f64::EPSILON {
+            return NormalizedF64::new(0.0);
         }
-        ((value - self.min) / (self.max - self.min)).clamp(0.0, 1.0)
+        NormalizedF64::new((value - self.min) / (self.max - self.min))
     }
 
     /// Get the denormalized value at a given time in ticks.
-    pub fn denormalized_value_at(&self, time_ticks: u32) -> Option<f32> {
+    pub fn denormalized_value_at(&self, time_ticks: u32) -> Option<f64> {
         self.value_at(time_ticks).map(|v| self.denormalize(v))
     }
 
@@ -404,7 +406,7 @@ impl AutomationLane {
 ///   tension > 0  → ease-out (√t weighted)
 ///
 /// The blend is continuous and always passes through (0,0) and (1,1).
-fn apply_tension_to_t(t: f32, tension: f32) -> f32 {
+fn apply_tension_to_t(t: f64, tension: f64) -> f64 {
     if tension == 0.0 {
         return t;
     }

@@ -9,7 +9,10 @@ use parking_lot::Mutex;
 use rtrb::RingBuffer;
 
 use crate::{
-    audio::backend::{AudioDeviceConfig, start_audio_stream}, commands::AudioCommand, context::DawContext, core::project::AudioWaveform
+    audio::backend::{start_audio_stream, AudioDeviceConfig},
+    commands::AudioCommand,
+    context::DawContext,
+    core::project::AudioWaveform,
 };
 
 fn generate_startup_beep() -> Option<AudioWaveform> {

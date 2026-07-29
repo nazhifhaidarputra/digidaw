@@ -14,30 +14,66 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AutomationDataState {
 
-
+ bool get isMasterAutomationDrawerOpened;/// Tracks which track automations are collapsed. 
+/// If a trackId is NOT in this set, it is considered expanded (defaults to true).
+ ISet<int> get collapsedTrackAutomations;/// Optional: Tracks the currently selected/highlighted automation lane in the UI
+ int? get selectedAutomationLaneId;
+/// Create a copy of AutomationDataState
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AutomationDataStateCopyWith<AutomationDataState> get copyWith => _$AutomationDataStateCopyWithImpl<AutomationDataState>(this as AutomationDataState, _$identity);
 
 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationDataState);
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationDataState&&(identical(other.isMasterAutomationDrawerOpened, isMasterAutomationDrawerOpened) || other.isMasterAutomationDrawerOpened == isMasterAutomationDrawerOpened)&&const DeepCollectionEquality().equals(other.collapsedTrackAutomations, collapsedTrackAutomations)&&(identical(other.selectedAutomationLaneId, selectedAutomationLaneId) || other.selectedAutomationLaneId == selectedAutomationLaneId));
 }
 
 
 @override
-int get hashCode => runtimeType.hashCode;
+int get hashCode => Object.hash(runtimeType,isMasterAutomationDrawerOpened,const DeepCollectionEquality().hash(collapsedTrackAutomations),selectedAutomationLaneId);
 
 @override
 String toString() {
-  return 'AutomationDataState()';
+  return 'AutomationDataState(isMasterAutomationDrawerOpened: $isMasterAutomationDrawerOpened, collapsedTrackAutomations: $collapsedTrackAutomations, selectedAutomationLaneId: $selectedAutomationLaneId)';
 }
 
 
 }
 
 /// @nodoc
-class $AutomationDataStateCopyWith<$Res>  {
-$AutomationDataStateCopyWith(AutomationDataState _, $Res Function(AutomationDataState) __);
+abstract mixin class $AutomationDataStateCopyWith<$Res>  {
+  factory $AutomationDataStateCopyWith(AutomationDataState value, $Res Function(AutomationDataState) _then) = _$AutomationDataStateCopyWithImpl;
+@useResult
+$Res call({
+ bool isMasterAutomationDrawerOpened, ISet<int> collapsedTrackAutomations, int? selectedAutomationLaneId
+});
+
+
+
+
+}
+/// @nodoc
+class _$AutomationDataStateCopyWithImpl<$Res>
+    implements $AutomationDataStateCopyWith<$Res> {
+  _$AutomationDataStateCopyWithImpl(this._self, this._then);
+
+  final AutomationDataState _self;
+  final $Res Function(AutomationDataState) _then;
+
+/// Create a copy of AutomationDataState
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? isMasterAutomationDrawerOpened = null,Object? collapsedTrackAutomations = null,Object? selectedAutomationLaneId = freezed,}) {
+  return _then(_self.copyWith(
+isMasterAutomationDrawerOpened: null == isMasterAutomationDrawerOpened ? _self.isMasterAutomationDrawerOpened : isMasterAutomationDrawerOpened // ignore: cast_nullable_to_non_nullable
+as bool,collapsedTrackAutomations: null == collapsedTrackAutomations ? _self.collapsedTrackAutomations : collapsedTrackAutomations // ignore: cast_nullable_to_non_nullable
+as ISet<int>,selectedAutomationLaneId: freezed == selectedAutomationLaneId ? _self.selectedAutomationLaneId : selectedAutomationLaneId // ignore: cast_nullable_to_non_nullable
+as int?,
+  ));
+}
+
 }
 
 
@@ -119,10 +155,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function()?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isMasterAutomationDrawerOpened,  ISet<int> collapsedTrackAutomations,  int? selectedAutomationLaneId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AutomationDataState() when $default != null:
-return $default();case _:
+return $default(_that.isMasterAutomationDrawerOpened,_that.collapsedTrackAutomations,_that.selectedAutomationLaneId);case _:
   return orElse();
 
 }
@@ -140,10 +176,10 @@ return $default();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function()  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isMasterAutomationDrawerOpened,  ISet<int> collapsedTrackAutomations,  int? selectedAutomationLaneId)  $default,) {final _that = this;
 switch (_that) {
 case _AutomationDataState():
-return $default();case _:
+return $default(_that.isMasterAutomationDrawerOpened,_that.collapsedTrackAutomations,_that.selectedAutomationLaneId);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -160,10 +196,10 @@ return $default();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function()?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isMasterAutomationDrawerOpened,  ISet<int> collapsedTrackAutomations,  int? selectedAutomationLaneId)?  $default,) {final _that = this;
 switch (_that) {
 case _AutomationDataState() when $default != null:
-return $default();case _:
+return $default(_that.isMasterAutomationDrawerOpened,_that.collapsedTrackAutomations,_that.selectedAutomationLaneId);case _:
   return null;
 
 }
@@ -175,32 +211,73 @@ return $default();case _:
 
 
 class _AutomationDataState implements AutomationDataState {
-  const _AutomationDataState();
+  const _AutomationDataState({this.isMasterAutomationDrawerOpened = false, this.collapsedTrackAutomations = const ISetConst({}), this.selectedAutomationLaneId});
   
 
+@override@JsonKey() final  bool isMasterAutomationDrawerOpened;
+/// Tracks which track automations are collapsed. 
+/// If a trackId is NOT in this set, it is considered expanded (defaults to true).
+@override@JsonKey() final  ISet<int> collapsedTrackAutomations;
+/// Optional: Tracks the currently selected/highlighted automation lane in the UI
+@override final  int? selectedAutomationLaneId;
 
-
+/// Create a copy of AutomationDataState
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$AutomationDataStateCopyWith<_AutomationDataState> get copyWith => __$AutomationDataStateCopyWithImpl<_AutomationDataState>(this, _$identity);
 
 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationDataState);
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationDataState&&(identical(other.isMasterAutomationDrawerOpened, isMasterAutomationDrawerOpened) || other.isMasterAutomationDrawerOpened == isMasterAutomationDrawerOpened)&&const DeepCollectionEquality().equals(other.collapsedTrackAutomations, collapsedTrackAutomations)&&(identical(other.selectedAutomationLaneId, selectedAutomationLaneId) || other.selectedAutomationLaneId == selectedAutomationLaneId));
 }
 
 
 @override
-int get hashCode => runtimeType.hashCode;
+int get hashCode => Object.hash(runtimeType,isMasterAutomationDrawerOpened,const DeepCollectionEquality().hash(collapsedTrackAutomations),selectedAutomationLaneId);
 
 @override
 String toString() {
-  return 'AutomationDataState()';
+  return 'AutomationDataState(isMasterAutomationDrawerOpened: $isMasterAutomationDrawerOpened, collapsedTrackAutomations: $collapsedTrackAutomations, selectedAutomationLaneId: $selectedAutomationLaneId)';
 }
 
 
 }
 
+/// @nodoc
+abstract mixin class _$AutomationDataStateCopyWith<$Res> implements $AutomationDataStateCopyWith<$Res> {
+  factory _$AutomationDataStateCopyWith(_AutomationDataState value, $Res Function(_AutomationDataState) _then) = __$AutomationDataStateCopyWithImpl;
+@override @useResult
+$Res call({
+ bool isMasterAutomationDrawerOpened, ISet<int> collapsedTrackAutomations, int? selectedAutomationLaneId
+});
 
 
+
+
+}
+/// @nodoc
+class __$AutomationDataStateCopyWithImpl<$Res>
+    implements _$AutomationDataStateCopyWith<$Res> {
+  __$AutomationDataStateCopyWithImpl(this._self, this._then);
+
+  final _AutomationDataState _self;
+  final $Res Function(_AutomationDataState) _then;
+
+/// Create a copy of AutomationDataState
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? isMasterAutomationDrawerOpened = null,Object? collapsedTrackAutomations = null,Object? selectedAutomationLaneId = freezed,}) {
+  return _then(_AutomationDataState(
+isMasterAutomationDrawerOpened: null == isMasterAutomationDrawerOpened ? _self.isMasterAutomationDrawerOpened : isMasterAutomationDrawerOpened // ignore: cast_nullable_to_non_nullable
+as bool,collapsedTrackAutomations: null == collapsedTrackAutomations ? _self.collapsedTrackAutomations : collapsedTrackAutomations // ignore: cast_nullable_to_non_nullable
+as ISet<int>,selectedAutomationLaneId: freezed == selectedAutomationLaneId ? _self.selectedAutomationLaneId : selectedAutomationLaneId // ignore: cast_nullable_to_non_nullable
+as int?,
+  ));
+}
+
+
+}
 
 // dart format on

@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{core::project::{AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget}, shared::id::*};
+use crate::{
+    core::project::{
+        AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
+    },
+    shared::id::*,
+};
 
 /// Transport feedback struct sent from the audio thread to Flutter.
 /// This is the single source of truth for all runtime transport state.
@@ -46,7 +51,6 @@ impl TryFrom<&AutomationTarget> for PluginTarget {
     }
 }
 
-
 impl PluginTarget {
     pub fn to_automation_target(&self, param_id: u32) -> AutomationTarget {
         match self {
@@ -70,12 +74,14 @@ impl PluginTarget {
                     target: EffectAutomationTarget::PluginParam { param_id },
                 },
             },
-            PluginTarget::MasterEffect(effect_id) => {
-                AutomationTarget::Master(MixerChannelParamTarget::Plugin {
-                    effect_id: *effect_id,
-                    target: EffectAutomationTarget::PluginParam { param_id },
-                })
-            }
+            PluginTarget::MasterEffect(effect_id) => AutomationTarget::Master(
+                crate::core::project::MasterAutomationTarget::MixerChannel(
+                    MixerChannelParamTarget::Plugin {
+                        effect_id: *effect_id,
+                        target: EffectAutomationTarget::PluginParam { param_id },
+                    },
+                ),
+            ),
         }
     }
 }

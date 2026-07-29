@@ -51,6 +51,7 @@ dependencies:
   logger: ^2.7.0
   built_collection: ^5.1.1
   fast_immutable_collections: ^11.2.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

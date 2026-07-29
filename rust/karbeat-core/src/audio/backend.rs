@@ -10,9 +10,13 @@ use rtrb::{Consumer, RingBuffer};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    audio::{engine::{AudioEngine, AudioEngineTelemetry}, event::TransportFeedback},
+    audio::{
+        engine::{AudioEngine, AudioEngineTelemetry},
+        event::TransportFeedback,
+    },
     commands::{AudioCommand, TelemetryRegistration},
-    context::DawContext, message::TelemetryRegistry,
+    context::DawContext,
+    message::TelemetryRegistry,
 };
 
 #[allow(unused)]
@@ -392,10 +396,10 @@ pub fn start_audio_stream(
         let mut active_cfg = ctx.active_audio_config.write();
         *active_cfg = config_pref.clone();
     }
-    
+
     // Create an Arc clone for the background thread to safely observe
     let active_config_arc = Arc::clone(&ctx.active_audio_config);
-    
+
     // Resolve initial device and config to create the engine exactly once
     let (device, config, sample_format) = get_device_and_config(&config_pref)?;
 
@@ -589,9 +593,10 @@ pub fn start_audio_stream(
                 let latest_config = active_config_arc.read().clone();
 
                 // Did the user change settings in the UI?
-                if latest_config != current_config_pref
-                {
-                    log::info!("Monitor: Audio configuration changed by user. Restarting stream...");
+                if latest_config != current_config_pref {
+                    log::info!(
+                        "Monitor: Audio configuration changed by user. Restarting stream..."
+                    );
                     break;
                 }
 

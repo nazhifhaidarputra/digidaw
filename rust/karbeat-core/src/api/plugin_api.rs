@@ -7,8 +7,8 @@ use crate::{
     context::DawContext,
     core::project::{
         generator::GeneratorInstanceType, mixer::EffectInstance, AutomationTarget,
-        EffectAutomationTarget, GeneratorId, GeneratorInstance, MixerChannelParamTarget,
-        TrackAutomationTarget, TrackId,
+        EffectAutomationTarget, GeneratorId, GeneratorInstance, MasterAutomationTarget,
+        MixerChannelParamTarget, TrackAutomationTarget, TrackId,
     },
     shared::id::*,
 };
@@ -412,12 +412,12 @@ fn map_target_to_automation(target: &PluginTarget, param_id: u32) -> AutomationT
                 target: EffectAutomationTarget::PluginParam { param_id },
             },
         },
-        PluginTarget::MasterEffect(effect_id) => {
-            AutomationTarget::Master(MixerChannelParamTarget::Plugin {
+        PluginTarget::MasterEffect(effect_id) => AutomationTarget::Master(
+            MasterAutomationTarget::MixerChannel(MixerChannelParamTarget::Plugin {
                 effect_id: *effect_id,
                 target: EffectAutomationTarget::PluginParam { param_id },
-            })
-        }
+            }),
+        ),
     }
 }
 

@@ -28,7 +28,7 @@ pub enum BufferDataTypeDto {
     Float32,
     Uint8,
     Int32,
-    Int8
+    Int8,
 }
 
 impl BufferDataTypeDto {
@@ -52,4 +52,3 @@ impl From<BufferDataType> for BufferDataTypeDto {
         }
     }
 }
-

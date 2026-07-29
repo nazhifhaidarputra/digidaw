@@ -2,10 +2,13 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use karbeat_core::{
-    context::DawContext, core::{
+    context::DawContext,
+    core::{
         file_manager::audio_loader::AudioLoader,
         project::{DawSource, TrackType},
-    }, shared::{AudioSourceId, TrackId}, utils::get_waveform_buffer
+    },
+    shared::{AudioSourceId, TrackId},
+    utils::get_waveform_buffer,
 };
 
 pub use karbeat_core::core::project::AudioWaveform;
@@ -57,7 +60,9 @@ impl WaveformHandle {
 /// Returns None if the source does not exist in the asset library.
 #[frb(sync)]
 pub fn get_waveform_handle(ctx: &DawContext, source_id: u32) -> Option<WaveformHandle> {
-    let wf = ctx.app_state.get_audio_source(&AudioSourceId::from(source_id))?;
+    let wf = ctx
+        .app_state
+        .get_audio_source(&AudioSourceId::from(source_id))?;
     Some(WaveformHandle(wf.clone()))
 }
 
@@ -68,7 +73,10 @@ pub fn get_waveform_handle(ctx: &DawContext, source_id: u32) -> Option<WaveformH
 /// This is a sync call — it only reads Arc pointers from the app state, so
 /// there is no blocking I/O and no buffer copying.
 #[frb(sync)]
-pub fn get_waveform_handles_for_track(ctx: &DawContext, track_id: u32) -> HashMap<u32, WaveformHandle> {
+pub fn get_waveform_handles_for_track(
+    ctx: &DawContext,
+    track_id: u32,
+) -> HashMap<u32, WaveformHandle> {
     let track = match ctx.app_state.tracks.get(&TrackId::from(track_id)) {
         Some(t) => t,
         None => return HashMap::new(),

@@ -140,8 +140,7 @@ mod tests {
     fn change_note_params_all_none_returns_unchanged_note() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
         let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
-        let original_velocity =
-            ctx.app_state.pattern_pool[&pattern_id].notes[0].velocity;
+        let original_velocity = ctx.app_state.pattern_pool[&pattern_id].notes[0].velocity;
         let result =
             note_api::change_note_params(&mut ctx, pattern_id, note_id, None, None, None, None);
         assert!(result.is_ok());
@@ -152,15 +151,8 @@ mod tests {
     fn change_note_params_velocity_min() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
         let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
-        let result = note_api::change_note_params(
-            &mut ctx,
-            pattern_id,
-            note_id,
-            Some(0),
-            None,
-            None,
-            None,
-        );
+        let result =
+            note_api::change_note_params(&mut ctx, pattern_id, note_id, Some(0), None, None, None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().velocity, 0);
     }
@@ -229,7 +221,11 @@ mod tests {
         note_api::add_notes_batch(
             &mut ctx,
             pattern_id,
-            vec![(60, 30000, Some(480)), (62, 31000, Some(480)), (64, 32000, Some(480))],
+            vec![
+                (60, 30000, Some(480)),
+                (62, 31000, Some(480)),
+                (64, 32000, Some(480)),
+            ],
         )
         .unwrap();
         assert_eq!(ctx.history.undo_stack.len(), before_hist + 1);

@@ -1,12 +1,15 @@
 // src/core/plugin/registry.rs
-use hashbrown::HashMap;
-use karbeat_plugin_types::ParameterSpec;
-use karbeat_plugin_api::{traits::{AudioPlugin, AudioPluginBuilder}, types::PluginCategory};
-use karbeat_utils::hash::hash_str;
 use crate::{
     effect::parametric_eq::DigiParametricEQ,
     generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
 };
+use hashbrown::HashMap;
+use karbeat_plugin_api::{
+    traits::{AudioPlugin, AudioPluginBuilder},
+    types::PluginCategory,
+};
+use karbeat_plugin_types::ParameterSpec;
+use karbeat_utils::hash::hash_str;
 
 type PluginFactory = Box<dyn Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync>;
 
@@ -41,9 +44,7 @@ impl PluginRegistry {
         registry.register_plugin("synth_karbeatzer_v2", "Karbeatzer V2", || {
             Box::new(KarbeatzerV2::build())
         });
-        registry.register_plugin("synth_my_retro", "My Retro", || {
-            Box::new(MyRetro::build())
-        });
+        registry.register_plugin("synth_my_retro", "My Retro", || Box::new(MyRetro::build()));
         registry.register_plugin("effect_param_eq", "Parametric EQ", || {
             Box::new(DigiParametricEQ::build())
         });
@@ -140,7 +141,10 @@ impl PluginRegistry {
 
     /// Deprecated: use `get_plugin_parameter_specs_by_id_str` instead.
     #[deprecated(note = "use get_plugin_parameter_specs_by_id_str instead")]
-    pub fn get_generator_parameter_specs_by_id_str(&self, id_str: &str) -> Option<Vec<ParameterSpec>> {
+    pub fn get_generator_parameter_specs_by_id_str(
+        &self,
+        id_str: &str,
+    ) -> Option<Vec<ParameterSpec>> {
         self.get_plugin_parameter_specs_by_id_str(id_str)
     }
 

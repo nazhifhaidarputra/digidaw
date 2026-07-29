@@ -1,5 +1,8 @@
 use crate::{
-    audio::event::TransportFeedback, commands::AudioCommand, context::DawContext, core::{
+    audio::event::TransportFeedback,
+    commands::AudioCommand,
+    context::DawContext,
+    core::{
         file_manager::audio_loader::AudioLoader,
         project::{AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId},
     },
@@ -75,8 +78,13 @@ pub fn play_preview_note(
             .ok_or_else(|| anyhow::anyhow!("Track has no generator"))?
             .id
     };
-    
-    let _ = ctx.send_audio_command(AudioCommand::PlayPreviewNote { note_key, generator_id, velocity, is_note_on: is_on })?;
+
+    let _ = ctx.send_audio_command(AudioCommand::PlayPreviewNote {
+        note_key,
+        generator_id,
+        velocity,
+        is_note_on: is_on,
+    })?;
 
     Ok(())
 }
@@ -88,7 +96,11 @@ pub fn play_preview_note_generator(
     velocity: u8,
     is_on: bool,
 ) -> anyhow::Result<()> {
-    ctx.send_audio_command(AudioCommand::PlayPreviewNote { note_key, generator_id, velocity, is_note_on: is_on })?;
+    ctx.send_audio_command(AudioCommand::PlayPreviewNote {
+        note_key,
+        generator_id,
+        velocity,
+        is_note_on: is_on,
+    })?;
     Ok(())
 }
-

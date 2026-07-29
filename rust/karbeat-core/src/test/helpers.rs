@@ -7,11 +7,7 @@
 use karbeat_utils::hash::hash_str;
 
 use crate::{
-    api::{
-        clip_api,
-        note_api,
-        track_api,
-    },
+    api::{clip_api, note_api, track_api},
     context::DawContext,
     core::project::{
         clip::{Clip, ClipSourceType, ClipTimeUnit},
@@ -55,8 +51,9 @@ pub fn make_seeded_ctx() -> (DawContext, TrackId, TrackId, PatternId) {
     let audio_track_id = audio_track.id;
 
     // 2. MIDI track with Karbeatzer V2
-    let midi_track = track_api::add_midi_track_with_generator_id(&mut ctx, karbeatzer_v2_registry_id())
-        .expect("Karbeatzer V2 should be in the default registry");
+    let midi_track =
+        track_api::add_midi_track_with_generator_id(&mut ctx, karbeatzer_v2_registry_id())
+            .expect("Karbeatzer V2 should be in the default registry");
     let midi_track_id = midi_track.id;
 
     // 3. Add a MIDI clip to the MIDI track (creates a new pattern automatically)

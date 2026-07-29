@@ -8,8 +8,7 @@ fn main() {
 
     // Points to shared assets folder.
     // This runs from the root of the rust workspace.
-    let export_dir = std::env::var("PLUGIN_MANIFEST_DIR")
-        .expect("No PLUGIN_MANIFEST_DIR defined");
+    let export_dir = std::env::var("PLUGIN_MANIFEST_DIR").expect("No PLUGIN_MANIFEST_DIR defined");
 
     // Call the export function on all plugins
     MyRetro::export_manifest(&export_dir).unwrap();

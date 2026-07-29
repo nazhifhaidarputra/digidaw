@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/input/input.dart';
 import 'package:karbeat/features/misc/error_init_screen.dart';
 import 'package:karbeat/features/misc/loading_screen.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
@@ -26,7 +27,6 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
   Future<void> _initializeRust() async {
     try {
-      // Initialize Rust asynchronously while the UI is already rendering
       await Future.wait([
         RustLib.init(),
         Future.delayed(const Duration(seconds: 5)),
@@ -59,7 +59,7 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
       );
     }
 
-    // 2. Show Loading Screen while Rust boots up
+    // Show Loading Screen while Rust boots up
     if (!_isRustInitialized) {
       return MaterialApp(
         title: 'DigiDAW',
@@ -70,15 +70,19 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
     }
 
     final projectState = ref.watch(projectProvider);
+    final activeShortcuts = ref.watch(shortcutManagerProvider);
     
-    return MaterialApp(
-      title: 'DigiDAW',
-      theme: ThemeData.dark(),
-      debugShowCheckedModeBanner: false,
-      home: projectState.when(
-        data: (_) => const MainScreen(),
-        loading: () => const LoadingScreen(),
-        error: (err, stack) => ErrorInitScreen(err: err, stack: stack),
+    return Shortcuts(
+      shortcuts: activeShortcuts,
+      child: MaterialApp(
+        title: 'DigiDAW',
+        theme: ThemeData.dark(),
+        debugShowCheckedModeBanner: false,
+        home: projectState.when(
+          data: (_) => const MainScreen(),
+          loading: () => const LoadingScreen(),
+          error: (err, stack) => ErrorInitScreen(err: err, stack: stack),
+        ),
       ),
     );
   }

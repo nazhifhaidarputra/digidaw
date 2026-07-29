@@ -6,11 +6,12 @@ use karbeat_core::{
     context::DawContext,
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
-        EffectAutomationTarget, MixerChannelParamTarget, ModulationLink,
+        EffectAutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
         ModulationLinkForOrderedLaneView, ModulationSource, TrackAutomationTarget,
     },
     shared::{BusId, EffectId, TrackId},
 };
+use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
 use crate::api::plugin::UiPluginTarget;
 
@@ -21,9 +22,9 @@ pub struct AutomationLaneDto {
     pub label: String,
     pub points: Vec<AutomationPointDto>,
     pub enabled: bool,
-    pub min: f32,
-    pub max: f32,
-    pub default_value: f32,
+    pub min: f64,
+    pub max: f64,
+    pub default_value: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -31,9 +32,9 @@ pub struct AutomationLaneDto {
 pub struct AutomationPointDto {
     pub id: u64,
     pub time_ticks: u32,
-    pub value: f32,
+    pub value: f64,
     pub curve_type: AutomationCurveTypeDto,
-    pub tension: f32,
+    pub tension: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -50,7 +51,12 @@ pub enum AutomationTargetDto {
         bus_id: u32,
         mix_target: MixerChannelParamTargetDto,
     },
-    Master(MixerChannelParamTargetDto),
+    Master(MasterAutomationTargetDto),
+}
+
+#[derive(Clone, Debug)]
+pub enum MasterAutomationTargetDto {
+    MixerChannel(MixerChannelParamTargetDto),
     TempoBpm,
 }
 
@@ -179,9 +185,9 @@ impl From<AutomationPointDto> for AutomationPoint {
         Self {
             id: point.id,
             time_ticks: point.time_ticks,
-            value: point.value,
+            value: NormalizedF64::new(point.value),
             curve_type: point.curve_type.into(),
-            tension: point.tension.into(),
+            tension: BipolarF64::new(point.tension),
         }
     }
 }
@@ -191,24 +197,34 @@ impl From<AutomationPoint> for AutomationPointDto {
         Self {
             id: p.id,
             time_ticks: p.time_ticks,
-            value: p.value,
+            value: p.value.get(),
             curve_type: p.curve_type.into(),
             tension: p.tension.get(),
         }
     }
 }
 
-impl From<AutomationLaneDto> for AutomationLane {
-    fn from(l: AutomationLaneDto) -> Self {
-        Self {
+impl TryFrom<AutomationLaneDto> for AutomationLane {
+    type Error = &'static str;
+
+    fn try_from(l: AutomationLaneDto) -> Result<Self, Self::Error> {
+        // If Flutter sends 1.5, this explicitly throws an Error
+        let default_value = NormalizedF64::try_from(l.default_value)?;
+
+        Ok(Self {
             id: l.id.into(),
             label: l.label,
-            points: l.points.into_iter().map(|p| p.into()).collect(),
+            // (Assuming points also use TryFrom for their internal NormalizedF64 values)
+            points: l
+                .points
+                .into_iter()
+                .filter_map(|p| p.try_into().ok())
+                .collect(),
             enabled: l.enabled,
             min: l.min,
             max: l.max,
-            default_value: l.default_value,
-        }
+            default_value,
+        })
     }
 }
 
@@ -221,7 +237,7 @@ impl From<&AutomationLane> for AutomationLaneDto {
             enabled: l.enabled,
             min: l.min,
             max: l.max,
-            default_value: l.default_value,
+            default_value: l.default_value.get(),
         }
     }
 }
@@ -284,10 +300,20 @@ impl From<&AutomationTarget> for AutomationTargetDto {
                 bus_id: bus_id.to_u32(),
                 mix_target: MixerChannelParamTargetDto::from(mix_target),
             },
-            AutomationTarget::Master(mix_target) => {
-                Self::Master(MixerChannelParamTargetDto::from(mix_target))
+            AutomationTarget::Master(master_target) => {
+                match master_target {
+                    karbeat_core::core::project::MasterAutomationTarget::MixerChannel(
+                        mix_target,
+                    ) => Self::Master(MasterAutomationTargetDto::MixerChannel(
+                        MixerChannelParamTargetDto::from(mix_target),
+                    )),
+                    karbeat_core::core::project::MasterAutomationTarget::TempoBpm => {
+                        Self::Master(MasterAutomationTargetDto::TempoBpm)
+                    }
+                }
+
+                // MixerChannelParamTargetDto::from(mix_target)
             }
-            AutomationTarget::TempoBpm => Self::TempoBpm,
             AutomationTarget::Generator {
                 generator_id,
                 param_id,
@@ -339,10 +365,14 @@ impl From<AutomationTargetDto> for AutomationTarget {
                 bus_id: BusId::from(bus_id),
                 mix_target: MixerChannelParamTarget::from(mix_target),
             },
-            AutomationTargetDto::Master(mix_target) => {
-                Self::Master(MixerChannelParamTarget::from(mix_target))
-            }
-            AutomationTargetDto::TempoBpm => Self::TempoBpm,
+            AutomationTargetDto::Master(master_target) => match master_target {
+                MasterAutomationTargetDto::MixerChannel(mix_target) => Self::Master(
+                    MasterAutomationTarget::MixerChannel(MixerChannelParamTarget::from(mix_target)),
+                ),
+                MasterAutomationTargetDto::TempoBpm => {
+                    Self::Master(MasterAutomationTarget::TempoBpm)
+                }
+            },
             AutomationTargetDto::Generator {
                 generator_id,
                 param_id,
@@ -388,9 +418,9 @@ pub fn add_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTargetDto,
     label: &str,
-    min: f32,
-    max: f32,
-    default_value: f32,
+    min: f64,
+    max: f64,
+    default_value: f64,
 ) -> Result<(AutomationLaneDto, ModulationLinkDto), String> {
     match automation_api::add_automation_lane(ctx, target.into(), label, min, max, default_value) {
         Ok((lane, mod_link)) => {
@@ -419,9 +449,9 @@ pub fn add_automation_lane_for_track(
     track_id: u32,
     target: AutomationTargetDto,
     label: &str,
-    min: f32,
-    max: f32,
-    default_value: f32,
+    min: f64,
+    max: f64,
+    default_value: f64,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane_for_track(
         ctx,
@@ -445,9 +475,9 @@ pub fn add_automation_lane_for_bus(
     bus_id: u32,
     target: AutomationTargetDto,
     label: &str,
-    min: f32,
-    max: f32,
-    default_value: f32,
+    min: f64,
+    max: f64,
+    default_value: f64,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane_for_bus(
         ctx,
@@ -470,9 +500,14 @@ pub fn add_new_automation_point(
     ctx: &mut DawContext,
     automation_id: u32,
     time_ticks: u32,
-    value: f32,
+    value: f64,
 ) -> Result<AutomationLaneDto, String> {
-    automation_api::add_new_automation_point(ctx, automation_id.into(), time_ticks, value)
+    // we will warn if the value is not in normalized value
+    if value > 1.0 || value < 0.0 {
+        log::warn!("Value are not in correct range. it will be clamped");
+    }
+    let normalized_val = NormalizedF64::new(value);
+    automation_api::add_new_automation_point(ctx, automation_id.into(), time_ticks, normalized_val)
         .map(|(lane, _)| (&lane).into())
         .map_err(|e| e.to_string())
 }
@@ -492,18 +527,34 @@ pub fn update_automation_point(
     automation_id: u32,
     id: u64,
     time_ticks: Option<u32>,
-    value: Option<f32>,
-    tension: Option<f32>,
+    value: Option<f64>,
+    tension: Option<f64>,
     curve_type: Option<AutomationCurveTypeDto>,
 ) -> Result<usize, String> {
+    let some_value = value.map(|v| {
+        if v > 1.0 || v < 0.0 {
+            log::warn!("Value are not in correct range. it will be clamped");
+        }
+
+        NormalizedF64::new(v)
+    });
+
+    let some_tension = tension.map(|t| {
+        if t < -1.0 || t > 1.0 {
+            log::warn!("Tension are not in correct range. it will be clamped");
+        }
+
+        BipolarF64::new(t)
+    });
+
     automation_api::update_automation_point(
         ctx,
         automation_id.into(),
         id,
         time_ticks,
-        value,
-        tension,
-        curve_type.map(|ct| ct.into())
+        some_value,
+        some_tension,
+        curve_type.map(|ct| ct.into()),
     )
     .map_err(|e| e.to_string())
 }
@@ -565,4 +616,3 @@ pub fn get_all_modulation_sources(ctx: &DawContext) -> HashMap<u32, ModulationSo
 pub fn get_modulation_source(ctx: &DawContext, id: u32) -> Option<ModulationSourceDto> {
     automation_api::get_modulation_source(ctx, id)
 }
-

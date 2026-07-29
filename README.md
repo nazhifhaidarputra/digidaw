@@ -1,10 +1,10 @@
-<div align="center">
+<!-- <div align="center">
   <h1>🎵 DigiDAW</h1>
   <img src="./assets/images/Digidaw_logo.png"/>
   <p><strong>A minimal, cross-platform Digital Audio Workstation (DAW) written in Flutter and Rust.</strong></p>
-</div>
+</div> -->
 
----
+# Digidaw
 
 DigiDAW (formerly "Karbeat") is a clean, simple, and minimal Digital Audio Workstation (DAW) designed to be cross-platform. We prioritize delivering an effective mobile-first application
 

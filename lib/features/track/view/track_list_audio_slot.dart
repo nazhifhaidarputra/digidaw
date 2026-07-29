@@ -5,7 +5,6 @@ class AudioTrackSlot extends ConsumerStatefulWidget {
   final double height;
   final ScrollController horizontalScrollController;
   final int sampleRate;
-  final ClipDragController clipDragController;
 
   const AudioTrackSlot({
     super.key,
@@ -13,7 +12,6 @@ class AudioTrackSlot extends ConsumerStatefulWidget {
     required this.height,
     required this.horizontalScrollController,
     required this.sampleRate,
-    required this.clipDragController,
   });
 
   @override
@@ -84,74 +82,92 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
     if (track == null) return const SizedBox();
 
-    return Container(
-      height: widget.height,
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
-          right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
-        ),
-        color: Colors.grey.shade900,
-      ),
-      child: Stack(
-        clipBehavior: Clip.none, // Allow clips to drag outside temporarily
-        children: [
-          Positioned.fill(
-            child: MouseRegion(
-              cursor: selectedTool == ToolSelection.draw
-                  ? SystemMouseCursors.precise
-                  : SystemMouseCursors.basic,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTapUp: (details) {
-                  if (selectedTool == ToolSelection.draw) {
-                    _handleEmptySpaceClick(
-                      context: context,
-                      localDx: details.localPosition.dx,
-                      zoomLevel: zoomLevel,
-                    );
-                  } else {
-                    ref
-                        .read(trackListStateProvider.notifier)
-                        .deselectAllClips();
-                  }
-                },
-                child: RepaintBoundary(
-                  child: CustomPaint(
-                    painter: GridPainter(
-                      zoomLevel: zoomLevel,
-                      gridSize: gridSize,
-                      tempo: tempo ?? 120,
-                      sampleRate: safeSampleRate,
-                      scrollController: widget.horizontalScrollController,
+    return DragTarget<List<int>>(
+      onWillAcceptWithDetails: (details) => true,
+      onAcceptWithDetails: (details) {},
+      onMove: (details) {
+        final placementState = ref.read(clipPlacementProvider);
+        if (placementState.trackId != widget.trackId) {
+          ref
+              .read(clipPlacementProvider.notifier)
+              .updateBatchDrag(
+                targetTrackId: widget.trackId,
+                snappedDeltaTicks: placementState.snappedDeltaTicks,
+              );
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          height: widget.height,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
+              right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
+            ),
+            color: candidateData.isNotEmpty
+                ? Colors.white.withAlpha(20)
+                : Colors.grey.shade900,
+          ),
+          child: Stack(
+            clipBehavior: Clip.none, // Allow clips to drag outside temporarily
+            children: [
+              Positioned.fill(
+                child: MouseRegion(
+                  cursor: selectedTool == ToolSelection.draw
+                      ? SystemMouseCursors.precise
+                      : SystemMouseCursors.basic,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTapUp: (details) {
+                      if (selectedTool == ToolSelection.draw) {
+                        _handleEmptySpaceClick(
+                          context: context,
+                          localDx: details.localPosition.dx,
+                          zoomLevel: zoomLevel,
+                        );
+                      } else {
+                        ref
+                            .read(trackListStateProvider.notifier)
+                            .deselectAllClips();
+                      }
+                    },
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        painter: GridPainter(
+                          zoomLevel: zoomLevel,
+                          gridSize: gridSize,
+                          tempo: tempo ?? 120,
+                          sampleRate: safeSampleRate,
+                          scrollController: widget.horizontalScrollController,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          ...track.clips.map((clip) {
-            final isSelected =
-                isSelectedTrack && selectedClipIds.contains(clip.id);
+              ...track.clips.map((clip) {
+                final isSelected =
+                    isSelectedTrack && selectedClipIds.contains(clip.id);
 
-            return _InteractiveClip(
-              key: ValueKey(clip.id),
-              clip: clip,
-              trackId: widget.trackId,
-              trackType: track.trackType,
-              color: track.color.toColor(),
-              zoomLevel: zoomLevel,
-              height: widget.height,
-              selectedTool: selectedTool,
-              isSelected: isSelected,
-              selectedClipIds: selectedClipIds,
-              clipDragController: widget.clipDragController,
-              horizontalScrollController: widget.horizontalScrollController,
-              waveformMap: waveformMap,
-            );
-          }),
-        ],
-      ),
+                return _InteractiveClip(
+                  key: ValueKey(clip.id),
+                  clip: clip,
+                  trackId: widget.trackId,
+                  trackType: track.trackType,
+                  color: track.color.toColor(),
+                  zoomLevel: zoomLevel,
+                  height: widget.height,
+                  selectedTool: selectedTool,
+                  isSelected: isSelected,
+                  selectedClipIds: selectedClipIds,
+                  horizontalScrollController: widget.horizontalScrollController,
+                  waveformMap: waveformMap,
+                );
+              }),
+            ],
+          ),
+        );
+      },
     );
   }
 }

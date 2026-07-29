@@ -1,16 +1,19 @@
 pub mod bit_crush;
 pub mod chorus;
 pub mod compressor;
+pub mod distortion;
 pub mod envelope;
 pub mod filter;
 pub mod flanger;
+pub mod helper;
 pub mod interpolation;
+pub mod lfo;
 pub mod metronome;
+pub mod noise;
 pub mod oscillator;
 pub mod pitch_shift;
+pub mod prelude;
 pub mod reverb;
 pub mod stretcher;
 pub mod voice;
 pub mod windowing;
-
-pub mod prelude;

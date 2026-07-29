@@ -1,10 +1,7 @@
-pub(crate) use karbeat_core::
-    context::INIT_LOGGER
-;
+pub(crate) use karbeat_core::context::INIT_LOGGER;
 
 pub mod api;
 mod frb_generated;
-
 
 pub fn init_logger() {
     // if release, use info, else use debug

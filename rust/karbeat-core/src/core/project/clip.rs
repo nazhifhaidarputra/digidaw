@@ -287,7 +287,10 @@ impl ApplicationState {
         edge: ResizeEdge,
         new_time_val: u64,
     ) -> anyhow::Result<Clip> {
-        let track = self.tracks.get_mut(&track_id).with_context(|| "Track not found")?;
+        let track = self
+            .tracks
+            .get_mut(&track_id)
+            .with_context(|| "Track not found")?;
 
         let modified_clip = track.resize_clip(clip_id, edge, new_time_val)?;
         Ok(modified_clip)

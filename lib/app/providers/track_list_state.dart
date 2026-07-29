@@ -13,6 +13,7 @@ import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/track.dart' as track_api;
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
+import 'package:karbeat/src/rust/api/waveform.dart';
 
 part 'track_list_state.freezed.dart';
 
@@ -840,3 +841,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
 /// Mutate: `ref.read(trackListStateProvider.notifier).syncTracksState()`
 final trackListStateProvider =
     NotifierProvider<TrackListNotifier, TrackListState>(TrackListNotifier.new);
+
+final trackWaveformProvider = Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+  ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
+  final ctx = ref.read(projectProvider.notifier).dawContext;
+  return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
+});

@@ -26,11 +26,15 @@ pub fn set_bpm(ctx: &mut DawContext, val: f32) {
     let _ = ctx.send_audio_command(AudioCommand::SetBPM(val));
 }
 
-pub fn stop_song_playback(ctx: &mut DawContext, ) {
+pub fn stop_song_playback(ctx: &mut DawContext) {
     let _ = ctx.send_audio_command(AudioCommand::StopAndReset);
 }
 
-pub fn toggle_pattern_playback(ctx: &mut DawContext, pattern_id: PatternId, generator_id: GeneratorId) {
+pub fn toggle_pattern_playback(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    generator_id: GeneratorId,
+) {
     let _ = ctx.send_audio_command(AudioCommand::TogglePatternPlayback {
         pattern_id,
         generator_id,

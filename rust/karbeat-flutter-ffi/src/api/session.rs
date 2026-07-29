@@ -74,7 +74,11 @@ pub fn copy_pattern_notes(
 }
 
 /// Cut pattern notes: copies them to clipboard then deletes with history.
-pub fn cut_pattern_notes(ctx: &mut DawContext, pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
+pub fn cut_pattern_notes(
+    ctx: &mut DawContext,
+    pattern_id: u32,
+    note_ids: Vec<u32>,
+) -> Result<(), String> {
     clipboard_api::cut_notes(
         ctx,
         pattern_id.into(),
@@ -103,7 +107,11 @@ pub fn paste_pattern_notes(
 }
 
 /// Delete notes in group. useful for range and group deletion
-pub fn delete_pattern_notes(ctx: &mut DawContext, pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
+pub fn delete_pattern_notes(
+    ctx: &mut DawContext,
+    pattern_id: u32,
+    note_ids: Vec<u32>,
+) -> Result<(), String> {
     let note_ids_typed = note_ids
         .into_iter()
         .map(karbeat_core::core::project::NoteId::from)
@@ -160,8 +168,9 @@ pub fn paste_clips(
             offset_start: 0,
         },
     };
-    let pasted_clips = clipboard_api::paste_clips(ctx, TrackId::from(target_track_id), clip_time_unit)
-        .map_err(|e| e.to_string())?;
+    let pasted_clips =
+        clipboard_api::paste_clips(ctx, TrackId::from(target_track_id), clip_time_unit)
+            .map_err(|e| e.to_string())?;
 
     Ok(pasted_clips.iter().map(UiClip::from).collect())
 }
@@ -221,5 +230,7 @@ pub fn resize_clip(
 // ==================================
 
 pub fn get_clipboard_contents(ctx: &DawContext) -> UiClipboardContent {
-    clipboard_api::get_clipboard_contents(ctx, |clipboard_ref| UiClipboardContent::from(clipboard_ref))
+    clipboard_api::get_clipboard_contents(ctx, |clipboard_ref| {
+        UiClipboardContent::from(clipboard_ref)
+    })
 }

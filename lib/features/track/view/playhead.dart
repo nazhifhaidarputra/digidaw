@@ -107,7 +107,8 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                       if (left > viewportWidth + 50) return const SizedBox();
 
                       // Hide if it goes behind the header/offset (scrolled too far left)
-                      if (left < widget.offsetAdjustment) return const SizedBox();
+                      if (left < widget.offsetAdjustment)
+                        return const SizedBox();
 
                       return Positioned(
                         left: left - 10, // Center the 20px wide handle

@@ -201,11 +201,13 @@ class TrackHeader extends ConsumerWidget {
           icon: Icons.arrow_upward,
           onTap: () async {
             AppLogger.info("Move Up requested for track ID: ${track.id}");
-            ref.read(trackListStateProvider.notifier).handleUpdateTrackOrder(
-              ref: ref,
-              trackId: trackId,
-              newIdx: (track.orderIdx - 1).complyU32(),
-            );
+            ref
+                .read(trackListStateProvider.notifier)
+                .handleUpdateTrackOrder(
+                  ref: ref,
+                  trackId: trackId,
+                  newIdx: (track.orderIdx - 1).complyU32(),
+                );
           },
         ),
         DawContextAction(
@@ -213,11 +215,13 @@ class TrackHeader extends ConsumerWidget {
           icon: Icons.arrow_downward,
           onTap: () async {
             AppLogger.info("Move Down requested for track ID: ${track.id}");
-            ref.read(trackListStateProvider.notifier).handleUpdateTrackOrder(
-              ref: ref,
-              trackId: trackId,
-              newIdx: (track.orderIdx + 1).complyU32(),
-            );
+            ref
+                .read(trackListStateProvider.notifier)
+                .handleUpdateTrackOrder(
+                  ref: ref,
+                  trackId: trackId,
+                  newIdx: (track.orderIdx + 1).complyU32(),
+                );
           },
         ),
         DawContextAction(
@@ -226,7 +230,9 @@ class TrackHeader extends ConsumerWidget {
           isDestructive: true,
           onTap: () {
             AppLogger.info("Delete track requested for ID: ${track.id}");
-            ref.read(trackListStateProvider.notifier).deleteTrack(trackId: trackId);
+            ref
+                .read(trackListStateProvider.notifier)
+                .deleteTrack(trackId: trackId);
           },
         ),
       ],

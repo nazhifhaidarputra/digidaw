@@ -5,3 +5,4 @@ pub mod hash;
 pub mod macros;
 pub mod math;
 pub mod parser;
+pub mod types;

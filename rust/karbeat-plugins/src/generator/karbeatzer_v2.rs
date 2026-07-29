@@ -190,7 +190,8 @@ impl AudioPlugin for KarbeatzerV2 {
         let new_channels = outputs.first().map(|b| b.channel_count).unwrap_or(2);
         if self.channels != new_channels {
             self.channels = new_channels;
-            self.filter.prepare(self.channels as u8, self.sample_rate as u32);
+            self.filter
+                .prepare(self.channels as u8, self.sample_rate as u32);
         }
     }
 
@@ -204,12 +205,16 @@ impl AudioPlugin for KarbeatzerV2 {
             self.set_parameter(param_change.param_id, param_change.normalized_value);
         }
 
-        if buffers.main_outputs.is_empty() { return; }
-        
+        if buffers.main_outputs.is_empty() {
+            return;
+        }
+
         let outputs = &mut buffers.main_outputs[0].channel_data;
         let total_frames = outputs.first().map_or(0, |ch| ch.len());
-        
-        if self.channels == 0 || total_frames == 0 { return; }
+
+        if self.channels == 0 || total_frames == 0 {
+            return;
+        }
 
         // Resize internal interleaved buffer if necessary
         let required_len = total_frames * self.channels;
@@ -240,7 +245,8 @@ impl AudioPlugin for KarbeatzerV2 {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice = &mut self.interleaved_buffer[current_frame * self.channels..end_frame * self.channels];
+                let out_slice = &mut self.interleaved_buffer
+                    [current_frame * self.channels..end_frame * self.channels];
 
                 let KarbeatzerV2 {
                     active_voices,
@@ -255,7 +261,9 @@ impl AudioPlugin for KarbeatzerV2 {
 
                 // Render all active voices
                 for voice in active_voices.iter_mut() {
-                    if !voice.is_active { continue; }
+                    if !voice.is_active {
+                        continue;
+                    }
 
                     Self::generate_voice_block(
                         oscillators,
@@ -293,9 +301,10 @@ impl AudioPlugin for KarbeatzerV2 {
             }
 
             // Process MIDI
-            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame {
+            while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
+            {
                 match midi_events[event_idx].data {
-                    // Ignored the new `channel` field using `..` 
+                    // Ignored the new `channel` field using `..`
                     MidiMessage::NoteOn { key, velocity, .. } => {
                         if velocity > 0 {
                             self.active_voices.push(SynthVoice::new(

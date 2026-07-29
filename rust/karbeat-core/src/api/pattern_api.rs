@@ -1,9 +1,13 @@
 use crate::{
-    audio::engine::PlaybackMode, commands::AudioCommand, context::DawContext, core::project::{GeneratorId, Pattern, PatternId}
+    audio::engine::PlaybackMode,
+    commands::AudioCommand,
+    context::DawContext,
+    core::project::{GeneratorId, Pattern, PatternId},
 };
 
 pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<Pattern> {
-    let pattern_ref = ctx.app_state
+    let pattern_ref = ctx
+        .app_state
         .pattern_pool
         .get(pattern_id)
         .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
@@ -17,8 +21,8 @@ where
     F: Fn(u32, &Pattern) -> Item, // The mapper takes the ID and the Pattern, and returns an Item
     C: FromIterator<Item>,        // The collection must be buildable from an iterator of Items
 {
-
-    let patterns = ctx.app_state
+    let patterns = ctx
+        .app_state
         .pattern_pool
         .iter()
         .map(|(&id, pattern)| {

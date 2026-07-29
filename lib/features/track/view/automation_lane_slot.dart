@@ -1,3 +1,4 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,9 +28,10 @@ class AutomationLaneSlot extends ConsumerStatefulWidget {
   @override
   ConsumerState<AutomationLaneSlot> createState() => _AutomationLaneSlotState();
 }
+
 class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   // Optimistic UI state
-  List<AutomationPointDto>? _localPoints;
+  IList<AutomationPointDto>? _localPoints;
   int? _draggedPointId;
 
   @override
@@ -43,16 +45,22 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
 
   double _getTicksFromX(double localX) {
     final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
-    final scrollX = widget.horizontalScrollController.hasClients
-        ? widget.horizontalScrollController.offset
-        : 0.0;
-    return (localX + scrollX) * zoomLevel;
+    return localX * zoomLevel;
   }
 
+  /// Calculates the purely normalized value (0.0 to 1.0) from the Y pixel coordinate.
+  /// This perfectly maps to the backend's NormalizedF64 newtype.
   double _getValueFromY(double localY) {
     // Y=0 is top (1.0), Y=height is bottom (0.0)
     final normalized = 1.0 - (localY / widget.height);
     return normalized.clamp(0.0, 1.0);
+  }
+
+  /// Optional: Use this if you ever need to draw a UI tooltip while dragging
+  /// to show the user the real-world parameter value (e.g., " -6.0 dB").
+  double _getDenormalizedValue(double normalizedValue) {
+    return widget.lane.min +
+        normalizedValue * (widget.lane.max - widget.lane.min);
   }
 
   int _snapTicks(int ticks) {
@@ -71,14 +79,11 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   int? _findPointIdAt(Offset localPos) {
     final points = _localPoints ?? widget.lane.points;
     final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
-    final scrollX = widget.horizontalScrollController.hasClients
-        ? widget.horizontalScrollController.offset
-        : 0.0;
 
     const hitBoxPixels = 15.0;
 
     for (final p in points) {
-      final px = (p.timeTicks / zoomLevel) - scrollX;
+      final px = p.timeTicks / zoomLevel;
       final py = widget.height - (p.value * widget.height);
 
       final distance = (Offset(px, py) - localPos).distance;
@@ -100,76 +105,95 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     if (isRightClick) {
       if (pointId != null) {
         // DELETE POINT
-        ref.read(automationProvider.notifier).removePoint(
-              widget.lane.id,
-              pointId,
-            );
+        ref
+            .read(automationProvider.notifier)
+            .removePoint(widget.lane.id, pointId);
       }
-    } else {
-      if (pointId == null) {
-        // ADD NEW POINT
-        final rawTicks = _getTicksFromX(event.localPosition.dx).toInt();
-        final snappedTicks = _snapTicks(rawTicks).clamp(0, 999999999);
-        final value = _getValueFromY(event.localPosition.dy);
-
-        ref.read(automationProvider.notifier).addPoint(
-              widget.lane.id,
-              snappedTicks,
-              value,
-            );
-      }
+      return;
     }
-  }
 
-  void _onPanStart(DragStartDetails details) {
-    final pointId = _findPointIdAt(details.localPosition);
+    // Left Click Logic
     if (pointId != null) {
       setState(() {
         _draggedPointId = pointId;
-        _localPoints = List.from(widget.lane.points);
+        _localPoints = widget.lane.points.toIList();
+      });
+    } else {
+      final rawTicks = _getTicksFromX(event.localPosition.dx).toInt();
+      final snappedTicks = _snapTicks(rawTicks).clamp(0, 999999999);
+      final value = _getValueFromY(event.localPosition.dy);
+
+      final tempId = -DateTime.now().microsecondsSinceEpoch;
+
+      final newPoint = AutomationPointDto(
+        id: tempId,
+        timeTicks: snappedTicks,
+        value: value,
+        curveType: AutomationCurveTypeDto.linear,
+        tension: 0.0,
+      );
+
+      setState(() {
+        _draggedPointId = tempId;
+        // Immutably append to the IList
+        _localPoints = widget.lane.points.toIList().add(newPoint);
       });
     }
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
+  void _onPointerMove(PointerMoveEvent event) {
     if (_draggedPointId != null && _localPoints != null) {
       final index = _localPoints!.indexWhere((p) => p.id == _draggedPointId);
       if (index == -1) return;
 
-      final rawTicks = _getTicksFromX(details.localPosition.dx).toInt();
+      final rawTicks = _getTicksFromX(event.localPosition.dx).toInt();
       final snappedTicks = _snapTicks(rawTicks).clamp(0, 999999999);
-      final value = _getValueFromY(details.localPosition.dy);
+      final value = _getValueFromY(event.localPosition.dy);
 
       setState(() {
         final p = _localPoints![index];
-        _localPoints![index] = p.copyWith(
-          timeTicks: snappedTicks,
-          value: value,
+        _localPoints = _localPoints!.replace(
+          index,
+          p.copyWith(timeTicks: snappedTicks, value: value),
         );
-        // Optional: you can sort _localPoints here if you want lines to uncross 
-        // mid-drag, but it's often cleaner to just let the backend fix it on drop.
       });
     }
   }
 
-  void _onPanEnd(DragEndDetails details) {
+  void _onPointerUp(PointerUpEvent event) {
     if (_draggedPointId != null && _localPoints != null) {
       final p = _localPoints!.firstWhere((p) => p.id == _draggedPointId);
 
-      // Finalize the drag by sending the data to Rust
-      ref.read(automationProvider.notifier).updatePoint(
-            automationLaneId: widget.lane.id,
-            pointId: p.id,
-            timeTicks: p.timeTicks,
-            value: p.value,
-            tension: p.tension,
-          );
+      if (_draggedPointId! < 0) {
+        // A. It was a temporary point -> Tell Rust to ADD it officially
+        ref
+            .read(automationProvider.notifier)
+            .addPoint(widget.lane.id, p.timeTicks, p.value);
+      } else {
+        // B. It was an existing point -> Tell Rust to UPDATE it
+        ref
+            .read(automationProvider.notifier)
+            .updatePoint(
+              automationLaneId: widget.lane.id,
+              pointId: p.id,
+              timeTicks: p.timeTicks,
+              value: p.value,
+              tension: p.tension,
+            );
+      }
 
       setState(() {
         _draggedPointId = null;
         _localPoints = null; // Yield control back to Rust
       });
     }
+  }
+
+  void _onPointerCancel() {
+    setState(() {
+      _draggedPointId = null;
+      _localPoints = null;
+    });
   }
 
   @override
@@ -182,7 +206,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
     final displayLane = _localPoints != null
-        ? widget.lane.copyWith(points: _localPoints!)
+        ? widget.lane.copyWith(points: _localPoints!.toList())
         : widget.lane;
 
     return Container(
@@ -194,19 +218,19 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
           right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
         ),
       ),
-      child: Listener(
-        onPointerDown: _onPointerDown,
-        child: GestureDetector(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Empty callbacks absorb the drag gestures, preventing the parent
+        // horizontalScrollController from scrolling while interacting here.
+        onHorizontalDragStart: (_) {},
+        onHorizontalDragUpdate: (_) {},
+        onHorizontalDragEnd: (_) {},
+        child: Listener(
           behavior: HitTestBehavior.opaque,
-            onPanStart: _onPanStart,
-            onPanUpdate: _onPanUpdate,
-            onPanEnd: _onPanEnd,
-            onPanCancel: () {
-              setState(() {
-                _draggedPointId = null;
-                _localPoints = null;
-              });
-            },
+          onPointerDown: _onPointerDown,
+          onPointerMove: _onPointerMove,
+          onPointerUp: _onPointerUp,
+          onPointerCancel: (_) => _onPointerCancel(),
           child: Stack(
             children: [
               // 1. Background Grid
@@ -223,7 +247,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                   ),
                 ),
               ),
-          
+
               // 2. Automation Curve Overlay
               Positioned.fill(
                 child: RepaintBoundary(

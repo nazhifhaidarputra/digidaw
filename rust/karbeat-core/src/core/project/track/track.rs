@@ -257,7 +257,12 @@ impl AudioTrack {
         }
     }
 
-    pub fn resize_clip(&mut self, clip_id: ClipId, edge: ResizeEdge, new_time_val: u64)-> anyhow::Result<Clip> {
+    pub fn resize_clip(
+        &mut self,
+        clip_id: ClipId,
+        edge: ResizeEdge,
+        new_time_val: u64,
+    ) -> anyhow::Result<Clip> {
         // Find and remove the old clip by its index (O(N))
         let clip_idx = self
             .clips
@@ -422,7 +427,6 @@ impl ApplicationState {
 
         // Create the plugin via registry using ID
         let (generator_plugin, generator_name) = {
-
             if let Some((generator_box, name)) = registry.create_plugin_by_id(registry_id) {
                 (generator_box, name)
             } else {

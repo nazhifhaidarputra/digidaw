@@ -13,12 +13,17 @@ use rtrb::{Consumer, Producer};
 
 use crate::{
     audio::{
-        backend::AudioDeviceConfig, event::TransportFeedback, render_state::{AudioAutomationLane, AudioGraphState}
-    }, commands::{AudioCommand, AudioFeedback,TelemetryRegistration},
+        backend::AudioDeviceConfig,
+        event::TransportFeedback,
+        render_state::{AudioAutomationLane, AudioGraphState},
+    },
+    commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
     core::{
         history::{HistoryManager, ProjectAction},
-        project::{ApplicationState, AudioTrack, Pattern},
-    }, message::TelemetryRegistry, shared::{AutomationId, PatternId}
+        project::{ApplicationState, AudioTrack, AutomationLane, Pattern},
+    },
+    message::TelemetryRegistry,
+    shared::{AutomationId, PatternId},
 };
 
 pub struct DawContext {
@@ -41,7 +46,7 @@ pub struct DawContext {
     /// Plugin factory registry
     pub plugin_registry: PluginRegistry,
 
-    /// The live, thread-safe audio configuration. 
+    /// The live, thread-safe audio configuration.
     /// The UI writes to this, and the background stream monitor reads from it.
     pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
 
@@ -123,7 +128,11 @@ impl DawContext {
             tracks: tracks,
             patterns: patterns,
         });
-        log::debug!("number of tracks: {}, number of patterns: {}", tracks_len, patterns_len);
+        log::debug!(
+            "number of tracks: {}, number of patterns: {}",
+            tracks_len,
+            patterns_len
+        );
     }
 
     pub fn broadcast_full_graph(&mut self) {
@@ -131,19 +140,18 @@ impl DawContext {
         let _ = self.send_audio_command(AudioCommand::ReplaceFullGraph { graph });
     }
 
-    pub fn broadcast_automation_lane(&mut self, id: AutomationId) {
-        let app = &self.app_state;
-        let Some(lane_arc) = app.automation_pool.get(&id) else {
-            return;
+    pub fn broadcast_automation_lane(&mut self, id: AutomationId, lane: &AutomationLane) {
+        let lane_audio_graph = AudioAutomationLane {
+            points: lane.points.clone(),
+            enabled: lane.enabled,
+            min: lane.min,
+            max: lane.max,
+            default_value: lane.default_value,
         };
-        let lane = AudioAutomationLane {
-            points: lane_arc.points.clone(),
-            enabled: lane_arc.enabled,
-            min: lane_arc.min,
-            max: lane_arc.max,
-            default_value: lane_arc.default_value,
-        };
-        let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane { id, lane });
+        let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane {
+            id,
+            lane: lane_audio_graph,
+        });
     }
 
     pub fn push_history(&mut self, action: ProjectAction) {
@@ -170,11 +178,15 @@ impl DawContext {
     /// Call this on every UI frame (e.g. alongside `get_mixer_telemetry_sync`).
     /// It is entirely non-blocking: if no messages are pending it returns immediately.
     pub fn drain_telemetry_registrations(&mut self) {
-        let Some(receiver_mutex) = &self.telemetry_reg_receiver else { return };
-        
+        let Some(receiver_mutex) = &self.telemetry_reg_receiver else {
+            return;
+        };
+
         // Lock the receiver to poll messages
-        let receiver = receiver_mutex.lock(); 
-        let Some(reg) = &mut self.telemetry_registry else { return };
+        let receiver = receiver_mutex.lock();
+        let Some(reg) = &mut self.telemetry_registry else {
+            return;
+        };
 
         while let Ok(msg) = receiver.try_recv() {
             match msg {

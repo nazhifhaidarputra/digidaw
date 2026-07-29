@@ -91,7 +91,7 @@ class DawToolbarMenuGroupFactory {
         'New project',
         shortcut: 'Ctrl + N',
         callback: (context, ref) async {
-          ref.invalidate(projectProvider);
+          await ref.read(projectProvider.notifier).newBlankProject();
 
           // Safely update window title back to default
           if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {

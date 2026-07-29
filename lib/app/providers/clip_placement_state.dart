@@ -11,36 +11,52 @@ import 'package:karbeat/core/utils/result_type.dart';
 
 part 'clip_placement_state.freezed.dart';
 
+enum BatchDragAction { none, move, resizeLeft, resizeRight }
+
 @freezed
 abstract class ClipPlacementState with _$ClipPlacementState {
   const factory ClipPlacementState({
+    // New clip placement
     int? sourceId,
     UiSourceType? sourceType,
-    @Default(-1) int trackId,
+    @Default(-1)
+    int trackId, // Used as target track for both new placement and moving
     @Default(0.0) double timeSamples,
+
+    // Existing clip batch drag
+    @Default([]) List<int> draggedClipIds,
+    @Default(BatchDragAction.none) BatchDragAction dragAction,
+    @Default(0) int snappedDeltaTicks,
+    @Default(-1) int originalTrackId,
   }) = _ClipPlacementState;
 }
 
 extension ClipPlacementHelper on ClipPlacementState {
   bool get isPlacing => sourceId != null;
+  bool get isDraggingExisting => dragAction != BatchDragAction.none;
 }
 
 class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
   @override
   ClipPlacementState build() {
-
     return const ClipPlacementState();
   }
 
   DawContext get _ctx {
-    // Optional: Add a debug assert to catch architectural mistakes early
-    assert(ref.read(projectProvider).hasValue, "Attempted to access DawContext before ProjectProvider finished loading!");
+    assert(
+      ref.read(projectProvider).hasValue,
+      "Attempted to access DawContext before ProjectProvider finished loading!",
+    );
     return ref.read(projectProvider.notifier).dawContext;
   }
 
+  // --- New Clip Placement Methods ---
+
   void startPlacement(int sourceId, {required UiSourceType type}) {
-    state = ClipPlacementState(sourceId: sourceId, sourceType: type);
-    ref.read(workspaceStateProvider.notifier).navigateTo(WorkspaceView.trackList);
+    state = state.copyWith(sourceId: sourceId, sourceType: type);
+    ref
+        .read(workspaceStateProvider.notifier)
+        .navigateTo(WorkspaceView.trackList);
   }
 
   void updatePlacementTarget(int trackId, double timeSamples) {
@@ -48,7 +64,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
   }
 
   void cancelPlacement() {
-    state = const ClipPlacementState();
+    state = state.copyWith(sourceId: null, sourceType: null);
   }
 
   Future<Result<void>> confirmPlacement() async {
@@ -64,7 +80,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
           startTime: s.timeSamples.toInt(),
         );
         await ref.read(trackListStateProvider.notifier).syncTrack(s.trackId);
-        state = const ClipPlacementState();
+        cancelPlacement();
         return Result.ok(null);
       } catch (e) {
         AppLogger.error("Error creating clip: $e");
@@ -73,8 +89,45 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
     }
     return Result.ok(null);
   }
+
+  // --- Existing Clip Drag Methods ---
+
+  void startBatchDrag({
+    required List<int> clipIds,
+    required BatchDragAction action,
+    required int originalTrackId,
+  }) {
+    state = state.copyWith(
+      draggedClipIds: clipIds,
+      dragAction: action,
+      originalTrackId: originalTrackId,
+      trackId: originalTrackId,
+      snappedDeltaTicks: 0,
+    );
+  }
+
+  void updateBatchDrag({
+    required int targetTrackId,
+    required int snappedDeltaTicks,
+  }) {
+    state = state.copyWith(
+      trackId: targetTrackId,
+      snappedDeltaTicks: snappedDeltaTicks,
+    );
+  }
+
+  void cancelBatchDrag() {
+    state = state.copyWith(
+      draggedClipIds: [],
+      dragAction: BatchDragAction.none,
+      originalTrackId: -1,
+      trackId: -1,
+      snappedDeltaTicks: 0,
+    );
+  }
 }
 
-final clipPlacementProvider = NotifierProvider<ClipPlacementNotifier, ClipPlacementState>(
-  () => ClipPlacementNotifier(),
-);
+final clipPlacementProvider =
+    NotifierProvider<ClipPlacementNotifier, ClipPlacementState>(
+      () => ClipPlacementNotifier(),
+    );

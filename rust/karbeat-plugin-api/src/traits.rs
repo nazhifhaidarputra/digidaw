@@ -1,13 +1,11 @@
-use std::{any::Any, fmt::Debug};
+use dyn_clone::{clone_trait_object, DynClone};
 use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
-use dyn_clone::{clone_trait_object, DynClone};
+use std::{any::Any, fmt::Debug};
 
 // Import the newly defined types for non-interleaved audio and IO configuration
-use crate::types::{
-    PluginCategory, ProcessContext, ZeroCopyBuffer, AudioBuffers, BusConfig
-};
+use crate::types::{AudioBuffers, BusConfig, PluginCategory, ProcessContext, ZeroCopyBuffer};
 
 // ============================================================================
 // CONTEXTS & TYPES
@@ -33,19 +31,23 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     // --- Metadata ---
     fn name(&self) -> &str;
     fn category(&self) -> PluginCategory;
-    
+
     /// Optional: Vendor name (Useful for VST3/CLAP adapters)
-    fn vendor(&self) -> &str { "Unknown Vendor" }
-    
+    fn vendor(&self) -> &str {
+        "Unknown Vendor"
+    }
+
     /// Optional: Plugin version (Useful for VST3/CLAP adapters)
-    fn version(&self) -> &str { "1.0.0" }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
 
     // --- Lifecycle & IO ---
-    
+
     /// Prepares the plugin for processing.
     /// Note: `channels` is no longer passed here. Use `set_io_layout` to configure channels.
     fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
-    
+
     fn reset(&mut self);
 
     /// Asks the plugin if it can support a specific IO layout.
@@ -54,36 +56,42 @@ pub trait AudioPlugin: DynClone + Send + Sync {
         true // Default: accept any layout
     }
 
-    /// Tells the plugin to apply the new IO layout. 
+    /// Tells the plugin to apply the new IO layout.
     /// The plugin should reset its internal state if the channel count changed.
     fn set_io_layout(&mut self, inputs: &[BusConfig], outputs: &[BusConfig]);
 
     // --- Processing ---
-    
+
     /// The universal process block.
     /// - Instruments will ignore the incoming audio in the buffer and overwrite it.
     /// - Effects will modify the audio in the buffer.
-    /// 
+    ///
     /// Now accepts non-interleaved `AudioBuffers` and a rich `ProcessContext`
     /// containing sample-accurate param changes and high-precision transport.
     fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext);
 
     // --- Bypass & Latency ---
-    
+
     /// Tells the plugin to bypass. It should let its internal tails ring out.
     fn set_bypass(&mut self, _bypass: bool) {}
 
     /// The engine can poll this every block to see if it needs to recalculate PDC.
-    fn has_latency_changed(&mut self) -> bool { false }
+    fn has_latency_changed(&mut self) -> bool {
+        false
+    }
 
     /// Report the latency of the plugin to the audio engine in samples.
-    fn latency_samples(&self) -> u32 { 0 }
+    fn latency_samples(&self) -> u32 {
+        0
+    }
 
     /// Report the tail of the plugin to the audio engine in samples.
-    fn tail_samples(&self) -> u32 { 0 }
+    fn tail_samples(&self) -> u32 {
+        0
+    }
 
     // --- Parameters & Automation ---
-    
+
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
 
@@ -96,37 +104,43 @@ pub trait AudioPlugin: DynClone + Send + Sync {
 
     // --- Parameter Normalization & UI Formatting ---
     // VST3/CLAP strictly separate 0..1 normalized values from plain values (e.g. Hz, dB).
-    
+
     /// Converts a plain value (e.g., 1000.0 Hz) to a normalized value (0.0..1.0).
-    fn plain_to_normalized(&self, id: u32, plain: f32) -> f32 { plain }
-    
-    /// Converts a normalized value (0.0..1.0) to a plain value (e.g., 1000.0 Hz).
-    fn normalized_to_plain(&self, id: u32, normalized: f32) -> f32 { normalized }
-    
-    /// Formats a normalized value as a string for UI display (e.g., "1.00 kHz").
-    fn value_to_string(&self, id: u32, normalized: f32) -> String { 
-        format!("{:.2}", self.normalized_to_plain(id, normalized)) 
+    fn plain_to_normalized(&self, id: u32, plain: f32) -> f32 {
+        plain
     }
-    
+
+    /// Converts a normalized value (0.0..1.0) to a plain value (e.g., 1000.0 Hz).
+    fn normalized_to_plain(&self, id: u32, normalized: f32) -> f32 {
+        normalized
+    }
+
+    /// Formats a normalized value as a string for UI display (e.g., "1.00 kHz").
+    fn value_to_string(&self, id: u32, normalized: f32) -> String {
+        format!("{:.2}", self.normalized_to_plain(id, normalized))
+    }
+
     /// Parses a string from the UI into a normalized value.
-    fn string_to_value(&self, id: u32, text: &str) -> Option<f32> { 
-        text.parse::<f32>().ok().map(|p| self.plain_to_normalized(id, p)) 
+    fn string_to_value(&self, id: u32, text: &str) -> Option<f32> {
+        text.parse::<f32>()
+            .ok()
+            .map(|p| self.plain_to_normalized(id, p))
     }
 
     // Internal engine modulation (kept for your engine's specific modulation matrix)
     fn apply_automation(&mut self, id: u32, value: f32);
     fn clear_automation(&mut self, id: u32);
-    
+
     fn default_parameters(&self) -> HashMap<u32, f32>;
 
     fn static_parameter_specs() -> Vec<ParameterSpec>
     where
         Self: Sized;
-        
+
     fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
 
     // --- State & Presets ---
-    
+
     /// Get state of plugin when loading preset / saving project
     fn get_state(&self) -> Vec<u8> {
         let mut current_params: HashMap<u32, f32> = HashMap::new();
@@ -166,16 +180,16 @@ pub trait AudioPlugin: DynClone + Send + Sync {
         Vec::new()
     }
 
-    /// Loads a specific preset by index. 
+    /// Loads a specific preset by index.
     fn load_preset(&mut self, _index: usize) {}
-    
+
     /// Gets the index of the currently loaded preset, if any.
     fn current_preset_index(&self) -> Option<usize> {
         None
     }
 
     // --- Custom & FFI ---
-    
+
     /// Execute a custom command
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
         None
@@ -187,7 +201,7 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     }
 
     // --- Reflection ---
-    
+
     /// An helper to enable downcasting
     fn as_any(&self) -> &dyn Any;
 }

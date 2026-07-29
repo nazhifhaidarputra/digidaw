@@ -93,7 +93,7 @@ impl MyRetro {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Processes in pure Mono and ACCUMULATES directly into the mix buffer
     pub fn accumulate_voice_block(
         oscillators: &[Oscillator; 2],
@@ -141,7 +141,7 @@ impl MyRetro {
             }
 
             let crushed_sample = (temp_sample * crush_steps).round() / crush_steps;
-            
+
             // ACCUMULATE directly into the shared block buffer
             *sample += crushed_sample * current_gain;
         }
@@ -244,12 +244,16 @@ impl AudioPlugin for MyRetro {
             self.set_parameter(param_change.param_id, param_change.normalized_value);
         }
 
-        if buffers.main_outputs.is_empty() { return; }
+        if buffers.main_outputs.is_empty() {
+            return;
+        }
 
         let outputs = &mut buffers.main_outputs[0].channel_data;
         let total_frames = outputs.first().map_or(0, |ch| ch.len());
 
-        if self.channels == 0 || total_frames == 0 { return; }
+        if self.channels == 0 || total_frames == 0 {
+            return;
+        }
 
         // Ensure mono mix buffer is large enough and cleared
         if self.mix_buffer.len() < total_frames {

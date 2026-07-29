@@ -264,20 +264,18 @@ pub fn get_plugin_parameter_specs(
 ) -> Result<Vec<UiPluginParameter>, String> {
     let plugin_target = target.into();
 
-    plugin_api::get_plugin_parameter_specs(ctx, &plugin_target, |p, value| {
-        UiPluginParameter {
-            id: p.id,
-            path: p.path,
-            name: p.name,
-            group: p.group,
-            value,
-            min: p.min as f32,
-            max: p.max as f32,
-            default_value: p.default_value as f32,
-            step: p.step as f32,
-            param_type: UiParameterType::from(p.value_type),
-            choices: p.choices,
-        }
+    plugin_api::get_plugin_parameter_specs(ctx, &plugin_target, |p, value| UiPluginParameter {
+        id: p.id,
+        path: p.path,
+        name: p.name,
+        group: p.group,
+        value,
+        min: p.min as f32,
+        max: p.max as f32,
+        default_value: p.default_value as f32,
+        step: p.step as f32,
+        param_type: UiParameterType::from(p.value_type),
+        choices: p.choices,
     })
     .map_err(|e| e.to_string())
 }
@@ -357,14 +355,9 @@ pub fn execute_plugin_instance_command(
     let payload_value: serde_json::Value =
         serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    plugin_api::execute_plugin_instance_command(
-        ctx,
-        &target.into(),
-        &command,
-        &payload_value,
-    )
-    .map(|v| v.to_string())
-    .map_err(|e| e.to_string())
+    plugin_api::execute_plugin_instance_command(ctx, &target.into(), &command, &payload_value)
+        .map(|v| v.to_string())
+        .map_err(|e| e.to_string())
 }
 
 /// 3. REAL-TIME COMMANDS (Dispatched to the audio thread)
@@ -385,13 +378,13 @@ pub fn execute_live_plugin_command(
 // ZERO-QUEUE / LOCK-FREE TELEMETRY API
 // ============================================================================
 
-/// Get the snapshot telemetry from the audio engine. 
+/// Get the snapshot telemetry from the audio engine.
 /// This utilizes an atomic ArcSwap which enables lock-free reading.
 /// If empty, it means that the snapshot is not currently available.
 #[frb(sync)]
 pub fn get_plugin_snapshot_telemetry_sync(
-    ctx: &mut DawContext, 
-    target: UiPluginTarget
+    ctx: &mut DawContext,
+    target: UiPluginTarget,
 ) -> Option<PluginTelemetrySnapshotDto> {
     plugin_api::get_plugin_telemetry_sync(ctx, target.into()).map(|t| t.into())
 }

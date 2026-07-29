@@ -9,7 +9,11 @@ mod tests {
 
     // ─── Helper: add a MIDI clip to the given MIDI track ─────────────────────
 
-    fn add_midi_clip(ctx: &mut crate::context::DawContext, track_id: TrackId, start: u32) -> crate::core::project::clip::Clip {
+    fn add_midi_clip(
+        ctx: &mut crate::context::DawContext,
+        track_id: TrackId,
+        start: u32,
+    ) -> crate::core::project::clip::Clip {
         clip_api::add_clip(ctx, None, ClipSourceType::Midi, track_id, start)
             .expect("add_clip should succeed")
     }
@@ -20,7 +24,11 @@ mod tests {
     fn get_clip_happy_path() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
         // The seeded ctx already has one clip on midi_id (from make_seeded_ctx)
-        let clips: Vec<_> = ctx.app_state.tracks[&midi_id].clips.iter().cloned().collect();
+        let clips: Vec<_> = ctx.app_state.tracks[&midi_id]
+            .clips
+            .iter()
+            .cloned()
+            .collect();
         assert!(!clips.is_empty(), "seeded ctx should have clips");
         let clip_id = clips[0].id;
 
@@ -139,8 +147,15 @@ mod tests {
         let result = clip_api::resize_clip(&mut ctx, midi_id, clip.id, ResizeEdge::Right, new_end);
         assert!(result.is_ok(), "{:?}", result.err());
         let new_clip = result.unwrap();
-        assert_eq!(new_clip.time.start_time_raw(), original_start, "Start should not change");
-        assert!(new_clip.time.loop_length_raw() > original_length, "Length should increase");
+        assert_eq!(
+            new_clip.time.start_time_raw(),
+            original_start,
+            "Start should not change"
+        );
+        assert!(
+            new_clip.time.loop_length_raw() > original_length,
+            "Length should increase"
+        );
     }
 
     #[test]
@@ -148,7 +163,8 @@ mod tests {
         let mut ctx = make_ctx();
         let bogus_track = TrackId::from(99999);
         let bogus_clip = ClipId::from(99999);
-        let result = clip_api::resize_clip(&mut ctx, bogus_track, bogus_clip, ResizeEdge::Right, 1000);
+        let result =
+            clip_api::resize_clip(&mut ctx, bogus_track, bogus_clip, ResizeEdge::Right, 1000);
         assert!(result.is_err());
     }
 
@@ -167,7 +183,10 @@ mod tests {
         let (left, right) = result.unwrap();
         assert!(left.time.loop_length_raw() > 0);
         assert!(right.time.loop_length_raw() > 0);
-        assert_eq!(left.time.start_time_raw() + left.time.loop_length_raw(), midpoint);
+        assert_eq!(
+            left.time.start_time_raw() + left.time.loop_length_raw(),
+            midpoint
+        );
         assert_eq!(right.time.start_time_raw(), midpoint);
     }
 
@@ -215,7 +234,10 @@ mod tests {
 
         // Mix of valid + invalid
         let result = clip_api::batch_delete_clips(&mut ctx, midi_id, vec![valid_id, bogus_id]);
-        assert!(result.is_ok(), "Should succeed even with invalid IDs mixed in");
+        assert!(
+            result.is_ok(),
+            "Should succeed even with invalid IDs mixed in"
+        );
     }
 
     #[test]

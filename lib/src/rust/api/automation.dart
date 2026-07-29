@@ -10,7 +10,7 @@ import 'plugin.dart';
 import 'project.dart';
 part 'automation.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
@@ -250,9 +250,8 @@ sealed class AutomationTargetDto with _$AutomationTargetDto {
     required int busId,
     required MixerChannelParamTargetDto mixTarget,
   }) = AutomationTargetDto_Bus;
-  const factory AutomationTargetDto.master(MixerChannelParamTargetDto field0) =
+  const factory AutomationTargetDto.master(MasterAutomationTargetDto field0) =
       AutomationTargetDto_Master;
-  const factory AutomationTargetDto.tempoBpm() = AutomationTargetDto_TempoBpm;
 }
 
 @freezed
@@ -262,6 +261,17 @@ sealed class EffectAutomationTargetDto with _$EffectAutomationTargetDto {
   const factory EffectAutomationTargetDto.mix() = EffectAutomationTargetDto_Mix;
   const factory EffectAutomationTargetDto.pluginParam({required int paramId}) =
       EffectAutomationTargetDto_PluginParam;
+}
+
+@freezed
+sealed class MasterAutomationTargetDto with _$MasterAutomationTargetDto {
+  const MasterAutomationTargetDto._();
+
+  const factory MasterAutomationTargetDto.mixerChannel(
+    MixerChannelParamTargetDto field0,
+  ) = MasterAutomationTargetDto_MixerChannel;
+  const factory MasterAutomationTargetDto.tempoBpm() =
+      MasterAutomationTargetDto_TempoBpm;
 }
 
 @freezed

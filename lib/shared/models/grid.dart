@@ -16,8 +16,8 @@ enum GridSize {
   final double value;
   const GridSize(this.value);
   String get label => switch (this) {
-    GridSize.oneBar => '1 Bar',
-    GridSize.twoBeat => '2 Beats',
+    GridSize.oneBar => '4/1',
+    GridSize.twoBeat => '2/1',
     GridSize.full => '1/1',
     GridSize.half => '1/2',
     GridSize.third => '1/3',
@@ -32,8 +32,8 @@ enum GridSize {
   };
 
   double get sizeInBeat => switch (this) {
-      GridSize.infinity => 1 / 960,
-      _ => 1 / value
+    GridSize.infinity => 4 / 960,
+    _ => 4 / value,
   };
 }
 
