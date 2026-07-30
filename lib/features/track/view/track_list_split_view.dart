@@ -413,6 +413,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             controller: _headerController,
             slivers: [
               SliverToBoxAdapter(child: _buildMasterHeader()),
+              _buildBusAutomationHeaderSection(),
               SliverList.builder(
                 itemCount: widget.trackIds.length,
                 itemBuilder: (context, index) {
@@ -826,6 +827,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                     SliverToBoxAdapter(
                                       child: _buildMasterTimelineAutomationLanes(),
                                     ),
+                                    _buildBusAutomationTimelineSection(),
                                     _buildTimelineTrackWidget(),
                                     const SliverToBoxAdapter(
                                       child: SizedBox(height: 60),
@@ -848,13 +850,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         // Overlays inside the Timeline Stack
         // (Range selection rect is rendered per-track inside AudioTrackSlot via TrackRangeSelectOverlay)
         _buildCutHelperLine(context),
-
-        // _GroupedBatchOverlay(
-        //   trackIds: widget.trackIds,
-        //   itemHeight: widget.itemHeight,
-        //   horizontalScrollController: _trackContentController,
-        //   timelineController: _timelineController,
-        // ),
 
         Positioned.fill(
           child: IgnorePointer(
@@ -1278,8 +1273,130 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  Widget _buildBusAutomationLaneSection(BuildContext context, WidgetRef ref) {
-    return Expanded(child: Container());
+  Widget _buildBusAutomationHeaderSection() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final buses = ref.watch(projectProvider.select((s) => s.value?.mixer.buses));
+        if (buses == null || buses.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+        final busIds = buses.keys.toList()..sort();
+
+        return SliverList.builder(
+          itemCount: busIds.length,
+          itemBuilder: (context, index) {
+            final busId = busIds[index];
+            final bus = buses[busId]!;
+            
+            return Consumer(
+              builder: (context, ref, _) {
+                final lanes = ref.watch(busAutomationProvider(busId)).toIList();
+                final isExpanded = ref.watch(busAutomationExpandedProvider(busId));
+                final trackColor = Colors.teal.shade400; // Distinct color for Buses
+
+                if (lanes.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  children: [
+                    // Bus Title Header
+                    Container(
+                      height: 30,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 10),
+                      color: Colors.grey.shade800,
+                      child: Text(
+                        bus.name,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    AutomationExpandBar(
+                      isExpanded: isExpanded,
+                      laneCount: lanes.length,
+                      trackColor: trackColor,
+                      onTap: () => ref
+                          .read(automationProvider.notifier)
+                          .toggleBusAutomationExpanded(busId),
+                    ),
+                    if (isExpanded)
+                      ...lanes.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: AutomationLaneHeader(
+                            lane: entry.$3,
+                            itemHeight: 60,
+                            trackColor: trackColor,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBusAutomationTimelineSection() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final buses = ref.watch(projectProvider.select((s) => s.value?.mixer.buses));
+        if (buses == null || buses.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+        final busIds = buses.keys.toList()..sort();
+        final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
+
+        return SliverList.builder(
+          itemCount: busIds.length,
+          itemBuilder: (context, index) {
+            final busId = busIds[index];
+            
+            return Consumer(
+              builder: (context, ref, _) {
+                final lanes = ref.watch(busAutomationProvider(busId)).toIList();
+                final isExpanded = ref.watch(busAutomationExpandedProvider(busId));
+                final trackColor = Colors.teal.shade400;
+
+                if (lanes.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  children: [
+                    // Empty space to perfectly align with the Bus Title block on the left
+                    const SizedBox(height: 30),
+                    // AutomationExpandBar is duplicated here as a spacer to keep layout aligned
+                    AutomationExpandBar(
+                      isExpanded: isExpanded,
+                      laneCount: lanes.length,
+                      trackColor: trackColor,
+                      onTap: () => ref
+                          .read(automationProvider.notifier)
+                          .toggleBusAutomationExpanded(busId),
+                    ),
+                    if (isExpanded)
+                      ...lanes.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: AutomationLaneSlot(
+                            lane: entry.$3,
+                            height: 60,
+                            horizontalScrollController: _trackContentController,
+                            trackColor: trackColor,
+                            sampleRate: sr,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   @override

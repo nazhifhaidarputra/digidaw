@@ -17,6 +17,9 @@ abstract class AutomationDataState with _$AutomationDataState {
     /// If a trackId is NOT in this set, it is considered expanded (defaults to true).
     @Default(ISetConst({})) ISet<int> collapsedTrackAutomations,
 
+    /// Tracks which bus automations are collapsed.
+    @Default(ISetConst({})) ISet<int> collapsedBusAutomations,
+
     /// Optional: Tracks the currently selected/highlighted automation lane in the UI
     int? selectedAutomationLaneId,
   }) = _AutomationDataState;
@@ -54,6 +57,17 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
       );
     } else {
       state = state.copyWith(collapsedTrackAutomations: collapsed.add(trackId));
+    }
+  }
+
+  void toggleBusAutomationExpanded(int busId) {
+    final collapsed = state.collapsedBusAutomations;
+    if (collapsed.contains(busId)) {
+      state = state.copyWith(
+        collapsedBusAutomations: collapsed.remove(busId),
+      );
+    } else {
+      state = state.copyWith(collapsedBusAutomations: collapsed.add(busId));
     }
   }
 
@@ -323,6 +337,18 @@ final trackAutomationExpandedProvider = Provider.family<bool, int>((
     automationProvider.select((s) => s.collapsedTrackAutomations),
   );
   return !collapsed.contains(trackId);
+});
+
+/// Tracks whether a bus's automation accordion is expanded.
+/// Defaults to true unless explicitly collapsed in the AutomationDataState.
+final busAutomationExpandedProvider = Provider.family<bool, int>((
+  ref,
+  busId,
+) {
+  final collapsed = ref.watch(
+    automationProvider.select((s) => s.collapsedBusAutomations),
+  );
+  return !collapsed.contains(busId);
 });
 
 /// Provider to get all automation lanes for a specific Bus ID.

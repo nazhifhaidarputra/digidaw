@@ -32,7 +32,7 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Simple Synthesizers
 - [x] Parametric EQ  
 - [x] Mixer Routing (Partially)
-- [ ] Bus Automation lanes rack
+- [x] Bus Automation lanes rack
 - [ ] Action history (Undo/Redo)
 - [ ] Finishing and optimizing Bus Mixer Routing
 - [ ] Time-stretched audio waveform processing
