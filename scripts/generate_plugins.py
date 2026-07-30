@@ -12,7 +12,17 @@ def main():
     project_root = os.path.dirname(script_dir)
     rust_dir = os.path.join(project_root, 'rust')
     
+    # Define the absolute path to the manifest output directory
+    manifest_dir = os.path.join(project_root, 'assets', 'manifest', 'audio_plugin')
+    
+    # Ensure the target directory exists before Rust tries to write to it
+    os.makedirs(manifest_dir, exist_ok=True)
+    
     print("🚀 Starting Plugin Generation Pipeline...\n")
+
+    # Inject the environment variable into a copy of the current environment
+    env = os.environ.copy()
+    env['PLUGIN_MANIFEST_DIR'] = manifest_dir
 
     # 2. Step 1: Run Rust Exporter
     print(f"⚙️  [1/2] Running Rust export_manifest in {rust_dir}...")
@@ -20,6 +30,7 @@ def main():
         rust_process = subprocess.run(
             ['cargo', 'run', '--bin', 'export_manifest'],
             cwd=rust_dir,
+            env=env,
             check=True, # Raises CalledProcessError on non-zero exit
             shell=IS_WINDOWS
         )

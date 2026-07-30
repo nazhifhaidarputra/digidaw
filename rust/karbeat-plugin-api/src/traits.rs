@@ -48,6 +48,7 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     /// Note: `channels` is no longer passed here. Use `set_io_layout` to configure channels.
     fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
 
+    /// Define this reset for a graceful cleanup of the plugin
     fn reset(&mut self);
 
     /// Asks the plugin if it can support a specific IO layout.

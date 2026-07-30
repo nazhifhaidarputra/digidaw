@@ -1,0 +1,37 @@
+{
+  "id": 227290430,
+  "id_string": "effect_pitcher",
+  "name": "Pitcher",
+  "internal_type": "Pitcher",
+  "is_synth": false,
+  "parameters": [
+    {
+      "id": 3966689298,
+      "path": "mode",
+      "name": "Pitch Shift mode",
+      "group": "Pitcher",
+      "value": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "default_value": 0.0,
+      "step": 1.0,
+      "value_type": "Choice",
+      "choices": [
+        "WSOLA"
+      ]
+    },
+    {
+      "id": 1749825986,
+      "path": "engine/pitch_ratio",
+      "name": "Pitch Ratio",
+      "group": "Pitcher",
+      "value": 1.0,
+      "min": 0.5,
+      "max": 2.0,
+      "default_value": 1.0,
+      "step": 0.001,
+      "value_type": "Float",
+      "choices": []
+    }
+  ]
+}

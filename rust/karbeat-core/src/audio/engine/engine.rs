@@ -1,18 +1,14 @@
 use crate::{
-    audio::{
+    apply_mix_param, audio::{
         engine::{helper::*, types::*},
         event::{PluginTarget, TransportFeedback},
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
         },
-    },
-    commands::{
+    }, commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
         GeneratorParameterSnapshot, MixerChannelTarget, TelemetryRegistration,
-    },
-    core::project::*,
-    shared::id::*,
-    utils::{apply_simd_mix, apply_simd_mix_gain},
+    }, core::project::*, shared::id::*, utils::{apply_simd_mix, apply_simd_mix_gain},
 };
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::SmoothableParam;
@@ -1685,7 +1681,7 @@ impl AudioEngine {
                 let bus_ids = graph.bus_ids.iter().copied();
                 self.cached_routing_order =
                     compute_routing_order(track_ids, bus_ids, &graph.routing);
-                
+
                 self.current_state.graph = graph;
 
                 // =========================================================
@@ -1708,14 +1704,17 @@ impl AudioEngine {
                             LiveModulationSource::Automation { lane_id: *lane_id }
                         }
                         crate::core::project::ModulationSource::PeakController { source } => {
-                            LiveModulationSource::PeakController { source: source.clone() }
+                            LiveModulationSource::PeakController {
+                                source: source.clone(),
+                            }
                         }
                     };
                     self.active_sources.insert(id, (live_source, 0.0));
                 }
 
                 // Extract the values from the HashMap and push them directly into the active links array
-                self.active_links.extend(self.current_state.graph.modulation_links.values().cloned());
+                self.active_links
+                    .extend(self.current_state.graph.modulation_links.values().cloned());
 
                 log::debug!("[AudioEngine] ReplaceFullGraph applied");
                 self.recalculate_max_sample_index();
@@ -3324,89 +3323,42 @@ impl AudioEngine {
                     inst.plugin.apply_automation(*param_id, final_value);
                 }
             }
+
             AutomationTarget::Track {
                 track_id,
                 track_target,
             } => match track_target {
-                TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
-                    MixerChannelParamTarget::Volume => {
-                        if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            ch.volume.apply_automation(final_value);
-                        }
-                    }
-                    MixerChannelParamTarget::Pan => {
-                        if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            ch.pan.apply_automation(
-                                final_value,
-                            );
-                        }
-                    }
-                    MixerChannelParamTarget::Plugin { effect_id, target } => match target {
-                        EffectAutomationTarget::Mix => todo!(),
-                        EffectAutomationTarget::PluginParam { param_id } => {
-                            if let Some(effects) = self
-                                .plugin_state
-                                .get_track_effects_mut(track_id.to_u32() as usize)
-                            {
-                                if let Some(e) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                                    e.plugin.apply_automation(*param_id, final_value);
-                                }
-                            }
-                        }
-                    },
-                },
-            },
-            AutomationTarget::Bus { bus_id, mix_target } => match mix_target {
-                MixerChannelParamTarget::Volume => {
-                    if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        ch.volume.apply_automation(final_value);
-                    }
+                TrackAutomationTarget::MixerChannel(mix_target) => {
+                    apply_mix_param!(
+                        mix_target,
+                        final_value,
+                        self.mixer_state.track_channels.get_mut(track_id),
+                        self.plugin_state
+                            .get_track_effects_mut(track_id.to_u32() as usize)
+                    );
                 }
-                MixerChannelParamTarget::Pan => {
-                    if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        ch.pan.apply_automation(
-                            final_value,
-                        );
-                    }
-                }
-                MixerChannelParamTarget::Plugin { effect_id, target } => match target {
-                    EffectAutomationTarget::Mix => todo!(),
-                    EffectAutomationTarget::PluginParam { param_id } => {
-                        if let Some(effects) = self
-                            .plugin_state
-                            .get_bus_effects_mut(bus_id.to_u32() as usize)
-                        {
-                            if let Some(e) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                                e.plugin.apply_automation(*param_id, final_value);
-                            }
-                        }
-                    }
-                },
             },
+
+            AutomationTarget::Bus { bus_id, mix_target } => {
+                apply_mix_param!(
+                    mix_target,
+                    final_value,
+                    self.mixer_state.bus_channels.get_mut(bus_id),
+                    self.plugin_state
+                        .get_bus_effects_mut(bus_id.to_u32() as usize)
+                );
+            }
+
             AutomationTarget::Master(master_target) => match master_target {
-                MasterAutomationTarget::MixerChannel(mix_target) => match mix_target {
-                    MixerChannelParamTarget::Volume => {
-                        self.mixer_state.master.volume.apply_automation(final_value);
-                    }
-                    MixerChannelParamTarget::Pan => {
-                        self.mixer_state.master.pan.apply_automation(
-                            final_value
-                        );
-                    }
-                    MixerChannelParamTarget::Plugin { effect_id, target } => match target {
-                        EffectAutomationTarget::Mix => todo!(),
-                        EffectAutomationTarget::PluginParam { param_id } => {
-                            if let Some(e) = self
-                                .plugin_state
-                                .master_effects
-                                .iter_mut()
-                                .find(|e| e.id == *effect_id)
-                            {
-                                e.plugin.apply_automation(*param_id, final_value);
-                            }
-                        }
-                    },
-                },
+                MasterAutomationTarget::MixerChannel(mix_target) => {
+                    apply_mix_param!(
+                        mix_target,
+                        final_value,
+                        // Wrap direct master references in `Some` to unify the interface
+                        Some(&mut self.mixer_state.master),
+                        Some(&mut self.plugin_state.master_effects)
+                    );
+                }
                 MasterAutomationTarget::TempoBpm => {
                     self.bpm = final_value;
                 }
@@ -3860,3 +3812,4 @@ mod tests {
         assert_eq!(ch.volume.get(), 0.75, "Volume should be automated to 0.75");
     }
 }
+

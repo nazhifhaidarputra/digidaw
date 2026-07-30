@@ -1,7 +1,6 @@
 // src/core/plugin/registry.rs
 use crate::{
-    effect::parametric_eq::DigiParametricEQ,
-    generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
+    effect::{parametric_eq::DigiParametricEQ, pitch_shifter::Pitcher}, generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
 };
 use hashbrown::HashMap;
 use karbeat_plugin_api::{
@@ -12,6 +11,16 @@ use karbeat_plugin_types::ParameterSpec;
 use karbeat_utils::hash::hash_str;
 
 type PluginFactory = Box<dyn Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync>;
+
+/// A declarative macro to quickly register a list of plugins.
+/// Usage: `register_plugins!(registry, ("id", "Name", PluginStruct), ...);`
+macro_rules! register_plugins {
+    ( $registry:expr, $( ($id:expr, $name:expr, $plugin_type:ty) ),* $(,)? ) => {
+        $(
+            $registry.register_plugin($id, $name, || Box::new(<$plugin_type>::build()));
+        )*
+    };
+}
 
 struct RegisteredPlugin {
     name: String,
@@ -41,13 +50,13 @@ impl PluginRegistry {
 
     pub fn new_with_defaults() -> Self {
         let mut registry = Self::new();
-        registry.register_plugin("synth_karbeatzer_v2", "Karbeatzer V2", || {
-            Box::new(KarbeatzerV2::build())
-        });
-        registry.register_plugin("synth_my_retro", "My Retro", || Box::new(MyRetro::build()));
-        registry.register_plugin("effect_param_eq", "Parametric EQ", || {
-            Box::new(DigiParametricEQ::build())
-        });
+        register_plugins!(
+            registry,
+            ("synth_karbeatzer_v2", "Karbeatzer V2", KarbeatzerV2),
+            ("synth_my_retro", "My Retro", MyRetro),
+            ("effect_param_eq", "Parametric EQ", DigiParametricEQ),
+            ("effect_pitcher", "Pitcher", Pitcher),
+        );
         registry
     }
 
