@@ -744,6 +744,7 @@ class KarbeatParametricEqState
                 step: p.step,
                 suffix: "dB",
                 onChanged: _updateMasterGain,
+                target: resolveAutomationTarget(p.id),
               ),
             ),
           ),
@@ -789,6 +790,7 @@ class KarbeatParametricEqState
         step: p.step,
         suffix: suffix,
         onChanged: onChanged,
+        target: resolveAutomationTarget(p.id),
       ),
     );
   }

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/automation_provider.dart';
+import 'package:karbeat/core/utils/logger.dart';
 // Make sure to import your ParameterInteractionWrapper here!
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
+import 'package:karbeat/src/rust/api/automation.dart';
 
 // ============================================================================
 // FLOAT PARAMETER (Slider)
 // ============================================================================
-class DawFloatParam extends StatelessWidget {
+class DawFloatParam extends ConsumerWidget {
   final int paramId;
   final String name;
   final double value;
@@ -19,6 +23,7 @@ class DawFloatParam extends StatelessWidget {
   final ValueChanged<double>? onChangeEnd;
   final SliderInteraction sliderInteraction;
   final double? sliderWidth;
+  final AutomationTargetDto? target;
 
   const DawFloatParam({
     super.key,
@@ -35,10 +40,11 @@ class DawFloatParam extends StatelessWidget {
     this.onChangeEnd,
     this.sliderInteraction = SliderInteraction.slideThumb,
     this.sliderWidth,
+    this.target,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final displayValue = value.toStringAsFixed(2);
 
     int? divisions;
@@ -84,7 +90,19 @@ class DawFloatParam extends StatelessWidget {
               onChanged: onChanged,
               onAddAutomation: () async {
                 // TODO: Wire up automation lane creation using paramId
-                debugPrint("Create automation for $name ($paramId)");
+                AppLogger.debug("Create automation for $name ($paramId)");
+                if (target == null) {
+                  return;
+                }
+                ref
+                    .read(automationProvider.notifier)
+                    .handleAddAutomationForTarget(
+                      target: target!,
+                      label: name,
+                      min: min,
+                      max: max,
+                      defaultValue: defaultValue,
+                    );
               },
               child: Slider(
                 value: value.clamp(min, max),
@@ -147,7 +165,8 @@ class DawChoiceParam extends StatelessWidget {
           step: 1.0,
           onChanged: onChanged,
           onAddAutomation: () {
-            debugPrint("Create automation for $name ($paramId)");
+            // There are no automation for choice param (yet) 
+            // debugPrint("Create automation for $name ($paramId)");
           },
           child: Wrap(
             spacing: 8,
@@ -225,7 +244,8 @@ class DawBoolParam extends StatelessWidget {
       step: 1.0,
       onChanged: onChanged,
       onAddAutomation: () {
-        debugPrint("Create automation for $name ($paramId)");
+        // There are no automation for Bool param (yet) 
+        // debugPrint("Create automation for $name ($paramId)");
       },
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

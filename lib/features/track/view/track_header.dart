@@ -1,13 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
-import 'package:karbeat/app/providers/app_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/math.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
-import 'package:karbeat/features/track/services/general_track_service.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 class TrackHeader extends ConsumerWidget {

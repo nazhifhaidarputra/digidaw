@@ -583,7 +583,3 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     return gestureDetector;
   }
 }
-
-// =============================================================================
-// 2. THE CLIP RENDERER (The actual colored box)
-// =============================================================================

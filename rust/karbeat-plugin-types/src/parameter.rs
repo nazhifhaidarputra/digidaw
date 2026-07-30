@@ -392,12 +392,14 @@ impl<T: ParamType> Param<T> {
     /// Apply an automation frame from the sequencer.
     /// This modifies `current_value` but leaves `base_value` untouched.
     pub fn apply_automation(&mut self, automated_val: T) {
-        self.current_value = automated_val.clamp_value(&self.bounds);
+        let denormalized = self.denormalize(NormalizedF64::new(automated_val.to_f64()));
+        self.current_value = T::from_f64_clamped(denormalized.to_f64(), &self.bounds);
         T::update_smoother_target(&mut self.smoother, self.current_value);
     }
 
     pub fn apply_automation_from_f64(&mut self, automated_val: f64) {
-        self.current_value = T::from_f64_clamped(automated_val, &self.bounds);
+        let denormalized = self.denormalize(NormalizedF64::new(automated_val));
+        self.current_value = T::from_f64_clamped(denormalized.to_f64(), &self.bounds);
         T::update_smoother_target(&mut self.smoother, self.current_value);
     }
 
@@ -448,6 +450,55 @@ impl<T: ParamType> Param<T> {
                 _ => vec![],
             },
         }
+    }
+
+    pub fn normalize_value(&self, value: T) -> NormalizedF64 {
+        let (min_f, max_f) = match &self.bounds {
+            ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
+                (min.to_f64(), max.to_f64())
+            }
+            ParamBounds::Toggle => (0.0, 1.0),
+            ParamBounds::Choice { count, .. } => {
+                (0.0, count.saturating_sub(1) as f64)
+            }
+        };
+        
+        NormalizedF64::from_range(value.to_f64(), min_f, max_f)
+    }
+
+    /// Normalize the current (automation-applied) value to [0.0, 1.0].
+    #[inline]
+    pub fn normalize(&self) -> NormalizedF64 {
+        self.normalize_value(self.current_value)
+    }
+
+    /// Normalize the base (UI) value to [0.0, 1.0].
+    #[inline]
+    pub fn normalize_base(&self) -> NormalizedF64 {
+        self.normalize_value(self.base_value)
+    }
+
+    /// Convert a normalized [0.0, 1.0] value back to the parameter's native type `T`.
+    pub fn denormalize(&self, normalized: NormalizedF64) -> T {
+        let (min_f, max_f) = match &self.bounds {
+            ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
+                (min.to_f64(), max.to_f64())
+            }
+            ParamBounds::Toggle => (0.0, 1.0),
+            ParamBounds::Choice { count, .. } => {
+                (0.0, count.saturating_sub(1) as f64)
+            }
+        };
+        
+        let denormalized_f64 = normalized.to_range(min_f, max_f);
+        T::from_f64_clamped(denormalized_f64, &self.bounds)
+    }
+
+    /// Set the base value from a normalized [0.0, 1.0] input.
+    /// Respects automation state (only updates `current_value` if not automated).
+    pub fn set_base_normalized(&mut self, normalized: NormalizedF64) {
+        let value = self.denormalize(normalized);
+        self.set_base(value);
     }
 }
 
@@ -593,53 +644,53 @@ pub trait AutoParams {
     fn auto_get_parameter_specs(&self, prefix_hash: u32, prefix_str: &str) -> Vec<ParameterSpec>;
 }
 
-impl<T: Normalizable> Param<T> {
-    /// Normalize any value of type `T` to the [0.0, 1.0] range based on parameter bounds.
-    pub fn normalize_value(&self, value: T) -> NormalizedF64 {
-        match &self.bounds {
-            ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
-                let min_f = min.to_f64();
-                let max_f = max.to_f64();
-                let range = max_f - min_f;
-                NormalizedF64::from_range(value.to_f64(), min_f, max_f)
-            }
-            // Unreachable for Normalizable types, but kept for exhaustiveness
-            _ => NormalizedF64::new(value.to_f64()),
-        }
-    }
+// impl<T: Normalizable> Param<T> {
+//     /// Normalize any value of type `T` to the [0.0, 1.0] range based on parameter bounds.
+//     pub fn normalize_value(&self, value: T) -> NormalizedF64 {
+//         match &self.bounds {
+//             ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
+//                 let min_f = min.to_f64();
+//                 let max_f = max.to_f64();
+//                 let range = max_f - min_f;
+//                 NormalizedF64::from_range(value.to_f64(), min_f, max_f)
+//             }
+//             // Unreachable for Normalizable types, but kept for exhaustiveness
+//             _ => NormalizedF64::new(value.to_f64()),
+//         }
+//     }
 
-    /// Normalize the current (automation-applied) value to [0.0, 1.0].
-    #[inline]
-    pub fn normalize(&self) -> NormalizedF64 {
-        self.normalize_value(self.current_value)
-    }
+//     /// Normalize the current (automation-applied) value to [0.0, 1.0].
+//     #[inline]
+//     pub fn normalize(&self) -> NormalizedF64 {
+//         self.normalize_value(self.current_value)
+//     }
 
-    /// Normalize the base (UI) value to [0.0, 1.0].
-    #[inline]
-    pub fn normalize_base(&self) -> NormalizedF64 {
-        self.normalize_value(self.base_value)
-    }
+//     /// Normalize the base (UI) value to [0.0, 1.0].
+//     #[inline]
+//     pub fn normalize_base(&self) -> NormalizedF64 {
+//         self.normalize_value(self.base_value)
+//     }
 
-    /// Convert a normalized [0.0, 1.0] value back to the parameter's native type `T`.
-    pub fn denormalize(&self, normalized: NormalizedF64) -> T {
-        match &self.bounds {
-            ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
-                let min_f = min.to_f64();
-                let max_f = max.to_f64();
-                T::from_f64_clamped(min_f + *normalized * (max_f - min_f), &self.bounds)
-            }
-            // Unreachable for Normalizable types, but kept for exhaustiveness
-            _ => T::from_f64_clamped(0.0, &self.bounds),
-        }
-    }
+//     /// Convert a normalized [0.0, 1.0] value back to the parameter's native type `T`.
+//     pub fn denormalize(&self, normalized: NormalizedF64) -> T {
+//         match &self.bounds {
+//             ParamBounds::Continuous { min, max, .. } | ParamBounds::Discrete { min, max, .. } => {
+//                 let min_f = min.to_f64();
+//                 let max_f = max.to_f64();
+//                 T::from_f64_clamped(min_f + *normalized * (max_f - min_f), &self.bounds)
+//             }
+//             // Unreachable for Normalizable types, but kept for exhaustiveness
+//             _ => T::from_f64_clamped(0.0, &self.bounds),
+//         }
+//     }
 
-    /// Set the base value from a normalized [0.0, 1.0] input.
-    /// Respects automation state (only updates `current_value` if not automated).
-    pub fn set_base_normalized(&mut self, normalized: NormalizedF64) {
-        let value = self.denormalize(normalized);
-        self.set_base(value);
-    }
-}
+//     /// Set the base value from a normalized [0.0, 1.0] input.
+//     /// Respects automation state (only updates `current_value` if not automated).
+//     pub fn set_base_normalized(&mut self, normalized: NormalizedF64) {
+//         let value = self.denormalize(normalized);
+//         self.set_base(value);
+//     }
+// }
 
 /// Data structure to prevent zipper noise
 /// during real time automation/modulation

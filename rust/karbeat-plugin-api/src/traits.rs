@@ -138,7 +138,7 @@ pub trait AudioPlugin: DynClone + Send + Sync {
         Self: Sized;
 
     fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
-
+    
     // --- State & Presets ---
 
     /// Get state of plugin when loading preset / saving project

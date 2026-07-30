@@ -3331,24 +3331,13 @@ impl AudioEngine {
                 TrackAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Volume => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
-                            // let max_amp = 10.0f32.powf(6.0 / 20.0);
-                            let amplitude = (final_value as f64).powi(3) * MAX_AMPLITUDE;
-                            let target_db = if amplitude <= 0.001 {
-                                -100.0
-                            } else {
-                                20.0 * amplitude.log10()
-                            };
-
-                            // Clamp the final dB to the parameter bounds
-                            let clamped_db = target_db.clamp(-100.0, 6.0);
-
-                            ch.volume.apply_automation(clamped_db as f32);
+                            ch.volume.apply_automation(final_value);
                         }
                     }
                     MixerChannelParamTarget::Pan => {
                         if let Some(ch) = self.mixer_state.track_channels.get_mut(track_id) {
                             ch.pan.apply_automation(
-                                ch.pan.denormalize(NormalizedF64::new(final_value as f64)),
+                                final_value,
                             );
                         }
                     }
@@ -3370,23 +3359,13 @@ impl AudioEngine {
             AutomationTarget::Bus { bus_id, mix_target } => match mix_target {
                 MixerChannelParamTarget::Volume => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
-                        let amplitude = (final_value as f64).powi(3) * MAX_AMPLITUDE;
-                        let target_db = if amplitude <= 0.001 {
-                            -100.0
-                        } else {
-                            20.0 * amplitude.log10()
-                        };
-
-                        // Clamp the final dB to the parameter bounds
-                        let clamped_db = target_db.clamp(-100.0, 6.0);
-
-                        ch.volume.apply_automation(clamped_db as f32);
+                        ch.volume.apply_automation(final_value);
                     }
                 }
                 MixerChannelParamTarget::Pan => {
                     if let Some(ch) = self.mixer_state.bus_channels.get_mut(bus_id) {
                         ch.pan.apply_automation(
-                            ch.pan.denormalize(NormalizedF64::new(final_value as f64)),
+                            final_value,
                         );
                     }
                 }
@@ -3407,24 +3386,11 @@ impl AudioEngine {
             AutomationTarget::Master(master_target) => match master_target {
                 MasterAutomationTarget::MixerChannel(mix_target) => match mix_target {
                     MixerChannelParamTarget::Volume => {
-                        let amplitude = (final_value as f64).powi(3) * MAX_AMPLITUDE;
-                        let target_db = if amplitude <= 0.001 {
-                            -100.0
-                        } else {
-                            20.0 * amplitude.log10()
-                        };
-
-                        // Clamp the final dB to the parameter bounds
-                        let clamped_db = target_db.clamp(-100.0, 6.0);
-
-                        self.mixer_state.master.volume.apply_automation(clamped_db as f32);
+                        self.mixer_state.master.volume.apply_automation(final_value);
                     }
                     MixerChannelParamTarget::Pan => {
                         self.mixer_state.master.pan.apply_automation(
-                            self.mixer_state
-                                .master
-                                .pan
-                                .denormalize(NormalizedF64::new(final_value as f64)),
+                            final_value
                         );
                     }
                     MixerChannelParamTarget::Plugin { effect_id, target } => match target {
