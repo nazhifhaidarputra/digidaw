@@ -11,9 +11,6 @@ use karbeat_utils::hash::hash_str;
 #[karbeat_plugin]
 #[derive(Clone, Debug)]
 pub struct Pitcher {
-    #[param(id = "mode", name = "Pitch Shift mode", group = "Pitcher")]
-    pub mode: PitchShiftAlgorithm,
-
     // ==========================
     // Pitch shift algorithm engine
     // ==========================
@@ -104,29 +101,25 @@ impl AudioPlugin for Pitcher {
             dst[..n].copy_from_slice(&src[..n]);
         }
 
-        match self.mode.get() {
-            PitchShiftAlgorithm::WSOLA => {
-                let output_bus = &mut buffers.main_outputs[0];
-                let mut slices_arr: [&mut [f32]; 8] = [
-                    &mut [],
-                    &mut [],
-                    &mut [],
-                    &mut [],
-                    &mut [],
-                    &mut [],
-                    &mut [],
-                    &mut [],
-                ];
-                for (slot, ch) in slices_arr
-                    .iter_mut()
-                    .zip(output_bus.channel_data.iter_mut())
-                {
-                    *slot = &mut **ch;
-                }
-                self.pitch_shift_engine
-                    .process_block(&mut slices_arr[..channels])
-            }
+        let output_bus = &mut buffers.main_outputs[0];
+        let mut slices_arr: [&mut [f32]; 8] = [
+            &mut [],
+            &mut [],
+            &mut [],
+            &mut [],
+            &mut [],
+            &mut [],
+            &mut [],
+            &mut [],
+        ];
+        for (slot, ch) in slices_arr
+            .iter_mut()
+            .zip(output_bus.channel_data.iter_mut())
+        {
+            *slot = &mut **ch;
         }
+        self.pitch_shift_engine
+            .process_block(&mut slices_arr[..channels]);
     }
 }
 
