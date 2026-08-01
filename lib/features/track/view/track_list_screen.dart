@@ -47,20 +47,7 @@ part 'track_list_timeline_ruler.dart';
 part 'track_list_audio_slot.dart';
 part 'track_list_interactive_clip.dart';
 part 'track_list_clip_renderer.dart';
-part 'track_list_grouped_batch_overlay.dart';
-
-// final trackWaveformProvider =
-//     Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
-//       // Re-evaluate whenever the track changes (e.g. clips added/removed)
-//       ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
-//       final ctx = ref.read(projectProvider.notifier).dawContext;
-//       return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
-//     });
-
-// /// Tracks whether a track's automation accordion is expanded
-// final trackAccordionExpandedProvider = StateProvider.family<bool, int>(
-//   (ref, trackId) => true,
-// );
+// part 'track_list_grouped_batch_overlay.dart';
 
 class TrackListScreen extends ConsumerWidget {
   const TrackListScreen({super.key});
@@ -96,20 +83,5 @@ class TrackListScreen extends ConsumerWidget {
         );
       },
     );
-  }
-}
-
-class _TrackContainer extends ConsumerStatefulWidget {
-  @override
-  _TrackContainerState createState() {
-    return _TrackContainerState();
-  }
-}
-
-class _TrackContainerState extends ConsumerState<_TrackContainer> {
-  @override
-  Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
   }
 }

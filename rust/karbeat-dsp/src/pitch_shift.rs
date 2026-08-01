@@ -58,7 +58,7 @@ mod ffi {
     // Option flags relevant to the live shifter
     pub const OPTION_WINDOW_SHORT: RubberBandOptions = 0x0000_0000;
     pub const OPTION_WINDOW_MEDIUM: RubberBandOptions = 0x0010_0000;
-    pub const OPTION_FORMANT_SHIFTED: RubberBandOptions = 0x0000_0000;
+    pub const OPTION_FORMANT_SHIFTED: RubberBandOptions = 0x0200_0000;
     pub const OPTION_CHANNELS_APART: RubberBandOptions = 0x0000_0000;
 
     extern "C" {
@@ -129,9 +129,14 @@ unsafe impl Send for RbLiveShifter {}
 unsafe impl Sync for RbLiveShifter {}
 
 impl RbLiveShifter {
-    fn new(sample_rate: u32, channels: usize) -> Option<Self> {
-        let options =
-            ffi::OPTION_WINDOW_SHORT | ffi::OPTION_FORMANT_SHIFTED | ffi::OPTION_CHANNELS_APART;
+    fn new(sample_rate: u32, channels: usize, preserve_formants: bool) -> Option<Self> {
+        // OPTIMIZATION 1: Disabled CHANNELS_APART to process stereo as a unified coherent phase
+        let mut options = ffi::OPTION_WINDOW_SHORT;
+        
+        // OPTIMIZATION 2: Only enable formant preservation if explicitly requested
+        if preserve_formants {
+            options |= ffi::OPTION_FORMANT_SHIFTED;
+        }
 
         let state_raw =
             unsafe { ffi::rubberband_live_new(sample_rate as _, channels as _, options) };
@@ -220,6 +225,14 @@ pub struct PitchShiftEngine {
     )]
     pub pitch_ratio: f32,
 
+    #[param(
+        id = "preserve_formants",
+        name = "Preserve Formants",
+        group = "Pitcher",
+        default = false
+    )]
+    pub preserve_formants: bool,
+
     /// The underlying rubberband live-shifter instance, created lazily on the
     /// first `process_block()` call so we know the sample rate and channel count.
     #[allow(clippy::box_collection)]
@@ -244,6 +257,10 @@ pub struct PitchShiftEngine {
     output_read_pos: usize,
 
     last_pitch_ratio: f64,
+    last_preserve_formants: bool,
+    
+    // Tracks consecutive silent frames to trigger smart sleep
+    silence_counter: usize,
 }
 
 impl Clone for PitchShiftEngine {
@@ -253,6 +270,7 @@ impl Clone for PitchShiftEngine {
         let mut e = Self::base_default();
         e.pitch_ratio = self.pitch_ratio.clone();
         e.sample_rate = self.sample_rate;
+        e.preserve_formants = self.preserve_formants.clone();
         e.channels = self.channels;
         e
     }
@@ -269,6 +287,9 @@ impl Default for PitchShiftEngine {
         def.staging_fill = 0;
         def.output_pending = 0;
         def.output_read_pos = 0;
+        def.last_pitch_ratio = -1.0;
+        def.last_preserve_formants = false;
+        def.silence_counter = 0;
         def
     }
 }
@@ -283,24 +304,27 @@ impl PitchShiftEngine {
         let sr = sample_rate as u32;
         let channels = channels.max(1).min(8);
 
+        let pf = self.preserve_formants.get();
+
         // Rebuild the shifter if config changed.
         let needs_rebuild = self
             .shifter
             .as_ref()
-            .map_or(true, |s| s.channels != channels || self.sample_rate != sr);
+            .map_or(true, |s| s.channels != channels || self.sample_rate != sr || self.last_preserve_formants != pf);
 
         if needs_rebuild {
             self.sample_rate = sr;
             self.channels = channels;
-            self.shifter = RbLiveShifter::new(sr, channels).map(Box::new);
+            self.last_preserve_formants = pf;
+            self.shifter = RbLiveShifter::new(sr, channels, pf).map(Box::new);
 
-            // Size the staging buffers to the shifter's block size.
             let block = self.shifter_block_size();
             self.input_staging = vec![vec![0.0_f32; block]; channels];
             self.output_staging = vec![vec![0.0_f32; block * 4]; channels];
             self.staging_fill = 0;
             self.output_pending = 0;
             self.output_read_pos = 0;
+            self.silence_counter = 0;
         }
     }
 
@@ -320,30 +344,58 @@ impl PitchShiftEngine {
             return;
         }
 
-        // Lazy init: create the shifter on first call if prepare() wasn't
-        // called explicitly.
-        if self.shifter.is_none() || self.channels != channels {
+        // Lazy init
+        let pf = self.preserve_formants.get();
+        if self.shifter.is_none() || self.channels != channels || self.last_preserve_formants != pf {
             self.prepare(self.sample_rate as f32, channels);
         }
 
+        // -------------------------------------------------------------
+        // OPTIMIZATION 3: SMART SLEEP (Bypass processing on silence)
+        // -------------------------------------------------------------
+        let mut is_silent = true;
+        for ch in channels_data.iter() {
+            for &s in ch.iter() {
+                if s.abs() > 1e-5 {
+                    is_silent = false;
+                    break;
+                }
+            }
+            if !is_silent { break; }
+        }
+
+        if is_silent {
+            self.silence_counter += num_frames;
+        } else {
+            self.silence_counter = 0;
+        }
         // Update pitch scale from parameter every block (real-time safe).
         let ratio = self.pitch_ratio.get() as f64;
-        let is_unity = (ratio - 1.0).abs() < 1e-3;
+        let is_unity = (ratio - 1.0).abs() < 1e-2;
 
-        // Only bypass once nothing is in flight — otherwise we strand
-        // already-staged/shifted audio and desync the ring buffer.
-        if is_unity && self.staging_fill == 0 && self.output_pending == 0 {
-            self.last_pitch_ratio = ratio;
-            return; // channels_data already holds the dry copy from Pitcher::process
-        }
-
-        if let Some(s) = &self.shifter {
-            if (s.state.as_ptr() as usize) != 0 {
-                s.set_pitch_scale(ratio);
+        let tail_length = self.shifter_block_size() * 3;
+        
+        if (is_silent && self.silence_counter > tail_length) 
+            || (is_unity && self.staging_fill == 0 && self.output_pending == 0) 
+        {
+            if is_silent {
+                for ch in channels_data.iter_mut() {
+                    ch.fill(0.0);
+                }
             }
+            self.last_pitch_ratio = ratio;
+            return; // 100% CPU Reclaimed!
         }
-        self.last_pitch_ratio = ratio;
 
+        // Only trigger the heavy internal C++ recalculation if the value meaningfully changed
+        if (ratio - self.last_pitch_ratio).abs() > 1e-2 {
+            if let Some(s) = &self.shifter {
+                if (s.state.as_ptr() as usize) != 0 {
+                    s.set_pitch_scale(ratio);
+                }
+            }
+            self.last_pitch_ratio = ratio;
+        }
         let block = self.shifter_block_size();
 
         let mut in_pos = 0usize;

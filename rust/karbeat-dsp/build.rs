@@ -1,8 +1,7 @@
 fn main() {
-    // Link the system-installed rubberband library.
-    // Requires the `rubberband-devel` (Fedora) / `librubberband-dev` (Debian) package.
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "android" {
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        println!("cargo:rustc-link-search=native={}/../android/app/src/main/jniLibs/arm64-v8a", manifest_dir);
+    }
     println!("cargo:rustc-link-lib=rubberband");
-
-    // Tell Cargo to re-run this script only if Cargo.toml changes.
-    println!("cargo:rerun-if-changed=build.rs");
 }

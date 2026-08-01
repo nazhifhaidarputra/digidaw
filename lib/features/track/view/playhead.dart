@@ -59,7 +59,7 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   int _dragSamples = 0;
   int _lastKnownSamples = 0;
 
-  UiTransportFeedback? _lastProcessedFeedback;
+  // UiTransportFeedback? _lastProcessedFeedback;
 
   @override
   Widget build(BuildContext context) {

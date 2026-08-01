@@ -2,16 +2,13 @@
 set -e
 
 echo -e "\033[1;36m==> [Linux Build] Checking required audio backends...\033[0m"
-
 # Check for JACK or Pipewire
 HAS_JACK=false
 HAS_PIPEWIRE=false
-
 if command -v jackd >/dev/null 2>&1; then
     echo -e "Found JACK: $(jackd -V | head -n 1)"
     HAS_JACK=true
 fi
-
 if command -v pipewire >/dev/null 2>&1; then
     echo -e "Found PipeWire: $(pipewire --version | head -n 1)"
     HAS_PIPEWIRE=true
@@ -25,13 +22,32 @@ fi
 
 echo -e "\033[1;36m==> [Linux Build] Checking system dependencies...\033[0m"
 
-# Install Linux system dependencies for Flutter and Rust Audio (JACK/ALSA)
+# Distro-agnostic dependency installation
+DEPS_INSTALLED=false
 if command -v apt-get >/dev/null 2>&1; then
-  echo -e "\033[1;33m==> Installing required apt packages (you may be prompted for sudo password)...\033[0m"
-  sudo apt-get update
-  sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libasound2-dev libjack-jackd2-dev
+    echo -e "\033[1;33m==> Detected Debian/Ubuntu. Installing packages via apt...\033[0m"
+    sudo apt-get update
+    sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libasound2-dev libjack-jackd2-dev librubberband-dev
+    DEPS_INSTALLED=true
+elif command -v dnf >/dev/null 2>&1; then
+    echo -e "\033[1;33m==> Detected Fedora/RHEL. Installing packages via dnf...\033[0m"
+    sudo dnf install -y clang cmake ninja-build pkgconf-pkg-config gtk3-devel alsa-lib-devel jack-audio-connection-kit-devel rubberband-devel
+    DEPS_INSTALLED=true
+elif command -v pacman >/dev/null 2>&1; then
+    echo -e "\033[1;33m==> Detected Arch Linux. Installing packages via pacman...\033[0m"
+    sudo pacman -Sy --noconfirm clang cmake ninja pkgconf gtk3 alsa-lib jack2 rubberband
+    DEPS_INSTALLED=true
+elif command -v zypper >/dev/null 2>&1; then
+    echo -e "\033[1;33m==> Detected openSUSE. Installing packages via zypper...\033[0m"
+    sudo zypper install -y clang cmake ninja pkg-config gtk3-devel alsa-devel jack-devel librubberband-devel
+    DEPS_INSTALLED=true
 else
-  echo -e "\033[1;33m==> 'apt-get' not found (Not Debian/Ubuntu). Please ensure GTK3, ALSA, and JACK development headers are installed manually.\033[0m"
+    echo -e "\033[1;33m==> No supported package manager found (apt/dnf/pacman/zypper).\033[0m"
+    echo -e "Please manually ensure the following are installed: clang, cmake, ninja, pkg-config, GTK3, ALSA, JACK, and RubberBand development libraries."
+fi
+
+if [ "$DEPS_INSTALLED" = false ]; then
+    echo -e "\033[1;33m==> WARNING: Automatic dependency installation was skipped.\033[0m"
 fi
 
 # Ensure required CLI tools exist
@@ -40,8 +56,8 @@ command -v cargo >/dev/null 2>&1 || { echo "Rust/Cargo is not installed. Abortin
 
 # Install FRB codegen if missing
 if ! command -v flutter_rust_bridge_codegen >/dev/null 2>&1; then
-  echo -e "\033[1;33m==> Installing flutter_rust_bridge_codegen...\033[0m"
-  cargo install flutter_rust_bridge_codegen
+    echo -e "\033[1;33m==> Installing flutter_rust_bridge_codegen...\033[0m"
+    cargo install flutter_rust_bridge_codegen
 fi
 
 echo -e "\033[1;36m==> [Linux Build] Running Flutter Rust Bridge Codegen...\033[0m"
@@ -56,7 +72,6 @@ flutter build linux --release
 echo -e "\033[1;36m==> [Linux Build] Archiving Release Bundle...\033[0m"
 BUILD_DIR="build/linux/x64/release/bundle"
 DIST_DIR="dist"
-
 mkdir -p "$DIST_DIR"
 tar -czvf "$DIST_DIR/Digidaw-linux-x64.tar.gz" -C "$BUILD_DIR" .
 

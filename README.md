@@ -33,6 +33,7 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Parametric EQ  
 - [x] Mixer Routing (Partially)
 - [x] Bus Automation lanes rack
+- [x] Real-time pitch shifting (Via Rubberband FFI binding)
 - [ ] Action history (Undo/Redo)
 - [ ] Finishing and optimizing Bus Mixer Routing
 - [ ] Time-stretched audio waveform processing
