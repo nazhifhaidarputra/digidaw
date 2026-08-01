@@ -287,7 +287,7 @@ pub fn get_device_sample_rates(
     Ok(rates)
 }
 
-// Helper to dry up the code and fetch the device repeatedly during restarts
+/// Helper to dry up the code and fetch the device repeatedly during restarts
 fn get_device_and_config(
     config_pref: &AudioDeviceConfig,
 ) -> Result<(cpal::Device, cpal::StreamConfig, cpal::SampleFormat)> {
@@ -354,12 +354,17 @@ fn get_device_and_config(
         })
         .context("device does not support stereo (2 channels) output")?;
 
-    let buffer_size = match supported_config.buffer_size() {
-        cpal::SupportedBufferSize::Range { min, max } => {
-            let desired = config_pref.buffer_size.unwrap_or(1024);
-            cpal::BufferSize::Fixed(desired.clamp(*min, *max))
+    // Yield to the Server's globally locked buffer size if using JACK to prevent crash loop
+    let buffer_size = if host.id().name() == "JACK" {
+        cpal::BufferSize::Default
+    } else {
+        match supported_config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, max } => {
+                let desired = config_pref.buffer_size.unwrap_or(1024);
+                cpal::BufferSize::Fixed(desired.clamp(*min, *max))
+            }
+            cpal::SupportedBufferSize::Unknown => cpal::BufferSize::Default,
         }
-        cpal::SupportedBufferSize::Unknown => cpal::BufferSize::Default,
     };
 
     let config = cpal::StreamConfig {
@@ -370,7 +375,6 @@ fn get_device_and_config(
 
     Ok((device, config, supported_config.sample_format()))
 }
-
 /// Start the audio stream by initializing the Command Queue and Audio Engine
 /// and then spawning the Monitor Thread to handle stream failures.
 pub fn start_audio_stream(
@@ -389,9 +393,22 @@ pub fn start_audio_stream(
     // Resolve initial device and config to create the engine exactly once
     let (device, config, sample_format) = get_device_and_config(&config_pref)?;
 
+    // Extract actual values granted by the OS instead of relying on preferences
     let sample_rate = config.sample_rate;
     let channels = config.channels as usize;
-    let engine_block_size = config_pref.buffer_size.unwrap_or(1024) as usize;
+    let engine_block_size = match config.buffer_size {
+        cpal::BufferSize::Fixed(size) => size as usize,
+        cpal::BufferSize::Default => config_pref.buffer_size.unwrap_or(1024) as usize,
+    };
+
+    // Sync actual OS values back to the active configuration immediately
+    {
+        let mut active_cfg = active_config_arc.write();
+        active_cfg.sample_rate = Some(sample_rate);
+        active_cfg.buffer_size = Some(engine_block_size as u32);
+        active_cfg.host_name = config_pref.host_name;
+        active_cfg.device_id = config_pref.device_id;
+    }
 
     log::info!(
         "Initial Stream Config: {:?} Hz, {} Channels",
@@ -441,12 +458,12 @@ pub fn start_audio_stream(
     let (restart_tx, restart_rx) = std::sync::mpsc::channel::<()>();
     let monitor_engine = Arc::clone(&engine_arc);
 
-    // 2. Spawn the Device Monitor Thread
+    // Spawn the Device Monitor Thread
     std::thread::spawn(move || {
         loop {
             log::info!("Monitor: Attempting to build and start audio stream...");
 
-            let current_config_pref = active_config_arc.read().clone();
+            let mut current_config_pref = active_config_arc.read().clone();
 
             let (device, config, sample_format) = match get_device_and_config(&current_config_pref)
             {
@@ -461,12 +478,23 @@ pub fn start_audio_stream(
                 }
             };
 
-            let sample_rate = config.sample_rate;
+           let sample_rate = config.sample_rate;
             let channels = config.channels as usize;
-            let engine_block_size = current_config_pref.buffer_size.unwrap_or(1024) as usize;
+            let engine_block_size = match config.buffer_size {
+                cpal::BufferSize::Fixed(size) => size as usize,
+                cpal::BufferSize::Default => current_config_pref.buffer_size.unwrap_or(1024) as usize,
+            };
 
             let playing_device_id = device.id().ok();
             let current_host = resolve_host(current_config_pref.host_name.as_deref());
+
+            // Sync actual OS values back to the active configuration immediately to prevent restart loops
+            {
+                let mut cfg = active_config_arc.write();
+                cfg.sample_rate = Some(sample_rate);
+                cfg.buffer_size = Some(engine_block_size as u32);
+                current_config_pref = cfg.clone(); // Crucial: update local tracking to silence the polling loop
+            }
 
             {
                 let mut eng = monitor_engine.lock();
@@ -544,10 +572,17 @@ pub fn start_audio_stream(
                                 if let Ok(new_size) = num_str.parse::<u32>() {
                                     log::info!("Dynamically updating buffer size to {}", new_size);
                                     let mut cfg = err_config_arc.write();
-                                    cfg.buffer_size = Some(new_size);
+
+                                    // Only trigger logic if the size is ACTUALLY different
+                                    if cfg.buffer_size != Some(new_size) {
+                                        log::info!("Dynamically updating buffer size to {}", new_size);
+                                        cfg.buffer_size = Some(new_size);
+                                        let _ = tx_clone.send(());
+                                    } else {
+                                        log::debug!("Buffer size is already synced to {}. Ignoring redundant error.", new_size);
+                                    }
                                 }
                             }
-                            let _ = tx_clone.send(());
                         } else {
                             log::error!("Audio stream backend error: {}. Triggering restart...", err_msg);
                             let _ = tx_clone.send(());
