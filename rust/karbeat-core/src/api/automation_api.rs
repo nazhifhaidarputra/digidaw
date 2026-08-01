@@ -35,7 +35,7 @@ pub fn add_automation_lane_for_track(
     let (lane, link_id) =
         app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?;
 
-    broadcast_modulations(ctx, link_id)?;
+    broadcast_modulation(ctx, link_id)?;
 
     // Broadcast the new lane to the audio thread by its AutomationId
     ctx.broadcast_automation_lane(lane.id, &lane);
@@ -56,7 +56,7 @@ pub fn add_automation_lane(
     let app = &mut ctx.app_state;
     let (lane, link_id) = app.add_automation_lane(target, label, min, max, default_value)?;
 
-    broadcast_modulations(ctx, link_id)?;
+    broadcast_modulation(ctx, link_id)?;
 
     ctx.broadcast_automation_lane(lane.id, &lane);
 
@@ -85,13 +85,47 @@ pub fn add_automation_lane_for_bus(
         app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
     };
 
-    broadcast_modulations(ctx, link_id)?;
+    broadcast_modulation(ctx, link_id)?;
 
     ctx.broadcast_automation_lane(lane.id, &lane);
 
     // TODO: add history
 
     Ok(lane)
+}
+
+pub fn remove_automation_lane(
+    ctx: &mut DawContext,
+    target: AutomationTarget,
+
+) -> anyhow::Result<(AutomationId, Vec<ModulationId>, Vec<ModulationLinkId>)>{
+    let app = &mut ctx.app_state;
+    
+    let (removed_lane, removed_sources, removed_links) = app
+        .remove_automation_lane(target)
+        .ok_or_else(|| anyhow::anyhow!("No automation lane found for this target"))?;
+
+    let mut commands = Vec::new();
+
+    // Safest DSP tear-down order: Unplug Cable (Link) -> Destroy Generator (Source) -> Destroy Lane
+    for link_id in removed_links.iter() {
+        commands.push(AudioCommand::RemoveModulationLink(*link_id));
+    }
+
+    for source_id in removed_sources.iter() {
+        commands.push(AudioCommand::RemoveModulationSource(*source_id));
+    }
+    commands.push(AudioCommand::RemoveAutomationLane { id: removed_lane });
+
+    if !commands.is_empty() {
+        ctx.try_send_audio_command_chain(commands)?;
+    }
+
+    Ok((
+        removed_lane,
+        removed_sources.into_iter().collect(),
+        removed_links.into_iter().collect(),
+    ))
 }
 
 pub fn add_new_automation_point(
@@ -284,29 +318,29 @@ pub fn link_this_param_to_controller(
     Ok(id)
 }
 
-fn broadcast_modulations(ctx: &mut DawContext, link_id: ModulationLinkId) -> anyhow::Result<()> {
-    let link = ctx
-        .app_state
-        .modulation_links
-        .get(&link_id)
-        .ok_or_else(|| anyhow::anyhow!("Modulation link not found"))?;
+fn broadcast_modulation(ctx: &mut DawContext, link_id: ModulationLinkId) -> anyhow::Result<()> {
+    let mut commands = Vec::new();
 
-    let source = ctx
-        .app_state
-        .modulation_sources
-        .get(&link.prop.source_id)
-        .ok_or_else(|| anyhow::anyhow!("Modulation source not found"))?;
+    if let Some(link) = ctx.app_state.modulation_links.get(&link_id) {
+        let source_id = link.prop.source_id;
 
-    let commands = vec![
-        AudioCommand::AddModulationSource {
-            id: link.prop.source_id,
-            source: source.to_owned(),
-        },
-        AudioCommand::AddModulationLink {
-            id: link_id,
-            link: link.prop.to_owned(),
-        },
-    ];
+        if let Some(source) = ctx.app_state.modulation_sources.get(&source_id) {
+            commands.push(AudioCommand::AddModulationSource {
+                id: source_id,
+                source: source.to_owned(),
+            });
+            commands.push(AudioCommand::AddModulationLink {
+                id: link_id,
+                link: link.prop.to_owned(),
+            });
+        } else {
+            commands.push(AudioCommand::RemoveModulationSource(source_id));
+            commands.push(AudioCommand::RemoveModulationLink(link_id));
+        }
+    } else {
+        commands.push(AudioCommand::RemoveModulationLink(link_id));
+    }
 
+    // Dispatch the accumulated commands
     ctx.try_send_audio_command_chain(commands)
 }

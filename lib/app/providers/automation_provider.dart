@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
@@ -149,6 +150,60 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
       }
       return AsyncError(e, s);
     }
+  }
+
+  Future<void> handleRemoveAutomationForTarget({
+    required AutomationTargetDto target,
+  }) async {
+    final projectData = ref.read(projectProvider).value;
+
+    if (projectData == null) {
+      // Used throwing exception here so that flutter widget able to catch it onError
+      throw Exception("Project state is missing");
+    }
+
+    final originalPool = projectData.automationPool;
+    final originalLinks = projectData.modulationLinks;
+    final originalSources = projectData.modulationSources;
+    try {
+
+      // wrap the async call to result type
+      final removeResult = await attemptAsync(() async {
+          return await removeAutomationLaneFor(ctx: _ctx, target: target);
+      });
+
+      if (removeResult.isErr()) {
+        throw removeResult.err();
+      }
+
+      final (removedAutomationId, removedModulationSourceIds, removedModulationLinkIds) = removeResult.ok();
+
+      // remove the link first
+      final newLinks = originalLinks.removeWhere((id, _) => removedModulationLinkIds.contains(id));
+      final newSources = originalSources.removeWhere((id, _) => removedModulationSourceIds.contains(id));
+      final newAutomationPool = originalPool.remove(removedAutomationId);
+
+      ref
+          .read(projectProvider.notifier)
+          .updateAutomations(
+            pool: newAutomationPool,
+            links: newLinks,
+            sources: newSources,
+          );
+    } catch (e) {
+      AppLogger.error("Cannot remove the targeted automation: $e");
+      // Rollback all three maps if anything fails
+      if (ref.read(projectProvider).hasValue) {
+        ref
+            .read(projectProvider.notifier)
+            .updateAutomations(
+              pool: originalPool,
+              links: originalLinks,
+              sources: originalSources,
+            );
+      }
+    }
+    
   }
 
   Future<AsyncValue<void>> addModulation(ModulationSourceDto source) async {

@@ -1540,6 +1540,10 @@ impl AudioEngine {
             }
             AudioCommand::RemoveModulationLink(modulation_link_id) => {
                 self.active_links.retain(|l| l.id != modulation_link_id);
+                log::info!(
+                    "[AudioEngine] Removed Modulation Link {:?}",
+                    modulation_link_id
+                );
             }
             AudioCommand::UpdateTrackGraph { tracks, patterns } => {
                 // Update only the track/pattern/sample-index portion of the local graph.

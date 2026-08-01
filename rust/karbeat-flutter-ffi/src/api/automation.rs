@@ -496,6 +496,28 @@ pub fn add_automation_lane_for_bus(
     }
 }
 
+/// ## Overview
+/// 
+/// Remove automation lane for target. also cascade remove all modulations linked to it
+/// 
+/// ## Returns
+/// 
+/// * Tuple of (removed_automation_id, removed_modulation_source_ids, removed_modulation_link_ids)
+pub fn remove_automation_lane_for(
+    ctx: &mut DawContext,
+    target: AutomationTargetDto,
+) -> Result<(u32, Vec<u32>, Vec<u32>), String> {
+    automation_api::remove_automation_lane(ctx, target.into())
+        .map(|(automation_id, mod_ids, mod_link_ids)| {
+            (
+                automation_id.to_u32(),
+                mod_ids.into_iter().map(|m| m.to_u32()).collect(),
+                mod_link_ids.into_iter().map(|m| m.to_u32()).collect(),
+            )
+        })
+        .map_err(|e| e.to_string())
+}
+
 pub fn add_new_automation_point(
     ctx: &mut DawContext,
     automation_id: u32,

@@ -522,6 +522,8 @@ pub fn start_audio_stream(
 
             let tx_clone = restart_tx.clone();
 
+            let err_config_arc = Arc::clone(&active_config_arc);
+
             let err_fn = move |err: cpal::StreamError| {
                 match err {
                     cpal::StreamError::DeviceNotAvailable => {
@@ -532,6 +534,20 @@ pub fn start_audio_stream(
                         let err_msg = err.to_string().to_lowercase();
                         if err_msg.contains("underrun") || err_msg.contains("overrun") {
                             log::warn!("Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally...");
+                        } else if err_msg.contains("buffer size changed to:") {
+                            log::warn!("Host forced a different buffer size. Adapting config to prevent crash loop...");
+                            
+                            // Extract the exact buffer size JACK/OS is forcing us to use
+                            let parts: Vec<&str> = err_msg.split("buffer size changed to:").collect();
+                            if parts.len() > 1 {
+                                let num_str = parts[1].trim().chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
+                                if let Ok(new_size) = num_str.parse::<u32>() {
+                                    log::info!("Dynamically updating buffer size to {}", new_size);
+                                    let mut cfg = err_config_arc.write();
+                                    cfg.buffer_size = Some(new_size);
+                                }
+                            }
+                            let _ = tx_clone.send(());
                         } else {
                             log::error!("Audio stream backend error: {}. Triggering restart...", err_msg);
                             let _ = tx_clone.send(());
@@ -611,6 +627,10 @@ pub fn start_audio_stream(
             }
 
             log::info!("Monitor: Audio stream is successfully running.");
+
+            // Drain any stale restart signals that piled up from multiple rapid error callbacks
+            // before we enter the polling loop to prevent immediate phantom restarts.
+            while restart_rx.try_recv().is_ok() {}
 
             // ---------------------------------------------------------
             // Active Polling Loop (~10 FPS)

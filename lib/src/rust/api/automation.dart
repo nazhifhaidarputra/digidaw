@@ -98,6 +98,21 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   defaultValue: defaultValue,
 );
 
+/// ## Overview
+///
+/// Remove automation lane for target. also cascade remove all modulations linked to it
+///
+/// ## Returns
+///
+/// * Tuple of (removed_automation_id, removed_modulation_source_ids, removed_modulation_link_ids)
+Future<(int, Uint32List, Uint32List)> removeAutomationLaneFor({
+  required DawContext ctx,
+  required AutomationTargetDto target,
+}) => RustLib.instance.api.crateApiAutomationRemoveAutomationLaneFor(
+  ctx: ctx,
+  target: target,
+);
+
 Future<AutomationLaneDto> addNewAutomationPoint({
   required DawContext ctx,
   required int automationId,

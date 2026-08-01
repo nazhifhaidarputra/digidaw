@@ -89,7 +89,6 @@ class DawFloatParam extends ConsumerWidget {
               step: step,
               onChanged: onChanged,
               onAddAutomation: () async {
-                // TODO: Wire up automation lane creation using paramId
                 AppLogger.debug("Create automation for $name ($paramId)");
                 if (target == null) {
                   return;
@@ -102,6 +101,17 @@ class DawFloatParam extends ConsumerWidget {
                       min: min,
                       max: max,
                       defaultValue: defaultValue,
+                    );
+              },
+              onRemoveAutomation: () async {
+                AppLogger.debug("Create automation for $name ($paramId)");
+                if (target == null) {
+                  return;
+                }
+                ref
+                    .read(automationProvider.notifier)
+                    .handleRemoveAutomationForTarget(
+                      target: target!,
                     );
               },
               child: Slider(

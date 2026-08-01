@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use hashbrown::HashSet;
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use serde::{Deserialize, Serialize};
 
@@ -250,6 +251,45 @@ impl ApplicationState {
             .into_iter()
             .map(|item| (item.1, item.2, item.3))
             .collect()
+    }
+
+    /// remove automation lane, also remove orphaned modulation source and modulation links which links to this automation lane.
+    /// returns all removed data
+    pub fn remove_automation_lane(&mut self, target: AutomationTarget) -> Option<(AutomationId, HashSet<ModulationId>, HashSet<ModulationLinkId>)> {
+        let mut removed_sources = HashSet::new();
+        let mut removed_links = HashSet::new();
+        let mut main_lane_id = None;
+
+        // Identify all links mapped to this target that are driven by an Automation Lane
+        let mut to_remove = Vec::new();
+        for (link_id, link) in self.modulation_links.iter() {
+            if link.prop.target == target {
+                if let Some(ModulationSource::Automation { lane_id }) =
+                    self.modulation_sources.get(&link.prop.source_id)
+                {
+                    to_remove.push((*link_id, link.prop.source_id, *lane_id));
+                }
+            }
+        }
+
+        // Perform the removals from the application state
+        for (link_id, source_id, lane_id) in to_remove {
+            if self.modulation_links.remove(&link_id).is_some() {
+                removed_links.insert(link_id); // HashSet uses insert()
+            }
+            if self.modulation_sources.remove(&source_id).is_some() {
+                removed_sources.insert(source_id); // HashSet uses insert()
+            }
+            if self.automation_pool.remove(&lane_id).is_some() {
+                // Capture the first lane_id we find to return it
+                if main_lane_id.is_none() {
+                    main_lane_id = Some(lane_id);
+                }
+            }
+        }
+
+        // Map the found lane_id with the collected HashSets, otherwise return None
+        main_lane_id.map(|id| (id, removed_sources, removed_links))
     }
 
     /// Completely remove all Modulation Links and orphaned Automation Lanes for a Track.
