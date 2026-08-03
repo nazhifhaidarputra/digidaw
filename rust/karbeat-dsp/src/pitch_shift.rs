@@ -45,55 +45,11 @@ pub const GRAIN_SIZE: usize = 512;
 // Raw FFI — rubberband-c.h (C linkage)
 // ============================================================================
 
-#[allow(non_camel_case_types, dead_code)]
-mod ffi {
-    use std::os::raw::{c_double, c_float, c_int, c_uint};
-
-    // Opaque handle returned by rubberband_live_new()
-    pub enum RubberBandLiveState_ {}
-    pub type RubberBandLiveState = *mut RubberBandLiveState_;
-
-    pub type RubberBandOptions = c_int;
-
-    // Option flags relevant to the live shifter
-    pub const OPTION_WINDOW_SHORT: RubberBandOptions = 0x0000_0000;
-    pub const OPTION_WINDOW_MEDIUM: RubberBandOptions = 0x0010_0000;
-    pub const OPTION_FORMANT_SHIFTED: RubberBandOptions = 0x0200_0000;
-    pub const OPTION_CHANNELS_APART: RubberBandOptions = 0x0000_0000;
-
-    extern "C" {
-        pub fn rubberband_live_new(
-            sample_rate: c_uint,
-            channels: c_uint,
-            options: RubberBandOptions,
-        ) -> RubberBandLiveState;
-
-        pub fn rubberband_live_delete(state: RubberBandLiveState);
-
-        pub fn rubberband_live_reset(state: RubberBandLiveState);
-
-        pub fn rubberband_live_set_pitch_scale(state: RubberBandLiveState, scale: c_double);
-
-        pub fn rubberband_live_get_pitch_scale(state: RubberBandLiveState) -> c_double;
-
-        pub fn rubberband_live_set_formant_scale(state: RubberBandLiveState, scale: c_double);
-
-        /// Returns the fixed block size the library expects on each `shift()` call.
-        pub fn rubberband_live_get_block_size(state: RubberBandLiveState) -> c_uint;
-
-        /// Returns the start delay (latency) in samples.
-        pub fn rubberband_live_get_start_delay(state: RubberBandLiveState) -> c_uint;
-
-        /// Process exactly `getBlockSize()` frames.
-        ///
-        /// `input`  — pointer to an array of `channels` const-float pointers
-        /// `output` — pointer to an array of `channels` float pointers
-        pub fn rubberband_live_shift(
-            state: RubberBandLiveState,
-            input: *const *const c_float,
-            output: *const *mut c_float,
-        );
-    }
+#[allow(non_camel_case_types, non_snake_case, non_upper_case_globals, dead_code)]
+pub mod ffi {
+    // This instantly brings in every function, struct, and all the C documentation!
+    // Hover over any ffi:: function below in your IDE to see the C++ docs.
+    include!(concat!(env!("OUT_DIR"), "/rubberband_bindings.rs"));
 }
 
 // ============================================================================
@@ -131,11 +87,13 @@ unsafe impl Sync for RbLiveShifter {}
 impl RbLiveShifter {
     fn new(sample_rate: u32, channels: usize, preserve_formants: bool) -> Option<Self> {
         // OPTIMIZATION 1: Disabled CHANNELS_APART to process stereo as a unified coherent phase
-        let mut options = ffi::OPTION_WINDOW_SHORT;
+        // let mut options = ffi::OPTION_WINDOW_SHORT
+        let mut options = ffi::RubberBandLiveOption_RubberBandLiveOptionWindowShort;
         
         // OPTIMIZATION 2: Only enable formant preservation if explicitly requested
         if preserve_formants {
-            options |= ffi::OPTION_FORMANT_SHIFTED;
+            // options |= ffi::OPTION_FORMANT_SHIFTED;
+            options = ffi::RubberBandOption_RubberBandOptionFormantShifted;
         }
 
         let state_raw =

@@ -1582,6 +1582,7 @@ dependencies = [
 name = "karbeat-dsp"
 version = "0.3.0"
 dependencies = [
+ "bindgen",
  "dasp",
  "derive_builder",
  "fastrand",
@@ -1592,10 +1593,12 @@ dependencies = [
  "log",
  "num-complex",
  "num-traits",
+ "pkg-config",
  "realfft",
  "rustfft",
  "serde",
  "smallvec",
+ "vcpkg",
  "wide",
 ]
 
@@ -3228,6 +3231,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3362,9 +3371,9 @@ dependencies = [
 
 [[package]]
 name = "wide"
-version = "1.5.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfdfe6a32973f2d1b268b8895845a8a96cac2f0191e72c27cc929036060dbf89"
+checksum = "be99e8317aa9f08e7d16e13033ca43faab59ab582b1d0feab7b385424c42f8b1"
 dependencies = [
  "bytemuck",
  "safe_arch",

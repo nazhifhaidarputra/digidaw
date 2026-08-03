@@ -1,1 +1,6 @@
 /target
+*.dll
+*.lib
+*.so
+*.dylib
+vcpkg_installed/
