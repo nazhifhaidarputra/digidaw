@@ -19,6 +19,7 @@
 //! the system-installed `librubberband.so`.
 
 use std::ptr::NonNull;
+use std::mem::MaybeUninit;
 
 use karbeat_macros::{karbeat_plugin, EnumParam};
 use serde::{Deserialize, Serialize};
@@ -132,13 +133,14 @@ impl RbLiveShifter {
         debug_assert_eq!(channels_data.len(), self.channels);
 
         // Build the pointer arrays that rubberband_live_shift expects.
-        // Using SmallVec-style stack storage for up to 8 channels.
-        let mut in_ptrs: [*const f32; 8] = [std::ptr::null(); 8];
-        let mut out_ptrs: [*mut f32; 8] = [std::ptr::null_mut(); 8];
+        // Using stack storage for up to 8 channels.
+        // OPTIMIZATION: Avoid zeroing stack arrays before initializing pointers
+        let mut in_ptrs: [MaybeUninit<*const f32>; 8] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut out_ptrs: [MaybeUninit<*mut f32>; 8] = unsafe { MaybeUninit::uninit().assume_init() };
 
-        for (ch, slice) in channels_data.iter_mut().enumerate() {
-            in_ptrs[ch] = slice.as_ptr();
-            out_ptrs[ch] = slice.as_mut_ptr();
+        for (ch, slice) in channels_data.iter_mut().enumerate().take(8) {
+            in_ptrs[ch] = MaybeUninit::new(slice.as_ptr());
+            out_ptrs[ch] = MaybeUninit::new(slice.as_mut_ptr());
         }
 
         unsafe {
@@ -278,7 +280,19 @@ impl PitchShiftEngine {
 
             let block = self.shifter_block_size();
             self.input_staging = vec![vec![0.0_f32; block]; channels];
-            self.output_staging = vec![vec![0.0_f32; block * 4]; channels];
+           
+            // reserve some uninitialized space
+            let target_cap = block * 4;
+            self.output_staging = (0..channels)
+                .map(|_| {
+                    let mut uninit_buf: Vec<MaybeUninit<f32>> = Vec::with_capacity(target_cap);
+                    unsafe {
+                        uninit_buf.set_len(target_cap);
+                        // Safe cast since MaybeUninit<f32> and f32 have identical layout
+                        std::mem::transmute::<Vec<MaybeUninit<f32>>, Vec<f32>>(uninit_buf)
+                    }
+                })
+                .collect();
             self.staging_fill = 0;
             self.output_pending = 0;
             self.output_read_pos = 0;
@@ -308,9 +322,9 @@ impl PitchShiftEngine {
             self.prepare(self.sample_rate as f32, channels);
         }
 
-        // -------------------------------------------------------------
+        // =============================================================
         // OPTIMIZATION 3: SMART SLEEP (Bypass processing on silence)
-        // -------------------------------------------------------------
+        // =============================================================
         let mut is_silent = true;
         for ch in channels_data.iter() {
             for &s in ch.iter() {
@@ -342,7 +356,7 @@ impl PitchShiftEngine {
                 }
             }
             self.last_pitch_ratio = ratio;
-            return; // 100% CPU Reclaimed!
+            return;
         }
 
         // Only trigger the heavy internal C++ recalculation if the value meaningfully changed
@@ -360,7 +374,7 @@ impl PitchShiftEngine {
         let mut out_pos = 0usize;
 
         while in_pos < num_frames || out_pos < num_frames {
-            // ---- Drain any pending output first ----
+            // Drain any pending output first
             while out_pos < num_frames && self.output_pending > 0 {
                 for ch in 0..channels {
                     let src = self.output_staging[ch][self.output_read_pos];
@@ -375,7 +389,7 @@ impl PitchShiftEngine {
                 break;
             }
 
-            // ---- Fill the staging buffer ----
+            // Fill the staging buffer
             let space = block - self.staging_fill;
             let avail = (num_frames - in_pos).min(space);
 
@@ -387,7 +401,7 @@ impl PitchShiftEngine {
             self.staging_fill += avail;
             in_pos += avail;
 
-            // ---- If we have a full block, run the shifter ----
+            // run the shifter when the staging buffer is full
             if self.staging_fill == block {
                 // Build &mut [&mut [f32]] from the staging buffers and shift.
                 // The ptrs borrow ends before we access input_staging below.
@@ -401,7 +415,7 @@ impl PitchShiftEngine {
                     if let Some(shifter) = &self.shifter {
                         shifter.shift(&mut ptrs);
                     }
-                } // <-- ptrs (and the mutable borrow of input_staging) dropped here
+                }
 
                 // Append processed block to output ring.
                 let out_len = self.output_staging[0].len();
