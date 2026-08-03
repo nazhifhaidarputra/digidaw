@@ -427,11 +427,11 @@ impl PitchShiftEngine {
                 let second_chunk = block - first_chunk;
 
                 for ch in 0..channels {
-                    // 1. Write up to the boundary using a lightning-fast memory copy
+                    // Write up to the boundary
                     self.output_staging[ch][write_pos..write_pos + first_chunk]
                         .copy_from_slice(&self.input_staging[ch][..first_chunk]);
 
-                    // 2. Wrap around and write the remainder (if any)
+                    // Wrap remainder
                     if second_chunk > 0 {
                         self.output_staging[ch][..second_chunk]
                             .copy_from_slice(&self.input_staging[ch][first_chunk..]);
