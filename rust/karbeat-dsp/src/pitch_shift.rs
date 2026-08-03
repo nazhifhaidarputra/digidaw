@@ -322,9 +322,8 @@ impl PitchShiftEngine {
             self.prepare(self.sample_rate as f32, channels);
         }
 
-        // =============================================================
-        // OPTIMIZATION 3: SMART SLEEP (Bypass processing on silence)
-        // =============================================================
+        // Bypass processing on Silence since processing zeroed buffer will
+        // be a waste of resource
         let mut is_silent = true;
         for ch in channels_data.iter() {
             for &s in ch.iter() {
