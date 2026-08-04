@@ -57,9 +57,19 @@ pub struct Compressor {
         max = 24.0,
         step = 0.1
     )]
-    pub makeup_gain: f64, // In dB
-    #[param(id = "wetness", name = "Wetness", default = 0.0, max = 1.0, step = 0.1)]
-    pub wetness: f64, // 0.0 to 1.0
+    pub makeup_gain_db: f64, // In dB
+    #[param(id = "wet_mix", name = "Wet Mix", default = 0.0, max = 1.0, step = 0.1)]
+    pub wet_mix: f64, // 0.0 to 1.0
+
+    #[param(
+        id = "dry_mix",
+        name = "Dry mix",
+        default = 1.0,
+        min = 0.0,
+        max = 1.0,
+        step = 0.01
+    )]
+    pub dry_mix: f64, // 0.0 to 1.0
 
     sample_rate: f64,
     envelope_db: f64,       // Tracks the smoothed gain reduction
@@ -102,8 +112,9 @@ impl Compressor {
         let ratio = self.ratio.get().max(1.0);
         let attack_ms = self.attack_ms.get().max(1) as f64;
         let release_ms = self.release_ms.get().max(1) as f64;
-        let makeup_gain = self.makeup_gain.get();
-        let wetness = self.wetness.get();
+        let makeup_gain = self.makeup_gain_db.get();
+        let wet_mix = self.wet_mix.get();
+        let dry_mix = self.dry_mix.get();
 
         let input_abs = input_f64.abs();
         let input_db = if input_abs > 1e-6 {
@@ -151,9 +162,7 @@ impl Compressor {
         };
 
         let linear_gain = 10.0_f64.powf((-self.envelope_db + makeup_gain) / 20.0);
-        let wet_signal = delayed_sample * linear_gain;
-
-        let out = (1.0 - wetness) * delayed_sample + wetness * wet_signal;
+        let out = delayed_sample * (dry_mix + (wet_mix * linear_gain));
 
         out as f32
     }
@@ -173,6 +182,7 @@ pub struct SidechainCompressor {
         step = 1
     )]
     pub attack_ms: i32,
+
     #[param(
         id = "release",
         name = "Release",
@@ -182,6 +192,7 @@ pub struct SidechainCompressor {
         step = 1
     )]
     pub release_ms: i32,
+
     #[param(
         id = "ratio",
         name = "Ratio",
@@ -191,8 +202,10 @@ pub struct SidechainCompressor {
         step = 0.1
     )]
     pub ratio: f64,
+
     #[param(id = "threshold", name = "Threshold", default = 0.0, min = -60.0, max = 0.0, step = 0.1)]
     pub threshold: f64, // In dB
+
     #[param(
         id = "delay",
         name = "Delay",
@@ -202,6 +215,7 @@ pub struct SidechainCompressor {
         step = 1
     )]
     pub delay_ms: i32, // Lookahead delay applied to the MAIN input
+
     #[param(
         id = "knee",
         name = "Knee",
@@ -211,6 +225,7 @@ pub struct SidechainCompressor {
         step = 0.1
     )]
     pub knee: f64, // In dB
+
     #[param(
         id = "makeup_gain",
         name = "MakeUp Gain",
@@ -219,16 +234,27 @@ pub struct SidechainCompressor {
         max = 24.0,
         step = 0.1,
     )]
-    pub makeup_gain: f64, // In dB
+    pub makeup_gain_db: f64, // In dB
+
     #[param(
-        id = "wetness",
-        name = "Wetness",
+        id = "wet_mix",
+        name = "Wet Mix",
         default = 1.0,
         min = 0.0,
         max = 1.0,
         step = 0.01
     )]
-    pub wetness: f64, // 0.0 to 1.0
+    pub wet_mix: f64, // 0.0 to 1.0
+
+    #[param(
+        id = "dry_mix",
+        name = "Dry mix",
+        default = 1.0,
+        min = 0.0,
+        max = 1.0,
+        step = 0.01
+    )]
+    pub dry_mix: f64, // 0.0 to 1.0
 
     sample_rate: f64,
     envelope_db: f64,       // Tracks the smoothed gain reduction
@@ -276,8 +302,9 @@ impl SidechainCompressor {
         let ratio = self.ratio.get().max(1.0);
         let attack_ms = self.attack_ms.get().max(1) as f64;
         let release_ms = self.release_ms.get().max(1) as f64;
-        let makeup_gain = self.makeup_gain.get();
-        let wetness = self.wetness.get();
+        let makeup_gain = self.makeup_gain_db.get();
+        let wet_mix = self.wet_mix.get();
+        let dry_mix = self.dry_mix.get();
 
         // Level Detection (Peak) -> DRIVEN BY SIDECHAIN INPUT
         let sc_abs = sc_f64.abs();
@@ -326,12 +353,9 @@ impl SidechainCompressor {
             out
         };
 
-        // Apply Gain Reduction and Makeup Gain
-        let linear_gain = 10.0_f64.powf((-self.envelope_db + makeup_gain) / 20.0);
-        let wet_signal = delayed_main_sample * linear_gain;
-
         // Dry/Wet Mix
-        let out = (1.0 - wetness) * delayed_main_sample + wetness * wet_signal;
+        let linear_gain = 10.0_f64.powf((-self.envelope_db + makeup_gain) / 20.0);
+        let out = delayed_main_sample * (dry_mix + (wet_mix * linear_gain));
 
         out as f32
     }
@@ -399,16 +423,26 @@ pub struct DynamicsProcessor {
     )]
     pub knee: f64, // In dB
     #[param(id = "makeup_gain", name = "MakeUp Gain", default = 0.0, min = -24.0, max = 24.0, step = 0.1)]
-    pub makeup_gain: f64, // In dB
+    pub makeup_gain_db: f64, // In dB
     #[param(
-        id = "wetness",
-        name = "Wetness",
+        id = "wet_mix",
+        name = "Wet Mix",
         default = 1.0,
         min = 0.0,
         max = 1.0,
         step = 0.01
     )]
-    pub wetness: f64, // 0.0 to 1.0
+    pub wet_mix: f64, // 0.0 to 1.0
+
+    #[param(
+        id = "dry_mix",
+        name = "Dry mix",
+        default = 1.0,
+        min = 0.0,
+        max = 1.0,
+        step = 0.01
+    )]
+    pub dry_mix: f64, // 0.0 to 1.0
 
     sample_rate: f64,
     envelope_db: f64, // Tracks the smoothed gain reduction (positive value = reduction)
@@ -451,11 +485,12 @@ impl DynamicsProcessor {
         let ratio = self.ratio.get().max(1.0);
         let attack_ms = self.attack_ms.get().max(1) as f64;
         let release_ms = self.release_ms.get().max(1) as f64;
-        let makeup_gain = self.makeup_gain.get();
-        let wetness = self.wetness.get();
+        let makeup_gain = self.makeup_gain_db.get();
+        let wet_mix = self.wet_mix.get();
+        let dry_mix = self.dry_mix.get();
         let mode = self.mode.get();
 
-        // 1. Level Detection (Peak)
+        // Level Detection (Peak)
         let det_abs = det_f64.abs();
         let det_db = if det_abs > 1e-6 {
             20.0 * det_abs.log10()
@@ -463,7 +498,7 @@ impl DynamicsProcessor {
             -120.0
         };
 
-        // 2. Gain Computer
+        // Gain Computer
         let lower_knee = threshold - knee / 2.0;
         let upper_knee = threshold + knee / 2.0;
 
@@ -502,7 +537,7 @@ impl DynamicsProcessor {
             }
         };
 
-        // 3. Envelope Smoothing (Ballistics)
+        // Envelope Smoothing (Ballistics)
         let attack_coef = (-1.0 / (attack_ms * 0.001 * self.sample_rate)).exp();
         let release_coef = (-1.0 / (release_ms * 0.001 * self.sample_rate)).exp();
 
@@ -516,7 +551,7 @@ impl DynamicsProcessor {
                 release_coef * self.envelope_db + (1.0 - release_coef) * gain_reduction_target_db;
         }
 
-        // 4. Lookahead Delay Line (Applied ONLY to the main signal)
+        // Lookahead Delay Line (Applied ONLY to the main signal)
         let delayed_main_sample = if self.delay_buffer.is_empty() {
             main_f64
         } else {
@@ -526,13 +561,8 @@ impl DynamicsProcessor {
             out
         };
 
-        // 5. Apply Gain Reduction and Makeup Gain
-        // envelope_db is a positive number representing attenuation, so we subtract it
         let linear_gain = 10.0_f64.powf((-self.envelope_db + makeup_gain) / 20.0);
-        let wet_signal = delayed_main_sample * linear_gain;
-
-        // 6. Dry/Wet Mix
-        let out = (1.0 - wetness) * delayed_main_sample + wetness * wet_signal;
+       let out = delayed_main_sample * (dry_mix + (wet_mix * linear_gain));
 
         out as f32
     }

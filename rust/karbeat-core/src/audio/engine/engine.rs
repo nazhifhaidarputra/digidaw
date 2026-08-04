@@ -80,6 +80,7 @@ pub struct AudioEngine {
     active_links: Vec<ModulationLink>,
     /// Targets whose absolute automation has been manually overridden by the user
     suspended_targets: HashSet<AutomationTarget>,
+    block_param_changes: HashMap<PluginTarget, Vec<ParamChange>>,
 
     /// Tracks the continuous phase of active LFOs
     lfo_phases: HashMap<AutomationTarget, f32>,
@@ -192,6 +193,7 @@ impl AudioEngine {
             telemetry,
             telemetry_reg_sender,
             suspended_targets: HashSet::new(),
+            block_param_changes: HashMap::new(),
         }
     }
 
@@ -264,6 +266,7 @@ impl AudioEngine {
             telemetry_reg_sender: mpsc::sync_channel(0).0,
 
             suspended_targets: self.suspended_targets.clone(),
+            block_param_changes: HashMap::new(),
         }
     }
 
@@ -273,6 +276,8 @@ impl AudioEngine {
 
     pub fn process(&mut self, output_buffer: &mut [f32]) {
         let start_time = Instant::now();
+
+        self.block_param_changes.clear();
 
         // Process Commands (Play, Stop, Seek, Graph updates)
         while let Ok(cmd) = self.command_consumer.pop() {
@@ -878,7 +883,15 @@ impl AudioEngine {
                         }
                     }
                 }
-                // update the base_value of the parameter in the active_links map
+
+                self.block_param_changes
+                    .entry(target.clone())
+                    .or_default()
+                    .push(ParamChange {
+                        param_id: param_id,
+                        normalized_value: value,
+                        sample_offset: 0,
+                    });
 
                 let our_target = target.to_automation_target(param_id);
 
@@ -1062,7 +1075,7 @@ impl AudioEngine {
                 self.plugin_state.add_bus(id_index);
                 self.bus_buffers.insert(bus_id, Vec::new());
 
-                // FIX: Initialize the missing bus mixer channel!
+                // Initialize the missing bus mixer channel
                 self.mixer_state.bus_channels.entry(bus_id).or_default();
 
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
@@ -1154,6 +1167,7 @@ impl AudioEngine {
                 self.active_links.clear();
                 self.suspended_targets.clear();
                 self.lfo_phases.clear();
+                self.block_param_changes.clear();
 
                 for (&id, source) in &self.current_state.graph.modulation_sources {
                     let live_source = match source {
@@ -1695,6 +1709,7 @@ impl AudioEngine {
                 self.active_links.clear();
                 self.suspended_targets.clear();
                 self.lfo_phases.clear();
+                self.block_param_changes.clear();
 
                 for (&id, source) in &self.current_state.graph.modulation_sources {
                     let live_source = match source {
@@ -2152,6 +2167,10 @@ impl AudioEngine {
                             let mut gen_ctx = base_ctx.clone();
                             gen_ctx.midi_events = events;
 
+                            let pt = PluginTarget::Generator(gen_id);
+                            let changes = self.block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+                            gen_ctx.param_changes = changes;
+
                             process_plugin_wrapper(
                                 &mut *gen_instance.plugin,
                                 &mut self.mix_buffer,
@@ -2228,6 +2247,7 @@ impl AudioEngine {
                         &mut self.channel_buffers_in,
                         &mut self.channel_buffers_out,
                         &mut self.aux_channel_buffers,
+                        &self.block_param_changes,
                     );
 
                     if let Some(delay_line) = self.track_delay_lines.get_mut(track_id) {
@@ -2360,12 +2380,17 @@ impl AudioEngine {
                         for effect in effects.iter_mut() {
                             let sidechain_id = SidechainRouteId::BusEffect(*bus_id, effect.id);
                             let aux = self.aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
+
+                            let pt = PluginTarget::BusEffect(*bus_id, effect.id);
+                            let mut ctx = base_ctx.clone();
+                            ctx.param_changes = self.block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+
                             process_plugin_wrapper(
                                 &mut *effect.plugin,
                                 &mut self.mix_buffer,
                                 aux,
                                 channels,
-                                &base_ctx,
+                                &ctx,
                                 &mut self.channel_buffers_in,
                                 &mut self.channel_buffers_out,
                                 &mut self.aux_channel_buffers,
@@ -2468,6 +2493,7 @@ impl AudioEngine {
                             &mut self.channel_buffers_in,
                             &mut self.channel_buffers_out,
                             &mut self.aux_channel_buffers,
+                            &self.block_param_changes,
                         );
                     } else {
                         // output silent buffer
@@ -2583,6 +2609,8 @@ impl AudioEngine {
         channel_buffers_in: &mut [Vec<f32>],
         channel_buffers_out: &mut [Vec<f32>],
         aux_channel_buffers: &mut [Vec<f32>],
+        block_param_changes: &'a HashMap<PluginTarget, Vec<ParamChange>>,
+
     ) {
         // ==== SIMD Phase Inversion ====
         if mixer_channel.inverted_phase {
@@ -2595,12 +2623,16 @@ impl AudioEngine {
                 let sidechain_id = SidechainRouteId::TrackEffect(track_id, effect.id);
                 let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
+                let pt = PluginTarget::TrackEffect(track_id, effect.id);
+                let mut ctx = process_ctx.clone();
+                ctx.param_changes = block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+
                 process_plugin_wrapper(
                     &mut *effect.plugin,
                     buffer,
                     aux,
                     channels,
-                    process_ctx,
+                    &ctx,
                     channel_buffers_in,
                     channel_buffers_out,
                     aux_channel_buffers,
@@ -2634,6 +2666,7 @@ impl AudioEngine {
         channel_buffers_in: &mut [Vec<f32>],
         channel_buffers_out: &mut [Vec<f32>],
         aux_channel_buffers: &mut [Vec<f32>],
+        block_param_changes: &'a HashMap<PluginTarget, Vec<ParamChange>>,
     ) {
         // ==== SIMD Phase Inversion ====
         if master_bus.inverted_phase {
@@ -2645,12 +2678,16 @@ impl AudioEngine {
             let sidechain_id = SidechainRouteId::MasterEffect(effect.id);
             let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
+            let pt = PluginTarget::MasterEffect(effect.id);
+            let mut ctx = process_ctx.clone();
+            ctx.param_changes = block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+
             process_plugin_wrapper(
                 &mut *effect.plugin,
                 buffer,
                 aux,
                 channels,
-                process_ctx,
+                &ctx,
                 channel_buffers_in,
                 channel_buffers_out,
                 aux_channel_buffers,
@@ -3214,6 +3251,46 @@ impl AudioEngine {
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency
         );
+    }
+
+    fn queue_param_change(&mut self, target: &AutomationTarget, value: f32, sample_offset: u32) {
+        let (plugin_target, param_id) = match target {
+            AutomationTarget::Generator { generator_id, param_id } => {
+                (PluginTarget::Generator(*generator_id), *param_id)
+            }
+            AutomationTarget::Track {
+                track_id,
+                track_target:
+                    TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Plugin {
+                        effect_id,
+                        target: EffectAutomationTarget::PluginParam { param_id },
+                    }),
+            } => (PluginTarget::TrackEffect(*track_id, *effect_id), *param_id),
+            AutomationTarget::Bus {
+                bus_id,
+                mix_target:
+                    MixerChannelParamTarget::Plugin {
+                        effect_id,
+                        target: EffectAutomationTarget::PluginParam { param_id },
+                    },
+            } => (PluginTarget::BusEffect(*bus_id, *effect_id), *param_id),
+            AutomationTarget::Master(MasterAutomationTarget::MixerChannel(
+                MixerChannelParamTarget::Plugin {
+                    effect_id,
+                    target: EffectAutomationTarget::PluginParam { param_id },
+                },
+            )) => (PluginTarget::MasterEffect(*effect_id), *param_id),
+            _ => return, // Not a plugin parameter target (e.g. Master volume)
+        };
+
+        self.block_param_changes
+            .entry(plugin_target)
+            .or_default()
+            .push(ParamChange {
+                param_id: param_id,
+                normalized_value: value,
+                sample_offset: sample_offset as usize,
+            });
     }
 
     fn evaluate_pre_block_modulations(&mut self, buffer_size: usize) {
