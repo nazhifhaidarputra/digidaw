@@ -159,7 +159,7 @@ pub struct AssetLibrary {
 impl Default for AssetLibrary {
     fn default() -> Self {
         Self {
-            next_id: 1,
+            next_id: 0,
             source_map: HashMap::new(),
         }
     }

@@ -169,11 +169,10 @@ impl AudioLoader for ApplicationState {
                 return Err(anyhow!("{}", error_msg));
             }
         };
-        let mut raw_id = self.asset_library.next_id;
-        let source_id = AudioSourceId::next(&mut raw_id);
+
+        let source_id = AudioSourceId::next(&mut self.asset_library.next_id);
 
         let asset_library = &mut self.asset_library;
-        // asset_library.next_id += 1;
 
         // Assign this audio waveform with an Id
         waveform.id = Some(source_id);
