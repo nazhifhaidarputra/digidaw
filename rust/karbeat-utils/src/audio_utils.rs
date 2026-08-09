@@ -9,7 +9,9 @@ use rubato::{
 
 use crate::error::AudioResamplingError;
 
-const CHUNK_SIZE: usize = 1024;
+const CHUNK_SIZE: usize = 8192;
+const SINC_LEN: usize = 64;
+const OVERSAMPLING_FACTOR: usize = 64;
 
 /// Robust Stereo Downsampling (Min-Max Binning) with Dasp.
 /// Supports generic Mono (1) or Stereo (2) channel counts safely.
@@ -224,10 +226,10 @@ pub fn resample_buffers(
     let ratio = target_sample_rate as f64 / source_sample_rate as f64;
 
     let params = SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: Some(0.95),
-        interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 256,
+        sinc_len: SINC_LEN,
+        f_cutoff: None,
+        interpolation: SincInterpolationType::Cubic,
+        oversampling_factor: OVERSAMPLING_FACTOR,
         window: WindowFunction::BlackmanHarris2,
     };
 
@@ -322,10 +324,10 @@ pub fn resample_interleaved_buffer(
     let ratio = target_sample_rate as f64 / source_sample_rate as f64;
 
     let params = SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: Some(0.95),
-        interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 256,
+        sinc_len: SINC_LEN,
+        f_cutoff: None,
+        interpolation: SincInterpolationType::Cubic,
+        oversampling_factor: OVERSAMPLING_FACTOR,
         window: WindowFunction::BlackmanHarris2,
     };
 
@@ -405,10 +407,10 @@ where
     let ratio = target_sample_rate as f64 / source_sample_rate as f64;
 
     let params = SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: Some(0.95),
-        interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 256,
+        sinc_len: SINC_LEN,
+        f_cutoff: None,
+        interpolation: SincInterpolationType::Cubic,
+        oversampling_factor: OVERSAMPLING_FACTOR,
         window: WindowFunction::BlackmanHarris2,
     };
 

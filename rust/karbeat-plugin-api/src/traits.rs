@@ -11,6 +11,26 @@ use crate::types::{AudioBuffers, BusConfig, PluginCategory, ProcessContext, Zero
 // CONTEXTS & TYPES
 // ============================================================================
 
+use raw_window_handle::RawWindowHandle;
+
+/// Handles the GUI layer of the plugin. 
+/// This lives entirely on the main UI thread.
+pub trait PluginEditor {
+    /// Instructs the plugin to attach its GUI to the provided platform-specific window handle.
+    /// Returns true if successful.
+    fn open(&mut self, handle: RawWindowHandle) -> bool;
+
+    /// Instructs the plugin to destroy its GUI resources.
+    fn close(&mut self);
+
+    /// Gets the current or preferred dimensions of the GUI (width, height).
+    fn get_size(&self) -> Option<(u32, u32)>;
+
+    /// Requests the plugin to resize its GUI. Returns true if accepted.
+    fn set_size(&mut self, width: u32, height: u32) -> bool;
+}
+
+
 /// ## Overview
 ///
 /// Interface or Trait every plugin should respect.
@@ -205,6 +225,14 @@ pub trait AudioPlugin: DynClone + Send + Sync {
 
     /// An helper to enable downcasting
     fn as_any(&self) -> &dyn Any;
+
+    // --- GUI Handler ----
+    /// Returns the UI editor for this plugin, if it has one.
+    /// The DAW will call this from the main thread, take ownership of the editor,
+    /// and use it to draw the GUI.
+    fn get_editor(&mut self) -> Option<Box<dyn PluginEditor>> {
+        None
+    }
 }
 
 impl Debug for dyn AudioPlugin + Send + Sync {

@@ -166,7 +166,7 @@ impl AudioLoader for ApplicationState {
             Err(e) => {
                 let error_msg = format!("Cannot decode audio file: {}", e);
                 log::error!("{}", error_msg);
-                return Err(anyhow!("{}", error_msg));
+                anyhow::bail!("{}", error_msg);
             }
         };
 
