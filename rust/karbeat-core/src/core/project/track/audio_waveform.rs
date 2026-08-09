@@ -38,7 +38,9 @@ pub struct AudioWaveform {
     pub file_path: PathBuf,
     /// name of the audio waveform
     pub name: String,
-    /// Sample rate of the audio waveform
+    /// Original sample rate of the audio waveform
+    pub original_sample_rate: u32,
+    /// Current sample rate of the audio waveform
     pub sample_rate: u32,
     /// Number of channels of the audio waveform
     pub channels: u16,
@@ -91,6 +93,7 @@ impl Default for AudioWaveform {
             buffer: None,
             file_path: PathBuf::new(),
             name: "Sample".to_string(),
+            original_sample_rate: 44100,
             sample_rate: 44100,
             channels: 2,
             duration: 0.0,

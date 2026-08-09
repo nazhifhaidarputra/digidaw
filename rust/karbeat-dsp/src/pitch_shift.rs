@@ -96,7 +96,8 @@ impl RbLiveShifter {
             // options |= ffi::OPTION_FORMANT_SHIFTED;
             options = ffi::RubberBandOption_RubberBandOptionFormantShifted;
         }
-
+        
+        let options = options.try_into().ok()?;
         let state_raw =
             unsafe { ffi::rubberband_live_new(sample_rate as _, channels as _, options) };
 

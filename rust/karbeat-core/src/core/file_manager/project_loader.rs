@@ -78,7 +78,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
     Ok(())
 }
 
-pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
+pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<ApplicationState> {
     let mut file =
         File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
 
@@ -159,7 +159,7 @@ pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
             })?;
 
             let mut waveform =
-                load_audio_file(dest_path_str, Some(&file_name)).with_context(|| {
+                load_audio_file(dest_path_str, Some(&file_name), sample_rate).with_context(|| {
                     format!("Failed to decode embedded audio for source id {id} ({file_name})")
                 })?;
 
@@ -228,6 +228,8 @@ mod test {
     use std::io::{Read, Write};
     use tempfile::tempdir;
 
+    const SAMPLE_RATE: u32 = 48000;
+
     #[test]
     fn it_should_be_able_to_save_project() {
         // Setup isolated temp directory
@@ -261,7 +263,9 @@ mod test {
         let mut file = File::create(&file_path_no_magic).unwrap();
         file.write_all(b"GARBAGE_DATA_NO_MAGIC_HEADER").unwrap();
 
-        let load_result = load_daw_project(&file_path_no_magic);
+        
+
+        let load_result = load_daw_project(&file_path_no_magic, SAMPLE_RATE);
         assert!(load_result.is_err());
         assert_eq!(
             load_result.unwrap_err().to_string(),
@@ -275,7 +279,7 @@ mod test {
         file2.write_all(KARBEAT_MAGIC_HEADER).unwrap();
         file2.write_all(b"THIS IS NOT A ZIP FILE").unwrap();
 
-        let load_result_zip = load_daw_project(&file_path_bad_zip);
+        let load_result_zip = load_daw_project(&file_path_bad_zip, SAMPLE_RATE);
         assert!(
             load_result_zip.is_err(),
             "Failed to reject a corrupted ZIP payload"
@@ -302,7 +306,7 @@ mod test {
         );
 
         // Load & Verify
-        let load_result = load_daw_project(&file_path);
+        let load_result = load_daw_project(&file_path, SAMPLE_RATE);
         assert!(
             load_result.is_ok(),
             "Failed to load the project we just saved: {:?}",
@@ -328,7 +332,7 @@ mod test {
 
         save_daw_project(&file_path, &app_state).unwrap();
 
-        let load_result = load_daw_project(&file_path);
+        let load_result = load_daw_project(&file_path, SAMPLE_RATE);
         assert!(
             load_result.is_ok(),
             "Failed to load a known-valid project file"

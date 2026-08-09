@@ -3,6 +3,7 @@
 // Source code of file loader
 
 use hashbrown::HashMap;
+use karbeat_utils::audio_utils::resample_interleaved_stream;
 use std::{
     fs::File,
     io::{BufReader, BufWriter, Write},
@@ -43,59 +44,46 @@ mod err {
 }
 
 /// Main entry point for loading audio.
-pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWaveform> {
+pub fn load_audio_file(path_str: &str, name: Option<&str>, target_sample_rate: u32,) -> Result<AudioWaveform> {
     let path = Path::new(path_str);
     let file =
         File::open(path).with_context(|| format!("Failed to open audio file: {}", path_str))?;
     let reader = BufReader::new(file);
 
-    let decoder =
+    let mut decoder =
         rodio::Decoder::new(reader).context("Failed to decode audio file (unsupported format)")?;
-    let sample_rate = decoder.sample_rate();
-    let channels = decoder.channels();
+    let sample_rate = decoder.sample_rate().get();
+    let source_sample_rate = decoder.sample_rate().get();
+    let channels_u16 = decoder.channels().get();
+    let channels = channels_u16 as  usize;
 
     // Cache the loaded audio file
+    // let mut f32_decoder = decoder.into_iter();
     let mut cache_file = tempfile().context("Failed to create temporary cache file")?;
-
-    // let all_samples: Vec<f32> = decoder.collect();
-    // let total_samples = all_samples.len() as u32;
 
     // Use a BufWriter. It handles disk I/O incredibly efficiently behind the scenes.
     let total_samples = {
         let mut writer = BufWriter::new(&mut cache_file);
 
-        let mut total_samples: u32 = 0;
+        let written = if source_sample_rate == target_sample_rate {
+            stream_raw_to_disk(&mut decoder, &mut writer)?
+        } else {
+            resample_interleaved_stream(
+                &mut decoder,
+                source_sample_rate,
+                target_sample_rate,
+                channels,
+                &mut writer,
+            )
+            .map_err(|e| anyhow!("Failed to resample stream: {}", e.err_source))?
+        };
 
-        // Create a tiny buffer to hold 8192 samples (~32 KB of RAM)
-        let chunk_size = 8192;
-        let mut chunk: Vec<f32> = Vec::with_capacity(chunk_size);
-
-        // Stream directly from the decoder to the disk
-        for sample in decoder {
-            chunk.push(sample);
-            total_samples += 1;
-
-            // When our tiny RAM buffer is full, dump it to the disk and clear it
-            if chunk.len() == chunk_size {
-                let byte_slice: &[u8] = bytemuck::cast_slice(&chunk);
-                writer.write_all(byte_slice)?;
-                chunk.clear(); // Clears the vector but keeps the allocated 32KB capacity
-            }
-        }
-
-        // Write any leftover samples that didn't perfectly fill the last chunk
-        if !chunk.is_empty() {
-            let byte_slice: &[u8] = bytemuck::cast_slice(&chunk);
-            writer.write_all(byte_slice)?;
-        }
-
-        // Flush the writer to guarantee all bytes are written to the disk
         writer.flush()?;
-        total_samples
+        written
     };
 
-    let total_frames = if channels.get() > 0 {
-        total_samples / (channels.get() as u32)
+    let total_frames = if channels > 0 {
+        total_samples / (channels as u32)
     } else {
         0
     };
@@ -107,8 +95,8 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
 
     let mmap = unsafe { MmapOptions::new().map(&cache_file)? };
 
-    let duration_seconds = if sample_rate.get() > 0 {
-        (total_frames as f64) / (sample_rate.get() as f64)
+    let duration_seconds = if sample_rate > 0 {
+        (total_frames as f64) / (sample_rate as f64)
     } else {
         0.0
     };
@@ -125,26 +113,55 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
         buffer,
         file_path: path.to_path_buf(),
         name: final_name,
-        sample_rate: sample_rate.get(),
-        channels: channels.get(),
+        sample_rate: target_sample_rate,
+        channels: channels_u16,
         duration: duration_seconds,
         trim_end: total_frames,
         ..Default::default()
     })
 }
 
+/// Helper for the fast-path: Streams decoded audio directly to disk without resampling.
+fn stream_raw_to_disk<I, W>(decoder: &mut I, writer: &mut W) -> Result<u32>
+where
+    I: Iterator<Item = f32>,
+    W: Write,
+{
+    let chunk_size = 8192;
+    let mut chunk = Vec::with_capacity(chunk_size);
+    let mut total_written = 0;
+
+    for sample in decoder {
+        chunk.push(sample);
+        total_written += 1;
+
+        if chunk.len() == chunk_size {
+            writer.write_all(bytemuck::cast_slice(&chunk))?;
+            chunk.clear();
+        }
+    }
+
+    if !chunk.is_empty() {
+        writer.write_all(bytemuck::cast_slice(&chunk))?;
+    }
+
+    Ok(total_written)
+}
+
 // Trait AudioLoader
 pub trait AudioLoader {
-    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<AudioSourceId>;
+    fn load_audio(&mut self, path: &str, name: Option<&str>, target_sample_rate: u32) -> Result<AudioSourceId>;
     fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>>;
     fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>>;
 }
 
+
+
 impl AudioLoader for ApplicationState {
-    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<AudioSourceId> {
+    fn load_audio(&mut self, path: &str, name: Option<&str>, target_sample_rate: u32) -> Result<AudioSourceId> {
         // Load the actual audio data (Heavy I/O operation)
         // This parses the file into f32 samples
-        let mut waveform = match load_audio_file(path, name) {
+        let mut waveform = match load_audio_file(path, name, target_sample_rate) {
             Ok(waveform) => waveform,
             Err(e) => {
                 let error_msg = format!("Cannot decode audio file: {}", e);

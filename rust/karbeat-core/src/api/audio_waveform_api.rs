@@ -116,17 +116,19 @@ where
 }
 
 pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result<AudioSourceId> {
-    let id = {
-        let result = ctx.app_state.load_audio(file_path, None);
-        match result {
-            Ok(source_id) => {
-                log::info!("Successfully added audio source {}", source_id.to_u32());
-                source_id
-            }
-            Err(e) => {
-                log::error!("[error] failed to load the audio: {}", e);
-                return Err(anyhow::anyhow!("Failed to load the audio source"));
-            }
+    let sample_rate = {
+        ctx.active_audio_config.read().sample_rate
+    }.ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
+
+    let result = ctx.app_state.load_audio(file_path, None, sample_rate);
+    let id = match result {
+        Ok(source_id) => {
+            log::info!("Successfully added audio source {}", source_id.to_u32());
+            source_id
+        }
+        Err(e) => {
+            log::error!("[error] failed to load the audio: {}", e);
+            return Err(anyhow::anyhow!("Failed to load the audio source"));
         }
     };
     ctx.broadcast_full_graph();
