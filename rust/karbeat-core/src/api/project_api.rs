@@ -255,8 +255,11 @@ pub fn load_project<T, F>(ctx: &mut DawContext, path_name: &str, mapper: F) -> a
 where
     F: FnOnce(&ApplicationState) -> T,
 {
+    let sample_rate = {
+        ctx.active_audio_config.read().sample_rate
+    }.ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
     // 1. Load the project from disk
-    let loaded_app = load_daw_project(Path::new(path_name))?;
+    let loaded_app = load_daw_project(Path::new(path_name), sample_rate)?;
 
     // Extract the BPM before we move the loaded app into the global lock
     let bpm = loaded_app.transport.bpm;

@@ -20,7 +20,6 @@ minimp3.workspace = true
 once_cell.workspace = true
 rtrb.workspace = true
 serde.workspace = true
-symphonia.workspace = true
 
 thiserror.workspace = true
 smallvec.workspace = true

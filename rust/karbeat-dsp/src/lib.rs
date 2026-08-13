@@ -1,3 +1,4 @@
+pub mod delay;
 pub mod channel;
 pub mod bit_crush;
 pub mod chorus;

@@ -205,6 +205,10 @@ pub fn sample_waveform_dasp(buffer: &[f32], pos: f64, src_channels: usize) -> [f
             return [0.0, 0.0];
         }
 
+        if alpha == 0.0 {
+            return frames[idx];
+        }
+
         let p0 = if idx > 0 {
             frames[idx - 1]
         } else {
@@ -224,6 +228,11 @@ pub fn sample_waveform_dasp(buffer: &[f32], pos: f64, src_channels: usize) -> [f
 
         if idx >= len {
             return [0.0, 0.0];
+        }
+
+        if alpha == 0.0 {
+            let val = frames[idx][0];
+            return [val, val];
         }
 
         let p0 = if idx > 0 {
