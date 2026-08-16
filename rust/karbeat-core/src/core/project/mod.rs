@@ -1,3 +1,4 @@
+pub mod sidechain;
 mod index;
 // src/core/project/mod.rs
 

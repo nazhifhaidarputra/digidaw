@@ -347,7 +347,7 @@ pub fn rename_bus(ctx: &mut DawContext, bus_id: BusId, new_name: &str) -> anyhow
 
 pub fn set_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
     let app = &mut ctx.app_state;
-    app.mixer.add_routing(conn)?;
+    app.mixer.add_routing(conn, &app.tracks)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
@@ -367,7 +367,8 @@ pub fn remove_routing(
 }
 
 pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
-    let routing = ctx.app_state.mixer.update_routing(conn)?;
+    let app = &mut ctx.app_state;
+    let routing = app.mixer.update_routing(conn, &app.tracks)?;
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }

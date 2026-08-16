@@ -105,10 +105,10 @@ pub struct AudioEngine {
     compensation_delays: HashMap<RoutingNode, u32>,
     track_delay_lines: HashMap<TrackId, DelayLine>,
     bus_delay_lines: HashMap<BusId, DelayLine>,
-    sidechain_delay_lines: HashMap<SidechainRouteId, DelayLine>,
+    sidechain_delay_lines: HashMap<SidechainRoute, DelayLine>,
 
     // =============== Auxiliary/Sidechain buffer =================
-    aux_buffers: HashMap<SidechainRouteId, Vec<f32>>,
+    aux_buffers: HashMap<SidechainRoute, Vec<f32>>,
 
     // =============== Non-Interleaved Buffers =================
     channel_buffers_in: Vec<Vec<f32>>,
@@ -2160,7 +2160,7 @@ impl AudioEngine {
                             .plugin_state
                             .get_generator_mut(gen_id.to_u32() as usize)
                         {
-                            let sidechain_id = SidechainRouteId::Generator(gen_id);
+                            let sidechain_id = SidechainRoute::Generator(gen_id);
                             let aux = self.aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
                             // PROCESS AUDIO
                             // Build context for the generator — MIDI events are passed via ProcessContext
@@ -2378,7 +2378,7 @@ impl AudioEngine {
                         .get_bus_effects_mut(bus_id.to_u32() as usize)
                     {
                         for effect in effects.iter_mut() {
-                            let sidechain_id = SidechainRouteId::BusEffect(*bus_id, effect.id);
+                            let sidechain_id = SidechainRoute::BusEffect(*bus_id, effect.id);
                             let aux = self.aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
                             let pt = PluginTarget::BusEffect(*bus_id, effect.id);
@@ -2605,7 +2605,7 @@ impl AudioEngine {
         buffer: &mut [f32],
         channels: usize,
         process_ctx: &ProcessContext<'a>,
-        aux_buffers: &'a HashMap<SidechainRouteId, Vec<f32>>,
+        aux_buffers: &'a HashMap<SidechainRoute, Vec<f32>>,
         channel_buffers_in: &mut [Vec<f32>],
         channel_buffers_out: &mut [Vec<f32>],
         aux_channel_buffers: &mut [Vec<f32>],
@@ -2620,7 +2620,7 @@ impl AudioEngine {
         // Effects chain from plugin_state
         if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
             for effect in effects.iter_mut() {
-                let sidechain_id = SidechainRouteId::TrackEffect(track_id, effect.id);
+                let sidechain_id = SidechainRoute::TrackEffect(track_id, effect.id);
                 let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
                 let pt = PluginTarget::TrackEffect(track_id, effect.id);
@@ -2662,7 +2662,7 @@ impl AudioEngine {
         buffer: &mut [f32],
         channels: usize,
         process_ctx: &ProcessContext<'a>,
-        aux_buffers: &'a HashMap<SidechainRouteId, Vec<f32>>,
+        aux_buffers: &'a HashMap<SidechainRoute, Vec<f32>>,
         channel_buffers_in: &mut [Vec<f32>],
         channel_buffers_out: &mut [Vec<f32>],
         aux_channel_buffers: &mut [Vec<f32>],
@@ -2675,7 +2675,7 @@ impl AudioEngine {
 
         // Master effects chain
         for effect in master_effects.iter_mut() {
-            let sidechain_id = SidechainRouteId::MasterEffect(effect.id);
+            let sidechain_id = SidechainRoute::MasterEffect(effect.id);
             let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
             let pt = PluginTarget::MasterEffect(effect.id);

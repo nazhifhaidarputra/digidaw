@@ -439,16 +439,6 @@ impl ApplicationState {
             }
         };
 
-        // Send the plugin to the audio thread (lock-free)
-        // We will refactor so that the command is pushed inside the service layer
-        // if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        //     let _ = sender.push(AudioCommand::AddGenerator {
-        //         generator_id: gen_id,
-        //         track_id,
-        //         plugin: generator_plugin,
-        //     });
-        // }
-
         // Create plugin instance descriptor with registry ID
         let plugin_instance = PluginInstance::new_with_id(registry_id, &generator_name);
 
@@ -500,17 +490,12 @@ impl ApplicationState {
             .get(&track_id)
             .and_then(|t| t.generator.as_ref().map(|g| g.id));
 
-        // Remove the track
-        if self.tracks.remove(&track_id).is_none() {
-            return Err(anyhow::anyhow!("Track {:?} not found", track_id));
-        }
-
         // Remove the mixer channel
         self.mixer.channels.remove(&track_id);
 
         // Remove all routing connections for this track
-        self.mixer.remove_track_routing(track_id);
-
+        self.mixer.remove_track_routing(track_id, &self.tracks);
+        
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
             self.generator_pool.remove(&gen_id);
@@ -519,6 +504,11 @@ impl ApplicationState {
 
         // Remove all automation lanes for this track
         self.remove_modulations_for_track(track_id);
+
+        // Remove the track
+        if self.tracks.remove(&track_id).is_none() {
+            return Err(anyhow::anyhow!("Track {:?} not found", track_id));
+        }
 
         self.normalize_track_orders();
 

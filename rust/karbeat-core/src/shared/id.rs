@@ -15,11 +15,3 @@ define_id!(NoteId);
 define_id!(ModulationId);
 
 define_id!(ModulationLinkId);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum SidechainRouteId {
-    Generator(GeneratorId),
-    TrackEffect(TrackId, EffectId),
-    BusEffect(BusId, EffectId),
-    MasterEffect(EffectId),
-}

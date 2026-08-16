@@ -1,7 +1,7 @@
-use dyn_clone::{clone_trait_object, DynClone};
-use hashbrown::HashMap;
+pub use dyn_clone::{clone_trait_object, DynClone};
+pub use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
-use serde_json::Value;
+pub use serde_json::Value;
 use std::{any::Any, fmt::Debug};
 
 // Import the newly defined types for non-interleaved audio and IO configuration
@@ -62,8 +62,6 @@ pub trait AudioPlugin: DynClone + Send + Sync {
         "1.0.0"
     }
 
-    // --- Lifecycle & IO ---
-
     /// Prepares the plugin for processing.
     /// Note: `channels` is no longer passed here. Use `set_io_layout` to configure channels.
     fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
@@ -81,8 +79,6 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     /// The plugin should reset its internal state if the channel count changed.
     fn set_io_layout(&mut self, inputs: &[BusConfig], outputs: &[BusConfig]);
 
-    // --- Processing ---
-
     /// The universal process block.
     /// - Instruments will ignore the incoming audio in the buffer and overwrite it.
     /// - Effects will modify the audio in the buffer.
@@ -90,8 +86,6 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     /// Now accepts non-interleaved `AudioBuffers` and a rich `ProcessContext`
     /// containing sample-accurate param changes and high-precision transport.
     fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext);
-
-    // --- Bypass & Latency ---
 
     /// Tells the plugin to bypass. It should let its internal tails ring out.
     fn set_bypass(&mut self, _bypass: bool) {}
@@ -110,8 +104,6 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     fn tail_samples(&self) -> u32 {
         0
     }
-
-    // --- Parameters & Automation ---
 
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;

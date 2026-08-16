@@ -1,8 +1,10 @@
+use core::unimplemented;
+
 use crate::{api::*, context::Vst3HostContext};
-use karbeat_plugin_api::{traits::AudioPlugin, types::PluginCategory};
+use karbeat_plugin_api::prelude::*;
 use vst3::{
-    Class, ComPtr, ComWrapper, Steinberg::{
-        Vst::{IComponent, IEditController}, kNotImplemented, kResultOk,
+    ComPtr, ComWrapper, Steinberg::{
+        Vst::{IComponent, IEditController}
     },
 };
 
@@ -93,6 +95,7 @@ impl AudioPlugin for Vst3Wrapper {
         //     log::error!("Failed to serialize Plugin state: {}", err);
         //     Vec::new()
         // })
+        unimplemented!()
     }
 
     fn set_state(&mut self, state: &[u8]) {
@@ -125,6 +128,7 @@ impl AudioPlugin for Vst3Wrapper {
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
         // VST3 does not have custom command compatibility.
         // We won't implement this
+        None
     }
 
     fn get_zero_copy_buffer(

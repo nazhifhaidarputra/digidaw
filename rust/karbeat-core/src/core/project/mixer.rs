@@ -8,9 +8,33 @@ use thiserror::Error;
 
 use crate::{
     commands::EffectTarget,
-    core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
-    shared::{BusId, EffectId, SidechainRouteId},
+    core::project::{plugin::AudioPlugin, ApplicationState, AudioTrack, PluginInstance, TrackId},
+    shared::{BusId, EffectId, GeneratorId},
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SidechainRoute {
+    Generator(GeneratorId),
+    TrackEffect(TrackId, EffectId),
+    BusEffect(BusId, EffectId),
+    MasterEffect(EffectId),
+}
+
+impl SidechainRoute {
+    pub fn owner_node(&self, tracks: &HashMap<TrackId, AudioTrack>) -> Option<RoutingNode> {
+        match self {
+            SidechainRoute::TrackEffect(track_id, _) => Some(RoutingNode::Track(*track_id)),
+            SidechainRoute::BusEffect(bus_id, _) => Some(RoutingNode::Bus(*bus_id)),
+            SidechainRoute::MasterEffect(_) => Some(RoutingNode::Master),
+            SidechainRoute::Generator(gen_id) => {
+                // A generator has no routing identity of its own — it's audio
+                // that gets summed into whatever track hosts it. Needs a
+                // generator -> owning track lookup (see note below).
+                find_track_hosting_generator(tracks, *gen_id).map(RoutingNode::Track)
+            }
+        }
+    }
+}
 
 // =============================================================================
 // Routing Matrix Types
@@ -22,7 +46,7 @@ pub enum RoutingNode {
     Track(TrackId),
     Bus(BusId),
     Master,
-    PluginSidechain(SidechainRouteId),
+    PluginSidechain(SidechainRoute),
 }
 
 /// A routing connection in the matrix
@@ -279,13 +303,6 @@ impl MixerState {
         let (effect_plugin, effect_name, effect_id) =
             mixer_channel.channel.add_effect(registry, registry_id)?;
 
-        // // Push to the audio thread
-        // ctx.send_audio_command(AudioCommand::AddEffect {
-        //     target: crate::commands::EffectTarget::Track(*track_id),
-        //     effect_id,
-        //     effect: effect_plugin,
-        // });
-
         log::info!(
             "Effect {} (registry_id={}) added to track {:?}",
             effect_name,
@@ -310,10 +327,7 @@ impl MixerState {
         // Clone and modify the channel
         mixer_channel.channel.remove_effect(effect_id)?;
 
-        // send_audio_command(AudioCommand::RemoveEffect {
-        //     target: crate::commands::EffectTarget::Track(*track_id),
-        //     effect_id,
-        // });
+        self.remove_routing_for_sidechain(SidechainRoute::TrackEffect(*track_id, effect_id));
 
         Ok((EffectTarget::Track(*track_id), effect_id))
     }
@@ -341,12 +355,6 @@ impl MixerState {
         let channel = &mut self.master_bus;
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
 
-        // send_audio_command(AudioCommand::AddEffect {
-        //     target: crate::commands::EffectTarget::Master,
-        //     effect_id,
-        //     effect: effect_plugin,
-        // });
-
         log::info!(
             "Effect {} (registry_id={}) added to master bus",
             effect_name,
@@ -359,11 +367,7 @@ impl MixerState {
         let channel = &mut self.master_bus;
         channel.remove_effect(effect_id)?;
 
-        // // Send master effect removal command to audio thread
-        // send_audio_command(AudioCommand::RemoveEffect {
-        //     target: crate::commands::EffectTarget::Master,
-        //     effect_id,
-        // });
+        self.remove_routing_for_sidechain(SidechainRoute::MasterEffect(effect_id));
 
         Ok(())
     }
@@ -384,9 +388,6 @@ impl MixerState {
             RoutingNode::Master,
         ));
 
-        // send signal to audio thread that the BUSSSS is created
-        // send_audio_command(AudioCommand::AddBus { bus_id, name });
-
         bus_id
     }
 
@@ -401,11 +402,14 @@ impl MixerState {
 
         // Remove all routing connections involving this bus
         self.routing.retain(|conn| {
-            conn.source != RoutingNode::Bus(bus_id) && conn.destination != RoutingNode::Bus(bus_id)
+            let touches_bus_directly = conn.source == RoutingNode::Bus(bus_id)
+                || conn.destination == RoutingNode::Bus(bus_id);
+            let touches_bus_via_sidechain = matches!(
+                conn.destination,
+                RoutingNode::PluginSidechain(SidechainRoute::BusEffect(b, _)) if b == bus_id
+            );
+            !(touches_bus_directly || touches_bus_via_sidechain)
         });
-
-        // send signal to audio thread that the BUSSSS is deleted
-        // send_audio_command(AudioCommand::RemoveBus { bus_id });
 
         Ok(())
     }
@@ -442,12 +446,6 @@ impl MixerState {
         let (effect_plugin, effect_name, effect_id) =
             bus.channel.add_effect(registry, registry_id)?;
 
-        // send_audio_command(AudioCommand::AddEffect {
-        //     target: crate::commands::EffectTarget::Bus(bus_id),
-        //     effect_id,
-        //     effect: effect_plugin,
-        // });
-
         log::info!(
             "Effect {} (registry_id={}) added to bus {:?}",
             effect_name,
@@ -470,6 +468,8 @@ impl MixerState {
 
         bus.channel.remove_effect(effect_id)?;
 
+        self.remove_routing_for_sidechain(SidechainRoute::BusEffect(bus_id, effect_id));
+
         Ok(())
     }
 
@@ -477,19 +477,39 @@ impl MixerState {
     // Routing Management
     // =========================================================================
 
-    /// Add a routing connection. Returns error if it would create a cycle.
-    pub fn add_routing(&mut self, connection: RoutingConnection) -> anyhow::Result<()> {
-        // Validate: source cannot be Master
+    pub fn add_routing(
+        &mut self,
+        connection: RoutingConnection,
+        tracks: &HashMap<TrackId, AudioTrack>,
+    ) -> anyhow::Result<()> {
         if connection.source == RoutingNode::Master {
             return Err(anyhow::anyhow!("Master cannot be a routing source"));
         }
-
-        // Validate: destination cannot be a Track
         if matches!(connection.destination, RoutingNode::Track(_)) {
             return Err(anyhow::anyhow!("Tracks cannot be routing destinations"));
         }
+        if matches!(connection.source, RoutingNode::PluginSidechain(_)) {
+            return Err(anyhow::anyhow!(
+                "A sidechain slot cannot be a routing source"
+            ));
+        }
+        // Sidechain taps are always sends — there's no "main output" concept
+        // for a sidechain slot; it just sums whatever's routed to it.
+        if matches!(connection.destination, RoutingNode::PluginSidechain(_)) && !connection.is_send
+        {
+            return Err(anyhow::anyhow!(
+                "Sidechain routing must be a send (is_send = true)"
+            ));
+        }
+        // Sidechain destination must actually resolve to something real.
+        if let RoutingNode::PluginSidechain(route) = connection.destination {
+            if route.owner_node(tracks).is_none() {
+                return Err(anyhow::anyhow!(
+                    "Sidechain route does not resolve to a live owner"
+                ));
+            }
+        }
 
-        // Check for duplicate
         let exists = self.routing.iter().any(|c| {
             c.source == connection.source
                 && c.destination == connection.destination
@@ -499,9 +519,8 @@ impl MixerState {
             return Err(anyhow::anyhow!("Routing connection already exists"));
         }
 
-        // Temporarily add and check for cycles
         self.routing.push(connection.clone());
-        if self.has_routing_cycle() {
+        if self.has_routing_cycle(tracks) {
             self.routing.pop();
             return Err(anyhow::anyhow!("Routing would create a cycle"));
         }
@@ -529,29 +548,44 @@ impl MixerState {
     }
 
     /// Check if the routing graph has a cycle using DFS
-    pub fn has_routing_cycle(&self) -> bool {
-        // Build adjacency list for buses only (tracks and master can't create cycles)
-        let mut adj: HashMap<BusId, Vec<BusId>> = HashMap::new();
-        for bus_id in self.buses.keys() {
-            adj.insert(*bus_id, Vec::new());
+    pub fn has_routing_cycle(&self, tracks: &HashMap<TrackId, AudioTrack>) -> bool {
+        let mut adj: HashMap<RoutingNode, Vec<RoutingNode>> = HashMap::new();
+
+        // Seed every real node so isolated nodes are still visited.
+        let all_nodes = self
+            .channels
+            .keys()
+            .map(|id| RoutingNode::Track(*id))
+            .chain(self.buses.keys().map(|id| RoutingNode::Bus(*id)))
+            .chain(std::iter::once(RoutingNode::Master));
+        for n in all_nodes {
+            adj.entry(n).or_default();
         }
 
         for conn in &self.routing {
-            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)
-            {
-                if let Some(neighbors) = adj.get_mut(&src) {
-                    neighbors.push(dst);
-                }
+            // Resolve PluginSidechain destinations down to the concrete node
+            // that must be processed before the sidechain data is readable.
+            let dest = match conn.destination {
+                RoutingNode::PluginSidechain(route) => route.owner_node(tracks),
+                other => Some(other),
+            };
+            // A source that is itself a PluginSidechain doesn't make sense
+            // (sidechain destinations aren't audio sources) — skip defensively.
+            let src = match conn.source {
+                RoutingNode::PluginSidechain(_) => None,
+                other => Some(other),
+            };
+
+            if let (Some(src), Some(dst)) = (src, dest) {
+                adj.entry(src).or_default().push(dst);
             }
         }
 
-        // DFS to detect cycles
         let mut visited = HashSet::new();
         let mut rec_stack = HashSet::new();
 
-        for bus_id in self.buses.keys() {
-            if !visited.contains(bus_id) && find_cycle(*bus_id, &adj, &mut visited, &mut rec_stack)
-            {
+        for &node in adj.keys().collect::<Vec<_>>() {
+            if !visited.contains(&node) && find_cycle(node, &adj, &mut visited, &mut rec_stack) {
                 return true;
             }
         }
@@ -559,49 +593,56 @@ impl MixerState {
         false
     }
 
-    /// Get topologically sorted routing order for audio thread processing
-    /// Returns nodes in order: sources first, then intermediate buses, then master
-    pub fn get_routing_order(&self) -> Vec<RoutingNode> {
-        // All tracks come first (they are sources)
-        let mut order: Vec<RoutingNode> = self
+    /// Get topologically sorted routing order for audio thread processing.
+    /// Sidechain dependencies are folded in: a node with an unresolved
+    /// sidechain source isn't "ready" until that source is scheduled.
+    pub fn get_routing_order(&self, tracks: &HashMap<TrackId, AudioTrack>) -> Vec<RoutingNode> {
+        let all_nodes: Vec<RoutingNode> = self
             .channels
             .keys()
             .map(|id| RoutingNode::Track(*id))
+            .chain(self.buses.keys().map(|id| RoutingNode::Bus(*id)))
+            .chain(std::iter::once(RoutingNode::Master))
             .collect();
 
-        // Topological sort of buses using Kahn's algorithm
-        let mut in_degree: HashMap<BusId, usize> = HashMap::new();
-        let mut adj: HashMap<BusId, Vec<BusId>> = HashMap::new();
-
-        for bus_id in self.buses.keys() {
-            in_degree.insert(*bus_id, 0);
-            adj.insert(*bus_id, Vec::new());
+        let mut in_degree: HashMap<RoutingNode, usize> = HashMap::new();
+        let mut adj: HashMap<RoutingNode, Vec<RoutingNode>> = HashMap::new();
+        for &n in &all_nodes {
+            in_degree.insert(n, 0);
+            adj.insert(n, Vec::new());
         }
 
-        // Count incoming edges from other buses
         for conn in &self.routing {
-            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)
-            {
-                if let Some(neighbors) = adj.get_mut(&src) {
-                    neighbors.push(dst);
-                }
-                if let Some(deg) = in_degree.get_mut(&dst) {
-                    *deg += 1;
-                }
+            let dest = match conn.destination {
+                RoutingNode::PluginSidechain(route) => route.owner_node(tracks),
+                other => Some(other),
+            };
+            let src = match conn.source {
+                RoutingNode::PluginSidechain(_) => None,
+                other => Some(other),
+            };
+
+            if let (Some(src), Some(dst)) = (src, dest) {
+                // Guard against nodes referenced only via routing but not
+                // seeded above (shouldn't happen, but keeps this infallible).
+                adj.entry(src).or_default().push(dst);
+                *in_degree.entry(dst).or_insert(0) += 1;
             }
         }
 
-        // Start with buses that have no incoming bus edges
-        let mut queue: Vec<BusId> = in_degree
+        // Kahn's algorithm over the unified graph. Tracks with in-degree 0
+        // naturally come first, same as before, but now a track that is the
+        // *target* of a sidechain route correctly waits on its source.
+        let mut queue: Vec<RoutingNode> = in_degree
             .iter()
             .filter(|(_, &deg)| deg == 0)
-            .map(|(&id, _)| id)
+            .map(|(&n, _)| n)
             .collect();
 
-        while let Some(bus_id) = queue.pop() {
-            order.push(RoutingNode::Bus(bus_id));
-
-            if let Some(neighbors) = adj.get(&bus_id) {
+        let mut order = Vec::with_capacity(all_nodes.len());
+        while let Some(node) = queue.pop() {
+            order.push(node);
+            if let Some(neighbors) = adj.get(&node) {
                 for &neighbor in neighbors {
                     if let Some(deg) = in_degree.get_mut(&neighbor) {
                         *deg -= 1;
@@ -613,8 +654,6 @@ impl MixerState {
             }
         }
 
-        // Master comes last
-        order.push(RoutingNode::Master);
         order
     }
 
@@ -634,67 +673,110 @@ impl MixerState {
         }
     }
 
-    /// Remove all routing for a track (used when deleting tracks)
-    pub fn remove_track_routing(&mut self, track_id: TrackId) {
-        self.routing
-            .retain(|c| c.source != RoutingNode::Track(track_id));
-    }
+/// Remove all routing for a track (used when deleting tracks).
+/// This includes:
+///   - connections where the track is the source (its own audio going somewhere)
+///   - connections targeting a sidechain slot on an effect that lives on this track
+///   - connections targeting a sidechain slot on this track's generator (if any)
+///
+/// Must be called with the track's data still present in `tracks` (i.e. before
+/// it's removed from `ApplicationState.tracks`), since it needs to read the
+/// track's generator id to resolve the last case.
+pub fn remove_track_routing(&mut self, track_id: TrackId, tracks: &HashMap<TrackId, AudioTrack>) {
+    let generator_id = tracks
+        .get(&track_id)
+        .and_then(|t| t.generator.as_ref())
+        .map(|g| g.id);
+
+    self.routing.retain(|c| {
+        let is_source = c.source == RoutingNode::Track(track_id);
+
+        let is_effect_dest = matches!(
+            c.destination,
+            RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(t, _)) if t == track_id
+        );
+
+        let is_generator_dest = generator_id.is_some_and(|gid| {
+            matches!(
+                c.destination,
+                RoutingNode::PluginSidechain(SidechainRoute::Generator(g)) if g == gid
+            )
+        });
+
+        !(is_source || is_effect_dest || is_generator_dest)
+    });
+}
 
     pub fn update_routing(
         &mut self,
         connection: RoutingConnection,
+        tracks: &HashMap<TrackId, AudioTrack>,
     ) -> anyhow::Result<Box<[RoutingConnection]>> {
         if connection.source == RoutingNode::Master {
             return Err(anyhow::anyhow!("Master cannot be a routing source"));
         }
-
         if matches!(connection.destination, RoutingNode::Track(_)) {
             return Err(anyhow::anyhow!("Tracks cannot be routing destinations"));
         }
+        if matches!(connection.source, RoutingNode::PluginSidechain(_)) {
+            return Err(anyhow::anyhow!(
+                "A sidechain slot cannot be a routing source"
+            ));
+        }
+        if matches!(connection.destination, RoutingNode::PluginSidechain(_)) && !connection.is_send
+        {
+            return Err(anyhow::anyhow!(
+                "Sidechain routing must be a send (is_send = true)"
+            ));
+        }
+        if let RoutingNode::PluginSidechain(route) = connection.destination {
+            if route.owner_node(tracks).is_none() {
+                return Err(anyhow::anyhow!(
+                    "Sidechain route does not resolve to a live owner"
+                ));
+            }
+        }
 
-        // Backup the connections we might overwrite in case we need to revert a cycle
         let mut backed_up_connections = Vec::new();
 
         if !connection.is_send {
-            // MAIN OUTPUT ENFORCEMENT: A source can only have exactly ONE main output.
-            // Remove any existing main output for this specific source.
             self.routing.retain(|c| {
                 if c.source == connection.source && !c.is_send {
                     backed_up_connections.push(c.clone());
-                    false // Remove it
+                    false
                 } else {
-                    true // Keep it
+                    true
                 }
             });
         } else {
-            // SEND ENFORCEMENT: A source can have multiple sends, but only ONE per destination.
-            // Find and remove the existing send to this exact destination so we can replace its level.
             self.routing.retain(|c| {
                 if c.source == connection.source
                     && c.destination == connection.destination
                     && c.is_send
                 {
                     backed_up_connections.push(c.clone());
-                    false // Remove it
+                    false
                 } else {
-                    true // Keep it
+                    true
                 }
             });
         }
 
-        // Add the new or updated connection
         self.routing.push(connection.clone());
 
-        // Cycle Detection: Check if this new graph topology breaks the DAG
-        if self.has_routing_cycle() {
-            // Revert changes
-            self.routing.pop(); // Remove the bad connection we just pushed
-            self.routing.extend(backed_up_connections); // Restore the old ones
-
+        if self.has_routing_cycle(tracks) {
+            self.routing.pop();
+            self.routing.extend(backed_up_connections);
             return Err(anyhow::anyhow!("Routing would create a feedback cycle"));
         }
 
         Ok(self.routing.clone().into_boxed_slice())
+    }
+
+    /// Remove all routing connections that target a specific sidechain slot.
+    fn remove_routing_for_sidechain(&mut self, route: SidechainRoute) {
+        self.routing
+            .retain(|c| c.destination != RoutingNode::PluginSidechain(route));
     }
 }
 
@@ -714,12 +796,12 @@ impl ApplicationState {
         return &self.mixer;
     }
 }
-/// Helper to find cycle using DFS
+/// Helper to find cycle using DFS over the full RoutingNode graph
 fn find_cycle(
-    node: BusId,
-    adj: &hashbrown::HashMap<BusId, Vec<BusId>>,
-    visited: &mut hashbrown::HashSet<BusId>,
-    rec_stack: &mut hashbrown::HashSet<BusId>,
+    node: RoutingNode,
+    adj: &HashMap<RoutingNode, Vec<RoutingNode>>,
+    visited: &mut HashSet<RoutingNode>,
+    rec_stack: &mut HashSet<RoutingNode>,
 ) -> bool {
     visited.insert(node);
     rec_stack.insert(node);
@@ -738,4 +820,14 @@ fn find_cycle(
 
     rec_stack.remove(&node);
     false
+}
+
+fn find_track_hosting_generator(
+    tracks: &HashMap<TrackId, AudioTrack>,
+    generator_id: GeneratorId,
+) -> Option<TrackId> {
+    tracks
+        .iter()
+        .find(|(_, track)| track.generator.as_ref().is_some_and(|g| g.id == generator_id))
+        .map(|(id, _)| *id)
 }
