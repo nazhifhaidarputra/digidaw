@@ -1,6 +1,4 @@
 use karbeat_utils::define_id;
-use serde::{Deserialize, Serialize};
-
 define_id!(TrackId);
 define_id!(ClipId);
 define_id!(AutomationId);

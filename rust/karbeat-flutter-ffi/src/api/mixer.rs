@@ -16,6 +16,9 @@ use karbeat_core::core::project::mixer::{
     BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
     RoutingConnection, RoutingNode,
 };
+use karbeat_utils::types::NormalizedF64;
+
+use crate::api::plugin::UiPluginTarget;
 
 // ======================================
 // Type Definitions
@@ -635,4 +638,38 @@ pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshotD
 
 pub fn set_mixer_telemetry_subs(ctx: &mut DawContext, active: bool) -> Result<(), String> {
     mixer_api::set_mixer_telemetry_subs(ctx, active).map_err(|e| e.to_string())
+}
+
+// ======================================
+// Sidechain-related API
+// ======================================
+
+/// Get all track channels and bus channels, and also
+/// its current sidechain properties
+pub fn get_available_sidechainable_channels(
+    ctx: &DawContext,
+    sidechain_plugin: UiPluginTarget,
+) -> Vec<UiRoutingConnection> {
+    mixer_api::get_available_sidechainable_channels(ctx, sidechain_plugin.into())
+        .iter()
+        .map(|rc| rc.into())
+        .collect()
+}
+
+/// Update the sidechain properties of the sidechain source [target] in [this_plugin]
+///
+/// target should be a valid routing connection with the type of PluginSidechain
+pub fn upsert_sidechain_prop_of_plugin(
+    ctx: &mut DawContext,
+    plugin: UiPluginTarget,
+    from: UiRoutingNode,
+    send_level: Option<f64>,
+) -> Result<(), String> {
+    mixer_api::upsert_sidechain_prop_of_plugin(
+        ctx,
+        plugin.into(),
+        from.into(),
+        send_level.map(|l| NormalizedF64::new(l)),
+    )
+    .map_err(|e| e.to_string())
 }

@@ -8,11 +8,10 @@ use crate::{
     }, commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
         GeneratorParameterSnapshot, MixerChannelTarget, TelemetryRegistration,
-    }, core::project::*, shared::id::*, utils::{apply_simd_mix, apply_simd_mix_gain},
+    }, core::project::*, shared::{constants::f64::PPQ, id::*}, utils::{apply_simd_mix, apply_simd_mix_gain},
 };
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::SmoothableParam;
-use karbeat_utils::types::NormalizedF64;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
 use std::{
@@ -338,12 +337,8 @@ impl AudioEngine {
                 }
             }
         } else {
-            // When transport is stopped, still render any active voices
-            // (e.g., preview notes with sustain, ADSR tails)
             self.render_voices_to_buffer(output_buffer, channels, false);
             self.cleanup_finished_voices(frame_count);
-            // Do NOT emit every audio callback — position is only pushed when state
-            // actually changes (seek, stop, play toggle) via emit_current_playback_position.
         }
 
         // Always Render Previews (Metronome, Browser Preview)
@@ -416,7 +411,6 @@ impl AudioEngine {
         // Only enforce the auto-stop/loop boundary if the project actually has content (song_end > 0)
         if song_end > 0 && self.song_state.playhead_samples > song_end {
             if self.song_state.is_looping {
-                // Reset playhead back to 0 without changing `is_playing` state
                 self.song_state.playhead_samples = 0;
                 self.recalculate_beat_bar();
                 self.song_state.last_emitted_samples = 0;
@@ -426,10 +420,7 @@ impl AudioEngine {
                 self.stop_all_active_generators();
                 self.active_oneshots.clear();
 
-                // Immediately process the first block of the new loop
                 self.process_block_song_mode(frame_count, output_buffer, channels);
-
-                // Force a UI update to snap the playhead back visually
                 self.emit_current_playback_position();
             } else {
                 // If not looping, stop playback normally
@@ -488,7 +479,7 @@ impl AudioEngine {
         let sample_rate = self.sample_rate as f32;
 
         let samples_per_beat = (60.0 / tempo) * sample_rate;
-        let loop_len_samples = (((pattern.length_ticks as f32) / 960.0) * samples_per_beat) as u32;
+        let loop_len_samples = (((pattern.length_ticks as f32) / PPQ as f32) * samples_per_beat) as u32;
 
         if loop_len_samples == 0 {
             return;
@@ -589,7 +580,6 @@ impl AudioEngine {
 
             voice.playing_keys.clear();
 
-            // Query plugin for its tail length
             if let Some(gen_instance) = plugin_state.get_generator(voice.id.to_u32() as usize) {
                 // clamp tail to save CPU because who the hell is gonna have more than 20 seconds of reverb tail?
                 let tail = gen_instance.plugin.tail_samples().min(20 * sample_rate);
@@ -770,10 +760,9 @@ impl AudioEngine {
                         self.recalculate_pattern_beat_bar();
                         self.pattern_state.is_playing = false;
                     }
-                    _ => {} // Same mode, do nothing
+                    _ => {}
                 }
 
-                // update with new playback mode
                 self.playback_mode = playback_mode;
 
                 // Snap UI to the beginning immediately
@@ -921,10 +910,6 @@ impl AudioEngine {
                         voice.track_id = track_id;
                     }
                 }
-
-                // This should Send updated param specifications to ApplicationState in business logic thread
-                // Since they are also needs to be updated to reflect this change.
-                // However because the logic in FFI assume that this is handled, we don't have to do it
             }
             AudioCommand::AddEffect {
                 target,
@@ -1063,8 +1048,6 @@ impl AudioEngine {
             }
             AudioCommand::QueryMixerChannel { target } => {
                 let snapshot = self.mixer_state.snapshot(target);
-                // Push to the shared feedback ring buffer — the FFI layer polls it
-                // via poll_mixer_channel_feedback(), exactly like plugin parameters.
                 let _ = self
                     .feedback_producer
                     .push(AudioFeedback::MixerChannelSnapshot(snapshot));
@@ -1235,7 +1218,6 @@ impl AudioEngine {
                     Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
                 > = HashMap::new();
 
-                // Batch load Generators
                 for (gen_id, mut plugin) in generators.into_iter() {
                     plugin.prepare(sample_rate, buf_size);
                     let bus = BusConfig {
@@ -1392,8 +1374,6 @@ impl AudioEngine {
                         *is_playing = true;
                     }
                 } else {
-                    // Do NOT call stop_playback() here — that would reset the song playhead.
-                    // Only silence voices and stop both states; the playhead stays where it is.
                     self.stop_all_active_generators();
                     self.song_state.is_playing = false;
                     self.pattern_state.is_playing = false;
@@ -1846,7 +1826,7 @@ impl AudioEngine {
         let ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
             ((self.song_state.playhead_samples as f64)
                 * ((self.bpm as f64) / 60.0)
-                * (960.0 / (self.sample_rate as f64))) as u32
+                * (PPQ / (self.sample_rate as f64))) as u32
         } else {
             0
         };
@@ -1854,7 +1834,7 @@ impl AudioEngine {
         let pattern_ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
             ((self.pattern_state.playhead_samples as f64)
                 * ((self.bpm as f64) / 60.0)
-                * (960.0 / (self.sample_rate as f64))) as u32
+                * (PPQ / (self.sample_rate as f64))) as u32
         } else {
             0
         };
@@ -2729,7 +2709,7 @@ impl AudioEngine {
         }
 
         let samples_per_beat = ((60.0 / self.bpm) * (self.sample_rate as f32)) as f64;
-        let samples_per_tick = samples_per_beat / 960.0;
+        let samples_per_tick = samples_per_beat / PPQ;
 
         for clip_data in track.clips() {
             let (clip_start, clip_length, clip_offset) = match &clip_data.time {
@@ -2766,7 +2746,7 @@ impl AudioEngine {
                 name: clip_data.name.clone(),
                 id: clip_data.id,
                 source: clip_data.source.clone(),
-                time: crate::core::project::clip::ClipTimeUnit::Samples {
+                time: ClipTimeUnit::Samples {
                     start_time: clip_start as u64,
                     loop_length: clip_length as u64,
                     offset_start: clip_offset as u64,
@@ -2975,7 +2955,7 @@ impl AudioEngine {
         }
 
         let pattern_len_samples =
-            (((pattern.length_ticks as f64) / 960.0) * (samples_per_beat as f64)) as u32;
+            (((pattern.length_ticks as f64) / PPQ) * (samples_per_beat as f64)) as u32;
         if pattern_len_samples == 0 {
             return;
         }
@@ -2989,8 +2969,8 @@ impl AudioEngine {
 
         for note in &pattern.notes {
             let note_start =
-                (((note.start_tick as f64) / 960.0) * (samples_per_beat as f64)) as u32;
-            let note_dur = (((note.duration as f64) / 960.0) * (samples_per_beat as f64)) as u32;
+                (((note.start_tick as f64) / PPQ) * (samples_per_beat as f64)) as u32;
+            let note_dur = (((note.duration as f64) / PPQ) * (samples_per_beat as f64)) as u32;
 
             // Note position within the pattern (in samples from pattern start)
             let note_pos_in_pattern = pattern_offset + note_start;
@@ -3049,7 +3029,7 @@ impl AudioEngine {
         buffer_start: u32,
         buffer_end: u32,
     ) {
-        let samples_per_tick = ((60.0 / tempo) * (sample_rate as f32)) / 960.0;
+        let samples_per_tick = ((60.0 / tempo) * (sample_rate as f32)) / PPQ as f32;
 
         for note in notes {
             let note_start = ((note.start_tick as f32) * samples_per_tick) as u32;
@@ -3301,7 +3281,7 @@ impl AudioEngine {
 
         let sample_rate = self.sample_rate as f32;
         let samples_per_beat = (60.0 / tempo) * sample_rate;
-        let samples_per_tick = samples_per_beat / 960.0;
+        let samples_per_tick = samples_per_beat / PPQ as f32;
         let current_tick =
             ((self.song_state.playhead_samples as f64) / (samples_per_tick as f64)) as u32;
 
@@ -3333,9 +3313,7 @@ impl AudioEngine {
                 }
                 LiveModulationSource::Automation { lane_id } => {
                     if let Some(lane) = self.current_state.graph.automation_lanes.get(lane_id) {
-                        // log::debug!("This line prints means the value is being ticked");
                         let norm_val = lane.value_at_ticks(current_tick) as f32;
-                        // log::debug!("Automated normalized value of lane {} = {}", lane_id, norm_val);
                         *current_output = norm_val;
                     }
                 }
@@ -3375,7 +3353,6 @@ impl AudioEngine {
             let base = if let Some(auto_val) = automation_override {
                 auto_val
             } else {
-                // For now, we assume you update `link.base_value` via a command when the knob turns.
                 self.active_links
                     .iter()
                     .find(|l| l.target == target)
@@ -3383,10 +3360,7 @@ impl AudioEngine {
                     .unwrap_or(0.0)
             };
 
-            // Add the LFOs to the base and clamp it!
-            // Assuming parameters are normalized 0.0 to 1.0 at this stage.
             let final_value = (base + lfo_accumulator).clamp(0.0, 1.0);
-
             self.apply_parameter_change(&target, final_value);
         }
     }
@@ -3435,7 +3409,6 @@ impl AudioEngine {
                     apply_mix_param!(
                         mix_target,
                         final_value,
-                        // Wrap direct master references in `Some` to unify the interface
                         Some(&mut self.mixer_state.master),
                         Some(&mut self.plugin_state.master_effects)
                     );
@@ -3486,7 +3459,7 @@ impl AudioEngine {
                             }
                         }
                     },
-                    _ => {} // Native Volume and Pan don't currently require edit notifications
+                    _ => {}
                 },
             },
             AutomationTarget::Bus { bus_id, mix_target } => match mix_target {
@@ -3631,12 +3604,14 @@ impl AudioEngine {
                 .set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
         }
 
-        // 3. Clear delay lines to avoid playing back garbage/pitch-shifted audio
+        // Clear delay lines to avoid playing back garbage/pitch-shifted audio
         self.track_delay_lines.clear();
         self.bus_delay_lines.clear();
         self.sidechain_delay_lines.clear();
     }
 
+    /// Recalculate max samples index of the timeline after 
+    /// changes in the tracks
     fn recalculate_max_sample_index(&mut self) {
         let bpm = self.bpm as f64;
         let sample_rate = self.sample_rate as f64;
@@ -3658,7 +3633,7 @@ impl AudioEngine {
                     } => {
                         let end_tick = *start_time + *loop_length;
                         // Accurately project MIDI ticks into exact sample lengths
-                        ((end_tick as f64) * (60.0 / bpm) * (sample_rate / 960.0)) as u32
+                        ((end_tick as f64) * (60.0 / bpm) * (sample_rate / PPQ)) as u32
                     }
                 };
                 if end_sample > max_clip_end {
@@ -3685,7 +3660,6 @@ impl AudioEngine {
         let mut snapshot = MixerTelemetrySnapshot::default();
         snapshot.master = Some(self.mixer_state.snapshot(MixerChannelTarget::Master));
 
-        // Snapshot Tracks
         for &track_id in self.mixer_state.track_channels.keys() {
             snapshot.tracks.insert(
                 track_id,
@@ -3693,8 +3667,6 @@ impl AudioEngine {
                     .snapshot(MixerChannelTarget::Track(track_id)),
             );
         }
-
-        // Snapshot Buses
         for &bus_id in self.mixer_state.bus_channels.keys() {
             snapshot.buses.insert(
                 bus_id,
@@ -3702,7 +3674,6 @@ impl AudioEngine {
             );
         }
 
-        // Write snapshot into the triple-buffer in-place, then publish atomically.
         *self.telemetry.mixer_telemetry_producer.input_buffer_mut() = snapshot;
         self.telemetry.mixer_telemetry_producer.publish();
     }
@@ -3747,150 +3718,6 @@ impl AudioEngine {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::audio::engine::{AudioEngine, AudioEngineTelemetry};
-    use crate::audio::event::TransportFeedback;
-    use crate::audio::render_state::AudioGraphState;
-    use crate::commands::{AudioCommand, AudioFeedback, TelemetryRegistration};
-    use crate::core::project::automation::{
-        AutomationLane, AutomationPoint, AutomationTarget, MixerChannelParamTarget,
-        TrackAutomationTarget,
-    };
-    use crate::core::project::modulation::{ModulationLink, ModulationSource};
-    use crate::core::project::track::AudioTrack;
-    use crate::core::project::{ApplicationState, ModulationLinkForOrderedLaneView, TrackType};
-    use crate::shared::id::{AutomationId, ModulationLinkId, TrackId};
-    use crate::shared::ModulationId;
-    use karbeat_utils::color::Color;
-    use karbeat_utils::types::NormalizedF64;
-    use rtrb::RingBuffer;
-    use std::sync::mpsc;
-    // use crate::audio::;
-
-    #[test]
-    fn test_automation_lane_applied_to_mixer_volume() {
-        // Setup Audio Engine
-        let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
-        let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
-        let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
-        let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(1024);
-
-        let mut track_id_inc = 0;
-        let mut automation_id_inc = 0;
-
-        let mut mod_source_id_inc = 0;
-        let mut mod_link_id_inc = 0;
-        let mut engine = AudioEngine::new(
-            cmd_consumer,
-            pos_producer,
-            fb_producer,
-            44100,
-            2,
-            120.0,
-            512,
-            AudioEngineTelemetry::new_for_export(),
-            telemetry_tx,
-        );
-
-        let track_id = TrackId::next(&mut track_id_inc);
-        let automation_id = AutomationId::next(&mut automation_id_inc);
-        let mod_source_id = ModulationId::next(&mut mod_source_id_inc);
-        let mod_link_id = ModulationLinkId::next(&mut mod_link_id_inc);
-
-        // Target: Track Volume
-        let target = AutomationTarget::Track {
-            track_id,
-            track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Volume),
-        };
-
-        // Setup Track
-        let track = AudioTrack::new(
-            track_id,
-            "Test Track",
-            Color::new_from_rgb(0, 0, 0),
-            TrackType::Audio,
-        );
-        // Ensure track has a channel in the mixer state
-        let mut app_state = ApplicationState::default();
-        app_state.tracks.insert(track_id, track);
-
-        let mut automation_lane = AutomationLane::new(automation_id, "Volume", 0.0, 1.0, 0.5);
-        // Set point at 0 ticks with value 0.75
-        automation_lane.add_point(AutomationPoint::new(0, NormalizedF64::new(0.75)));
-
-        app_state
-            .automation_pool
-            .insert(automation_id, automation_lane.clone());
-
-        // Setup modulation source and link
-        app_state.modulation_sources.insert(
-            mod_source_id,
-            ModulationSource::Automation {
-                lane_id: automation_id,
-            },
-        );
-        app_state.modulation_links.insert(
-            mod_link_id,
-            ModulationLinkForOrderedLaneView {
-                order_idx: 0,
-                prop: ModulationLink {
-                    id: mod_link_id,
-                    source_id: mod_source_id,
-                    target: target.clone(),
-                    depth: 1.0,
-                    base_value: 0.5,
-                },
-            },
-        );
-
-        // Initialize Engine State
-        engine.process_command(AudioCommand::ReplaceFullGraph {
-            graph: AudioGraphState::from(&app_state),
-        });
-
-        let mut new_val = crate::audio::engine::AudioMixerChannelValues::default();
-        new_val.volume.set_base(0.5);
-        engine.mixer_state.track_channels.insert(track_id, new_val);
-
-        engine.process_command(AudioCommand::AddModulationSource {
-            id: mod_source_id,
-            source: ModulationSource::Automation {
-                lane_id: automation_id,
-            },
-        });
-        engine.process_command(AudioCommand::AddModulationLink {
-            id: mod_link_id,
-            link: ModulationLink {
-                id: mod_link_id,
-                source_id: mod_source_id,
-                target: target.clone(),
-                depth: 1.0,
-                base_value: 0.5,
-            },
-        });
-        engine.process_command(AudioCommand::UpdateAutomationLane {
-            id: automation_id,
-            lane: automation_lane.into(),
-        });
-
-        // Let's set playhead to 0 and playback mode
-        engine.process_command(AudioCommand::SetPlayhead(0));
-
-        // Run one process block
-        let mut output_buffer = vec![0.0; 512 * 2];
-        engine.process(&mut output_buffer);
-
-        //  Check if MixerChannel Volume was updated to 0.75
-        let ch = engine
-            .mixer_state
-            .track_channels
-            .get(&track_id)
-            .expect("Track channel not found");
-        assert_eq!(ch.volume.get(), 0.75, "Volume should be automated to 0.75");
     }
 }
 

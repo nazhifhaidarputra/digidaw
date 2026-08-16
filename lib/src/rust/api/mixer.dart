@@ -6,6 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'plugin.dart';
 import 'project.dart';
 part 'mixer.freezed.dart';
 
@@ -213,6 +214,31 @@ Future<void> setMixerTelemetrySubs({
 }) => RustLib.instance.api.crateApiMixerSetMixerTelemetrySubs(
   ctx: ctx,
   active: active,
+);
+
+/// Get all track channels and bus channels, and also
+/// its current sidechain properties
+Future<List<UiRoutingConnection>> getAvailableSidechainableChannels({
+  required DawContext ctx,
+  required UiPluginTarget sidechainPlugin,
+}) => RustLib.instance.api.crateApiMixerGetAvailableSidechainableChannels(
+  ctx: ctx,
+  sidechainPlugin: sidechainPlugin,
+);
+
+/// Update the sidechain properties of the sidechain source [target] in [this_plugin]
+///
+/// target should be a valid routing connection with the type of PluginSidechain
+Future<void> upsertSidechainPropOfPlugin({
+  required DawContext ctx,
+  required UiPluginTarget plugin,
+  required UiRoutingNode from,
+  double? sendLevel,
+}) => RustLib.instance.api.crateApiMixerUpsertSidechainPropOfPlugin(
+  ctx: ctx,
+  plugin: plugin,
+  from: from,
+  sendLevel: sendLevel,
 );
 
 @freezed

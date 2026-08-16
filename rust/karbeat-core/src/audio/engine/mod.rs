@@ -1,3 +1,4 @@
+pub mod tests;
 mod engine;
 mod helper;
 mod types;
