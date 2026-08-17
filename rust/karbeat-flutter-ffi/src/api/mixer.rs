@@ -656,7 +656,7 @@ pub fn get_available_sidechainable_channels(
         .collect()
 }
 
-/// Update the sidechain properties of the sidechain source [target] in [this_plugin]
+/// Update the sidechain properties of the sidechain source ```target``` in ```plugin```
 ///
 /// target should be a valid routing connection with the type of PluginSidechain
 pub fn upsert_sidechain_prop_of_plugin(

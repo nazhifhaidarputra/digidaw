@@ -20,12 +20,12 @@ pub enum ClipSourceType {
     Audio,
 }
 
-/// ======================================
+// ======================================
 /// ClipTimeUnit
 /// Encapsulates clip timeline positioning with explicit units.
 /// Audio clips use raw samples (BPM-independent).
 /// MIDI/Automation clips use ticks (960 PPQN, BPM-dependent).
-/// ======================================
+// ======================================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ClipTimeUnit {
     /// Values in raw audio samples (BPM-independent)

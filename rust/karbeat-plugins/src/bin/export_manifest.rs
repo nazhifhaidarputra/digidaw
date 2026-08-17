@@ -1,5 +1,5 @@
 use karbeat_plugin_api::manifest::Manifestable;
-use karbeat_plugins::{effect::pitch_shifter::Pitcher, plugins::*};
+use karbeat_plugins::{effect::{pitch_shifter::Pitcher, sidechain::DigidawSidechainCompressor}, plugins::*};
 
 /// A declarative macro to export manifests for a variadic list of plugins.
 macro_rules! export_plugins {
@@ -16,9 +16,6 @@ macro_rules! export_plugins {
 fn main() {
     println!("Starting Karbeat Manifest Extractor...");
 
-    // Points to shared assets folder.
-    // This runs from the root of the rust workspace.
-
     // HOW TO run script from root workspace:
     // PLUGIN_MANIFEST_DIR="../assets/manifests/audio-plugins/" cargo run --bin export_manifest
     let export_dir = std::env::var("PLUGIN_MANIFEST_DIR").expect("No PLUGIN_MANIFEST_DIR defined");
@@ -29,7 +26,8 @@ fn main() {
         MyRetro,
         KarbeatzerV2,
         DigiParametricEQ,
-        Pitcher
+        Pitcher,
+        DigidawSidechainCompressor
     );
 
     println!("INFO: All manifests exported successfully to Flutter assets!");

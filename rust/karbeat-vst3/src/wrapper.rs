@@ -95,7 +95,7 @@ impl AudioPlugin for Vst3Wrapper {
         //     log::error!("Failed to serialize Plugin state: {}", err);
         //     Vec::new()
         // })
-        unimplemented!()
+        todo!()
     }
 
     fn set_state(&mut self, state: &[u8]) {
@@ -113,6 +113,7 @@ impl AudioPlugin for Vst3Wrapper {
         //         log::error!("Failed to deserialize Plugin state: {}", err);
         //     }
         // }
+        todo!()
     }
 
     fn get_factory_presets(&self) -> Vec<(String, Vec<u8>)> {

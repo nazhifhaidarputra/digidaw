@@ -1,6 +1,7 @@
 use karbeat_dsp::{channel::StandardChannelMode, compressor::SidechainCompressor};
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
+use karbeat_utils::hash::hash_str;
 
 /// An audio FX to do sidechain compressing,
 /// Meaning that the compression is influenced
@@ -52,7 +53,7 @@ impl AudioPlugin for DigidawSidechainCompressor {
         self.compressor_r.prepare(48000.0);
     }
 
-    fn process(&mut self, buffer: &mut AudioBuffers, context: &ProcessContext) {
+    fn process(&mut self, buffer: &mut AudioBuffers, _context: &ProcessContext) {
         self.compressor_r
             .attack_ms
             .apply_automation(self.compressor_l.attack_ms.get());
@@ -137,6 +138,26 @@ impl AudioPlugin for DigidawSidechainCompressor {
         let new_channels = inputs.first().map(|b| b.channel_count).unwrap_or(2);
         if self.channels != new_channels {
             self.channels = new_channels;
+        }
+    }
+}
+
+impl AudioPluginBuilder for DigidawSidechainCompressor {
+    fn build() -> Self {
+        Self::default()
+    }
+}
+
+impl Manifestable for DigidawSidechainCompressor {
+    fn build_manifest() -> PluginManifest {
+        let id_str = "effect_digidaw_sidechain_comp";
+        PluginManifest {
+            id: hash_str(id_str),
+            id_string: id_str.to_owned(),
+            name: "DigiDAW Sidechain Compressor".to_string(),
+            internal_type: "DigidawSidechainCompressor".to_string(),
+            is_synth: false,
+            parameters: Self::static_parameter_specs(),
         }
     }
 }

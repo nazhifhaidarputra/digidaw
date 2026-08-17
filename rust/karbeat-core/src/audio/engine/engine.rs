@@ -2713,7 +2713,7 @@ impl AudioEngine {
 
         for clip_data in track.clips() {
             let (clip_start, clip_length, clip_offset) = match &clip_data.time {
-                crate::core::project::clip::ClipTimeUnit::Samples {
+                ClipTimeUnit::Samples {
                     start_time,
                     loop_length,
                     offset_start,
@@ -2722,7 +2722,7 @@ impl AudioEngine {
                     *loop_length as u32,
                     *offset_start as u32,
                 ),
-                crate::core::project::clip::ClipTimeUnit::Ticks {
+                ClipTimeUnit::Ticks {
                     start_time,
                     loop_length,
                     offset_start,
@@ -3231,46 +3231,6 @@ impl AudioEngine {
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency
         );
-    }
-
-    fn queue_param_change(&mut self, target: &AutomationTarget, value: f32, sample_offset: u32) {
-        let (plugin_target, param_id) = match target {
-            AutomationTarget::Generator { generator_id, param_id } => {
-                (PluginTarget::Generator(*generator_id), *param_id)
-            }
-            AutomationTarget::Track {
-                track_id,
-                track_target:
-                    TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Plugin {
-                        effect_id,
-                        target: EffectAutomationTarget::PluginParam { param_id },
-                    }),
-            } => (PluginTarget::TrackEffect(*track_id, *effect_id), *param_id),
-            AutomationTarget::Bus {
-                bus_id,
-                mix_target:
-                    MixerChannelParamTarget::Plugin {
-                        effect_id,
-                        target: EffectAutomationTarget::PluginParam { param_id },
-                    },
-            } => (PluginTarget::BusEffect(*bus_id, *effect_id), *param_id),
-            AutomationTarget::Master(MasterAutomationTarget::MixerChannel(
-                MixerChannelParamTarget::Plugin {
-                    effect_id,
-                    target: EffectAutomationTarget::PluginParam { param_id },
-                },
-            )) => (PluginTarget::MasterEffect(*effect_id), *param_id),
-            _ => return, // Not a plugin parameter target (e.g. Master volume)
-        };
-
-        self.block_param_changes
-            .entry(plugin_target)
-            .or_default()
-            .push(ParamChange {
-                param_id: param_id,
-                normalized_value: value,
-                sample_offset: sample_offset as usize,
-            });
     }
 
     fn evaluate_pre_block_modulations(&mut self, buffer_size: usize) {
