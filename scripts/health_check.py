@@ -3,7 +3,6 @@ import sys
 import shutil
 import subprocess
 
-# --- Terminal Colors ---
 class Colors:
     GREEN = '\033[92m'
     RED = '\033[91m'

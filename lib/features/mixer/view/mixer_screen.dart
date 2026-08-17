@@ -5,6 +5,7 @@ import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/plugins/plugin_registry.dart';
 import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
@@ -1308,12 +1309,17 @@ class _PanKnob extends ConsumerWidget {
                     .read(automationProvider.notifier)
                     .handleRemoveAutomationForTarget(target: automationTarget);
               },
-              child: Slider(
+              child: DigidawParameterKnob(
                 value: value,
                 min: spec.min,
                 max: spec.max,
+                defaultValue: spec.defaultValue,
+                step: spec.step == 0.0 ? 0.01 : spec.step,
+                diameter: 30.0, // Perfectly sized for the 72px channel strip
+                activeColor: accentColor,
+                inactiveColor:
+                    Colors.white12, // Matches the previous slider track
                 onChanged: onChanged,
-                allowedInteraction: SliderInteraction.slideOnly,
                 onChangeStart: onChangeStart != null
                     ? (_) => onChangeStart!()
                     : null,
@@ -1387,7 +1393,9 @@ class _VolumeFader extends ConsumerWidget {
               AppLogger.info(
                 "Remove automation for ${spec.name} (ID: ${spec.id})",
               );
-              ref.read(automationProvider.notifier).handleRemoveAutomationForTarget(target: automationTarget);
+              ref
+                  .read(automationProvider.notifier)
+                  .handleRemoveAutomationForTarget(target: automationTarget);
             },
             child: SizedBox(
               width: sliderWidth,

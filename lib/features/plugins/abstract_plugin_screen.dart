@@ -335,6 +335,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
           onChangeStart: (_) => beginParameterEdit(param.id),
           onChangeEnd: (_) => endParameterEdit(param.id),
           target: automationTarget,
+          sliderInteraction: SliderInteraction.tapAndSlide,
         );
       case plugin_api.UiParameterType.choice:
         return DawChoiceParam(
