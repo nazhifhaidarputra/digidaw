@@ -3,12 +3,9 @@
 #[cfg(test)]
 mod tests {
     use crate::api::audio_waveform_api;
-    use crate::api::track_api;
-    use crate::core::project::clip::ClipSourceType;
+
     use crate::shared::id::{AudioSourceId, TrackId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
-
-    // ─── get_audio_waveform_clips_data ───────────────────────────────────────
 
     #[test]
     fn get_audio_waveform_clips_data_empty_state() {
@@ -19,8 +16,6 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    // ─── get_audio_waveform_for_clip ─────────────────────────────────────────
-
     #[test]
     fn get_audio_waveform_for_clip_missing_source_returns_err() {
         let ctx = make_ctx();
@@ -28,8 +23,6 @@ mod tests {
         let result = audio_waveform_api::get_audio_waveform_for_clip(&ctx, &bogus_id);
         assert!(result.is_err(), "Unknown AudioSourceId should return Err");
     }
-
-    // ─── get_audio_waveform_for_clip_only_in_specific_track ──────────────────
 
     #[test]
     fn get_audio_waveform_for_clip_only_in_specific_track_missing_track_returns_none() {
@@ -61,8 +54,6 @@ mod tests {
         );
     }
 
-    // ─── get_audio_waveform_for_clip_all_available_in_tracks ─────────────────
-
     #[test]
     fn get_audio_waveform_for_clip_all_available_in_tracks_empty_state() {
         let ctx = make_ctx();
@@ -75,8 +66,6 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    // ─── get_audio_source_list ───────────────────────────────────────────────
-
     #[test]
     fn get_audio_source_list_empty() {
         let ctx = make_ctx();
@@ -85,16 +74,12 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    // ─── add_audio_source ────────────────────────────────────────────────────
-
     #[test]
     fn add_audio_source_invalid_path_returns_err() {
         let mut ctx = make_ctx();
         let result = audio_waveform_api::add_audio_source(&mut ctx, "nonexistent_file_xyz.wav");
         assert!(result.is_err(), "Invalid path should return Err");
     }
-
-    // ─── get_audio_waveform ──────────────────────────────────────────────────
 
     #[test]
     fn get_audio_waveform_unknown_id_returns_err() {

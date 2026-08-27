@@ -1,9 +1,15 @@
-use std::{str::FromStr, sync::{Arc, atomic::{AtomicBool, Ordering}}};
+use std::{
+    str::FromStr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
     DeviceId, OutputCallbackInfo,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use parking_lot::Mutex;
 use rtrb::{Consumer, RingBuffer};
@@ -67,7 +73,7 @@ macro_rules! run_stream {
                     read_buffer.resize(samples_needed, 0.0);
                 }
 
-                // Simply pop from the Lock-Free RingBuffer. 
+                // Simply pop from the Lock-Free RingBuffer.
                 // If it's empty (underrun), output silence instead of blocking.
                 for i in 0..samples_needed {
                     if let Ok(sample) = consumer.pop() {
@@ -478,11 +484,13 @@ pub fn start_audio_stream(
                 }
             };
 
-           let sample_rate = config.sample_rate;
+            let sample_rate = config.sample_rate;
             let channels = config.channels as usize;
             let engine_block_size = match config.buffer_size {
                 cpal::BufferSize::Fixed(size) => size as usize,
-                cpal::BufferSize::Default => current_config_pref.buffer_size.unwrap_or(1024) as usize,
+                cpal::BufferSize::Default => {
+                    current_config_pref.buffer_size.unwrap_or(1024) as usize
+                }
             };
 
             let playing_device_id = device.id().ok();
@@ -561,35 +569,55 @@ pub fn start_audio_stream(
                     cpal::StreamError::BackendSpecific { ref err } => {
                         let err_msg = err.to_string().to_lowercase();
                         if err_msg.contains("underrun") || err_msg.contains("overrun") {
-                            log::warn!("Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally...");
+                            log::warn!(
+                                "Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally..."
+                            );
                         } else if err_msg.contains("buffer size changed to:") {
-                            log::warn!("Host forced a different buffer size. Adapting config to prevent crash loop...");
-                            
+                            log::warn!(
+                                "Host forced a different buffer size. Adapting config to prevent crash loop..."
+                            );
+
                             // Extract the exact buffer size JACK/OS is forcing us to use
-                            let parts: Vec<&str> = err_msg.split("buffer size changed to:").collect();
+                            let parts: Vec<&str> =
+                                err_msg.split("buffer size changed to:").collect();
                             if parts.len() > 1 {
-                                let num_str = parts[1].trim().chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
+                                let num_str = parts[1]
+                                    .trim()
+                                    .chars()
+                                    .take_while(|c| c.is_ascii_digit())
+                                    .collect::<String>();
                                 if let Ok(new_size) = num_str.parse::<u32>() {
                                     log::info!("Dynamically updating buffer size to {}", new_size);
                                     let mut cfg = err_config_arc.write();
 
                                     // Only trigger logic if the size is ACTUALLY different
                                     if cfg.buffer_size != Some(new_size) {
-                                        log::info!("Dynamically updating buffer size to {}", new_size);
+                                        log::info!(
+                                            "Dynamically updating buffer size to {}",
+                                            new_size
+                                        );
                                         cfg.buffer_size = Some(new_size);
                                         let _ = tx_clone.send(());
                                     } else {
-                                        log::debug!("Buffer size is already synced to {}. Ignoring redundant error.", new_size);
+                                        log::debug!(
+                                            "Buffer size is already synced to {}. Ignoring redundant error.",
+                                            new_size
+                                        );
                                     }
                                 }
                             }
                         } else {
-                            log::error!("Audio stream backend error: {}. Triggering restart...", err_msg);
+                            log::error!(
+                                "Audio stream backend error: {}. Triggering restart...",
+                                err_msg
+                            );
                             let _ = tx_clone.send(());
                         }
                     }
                     cpal::StreamError::BufferUnderrun => {
-                        log::warn!("Native buffer underrun detected due to CPU lag. Recovering naturally...");
+                        log::warn!(
+                            "Native buffer underrun detected due to CPU lag. Recovering naturally..."
+                        );
                     }
                     cpal::StreamError::StreamInvalidated => {
                         log::error!("Audio stream invalidated by the OS. Triggering restart...");
@@ -645,7 +673,7 @@ pub fn start_audio_stream(
                     // Abort the DSP thread to prevent memory leak/orphans since stream failed
                     is_dsp_running.store(false, Ordering::Relaxed);
                     let _ = dsp_thread.join();
-                    
+
                     std::thread::sleep(std::time::Duration::from_secs(2));
                     continue;
                 }
@@ -706,7 +734,7 @@ pub fn start_audio_stream(
 
             // CLEANUP: Drop the active stream. This safely releases the hardware handle.
             drop(stream);
-            
+
             // CLEANUP: Signal DSP Thread to stop gracefully and join it to prevent memory leaks
             is_dsp_running.store(false, Ordering::Relaxed);
             if let Err(e) = dsp_thread.join() {

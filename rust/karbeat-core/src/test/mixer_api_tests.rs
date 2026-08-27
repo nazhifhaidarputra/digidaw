@@ -3,12 +3,10 @@
 #[cfg(test)]
 mod tests {
     use crate::api::mixer_api;
-    use crate::commands::{EffectTarget, MixerChannelTarget};
-    use crate::core::project::mixer::{MixerChannelParams, RoutingConnection, RoutingNode};
+
+    use crate::core::project::mixer::{RoutingConnection, RoutingNode};
     use crate::shared::id::{BusId, EffectId, TrackId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx, param_eq_registry_id};
-
-    // ─── get_mixer_state ─────────────────────────────────────────────────────
 
     #[test]
     fn get_mixer_state_returns_default_on_empty() {
@@ -16,8 +14,6 @@ mod tests {
         let _state = mixer_api::get_mixer_state(&ctx, |m| m.channels.len());
         // Just checks it doesn't panic
     }
-
-    // ─── get_mixer_channel ───────────────────────────────────────────────────
 
     #[test]
     fn get_mixer_channel_missing_track_returns_err() {
@@ -33,8 +29,6 @@ mod tests {
         let result = mixer_api::get_mixer_channel(&ctx, audio_id, |c| c.mute);
         assert!(result.is_ok());
     }
-
-    // ─── get_track_mixer_channel_specs ───────────────────────────────────────
 
     #[test]
     fn get_track_mixer_channel_specs_missing_returns_none() {
@@ -53,8 +47,6 @@ mod tests {
         assert!(specs.is_some());
     }
 
-    // ─── get_bus_mixer_channel_specs ─────────────────────────────────────────
-
     #[test]
     fn get_bus_mixer_channel_specs_missing_returns_none() {
         let ctx = make_ctx();
@@ -64,8 +56,6 @@ mod tests {
         assert!(result.is_none());
     }
 
-    // ─── get_master_channel_specs ────────────────────────────────────────────
-
     #[test]
     fn get_master_channel_specs_always_returns() {
         let ctx = make_ctx();
@@ -74,16 +64,12 @@ mod tests {
         let _ = specs; // no panic = success
     }
 
-    // ─── get_buses ───────────────────────────────────────────────────────────
-
     #[test]
     fn get_buses_empty_on_fresh_ctx() {
         let ctx = make_ctx();
         let buses: Vec<_> = mixer_api::get_buses(&ctx, |id, _b| *id);
         assert!(buses.is_empty());
     }
-
-    // ─── get_routing_matrix ──────────────────────────────────────────────────
 
     #[test]
     fn get_routing_matrix_returns_default_routes() {
@@ -94,17 +80,15 @@ mod tests {
         assert!(!routes.is_empty(), "Seeded ctx should have routing entries");
     }
 
-    // ─── create_bus / delete_bus ─────────────────────────────────────────────
-
     #[test]
     fn create_bus_and_delete_happy_path() {
         let mut ctx = make_ctx();
         let bus_id = mixer_api::create_bus(&mut ctx, "My Bus".to_string());
-        assert!(ctx.app_state.mixer.buses.contains_key(&bus_id));
+        assert!(ctx.app_state.mixer.buses.contains_key(bus_id));
 
         let result = mixer_api::delete_bus(&mut ctx, bus_id);
         assert!(result.is_ok());
-        assert!(!ctx.app_state.mixer.buses.contains_key(&bus_id));
+        assert!(!ctx.app_state.mixer.buses.contains_key(bus_id));
     }
 
     #[test]
@@ -115,15 +99,13 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── rename_bus ──────────────────────────────────────────────────────────
-
     #[test]
     fn rename_bus_happy_path() {
         let mut ctx = make_ctx();
         let bus_id = mixer_api::create_bus(&mut ctx, "Old Name".to_string());
         let result = mixer_api::rename_bus(&mut ctx, bus_id, "New Name");
         assert!(result.is_ok());
-        let name = ctx.app_state.mixer.buses[&bus_id].name.clone();
+        let name = ctx.app_state.mixer.buses[bus_id].name.clone();
         assert_eq!(name, "New Name");
     }
 
@@ -134,8 +116,6 @@ mod tests {
         let result = mixer_api::rename_bus(&mut ctx, bogus_id, "Whatever");
         assert!(result.is_err());
     }
-
-    // ─── set_routing / remove_routing / update_routing ───────────────────────
 
     #[test]
     fn set_routing_happy_path() {
@@ -165,8 +145,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── Effect chain ─────────────────────────────────────────────────────────
-
     #[test]
     fn add_effect_to_mixer_channel_invalid_track_returns_err() {
         let mut ctx = make_ctx();
@@ -192,7 +170,7 @@ mod tests {
             .app_state
             .mixer
             .channels
-            .get(&audio_id)
+            .get(audio_id)
             .map(|ch| ch.channel.effects.len())
             .unwrap_or(0);
         assert_eq!(effects_count, 1);
@@ -211,7 +189,7 @@ mod tests {
         let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
         mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, audio_id, param_eq_registry_id())
             .unwrap();
-        let effect_id = ctx.app_state.mixer.channels[&audio_id]
+        let effect_id = ctx.app_state.mixer.channels[audio_id]
             .channel
             .effects
             .last()
@@ -219,10 +197,12 @@ mod tests {
             .id;
         let result = mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id);
         assert!(result.is_ok());
-        assert!(ctx.app_state.mixer.channels[&audio_id]
-            .channel
-            .effects
-            .is_empty());
+        assert!(
+            ctx.app_state.mixer.channels[audio_id]
+                .channel
+                .effects
+                .is_empty()
+        );
     }
 
     #[test]
@@ -256,8 +236,6 @@ mod tests {
         let result = mixer_api::add_effect_to_bus(&mut ctx, bus_id, param_eq_registry_id());
         assert!(result.is_ok(), "{:?}", result.err());
     }
-
-    // ─── get_master_bus_populated ─────────────────────────────────────────────
 
     #[test]
     fn get_master_bus_populated_empty() {

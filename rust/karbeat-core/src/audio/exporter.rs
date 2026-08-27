@@ -2,7 +2,7 @@ use rtrb::RingBuffer;
 use thiserror::Error;
 
 use crate::{
-    audio::writer::{create_writer, AudioExportConfig, AudioWriter},
+    audio::writer::{AudioExportConfig, AudioWriter, create_writer},
     commands::AudioCommand,
     context::DawContext,
 };

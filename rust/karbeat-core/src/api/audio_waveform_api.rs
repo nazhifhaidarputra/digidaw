@@ -45,7 +45,7 @@ where
     C: FromIterator<U>,
 {
     let app = &ctx.app_state;
-    let track = app.tracks.get(track_id)?;
+    let track = app.tracks.get(*track_id)?;
 
     let TrackType::Audio = track.track_type else {
         return Some(std::iter::empty().collect()); // Return empty since it is not a audio track
@@ -54,7 +54,8 @@ where
     let return_map = track
         .clips()
         .iter()
-        .filter_map(|c| {
+        .filter_map(|clip_id| {
+            let c = app.clips_pool.get(*clip_id)?;
             // Get source Id from clip
             let Some(DawSource::Audio(id)) = c.source else {
                 return None;
@@ -84,7 +85,8 @@ where
         .values()
         .filter(|t| matches!(t.track_type, TrackType::Audio))
         .flat_map(|t| t.clips().iter())
-        .filter_map(|clip| {
+        .filter_map(|clip_id| {
+            let clip = app.clips_pool.get(*clip_id)?;
             if let Some(DawSource::Audio(id)) = clip.source {
                 let id_u32 = id.to_u32();
                 if processed.insert(id_u32) {
@@ -111,14 +113,13 @@ where
         .asset_library
         .source_map
         .iter()
-        .map(|(&id, wf)| mapper(id.to_u32(), wf.as_ref()))
+        .map(|(id, wf)| mapper(id.to_u32(), wf.as_ref()))
         .collect())
 }
 
 pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result<AudioSourceId> {
-    let sample_rate = {
-        ctx.active_audio_config.read().sample_rate
-    }.ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
+    let sample_rate = { ctx.active_audio_config.read().sample_rate }
+        .ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
 
     let result = ctx.app_state.load_audio(file_path, None, sample_rate);
     let id = match result {

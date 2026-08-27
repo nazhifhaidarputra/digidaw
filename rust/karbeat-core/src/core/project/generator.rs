@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    core::project::{plugin::instance::PluginInstance, ApplicationState},
+    core::project::{ApplicationState, plugin::instance::PluginInstance},
     shared::id::GeneratorId,
 };
 
@@ -30,23 +30,19 @@ impl Default for GeneratorInstanceType {
 
 impl ApplicationState {
     pub fn add_generator(&mut self, instance_type: GeneratorInstanceType) -> GeneratorId {
-        let id = GeneratorId::next(&mut self.generator_counter);
-
-        // Ensure the inner instance knows its ID
-        let instance = GeneratorInstance { id, instance_type };
-
-        self.generator_pool.insert(id, instance);
-        id
+        self.generator_pool
+            .insert_with_key(|id| GeneratorInstance { id, instance_type })
     }
 
     /// Deletes a generator source and removes all clips referencing it.
     pub fn remove_generator(&mut self, generator_id: GeneratorId) -> Option<GeneratorId> {
-        if self.generator_pool.remove(&generator_id).is_none() {
+        if self.generator_pool.remove(generator_id).is_none() {
             return None;
         }
 
+        let clips_pool = &mut self.clips_pool;
         for track in self.tracks.values_mut() {
-            track.remove_clip_by_source_id(generator_id, true);
+            track.remove_clip_by_source_id(clips_pool, generator_id.to_u64(), true);
         }
 
         Some(generator_id)

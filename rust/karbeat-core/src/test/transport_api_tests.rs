@@ -5,7 +5,7 @@ mod tests {
     use crate::api::transport_api;
     use crate::audio::engine::PlaybackMode;
     use crate::shared::id::{GeneratorId, PatternId};
-    use crate::test::helpers::{make_ctx, make_seeded_ctx};
+    use crate::test::helpers::make_ctx;
 
     // ─── set_playing ─────────────────────────────────────────────────────────
 

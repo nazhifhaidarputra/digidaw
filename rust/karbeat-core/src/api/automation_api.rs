@@ -5,8 +5,8 @@ use crate::{
     commands::AudioCommand,
     context::DawContext,
     core::project::{
-        automation::{AutomationLane, AutomationTarget},
         AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource,
+        automation::{AutomationLane, AutomationTarget},
     },
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
@@ -64,7 +64,7 @@ pub fn add_automation_lane(
     let mod_link = ctx
         .app_state
         .modulation_links
-        .get(&link_id)
+        .get(link_id)
         .with_context(|| "Modulation link not found")?;
     // TODO: add history
 
@@ -97,10 +97,9 @@ pub fn add_automation_lane_for_bus(
 pub fn remove_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTarget,
-
-) -> anyhow::Result<(AutomationId, Vec<ModulationId>, Vec<ModulationLinkId>)>{
+) -> anyhow::Result<(AutomationId, Vec<ModulationId>, Vec<ModulationLinkId>)> {
     let app = &mut ctx.app_state;
-    
+
     let (removed_lane, removed_sources, removed_links) = app
         .remove_automation_lane(target)
         .ok_or_else(|| anyhow::anyhow!("No automation lane found for this target"))?;
@@ -195,7 +194,7 @@ pub fn get_automation_lane<Id: Into<AutomationId>>(
 ) -> Option<AutomationLane> {
     let app = &ctx.app_state;
     let id_typed = lane_id.into();
-    app.automation_pool.get(&id_typed).cloned()
+    app.automation_pool.get(id_typed).cloned()
 }
 
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
@@ -214,7 +213,7 @@ where
     let app = &ctx.app_state;
     app.modulation_links
         .iter()
-        .map(|(id, modulation)| f(id, modulation))
+        .map(|(id, modulation)| f(&id, modulation))
         .collect()
 }
 
@@ -227,7 +226,7 @@ where
 {
     let app = &ctx.app_state;
     let id_typed = id.into();
-    app.modulation_links.get(&id_typed).cloned()
+    app.modulation_links.get(id_typed).cloned()
 }
 
 /// Add generic modulation source
@@ -250,7 +249,7 @@ where
     let app = &ctx.app_state;
     app.modulation_sources
         .iter()
-        .map(|(id, s)| (Id::from(*id), S::from(s)))
+        .map(|(id, s)| (Id::from(id), S::from(s)))
         .collect::<C>()
 }
 
@@ -266,7 +265,7 @@ where
     let app = &ctx.app_state;
     let id_typed = modulation_id.into();
     app.modulation_sources
-        .get(&id_typed)
+        .get(id_typed)
         .map(|s| Siuuuu::from(s))
 }
 
@@ -302,7 +301,7 @@ pub fn link_this_param_to_controller(
         let id = app.link_modulation(source_id, target, depth, base_value)?;
         let link = app
             .modulation_links
-            .get(&id)
+            .get(id)
             .map(|l| ModulationLink {
                 id,
                 source_id: l.prop.source_id,
@@ -321,10 +320,10 @@ pub fn link_this_param_to_controller(
 fn broadcast_modulation(ctx: &mut DawContext, link_id: ModulationLinkId) -> anyhow::Result<()> {
     let mut commands = Vec::new();
 
-    if let Some(link) = ctx.app_state.modulation_links.get(&link_id) {
+    if let Some(link) = ctx.app_state.modulation_links.get(link_id) {
         let source_id = link.prop.source_id;
 
-        if let Some(source) = ctx.app_state.modulation_sources.get(&source_id) {
+        if let Some(source) = ctx.app_state.modulation_sources.get(source_id) {
             commands.push(AudioCommand::AddModulationSource {
                 id: source_id,
                 source: source.to_owned(),

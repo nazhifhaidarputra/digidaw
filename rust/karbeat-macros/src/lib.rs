@@ -239,7 +239,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             return Err(
                                 syn::Error::new_spanned(
                                     &meta.path,
-                                    format!("{:?} is not a valid parameter", meta.path)
+                                    format!("{:?} is not a valid parameter", &meta.path)
                                 )
                             );
                         }

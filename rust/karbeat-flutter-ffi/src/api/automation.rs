@@ -183,7 +183,7 @@ impl From<AutomationCurveTypeDto> for AutomationCurveType {
 impl From<AutomationPointDto> for AutomationPoint {
     fn from(point: AutomationPointDto) -> Self {
         Self {
-            id: point.id,
+            id: point.id.into(),
             time_ticks: point.time_ticks,
             value: NormalizedF64::new(point.value),
             curve_type: point.curve_type.into(),
@@ -195,7 +195,7 @@ impl From<AutomationPointDto> for AutomationPoint {
 impl From<AutomationPoint> for AutomationPointDto {
     fn from(p: AutomationPoint) -> Self {
         Self {
-            id: p.id,
+            id: p.id.to_u64(),
             time_ticks: p.time_ticks,
             value: p.value.get(),
             curve_type: p.curve_type.into(),
@@ -211,15 +211,22 @@ impl TryFrom<AutomationLaneDto> for AutomationLane {
         // If Flutter sends 1.5, this explicitly throws an Error
         let default_value = NormalizedF64::try_from(l.default_value)?;
 
+        let points: Vec<AutomationPoint> = l
+            .points
+            .into_iter()
+            .filter_map(|p| p.try_into().ok())
+            .collect();
+        let next_point_id = points
+            .iter()
+            .map(|point| point.id.to_u32())
+            .max()
+            .map_or(0, |id| id.saturating_add(1));
+
         Ok(Self {
             id: l.id.into(),
             label: l.label,
-            // (Assuming points also use TryFrom for their internal NormalizedF64 values)
-            points: l
-                .points
-                .into_iter()
-                .filter_map(|p| p.try_into().ok())
-                .collect(),
+            points,
+            next_point_id,
             enabled: l.enabled,
             min: l.min,
             max: l.max,
@@ -497,11 +504,11 @@ pub fn add_automation_lane_for_bus(
 }
 
 /// ## Overview
-/// 
+///
 /// Remove automation lane for target. also cascade remove all modulations linked to it
-/// 
+///
 /// ## Returns
-/// 
+///
 /// * Tuple of (removed_automation_id, removed_modulation_source_ids, removed_modulation_link_ids)
 pub fn remove_automation_lane_for(
     ctx: &mut DawContext,

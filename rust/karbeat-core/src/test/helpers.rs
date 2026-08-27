@@ -10,8 +10,8 @@ use crate::{
     api::{clip_api, note_api, track_api},
     context::DawContext,
     core::project::{
-        clip::{Clip, ClipSourceType, ClipTimeUnit},
         DawSource,
+        clip::{Clip, ClipSourceType, ClipTimeUnit},
     },
     shared::id::{ClipId, PatternId, TrackId},
 };

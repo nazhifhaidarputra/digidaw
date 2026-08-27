@@ -103,7 +103,7 @@ impl HistoryManager {
                 // Inverse: Delete the note
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 let index = p
@@ -118,7 +118,7 @@ impl HistoryManager {
                 // Inverse: Add the note back
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 p.restore_note(note.clone()).map_err(|e| e.to_string())?;
@@ -133,7 +133,7 @@ impl HistoryManager {
                 // Inverse: Move to old position
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 let index = p
@@ -152,7 +152,7 @@ impl HistoryManager {
             } => {
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 let index = p
@@ -193,22 +193,8 @@ impl HistoryManager {
             ProjectAction::ResizeClip {
                 track_id, old_clip, ..
             } => {
-                // Inverse: Restore the old clip state
-                let track = app.tracks.get_mut(track_id).ok_or("Track not found")?;
-
-                // Find and remove the current clip
-                if let Some(idx) = track.clips.iter().position(|c| c.id == old_clip.id) {
-                    track.clips.remove(idx);
-                }
-
-                // Re-insert the old clip using Binary Search to maintain sorted order
-                let pos = track
-                    .clips
-                    .binary_search_by_key(&old_clip.time.start_time_raw(), |c| {
-                        c.time.start_time_raw()
-                    })
-                    .unwrap_or_else(|e| e);
-                track.clips.insert(pos, old_clip.clone());
+                app.add_clip_to_track(*track_id, old_clip.clone())
+                    .map_err(|e| e.to_string())?;
             }
         }
 
@@ -224,7 +210,7 @@ impl HistoryManager {
             ProjectAction::AddNote { pattern_id, note } => {
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 p.restore_note(note.clone()).map_err(|e| e.to_string())?;
@@ -232,7 +218,7 @@ impl HistoryManager {
             ProjectAction::DeleteNote { pattern_id, note } => {
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 let index = p
@@ -251,7 +237,7 @@ impl HistoryManager {
             } => {
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 let index = p
@@ -270,7 +256,7 @@ impl HistoryManager {
             } => {
                 let pattern = app
                     .pattern_pool
-                    .get_mut(pattern_id)
+                    .get_mut(*pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = pattern;
                 let index = p
@@ -288,8 +274,8 @@ impl HistoryManager {
                 }
             }
             ProjectAction::AddClip { track_id, clip } => {
-                let t = app.tracks.get_mut(track_id).ok_or("Track not found")?;
-                t.add_clip(clip.clone()).map_err(|e| e.to_string())?;
+                app.add_clip_to_track(*track_id, clip.clone())
+                    .map_err(|e| e.to_string())?;
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Forward: Delete the clip from the track
@@ -310,22 +296,8 @@ impl HistoryManager {
             ProjectAction::ResizeClip {
                 track_id, new_clip, ..
             } => {
-                // Forward: Apply the new clip state
-                let track = app.tracks.get_mut(track_id).ok_or("Track not found")?;
-
-                // Find and remove current clip
-                if let Some(idx) = track.clips.iter().position(|c| c.id == new_clip.id) {
-                    track.clips.remove(idx);
-                }
-
-                // Re-insert the new clip using Binary Search to maintain sorted order
-                let pos = track
-                    .clips
-                    .binary_search_by_key(&new_clip.time.start_time_raw(), |c| {
-                        c.time.start_time_raw()
-                    })
-                    .unwrap_or_else(|e| e);
-                track.clips.insert(pos, new_clip.clone());
+                app.add_clip_to_track(*track_id, new_clip.clone())
+                    .map_err(|e| e.to_string())?;
             }
         }
         Ok(())

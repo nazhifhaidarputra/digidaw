@@ -9,11 +9,11 @@ use smallvec::SmallVec;
 use triple_buffer::Input;
 
 use crate::{
+    DOWNBEAT_BYTES, OFFBEAT_BYTES,
     audio::{engine::helper::load_internal_wav, event::PluginTarget},
     commands::{MixerChannelSnapshot, MixerChannelTarget},
     core::project::{AudioWaveform, MixerChannel, MixerChannelParams},
     shared::*,
-    DOWNBEAT_BYTES, OFFBEAT_BYTES,
 };
 
 pub const MAX_AMPLITUDE: f64 = 1.99526231497;

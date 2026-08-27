@@ -65,7 +65,6 @@ mod tests {
             .generator_pool
             .keys()
             .next()
-            .cloned()
             .expect("Seeded ctx should have a generator");
         let result = pattern_api::play_pattern_preview(&mut ctx, pattern_id, gen_id);
         assert!(result.is_ok(), "No-stream should silently succeed");
@@ -81,7 +80,6 @@ mod tests {
             .generator_pool
             .keys()
             .next()
-            .cloned()
             .expect("Seeded ctx should have a generator");
         let result = pattern_api::stop_pattern_preview_local(&mut ctx, pattern_id, gen_id);
         assert!(result.is_ok());

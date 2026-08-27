@@ -145,7 +145,7 @@ pub fn add_midi_track_with_generator_id(
 ) -> Result<UiTrack, String> {
     let res =
         track_api::add_midi_track_with_generator_id(ctx, registry_id).map_err(|e| e.to_string())?;
-    Ok(UiTrack::from(&res))
+    Ok(UiTrack::from_track(&res, &ctx.app_state))
 }
 
 pub fn get_clip(ctx: &DawContext, track_id: u32, clip_id: u32) -> Result<UiClip, String> {
@@ -157,7 +157,9 @@ pub fn get_clip(ctx: &DawContext, track_id: u32, clip_id: u32) -> Result<UiClip,
 
 // Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
 pub fn get_track(ctx: &DawContext, track_id: u32) -> Option<UiTrack> {
-    track_api::get_track(ctx, TrackId::from(track_id), |t| UiTrack::from(t))
+    track_api::get_track(ctx, TrackId::from(track_id), |t| {
+        UiTrack::from_track(t, &ctx.app_state)
+    })
 }
 
 // =====================================

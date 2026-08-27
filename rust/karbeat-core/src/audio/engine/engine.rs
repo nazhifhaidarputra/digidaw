@@ -1,14 +1,19 @@
 use crate::{
-    apply_mix_param, audio::{
+    apply_mix_param,
+    audio::{
         engine::{helper::*, types::*},
         event::{PluginTarget, TransportFeedback},
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
         },
-    }, commands::{
+    },
+    commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
         GeneratorParameterSnapshot, MixerChannelTarget, TelemetryRegistration,
-    }, core::project::*, shared::{constants::f64::PPQ, id::*}, utils::{apply_simd_mix, apply_simd_mix_gain},
+    },
+    core::project::*,
+    shared::{constants::f64::PPQ, id::*},
+    utils::{apply_simd_mix, apply_simd_mix_gain},
 };
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::SmoothableParam;
@@ -286,8 +291,8 @@ impl AudioEngine {
         // Dynamically poll plugins for internal latency changes
         let mut plugin_latency_changed = false;
 
-        for gen in self.plugin_state.generators.iter_mut().flatten() {
-            plugin_latency_changed |= gen.plugin.has_latency_changed();
+        for generator in self.plugin_state.generators.iter_mut().flatten() {
+            plugin_latency_changed |= generator.plugin.has_latency_changed();
         }
         for effects in self.plugin_state.track_effects.iter_mut() {
             for effect in effects.iter_mut() {
@@ -479,7 +484,8 @@ impl AudioEngine {
         let sample_rate = self.sample_rate as f32;
 
         let samples_per_beat = (60.0 / tempo) * sample_rate;
-        let loop_len_samples = (((pattern.length_ticks as f32) / PPQ as f32) * samples_per_beat) as u32;
+        let loop_len_samples =
+            (((pattern.length_ticks as f32) / PPQ as f32) * samples_per_beat) as u32;
 
         if loop_len_samples == 0 {
             return;
@@ -1539,10 +1545,15 @@ impl AudioEngine {
                     modulation_link_id
                 );
             }
-            AudioCommand::UpdateTrackGraph { tracks, patterns } => {
+            AudioCommand::UpdateTrackGraph {
+                tracks,
+                clips,
+                patterns,
+            } => {
                 // Update only the track/pattern/sample-index portion of the local graph.
                 // Routing and automation lanes are untouched by this command.
                 self.current_state.graph.tracks = tracks;
+                self.current_state.graph.clips = clips;
                 self.current_state.graph.patterns = patterns;
 
                 let valid_track_ids: HashSet<_> = self
@@ -1608,18 +1619,16 @@ impl AudioEngine {
                             (self.current_state.graph.max_sample_index as f64 * ratio) as u32;
 
                         // Scale all Audio Clips that are mapped in Absolute Samples
-                        for track in self.current_state.graph.tracks.iter_mut() {
-                            for clip in track.clips.iter_mut() {
-                                if let crate::core::project::clip::ClipTimeUnit::Samples {
-                                    start_time,
-                                    loop_length,
-                                    offset_start,
-                                } = &mut clip.time
-                                {
-                                    *start_time = (*start_time as f64 * ratio) as u64;
-                                    *loop_length = (*loop_length as f64 * ratio) as u64;
-                                    *offset_start = (*offset_start as f64 * ratio) as u64;
-                                }
+                        for clip in self.current_state.graph.clips.values_mut() {
+                            if let crate::core::project::clip::ClipTimeUnit::Samples {
+                                start_time,
+                                loop_length,
+                                offset_start,
+                            } = &mut clip.time
+                            {
+                                *start_time = (*start_time as f64 * ratio) as u64;
+                                *loop_length = (*loop_length as f64 * ratio) as u64;
+                                *offset_start = (*offset_start as f64 * ratio) as u64;
                             }
                         }
 
@@ -1633,10 +1642,10 @@ impl AudioEngine {
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
                     log::info!(
-                                "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
-                                sr,
-                                buf_size
-                            );
+                        "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                        sr,
+                        buf_size
+                    );
 
                     self.recalculate_max_sample_index();
                 }
@@ -1667,10 +1676,10 @@ impl AudioEngine {
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
                     log::info!(
-                                "[AudioEngine] ReplaceFullGraph sync: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
-                                sr,
-                                buf_size
-                            );
+                        "[AudioEngine] ReplaceFullGraph sync: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                        sr,
+                        buf_size
+                    );
                 }
 
                 // Used for undo/redo. Atomically replace the full graph snapshot
@@ -1950,9 +1959,9 @@ impl AudioEngine {
     fn trigger_live_note(&mut self, generator_id: GeneratorId, key: u8, velocity: u8, is_on: bool) {
         // Try to find the track that has this generator from current_state
         let target_info = self.current_state.graph.tracks.iter().find_map(|t| {
-            if let Some(gen) = &t.generator {
-                if gen.id == generator_id {
-                    return Some((t.id, gen.clone()));
+            if let Some(gen_) = &t.generator {
+                if gen_.id == generator_id {
+                    return Some((t.id, gen_.clone()));
                 }
             }
             None
@@ -2148,7 +2157,11 @@ impl AudioEngine {
                             gen_ctx.midi_events = events;
 
                             let pt = PluginTarget::Generator(gen_id);
-                            let changes = self.block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+                            let changes = self
+                                .block_param_changes
+                                .get(&pt)
+                                .map(|v| v.as_slice())
+                                .unwrap_or(&[]);
                             gen_ctx.param_changes = changes;
 
                             process_plugin_wrapper(
@@ -2363,7 +2376,11 @@ impl AudioEngine {
 
                             let pt = PluginTarget::BusEffect(*bus_id, effect.id);
                             let mut ctx = base_ctx.clone();
-                            ctx.param_changes = self.block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+                            ctx.param_changes = self
+                                .block_param_changes
+                                .get(&pt)
+                                .map(|v| v.as_slice())
+                                .unwrap_or(&[]);
 
                             process_plugin_wrapper(
                                 &mut *effect.plugin,
@@ -2590,7 +2607,6 @@ impl AudioEngine {
         channel_buffers_out: &mut [Vec<f32>],
         aux_channel_buffers: &mut [Vec<f32>],
         block_param_changes: &'a HashMap<PluginTarget, Vec<ParamChange>>,
-
     ) {
         // ==== SIMD Phase Inversion ====
         if mixer_channel.inverted_phase {
@@ -2605,7 +2621,10 @@ impl AudioEngine {
 
                 let pt = PluginTarget::TrackEffect(track_id, effect.id);
                 let mut ctx = process_ctx.clone();
-                ctx.param_changes = block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+                ctx.param_changes = block_param_changes
+                    .get(&pt)
+                    .map(|v| v.as_slice())
+                    .unwrap_or(&[]);
 
                 process_plugin_wrapper(
                     &mut *effect.plugin,
@@ -2660,7 +2679,10 @@ impl AudioEngine {
 
             let pt = PluginTarget::MasterEffect(effect.id);
             let mut ctx = process_ctx.clone();
-            ctx.param_changes = block_param_changes.get(&pt).map(|v| v.as_slice()).unwrap_or(&[]);
+            ctx.param_changes = block_param_changes
+                .get(&pt)
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]);
 
             process_plugin_wrapper(
                 &mut *effect.plugin,
@@ -2711,7 +2733,10 @@ impl AudioEngine {
         let samples_per_beat = ((60.0 / self.bpm) * (self.sample_rate as f32)) as f64;
         let samples_per_tick = samples_per_beat / PPQ;
 
-        for clip_data in track.clips() {
+        for clip_id in track.clips() {
+            let Some(clip_data) = self.current_state.graph.clips.get(clip_id).cloned() else {
+                continue;
+            };
             let (clip_start, clip_length, clip_offset) = match &clip_data.time {
                 ClipTimeUnit::Samples {
                     start_time,
@@ -2760,7 +2785,7 @@ impl AudioEngine {
                         .graph
                         .asset_library
                         .source_map
-                        .get(source_id)
+                        .get(*source_id)
                         .cloned();
                     if let Some(waveform) = waveform_opt {
                         self.prepare_audio_voice(track.id, &clip, &waveform, start_time, end_time);
@@ -2968,8 +2993,7 @@ impl AudioEngine {
         let pattern_offset = 0;
 
         for note in &pattern.notes {
-            let note_start =
-                (((note.start_tick as f64) / PPQ) * (samples_per_beat as f64)) as u32;
+            let note_start = (((note.start_tick as f64) / PPQ) * (samples_per_beat as f64)) as u32;
             let note_dur = (((note.duration as f64) / PPQ) * (samples_per_beat as f64)) as u32;
 
             // Note position within the pattern (in samples from pattern start)
@@ -3125,8 +3149,11 @@ impl AudioEngine {
         // Calculate internal latencies for tracks
         for track in self.current_state.graph.tracks.as_ref() {
             let mut lat = 0;
-            if let Some(gen) = &track.generator {
-                if let Some(instance) = self.plugin_state.get_generator(gen.id.to_u32() as usize) {
+            if let Some(generator) = &track.generator {
+                if let Some(instance) = self
+                    .plugin_state
+                    .get_generator(generator.id.to_u32() as usize)
+                {
                     lat += instance.plugin.latency_samples();
                 }
             }
@@ -3472,8 +3499,8 @@ impl AudioEngine {
     /// Call this when the transport stops to know when to put the engine to sleep.
     pub fn get_project_tail_length(&self) -> u32 {
         let mut max_tail = 0;
-        for gen in self.plugin_state.generators.iter().flatten() {
-            max_tail = max_tail.max(gen.plugin.tail_samples());
+        for generator in self.plugin_state.generators.iter().flatten() {
+            max_tail = max_tail.max(generator.plugin.tail_samples());
         }
         for effects in self.plugin_state.track_effects.iter() {
             for e in effects {
@@ -3516,14 +3543,15 @@ impl AudioEngine {
         let channels = self.num_channels as usize;
         let bf_size = buf_size.max(512);
 
-        for gen in self.plugin_state.generators.iter_mut().flatten() {
-            gen.plugin.prepare(sr as f32, bf_size);
+        for generator in self.plugin_state.generators.iter_mut().flatten() {
+            generator.plugin.prepare(sr as f32, bf_size);
             let bus = BusConfig {
                 name: "Main".into(),
                 channel_count: channels,
                 is_optional: false,
             };
-            gen.plugin
+            generator
+                .plugin
                 .set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
         }
         for effects in self.plugin_state.track_effects.iter_mut() {
@@ -3570,7 +3598,7 @@ impl AudioEngine {
         self.sidechain_delay_lines.clear();
     }
 
-    /// Recalculate max samples index of the timeline after 
+    /// Recalculate max samples index of the timeline after
     /// changes in the tracks
     fn recalculate_max_sample_index(&mut self) {
         let bpm = self.bpm as f64;
@@ -3579,7 +3607,10 @@ impl AudioEngine {
 
         // Find the absolute furthest boundary of any clip on the timeline
         for track in self.current_state.graph.tracks.iter() {
-            for clip in track.clips.iter() {
+            for clip_id in track.clips.iter() {
+                let Some(clip) = self.current_state.graph.clips.get(clip_id) else {
+                    continue;
+                };
                 let end_sample = match &clip.time {
                     crate::core::project::clip::ClipTimeUnit::Samples {
                         start_time,
@@ -3680,4 +3711,3 @@ impl AudioEngine {
         }
     }
 }
-

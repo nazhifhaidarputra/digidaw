@@ -2,13 +2,11 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::api::{clip_api, clipboard_api, note_api};
-    use crate::core::project::clip::{ClipSourceType, ClipTimeUnit};
-    use crate::core::project::ClipboardContent;
-    use crate::shared::id::{NoteId, PatternId};
-    use crate::test::helpers::{make_ctx, make_seeded_ctx};
+    use crate::api::clipboard_api;
 
-    // ─── get_clipboard_contents ──────────────────────────────────────────────
+    use crate::core::project::ClipboardContent;
+    use crate::shared::id::PatternId;
+    use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
     #[test]
     fn get_clipboard_contents_initial_empty() {
@@ -18,12 +16,10 @@ mod tests {
         assert!(is_empty, "Fresh state clipboard should be Empty");
     }
 
-    // ─── copy_pattern_notes ──────────────────────────────────────────────────
-
     #[test]
     fn copy_pattern_notes_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_ids: Vec<_> = ctx.app_state.pattern_pool[&pattern_id]
+        let note_ids: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
             .map(|n| n.id)
@@ -45,8 +41,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── paste_notes ─────────────────────────────────────────────────────────
-
     #[test]
     fn paste_notes_empty_clipboard_returns_empty() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
@@ -62,7 +56,7 @@ mod tests {
     #[test]
     fn paste_notes_with_copied_content() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_ids: Vec<_> = ctx.app_state.pattern_pool[&pattern_id]
+        let note_ids: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
             .map(|n| n.id)
@@ -83,7 +77,7 @@ mod tests {
     #[test]
     fn paste_notes_with_target_key_override() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_ids: Vec<_> = ctx.app_state.pattern_pool[&pattern_id]
+        let note_ids: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
             .map(|n| n.id)
@@ -103,22 +97,20 @@ mod tests {
         );
     }
 
-    // ─── cut_notes ───────────────────────────────────────────────────────────
-
     #[test]
     fn cut_notes_empty_list_is_noop() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let before = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let before = ctx.app_state.pattern_pool[pattern_id].notes.len();
         let result = clipboard_api::cut_notes(&mut ctx, pattern_id, vec![]);
         assert!(result.is_ok());
-        let after = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let after = ctx.app_state.pattern_pool[pattern_id].notes.len();
         assert_eq!(before, after, "Empty cut should not remove notes");
     }
 
     #[test]
     fn cut_notes_removes_notes_and_sets_clipboard() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_ids: Vec<_> = ctx.app_state.pattern_pool[&pattern_id]
+        let note_ids: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
             .map(|n| n.id)
@@ -128,7 +120,7 @@ mod tests {
         let result = clipboard_api::cut_notes(&mut ctx, pattern_id, note_ids);
         assert!(result.is_ok());
         assert!(
-            ctx.app_state.pattern_pool[&pattern_id].notes.is_empty(),
+            ctx.app_state.pattern_pool[pattern_id].notes.is_empty(),
             "All notes should have been cut"
         );
         let has_notes = clipboard_api::get_clipboard_contents(&ctx, |cb| {
@@ -137,7 +129,6 @@ mod tests {
         assert!(has_notes, "Clipboard should contain notes after cut");
     }
 
-    // ─── copy_clips / cut_clips / paste_clips ────────────────────────────────
 
     #[test]
     fn copy_clips_empty_ids_leaves_clipboard_empty() {
@@ -151,10 +142,10 @@ mod tests {
     #[test]
     fn copy_clips_happy_path() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip_ids: Vec<_> = ctx.app_state.tracks[&midi_id]
+        let clip_ids: Vec<_> = ctx.app_state.tracks[midi_id]
             .clips
             .iter()
-            .map(|c| c.id)
+            .copied()
             .collect();
         clipboard_api::copy_clips(&mut ctx, midi_id, &clip_ids);
         let has_clips = clipboard_api::get_clipboard_contents(&ctx, |cb| {
@@ -166,24 +157,24 @@ mod tests {
     #[test]
     fn cut_clips_empty_ids_is_noop() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let before = ctx.app_state.tracks[&midi_id].clips.len();
+        let before = ctx.app_state.tracks[midi_id].clips.len();
         clipboard_api::cut_clips(&mut ctx, midi_id, vec![]);
-        let after = ctx.app_state.tracks[&midi_id].clips.len();
+        let after = ctx.app_state.tracks[midi_id].clips.len();
         assert_eq!(before, after);
     }
 
     #[test]
     fn cut_clips_removes_from_track() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip_ids: Vec<_> = ctx.app_state.tracks[&midi_id]
+        let clip_ids: Vec<_> = ctx.app_state.tracks[midi_id]
             .clips
             .iter()
-            .map(|c| c.id)
+            .copied()
             .collect();
         let count = clip_ids.len();
         clipboard_api::cut_clips(&mut ctx, midi_id, clip_ids);
         assert!(
-            ctx.app_state.tracks[&midi_id].clips.is_empty(),
+            ctx.app_state.tracks[midi_id].clips.is_empty(),
             "All clips should be cut"
         );
     }
@@ -206,10 +197,10 @@ mod tests {
     fn paste_clips_happy_path() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
         // Copy first
-        let clip_ids: Vec<_> = ctx.app_state.tracks[&midi_id]
+        let clip_ids: Vec<_> = ctx.app_state.tracks[midi_id]
             .clips
             .iter()
-            .map(|c| c.id)
+            .copied()
             .collect();
         clipboard_api::copy_clips(&mut ctx, midi_id, &clip_ids);
 

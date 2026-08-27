@@ -6,9 +6,9 @@ use crate::{
     commands::{AudioCommand, EffectTarget},
     context::DawContext,
     core::project::{
-        generator::GeneratorInstanceType, mixer::EffectInstance, AutomationTarget,
-        EffectAutomationTarget, GeneratorId, GeneratorInstance, MasterAutomationTarget,
-        MixerChannelParamTarget, TrackAutomationTarget, TrackId,
+        AutomationTarget, EffectAutomationTarget, GeneratorId, GeneratorInstance,
+        MasterAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget, TrackId,
+        generator::GeneratorInstanceType, mixer::EffectInstance,
     },
     shared::id::*,
 };
@@ -83,7 +83,7 @@ pub fn get_generator<M, U>(ctx: &DawContext, generator_id: &GeneratorId, mapper:
 where
     M: FnOnce(&GeneratorInstance) -> U,
 {
-    let generator = ctx.app_state.generator_pool.get(generator_id)?;
+    let generator = ctx.app_state.generator_pool.get(*generator_id)?;
     Some(mapper(generator))
 }
 
@@ -98,7 +98,7 @@ where
 {
     let app = &ctx.app_state;
 
-    let channel = app.mixer.channels.get(track_id)?;
+    let channel = app.mixer.channels.get(*track_id)?;
 
     let effect = channel
         .channel
@@ -123,7 +123,7 @@ where
     M: Fn(&EffectInstance) -> U,
     C: FromIterator<U>,
 {
-    let channel = ctx.app_state.mixer.channels.get(track_id)?;
+    let channel = ctx.app_state.mixer.channels.get(*track_id)?;
 
     Some(channel.channel.effects.iter().map(mapper).collect())
 }
@@ -148,8 +148,8 @@ where
     let generator_arc = ctx
         .app_state
         .generator_pool
-        .get(generator_id)
-        .ok_or_else(|| format!("Generator {} not found", generator_id.0))?;
+        .get(*generator_id)
+        .ok_or_else(|| format!("Generator {} not found", generator_id))?;
 
     let generator = generator_arc;
 
@@ -193,14 +193,14 @@ where
                 .app_state
                 .mixer
                 .channels
-                .get(track_id)
-                .ok_or_else(|| format!("Track channel {} not found", track_id.0))?;
+                .get(*track_id)
+                .ok_or_else(|| format!("Track channel {} not found", track_id))?;
             let effect = channel
                 .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
+                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
             (effect.instance.name.clone(), effect.instance.registry_id)
         }
         EffectTarget::Bus(bus_id) => {
@@ -208,14 +208,14 @@ where
                 .app_state
                 .mixer
                 .buses
-                .get(bus_id)
-                .ok_or_else(|| format!("Bus {} not found", bus_id.0))?;
+                .get(*bus_id)
+                .ok_or_else(|| format!("Bus {} not found", bus_id))?;
             let effect = bus
                 .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
+                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
             (effect.instance.name.clone(), effect.instance.registry_id)
         }
         EffectTarget::Master => {
@@ -226,7 +226,7 @@ where
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
+                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
             (effect.instance.name.clone(), effect.instance.registry_id)
         }
     };
@@ -267,13 +267,13 @@ where
 {
     let (plugin_name, plugin_registry_id) = match target {
         PluginTarget::Generator(gen_id) => {
-            let gen = ctx
+            let generator = ctx
                 .app_state
                 .generator_pool
-                .get(gen_id)
-                .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id.0))?;
+                .get(*gen_id)
+                .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id))?;
 
-            if let GeneratorInstanceType::Plugin(ref p) = gen.instance_type {
+            if let GeneratorInstanceType::Plugin(ref p) = generator.instance_type {
                 (p.name.clone(), p.registry_id)
             } else {
                 return Err(anyhow::anyhow!("Generator is not a plugin type"));
@@ -284,14 +284,14 @@ where
                 .app_state
                 .mixer
                 .channels
-                .get(track_id)
-                .ok_or_else(|| anyhow::anyhow!("Track {} not found", track_id.0))?;
+                .get(*track_id)
+                .ok_or_else(|| anyhow::anyhow!("Track {} not found", track_id))?;
             let effect = channel
                 .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id.0))?;
+                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id))?;
             (effect.instance.name.clone(), effect.instance.registry_id)
         }
         PluginTarget::BusEffect(bus_id, effect_id) => {
@@ -299,14 +299,14 @@ where
                 .app_state
                 .mixer
                 .buses
-                .get(bus_id)
-                .ok_or_else(|| anyhow::anyhow!("Bus {} not found", bus_id.0))?;
+                .get(*bus_id)
+                .ok_or_else(|| anyhow::anyhow!("Bus {} not found", bus_id))?;
             let effect = bus
                 .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id.0))?;
+                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id))?;
             (effect.instance.name.clone(), effect.instance.registry_id)
         }
         PluginTarget::MasterEffect(effect_id) => {
@@ -317,7 +317,7 @@ where
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
-                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id.0))?;
+                .ok_or_else(|| anyhow::anyhow!("Effect {} not found", effect_id))?;
             (effect.instance.name.clone(), effect.instance.registry_id)
         }
     };
@@ -445,12 +445,12 @@ pub fn execute_plugin_instance_command(
 ) -> anyhow::Result<serde_json::Value> {
     let (plugin_name, plugin_registry_id, plugin_state) = match target {
         PluginTarget::Generator(gen_id) => {
-            let gen = ctx
+            let generator = ctx
                 .app_state
                 .generator_pool
-                .get(gen_id)
-                .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id.0))?;
-            match &gen.instance_type {
+                .get(*gen_id)
+                .ok_or_else(|| anyhow::anyhow!("Generator {} not found", gen_id))?;
+            match &generator.instance_type {
                 GeneratorInstanceType::Plugin(p) => {
                     (p.name.clone(), p.registry_id, p.plugin_state.clone())
                 }
@@ -462,7 +462,7 @@ pub fn execute_plugin_instance_command(
                 .app_state
                 .mixer
                 .channels
-                .get(t_id)
+                .get(*t_id)
                 .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
             let ef = ch
                 .channel
@@ -481,7 +481,7 @@ pub fn execute_plugin_instance_command(
                 .app_state
                 .mixer
                 .buses
-                .get(b_id)
+                .get(*b_id)
                 .ok_or_else(|| anyhow::anyhow!("Bus not found"))?;
             let ef = bus
                 .channel

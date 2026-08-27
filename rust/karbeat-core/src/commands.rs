@@ -9,12 +9,12 @@ use crate::{
         render_state::{AudioAutomationLane, AudioGraphState},
     },
     core::project::{
+        AutomationTarget, Clip, GeneratorId, ModulationLink, ModulationSource,
         mixer::{MixerChannelParams, RoutingConnection},
         plugin::AudioPlugin,
-        track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack},
-        AutomationTarget, GeneratorId, ModulationLink, ModulationSource,
+        track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern},
     },
-    shared::{id::*, AutomationId, ModulationId, PatternId},
+    shared::{AutomationId, ModulationId, PatternId, id::*},
 };
 
 pub enum AudioCommand {
@@ -199,6 +199,7 @@ pub enum AudioCommand {
     /// are modified, or BPM changes the max_sample_index.
     UpdateTrackGraph {
         tracks: Box<[AudioTrack]>,
+        clips: HashMap<ClipId, Clip>,
         patterns: HashMap<PatternId, Pattern>,
     },
 

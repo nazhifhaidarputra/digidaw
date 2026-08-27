@@ -9,7 +9,7 @@ pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<P
     let pattern_ref = ctx
         .app_state
         .pattern_pool
-        .get(pattern_id)
+        .get(*pattern_id)
         .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
 
     Ok(pattern_ref.clone())
@@ -25,7 +25,7 @@ where
         .app_state
         .pattern_pool
         .iter()
-        .map(|(&id, pattern)| {
+        .map(|(id, pattern)| {
             // Let the closure handle exactly what the Item shape looks like
             mapper(id.into(), pattern)
         })
@@ -39,7 +39,7 @@ pub fn play_pattern_preview(
     pattern_id: PatternId,
     generator_id: GeneratorId,
 ) -> anyhow::Result<()> {
-    if !ctx.app_state.pattern_pool.contains_key(&pattern_id) {
+    if !ctx.app_state.pattern_pool.contains_key(pattern_id) {
         return Err(anyhow::anyhow!("Pattern {:?} not found", pattern_id));
     }
 

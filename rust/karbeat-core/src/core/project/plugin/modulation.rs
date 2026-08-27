@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     audio::event::PluginTarget,
     core::project::{
-        automation::AutomationTarget, ApplicationState, AutomationCurveType, AutomationLane,
-        AutomationPoint,
+        ApplicationState, AutomationCurveType, AutomationLane, AutomationPoint,
+        automation::AutomationTarget,
     },
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
@@ -75,14 +75,12 @@ impl ApplicationState {
 
     /// Creates a new signal generator (e.g., an LFO)
     pub fn add_modulation_source(&mut self, source: ModulationSource) -> ModulationId {
-        let new_id = ModulationId::next(&mut self.modulation_src_counter);
-        self.modulation_sources.insert(new_id, source.clone());
-        return new_id;
+        self.modulation_sources.insert(source)
     }
 
     /// Removes a generator AND all cables connected to it
     pub fn remove_modulation_source(&mut self, source_id: ModulationId) {
-        self.modulation_sources.remove(&source_id);
+        self.modulation_sources.remove(source_id);
         // Cascade delete: Remove any cables that were plugged into this source
         self.modulation_links
             .retain(|_, link| link.prop.source_id != source_id);
@@ -97,7 +95,7 @@ impl ApplicationState {
         base_value: f32,
     ) -> anyhow::Result<ModulationLinkId> {
         // Ensure the source actually exists
-        if !self.modulation_sources.contains_key(&source_id) {
+        if !self.modulation_sources.contains_key(source_id) {
             return Err(anyhow::anyhow!("Modulation source not found"));
         }
 
@@ -112,28 +110,24 @@ impl ApplicationState {
             ));
         }
 
-        let link_id = ModulationLinkId::next(&mut self.modulation_link_counter);
-
         let order_idx = self
             .modulation_links
             .values()
             .filter(|l| l.prop.target == target)
             .count();
 
-        let link = ModulationLink {
-            id: link_id,
-            source_id,
-            target,
-            depth,
-            base_value,
-        };
-
-        let ordered_link = ModulationLinkForOrderedLaneView {
-            order_idx,
-            prop: link,
-        };
-
-        self.modulation_links.insert(link_id, ordered_link);
+        let link_id =
+            self.modulation_links
+                .insert_with_key(|id| ModulationLinkForOrderedLaneView {
+                    order_idx,
+                    prop: ModulationLink {
+                        id,
+                        source_id,
+                        target,
+                        depth,
+                        base_value,
+                    },
+                });
         log::info!(
             "Successfully linked source {:?} to target via link2 {:?}",
             source_id,
@@ -145,14 +139,14 @@ impl ApplicationState {
 
     /// Change the depth/amount of a specific connection
     pub fn update_link_depth(&mut self, link_id: ModulationLinkId, new_depth: f32) {
-        if let Some(link) = self.modulation_links.get_mut(&link_id) {
+        if let Some(link) = self.modulation_links.get_mut(link_id) {
             link.prop.depth = new_depth;
         }
     }
 
     /// Removes a specific connection
     pub fn remove_modulation_link(&mut self, link_id: ModulationLinkId) {
-        self.modulation_links.remove(&link_id);
+        self.modulation_links.remove(link_id);
     }
 
     // =========================================================================
@@ -174,7 +168,7 @@ impl ApplicationState {
             if link.prop.target == target {
                 // If it's linked to an Automation lane, reject it!
                 matches!(
-                    self.modulation_sources.get(&link.prop.source_id),
+                    self.modulation_sources.get(link.prop.source_id),
                     Some(ModulationSource::Automation { .. })
                 )
             } else {
@@ -189,9 +183,11 @@ impl ApplicationState {
         }
 
         // Create the Lane (Pure Data)
-        let lane_id = AutomationId::next(&mut self.automation_counter);
-        let lane = AutomationLane::new(lane_id, label, min, max, default_value);
-        self.automation_pool.insert(lane_id, lane.clone());
+        let label = label.into();
+        let lane_id = self
+            .automation_pool
+            .insert_with_key(|id| AutomationLane::new(id, label, min, max, default_value));
+        let lane = self.automation_pool[lane_id].clone();
 
         // Create the Source Generator
         let source = ModulationSource::Automation { lane_id };
@@ -235,9 +231,9 @@ impl ApplicationState {
             .filter_map(|link| {
                 if link.prop.target.references_track(track_id) {
                     if let Some(ModulationSource::Automation { lane_id }) =
-                        self.modulation_sources.get(&link.prop.source_id)
+                        self.modulation_sources.get(link.prop.source_id)
                     {
-                        if let Some(lane) = self.automation_pool.get(lane_id) {
+                        if let Some(lane) = self.automation_pool.get(*lane_id) {
                             return Some((link.order_idx, link.prop.id, *lane_id, lane.clone()));
                         }
                     }
@@ -255,7 +251,14 @@ impl ApplicationState {
 
     /// remove automation lane, also remove orphaned modulation source and modulation links which links to this automation lane.
     /// returns all removed data
-    pub fn remove_automation_lane(&mut self, target: AutomationTarget) -> Option<(AutomationId, HashSet<ModulationId>, HashSet<ModulationLinkId>)> {
+    pub fn remove_automation_lane(
+        &mut self,
+        target: AutomationTarget,
+    ) -> Option<(
+        AutomationId,
+        HashSet<ModulationId>,
+        HashSet<ModulationLinkId>,
+    )> {
         let mut removed_sources = HashSet::new();
         let mut removed_links = HashSet::new();
         let mut main_lane_id = None;
@@ -265,22 +268,22 @@ impl ApplicationState {
         for (link_id, link) in self.modulation_links.iter() {
             if link.prop.target == target {
                 if let Some(ModulationSource::Automation { lane_id }) =
-                    self.modulation_sources.get(&link.prop.source_id)
+                    self.modulation_sources.get(link.prop.source_id)
                 {
-                    to_remove.push((*link_id, link.prop.source_id, *lane_id));
+                    to_remove.push((link_id, link.prop.source_id, *lane_id));
                 }
             }
         }
 
         // Perform the removals from the application state
         for (link_id, source_id, lane_id) in to_remove {
-            if self.modulation_links.remove(&link_id).is_some() {
+            if self.modulation_links.remove(link_id).is_some() {
                 removed_links.insert(link_id); // HashSet uses insert()
             }
-            if self.modulation_sources.remove(&source_id).is_some() {
+            if self.modulation_sources.remove(source_id).is_some() {
                 removed_sources.insert(source_id); // HashSet uses insert()
             }
-            if self.automation_pool.remove(&lane_id).is_some() {
+            if self.automation_pool.remove(lane_id).is_some() {
                 // Capture the first lane_id we find to return it
                 if main_lane_id.is_none() {
                     main_lane_id = Some(lane_id);
@@ -301,7 +304,7 @@ impl ApplicationState {
 
             if references {
                 if let Some(ModulationSource::Automation { lane_id }) =
-                    self.modulation_sources.get(&link.prop.source_id)
+                    self.modulation_sources.get(link.prop.source_id)
                 {
                     orphaned_lanes.push(*lane_id);
                 }
@@ -311,7 +314,7 @@ impl ApplicationState {
 
         // Clean up the pure data lanes so we don't leak memory
         for lane_id in orphaned_lanes {
-            self.automation_pool.remove(&lane_id);
+            self.automation_pool.remove(lane_id);
         }
     }
 
@@ -342,9 +345,9 @@ impl ApplicationState {
             .filter_map(|link| {
                 if link.prop.target.references_bus(bus_id) {
                     if let Some(ModulationSource::Automation { lane_id }) =
-                        self.modulation_sources.get(&link.prop.source_id)
+                        self.modulation_sources.get(link.prop.source_id)
                     {
-                        if let Some(lane) = self.automation_pool.get(lane_id) {
+                        if let Some(lane) = self.automation_pool.get(*lane_id) {
                             return Some((link.order_idx, link.prop.id, *lane_id, lane.clone()));
                         }
                     }
@@ -368,7 +371,7 @@ impl ApplicationState {
             let references = link.prop.target.references_bus(bus_id);
             if references {
                 if let Some(ModulationSource::Automation { lane_id }) =
-                    self.modulation_sources.get(&link.prop.source_id)
+                    self.modulation_sources.get(link.prop.source_id)
                 {
                     orphaned_lanes.push(*lane_id);
                 }
@@ -377,7 +380,7 @@ impl ApplicationState {
         });
 
         for lane_id in orphaned_lanes {
-            self.automation_pool.remove(&lane_id);
+            self.automation_pool.remove(lane_id);
         }
     }
 
@@ -402,16 +405,15 @@ impl ApplicationState {
         time_ticks: u32,
         value: NormalizedF64,
     ) -> anyhow::Result<(AutomationLane, u64)> {
-        let lane = self
-            .automation_pool
-            .get_mut(&lane_id)
-            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-
         // AutomationPoint::new applies Linear curve and clamps safely to 0.0..1.0
         let point = AutomationPoint::new(time_ticks, value);
-        let point_id = point.id;
-
-        lane.add_point(point);
+        let point_id = self
+            .automation_pool
+            .get_mut(lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?
+            .add_point(point)
+            .to_u64();
+        let lane = &self.automation_pool[lane_id];
         Ok((lane.clone(), point_id))
     }
 
@@ -422,7 +424,7 @@ impl ApplicationState {
     ) -> anyhow::Result<AutomationLane> {
         let lane = self
             .automation_pool
-            .get_mut(&lane_id)
+            .get_mut(lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
         let _ = lane
@@ -443,7 +445,7 @@ impl ApplicationState {
     ) -> anyhow::Result<(AutomationLane, usize)> {
         let lane = self
             .automation_pool
-            .get_mut(&lane_id)
+            .get_mut(lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
         match lane.update_point(point_id, time_ticks, value, tension, curve_type) {
@@ -468,7 +470,7 @@ impl ApplicationState {
         // Find the target to determine which UI drawer we are sorting inside
         let target = self
             .modulation_links
-            .get(&link_id)
+            .get(link_id)
             .map(|l| l.prop.target.clone())
             .ok_or_else(|| anyhow::anyhow!("Link {:?} not found", link_id))?;
 
@@ -496,7 +498,7 @@ impl ApplicationState {
 
         // Write the new sequential indices back to the global HashMap
         for (i, sibling) in sibling_links.iter().enumerate() {
-            if let Some(global_link) = self.modulation_links.get_mut(&sibling.prop.id) {
+            if let Some(global_link) = self.modulation_links.get_mut(sibling.prop.id) {
                 global_link.order_idx = i;
             }
         }

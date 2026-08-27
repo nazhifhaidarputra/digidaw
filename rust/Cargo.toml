@@ -12,6 +12,11 @@ members = [
     "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap",
 ]
 
+[workspace.package]
+version = "0.3.0"
+edition = "2024"
+license = "GPL 3.0"
+
 [workspace.dependencies]
 karbeat-core = { path = "karbeat-core" }
 karbeat-dsp = { path = "karbeat-dsp" }
@@ -49,7 +54,7 @@ memmap2 = "0.9.11"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
 zip = "8.5"
-toml = "1.1.2"
+toml = "1.1.4"
 chrono = { version = "0.4.44", features = ["serde"] }
 rmp-serde = "1.3.1"
 derive_builder = "0.20.2"
@@ -66,6 +71,7 @@ pkg-config = "0.3.33"
 rubato = "4.0.0"
 dyn-clone = "1.0.20"
 raw-window-handle = "0.6.2"
+slotmap = {version = "1.1.1", features=["serde"] }
 
 [profile.dev]
 opt-level = 3

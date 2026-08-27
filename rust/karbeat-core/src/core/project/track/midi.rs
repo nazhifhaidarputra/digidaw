@@ -421,7 +421,7 @@ impl Pattern {
             return Err(anyhow::anyhow!("Invalid key {}", note.key));
         }
 
-        // 2. Insert directly (Preserving ID)
+        // 2. Insert directly (preserving ID)
         self.notes.push(note);
 
         // 3. Maintain Order
@@ -487,7 +487,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Note> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
 
         let note = pattern.add_note(key, start_tick, duration)?;
@@ -502,7 +502,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Note> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
 
         let index = pattern
@@ -524,7 +524,7 @@ impl ApplicationState {
     ) -> anyhow::Result<(Note, u64)> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
 
         let index = pattern
@@ -548,7 +548,7 @@ impl ApplicationState {
     ) -> anyhow::Result<(Note, u64, u8)> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
 
         let index = pattern
@@ -576,7 +576,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Note> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
 
         let index = pattern
@@ -598,7 +598,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Vec<Note>> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         // let pattern = Arc::make_mut(pattern_arc);
 
@@ -626,7 +626,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Vec<Note>> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         // let pattern = Arc::make_mut(pattern_arc);
 
@@ -650,7 +650,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Vec<(Note, u64, u8)>> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         // let pattern = Arc::make_mut(pattern_arc);
 
@@ -664,7 +664,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Vec<(Note, u64)>> {
         let pattern = self
             .pattern_pool
-            .get_mut(&pattern_id)
+            .get_mut(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
         // let pattern = Arc::make_mut(pattern_arc);
 
@@ -678,7 +678,7 @@ impl ApplicationState {
     ) -> anyhow::Result<()> {
         let pattern = self
             .pattern_pool
-            .get(&pattern_id)
+            .get(pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
 
         // Filter and clone the requested notes
@@ -707,7 +707,7 @@ impl ApplicationState {
     ) -> anyhow::Result<Vec<Note>> {
         let pattern = self
             .pattern_pool
-            .get_mut(target_pattern_id)
+            .get_mut(*target_pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", target_pattern_id.to_u32()))?;
 
         // Get clipboard

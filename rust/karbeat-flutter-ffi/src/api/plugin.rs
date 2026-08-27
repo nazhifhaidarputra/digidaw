@@ -228,7 +228,7 @@ pub fn get_effect(
     let track_id = TrackId::from(track_id);
     let effect_id = EffectId::from(effect_id);
     plugin_api::get_effect(ctx, &track_id, &effect_id, |e| UiEffectInstance::from(e))
-        .ok_or_else(|| format!("Effect {} not found", effect_id.0))
+        .ok_or_else(|| format!("Effect {} not found", effect_id))
 }
 
 pub fn get_effect_from_master(
@@ -246,7 +246,7 @@ pub fn get_effects_from_track(
 ) -> Result<Vec<UiEffectInstance>, String> {
     let track_id = TrackId::from(track_id);
     plugin_api::get_effects_from_track(ctx, &track_id, |e| UiEffectInstance::from(e))
-        .ok_or_else(|| format!("Track {} not found", track_id.0))
+        .ok_or_else(|| format!("Track {} not found", track_id))
 }
 
 pub fn get_master_effects(ctx: &DawContext) -> Vec<UiEffectInstance> {

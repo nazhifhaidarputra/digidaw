@@ -12,11 +12,11 @@ use std::{
 };
 use tempfile::tempfile;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use memmap2::MmapOptions;
 use rodio::Source;
 
-use crate::core::project::{track::audio_waveform::AudioWaveform, ApplicationState, AudioSourceId};
+use crate::core::project::{ApplicationState, AudioSourceId, track::audio_waveform::AudioWaveform};
 
 trait FileNameExt {
     fn file_name_string(&self) -> String;
@@ -44,7 +44,11 @@ mod err {
 }
 
 /// Main entry point for loading audio.
-pub fn load_audio_file(path_str: &str, name: Option<&str>, target_sample_rate: u32,) -> Result<AudioWaveform> {
+pub fn load_audio_file(
+    path_str: &str,
+    name: Option<&str>,
+    target_sample_rate: u32,
+) -> Result<AudioWaveform> {
     let path = Path::new(path_str);
     let file =
         File::open(path).with_context(|| format!("Failed to open audio file: {}", path_str))?;
@@ -55,7 +59,7 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>, target_sample_rate: u
     let sample_rate = decoder.sample_rate().get();
     let source_sample_rate = decoder.sample_rate().get();
     let channels_u16 = decoder.channels().get();
-    let channels = channels_u16 as  usize;
+    let channels = channels_u16 as usize;
 
     // Cache the loaded audio file
     // let mut f32_decoder = decoder.into_iter();
@@ -150,15 +154,23 @@ where
 
 // Trait AudioLoader
 pub trait AudioLoader {
-    fn load_audio(&mut self, path: &str, name: Option<&str>, target_sample_rate: u32) -> Result<AudioSourceId>;
+    fn load_audio(
+        &mut self,
+        path: &str,
+        name: Option<&str>,
+        target_sample_rate: u32,
+    ) -> Result<AudioSourceId>;
     fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>>;
     fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>>;
 }
 
-
-
 impl AudioLoader for ApplicationState {
-    fn load_audio(&mut self, path: &str, name: Option<&str>, target_sample_rate: u32) -> Result<AudioSourceId> {
+    fn load_audio(
+        &mut self,
+        path: &str,
+        name: Option<&str>,
+        target_sample_rate: u32,
+    ) -> Result<AudioSourceId> {
         // Load the actual audio data (Heavy I/O operation)
         // This parses the file into f32 samples
         let mut waveform = match load_audio_file(path, name, target_sample_rate) {
@@ -170,16 +182,11 @@ impl AudioLoader for ApplicationState {
             }
         };
 
-        let source_id = AudioSourceId::next(&mut self.asset_library.next_id);
-
         let asset_library = &mut self.asset_library;
-
-        // Assign this audio waveform with an Id
-        waveform.id = Some(source_id);
-
-        asset_library
-            .source_map
-            .insert(source_id, Arc::new(waveform));
+        let source_id = asset_library.source_map.insert_with_key(|id| {
+            waveform.id = Some(id);
+            Arc::new(waveform)
+        });
 
         log::info!("Successfully loaded audio: {} (ID: {})", path, source_id);
 
@@ -187,10 +194,14 @@ impl AudioLoader for ApplicationState {
     }
 
     fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>> {
-        self.asset_library.source_map.get(id).cloned()
+        self.asset_library.source_map.get(*id).cloned()
     }
 
     fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>> {
-        self.asset_library.source_map.clone()
+        self.asset_library
+            .source_map
+            .iter()
+            .map(|(id, waveform)| (id, waveform.clone()))
+            .collect()
     }
 }

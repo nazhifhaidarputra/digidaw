@@ -456,14 +456,14 @@ pub fn get_track_mixer_channel_specs(
     ctx: &DawContext,
     track_id: u32,
 ) -> Option<Vec<ParameterSpecDTO>> {
-    mixer_api::get_track_mixer_channel_specs(ctx, &TrackId(track_id), |param_spec| {
+    mixer_api::get_track_mixer_channel_specs(ctx, &TrackId::from(track_id), |param_spec| {
         ParameterSpecDTO::from(param_spec)
     })
 }
 
 /// Get bus channel's parameter specs
 pub fn get_bus_mixer_channel_specs(ctx: &DawContext, bus_id: u32) -> Option<Vec<ParameterSpecDTO>> {
-    mixer_api::get_bus_mixer_channel_specs(ctx, &BusId(bus_id), |param_spec| {
+    mixer_api::get_bus_mixer_channel_specs(ctx, &BusId::from(bus_id), |param_spec| {
         ParameterSpecDTO::from(param_spec)
     })
 }

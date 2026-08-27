@@ -1,14 +1,14 @@
 [package]
 name = "karbeat-macros"
-version = "0.3.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 license = "Apache-2.0 OR MIT"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-syn = { version = "2.0.117", features = ["full"] }
+syn = { version = "3.0.0", features = ["full","extra-traits"] }
 quote = "1.0.45"
 proc-macro2 = "1.0.106"
 serde_json.workspace = true

@@ -6,15 +6,13 @@ mod tests {
     use crate::shared::id::{NoteId, PatternId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
-    // ─── add_note ─────────────────────────────────────────────────────────────
-
     #[test]
     fn add_note_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let before = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let before = ctx.app_state.pattern_pool[pattern_id].notes.len();
         let result = note_api::add_note(&mut ctx, pattern_id, 72, 5000, Some(960));
         assert!(result.is_ok(), "{:?}", result.err());
-        let after = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let after = ctx.app_state.pattern_pool[pattern_id].notes.len();
         assert_eq!(after, before + 1);
     }
 
@@ -55,16 +53,14 @@ mod tests {
         assert!(result.is_ok(), "None duration should use default");
     }
 
-    // ─── delete_note ──────────────────────────────────────────────────────────
-
     #[test]
     fn delete_note_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
-        let before = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
+        let before = ctx.app_state.pattern_pool[pattern_id].notes.len();
         let result = note_api::delete_note(&mut ctx, pattern_id, note_id);
         assert!(result.is_ok(), "{:?}", result.err());
-        let after = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let after = ctx.app_state.pattern_pool[pattern_id].notes.len();
         assert_eq!(after, before - 1);
     }
 
@@ -85,12 +81,10 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── move_note ────────────────────────────────────────────────────────────
-
     #[test]
     fn move_note_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
         let result = note_api::move_note(&mut ctx, pattern_id, note_id, 9999, 65);
         assert!(result.is_ok(), "{:?}", result.err());
         let note = result.unwrap();
@@ -106,12 +100,10 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── resize_note ──────────────────────────────────────────────────────────
-
     #[test]
     fn resize_note_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
         let result = note_api::resize_note(&mut ctx, pattern_id, note_id, 960);
         assert!(result.is_ok(), "{:?}", result.err());
         assert_eq!(result.unwrap().duration, 960);
@@ -120,7 +112,7 @@ mod tests {
     #[test]
     fn resize_note_to_zero_duration() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
         // Zero duration: no validation in API layer, just passes through
         let result = note_api::resize_note(&mut ctx, pattern_id, note_id, 0);
         assert!(result.is_ok(), "Zero resize should be accepted");
@@ -134,13 +126,11 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── change_note_params ───────────────────────────────────────────────────
-
     #[test]
     fn change_note_params_all_none_returns_unchanged_note() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
-        let original_velocity = ctx.app_state.pattern_pool[&pattern_id].notes[0].velocity;
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
+        let original_velocity = ctx.app_state.pattern_pool[pattern_id].notes[0].velocity;
         let result =
             note_api::change_note_params(&mut ctx, pattern_id, note_id, None, None, None, None);
         assert!(result.is_ok());
@@ -150,7 +140,7 @@ mod tests {
     #[test]
     fn change_note_params_velocity_min() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
         let result =
             note_api::change_note_params(&mut ctx, pattern_id, note_id, Some(0), None, None, None);
         assert!(result.is_ok());
@@ -160,7 +150,7 @@ mod tests {
     #[test]
     fn change_note_params_velocity_max() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
         let result = note_api::change_note_params(
             &mut ctx,
             pattern_id,
@@ -177,7 +167,7 @@ mod tests {
     #[test]
     fn change_note_params_mute() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_id = ctx.app_state.pattern_pool[&pattern_id].notes[0].id;
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
         let result = note_api::change_note_params(
             &mut ctx,
             pattern_id,
@@ -191,16 +181,14 @@ mod tests {
         assert!(result.unwrap().mute);
     }
 
-    // ─── add_notes_batch ─────────────────────────────────────────────────────
-
     #[test]
     fn add_notes_batch_empty_list_is_noop() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let before = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let before = ctx.app_state.pattern_pool[pattern_id].notes.len();
         let result = note_api::add_notes_batch(&mut ctx, pattern_id, vec![]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
-        let after = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let after = ctx.app_state.pattern_pool[pattern_id].notes.len();
         assert_eq!(before, after);
     }
 
@@ -237,27 +225,23 @@ mod tests {
         );
     }
 
-    // ─── delete_notes_batch ───────────────────────────────────────────────────
-
     #[test]
     fn delete_notes_batch_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let note_ids: Vec<_> = ctx.app_state.pattern_pool[&pattern_id]
+        let note_ids: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
             .map(|n| n.id)
             .collect();
         let result = note_api::delete_notes_batch(&mut ctx, pattern_id, note_ids);
         assert!(result.is_ok());
-        assert!(ctx.app_state.pattern_pool[&pattern_id].notes.is_empty());
+        assert!(ctx.app_state.pattern_pool[pattern_id].notes.is_empty());
     }
-
-    // ─── move_notes_batch ─────────────────────────────────────────────────────
 
     #[test]
     fn move_notes_batch_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let updates: Vec<_> = ctx.app_state.pattern_pool[&pattern_id]
+        let updates: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
             .map(|n| (n.id, n.start_tick + 100, n.key))
@@ -268,12 +252,10 @@ mod tests {
         assert!(!notes.is_empty());
     }
 
-    // ─── resize_notes_batch ───────────────────────────────────────────────────
-
     #[test]
     fn resize_notes_batch_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let updates: Vec<_> = ctx.app_state.pattern_pool[&pattern_id]
+        let updates: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
             .map(|n| (n.id, 960u64))

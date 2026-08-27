@@ -13,14 +13,8 @@ where
     F: FnOnce(&Clip) -> T,
 {
     let app = &ctx.app_state;
-    let track = app
-        .tracks
-        .get(&track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-    // Uses your recently fixed `get_clip` which returns `Option<Arc<Clip>>`
-    let clip = track
-        .get_clip(&clip_id)
+    let clip = app
+        .get_clip(&track_id, &clip_id)
         .ok_or_else(|| anyhow::anyhow!("Clip {:?} not found in track {:?}", clip_id, track_id))?;
 
     Ok(mapper(&clip))
@@ -87,11 +81,7 @@ pub fn move_clip(
 ) -> anyhow::Result<Clip> {
     // 1. Capture old state if we want to support undo for single move
     let app = &mut ctx.app_state;
-    let track = app
-        .tracks
-        .get(&source_track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", source_track_id))?;
-    let old_clip = track.get_clip(&clip_id).ok_or_else(|| {
+    let old_clip = app.get_clip(&source_track_id, &clip_id).ok_or_else(|| {
         anyhow::anyhow!(
             "Clip {:?} not found in track {:?}",
             clip_id,
@@ -127,12 +117,8 @@ pub fn resize_clip(
 ) -> anyhow::Result<Clip> {
     // 1. Capture old state
     let app = &mut ctx.app_state;
-    let track = app
-        .tracks
-        .get(&track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-    let old_clip = track
-        .get_clip(&clip_id)
+    let old_clip = app
+        .get_clip(&track_id, &clip_id)
         .ok_or_else(|| anyhow::anyhow!("Clip {:?} not found in track {:?}", clip_id, track_id))?;
 
     // 2. Mutate state
@@ -159,12 +145,8 @@ pub fn slice_clip(
 ) -> anyhow::Result<(Clip, Clip)> {
     // 1. Capture old state
     let app = &mut ctx.app_state;
-    let track = app
-        .tracks
-        .get(&track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-    let old_clip = track
-        .get_clip(&clip_id)
+    let old_clip = app
+        .get_clip(&track_id, &clip_id)
         .ok_or_else(|| anyhow::anyhow!("Clip {:?} not found in track {:?}", clip_id, track_id))?;
 
     // 2. Mutate state
@@ -201,12 +183,8 @@ pub fn batch_delete_clips(
 
     // 1. Mutate state and wllect actions
     let app = &mut ctx.app_state;
-    let track = app
-        .tracks
-        .get_mut(&track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
     for clip_id in clip_ids {
-        if let Ok(deleted_clip) = track.remove_clip(&clip_id) {
+        if let Ok(deleted_clip) = app.delete_clip_from_track(track_id, clip_id) {
             deleted_actions.push(ProjectAction::DeleteClip {
                 track_id,
                 clip: deleted_clip.clone(),
@@ -235,13 +213,9 @@ pub fn batch_move_clips(
 ) -> anyhow::Result<Vec<Clip>> {
     let app = &mut ctx.app_state;
     // 1. Capture old states
-    let track = app
-        .tracks
-        .get(&source_track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", source_track_id))?;
     let old_clips = clip_ids
         .iter()
-        .filter_map(|&id| track.get_clip(&id))
+        .filter_map(|id| app.get_clip(&source_track_id, id))
         .collect::<Vec<_>>();
 
     // 2. Mutate state
@@ -282,15 +256,9 @@ pub fn batch_resize_clips(
 ) -> anyhow::Result<Vec<Clip>> {
     // 1. Capture old states
     let app = &mut ctx.app_state;
-    let track = app
-        .tracks
-        .get(&track_id)
-        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-    let old_clips = track
-        .clips()
+    let old_clips = clip_ids
         .iter()
-        // .filter_map(|&clip| app.get_clip(&track_id, &clip.id).as_ref())
-        .cloned()
+        .filter_map(|id| app.get_clip(&track_id, id))
         .collect::<Vec<_>>();
 
     // 2. Mutate state
