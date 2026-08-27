@@ -4,8 +4,6 @@
 // Provides both project-level automation lane data (saved with the project)
 // and a runtime AutomationManager used by plugin wrappers during audio processing.
 
-use std::sync::atomic::AtomicU64;
-
 use karbeat_dsp::interpolation::lerp;
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use serde::{Deserialize, Serialize};
@@ -13,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     audio::event::PluginTarget,
     shared::{
-        id::{AutomationId, BusId, EffectId, TrackId},
         GeneratorId,
+        id::{AutomationId, AutomationPointId, BusId, EffectId, TrackId},
     },
 };
 
@@ -165,7 +163,7 @@ pub enum AutomationCurveType {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AutomationPoint {
-    pub id: u64,
+    pub id: AutomationPointId,
     /// Position in ticks (relative to project start)
     pub time_ticks: u32,
     /// Normalized parameter value (0.0–1.0)
@@ -176,16 +174,10 @@ pub struct AutomationPoint {
     pub tension: BipolarF64,
 }
 
-static POINT_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
-
 impl AutomationPoint {
-    fn next_id() -> u64 {
-        POINT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    }
-
     pub fn new(time_ticks: u32, value: NormalizedF64) -> Self {
         Self {
-            id: Self::next_id(),
+            id: AutomationPointId::default(),
             time_ticks,
             value,
             curve_type: AutomationCurveType::Linear,
@@ -200,7 +192,7 @@ impl AutomationPoint {
         curve_type: AutomationCurveType,
     ) -> Self {
         Self {
-            id: Self::next_id(),
+            id: AutomationPointId::default(),
             time_ticks,
             value,
             curve_type,
@@ -222,8 +214,9 @@ pub struct AutomationLane {
     pub id: AutomationId,
     /// Human-readable label (e.g. "Volume", "Filter Cutoff")
     pub label: String,
-    /// Automation points sorted by time
+    /// Automation points sorted by time. Points are self-contained in the lane.
     pub points: Vec<AutomationPoint>,
+    pub next_point_id: u32,
     /// Whether this lane is active
     pub enabled: bool,
     /// Minimum value of the target parameter (for display/denormalization)
@@ -248,6 +241,7 @@ impl AutomationLane {
             id,
             label: label.into(),
             points: Vec::new(),
+            next_point_id: 0,
             enabled: true,
             min,
             max,
@@ -256,17 +250,21 @@ impl AutomationLane {
     }
 
     /// Add a point to the lane (maintains sorted order by time).
-    pub fn add_point(&mut self, point: AutomationPoint) {
+    pub fn add_point(&mut self, mut point: AutomationPoint) -> AutomationPointId {
+        point.id = AutomationPointId::next(&mut self.next_point_id);
+        let id = point.id;
         let idx = self
             .points
             .binary_search_by(|p| p.time_ticks.cmp(&point.time_ticks))
             .unwrap_or_else(|i| i);
         self.points.insert(idx, point);
+        id
     }
 
     /// Remove a point at the given index.
     pub fn remove_point(&mut self, id: u64) -> Option<AutomationPoint> {
-        let index = self.points.iter().position(|p| p.id == id)?;
+        let id = AutomationPointId::from_u64(id);
+        let index = self.points.iter().position(|point| point.id == id)?;
         Some(self.points.remove(index))
     }
 
@@ -279,7 +277,8 @@ impl AutomationLane {
         tension: Option<BipolarF64>,
         curve_type: Option<AutomationCurveType>,
     ) -> Option<usize> {
-        let index = self.points.iter().position(|p| p.id == id)?;
+        let id = AutomationPointId::from_u64(id);
+        let index = self.points.iter().position(|point| point.id == id)?;
 
         let mut point = self.points.remove(index);
         if let Some(tt) = time_ticks {

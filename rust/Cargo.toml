@@ -9,8 +9,13 @@ members = [
     "karbeat-plugin-api",
     "karbeat-utils",
     "karbeat-macros",
-    "karbeat-plugin-types",
+    "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap",
 ]
+
+[workspace.package]
+version = "0.3.0"
+edition = "2024"
+license = "GPL 3.0"
 
 [workspace.dependencies]
 karbeat-core = { path = "karbeat-core" }
@@ -30,17 +35,10 @@ flutter_rust_bridge = "=2.11.1"
 log = "0.4.28"
 minimp3 = "0.6.1"
 once_cell = "1.21"
-rodio = "0.22.1"
+rodio = {version= "0.22.1", features=["symphonia-all"]}
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = "1.0.149"
-symphonia = { version = "0.5.5", default-features = false, features = [
-    "aac",
-    "mp3",
-    "flac",
-    "wav",
-    "ogg",
-] }
 triple_buffer = "9.0.0"
 rustfft = "6.4.1"
 thiserror = "2.0"
@@ -56,17 +54,24 @@ memmap2 = "0.9.11"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
 zip = "8.5"
-toml = "1.1.2"
+toml = "1.1.4"
 chrono = { version = "0.4.44", features = ["serde"] }
 rmp-serde = "1.3.1"
 derive_builder = "0.20.2"
 hound = "3.5.1"
 strum = { version = "0.28.0", features = ["derive"] }
 num-traits = "0.2"
-wide = "1.3.0"
+wide = "1.6.0"
 heck = "0.5.0"
 fundsp = "0.23.0"
-rand = "0.23.0"
+rand = "0.10.1"
+vcpkg = "0.2.15"
+bindgen = "0.72.1"
+pkg-config = "0.3.33"
+rubato = "4.0.0"
+dyn-clone = "1.0.20"
+raw-window-handle = "0.6.2"
+slotmap = {version = "1.1.1", features=["serde"] }
 
 [profile.dev]
 opt-level = 3
@@ -76,6 +81,7 @@ debug = true
 opt-level = 3
 
 [profile.release]
+
 codegen-units = 1
 lto = true
 opt-level = 3

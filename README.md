@@ -16,7 +16,48 @@ By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio pr
 - **High-Performance Audio**: Core audio engine built in Rust using [CPAL](https://github.com/RustAudio/cpal).
 - **Minimalist Interface**: A clean UI developed with Flutter for a distraction-free workflow.
 
-_More features are currently in active development._
+More features are currently in active development.
+
+## Roadmap
+
+These are features which have been or have not been implemented. All unimplemented features will be implemented in the future
+
+- [x] Ser/De project file
+- [x] Export Audio to MP3 and Wav
+- [x] Audio Waveform sequencing
+- [x] Working real-time transport controller
+- [x] Automation for mixer channel and mixer channel plugin
+- [x] Clip level manipulation (Copy, Cut, Paste, Slice, resize, move, and its batch operation) for both audio waveform clip and MIDI clip
+- [x] Piano roll MIDI note drawing
+- [x] Simple Synthesizers
+- [x] Parametric EQ  
+- [x] Mixer Routing (Partially)
+- [x] Bus Automation lanes rack
+- [x] Real-time pitch shifting (Via Rubberband FFI binding)
+- [ ] Action history (Undo/Redo)
+- [ ] Finishing and optimizing Bus Mixer Routing
+- [ ] Time-stretched audio waveform processing
+- [ ] Automation for generator and global parameters
+- [ ] Wavetable Synthesizer
+- [ ] Sample-based Synthesizer (for Real instrument)
+- [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Sidechain Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
+- [ ] Browser panel for easy drag-and-drop audio samples
+- [ ] Input channel for input recording
+- [ ] Auxiliary input handler (WIP)
+- [ ] Refactor UI for better UX and responsiveness in mobile platform
+- [ ] Third-party supports for native audio plugin (In form of Asset Workshop)
+- [ ] Settings/configuration for user
+- [ ] Logging for end-user
+- [ ] VST3/AU Host support
+- [ ] CLAP Host support
+- [ ] LV2 Host support
+- [ ] Plugin Scanner
+- [ ] MacOS version
+- [ ] iOS version
+- [ ] Export audio to FLAC and OGG
+- [ ] Tempo detector and Fit-to-tempo functionality
+- [ ] Version manager
+- [ ] Comprehensive Documentation for both User and Developer
 
 ## Tech Stack
 
@@ -41,7 +82,7 @@ Currently, technical documentation and detailed info are still being drafted. Pl
 
 ## 👨‍💻 Note for Developers
 
-Thank you for your interest in Karbeat! Here are a few things to keep in mind:
+Thank you for your interest in Digidaw! Here are a few things to keep in mind:
 
 - **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment for faster development. We will focus to complete features to an usable state for users. Eventually we will fully focus on mobile devices support as it is our main priority in the first place
 - **Future Platforms**: Once the core application is near completion, we'll implement and optimize features for **Android**.

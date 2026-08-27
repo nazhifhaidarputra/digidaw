@@ -1,9 +1,15 @@
-use std::{str::FromStr, sync::Arc};
+use std::{
+    str::FromStr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
     DeviceId, OutputCallbackInfo,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use parking_lot::Mutex;
 use rtrb::{Consumer, RingBuffer};
@@ -39,17 +45,21 @@ struct AudioContext {
 /// $consumer: The RingBuffer consumer (moved into the closure)
 /// $sample_type: The primitive type (f32, i16, etc)
 /// $converter: A closure |f32_sample| -> $sample_type
+/// Macro to generate the stream building logic
+/// $device: cpal device
+/// $config: cpal config
+/// $consumer: The RingBuffer consumer (moved into the closure)
+/// $sample_type: The primitive type (f32, i16, etc)
+/// $converter: A closure |f32_sample| -> $sample_type
 macro_rules! run_stream {
     (
         $device:expr,
         $config:expr,
-        $audio_ctx:expr,
         $consumer:expr,
         $sample_type:ty,
         $converter:expr,
         $err_fn:expr
     ) => {{
-        let mut audio_ctx = $audio_ctx;
         let mut consumer = $consumer;
         // Internal buffer for reading from ringbuffer before conversion
         let mut read_buffer: Vec<f32> = Vec::new();
@@ -59,28 +69,12 @@ macro_rules! run_stream {
             move |data: &mut [$sample_type], _: &OutputCallbackInfo| {
                 let samples_needed = data.len();
 
-                // Ensure Ring Buffer has enough data
-                // While readable samples < needed samples
-                while consumer.slots() < samples_needed {
-                    // Process fixed block
-                    {
-                        let mut engine = audio_ctx.engine.lock();
-                        engine.process(&mut audio_ctx.staging_buffer);
-                    }
-
-                    // Push to RingBuffer
-                    // Note: process() fills staging_buffer completely
-                    for sample in &audio_ctx.staging_buffer {
-                        if let Err(_) = audio_ctx.producer.push(*sample) {
-                            break;
-                        }
-                    }
-                }
-
                 if read_buffer.len() != samples_needed {
                     read_buffer.resize(samples_needed, 0.0);
                 }
 
+                // Simply pop from the Lock-Free RingBuffer.
+                // If it's empty (underrun), output silence instead of blocking.
                 for i in 0..samples_needed {
                     if let Ok(sample) = consumer.pop() {
                         read_buffer[i] = sample;
@@ -99,7 +93,6 @@ macro_rules! run_stream {
         )
     }};
 }
-
 /// Set host to use the optimized host for each platform.
 /// - Windows: ASIO, then fallback to WASAPI (low latency)
 /// - Android: AAudio (low latency, requires API 26+)
@@ -300,7 +293,7 @@ pub fn get_device_sample_rates(
     Ok(rates)
 }
 
-// Helper to dry up the code and fetch the device repeatedly during restarts
+/// Helper to dry up the code and fetch the device repeatedly during restarts
 fn get_device_and_config(
     config_pref: &AudioDeviceConfig,
 ) -> Result<(cpal::Device, cpal::StreamConfig, cpal::SampleFormat)> {
@@ -367,12 +360,17 @@ fn get_device_and_config(
         })
         .context("device does not support stereo (2 channels) output")?;
 
-    let buffer_size = match supported_config.buffer_size() {
-        cpal::SupportedBufferSize::Range { min, max } => {
-            let desired = config_pref.buffer_size.unwrap_or(1024);
-            cpal::BufferSize::Fixed(desired.clamp(*min, *max))
+    // Yield to the Server's globally locked buffer size if using JACK to prevent crash loop
+    let buffer_size = if host.id().name() == "JACK" {
+        cpal::BufferSize::Default
+    } else {
+        match supported_config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, max } => {
+                let desired = config_pref.buffer_size.unwrap_or(1024);
+                cpal::BufferSize::Fixed(desired.clamp(*min, *max))
+            }
+            cpal::SupportedBufferSize::Unknown => cpal::BufferSize::Default,
         }
-        cpal::SupportedBufferSize::Unknown => cpal::BufferSize::Default,
     };
 
     let config = cpal::StreamConfig {
@@ -383,7 +381,6 @@ fn get_device_and_config(
 
     Ok((device, config, supported_config.sample_format()))
 }
-
 /// Start the audio stream by initializing the Command Queue and Audio Engine
 /// and then spawning the Monitor Thread to handle stream failures.
 pub fn start_audio_stream(
@@ -397,15 +394,27 @@ pub fn start_audio_stream(
         *active_cfg = config_pref.clone();
     }
 
-    // Create an Arc clone for the background thread to safely observe
     let active_config_arc = Arc::clone(&ctx.active_audio_config);
 
     // Resolve initial device and config to create the engine exactly once
     let (device, config, sample_format) = get_device_and_config(&config_pref)?;
 
+    // Extract actual values granted by the OS instead of relying on preferences
     let sample_rate = config.sample_rate;
     let channels = config.channels as usize;
-    let engine_block_size = config_pref.buffer_size.unwrap_or(1024) as usize;
+    let engine_block_size = match config.buffer_size {
+        cpal::BufferSize::Fixed(size) => size as usize,
+        cpal::BufferSize::Default => config_pref.buffer_size.unwrap_or(1024) as usize,
+    };
+
+    // Sync actual OS values back to the active configuration immediately
+    {
+        let mut active_cfg = active_config_arc.write();
+        active_cfg.sample_rate = Some(sample_rate);
+        active_cfg.buffer_size = Some(engine_block_size as u32);
+        active_cfg.host_name = config_pref.host_name;
+        active_cfg.device_id = config_pref.device_id;
+    }
 
     log::info!(
         "Initial Stream Config: {:?} Hz, {} Channels",
@@ -429,14 +438,8 @@ pub fn start_audio_stream(
 
     let initial_bpm = ctx.app_state.transport.bpm;
 
-    // Build the engine telemetry.  The constructor returns both the engine-side
-    // producers AND the UI-side mixer consumer in one step.
     let (engine_telemetry, mixer_consumer) = AudioEngineTelemetry::new();
 
-    // Dedicated channel for handing per-plugin triple-buffer Output consumers
-    // from the audio thread back to DawContext on the main thread.
-    // Capacity of 64 is generous; in practice only a handful of plugins are
-    // added/removed between UI polls.
     let (telemetry_reg_sender, telemetry_reg_receiver) =
         std::sync::mpsc::sync_channel::<TelemetryRegistration>(64);
 
@@ -457,20 +460,16 @@ pub fn start_audio_stream(
     ctx.update_telemetry_reg(telemetry_registry);
     ctx.telemetry_reg_receiver = Some(Mutex::new(telemetry_reg_receiver));
 
-    // Create the engine wrapped in Arc<Mutex> so it outlives dropped streams
     let engine_arc = Arc::new(Mutex::new(engine));
-
-    // Create a channel to signal stream restarts from the error callback to the monitor loop
     let (restart_tx, restart_rx) = std::sync::mpsc::channel::<()>();
-
     let monitor_engine = Arc::clone(&engine_arc);
 
-    // 2. Spawn the Device Monitor Thread
+    // Spawn the Device Monitor Thread
     std::thread::spawn(move || {
         loop {
             log::info!("Monitor: Attempting to build and start audio stream...");
 
-            let current_config_pref = active_config_arc.read().clone();
+            let mut current_config_pref = active_config_arc.read().clone();
 
             let (device, config, sample_format) = match get_device_and_config(&current_config_pref)
             {
@@ -487,13 +486,24 @@ pub fn start_audio_stream(
 
             let sample_rate = config.sample_rate;
             let channels = config.channels as usize;
-            let engine_block_size = current_config_pref.buffer_size.unwrap_or(1024) as usize;
+            let engine_block_size = match config.buffer_size {
+                cpal::BufferSize::Fixed(size) => size as usize,
+                cpal::BufferSize::Default => {
+                    current_config_pref.buffer_size.unwrap_or(1024) as usize
+                }
+            };
 
             let playing_device_id = device.id().ok();
             let current_host = resolve_host(current_config_pref.host_name.as_deref());
 
-            // Notify engine of the active sample rate and buffer size
-            // (vital if the newly connected device has a different sample rate to prevent pitch-shifting!)
+            // Sync actual OS values back to the active configuration immediately to prevent restart loops
+            {
+                let mut cfg = active_config_arc.write();
+                cfg.sample_rate = Some(sample_rate);
+                cfg.buffer_size = Some(engine_block_size as u32);
+                current_config_pref = cfg.clone(); // Crucial: update local tracking to silence the polling loop
+            }
+
             {
                 let mut eng = monitor_engine.lock();
                 eng.process_command(AudioCommand::UpdateAudioConfig {
@@ -502,32 +512,127 @@ pub fn start_audio_stream(
                 });
             }
 
+            // High capacity to decouple DSP Thread variation from CPAL callback speed
             let ring_buffer_capacity = 8192;
-            let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
-            let staging_buffer = vec![0.0; engine_block_size * channels];
+            let (mut producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
+            let mut staging_buffer = vec![0.0; engine_block_size * channels];
 
-            let audio_ctx = AudioContext {
-                engine: Arc::clone(&monitor_engine),
-                producer,
-                staging_buffer,
-            };
+            // Setup Dedicated DSP Thread State
+            let is_dsp_running = Arc::new(AtomicBool::new(true));
+            let is_dsp_running_clone = Arc::clone(&is_dsp_running);
+            let engine_dsp = Arc::clone(&monitor_engine);
+            let block_samples = engine_block_size * channels;
+
+            // Pre-fill ring buffer to create a latency cushion to withstand OS scheduling jitter
+            let prefill_blocks = (ring_buffer_capacity / 2) / block_samples;
+            for _ in 0..prefill_blocks {
+                {
+                    let mut eng = engine_dsp.lock();
+                    eng.process(&mut staging_buffer);
+                }
+                for &sample in &staging_buffer {
+                    let _ = producer.push(sample);
+                }
+            }
+
+            // 3. Spawn the Dedicated DSP Thread
+            let dsp_thread = std::thread::spawn(move || {
+                // Pinning this thread priority to high/audio could be done here in the future
+                while is_dsp_running_clone.load(Ordering::Relaxed) {
+                    // Make sure there is enough space to write a full block safely
+                    if producer.slots() >= block_samples {
+                        {
+                            let mut engine = engine_dsp.lock();
+                            engine.process(&mut staging_buffer);
+                        }
+                        for &sample in &staging_buffer {
+                            let _ = producer.push(sample); // Guaranteed to succeed based on slots check
+                        }
+                    } else {
+                        // Sleep slightly to prevent a 100% CPU busy-wait loop
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                }
+                log::info!("DSP Thread explicitly shut down gracefully.");
+            });
 
             let tx_clone = restart_tx.clone();
 
-            // Callback triggered by CPAL if the stream dies natively (e.g. unplugging a USB interface)
-            let err_fn = move |err| {
-                log::error!("Audio stream error: {}. Triggering restart...", err);
-                let _ = tx_clone.send(());
+            let err_config_arc = Arc::clone(&active_config_arc);
+
+            let err_fn = move |err: cpal::StreamError| {
+                match err {
+                    cpal::StreamError::DeviceNotAvailable => {
+                        log::error!("Audio device disconnected: {}. Triggering restart...", err);
+                        let _ = tx_clone.send(());
+                    }
+                    cpal::StreamError::BackendSpecific { ref err } => {
+                        let err_msg = err.to_string().to_lowercase();
+                        if err_msg.contains("underrun") || err_msg.contains("overrun") {
+                            log::warn!(
+                                "Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally..."
+                            );
+                        } else if err_msg.contains("buffer size changed to:") {
+                            log::warn!(
+                                "Host forced a different buffer size. Adapting config to prevent crash loop..."
+                            );
+
+                            // Extract the exact buffer size JACK/OS is forcing us to use
+                            let parts: Vec<&str> =
+                                err_msg.split("buffer size changed to:").collect();
+                            if parts.len() > 1 {
+                                let num_str = parts[1]
+                                    .trim()
+                                    .chars()
+                                    .take_while(|c| c.is_ascii_digit())
+                                    .collect::<String>();
+                                if let Ok(new_size) = num_str.parse::<u32>() {
+                                    log::info!("Dynamically updating buffer size to {}", new_size);
+                                    let mut cfg = err_config_arc.write();
+
+                                    // Only trigger logic if the size is ACTUALLY different
+                                    if cfg.buffer_size != Some(new_size) {
+                                        log::info!(
+                                            "Dynamically updating buffer size to {}",
+                                            new_size
+                                        );
+                                        cfg.buffer_size = Some(new_size);
+                                        let _ = tx_clone.send(());
+                                    } else {
+                                        log::debug!(
+                                            "Buffer size is already synced to {}. Ignoring redundant error.",
+                                            new_size
+                                        );
+                                    }
+                                }
+                            }
+                        } else {
+                            log::error!(
+                                "Audio stream backend error: {}. Triggering restart...",
+                                err_msg
+                            );
+                            let _ = tx_clone.send(());
+                        }
+                    }
+                    cpal::StreamError::BufferUnderrun => {
+                        log::warn!(
+                            "Native buffer underrun detected due to CPU lag. Recovering naturally..."
+                        );
+                    }
+                    cpal::StreamError::StreamInvalidated => {
+                        log::error!("Audio stream invalidated by the OS. Triggering restart...");
+                        let _ = tx_clone.send(());
+                    }
+                }
             };
 
             let stream_result = match sample_format {
                 cpal::SampleFormat::F32 => {
-                    run_stream!(device, config, audio_ctx, consumer, f32, |s| s, err_fn)
+                    run_stream!(device, config, consumer, f32, |s| s, err_fn)
                 }
                 cpal::SampleFormat::I32 => run_stream!(
                     device,
                     config,
-                    audio_ctx,
                     consumer,
                     i32,
                     |s: f32| (s * (i32::MAX as f32)).clamp(i32::MIN as f32, i32::MAX as f32) as i32,
@@ -536,7 +641,6 @@ pub fn start_audio_stream(
                 cpal::SampleFormat::I16 => run_stream!(
                     device,
                     config,
-                    audio_ctx,
                     consumer,
                     i16,
                     |s: f32| (s * (i16::MAX as f32)).clamp(i16::MIN as f32, i16::MAX as f32) as i16,
@@ -545,7 +649,6 @@ pub fn start_audio_stream(
                 cpal::SampleFormat::U16 => run_stream!(
                     device,
                     config,
-                    audio_ctx,
                     consumer,
                     u16,
                     |s: f32| ((s + 1.0) * 0.5 * (u16::MAX as f32)).clamp(0.0, u16::MAX as f32)
@@ -555,7 +658,6 @@ pub fn start_audio_stream(
                 cpal::SampleFormat::U8 => run_stream!(
                     device,
                     config,
-                    audio_ctx,
                     consumer,
                     u8,
                     |s: f32| ((s + 1.0) * 0.5 * 255.0).clamp(0.0, 255.0) as u8,
@@ -568,6 +670,10 @@ pub fn start_audio_stream(
                 Ok(s) => s,
                 Err(e) => {
                     log::error!("Monitor: Failed to build stream: {}. Retrying in 2s...", e);
+                    // Abort the DSP thread to prevent memory leak/orphans since stream failed
+                    is_dsp_running.store(false, Ordering::Relaxed);
+                    let _ = dsp_thread.join();
+
                     std::thread::sleep(std::time::Duration::from_secs(2));
                     continue;
                 }
@@ -575,24 +681,30 @@ pub fn start_audio_stream(
 
             if let Err(e) = stream.play() {
                 log::error!("Monitor: Failed to play stream: {}. Retrying in 2s...", e);
+                // Abort the DSP thread cleanly
+                is_dsp_running.store(false, Ordering::Relaxed);
+                let _ = dsp_thread.join();
+
                 std::thread::sleep(std::time::Duration::from_secs(2));
                 continue;
             }
 
             log::info!("Monitor: Audio stream is successfully running.");
 
+            // Drain any stale restart signals that piled up from multiple rapid error callbacks
+            // before we enter the polling loop to prevent immediate phantom restarts.
+            while restart_rx.try_recv().is_ok() {}
+
             // ---------------------------------------------------------
             // Active Polling Loop (~10 FPS)
             // ---------------------------------------------------------
             loop {
-                // Did the stream natively die? (e.g. unplugged)
                 if restart_rx.try_recv().is_ok() {
                     log::info!("Monitor: Restart signal received from CPAL callback.");
                     break;
                 }
                 let latest_config = active_config_arc.read().clone();
 
-                // Did the user change settings in the UI?
                 if latest_config != current_config_pref {
                     log::info!(
                         "Monitor: Audio configuration changed by user. Restarting stream..."
@@ -600,7 +712,6 @@ pub fn start_audio_stream(
                     break;
                 }
 
-                // Check if device is actually changed
                 if latest_config.device_id.is_none() {
                     if let Some(default_dev) = current_host.default_output_device() {
                         if let Ok(ref default_id) = default_dev.id() {
@@ -618,12 +729,17 @@ pub fn start_audio_stream(
                     }
                 }
 
-                // Sleep for ~100ms
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
 
-            // Drop the active stream. This safely releases the hardware handle.
+            // CLEANUP: Drop the active stream. This safely releases the hardware handle.
             drop(stream);
+
+            // CLEANUP: Signal DSP Thread to stop gracefully and join it to prevent memory leaks
+            is_dsp_running.store(false, Ordering::Relaxed);
+            if let Err(e) = dsp_thread.join() {
+                log::error!("Failed to join DSP thread cleanly: {:?}", e);
+            }
 
             // Give OS drivers a short moment to map routing before we query devices again
             std::thread::sleep(std::time::Duration::from_millis(500));

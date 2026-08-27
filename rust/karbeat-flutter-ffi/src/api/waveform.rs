@@ -77,7 +77,7 @@ pub fn get_waveform_handles_for_track(
     ctx: &DawContext,
     track_id: u32,
 ) -> HashMap<u32, WaveformHandle> {
-    let track = match ctx.app_state.tracks.get(&TrackId::from(track_id)) {
+    let track = match ctx.app_state.tracks.get(TrackId::from(track_id)) {
         Some(t) => t,
         None => return HashMap::new(),
     };
@@ -89,7 +89,10 @@ pub fn get_waveform_handles_for_track(
 
     let mut map = HashMap::new();
 
-    for clip in track.clips() {
+    for clip_id in track.clips() {
+        let Some(clip) = ctx.app_state.clips_pool.get(*clip_id) else {
+            continue;
+        };
         if let Some(DawSource::Audio(source_id)) = clip.source {
             // Skip duplicates — a source may appear in multiple clips
             if map.contains_key(&source_id.to_u32()) {

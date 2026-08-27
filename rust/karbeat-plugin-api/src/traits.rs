@@ -1,7 +1,7 @@
-use dyn_clone::{clone_trait_object, DynClone};
-use hashbrown::HashMap;
+pub use dyn_clone::{clone_trait_object, DynClone};
+pub use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
-use serde_json::Value;
+pub use serde_json::Value;
 use std::{any::Any, fmt::Debug};
 
 // Import the newly defined types for non-interleaved audio and IO configuration
@@ -10,6 +10,26 @@ use crate::types::{AudioBuffers, BusConfig, PluginCategory, ProcessContext, Zero
 // ============================================================================
 // CONTEXTS & TYPES
 // ============================================================================
+
+use raw_window_handle::RawWindowHandle;
+
+/// Handles the GUI layer of the plugin. 
+/// This lives entirely on the main UI thread.
+pub trait PluginEditor {
+    /// Instructs the plugin to attach its GUI to the provided platform-specific window handle.
+    /// Returns true if successful.
+    fn open(&mut self, handle: RawWindowHandle) -> bool;
+
+    /// Instructs the plugin to destroy its GUI resources.
+    fn close(&mut self);
+
+    /// Gets the current or preferred dimensions of the GUI (width, height).
+    fn get_size(&self) -> Option<(u32, u32)>;
+
+    /// Requests the plugin to resize its GUI. Returns true if accepted.
+    fn set_size(&mut self, width: u32, height: u32) -> bool;
+}
+
 
 /// ## Overview
 ///
@@ -42,12 +62,11 @@ pub trait AudioPlugin: DynClone + Send + Sync {
         "1.0.0"
     }
 
-    // --- Lifecycle & IO ---
-
     /// Prepares the plugin for processing.
     /// Note: `channels` is no longer passed here. Use `set_io_layout` to configure channels.
     fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
 
+    /// Define this reset for a graceful cleanup of the plugin
     fn reset(&mut self);
 
     /// Asks the plugin if it can support a specific IO layout.
@@ -60,8 +79,6 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     /// The plugin should reset its internal state if the channel count changed.
     fn set_io_layout(&mut self, inputs: &[BusConfig], outputs: &[BusConfig]);
 
-    // --- Processing ---
-
     /// The universal process block.
     /// - Instruments will ignore the incoming audio in the buffer and overwrite it.
     /// - Effects will modify the audio in the buffer.
@@ -69,8 +86,6 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     /// Now accepts non-interleaved `AudioBuffers` and a rich `ProcessContext`
     /// containing sample-accurate param changes and high-precision transport.
     fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext);
-
-    // --- Bypass & Latency ---
 
     /// Tells the plugin to bypass. It should let its internal tails ring out.
     fn set_bypass(&mut self, _bypass: bool) {}
@@ -89,8 +104,6 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     fn tail_samples(&self) -> u32 {
         0
     }
-
-    // --- Parameters & Automation ---
 
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
@@ -138,7 +151,7 @@ pub trait AudioPlugin: DynClone + Send + Sync {
         Self: Sized;
 
     fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
-
+    
     // --- State & Presets ---
 
     /// Get state of plugin when loading preset / saving project
@@ -204,6 +217,14 @@ pub trait AudioPlugin: DynClone + Send + Sync {
 
     /// An helper to enable downcasting
     fn as_any(&self) -> &dyn Any;
+
+    // --- GUI Handler ----
+    /// Returns the UI editor for this plugin, if it has one.
+    /// The DAW will call this from the main thread, take ownership of the editor,
+    /// and use it to draw the GUI.
+    fn get_editor(&mut self) -> Option<Box<dyn PluginEditor>> {
+        None
+    }
 }
 
 impl Debug for dyn AudioPlugin + Send + Sync {

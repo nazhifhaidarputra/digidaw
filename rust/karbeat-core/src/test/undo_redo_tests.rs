@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::api::{self, clip_api, note_api};
-    use crate::core::history::ProjectAction;
+
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
     // ─── undo with empty history ─────────────────────────────────────────────
@@ -33,20 +33,20 @@ mod tests {
     #[test]
     fn undo_then_redo_note_add() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        let before = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let before = ctx.app_state.pattern_pool[pattern_id].notes.len();
 
         // Add a note
         let note =
             note_api::add_note(&mut ctx, pattern_id, 72, 50000, Some(480)).expect("add note");
         assert_eq!(
-            ctx.app_state.pattern_pool[&pattern_id].notes.len(),
+            ctx.app_state.pattern_pool[pattern_id].notes.len(),
             before + 1
         );
 
         // Undo → note should be gone
         api::undo(&mut ctx).expect("undo should succeed");
         assert_eq!(
-            ctx.app_state.pattern_pool[&pattern_id].notes.len(),
+            ctx.app_state.pattern_pool[pattern_id].notes.len(),
             before,
             "Undo should remove the added note"
         );
@@ -54,7 +54,7 @@ mod tests {
         // Redo → note should be back
         api::redo(&mut ctx).expect("redo should succeed");
         assert_eq!(
-            ctx.app_state.pattern_pool[&pattern_id].notes.len(),
+            ctx.app_state.pattern_pool[pattern_id].notes.len(),
             before + 1,
             "Redo should restore the note"
         );
@@ -65,27 +65,18 @@ mod tests {
     #[test]
     fn undo_then_redo_clip_move() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip = ctx.app_state.tracks[&midi_id].clips[0].clone();
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        let clip = ctx.app_state.clips_pool[clip_id].clone();
         let original_start = clip.time.start_time_raw();
 
         // Move clip to a different position
         clip_api::move_clip(&mut ctx, midi_id, midi_id, clip.id, 9600).expect("move clip");
-        let moved_start = ctx.app_state.tracks[&midi_id]
-            .clips
-            .iter()
-            .find(|c| c.id == clip.id)
-            .map(|c| c.time.start_time_raw())
-            .expect("clip should still exist");
+        let moved_start = ctx.app_state.clips_pool[clip.id].time.start_time_raw();
         assert_eq!(moved_start, 9600);
 
         // Undo → clip should be at original position
         api::undo(&mut ctx).expect("undo move clip");
-        let after_undo = ctx.app_state.tracks[&midi_id]
-            .clips
-            .iter()
-            .find(|c| c.id == clip.id)
-            .map(|c| c.time.start_time_raw())
-            .expect("clip should still exist after undo");
+        let after_undo = ctx.app_state.clips_pool[clip.id].time.start_time_raw();
         assert_eq!(
             after_undo, original_start,
             "Undo should restore original position"
@@ -93,12 +84,7 @@ mod tests {
 
         // Redo → clip moved again
         api::redo(&mut ctx).expect("redo move clip");
-        let after_redo = ctx.app_state.tracks[&midi_id]
-            .clips
-            .iter()
-            .find(|c| c.id == clip.id)
-            .map(|c| c.time.start_time_raw())
-            .expect("clip should exist after redo");
+        let after_redo = ctx.app_state.clips_pool[clip.id].time.start_time_raw();
         assert_eq!(after_redo, 9600, "Redo should re-apply the move");
     }
 
@@ -120,12 +106,12 @@ mod tests {
         )
         .expect("batch add");
 
-        let before_undo = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let before_undo = ctx.app_state.pattern_pool[pattern_id].notes.len();
         assert!(before_undo >= 3, "Should have at least the 3 batch notes");
 
         // Undo the Batch action → all 3 notes should be removed
         api::undo(&mut ctx).expect("undo batch");
-        let after_undo = ctx.app_state.pattern_pool[&pattern_id].notes.len();
+        let after_undo = ctx.app_state.pattern_pool[pattern_id].notes.len();
         assert_eq!(
             after_undo,
             before_undo - 3,

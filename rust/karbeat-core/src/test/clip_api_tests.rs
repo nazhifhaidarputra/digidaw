@@ -2,12 +2,10 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::api::{clip_api, track_api};
-    use crate::core::project::clip::{ClipSourceType, ClipTimeUnit, ResizeEdge};
+    use crate::api::clip_api;
+    use crate::core::project::clip::{ClipSourceType, ResizeEdge};
     use crate::shared::id::{ClipId, TrackId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
-
-    // ─── Helper: add a MIDI clip to the given MIDI track ─────────────────────
 
     fn add_midi_clip(
         ctx: &mut crate::context::DawContext,
@@ -18,19 +16,17 @@ mod tests {
             .expect("add_clip should succeed")
     }
 
-    // ─── get_clip ────────────────────────────────────────────────────────────
-
     #[test]
     fn get_clip_happy_path() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
         // The seeded ctx already has one clip on midi_id (from make_seeded_ctx)
-        let clips: Vec<_> = ctx.app_state.tracks[&midi_id]
+        let clips: Vec<_> = ctx.app_state.tracks[midi_id]
             .clips
             .iter()
             .cloned()
             .collect();
         assert!(!clips.is_empty(), "seeded ctx should have clips");
-        let clip_id = clips[0].id;
+        let clip_id = clips[0];
 
         let result = clip_api::get_clip(&ctx, midi_id, clip_id, |c| c.id);
         assert!(result.is_ok());
@@ -48,20 +44,18 @@ mod tests {
 
     #[test]
     fn get_clip_missing_clip_returns_err() {
-        let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let (ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
         let bogus_clip = ClipId::from(99999);
         let result = clip_api::get_clip(&ctx, midi_id, bogus_clip, |_| ());
         assert!(result.is_err());
     }
 
-    // ─── add_clip ─────────────────────────────────────────────────────────────
-
     #[test]
     fn add_clip_happy_path() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let before = ctx.app_state.tracks[&midi_id].clips.len();
+        let before = ctx.app_state.tracks[midi_id].clips.len();
         add_midi_clip(&mut ctx, midi_id, 3840); // start at beat 4
-        let after = ctx.app_state.tracks[&midi_id].clips.len();
+        let after = ctx.app_state.tracks[midi_id].clips.len();
         assert_eq!(after, before + 1);
     }
 
@@ -81,17 +75,15 @@ mod tests {
         assert!(result.is_err(), "MIDI clip on Audio track should fail");
     }
 
-    // ─── delete_clip ──────────────────────────────────────────────────────────
-
     #[test]
     fn delete_clip_happy_path() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip_id = ctx.app_state.tracks[&midi_id].clips[0].id;
-        let before = ctx.app_state.tracks[&midi_id].clips.len();
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        let before = ctx.app_state.tracks[midi_id].clips.len();
 
         let result = clip_api::delete_clip(&mut ctx, midi_id, clip_id);
         assert!(result.is_ok());
-        let after = ctx.app_state.tracks[&midi_id].clips.len();
+        let after = ctx.app_state.tracks[midi_id].clips.len();
         assert_eq!(after, before - 1);
     }
 
@@ -103,12 +95,10 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── move_clip ────────────────────────────────────────────────────────────
-
     #[test]
     fn move_clip_same_track_changes_start_time() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip_id = ctx.app_state.tracks[&midi_id].clips[0].id;
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
         let result = clip_api::move_clip(&mut ctx, midi_id, midi_id, clip_id, 9600);
         assert!(result.is_ok(), "{:?}", result.err());
         let new_start = result.unwrap().time.start_time_raw();
@@ -133,12 +123,11 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── resize_clip ──────────────────────────────────────────────────────────
-
     #[test]
     fn resize_clip_right_edge_extends_length() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip = ctx.app_state.tracks[&midi_id].clips[0].clone();
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        let clip = ctx.app_state.clips_pool[clip_id].clone();
         let original_start = clip.time.start_time_raw();
         let original_length = clip.time.loop_length_raw();
 
@@ -168,12 +157,11 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── slice_clip ───────────────────────────────────────────────────────────
-
     #[test]
     fn slice_clip_at_midpoint() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip = ctx.app_state.tracks[&midi_id].clips[0].clone();
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        let clip = ctx.app_state.clips_pool[clip_id].clone();
         let start = clip.time.start_time_raw();
         let len = clip.time.loop_length_raw();
         let midpoint = start + len / 2;
@@ -193,7 +181,8 @@ mod tests {
     #[test]
     fn slice_clip_outside_boundaries_returns_err() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip = ctx.app_state.tracks[&midi_id].clips[0].clone();
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        let clip = ctx.app_state.clips_pool[clip_id].clone();
         // Cut point before clip start
         let result = clip_api::slice_clip(&mut ctx, midi_id, clip.id, 0);
         assert!(result.is_err(), "Cut outside bounds should Err");
@@ -207,29 +196,27 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── batch_delete_clips ──────────────────────────────────────────────────
-
     #[test]
     fn batch_delete_clips_all_valid() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
         // Add a second clip
         add_midi_clip(&mut ctx, midi_id, 9600);
-        let clip_ids: Vec<ClipId> = ctx.app_state.tracks[&midi_id]
+        let clip_ids: Vec<ClipId> = ctx.app_state.tracks[midi_id]
             .clips
             .iter()
-            .map(|c| c.id)
+            .copied()
             .collect();
         assert!(clip_ids.len() >= 2);
 
         let result = clip_api::batch_delete_clips(&mut ctx, midi_id, clip_ids);
         assert!(result.is_ok());
-        assert!(ctx.app_state.tracks[&midi_id].clips.is_empty());
+        assert!(ctx.app_state.tracks[midi_id].clips.is_empty());
     }
 
     #[test]
     fn batch_delete_clips_partial_invalid_ids_silently_skipped() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let valid_id = ctx.app_state.tracks[&midi_id].clips[0].id;
+        let valid_id = ctx.app_state.tracks[midi_id].clips[0];
         let bogus_id = ClipId::from(99999);
 
         // Mix of valid + invalid
@@ -243,18 +230,17 @@ mod tests {
     #[test]
     fn batch_delete_clips_empty_list_is_noop() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let before = ctx.app_state.tracks[&midi_id].clips.len();
+        let before = ctx.app_state.tracks[midi_id].clips.len();
         let result = clip_api::batch_delete_clips(&mut ctx, midi_id, vec![]);
         assert!(result.is_ok());
-        assert_eq!(ctx.app_state.tracks[&midi_id].clips.len(), before);
+        assert_eq!(ctx.app_state.tracks[midi_id].clips.len(), before);
     }
-
-    // ─── batch_move_clips ─────────────────────────────────────────────────────
 
     #[test]
     fn batch_move_clips_with_positive_delta() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip = ctx.app_state.tracks[&midi_id].clips[0].clone();
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        let clip = ctx.app_state.clips_pool[clip_id].clone();
         let old_start = clip.time.start_time_raw();
 
         let result = clip_api::batch_move_clips(&mut ctx, midi_id, midi_id, vec![clip.id], 960);
@@ -272,12 +258,11 @@ mod tests {
         assert!(result.unwrap().is_empty());
     }
 
-    // ─── batch_resize_clips ───────────────────────────────────────────────────
-
     #[test]
     fn batch_resize_clips_right_edge_extends() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
-        let clip = ctx.app_state.tracks[&midi_id].clips[0].clone();
+        let clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        let clip = ctx.app_state.clips_pool[clip_id].clone();
         let original_length = clip.time.loop_length_raw();
 
         let result =

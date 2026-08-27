@@ -70,7 +70,7 @@ pub fn play_preview_note(
         let app = &ctx.app_state;
         let track = app
             .tracks
-            .get(&track_id)
+            .get(track_id)
             .ok_or_else(|| anyhow::anyhow!("Can't find requested track"))?;
         track
             .generator

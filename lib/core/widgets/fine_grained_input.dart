@@ -197,6 +197,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
   final T step;
   final ValueChanged<T> onChanged;
   final VoidCallback? onAddAutomation;
+  final VoidCallback? onRemoveAutomation;
 
   const ParameterInteractionWrapper({
     super.key,
@@ -209,6 +210,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
     required this.step,
     required this.onChanged,
     this.onAddAutomation,
+    this.onRemoveAutomation,
   });
 
   @override
@@ -241,9 +243,15 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
         ),
         if (onAddAutomation != null)
           DawContextAction(
-            title: "Create automation clip",
+            title: "Create automation",
             icon: Icons.show_chart,
             onTap: onAddAutomation!,
+          ),
+        if (onRemoveAutomation != null)
+          DawContextAction(
+            title: "Remove automation",
+            icon: Icons.cancel,
+            onTap: onRemoveAutomation!,
           ),
       ],
       child: child,

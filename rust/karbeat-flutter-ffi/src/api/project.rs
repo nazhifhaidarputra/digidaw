@@ -6,17 +6,17 @@ use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
 use karbeat_core::audio::writer::{AudioExportConfig, BitDepth, WavAudioWriterConfig};
 pub use karbeat_core::context::DawContext;
+use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use karbeat_core::core::project::{
+    AudioHardwareConfig, DawSource, ProjectMetadata,
     clip::Clip,
     generator::{GeneratorInstance, GeneratorInstanceType},
-    track::{audio_waveform::AudioWaveform, AudioTrack, TrackType},
+    track::{AudioTrack, TrackType, audio_waveform::AudioWaveform},
     transport::TransportState,
-    AudioHardwareConfig, DawSource, ProjectMetadata,
 };
-use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use serde::Serialize;
 
-use crate::api::waveform::{get_waveform_handle, WaveformHandle};
+use crate::api::waveform::{WaveformHandle, get_waveform_handle};
 use crate::frb_generated::StreamSink;
 
 pub enum UiTrackType {
@@ -41,13 +41,13 @@ impl From<ApplicationState> for UiApplicationState {
         let tracks: HashMap<u32, UiTrack> = value
             .tracks
             .iter()
-            .map(|(id, track)| (id.to_u32(), UiTrack::from(track)))
+            .map(|(id, track)| (id.to_u32(), UiTrack::from_track(track, &value)))
             .collect();
 
         let generators: HashMap<u32, UiGeneratorInstance> = value
             .generator_pool
             .iter()
-            .map(|(id, gen)| (id.to_u32(), UiGeneratorInstance::from(gen)))
+            .map(|(id, generator)| (id.to_u32(), UiGeneratorInstance::from(generator)))
             .collect();
 
         let patterns: HashMap<u32, crate::api::pattern::UiPattern> = value
@@ -201,8 +201,8 @@ impl From<UiTransportState> for TransportState {
     }
 }
 
-impl From<&AudioTrack> for UiTrack {
-    fn from(value: &AudioTrack) -> Self {
+impl UiTrack {
+    pub fn from_track(value: &AudioTrack, state: &ApplicationState) -> Self {
         let generator_id = value
             .generator
             .as_ref()
@@ -213,7 +213,7 @@ impl From<&AudioTrack> for UiTrack {
             color: value.color.to_string(),
             track_type: value.track_type.clone().into(),
             clips: value
-                .clips_to_vec()
+                .clips_to_vec(&state.clips_pool)
                 .iter()
                 .map(|c| UiClip::from(c))
                 .collect(),
@@ -534,8 +534,10 @@ pub fn get_audio_source_list(
 
 /// Get generator list used in the project
 pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u32, UiGeneratorInstance>, String> {
-    project_api::get_generator_list(ctx, |id, gen| (id, UiGeneratorInstance::from(gen)))
-        .map_err(|e| e.to_string())
+    project_api::get_generator_list(ctx, |id, generator| {
+        (id, UiGeneratorInstance::from(generator))
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Add a new audio source to the project
@@ -552,15 +554,17 @@ pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> Result<u32, St
 pub fn add_new_audio_track(ctx: &mut DawContext) -> UiTrack {
     let track = { track_api::add_new_audio_track(ctx) };
     log::info!("[add_new_track] successfully added new track");
-    UiTrack::from(&track)
+    UiTrack::from_track(&track, &ctx.app_state)
 }
 
 /// Get all tracks on the session/project.
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u32, UiTrack>, String> {
-    track_api::get_tracks_ordered(ctx, |id, track| (id, UiTrack::from(track)))
-        .map_err(|e| e.to_string())
+    track_api::get_tracks_ordered(ctx, |id, track| {
+        (id, UiTrack::from_track(track, &ctx.app_state))
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Export project to flutter. also report progress via StreamSink

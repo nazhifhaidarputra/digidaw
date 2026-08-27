@@ -5,12 +5,13 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
 import '../../generated/plugins/plugins.dart';
 
-/// A unified builder signature now that both effects and generators 
+/// A unified builder signature now that both effects and generators
 /// inherit from AbstractPluginScreen.
-typedef PluginScreenBuilder = AbstractPluginScreen Function(
-  plugin_api.UiPluginTarget target,
-  int pluginId,
-);
+typedef PluginScreenBuilder =
+    AbstractPluginScreen Function(
+      plugin_api.UiPluginTarget target,
+      int pluginId,
+    );
 
 class PluginRegistryFlutter {
   PluginRegistryFlutter._();
@@ -21,16 +22,15 @@ class PluginRegistryFlutter {
   static final Map<int, PluginScreenBuilder> _effects = {
     DigiParametricEQSpecs.id: (target, id) =>
         KarbeatParametricEq(target: target),
+    PitcherSpecs.id: (target, pluginId) => DigidawPitcher(target: target),
   };
 
   // ===========================================================================
   // GENERATORS REGISTRY
   // ===========================================================================
   static final Map<int, PluginScreenBuilder> _generators = {
-    KarbeatzerV2Specs.id: (target, id) =>
-        KarbeatzerScreen(target: target),
-    MyRetroSpecs.id: (target, id) => 
-        MyRetroSynth(target: target),
+    KarbeatzerV2Specs.id: (target, id) => KarbeatzerScreen(target: target),
+    MyRetroSpecs.id: (target, id) => MyRetroSynth(target: target),
   };
 
   // ===========================================================================
@@ -38,7 +38,7 @@ class PluginRegistryFlutter {
   // ===========================================================================
 
   /// Retrieves the correct screen widget for ANY plugin type.
-  /// 
+  ///
   /// [registryId] is the blueprint ID (from the generated Specs).
   /// [instanceId] is the living instance ID (from the audio engine).
   /// [target] is the unified FFI target.
@@ -60,7 +60,7 @@ class PluginRegistryFlutter {
     // 3. Throw a helpful error if totally unregistered
     throw Exception(
       'UI Screen not found for Registry ID $registryId. '
-      'Did you forget to add it to the PluginRegistry mappings?'
+      'Did you forget to add it to the PluginRegistry mappings?',
     );
   }
 
@@ -76,9 +76,11 @@ class PluginRegistryFlutter {
   }) {
     final builder = _generators[registryId];
     if (builder == null) {
-      throw Exception('Generator UI Screen not found for Registry ID $registryId.');
+      throw Exception(
+        'Generator UI Screen not found for Registry ID $registryId.',
+      );
     }
-    
+
     // Automatically construct the generator target
     final target = plugin_api.UiPluginTarget.generator(instanceId);
     return builder(target, instanceId);

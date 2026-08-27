@@ -6,9 +6,12 @@ use rodio::math::db_to_linear;
 use wide::f32x16;
 
 use crate::{
-    commands::MixerChannelTarget, core::project::{
-        AutomationTarget, MixerChannelParamTarget, MixerChannelParams, RoutingConnection, RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
-    }, shared::{BusId, TrackId},
+    commands::MixerChannelTarget,
+    core::project::{
+        AutomationTarget, MixerChannelParamTarget, MixerChannelParams, RoutingConnection,
+        RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
+    },
+    shared::{BusId, TrackId},
 };
 
 /// Unified entry point to render an audio waveform slice.
@@ -205,6 +208,10 @@ pub fn sample_waveform_dasp(buffer: &[f32], pos: f64, src_channels: usize) -> [f
             return [0.0, 0.0];
         }
 
+        if alpha == 0.0 {
+            return frames[idx];
+        }
+
         let p0 = if idx > 0 {
             frames[idx - 1]
         } else {
@@ -224,6 +231,11 @@ pub fn sample_waveform_dasp(buffer: &[f32], pos: f64, src_channels: usize) -> [f
 
         if idx >= len {
             return [0.0, 0.0];
+        }
+
+        if alpha == 0.0 {
+            let val = frames[idx][0];
+            return [val, val];
         }
 
         let p0 = if idx > 0 {
@@ -306,10 +318,10 @@ pub fn apply_phase_inversion_simd(buffer: &mut [f32]) {
 
 #[inline(always)]
 pub fn apply_volume_and_pan_simd(
-    buffer: &mut [f32], 
-    channels: usize, 
-    vol_param: &mut Param<f32>, 
-    pan_param: &mut Param<f32>
+    buffer: &mut [f32],
+    channels: usize,
+    vol_param: &mut Param<f32>,
+    pan_param: &mut Param<f32>,
 ) {
     let iter = buffer.chunks_exact_mut(channels);
 
@@ -319,8 +331,12 @@ pub fn apply_volume_and_pan_simd(
             let pan = pan_param.next_smoothed();
 
             // Handle the true silence threshold natively per-sample
-            let vol = if vol_db <= -100.0 { 0.0 } else { db_to_linear(vol_db as f32) };
-            
+            let vol = if vol_db <= -100.0 {
+                0.0
+            } else {
+                db_to_linear(vol_db as f32)
+            };
+
             let p = (pan as f32 + 1.0) * 0.5;
             let left_gain = (1.0 - p).sqrt() * vol;
             let right_gain = p.sqrt() * vol;
@@ -332,7 +348,11 @@ pub fn apply_volume_and_pan_simd(
         // Mono fallback
         for chunk in iter {
             let vol_db = vol_param.next_smoothed();
-            let vol = if vol_db <= -100.0 { 0.0 } else { db_to_linear(vol_db as f32) };
+            let vol = if vol_db <= -100.0 {
+                0.0
+            } else {
+                db_to_linear(vol_db as f32)
+            };
             chunk[0] *= vol;
         }
     }
@@ -510,7 +530,7 @@ pub fn compute_routing_order(
 
     let mut queue: VecDeque<BusId> = in_degree
         .iter()
-        .filter(|(_, &deg)| deg == 0)
+        .filter(|(_, deg)| **deg == 0)
         .map(|(&id, _)| id)
         .collect();
 
@@ -561,7 +581,9 @@ pub fn resolve_target_mixer_param(
             bus_id: *bus_id,
             mix_target: mt,
         },
-        MixerChannelTarget::Master => AutomationTarget::Master(crate::core::project::MasterAutomationTarget::MixerChannel(mt)),
+        MixerChannelTarget::Master => AutomationTarget::Master(
+            crate::core::project::MasterAutomationTarget::MixerChannel(mt),
+        ),
     });
 
     (automation_target, val)

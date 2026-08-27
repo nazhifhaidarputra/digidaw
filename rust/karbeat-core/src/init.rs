@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 use rtrb::RingBuffer;
 
 use crate::{
-    audio::backend::{start_audio_stream, AudioDeviceConfig},
+    audio::backend::{AudioDeviceConfig, start_audio_stream},
     commands::AudioCommand,
     context::DawContext,
     core::project::AudioWaveform,

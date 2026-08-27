@@ -47,5 +47,5 @@ Welcome to the Digidaw codebase! Building a low-latency Digital Audio Workstatio
 ## V. High-Performance FFI & Audio Threading
 
 * **Respect the Audio Thread:** The DSP `process()` loop must **never** allocate heap memory (`Vec::new()`, `Box::new()`), lock a `Mutex`, or block for I/O. All buffers must be pre-allocated and resized via commands from the main thread.
-* **Lock-Free Telemetry:** For pushing visual data (like EQ spectrums or mixer meters) from Rust to Dart, use lock-free atomic pointers (e.g., `ArcSwap`). Do not use message queues (`rtrb`) for lossy visual data, as this can choke the audio thread.
+* **Lock-Free Telemetry:** For pushing visual data (like EQ spectrums or mixer meters) from Rust to Dart, use triple_buffer mapped to each plugin instance.
 * **Zero-Copy Arrays:** When parsing large datasets from the audio engine (like an FFT spectrum), use Dart's `Float32List.sublistView` to parse the flat array efficiently without triggering garbage collection.

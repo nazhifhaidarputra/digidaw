@@ -3,15 +3,16 @@ use karbeat_plugin_api::traits::AudioPlugin;
 use karbeat_plugins::registry::PluginRegistry;
 
 use serde::{Deserialize, Serialize};
+use slotmap::SlotMap;
 
 use crate::{
     core::project::{
-        clip::ClipTimeUnit, ApplicationState, Clip, DawSource, GeneratorInstance,
-        GeneratorInstanceType, PluginInstance, ResizeEdge, TrackMixerChannel,
+        ApplicationState, Clip, DawSource, GeneratorInstance, GeneratorInstanceType,
+        PluginInstance, TrackMixerChannel,
     },
     shared::{
+        GeneratorId, GraphNodeId,
         id::{ClipId, TrackId},
-        GeneratorId,
     },
 };
 use karbeat_utils::color::Color;
@@ -20,10 +21,12 @@ use karbeat_utils::color::Color;
 #[serde(default)]
 pub struct AudioTrack {
     pub id: TrackId,
+    pub graph_node_id: GraphNodeId,
     pub name: String,
     pub color: Color,
     pub track_type: TrackType,
-    pub clips: Vec<Clip>,
+    /// Timeline order only; clip values live in `ApplicationState::clips_pool`.
+    pub clips: Vec<ClipId>,
     pub generator: Option<GeneratorInstance>,
     /// ======================================
     /// Track Sorting Order
@@ -37,6 +40,7 @@ impl Default for AudioTrack {
     fn default() -> Self {
         Self {
             id: Default::default(),
+            graph_node_id: Default::default(),
             name: Default::default(),
             color: Color::new_from_rgb(255, 255, 255),
             track_type: TrackType::Audio,
@@ -73,6 +77,7 @@ impl AudioTrack {
     pub fn new(id: TrackId, name: &str, color: Color, track_type: TrackType) -> Self {
         Self {
             id,
+            graph_node_id: Default::default(),
             name: name.to_string(),
             color,
             track_type,
@@ -90,32 +95,48 @@ impl AudioTrack {
         self.order_idx = new_idx;
     }
 
-    pub fn clips(&self) -> &[Clip] {
-        return &self.clips;
+    pub fn clips(&self) -> &[ClipId] {
+        &self.clips
     }
 
-    pub fn clips_to_vec(&self) -> Vec<Clip> {
-        self.clips.clone()
+    pub fn clips_to_vec(&self, clips_pool: &SlotMap<ClipId, Clip>) -> Vec<Clip> {
+        self.clips
+            .iter()
+            .filter_map(|id| clips_pool.get(*id).cloned())
+            .collect()
     }
 
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
 
-    pub fn get_clip(&self, clip_id: &ClipId) -> Option<Clip> {
-        self.clips.iter().find(|c| c.id == *clip_id).cloned()
+    pub fn get_clip(&self, clips_pool: &SlotMap<ClipId, Clip>, clip_id: &ClipId) -> Option<Clip> {
+        self.clips
+            .contains(clip_id)
+            .then(|| clips_pool.get(*clip_id).cloned())
+            .flatten()
+    }
+
+    pub fn accepts_clip(&self, clip: &Clip) -> bool {
+        matches!(
+            (&self.track_type, &clip.source),
+            (TrackType::Audio, Some(DawSource::Audio(_)))
+                | (TrackType::Midi, Some(DawSource::Midi(_)))
+                | (TrackType::Automation, Some(DawSource::Automation(_)))
+        )
     }
 
     /// Add a new clip to the track. it will return Err if
     /// the clip type is incompatible with the track type
-    pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u32> {
-        let is_valid = match (&self.track_type, &clip.source) {
-            (TrackType::Audio, Some(DawSource::Audio(_))) => true,
-            (TrackType::Midi, Some(DawSource::Midi { .. })) => true,
-            (TrackType::Automation, Some(DawSource::Automation(_))) => true,
-            // Allow Automation on Audio/Midi tracks? usually yes, but strictly speaking:
-            _ => false,
-        };
+    pub fn add_clip(
+        &mut self,
+        clip_id: ClipId,
+        clips_pool: &SlotMap<ClipId, Clip>,
+    ) -> anyhow::Result<u32> {
+        let clip = clips_pool
+            .get(clip_id)
+            .ok_or_else(|| anyhow::anyhow!("Clip not found in global pool"))?;
+        let is_valid = self.accepts_clip(clip);
 
         if is_valid {
             // Calculate potential new max index BEFORE moving clip (in native units)
@@ -124,11 +145,11 @@ impl AudioTrack {
             let start_time = clip.time.start_time_raw();
             let insert_pos = self
                 .clips
-                .binary_search_by_key(&start_time, |c| c.time.start_time_raw())
+                .binary_search_by_key(&start_time, |id| clips_pool[*id].time.start_time_raw())
                 .unwrap_or_else(|e| e);
 
             // Insert directly at the sorted position (O(N) memory shift, highly cache-friendly)
-            self.clips.insert(insert_pos, clip);
+            self.clips.insert(insert_pos, clip_id);
 
             // Return the end sample of this new clip
             return Ok(clip_end as u32);
@@ -140,11 +161,11 @@ impl AudioTrack {
     }
 
     /// Remove the clip, change max_index_sample if the deleted clip are the latest end sample index
-    pub fn remove_clip(&mut self, clip_id: &ClipId) -> anyhow::Result<Clip> {
+    pub fn remove_clip(&mut self, clip_id: &ClipId) -> anyhow::Result<ClipId> {
         let idx = self
             .clips
             .iter()
-            .position(|c| c.id == *clip_id)
+            .position(|id| id == clip_id)
             .ok_or_else(|| anyhow::anyhow!("Clip not found"))?;
 
         // Vec::remove shifts the remaining elements automatically
@@ -153,191 +174,34 @@ impl AudioTrack {
 
     /// Remove all clips that have the same source ID (only remove
     /// audio clip because it needs a cascading remove upon an audio source deletion)
-    pub fn remove_clip_by_source_id(&mut self, source_id: impl Into<u32>, is_generator: bool) {
-        let source_id_u32: u32 = source_id.into();
-        self.clips.retain(|clip| match &clip.source {
-            Some(DawSource::Audio(sid)) => {
-                if !is_generator {
-                    sid != &source_id_u32
-                } else {
-                    true
-                }
-            }
-            _ => true,
-        });
+    pub fn remove_clip_by_source_id(
+        &mut self,
+        clips_pool: &mut SlotMap<ClipId, Clip>,
+        source_id: u64,
+        is_generator: bool,
+    ) {
+        let removed: Vec<_> = self
+            .clips
+            .iter()
+            .copied()
+            .filter(
+                |id| match clips_pool.get(*id).and_then(|clip| clip.source.as_ref()) {
+                    Some(DawSource::Audio(sid)) => !is_generator && sid.to_u64() == source_id,
+                    _ => false,
+                },
+            )
+            .collect();
+        self.clips.retain(|id| !removed.contains(id));
+        for id in removed {
+            clips_pool.remove(id);
+        }
     }
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
-    pub fn add_clips_bulk(&mut self, new_clips: &[Clip]) {
-        self.clips.extend(new_clips.iter().cloned());
-
-        self.clips.sort_by_key(|c| c.time.start_time_raw());
-    }
-
-    pub fn slice_clip(
-        &mut self,
-        clip_id: &ClipId,
-        cut_point: u64,
-        clip_counter: &mut u32,
-    ) -> anyhow::Result<(Clip, Clip)> {
-        let clip_idx = self
-            .clips
-            .iter()
-            .position(|c| c.id == *clip_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Clip ID {:?} not found in track {:?}", clip_id, self.id)
-            })?;
-
-        let clip = self.clips[clip_idx].clone();
-
-        let clip_start = clip.time.start_time_raw();
-        let clip_length = clip.time.loop_length_raw();
-        let clip_offset = clip.time.offset_start_raw();
-
-        if cut_point > clip_start && cut_point < clip_start + clip_length {
-            // Remove using the exact Arc reference
-            self.clips.remove(clip_idx);
-
-            let first_length = cut_point - clip_start;
-            let second_length = clip_length - first_length;
-            let second_offset = clip_offset + first_length;
-
-            // Create left clip
-            let mut left_clip = clip.clone();
-            left_clip.id = *clip_id; // Retain original ID
-            match &mut left_clip.time {
-                ClipTimeUnit::Samples { loop_length, .. } => *loop_length = first_length,
-                ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = first_length as u32,
-            }
-
-            // Create right clip
-            let mut right_clip = clip.clone();
-            right_clip.id = ClipId::next(clip_counter);
-            match &mut right_clip.time {
-                ClipTimeUnit::Samples {
-                    start_time,
-                    loop_length,
-                    offset_start,
-                } => {
-                    *start_time = cut_point;
-                    *loop_length = second_length;
-                    *offset_start = second_offset;
-                }
-                ClipTimeUnit::Ticks {
-                    start_time,
-                    loop_length,
-                    offset_start,
-                } => {
-                    *start_time = cut_point as u32;
-                    *loop_length = second_length as u32;
-                    *offset_start = second_offset as u32;
-                }
-            }
-            // Re-insert both clips safely maintaining sort order using Binary Search (O(log N))
-            let left_pos = self
-                .clips
-                .binary_search_by_key(&left_clip.time.start_time_raw(), |c| {
-                    c.time.start_time_raw()
-                })
-                .unwrap_or_else(|e| e);
-            self.clips.insert(left_pos, left_clip.clone());
-
-            let right_pos = self
-                .clips
-                .binary_search_by_key(&right_clip.time.start_time_raw(), |c| {
-                    c.time.start_time_raw()
-                })
-                .unwrap_or_else(|e| e);
-            self.clips.insert(right_pos, right_clip.clone());
-
-            log::info!("Successfully cut the clip");
-            Ok((left_clip, right_clip))
-        } else {
-            return Err(anyhow::anyhow!("Cannot cut clip outside its boundaries"));
-        }
-    }
-
-    pub fn resize_clip(
-        &mut self,
-        clip_id: ClipId,
-        edge: ResizeEdge,
-        new_time_val: u64,
-    ) -> anyhow::Result<Clip> {
-        // Find and remove the old clip by its index (O(N))
-        let clip_idx = self
-            .clips
-            .iter()
-            .position(|c| c.id == clip_id)
-            .ok_or_else(|| anyhow::anyhow!("Clip not found"))?;
-
-        let mut modified_clip = self.clips.remove(clip_idx);
-
-        let old_start = modified_clip.time.start_time_raw();
-        let old_length = modified_clip.time.loop_length_raw();
-        let old_end = old_start + old_length;
-        let old_offset = modified_clip.time.offset_start_raw();
-
-        match edge {
-            ResizeEdge::Right => {
-                // Dragging Right Edge: Only change loop_length
-                if new_time_val > old_start {
-                    let new_length = new_time_val - old_start;
-                    match &mut modified_clip.time {
-                        ClipTimeUnit::Samples { loop_length, .. } => {
-                            *loop_length = new_length;
-                        }
-                        ClipTimeUnit::Ticks { loop_length, .. } => {
-                            *loop_length = new_length as u32;
-                        }
-                    }
-                }
-            }
-            ResizeEdge::Left => {
-                // Dragging Left Edge: Slip Edit
-                // Bound check: New Start cannot be past the old End
-                if new_time_val < old_end {
-                    let delta = (new_time_val as i64) - (old_start as i64);
-                    let new_offset = (old_offset as i64) + delta;
-
-                    // Constraint: offset cannot be negative
-                    if new_offset >= 0 {
-                        let new_length = old_end - new_time_val;
-                        match &mut modified_clip.time {
-                            ClipTimeUnit::Samples {
-                                start_time,
-                                loop_length,
-                                offset_start,
-                            } => {
-                                *start_time = new_time_val;
-                                *loop_length = new_length;
-                                *offset_start = new_offset as u64;
-                            }
-                            ClipTimeUnit::Ticks {
-                                start_time,
-                                loop_length,
-                                offset_start,
-                            } => {
-                                *start_time = new_time_val as u32;
-                                *loop_length = new_length as u32;
-                                *offset_start = new_offset as u32;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Re-insert the modified clip safely maintaining sort order (O(log N) search + O(N) shift)
-        let insert_pos = self
-            .clips
-            .binary_search_by_key(&modified_clip.time.start_time_raw(), |c| {
-                c.time.start_time_raw()
-            })
-            .unwrap_or_else(|e| e);
-
-        self.clips.insert(insert_pos, modified_clip.clone());
-
-        Ok(modified_clip)
+    pub fn add_clips_bulk(&mut self, new_clips: &[ClipId], clips_pool: &SlotMap<ClipId, Clip>) {
+        self.clips.extend_from_slice(new_clips);
+        self.clips
+            .sort_by_key(|id| clips_pool[*id].time.start_time_raw());
     }
 }
 
@@ -364,7 +228,7 @@ impl ApplicationState {
         // Re-apply sequential indices to ALL tracks
         for (i, t) in tracks.iter().enumerate() {
             if t.order_idx != i {
-                if let Some(track) = self.tracks.get_mut(&t.id) {
+                if let Some(track) = self.tracks.get_mut(t.id) {
                     track.set_order_idx(i);
                 }
             }
@@ -381,7 +245,7 @@ impl ApplicationState {
 
         for (new_idx, track) in tracks_sorted.into_iter().enumerate() {
             if track.order_idx != new_idx {
-                if let Some(t) = self.tracks.get_mut(&track.id) {
+                if let Some(t) = self.tracks.get_mut(track.id) {
                     t.set_order_idx(new_idx);
                 }
             }
@@ -389,7 +253,6 @@ impl ApplicationState {
     }
 
     pub fn add_new_audio_track(&mut self) -> AudioTrack {
-        let new_track_id = TrackId::next(&mut self.track_counter);
         let track_order = self
             .tracks
             .values()
@@ -397,22 +260,30 @@ impl ApplicationState {
             .max()
             .map(|m| m + 1)
             .unwrap_or(0);
-        let new_track = AudioTrack {
+        let new_track_id = self.tracks.insert_with_key(|id| AudioTrack {
             track_type: TrackType::Audio,
-            id: new_track_id,
-            name: format!("Track {}", new_track_id),
+            id,
+            name: "Audio track".to_string(),
             order_idx: track_order,
             ..Default::default()
-        };
-
-        // let track_arc = Arc::new(new_track);
-        self.tracks.insert(new_track_id, new_track.clone());
-
+        });
         // Create a corresponding mixer channel and default routing
-        self.mixer
-            .channels
-            .insert(new_track_id, TrackMixerChannel::default());
+        self.mixer.channels.insert(
+            new_track_id,
+            TrackMixerChannel {
+                id: new_track_id,
+                ..Default::default()
+            },
+        );
         self.mixer.add_track_default_routing(new_track_id);
+        if let Some(node_id) = self
+            .mixer
+            .graph_node_id(crate::core::project::RoutingNode::Track(new_track_id))
+        {
+            self.tracks[new_track_id].graph_node_id = node_id;
+            self.mixer.channels[new_track_id].graph_node_id = node_id;
+        }
+        let new_track = self.tracks[new_track_id].clone();
         new_track
     }
 
@@ -422,9 +293,6 @@ impl ApplicationState {
         registry: &mut PluginRegistry,
         registry_id: u32,
     ) -> anyhow::Result<(AudioTrack, GeneratorId, Box<dyn AudioPlugin + Send + Sync>)> {
-        let gen_id = GeneratorId::next(&mut self.generator_counter);
-        let track_id = TrackId::next(&mut self.track_counter);
-
         // Create the plugin via registry using ID
         let (generator_plugin, generator_name) = {
             if let Some((generator_box, name)) = registry.create_plugin_by_id(registry_id) {
@@ -432,31 +300,18 @@ impl ApplicationState {
             } else {
                 let message = format!("Generator with ID {} not found in registry", registry_id);
                 log::error!("{}", message);
-                // Decrement counters if failed to prevent gaps/orphans
-                self.generator_counter -= 1;
-                self.track_counter -= 1;
                 return Err(anyhow::anyhow!("{}", message));
             }
         };
 
-        // Send the plugin to the audio thread (lock-free)
-        // We will refactor so that the command is pushed inside the service layer
-        // if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        //     let _ = sender.push(AudioCommand::AddGenerator {
-        //         generator_id: gen_id,
-        //         track_id,
-        //         plugin: generator_plugin,
-        //     });
-        // }
-
         // Create plugin instance descriptor with registry ID
         let plugin_instance = PluginInstance::new_with_id(registry_id, &generator_name);
 
-        let generator = GeneratorInstance {
-            id: gen_id,
+        let gen_id = self.generator_pool.insert_with_key(|id| GeneratorInstance {
+            id,
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
-        };
-        self.generator_pool.insert(gen_id, generator.clone());
+        });
+        let generator = self.generator_pool[gen_id].clone();
         let track_order = self
             .tracks
             .values()
@@ -464,24 +319,32 @@ impl ApplicationState {
             .max()
             .map(|m| m + 1)
             .unwrap_or(0);
-        let new_track = AudioTrack {
+        let track_id = self.tracks.insert_with_key(|id| AudioTrack {
             track_type: TrackType::Midi,
-            id: track_id,
+            id,
             name: generator_name.clone(),
             color: Color::new_from_string("#FF8A65").unwrap_or(Color::default()),
             generator: Some(generator),
             order_idx: track_order,
             ..Default::default()
-        };
-
-        // let track_arc = Arc::new(new_track);
-        self.tracks.insert(track_id, new_track.clone());
-
+        });
         // Create a corresponding mixer channel and default routing
-        self.mixer
-            .channels
-            .insert(track_id, TrackMixerChannel::default());
+        self.mixer.channels.insert(
+            track_id,
+            TrackMixerChannel {
+                id: track_id,
+                ..Default::default()
+            },
+        );
         self.mixer.add_track_default_routing(track_id);
+        if let Some(node_id) = self
+            .mixer
+            .graph_node_id(crate::core::project::RoutingNode::Track(track_id))
+        {
+            self.tracks[track_id].graph_node_id = node_id;
+            self.mixer.channels[track_id].graph_node_id = node_id;
+        }
+        let new_track = self.tracks[track_id].clone();
 
         log::info!(
             "New MIDI track with generator {} (registry_id={}) is successfully created",
@@ -497,28 +360,31 @@ impl ApplicationState {
         // Get the generator ID before removing the track
         let generator_id = self
             .tracks
-            .get(&track_id)
+            .get(track_id)
             .and_then(|t| t.generator.as_ref().map(|g| g.id));
 
-        // Remove the track
-        if self.tracks.remove(&track_id).is_none() {
-            return Err(anyhow::anyhow!("Track {:?} not found", track_id));
-        }
-
         // Remove the mixer channel
-        self.mixer.channels.remove(&track_id);
+        self.mixer.channels.remove(track_id);
 
         // Remove all routing connections for this track
-        self.mixer.remove_track_routing(track_id);
+        self.mixer.remove_track_routing(track_id, &self.tracks);
 
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
-            self.generator_pool.remove(&gen_id);
+            self.generator_pool.remove(gen_id);
             deleted_track_type = RemovedTrackType::Midi;
         }
 
         // Remove all automation lanes for this track
         self.remove_modulations_for_track(track_id);
+
+        // Remove the track and its globally-owned clips.
+        let Some(track) = self.tracks.remove(track_id) else {
+            return Err(anyhow::anyhow!("Track {:?} not found", track_id));
+        };
+        for clip_id in track.clips {
+            self.clips_pool.remove(clip_id);
+        }
 
         self.normalize_track_orders();
 

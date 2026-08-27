@@ -686,6 +686,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, double) dco_decode_record_u_32_f_32(dynamic raw);
 
   @protected
+  (int, Uint32List, Uint32List)
+  dco_decode_record_u_32_list_prim_u_32_strict_list_prim_u_32_strict(
+    dynamic raw,
+  );
+
+  @protected
   (int, ModulationLinkDto) dco_decode_record_u_32_modulation_link_dto(
     dynamic raw,
   );
@@ -1601,6 +1607,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
+
+  @protected
+  (int, Uint32List, Uint32List)
+  sse_decode_record_u_32_list_prim_u_32_strict_list_prim_u_32_strict(
+    SseDeserializer deserializer,
+  );
 
   @protected
   (int, ModulationLinkDto) sse_decode_record_u_32_modulation_link_dto(
@@ -2688,6 +2700,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_f_32(
     (int, double) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_list_prim_u_32_strict_list_prim_u_32_strict(
+    (int, Uint32List, Uint32List) self,
     SseSerializer serializer,
   );
 

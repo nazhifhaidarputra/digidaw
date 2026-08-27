@@ -1,7 +1,8 @@
 {
-  "id": 0,
-  "name": "Karbeat Parametric EQ",
-  "internal_type": "KarbeatParametricEQ",
+  "id": 2105689785,
+  "id_string": "effect_param_eq",
+  "name": "Digi Parametric EQ",
+  "internal_type": "DigiParametricEQ",
   "is_synth": false,
   "parameters": [
     {
@@ -25,7 +26,7 @@
       "value": 60.0,
       "min": 20.0,
       "max": 20000.0,
-      "default_value": 60.0,
+      "default_value": 1000.0,
       "step": 1.0,
       "value_type": "Float",
       "choices": []
@@ -48,7 +49,7 @@
       "path": "band0/q",
       "name": "Q",
       "group": "Band 1",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -76,8 +77,8 @@
       "group": "Band 1",
       "value": 1.0,
       "min": 0.0,
-      "max": 6.0,
-      "default_value": 1.0,
+      "max": 7.0,
+      "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
       "choices": [
@@ -87,7 +88,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {
@@ -116,7 +118,7 @@
       "value": 125.0,
       "min": 20.0,
       "max": 20000.0,
-      "default_value": 125.0,
+      "default_value": 1000.0,
       "step": 1.0,
       "value_type": "Float",
       "choices": []
@@ -139,7 +141,7 @@
       "path": "band1/q",
       "name": "Q",
       "group": "Band 2",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -167,7 +169,7 @@
       "group": "Band 2",
       "value": 0.0,
       "min": 0.0,
-      "max": 6.0,
+      "max": 7.0,
       "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
@@ -178,7 +180,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {
@@ -207,7 +210,7 @@
       "value": 250.0,
       "min": 20.0,
       "max": 20000.0,
-      "default_value": 250.0,
+      "default_value": 1000.0,
       "step": 1.0,
       "value_type": "Float",
       "choices": []
@@ -230,7 +233,7 @@
       "path": "band2/q",
       "name": "Q",
       "group": "Band 3",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -258,7 +261,7 @@
       "group": "Band 3",
       "value": 0.0,
       "min": 0.0,
-      "max": 6.0,
+      "max": 7.0,
       "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
@@ -269,7 +272,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {
@@ -298,7 +302,7 @@
       "value": 500.0,
       "min": 20.0,
       "max": 20000.0,
-      "default_value": 500.0,
+      "default_value": 1000.0,
       "step": 1.0,
       "value_type": "Float",
       "choices": []
@@ -321,7 +325,7 @@
       "path": "band3/q",
       "name": "Q",
       "group": "Band 4",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -349,7 +353,7 @@
       "group": "Band 4",
       "value": 0.0,
       "min": 0.0,
-      "max": 6.0,
+      "max": 7.0,
       "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
@@ -360,7 +364,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {
@@ -412,7 +417,7 @@
       "path": "band4/q",
       "name": "Q",
       "group": "Band 5",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -440,7 +445,7 @@
       "group": "Band 5",
       "value": 0.0,
       "min": 0.0,
-      "max": 6.0,
+      "max": 7.0,
       "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
@@ -451,7 +456,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {
@@ -480,7 +486,7 @@
       "value": 2000.0,
       "min": 20.0,
       "max": 20000.0,
-      "default_value": 2000.0,
+      "default_value": 1000.0,
       "step": 1.0,
       "value_type": "Float",
       "choices": []
@@ -503,7 +509,7 @@
       "path": "band5/q",
       "name": "Q",
       "group": "Band 6",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -531,7 +537,7 @@
       "group": "Band 6",
       "value": 0.0,
       "min": 0.0,
-      "max": 6.0,
+      "max": 7.0,
       "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
@@ -542,7 +548,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {
@@ -571,7 +578,7 @@
       "value": 4000.0,
       "min": 20.0,
       "max": 20000.0,
-      "default_value": 4000.0,
+      "default_value": 1000.0,
       "step": 1.0,
       "value_type": "Float",
       "choices": []
@@ -594,7 +601,7 @@
       "path": "band6/q",
       "name": "Q",
       "group": "Band 7",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -622,7 +629,7 @@
       "group": "Band 7",
       "value": 0.0,
       "min": 0.0,
-      "max": 6.0,
+      "max": 7.0,
       "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
@@ -633,7 +640,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {
@@ -662,7 +670,7 @@
       "value": 8000.0,
       "min": 20.0,
       "max": 20000.0,
-      "default_value": 8000.0,
+      "default_value": 1000.0,
       "step": 1.0,
       "value_type": "Float",
       "choices": []
@@ -685,7 +693,7 @@
       "path": "band7/q",
       "name": "Q",
       "group": "Band 8",
-      "value": 0.707,
+      "value": 0.7070000171661377,
       "min": 0.1,
       "max": 20.0,
       "default_value": 0.707,
@@ -713,8 +721,8 @@
       "group": "Band 8",
       "value": 2.0,
       "min": 0.0,
-      "max": 6.0,
-      "default_value": 2.0,
+      "max": 7.0,
+      "default_value": 0.0,
       "step": 1.0,
       "value_type": "Choice",
       "choices": [
@@ -724,7 +732,8 @@
         "LowPass",
         "HighPass",
         "BandPass",
-        "Notch"
+        "Notch",
+        "Off"
       ]
     },
     {

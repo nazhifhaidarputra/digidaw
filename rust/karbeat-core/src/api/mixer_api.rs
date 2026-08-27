@@ -1,15 +1,16 @@
 use karbeat_plugin_types::ParameterSpec;
+use karbeat_utils::types::NormalizedF64;
 
 use crate::{
-    audio::engine::MixerTelemetrySnapshot,
+    audio::{engine::MixerTelemetrySnapshot, event::PluginTarget},
     commands::{AudioCommand, EffectTarget, MixerChannelTarget},
     context::DawContext,
     core::project::{
+        SidechainRoute, TrackId,
         mixer::{
             BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
             RoutingConnection, RoutingNode,
         },
-        TrackId,
     },
     shared::id::*,
 };
@@ -28,7 +29,7 @@ where
     F: Fn(&MixerChannel) -> T,
 {
     let mixer_state = &ctx.app_state.mixer;
-    let channel = mixer_state.channels.get(&track_id);
+    let channel = mixer_state.channels.get(track_id);
     channel
         .ok_or_else(|| anyhow::anyhow!("Channel not found"))
         .map(|c| mapper(&c.channel))
@@ -44,7 +45,7 @@ where
     M: Fn(&ParameterSpec) -> U,
     C: FromIterator<U>,
 {
-    let mix_channel = &ctx.app_state.mixer.channels.get(track_id)?;
+    let mix_channel = &ctx.app_state.mixer.channels.get(*track_id)?;
     Some(
         mix_channel
             .channel
@@ -65,7 +66,7 @@ where
     M: Fn(&ParameterSpec) -> U,
     C: FromIterator<U>,
 {
-    let bus_channel = &ctx.app_state.mixer.buses.get(bus_id)?;
+    let bus_channel = &ctx.app_state.mixer.buses.get(*bus_id)?;
     Some(
         bus_channel
             .channel
@@ -106,7 +107,7 @@ where
         .app_state
         .mixer
         .channels
-        .get(&track_id)
+        .get(track_id)
         .ok_or_else(|| anyhow::anyhow!("Channel not found"))?;
 
     let mapped_channel = mixer_mapper(&channel.channel);
@@ -149,7 +150,7 @@ where
         .mixer
         .buses
         .iter()
-        .map(|(id, bus)| mapper(id, bus))
+        .map(|(id, bus)| mapper(&id, bus))
         .collect()
 }
 
@@ -222,7 +223,7 @@ pub fn add_effect_to_mixer_channel_by_id(
     let effect_id = app
         .mixer
         .channels
-        .get(&track_id)
+        .get(track_id)
         .and_then(|ch| ch.channel.effects.last())
         .map(|e| e.id)
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
@@ -321,7 +322,7 @@ pub fn add_effect_to_bus(
     let effect_id = app
         .mixer
         .buses
-        .get(&bus_id)
+        .get(bus_id)
         .and_then(|b| b.channel.effects.last())
         .map(|e| e.id)
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
@@ -347,7 +348,7 @@ pub fn rename_bus(ctx: &mut DawContext, bus_id: BusId, new_name: &str) -> anyhow
 
 pub fn set_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
     let app = &mut ctx.app_state;
-    app.mixer.add_routing(conn)?;
+    app.mixer.add_routing(conn, &app.tracks)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
@@ -367,13 +368,14 @@ pub fn remove_routing(
 }
 
 pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
-    let routing = ctx.app_state.mixer.update_routing(conn)?;
+    let app = &mut ctx.app_state;
+    let routing = app.mixer.update_routing(conn, &app.tracks)?;
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }
 
 // ===========================================
-// ======= NEW mixer shared pointer API ======
+// ======= Mixer shared pointer API ======
 // ===========================================
 
 pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot {
@@ -393,4 +395,87 @@ pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot 
 
 pub fn set_mixer_telemetry_subs(ctx: &mut DawContext, active: bool) -> anyhow::Result<()> {
     ctx.send_audio_command(AudioCommand::SetMixerTelemetrySubscription { active })
+}
+
+// =================================================
+// SIDECHAIN getter and updater
+// =================================================
+
+/// Get all track channels and bus channels, and also
+/// its current sidechain properties
+pub fn get_available_sidechainable_channels(
+    ctx: &DawContext,
+    sidechain_plugin: PluginTarget,
+) -> Vec<RoutingConnection> {
+    let sidechain_route = SidechainRoute::from(sidechain_plugin);
+    let destination = RoutingNode::PluginSidechain(sidechain_route);
+
+    let mut available_channels = Vec::new();
+
+    // Helper closure to check if a routing connection already exists
+    let get_existing_connection = |src: RoutingNode| {
+        ctx.app_state
+            .mixer
+            .routing
+            .iter()
+            .find(|rc| rc.source == src && rc.destination == destination)
+            .cloned()
+    };
+
+    for track_id in ctx.app_state.tracks.keys() {
+        let source = RoutingNode::Track(track_id);
+
+        if let Some(existing_conn) = get_existing_connection(source) {
+            available_channels.push(existing_conn);
+        } else {
+            available_channels.push(RoutingConnection::new_send(source, destination, 0.0));
+        }
+    }
+    for bus_id in ctx.app_state.mixer.buses.keys() {
+        let source = RoutingNode::Bus(bus_id);
+
+        if let Some(existing_conn) = get_existing_connection(source) {
+            available_channels.push(existing_conn);
+        } else {
+            available_channels.push(RoutingConnection::new_send(source, destination, 0.0));
+        }
+    }
+    available_channels
+}
+
+/// Update the sidechain properties of the sidechain source [target] in [this_plugin]
+///
+/// target should be a valid routing connection with the type of PluginSidechain
+pub fn upsert_sidechain_prop_of_plugin(
+    ctx: &mut DawContext,
+    this_plugin: PluginTarget,
+    from: RoutingNode,
+    send_level: Option<NormalizedF64>,
+) -> anyhow::Result<()> {
+    let sidechain_route = SidechainRoute::from(this_plugin);
+    let routing_node_dest = RoutingNode::PluginSidechain(sidechain_route);
+
+    let existing_conn_idx = ctx
+        .app_state
+        .mixer
+        .routing
+        .iter()
+        .position(|rc| rc.source == from && rc.destination == routing_node_dest);
+
+    if let Some(idx) = existing_conn_idx {
+        if let Some(sl) = send_level {
+            ctx.app_state.mixer.routing[idx].send_level = sl.get() as f32;
+        }
+    } else {
+        let level = send_level.map(|v| v.get() as f32).unwrap_or(0.85);
+        let new_conn = RoutingConnection::new_send(from, routing_node_dest, level);
+
+        ctx.app_state
+            .mixer
+            .add_routing(new_conn, &ctx.app_state.tracks)?;
+    }
+
+    let routings = ctx.app_state.mixer.routing.clone().into_boxed_slice();
+    ctx.send_audio_command(AudioCommand::UpdateRouting { routing: routings })?;
+    Ok(())
 }

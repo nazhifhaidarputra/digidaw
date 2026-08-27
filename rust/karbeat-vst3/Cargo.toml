@@ -1,0 +1,14 @@
+[package]
+name = "karbeat-vst3"
+version = "0.1.0"
+edition = "2024"
+description = "Package which handles VST3 Host implementation"
+exclude = ["/vst3sdk"]
+license = "GPL 3.0"
+
+[dependencies]
+vst3 = "0.3.0"
+karbeat-plugin-api.workspace = true
+
+[lints]
+workspace = true

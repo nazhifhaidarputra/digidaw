@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
 import 'package:karbeat/features/plugins/abstract_plugin_screen.dart';
 import 'package:karbeat/generated/plugins/param_eq.dart';
@@ -744,6 +745,7 @@ class KarbeatParametricEqState
                 step: p.step,
                 suffix: "dB",
                 onChanged: _updateMasterGain,
+                target: resolveAutomationTarget(p.id),
               ),
             ),
           ),
@@ -789,6 +791,8 @@ class KarbeatParametricEqState
         step: p.step,
         suffix: suffix,
         onChanged: onChanged,
+        target: resolveAutomationTarget(p.id),
+        controlStyle: DawControlStyle.knob,
       ),
     );
   }

@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Context;
 use rayon::prelude::*;
-use zip::{read::ZipArchive, write::SimpleFileOptions, CompressionMethod, ZipWriter};
+use zip::{CompressionMethod, ZipWriter, read::ZipArchive, write::SimpleFileOptions};
 
 use crate::core::{
     file_manager::audio_loader::load_audio_file,
@@ -45,8 +45,8 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("sample.bin");
-            let internal_name = format!("audio/{}_{}", id.to_u32(), file_name);
-            valid_sources.push((*id, path.clone(), internal_name));
+            let internal_name = format!("audio/{}_{}", id.to_u64(), file_name);
+            valid_sources.push((id, path.clone(), internal_name));
         }
     }
 
@@ -62,7 +62,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
         std::io::copy(&mut reader, &mut zip)?;
 
         // Rewrite the file path in the cloned state to use the zip-internal path
-        if let Some(entry) = library.source_map.get_mut(&id) {
+        if let Some(entry) = library.source_map.get_mut(id) {
             let waveform = Arc::make_mut(entry);
             waveform.file_path = internal_name.into();
         }
@@ -78,7 +78,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
     Ok(())
 }
 
-pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
+pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<ApplicationState> {
     let mut file =
         File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
 
@@ -100,8 +100,6 @@ pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
         rmp_serde::from_slice(&project_bytes).context("Failed to deserialize project.msgpack")?;
 
     let library = &mut app_state.asset_library;
-    library.source_map.clear();
-
     // Create a persistent cache directory for this session, avoiding randomized file names
     // We use into_path() to intentionally leak the directory so it persists during playback
     let cache_dir = tempfile::Builder::new()
@@ -158,33 +156,29 @@ pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
                 )
             })?;
 
-            let mut waveform =
-                load_audio_file(dest_path_str, Some(&file_name)).with_context(|| {
+            let mut waveform = load_audio_file(dest_path_str, Some(&file_name), sample_rate)
+                .with_context(|| {
                     format!("Failed to decode embedded audio for source id {id} ({file_name})")
                 })?;
 
             waveform
-                .try_assign_id(AudioSourceId::from(id))
+                .try_assign_id(AudioSourceId::from_u64(id))
                 .with_context(|| format!("Duplicate or invalid audio source id {id}"))?;
 
             Ok((id, waveform))
         })
         .collect();
 
-    // Insert all decoded waveforms back into the map safely on the main thread
+    // Replace the deserialized metadata entries while retaining the exact
+    // serialized slot and generation for every audio source key.
     for (id, waveform) in decoded_waveforms? {
-        library
+        let source_id = AudioSourceId::from_u64(id);
+        let entry = library
             .source_map
-            .insert(AudioSourceId::from(id), Arc::new(waveform));
+            .get_mut(source_id)
+            .with_context(|| format!("Audio source key {id} missing from project arena"))?;
+        *entry = Arc::new(waveform);
     }
-
-    let max_source_id = library
-        .source_map
-        .keys()
-        .map(|k| k.to_u32())
-        .max()
-        .unwrap_or(0);
-    library.next_id = library.next_id.max(max_source_id.saturating_add(1));
 
     Ok(app_state)
 }
@@ -210,7 +204,7 @@ pub fn peek_project_metadata(path: &Path) -> anyhow::Result<ProjectMetadata> {
 }
 
 /// Parses `audio/{id}_{file_name}` as produced by [`save_karbeat_project`].
-fn parse_embedded_audio_path(zip_name: &str) -> Option<(u32, String)> {
+fn parse_embedded_audio_path(zip_name: &str) -> Option<(u64, String)> {
     let rest = zip_name.strip_prefix("audio/")?;
     if rest.is_empty() || rest.ends_with('/') {
         return None;
@@ -227,6 +221,8 @@ mod test {
     use super::*;
     use std::io::{Read, Write};
     use tempfile::tempdir;
+
+    const SAMPLE_RATE: u32 = 48000;
 
     #[test]
     fn it_should_be_able_to_save_project() {
@@ -261,7 +257,7 @@ mod test {
         let mut file = File::create(&file_path_no_magic).unwrap();
         file.write_all(b"GARBAGE_DATA_NO_MAGIC_HEADER").unwrap();
 
-        let load_result = load_daw_project(&file_path_no_magic);
+        let load_result = load_daw_project(&file_path_no_magic, SAMPLE_RATE);
         assert!(load_result.is_err());
         assert_eq!(
             load_result.unwrap_err().to_string(),
@@ -275,7 +271,7 @@ mod test {
         file2.write_all(KARBEAT_MAGIC_HEADER).unwrap();
         file2.write_all(b"THIS IS NOT A ZIP FILE").unwrap();
 
-        let load_result_zip = load_daw_project(&file_path_bad_zip);
+        let load_result_zip = load_daw_project(&file_path_bad_zip, SAMPLE_RATE);
         assert!(
             load_result_zip.is_err(),
             "Failed to reject a corrupted ZIP payload"
@@ -302,7 +298,7 @@ mod test {
         );
 
         // Load & Verify
-        let load_result = load_daw_project(&file_path);
+        let load_result = load_daw_project(&file_path, SAMPLE_RATE);
         assert!(
             load_result.is_ok(),
             "Failed to load the project we just saved: {:?}",
@@ -312,7 +308,8 @@ mod test {
         let loaded_state = load_result.unwrap();
 
         assert_eq!(
-            original_state, loaded_state,
+            rmp_serde::to_vec(&original_state).unwrap(),
+            rmp_serde::to_vec(&loaded_state).unwrap(),
             "Loaded state did not match the saved state!"
         );
     }
@@ -328,7 +325,7 @@ mod test {
 
         save_daw_project(&file_path, &app_state).unwrap();
 
-        let load_result = load_daw_project(&file_path);
+        let load_result = load_daw_project(&file_path, SAMPLE_RATE);
         assert!(
             load_result.is_ok(),
             "Failed to load a known-valid project file"

@@ -1,9 +1,9 @@
 use crate::core::project::{
+    ApplicationState, AssetLibrary, Clip, GeneratorId, TrackId,
     automation::{AutomationCurveType, AutomationPoint},
     mixer::RoutingConnection,
     plugin::AudioPlugin,
-    track::{midi::Pattern, AudioTrack},
-    ApplicationState, AssetLibrary, GeneratorId, TrackId,
+    track::{AudioTrack, midi::Pattern},
 };
 use crate::core::project::{AutomationLane, ModulationLink, ModulationSource};
 use crate::shared::id::*;
@@ -238,6 +238,7 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> Normalized
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
     pub tracks: Box<[AudioTrack]>,
+    pub clips: HashMap<ClipId, Clip>,
     pub patterns: HashMap<PatternId, Pattern>,
     /// Routing connections — owned and mutated directly by the audio thread
     /// via the UpdateRouting ring-buffer command.
@@ -263,14 +264,23 @@ impl From<&ApplicationState> for AudioGraphState {
         let modulation_links = app
             .modulation_links
             .iter()
-            .map(|(&id, view)| (id, view.prop.clone()))
+            .map(|(id, view)| (id, view.prop.clone()))
             .collect();
 
         Self {
             tracks: tracks_vec.into_boxed_slice(),
-            patterns: app.pattern_pool.clone(),
+            clips: app
+                .clips_pool
+                .iter()
+                .map(|(id, clip)| (id, clip.clone()))
+                .collect(),
+            patterns: app
+                .pattern_pool
+                .iter()
+                .map(|(id, pattern)| (id, pattern.clone()))
+                .collect(),
             routing: app.mixer.routing.clone().into_boxed_slice(),
-            bus_ids: app.mixer.buses.keys().copied().collect(),
+            bus_ids: app.mixer.buses.keys().collect(),
             asset_library: app.asset_library.clone(),
             automation_lanes: app
                 .automation_pool
@@ -285,7 +295,11 @@ impl From<&ApplicationState> for AudioGraphState {
             } else {
                 64
             },
-            modulation_sources: app.modulation_sources.clone(),
+            modulation_sources: app
+                .modulation_sources
+                .iter()
+                .map(|(id, source)| (id, source.clone()))
+                .collect(),
             modulation_links,
         }
     }

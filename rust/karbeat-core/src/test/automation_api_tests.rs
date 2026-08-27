@@ -31,7 +31,6 @@
 //         }
 //     }
 
-//     // ─── get_automations_lanes_all ───────────────────────────────────────────
 
 //     #[test]
 //     fn get_automations_lanes_all_empty() {
@@ -41,7 +40,6 @@
 //         assert!(result.is_empty());
 //     }
 
-//     // ─── add_automation_lane_for_track ───────────────────────────────────────
 
 //     #[test]
 //     fn add_automation_lane_for_track_happy_path() {
@@ -80,7 +78,6 @@
 //         let _ = result; // Just check it doesn't panic
 //     }
 
-//     // ─── add_automation_lane_for_bus ─────────────────────────────────────────
 
 //     #[test]
 //     fn add_automation_lane_for_bus_happy_path() {
@@ -242,8 +239,6 @@
 //         );
 //     }
 
-//     // ─── get_automation_lanes_for_track ──────────────────────────────────────
-
 //     #[test]
 //     fn get_automation_lanes_for_track_empty() {
 //         let ctx = make_ctx();
@@ -251,8 +246,6 @@
 //         let result = automation_api::get_automation_lanes_for_track(&ctx, bogus_id);
 //         assert!(result.is_empty());
 //     }
-
-//     // ─── get_automation_lane ─────────────────────────────────────────────────
 
 //     #[test]
 //     fn get_automation_lane_missing_returns_none() {
@@ -277,8 +270,6 @@
 //         let fetched = automation_api::get_automation_lane(&ctx, lane.id);
 //         assert!(fetched.is_some());
 //     }
-
-//     // ─── modulation source / link ─────────────────────────────────────────────
 
 //     #[test]
 //     fn add_modulation_source_and_retrieve() {

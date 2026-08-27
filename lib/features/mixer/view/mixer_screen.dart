@@ -5,6 +5,7 @@ import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/plugins/plugin_registry.dart';
 import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
@@ -26,7 +27,8 @@ class MixerScreen extends ConsumerStatefulWidget {
   ConsumerState<MixerScreen> createState() => _MixerScreenState();
 }
 
-class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProviderStateMixin {
+class _MixerScreenState extends ConsumerState<MixerScreen>
+    with SingleTickerProviderStateMixin {
   // Track the currently selected channel ID (or -1 for Master)
   int? _selectedChannelId;
   bool _isSelectedBus = false;
@@ -74,10 +76,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProv
     // Start pumping telemetry
     _ticker.start();
 
-    setMixerTelemetrySubs(
-      ctx: _dawContext,
-      active: true,
-    );
+    setMixerTelemetrySubs(ctx: _dawContext, active: true);
 
     // WidgetsBinding.instance.addPostFrameCallback((_) async {
     //   ref.read(mixerStateProvider.notifier).queryAllMixerChannels();
@@ -87,10 +86,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProv
 
   @override
   void dispose() {
-    setMixerTelemetrySubs(
-      ctx: _dawContext,
-      active: false,
-    );
+    setMixerTelemetrySubs(ctx: _dawContext, active: false);
     _ticker.dispose();
     _trackScrollController.dispose();
     _busScrollController.dispose();
@@ -678,11 +674,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProv
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Material(
-                            color: Colors.white.withAlpha(10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              side: BorderSide(color: Colors.white.withAlpha(20)),
-                            ),
+                          color: Colors.white.withAlpha(10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            side: BorderSide(color: Colors.white.withAlpha(20)),
+                          ),
                           child: ListTile(
                             dense: true,
                             title: Text(
@@ -701,7 +697,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProv
                             onTap: () async {
                               try {
                                 final target = isMaster
-                                    ? plugin_api.UiPluginTarget.masterEffect(effect.id)
+                                    ? plugin_api.UiPluginTarget.masterEffect(
+                                        effect.id,
+                                      )
                                     : _isSelectedBus
                                     ? plugin_api.UiPluginTarget.busEffect(
                                         busId: _selectedChannelId!,
@@ -715,9 +713,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProv
                                     .read(audioPluginProvider.notifier)
                                     .getAvailableEffects();
                                 final registryId = availableEffects
-                                    .firstWhere((p) => p.id == effect.registryId)
+                                    .firstWhere(
+                                      (p) => p.id == effect.registryId,
+                                    )
                                     .id;
-                        
+
                                 final screen = PluginRegistryFlutter.getScreen(
                                   registryId: registryId,
                                   instanceId: effect.id,
@@ -726,7 +726,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> with SingleTickerProv
                                 if (!context.mounted) return;
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (context) => screen),
+                                  MaterialPageRoute(
+                                    builder: (context) => screen,
+                                  ),
                                 );
                               } catch (_) {
                                 // Feedback for effects that don't have a UI yet
@@ -1071,7 +1073,9 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
         : const MixerChannelParamTargetDto.volume();
 
     if (widget.entry.isMaster) {
-      return AutomationTargetDto.master(MasterAutomationTargetDto.mixerChannel(mixTarget));
+      return AutomationTargetDto.master(
+        MasterAutomationTargetDto.mixerChannel(mixTarget),
+      );
     } else if (widget.entry.isBus) {
       return AutomationTargetDto.bus(
         busId: widget.entry.id,
@@ -1297,12 +1301,25 @@ class _PanKnob extends ConsumerWidget {
                       defaultValue: spec.defaultValue,
                     );
               },
-              child: Slider(
+              onRemoveAutomation: () {
+                AppLogger.info(
+                  "remove automation for ${spec.name} (ID: ${spec.id})",
+                );
+                ref
+                    .read(automationProvider.notifier)
+                    .handleRemoveAutomationForTarget(target: automationTarget);
+              },
+              child: DigidawParameterKnob(
                 value: value,
                 min: spec.min,
                 max: spec.max,
+                defaultValue: spec.defaultValue,
+                step: spec.step == 0.0 ? 0.01 : spec.step,
+                diameter: 30.0, // Perfectly sized for the 72px channel strip
+                activeColor: accentColor,
+                inactiveColor:
+                    Colors.white12, // Matches the previous slider track
                 onChanged: onChanged,
-                allowedInteraction: SliderInteraction.slideOnly,
                 onChangeStart: onChangeStart != null
                     ? (_) => onChangeStart!()
                     : null,
@@ -1371,6 +1388,14 @@ class _VolumeFader extends ConsumerWidget {
                     max: spec.max,
                     defaultValue: spec.defaultValue,
                   );
+            },
+            onRemoveAutomation: () async {
+              AppLogger.info(
+                "Remove automation for ${spec.name} (ID: ${spec.id})",
+              );
+              ref
+                  .read(automationProvider.notifier)
+                  .handleRemoveAutomationForTarget(target: automationTarget);
             },
             child: SizedBox(
               width: sliderWidth,

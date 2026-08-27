@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-// Make sure to import your ParameterInteractionWrapper here!
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
+import 'package:karbeat/src/rust/api/automation.dart';
+
+import 'digidaw_plugin_widgets/widgets.dart';
 
 // ============================================================================
 // FLOAT PARAMETER (Slider)
 // ============================================================================
-class DawFloatParam extends StatelessWidget {
+class DawFloatParam extends ConsumerWidget {
   final int paramId;
   final String name;
   final double value;
@@ -19,6 +23,9 @@ class DawFloatParam extends StatelessWidget {
   final ValueChanged<double>? onChangeEnd;
   final SliderInteraction sliderInteraction;
   final double? sliderWidth;
+  final AutomationTargetDto? target;
+  final DawControlStyle controlStyle;
+  final double knobDiameter;
 
   const DawFloatParam({
     super.key,
@@ -35,10 +42,13 @@ class DawFloatParam extends StatelessWidget {
     this.onChangeEnd,
     this.sliderInteraction = SliderInteraction.slideThumb,
     this.sliderWidth,
+    this.target,
+    this.controlStyle = DawControlStyle.slider,
+    this.knobDiameter = 52.0,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final displayValue = value.toStringAsFixed(2);
 
     int? divisions;
@@ -47,62 +57,86 @@ class DawFloatParam extends StatelessWidget {
       if (divisions <= 0) divisions = null;
     }
 
+    Widget buildControl() {
+      final wrapped = ParameterInteractionWrapper<double>(
+        parameterName: name,
+        value: value,
+        defaultValue: defaultValue,
+        min: min,
+        max: max,
+        step: step,
+        onChanged: onChanged,
+        onAddAutomation: () async {
+          if (target == null) return;
+          ref.read(automationProvider.notifier).handleAddAutomationForTarget(
+                target: target!,
+                label: name,
+                min: min,
+                max: max,
+                defaultValue: defaultValue,
+              );
+        },
+        onRemoveAutomation: () async {
+          if (target == null) return;
+          ref.read(automationProvider.notifier).handleRemoveAutomationForTarget(target: target!);
+        },
+        child: controlStyle == DawControlStyle.knob
+            ? DigidawParameterKnob(
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                defaultValue: defaultValue,
+                step: step,
+                diameter: knobDiameter,
+                onChanged: onChanged,
+                onChangeStart: onChangeStart,
+                onChangeEnd: onChangeEnd,
+              )
+            : DigidawParameterSlider(
+                slider: Slider(
+                  value: value.clamp(min, max),
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  onChanged: onChanged,
+                  onChangeStart: onChangeStart,
+                  onChangeEnd: onChangeEnd,
+                  allowedInteraction: sliderInteraction,
+                ),
+              ),
+      );
+
+      if (controlStyle == DawControlStyle.slider) {
+        final themed = SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: Colors.cyanAccent,
+            inactiveTrackColor: Colors.grey.shade700,
+            thumbColor: Colors.cyanAccent,
+            overlayColor: Colors.cyanAccent.withAlpha(51),
+            trackHeight: 4,
+            tickMarkShape: SliderTickMarkShape.noTickMark,
+          ),
+          child: wrapped,
+        );
+        return sliderWidth != null ? SizedBox(width: sliderWidth!, child: themed) : themed;
+      }
+      return wrapped;
+    }
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: controlStyle == DawControlStyle.knob
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              name,
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-            Text(
-              '$displayValue$suffix',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
+            Text(name, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            Text('$displayValue$suffix', style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ],
         ),
         const SizedBox(height: 4),
-        () {
-          final sliderWithTheme = SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: Colors.cyanAccent,
-              inactiveTrackColor: Colors.grey.shade700,
-              thumbColor: Colors.cyanAccent,
-              overlayColor: Colors.cyanAccent.withAlpha(51),
-              trackHeight: 4,
-              tickMarkShape: SliderTickMarkShape.noTickMark,
-            ),
-            child: ParameterInteractionWrapper<double>(
-              parameterName: name,
-              value: value,
-              defaultValue: defaultValue,
-              min: min,
-              max: max,
-              step: step,
-              onChanged: onChanged,
-              onAddAutomation: () async {
-                // TODO: Wire up automation lane creation using paramId
-                debugPrint("Create automation for $name ($paramId)");
-              },
-              child: Slider(
-                value: value.clamp(min, max),
-                min: min,
-                max: max,
-                divisions: divisions,
-                onChanged: onChanged,
-                onChangeStart: onChangeStart,
-                onChangeEnd: onChangeEnd,
-                allowedInteraction: sliderInteraction,
-              ),
-            ),
-          );
-          if (sliderWidth != null) {
-            return SizedBox(width: sliderWidth!, child: sliderWithTheme);
-          }
-          return sliderWithTheme;
-        }(),
+        buildControl(),
       ],
     );
   }
@@ -147,7 +181,8 @@ class DawChoiceParam extends StatelessWidget {
           step: 1.0,
           onChanged: onChanged,
           onAddAutomation: () {
-            debugPrint("Create automation for $name ($paramId)");
+            // There are no automation for choice param (yet)
+            // debugPrint("Create automation for $name ($paramId)");
           },
           child: Wrap(
             spacing: 8,
@@ -225,7 +260,8 @@ class DawBoolParam extends StatelessWidget {
       step: 1.0,
       onChanged: onChanged,
       onAddAutomation: () {
-        debugPrint("Create automation for $name ($paramId)");
+        // There are no automation for Bool param (yet)
+        // debugPrint("Create automation for $name ($paramId)");
       },
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

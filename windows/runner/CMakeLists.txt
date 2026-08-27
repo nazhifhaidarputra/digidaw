@@ -38,3 +38,12 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+set(VCPKG_ENV_BIN "${CMAKE_CURRENT_SOURCE_DIR}/../../rust/vcpkg_installed/x64-windows/bin")
+
+add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${VCPKG_ENV_BIN}"
+    "$<TARGET_FILE_DIR:${BINARY_NAME}>"
+    COMMENT "Copying DLLs from local vcpkg environment..."
+)

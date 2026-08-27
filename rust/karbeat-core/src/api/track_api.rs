@@ -1,7 +1,7 @@
 use crate::commands::AudioCommand;
 use crate::context::DawContext;
-use crate::core::project::track::RemovedTrackType;
 use crate::core::project::AudioTrack;
+use crate::core::project::track::RemovedTrackType;
 use crate::shared::id::*;
 use karbeat_utils::color::Color;
 
@@ -9,7 +9,7 @@ pub fn get_track<T, F>(ctx: &DawContext, track_id: TrackId, mapper: F) -> Option
 where
     F: Fn(&AudioTrack) -> T,
 {
-    let track = ctx.app_state.tracks.get(&track_id)?;
+    let track = ctx.app_state.tracks.get(track_id)?;
     Some(mapper(track))
 }
 
@@ -42,7 +42,7 @@ pub fn change_track_name(
     let track = ctx
         .app_state
         .tracks
-        .get_mut(&track_id)
+        .get_mut(track_id)
         .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
     track.name = new_name.to_string();
     Ok(())
@@ -56,7 +56,7 @@ pub fn change_track_color(
     let track = ctx
         .app_state
         .tracks
-        .get_mut(&track_id)
+        .get_mut(track_id)
         .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
     track.color = Color::new_from_string(new_color).ok_or_else(|| {
         anyhow::anyhow!("Invalid color format. Use hex string like #RRGGBB or #RRGGBBAA")
@@ -100,7 +100,7 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
     let generator_id = ctx
         .app_state
         .tracks
-        .get(&track_id)
+        .get(track_id)
         .and_then(|t| t.generator.as_ref().map(|g| g.id));
 
     let deleted_track_type = ctx.app_state.remove_track(track_id)?;

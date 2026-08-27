@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -9,9 +9,9 @@ pub enum ResizeEdge {
     Right,
 }
 
-use crate::core::project::track::midi::Pattern;
 use crate::core::project::ClipboardContent;
-use crate::core::project::{track::TrackType, ApplicationState, DawSource};
+use crate::core::project::track::midi::Pattern;
+use crate::core::project::{ApplicationState, DawSource, track::TrackType};
 use crate::shared::id::{ClipId, TrackId};
 use crate::shared::{AudioSourceId, PatternId};
 
@@ -20,12 +20,12 @@ pub enum ClipSourceType {
     Audio,
 }
 
-/// ======================================
+// ======================================
 /// ClipTimeUnit
 /// Encapsulates clip timeline positioning with explicit units.
 /// Audio clips use raw samples (BPM-independent).
 /// MIDI/Automation clips use ticks (960 PPQN, BPM-dependent).
-/// ======================================
+// ======================================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ClipTimeUnit {
     /// Values in raw audio samples (BPM-independent)
@@ -170,17 +170,29 @@ impl Ord for Clip {
 
 impl ApplicationState {
     pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) -> anyhow::Result<()> {
-        // Get the track
-        match self.tracks.get_mut(&track_id) {
-            Some(track) => {
-                // Add Clip & Check bounds
-                // We pass the Clip by value. The track takes ownership and wraps it in Arc.
-                let _ = track.add_clip(clip)?;
-            }
-            _ => {
-                return Err(anyhow::anyhow!("Track not found"));
-            }
+        let track = self
+            .tracks
+            .get(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        if !track.accepts_clip(&clip) {
+            return Err(anyhow::anyhow!(
+                "Warning: Mismatched Clip Source for Track Type"
+            ));
         }
+
+        let clip_id = if self.clips_pool.contains_key(clip.id) {
+            let id = clip.id;
+            self.clips_pool[id] = clip;
+            id
+        } else {
+            self.clips_pool.insert_with_key(|id| Clip { id, ..clip })
+        };
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        track.clips.retain(|id| *id != clip_id);
+        track.add_clip(clip_id, &self.clips_pool)?;
         Ok(())
     }
 
@@ -189,24 +201,23 @@ impl ApplicationState {
         track_id: TrackId,
         clip_id: ClipId,
     ) -> anyhow::Result<Clip> {
-        let deleted_clip = (if let Some(track) = self.tracks.get_mut(&track_id) {
-            match track.remove_clip(&clip_id) {
-                Ok(clip) => Ok(clip),
-                Err(e) => Err(e),
-            }
-        } else {
-            Err(anyhow::anyhow!("Track not found"))
-        })?;
-
-        Ok(deleted_clip)
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        track.remove_clip(&clip_id)?;
+        self.clips_pool
+            .get(clip_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Clip not found in global pool"))
     }
 
     /// Get a clip from a track by its ID.
     /// Returns an owned clone of the Clip if found.
     pub fn get_clip(&self, track_id: &TrackId, clip_id: &ClipId) -> Option<Clip> {
         self.tracks
-            .get(track_id)
-            .and_then(|track| track.get_clip(clip_id))
+            .get(*track_id)
+            .and_then(|track| track.get_clip(&self.clips_pool, clip_id))
     }
 
     /// Move a clip from one track to another (or within the same track) with a new start time.
@@ -219,20 +230,29 @@ impl ApplicationState {
         clip_id: ClipId,
         new_start_time: u64,
     ) -> anyhow::Result<Clip> {
-        // First, extract the clip from the source track
-        let clip = {
-            let track = self
-                .tracks
-                .get_mut(&source_track_id)
-                .with_context(|| "Track not found")?;
+        let clip = self
+            .clips_pool
+            .get(clip_id)
+            .with_context(|| "Clip not found in global pool")?;
+        let target = self
+            .tracks
+            .get(target_track_id)
+            .with_context(|| "Track not found")?;
+        if !target.accepts_clip(clip) {
+            return Err(anyhow::anyhow!(
+                "Warning: Mismatched Clip Source for Track Type"
+            ));
+        }
 
-            let clip = track.remove_clip(&clip_id)?;
+        self.tracks
+            .get_mut(source_track_id)
+            .with_context(|| "Track not found")?
+            .remove_clip(&clip_id)?;
 
-            clip.clone()
-        };
-
-        // Update the clip's start time (preserving the time unit variant)
-        let mut modified_clip = clip;
+        let modified_clip = self
+            .clips_pool
+            .get_mut(clip_id)
+            .with_context(|| "Clip not found in global pool")?;
         match &mut modified_clip.time {
             ClipTimeUnit::Samples { start_time, .. } => {
                 *start_time = new_start_time;
@@ -246,15 +266,15 @@ impl ApplicationState {
         {
             let track = self
                 .tracks
-                .get_mut(&target_track_id)
+                .get_mut(target_track_id)
                 .with_context(|| "Track not found")?;
 
             track
-                .add_clip(modified_clip.clone())
+                .add_clip(clip_id, &self.clips_pool)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
         }
 
-        Ok(modified_clip)
+        Ok(self.clips_pool[clip_id].clone())
     }
 
     /// Cut (Slice) a clip at a given point (in the clip's native time unit).
@@ -267,11 +287,58 @@ impl ApplicationState {
     ) -> anyhow::Result<(Clip, Clip)> {
         let track = self
             .tracks
-            .get_mut(track_id)
+            .get_mut(*track_id)
             .with_context(|| "Track not found")?;
+        if !track.clips.contains(clip_id) {
+            return Err(anyhow::anyhow!("Clip not found in track"));
+        }
+        track.remove_clip(clip_id)?;
 
-        let (first_clip, second_clip) =
-            track.slice_clip(clip_id, cut_point, &mut self.clip_counter)?;
+        let source = self
+            .clips_pool
+            .get(*clip_id)
+            .cloned()
+            .with_context(|| "Clip not found in global pool")?;
+        let clip_start = source.time.start_time_raw();
+        let clip_length = source.time.loop_length_raw();
+        if cut_point <= clip_start || cut_point >= clip_start + clip_length {
+            track.add_clip(*clip_id, &self.clips_pool)?;
+            return Err(anyhow::anyhow!("Cannot cut clip outside its boundaries"));
+        }
+
+        let first_length = cut_point - clip_start;
+        let second_length = clip_length - first_length;
+        let second_offset = source.time.offset_start_raw() + first_length;
+        let left = self.clips_pool.get_mut(*clip_id).unwrap();
+        match &mut left.time {
+            ClipTimeUnit::Samples { loop_length, .. } => *loop_length = first_length,
+            ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = first_length as u32,
+        }
+        let mut right = source;
+        match &mut right.time {
+            ClipTimeUnit::Samples {
+                start_time,
+                loop_length,
+                offset_start,
+            } => {
+                *start_time = cut_point;
+                *loop_length = second_length;
+                *offset_start = second_offset;
+            }
+            ClipTimeUnit::Ticks {
+                start_time,
+                loop_length,
+                offset_start,
+            } => {
+                *start_time = cut_point as u32;
+                *loop_length = second_length as u32;
+                *offset_start = second_offset as u32;
+            }
+        }
+        let right_clip_id = self.clips_pool.insert_with_key(|id| Clip { id, ..right });
+        track.add_clips_bulk(&[*clip_id, right_clip_id], &self.clips_pool);
+        let first_clip = self.clips_pool[*clip_id].clone();
+        let second_clip = self.clips_pool[right_clip_id].clone();
 
         Ok((first_clip, second_clip))
     }
@@ -289,11 +356,54 @@ impl ApplicationState {
     ) -> anyhow::Result<Clip> {
         let track = self
             .tracks
-            .get_mut(&track_id)
+            .get_mut(track_id)
             .with_context(|| "Track not found")?;
-
-        let modified_clip = track.resize_clip(clip_id, edge, new_time_val)?;
-        Ok(modified_clip)
+        track.remove_clip(&clip_id)?;
+        let modified_clip = self
+            .clips_pool
+            .get_mut(clip_id)
+            .with_context(|| "Clip not found in global pool")?;
+        let old_start = modified_clip.time.start_time_raw();
+        let old_end = old_start + modified_clip.time.loop_length_raw();
+        let old_offset = modified_clip.time.offset_start_raw();
+        match edge {
+            ResizeEdge::Right if new_time_val > old_start => match &mut modified_clip.time {
+                ClipTimeUnit::Samples { loop_length, .. } => {
+                    *loop_length = new_time_val - old_start
+                }
+                ClipTimeUnit::Ticks { loop_length, .. } => {
+                    *loop_length = (new_time_val - old_start) as u32
+                }
+            },
+            ResizeEdge::Left if new_time_val < old_end => {
+                let new_offset = old_offset as i64 + new_time_val as i64 - old_start as i64;
+                if new_offset >= 0 {
+                    match &mut modified_clip.time {
+                        ClipTimeUnit::Samples {
+                            start_time,
+                            loop_length,
+                            offset_start,
+                        } => {
+                            *start_time = new_time_val;
+                            *loop_length = old_end - new_time_val;
+                            *offset_start = new_offset as u64;
+                        }
+                        ClipTimeUnit::Ticks {
+                            start_time,
+                            loop_length,
+                            offset_start,
+                        } => {
+                            *start_time = new_time_val as u32;
+                            *loop_length = (old_end - new_time_val) as u32;
+                            *offset_start = new_offset as u32;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        track.add_clip(clip_id, &self.clips_pool)?;
+        Ok(self.clips_pool[clip_id].clone())
     }
 
     /// Create a new clip and add it to the track.
@@ -306,6 +416,9 @@ impl ApplicationState {
         track_id: TrackId,
         start_time: u32,
     ) -> anyhow::Result<Clip> {
+        if !self.tracks.contains_key(track_id) {
+            return Err(anyhow::anyhow!("Track not found"));
+        }
         let clip = match source_type {
             ClipSourceType::Audio => {
                 let source_id =
@@ -315,7 +428,7 @@ impl ApplicationState {
                 let audio_source = self
                     .asset_library
                     .source_map
-                    .get(&source_id)
+                    .get(source_id)
                     .ok_or_else(|| {
                         anyhow::anyhow!("The audio source is not available in the library")
                     })?
@@ -345,21 +458,26 @@ impl ApplicationState {
                     ClipTimeUnit::samples_per_tick(bpm, self.audio_config.sample_rate);
                 let start_time_samples = ((start_time as f64) * samples_per_tick) as u64;
 
-                let new_clip_id = ClipId::next(&mut self.clip_counter);
-
-                let clip = Clip {
+                let new_clip_id = self.clips_pool.insert_with_key(|id| Clip {
                     name: audio_source.name.clone(),
-                    id: new_clip_id,
+                    id,
                     source: Some(DawSource::Audio(source_id)),
                     time: ClipTimeUnit::Samples {
                         start_time: start_time_samples,
                         loop_length: timeline_length_samples,
                         offset_start: 0,
                     },
-                };
-                self.add_clip_to_track(track_id, clip.clone())?;
-
-                clip
+                });
+                if let Err(error) = self
+                    .tracks
+                    .get_mut(track_id)
+                    .with_context(|| "Track not found")?
+                    .add_clip(new_clip_id, &self.clips_pool)
+                {
+                    self.clips_pool.remove(new_clip_id);
+                    return Err(error);
+                }
+                self.clips_pool[new_clip_id].clone()
             }
             ClipSourceType::Midi => {
                 // Use existing pattern if source_id provided, otherwise create new
@@ -367,7 +485,7 @@ impl ApplicationState {
                     let pattern_id = PatternId::from(id);
                     let pattern = self
                         .pattern_pool
-                        .get(&pattern_id)
+                        .get(pattern_id)
                         .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", id))?;
 
                     // Length is in ticks
@@ -375,41 +493,44 @@ impl ApplicationState {
                     (pattern_id, length)
                 } else {
                     // Create new pattern
-                    let new_pattern_id = PatternId::next(&mut self.pattern_counter);
                     let default_ticks = 4 * 960;
                     let timeline_length = 4 * 960; // 4 beats
-
-                    let pattern = Pattern {
-                        id: new_pattern_id,
-                        name: format!("Pattern {}", new_pattern_id.to_u32()),
+                    let new_pattern_id = self.pattern_pool.insert_with_key(|id| Pattern {
+                        id,
+                        name: format!("Pattern {}", id),
                         length_ticks: default_ticks,
                         notes: Vec::new(),
                         next_note_id: 0,
-                    };
-                    self.pattern_pool.insert(new_pattern_id, pattern);
+                    });
                     (new_pattern_id, timeline_length)
                 };
 
                 let pattern_name = self
                     .pattern_pool
-                    .get(&pattern_id)
+                    .get(pattern_id)
                     .map(|p| p.name.clone())
                     .unwrap_or_else(|| format!("Pattern {}", pattern_id.to_u32()));
 
-                let new_clip_id = ClipId::next(&mut self.clip_counter);
-                let clip = Clip {
+                let new_clip_id = self.clips_pool.insert_with_key(|id| Clip {
                     name: pattern_name,
-                    id: new_clip_id,
+                    id,
                     source: Some(DawSource::Midi(pattern_id)),
                     time: ClipTimeUnit::Ticks {
                         start_time,
                         loop_length: timeline_length,
                         offset_start: 0,
                     },
-                };
-
-                self.add_clip_to_track(track_id, clip.clone())?;
-                clip
+                });
+                if let Err(error) = self
+                    .tracks
+                    .get_mut(track_id)
+                    .with_context(|| "Track not found")?
+                    .add_clip(new_clip_id, &self.clips_pool)
+                {
+                    self.clips_pool.remove(new_clip_id);
+                    return Err(error);
+                }
+                self.clips_pool[new_clip_id].clone()
             }
         };
 
@@ -426,22 +547,25 @@ impl ApplicationState {
     ) -> Result<Vec<Clip>, String> {
         let target_type = self
             .tracks
-            .get(&target_track_id)
+            .get(target_track_id)
             .ok_or("Target track not found")?
             .track_type
             .clone();
 
-        let mut clips_to_move = Vec::with_capacity(clip_ids.len());
+        let mut ids_to_move = Vec::with_capacity(clip_ids.len());
 
         // 1. Extract clips from the source track safely
         {
             let source_track = self
                 .tracks
-                .get_mut(&source_track_id)
+                .get_mut(source_track_id)
                 .ok_or("Source track not found")?;
 
-            for clip in source_track.clips.iter() {
-                if clip_ids.contains(&clip.id) {
+            for id in source_track.clips.iter().copied() {
+                if clip_ids.contains(&id) {
+                    let Some(clip) = self.clips_pool.get(id) else {
+                        continue;
+                    };
                     // Check compatibility if moving cross-track
                     if source_track_id != target_track_id {
                         let is_compatible = match (&target_type, &clip.source) {
@@ -454,17 +578,17 @@ impl ApplicationState {
                             continue; // Skip incompatible clips
                         }
                     }
-                    clips_to_move.push(clip.clone());
+                    ids_to_move.push(id);
                 }
             }
 
             // Remove extracted clips in O(N) without multiple memory shifts
-            let move_ids: Vec<_> = clips_to_move.iter().map(|c| c.id).collect();
-            source_track.clips.retain(|c| !move_ids.contains(&c.id));
+            source_track.clips.retain(|id| !ids_to_move.contains(id));
         }
 
         // 2. Modify clips
-        for clip in &mut clips_to_move {
+        for id in &ids_to_move {
+            let clip = &mut self.clips_pool[*id];
             let old_start = clip.time.start_time_raw() as i64;
             let new_start = (old_start + delta).max(0) as u64;
             match &mut clip.time {
@@ -476,12 +600,15 @@ impl ApplicationState {
         // 3. Insert them all at once and sort ONLY ONCE
         let target_track = self
             .tracks
-            .get_mut(&target_track_id)
+            .get_mut(target_track_id)
             .ok_or("Target track not found")?;
 
-        target_track.add_clips_bulk(&clips_to_move);
+        target_track.add_clips_bulk(&ids_to_move, &self.clips_pool);
 
-        Ok(clips_to_move)
+        Ok(ids_to_move
+            .iter()
+            .map(|id| self.clips_pool[*id].clone())
+            .collect())
     }
 
     /// Batch resize clips by a delta (in native units).
@@ -492,22 +619,18 @@ impl ApplicationState {
         edge: ResizeEdge,
         delta: i64,
     ) -> Result<Vec<Clip>, String> {
-        let track = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
-
-        // 1. Extract the clips
-        let mut clips_to_resize = Vec::with_capacity(clip_ids.len());
-        for clip in track.clips.iter() {
-            if clip_ids.contains(&clip.id) {
-                clips_to_resize.push(clip.clone());
-            }
-        }
-
-        // Remove them in a single O(N) pass
-        let resize_ids: Vec<_> = clips_to_resize.iter().map(|c| c.id).collect();
-        track.clips.retain(|c| !resize_ids.contains(&c.id));
+        let track = self.tracks.get_mut(track_id).ok_or("Track not found")?;
+        let resize_ids: Vec<_> = track
+            .clips
+            .iter()
+            .copied()
+            .filter(|id| clip_ids.contains(id))
+            .collect();
+        track.clips.retain(|id| !resize_ids.contains(id));
 
         // 2. Modify them
-        for modified_clip in &mut clips_to_resize {
+        for id in &resize_ids {
+            let modified_clip = &mut self.clips_pool[*id];
             let old_start = modified_clip.time.start_time_raw();
             let old_length = modified_clip.time.loop_length_raw();
             let old_end = old_start + old_length;
@@ -554,9 +677,12 @@ impl ApplicationState {
         }
 
         // 3. Bulk insert and single sort
-        track.add_clips_bulk(&clips_to_resize);
+        track.add_clips_bulk(&resize_ids, &self.clips_pool);
 
-        Ok(clips_to_resize)
+        Ok(resize_ids
+            .iter()
+            .map(|id| self.clips_pool[*id].clone())
+            .collect())
     }
 
     pub fn copy_clip_batch(
@@ -566,19 +692,14 @@ impl ApplicationState {
     ) -> anyhow::Result<()> {
         let track_arc = self
             .tracks
-            .get(&source_track_id)
+            .get(source_track_id)
             .ok_or_else(|| anyhow!("Track not found"))?;
 
         let copied_clips: Vec<_> = track_arc
             .clips
             .iter()
-            .filter_map(|clip| {
-                if clip_ids.contains(&clip.id) {
-                    Some(clip.clone())
-                } else {
-                    None
-                }
-            })
+            .filter(|id| clip_ids.contains(id))
+            .filter_map(|id| self.clips_pool.get(*id).cloned())
             .collect();
 
         if copied_clips.is_empty() {
@@ -615,9 +736,8 @@ impl ApplicationState {
 
         let mut pasted_clips = Vec::with_capacity(copied_clips.len());
 
+        let mut pasted_ids = Vec::with_capacity(copied_clips.len());
         for mut clip in copied_clips {
-            clip.id = ClipId::next(&mut self.clip_counter);
-
             let old_start = clip.time.start_time_raw() as i64;
             let new_start = (old_start + delta).max(0) as u64;
 
@@ -626,16 +746,18 @@ impl ApplicationState {
                 ClipTimeUnit::Ticks { start_time, .. } => *start_time = new_start as u32,
             }
 
-            pasted_clips.push(clip);
+            let id = self.clips_pool.insert_with_key(|id| Clip { id, ..clip });
+            pasted_clips.push(self.clips_pool[id].clone());
+            pasted_ids.push(id);
         }
 
         let target_track = self
             .tracks
-            .get_mut(&target_track_id)
+            .get_mut(target_track_id)
             .ok_or_else(|| anyhow!("Target track not found"))?;
 
         // Use optimized bulk insert
-        target_track.add_clips_bulk(&pasted_clips);
+        target_track.add_clips_bulk(&pasted_ids, &self.clips_pool);
 
         Ok(pasted_clips)
     }
@@ -648,17 +770,16 @@ impl ApplicationState {
         let _ = self.copy_clip_batch(source_track_id, clip_ids);
 
         let mut deleted_clips = Vec::new();
-        if let Some(track) = self.tracks.get_mut(&source_track_id) {
-            deleted_clips.extend(
-                track
-                    .clips
-                    .iter()
-                    .filter(|c| clip_ids.contains(&c.id))
-                    .cloned(),
-            );
+        if let Some(track) = self.tracks.get_mut(source_track_id) {
+            deleted_clips.extend(track.clips.iter().filter_map(|id| {
+                clip_ids
+                    .contains(id)
+                    .then(|| self.clips_pool.get(*id).cloned())
+                    .flatten()
+            }));
 
             // Delete clips in a single O(N) pass
-            track.clips.retain(|c| !clip_ids.contains(&c.id));
+            track.clips.retain(|id| !clip_ids.contains(id));
         }
 
         deleted_clips

@@ -5,9 +5,7 @@ mod tests {
     use crate::api::audio_api;
     use crate::api::track_api;
     use crate::shared::id::{AudioSourceId, TrackId};
-    use crate::test::helpers::{karbeatzer_v2_registry_id, make_ctx, make_seeded_ctx};
-
-    // ─── get_audio_source ────────────────────────────────────────────────────
+    use crate::test::helpers::make_ctx;
 
     #[test]
     fn get_audio_source_missing_returns_none() {
@@ -16,8 +14,6 @@ mod tests {
         let result = audio_api::get_audio_source(&ctx, bogus_id, |_w| true);
         assert!(result.is_none(), "Unknown AudioSourceId should return None");
     }
-
-    // ─── play_source_preview ─────────────────────────────────────────────────
 
     #[test]
     fn play_source_preview_missing_returns_err() {
@@ -29,16 +25,12 @@ mod tests {
         assert!(msg.contains("Audio source not found"), "Got: {}", msg);
     }
 
-    // ─── stop_all_previews ───────────────────────────────────────────────────
-
     #[test]
     fn stop_all_previews_with_no_stream_is_noop() {
         // Should not panic even though ring buffer is None
         let mut ctx = make_ctx();
         audio_api::stop_all_previews(&mut ctx);
     }
-
-    // ─── set_metronome_active ────────────────────────────────────────────────
 
     #[test]
     fn set_metronome_active_with_no_stream_is_noop() {
@@ -47,8 +39,6 @@ mod tests {
         audio_api::set_metronome_active(&mut ctx, false);
     }
 
-    // ─── get_audio_config ────────────────────────────────────────────────────
-
     #[test]
     fn get_audio_config_always_calls_mapper() {
         let ctx = make_ctx();
@@ -56,8 +46,6 @@ mod tests {
         // Default sample rate is 48000
         assert!(sample_rate > 0, "Sample rate should be positive");
     }
-
-    // ─── drain_position_feedback ─────────────────────────────────────────────
 
     #[test]
     fn drain_position_feedback_returns_empty_when_no_stream() {
@@ -68,8 +56,6 @@ mod tests {
             "Should return empty vec when consumer is None"
         );
     }
-
-    // ─── play_preview_note ───────────────────────────────────────────────────
 
     #[test]
     fn play_preview_note_missing_track_returns_err() {

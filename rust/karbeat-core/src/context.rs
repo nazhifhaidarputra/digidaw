@@ -3,7 +3,7 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
-use std::sync::{mpsc, Arc, Once};
+use std::sync::{Arc, Once, mpsc};
 
 use hashbrown::HashMap;
 use karbeat_plugin_api::traits::AudioPlugin;
@@ -20,10 +20,10 @@ use crate::{
     commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
     core::{
         history::{HistoryManager, ProjectAction},
-        project::{ApplicationState, AudioTrack, AutomationLane, Pattern},
+        project::{ApplicationState, AudioTrack, AutomationLane, Clip, Pattern},
     },
     message::TelemetryRegistry,
-    shared::{AutomationId, PatternId},
+    shared::{AutomationId, ClipId, PatternId},
 };
 
 pub struct DawContext {
@@ -112,20 +112,37 @@ impl DawContext {
     // Granular graph-state broadcast helpers
     // ======================================
 
-    fn update_track_graph(&mut self) -> (HashMap<PatternId, Pattern>, Box<[AudioTrack]>) {
+    fn update_track_graph(
+        &mut self,
+    ) -> (
+        HashMap<PatternId, Pattern>,
+        HashMap<ClipId, Clip>,
+        Box<[AudioTrack]>,
+    ) {
         let app = &mut self.app_state;
         let mut tracks_vec: Box<[AudioTrack]> = app.tracks.values().cloned().collect();
         tracks_vec.sort_by_key(|t| t.id);
 
         // return the pattern pool and tracks
-        (app.pattern_pool.clone(), tracks_vec)
+        let patterns = app
+            .pattern_pool
+            .iter()
+            .map(|(id, pattern)| (id, pattern.clone()))
+            .collect();
+        let clips = app
+            .clips_pool
+            .iter()
+            .map(|(id, clip)| (id, clip.clone()))
+            .collect();
+        (patterns, clips, tracks_vec)
     }
 
     pub fn broadcast_track_graph(&mut self) {
-        let (patterns, tracks) = self.update_track_graph();
+        let (patterns, clips, tracks) = self.update_track_graph();
         let (tracks_len, patterns_len) = (tracks.len(), patterns.len());
         let _ = self.send_audio_command(AudioCommand::UpdateTrackGraph {
             tracks: tracks,
+            clips,
             patterns: patterns,
         });
         log::debug!(

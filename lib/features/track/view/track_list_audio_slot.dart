@@ -24,7 +24,6 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     required double localDx,
     required double zoomLevel,
   }) {
-    // final state = ref.read(workspaceStateProvider);
     int startTime = (localDx * zoomLevel).round();
 
     if (ref.read(workspaceStateProvider).snapToGrid) {
@@ -38,7 +37,6 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to Zoom Level (Global)
     final zoomLevel = ref.watch(
       workspaceStateProvider.select((s) => s.horizontalZoomLevel),
     );
@@ -50,7 +48,6 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
       transportProvider.select((s) => s.value?.state?.bpm),
     );
 
-    // Listen to Track Data
     final track = ref.watch(
       projectProvider.select((s) => s.value?.tracks[widget.trackId]),
     );
@@ -80,21 +77,28 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
         ? <int>[]
         : trackSelectedClipIdsStr.split(',').map(int.parse).toList();
 
+    final placementState = ref.watch(clipPlacementProvider);
+
     if (track == null) return const SizedBox();
 
     return DragTarget<List<int>>(
       onWillAcceptWithDetails: (details) => true,
       onAcceptWithDetails: (details) {},
       onMove: (details) {
-        final placementState = ref.read(clipPlacementProvider);
-        if (placementState.trackId != widget.trackId) {
-          ref
-              .read(clipPlacementProvider.notifier)
-              .updateBatchDrag(
-                targetTrackId: widget.trackId,
-                snappedDeltaTicks: placementState.snappedDeltaTicks,
-              );
+        final renderBox = context.findRenderObject() as RenderBox;
+        final localX = renderBox.globalToLocal(details.offset).dx;
+
+        double ticks = localX * zoomLevel;
+        if (ref.read(workspaceStateProvider).snapToGrid) {
+          ticks = _snapTick(
+            ticks.toInt(),
+            ref.read(workspaceStateProvider),
+          ).toDouble();
         }
+
+        ref
+            .read(clipPlacementProvider.notifier)
+            .updatePlacementTarget(widget.trackId, ticks);
       },
       builder: (context, candidateData, rejectedData) {
         return Container(
@@ -109,16 +113,73 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                 : Colors.grey.shade900,
           ),
           child: Stack(
-            clipBehavior: Clip.none, // Allow clips to drag outside temporarily
+            clipBehavior: Clip.none,
             children: [
+              // Grid Painter (Layer paling bawah)
               Positioned.fill(
                 child: MouseRegion(
                   cursor: selectedTool == ToolSelection.draw
                       ? SystemMouseCursors.precise
                       : SystemMouseCursors.basic,
+                  onHover: (event) {
+                    if (!placementState.isPlacing) return;
+                    double ticks = event.localPosition.dx * zoomLevel;
+                    if (ref.read(workspaceStateProvider).snapToGrid) {
+                      ticks = _snapTick(
+                        ticks.toInt(),
+                        ref.read(workspaceStateProvider),
+                      ).toDouble();
+                    }
+                    ref
+                        .read(clipPlacementProvider.notifier)
+                        .updatePlacementTarget(widget.trackId, ticks);
+                  },
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
-                    onTapUp: (details) {
+                    onPanUpdate: (details) {
+                      if (!placementState.isPlacing) return;
+                      double ticks = details.localPosition.dx * zoomLevel;
+                      if (ref.read(workspaceStateProvider).snapToGrid) {
+                        ticks = _snapTick(
+                          ticks.toInt(),
+                          ref.read(workspaceStateProvider),
+                        ).toDouble();
+                      }
+
+                      ref
+                          .read(clipPlacementProvider.notifier)
+                          .updatePlacementTarget(widget.trackId, ticks);
+                    },
+                    onTapDown: (details) {
+                      if (!placementState.isPlacing) return;
+                      double ticks = details.localPosition.dx * zoomLevel;
+                      if (ref.read(workspaceStateProvider).snapToGrid) {
+                        ticks = _snapTick(
+                          ticks.toInt(),
+                          ref.read(workspaceStateProvider),
+                        ).toDouble();
+                      }
+                      ref
+                          .read(clipPlacementProvider.notifier)
+                          .updatePlacementTarget(widget.trackId, ticks);
+                    },
+                    onTapUp: (details) async {
+                      if (placementState.isPlacing) {
+                        final result = await ref
+                            .read(clipPlacementProvider.notifier)
+                            .confirmPlacement();
+                        if (result.isErr() && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                (result as Error<void>).toErrorMessage(),
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
                       if (selectedTool == ToolSelection.draw) {
                         _handleEmptySpaceClick(
                           context: context,
@@ -132,19 +193,26 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                       }
                     },
                     child: RepaintBoundary(
-                      child: CustomPaint(
-                        painter: GridPainter(
-                          zoomLevel: zoomLevel,
-                          gridSize: gridSize,
-                          tempo: tempo ?? 120,
-                          sampleRate: safeSampleRate,
-                          scrollController: widget.horizontalScrollController,
-                        ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return CustomPaint(
+                            painter: GridPainter(
+                              zoomLevel: zoomLevel,
+                              gridSize: gridSize,
+                              tempo: tempo ?? 120,
+                              sampleRate: safeSampleRate,
+                              scrollController: widget.horizontalScrollController,
+                              viewportWidth: constraints.maxWidth,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
                 ),
               ),
+
+              // Existing Clip list
               ...track.clips.map((clip) {
                 final isSelected =
                     isSelectedTrack && selectedClipIds.contains(clip.id);
@@ -164,6 +232,20 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                   waveformMap: waveformMap,
                 );
               }),
+
+              // Ghost Clip layer
+              TrackGhostClip(
+                trackId: widget.trackId,
+                trackHeight: widget.height,
+                zoomLevel: zoomLevel,
+              ),
+
+              // Range selection bounding box (per-track, in local coordinate space)
+              TrackRangeSelectOverlay(
+                trackId: widget.trackId,
+                trackHeight: widget.height,
+                zoomLevel: zoomLevel,
+              ),
             ],
           ),
         );

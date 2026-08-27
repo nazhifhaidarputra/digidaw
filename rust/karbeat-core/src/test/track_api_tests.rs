@@ -4,7 +4,7 @@
 mod tests {
     use crate::api::track_api;
     use crate::shared::id::TrackId;
-    use crate::test::helpers::{karbeatzer_v2_registry_id, make_ctx, make_seeded_ctx};
+    use crate::test::helpers::{karbeatzer_v2_registry_id, make_ctx};
 
     // ─── get_track ───────────────────────────────────────────────────────────
 
@@ -35,6 +35,15 @@ mod tests {
         assert_eq!(ctx.app_state.tracks.len(), 1);
         track_api::add_new_audio_track(&mut ctx);
         assert_eq!(ctx.app_state.tracks.len(), 2);
+    }
+
+    #[test]
+    fn add_new_audio_track_uses_user_friendly_default_name() {
+        let mut ctx = make_ctx();
+
+        let track = track_api::add_new_audio_track(&mut ctx);
+
+        assert_eq!(track.name, "Audio track");
     }
 
     // ─── add_midi_track_with_generator_id ────────────────────────────────────

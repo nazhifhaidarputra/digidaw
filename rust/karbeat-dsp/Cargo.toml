@@ -1,12 +1,13 @@
 [package]
 name = "karbeat-dsp"
-version = "0.3.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 license = "GPL-3.0-only"
 description = "DSP algorithms and utilities for Karbeat"
 
 [dependencies]
 dasp.workspace = true
+bindgen.workspace = true
 rustfft.workspace = true
 num-complex.workspace = true
 log.workspace = true
@@ -21,6 +22,11 @@ wide.workspace = true
 smallvec.workspace = true
 fundsp.workspace = true
 realfft = "3.5.0"
+
+[build-dependencies]
+vcpkg.workspace = true
+bindgen.workspace = true
+pkg-config.workspace = true
 
 [lints]
 workspace = true

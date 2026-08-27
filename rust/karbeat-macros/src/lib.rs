@@ -203,14 +203,15 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 p_group = lit_str.value();
                             }
                         } else if meta.path.is_ident("min") {
-                            let value = meta.value()?.parse::<Lit>()?;
-                            if let Lit::Float(lit_float) = value {
-                                p_min = lit_float.base10_parse()?;
+                            let value_expr: syn::Expr = meta.value()?.parse()?;
+                            if let Ok(num) = parse_numeric_expr(&value_expr) {
+                                p_min = num;
                             }
                         } else if meta.path.is_ident("max") {
-                            let value = meta.value()?.parse::<Lit>()?;
-                            if let Lit::Float(lit_float) = value {
-                                p_max = lit_float.base10_parse()?;
+                            // Fix: Parse as Expr to handle integers and negatives robustly
+                            let value_expr: syn::Expr = meta.value()?.parse()?;
+                            if let Ok(num) = parse_numeric_expr(&value_expr) {
+                                p_max = num;
                             }
                         } else if meta.path.is_ident("default") {
                             let value_expr: syn::Expr = meta.value()?.parse()?;
@@ -230,15 +231,15 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 ));
                             }                    
                         } else if meta.path.is_ident("step") {
-                            let value = meta.value()?.parse::<Lit>()?;
-                            if let Lit::Float(lit_float) = value {
-                                p_step = lit_float.base10_parse()?;
+                            let value_expr: syn::Expr = meta.value()?.parse()?;
+                            if let Ok(num) = parse_numeric_expr(&value_expr) {
+                                p_step = num;
                             }
                         } else {
                             return Err(
                                 syn::Error::new_spanned(
                                     &meta.path,
-                                    format!("{:?} is not a valid parameter", meta.path)
+                                    format!("{:?} is not a valid parameter", &meta.path)
                                 )
                             );
                         }

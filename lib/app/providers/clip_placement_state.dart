@@ -52,8 +52,13 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
 
   // --- New Clip Placement Methods ---
 
-  void startPlacement(int sourceId, {required UiSourceType type}) {
-    state = state.copyWith(sourceId: sourceId, sourceType: type);
+  void startPlacement(int sourceId, {required UiSourceType type, int? initialTrackId}) {
+    state = state.copyWith(
+      sourceId: sourceId, 
+      sourceType: type,
+      trackId: initialTrackId ?? -1, // Spawns on the actual track!
+      timeSamples: 0.0, // Spawns exactly at the start of the timeline
+    );
     ref
         .read(workspaceStateProvider.notifier)
         .navigateTo(WorkspaceView.trackList);

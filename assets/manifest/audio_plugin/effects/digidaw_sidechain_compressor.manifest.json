@@ -1,0 +1,142 @@
+{
+  "id": 4115417077,
+  "id_string": "effect_digidaw_sidechain_comp",
+  "name": "DigiDAW Sidechain Compressor",
+  "internal_type": "DigidawSidechainCompressor",
+  "is_synth": false,
+  "parameters": [
+    {
+      "id": 1615967742,
+      "path": "channel_mode",
+      "name": "Channel Mode",
+      "group": "",
+      "value": 2.0,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 2.0,
+      "step": 1.0,
+      "value_type": "Choice",
+      "choices": [
+        "Mono",
+        "Stereo"
+      ]
+    },
+    {
+      "id": 425362513,
+      "path": "compressor/attack",
+      "name": "Attack",
+      "group": "",
+      "value": 5.0,
+      "min": 1.0,
+      "max": 1000.0,
+      "default_value": 5.0,
+      "step": 1.0,
+      "value_type": "Int",
+      "choices": []
+    },
+    {
+      "id": 4082258858,
+      "path": "compressor/release",
+      "name": "Release",
+      "group": "",
+      "value": 5.0,
+      "min": 1.0,
+      "max": 1000.0,
+      "default_value": 5.0,
+      "step": 1.0,
+      "value_type": "Int",
+      "choices": []
+    },
+    {
+      "id": 3182674304,
+      "path": "compressor/ratio",
+      "name": "Ratio",
+      "group": "",
+      "value": 4.0,
+      "min": 1.0,
+      "max": 24.0,
+      "default_value": 4.0,
+      "step": 0.1,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 2691430956,
+      "path": "compressor/threshold",
+      "name": "Threshold",
+      "group": "",
+      "value": 0.0,
+      "min": -60.0,
+      "max": 0.0,
+      "default_value": 0.0,
+      "step": 0.1,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 1749740780,
+      "path": "compressor/delay",
+      "name": "Delay",
+      "group": "",
+      "value": 0.0,
+      "min": 0.0,
+      "max": 100.0,
+      "default_value": 0.0,
+      "step": 1.0,
+      "value_type": "Int",
+      "choices": []
+    },
+    {
+      "id": 3140348134,
+      "path": "compressor/knee",
+      "name": "Knee",
+      "group": "",
+      "value": 6.0,
+      "min": 0.0,
+      "max": 24.0,
+      "default_value": 6.0,
+      "step": 0.1,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 1500576132,
+      "path": "compressor/makeup_gain",
+      "name": "MakeUp Gain",
+      "group": "",
+      "value": 0.0,
+      "min": -24.0,
+      "max": 24.0,
+      "default_value": 0.0,
+      "step": 0.1,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 182769762,
+      "path": "compressor/wet_mix",
+      "name": "Wet Mix",
+      "group": "",
+      "value": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 1.0,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    },
+    {
+      "id": 204092199,
+      "path": "compressor/dry_mix",
+      "name": "Dry mix",
+      "group": "",
+      "value": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": 1.0,
+      "step": 0.01,
+      "value_type": "Float",
+      "choices": []
+    }
+  ]
+}

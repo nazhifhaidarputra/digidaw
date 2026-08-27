@@ -33,6 +33,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   // Optimistic UI state
   IList<AutomationPointDto>? _localPoints;
   int? _draggedPointId;
+  int? _hoveredPointId;
 
   @override
   void didUpdateWidget(covariant AutomationLaneSlot oldWidget) {
@@ -136,7 +137,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       setState(() {
         _draggedPointId = tempId;
         // Immutably append to the IList
-        _localPoints = widget.lane.points.toIList().add(newPoint);
+        _localPoints = widget.lane.points.lock.add(newPoint);
       });
     }
   }
@@ -196,6 +197,58 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     });
   }
 
+  /// Build Tooltip for edited automation point
+  Widget _buildTooltip() {
+    // Determine if we should show the tooltip based on dragging or hovering
+    final targetId = _draggedPointId ?? _hoveredPointId;
+    if (targetId == null) return const Positioned.fill(child: SizedBox.shrink());
+
+    final points = _localPoints ?? widget.lane.points;
+    final p = points.where((p) => p.id == targetId).firstOrNull;
+    if (p == null) return const Positioned.fill(child: SizedBox.shrink());
+
+    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    final px = p.timeTicks / zoomLevel;
+    final py = widget.height - (p.value * widget.height);
+
+    final realVal = _getDenormalizedValue(p.value);
+    
+    // Constrain the tooltip position so it doesn't clip out of the lane bounds
+    final double top = (py - 32).clamp(4.0, widget.height - 24.0);
+    final double left = px + 12; // Render slightly to the right of the cursor/finger
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E).withAlpha(230),
+            border: Border.all(color: widget.trackColor.withAlpha(128)),
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(150),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              )
+            ],
+          ),
+          child: Text(
+            realVal.toStringAsFixed(2),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(workspaceStateProvider);
@@ -236,14 +289,19 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
               // 1. Background Grid
               Positioned.fill(
                 child: RepaintBoundary(
-                  child: CustomPaint(
-                    painter: GridPainter(
-                      zoomLevel: zoomLevel,
-                      gridSize: gridSize,
-                      tempo: tempo,
-                      sampleRate: safeSampleRate,
-                      scrollController: widget.horizontalScrollController,
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraint) {
+                      return CustomPaint(
+                        painter: GridPainter(
+                          zoomLevel: zoomLevel,
+                          gridSize: gridSize,
+                          tempo: tempo,
+                          sampleRate: safeSampleRate,
+                          scrollController: widget.horizontalScrollController,
+                          viewportWidth: constraint.maxWidth,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -261,6 +319,9 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                   ),
                 ),
               ),
+
+              // 3. Tooltip
+              _buildTooltip(),
             ],
           ),
         ),

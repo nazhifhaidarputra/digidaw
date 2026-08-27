@@ -4,16 +4,16 @@ use std::time::{Duration, Instant};
 use indexmap::IndexMap;
 
 use crate::audio::event::PluginTarget;
-use crate::audio::exporter::{export_project as export_project_internal, TailHandling};
+use crate::audio::exporter::{TailHandling, export_project as export_project_internal};
 
 use crate::audio::writer::AudioExportConfig;
 use crate::commands::{AudioCommand, AudioFeedback, MixerChannelSeed, MixerChannelTarget};
 use crate::context::DawContext;
 use crate::core::file_manager::project_loader::{load_daw_project, save_daw_project};
-use crate::core::project::{
-    generator::GeneratorInstance, transport::TransportState, ProjectMetadata,
-};
 use crate::core::project::{ApplicationState, GeneratorInstanceType};
+use crate::core::project::{
+    ProjectMetadata, generator::GeneratorInstance, transport::TransportState,
+};
 pub fn get_project_metadata<T, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&ProjectMetadata) -> T,
@@ -37,7 +37,7 @@ where
         .app_state
         .generator_pool
         .iter()
-        .map(|(&id, gen)| mapper(id.to_u32(), gen))
+        .map(|(id, generator)| mapper(id.to_u32(), generator))
         .collect())
 }
 
@@ -50,11 +50,11 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
     // Gather all targets we need to query (using a tight read lock)
     let mut mixer_channel_targets: Vec<MixerChannelTarget> = Vec::new();
 
-    for (&gen_id, _) in &ctx.app_state.generator_pool {
+    for (gen_id, _) in &ctx.app_state.generator_pool {
         pending_requests.push(PluginTarget::Generator(gen_id));
         expected_responses += 1;
     }
-    for (&track_id, channel) in &ctx.app_state.mixer.channels {
+    for (track_id, channel) in &ctx.app_state.mixer.channels {
         for effect in &channel.channel.effects {
             pending_requests.push(PluginTarget::TrackEffect(track_id, effect.id));
             expected_responses += 1;
@@ -62,7 +62,7 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
         // Also query mixer channel DSP state
         mixer_channel_targets.push(MixerChannelTarget::Track(track_id));
     }
-    for (&bus_id, bus) in &ctx.app_state.mixer.buses {
+    for (bus_id, bus) in &ctx.app_state.mixer.buses {
         for effect in &bus.channel.effects {
             pending_requests.push(PluginTarget::BusEffect(bus_id, effect.id));
             expected_responses += 1;
@@ -132,7 +132,7 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
     for (target, state_blob) in updated_states {
         match target {
             PluginTarget::Generator(gen_id) => {
-                if let Some(gen_mut) = ctx.app_state.generator_pool.get_mut(&gen_id) {
+                if let Some(gen_mut) = ctx.app_state.generator_pool.get_mut(gen_id) {
                     if let GeneratorInstanceType::Plugin(plugin_instance) =
                         &mut gen_mut.instance_type
                     {
@@ -148,7 +148,7 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
                 }
             }
             PluginTarget::TrackEffect(track_id, effect_id) => {
-                if let Some(channel) = ctx.app_state.mixer.channels.get_mut(&track_id) {
+                if let Some(channel) = ctx.app_state.mixer.channels.get_mut(track_id) {
                     let ch_mut = channel;
                     if let Some(effect) = ch_mut
                         .channel
@@ -169,7 +169,7 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
                 }
             }
             PluginTarget::BusEffect(bus_id, effect_id) => {
-                if let Some(bus) = ctx.app_state.mixer.buses.get_mut(&bus_id) {
+                if let Some(bus) = ctx.app_state.mixer.buses.get_mut(bus_id) {
                     let bus_mut = bus;
                     if let Some(effect) = bus_mut
                         .channel
@@ -216,7 +216,7 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
     for snap in mixer_snapshots {
         match snap.target {
             MixerChannelTarget::Track(track_id) => {
-                if let Some(ch) = ctx.app_state.mixer.channels.get_mut(&track_id) {
+                if let Some(ch) = ctx.app_state.mixer.channels.get_mut(track_id) {
                     ch.channel.volume.set_base(snap.volume);
                     ch.channel.pan.set_base(snap.pan);
                     ch.channel.mute = snap.mute;
@@ -225,7 +225,7 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
                 }
             }
             MixerChannelTarget::Bus(bus_id) => {
-                if let Some(bus) = ctx.app_state.mixer.buses.get_mut(&bus_id) {
+                if let Some(bus) = ctx.app_state.mixer.buses.get_mut(bus_id) {
                     bus.channel.volume.set_base(snap.volume);
                     bus.channel.pan.set_base(snap.pan);
                     bus.channel.mute = snap.mute;
@@ -255,8 +255,10 @@ pub fn load_project<T, F>(ctx: &mut DawContext, path_name: &str, mapper: F) -> a
 where
     F: FnOnce(&ApplicationState) -> T,
 {
+    let sample_rate = { ctx.active_audio_config.read().sample_rate }
+        .ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
     // 1. Load the project from disk
-    let loaded_app = load_daw_project(Path::new(path_name))?;
+    let loaded_app = load_daw_project(Path::new(path_name), sample_rate)?;
 
     // Extract the BPM before we move the loaded app into the global lock
     let bpm = loaded_app.transport.bpm;
@@ -341,7 +343,7 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
                         plugin.set_parameter(spec.id, spec.value as f32);
                     }
                 }
-                generators.insert(*gen_id, plugin);
+                generators.insert(gen_id, plugin);
             }
         }
     }
@@ -366,7 +368,7 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
             }
         }
         if !track_chain.is_empty() {
-            track_effects.insert(*track_id, track_chain);
+            track_effects.insert(track_id, track_chain);
         }
     }
 
@@ -390,7 +392,7 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
             }
         }
         if !bus_chain.is_empty() {
-            bus_effects.insert(*bus_id, bus_chain);
+            bus_effects.insert(bus_id, bus_chain);
         }
     }
 
@@ -417,7 +419,7 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     let mut bus_channels = IndexMap::new();
     let master_channel;
 
-    for (&track_id, channel_arc) in &ctx.app_state.mixer.channels {
+    for (track_id, channel_arc) in &ctx.app_state.mixer.channels {
         track_channels.insert(
             track_id,
             MixerChannelSeed {
@@ -429,7 +431,7 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
             },
         );
     }
-    for (&bus_id, bus_arc) in &ctx.app_state.mixer.buses {
+    for (bus_id, bus_arc) in &ctx.app_state.mixer.buses {
         bus_channels.insert(
             bus_id,
             MixerChannelSeed {

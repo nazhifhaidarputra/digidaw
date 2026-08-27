@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
+import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/plugins/opaque.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -226,6 +227,51 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   }
 
   @protected
+  AutomationTargetDto resolveAutomationTarget(int paramId) {
+    final t = widget.target;
+    
+    return switch (t) {
+      plugin_api.UiPluginTarget_Generator(:final field0) =>
+        AutomationTargetDto.generator(
+          generatorId: field0,
+          paramId: paramId,
+        ),
+        
+      plugin_api.UiPluginTarget_TrackEffect(:final trackId, :final effectId) =>
+        AutomationTargetDto.track(
+          trackId: trackId,
+          trackTarget: TrackAutomationTargetDto.mixerChannel(
+            MixerChannelParamTargetDto.plugin(
+              effectId: effectId,
+              target: EffectAutomationTargetDto.pluginParam(paramId: paramId),
+            ),
+          ),
+        ),
+        
+      plugin_api.UiPluginTarget_BusEffect(:final busId, :final effectId) =>
+        AutomationTargetDto.bus(
+          busId: busId,
+          mixTarget: MixerChannelParamTargetDto.plugin(
+            effectId: effectId,
+            target: EffectAutomationTargetDto.pluginParam(paramId: paramId),
+          ),
+        ),
+        
+      plugin_api.UiPluginTarget_MasterEffect(:final field0) =>
+        AutomationTargetDto.master(
+          MasterAutomationTargetDto.mixerChannel(
+            MixerChannelParamTargetDto.plugin(
+              effectId: field0,
+              target: EffectAutomationTargetDto.pluginParam(paramId: paramId),
+            ),
+          ),
+        ),
+        
+      // _ => throw UnimplementedError("Unknown plugin target type: $t"),
+    };
+  }
+
+  @protected
   void onParametersUpdated() {}
 
   // ==========================================================================
@@ -272,6 +318,8 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
 
   @protected
   Widget buildDynamicParameterWidget(plugin_api.UiPluginParameter param) {
+    final automationTarget = resolveAutomationTarget(param.id);
+
     switch (param.paramType) {
       case plugin_api.UiParameterType.float:
       case plugin_api.UiParameterType.int:
@@ -286,6 +334,8 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
           onChanged: (val) => setParameter(param.id, val),
           onChangeStart: (_) => beginParameterEdit(param.id),
           onChangeEnd: (_) => endParameterEdit(param.id),
+          target: automationTarget,
+          sliderInteraction: SliderInteraction.tapAndSlide,
         );
       case plugin_api.UiParameterType.choice:
         return DawChoiceParam(

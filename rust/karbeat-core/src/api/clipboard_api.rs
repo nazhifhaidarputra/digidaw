@@ -2,7 +2,7 @@ use crate::{
     context::DawContext,
     core::{
         history::ProjectAction,
-        project::{clip::ClipTimeUnit, Clip, ClipboardContent, Note},
+        project::{Clip, ClipboardContent, Note, clip::ClipTimeUnit},
     },
     shared::{ClipId, NoteId, PatternId, TrackId},
 };
