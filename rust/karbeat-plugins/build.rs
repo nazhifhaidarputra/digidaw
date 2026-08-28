@@ -1,3 +1,3 @@
 fn main() {
-    println!("cargo:rerun-if-changed=../../assets/manifest/audio_plugin/");
+    println!("cargo:rerun-if-changed=../../assets/manifests/audio-plugins/");
 }

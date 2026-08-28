@@ -23,6 +23,8 @@ class PluginRegistryFlutter {
     DigiParametricEQSpecs.id: (target, id) =>
         KarbeatParametricEq(target: target),
     PitcherSpecs.id: (target, pluginId) => DigidawPitcher(target: target),
+    DigidawSidechainCompressorSpecs.id: (target, pluginId) =>
+        DigidawSidechainCompressor(target: target),
   };
 
   // ===========================================================================

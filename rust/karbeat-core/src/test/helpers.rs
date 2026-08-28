@@ -37,6 +37,11 @@ pub fn param_eq_registry_id() -> u32 {
     hash_str("effect_param_eq")
 }
 
+/// Registry ID for the built-in sidechain compressor effect.
+pub fn sidechain_compressor_registry_id() -> u32 {
+    hash_str("effect_digidaw_sidechain_comp")
+}
+
 /// A seeded context with:
 /// - 1 audio track
 /// - 1 MIDI track backed by Karbeatzer V2

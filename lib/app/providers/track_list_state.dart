@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -76,7 +77,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
   /// Sync a single track by its backend [trackId].
   Future<void> syncTracks() async {
-    final result = await AsyncValue.guard(() async {
+    final result = await ref.guardApi(() async {
       final (newTracksMap, newPatternMap) = await (
         getTracks(ctx: _ctx),
         getPatterns(ctx: _ctx), // Requires the pattern FFI endpoint
@@ -90,7 +91,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
   /// Sync a single track (creates a new map reference to trigger selectors).
   Future<void> syncTrack(int trackId) async {
-    final res = await AsyncValue.guard(() async {
+    final res = await ref.guardApi(() async {
       final updatedTrack = await getTrack(ctx: _ctx, trackId: trackId);
       if (updatedTrack == null) {
         AppLogger.warn(
@@ -187,7 +188,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
   Future<Result<void>> changeTrackName(int trackId, String newName) async {
     final original = ref.read(projectProvider).value?.tracks[trackId];
 
-    if (original == null) return Result.error(Exception('Track not found'));
+    if (original == null) {
+      return ref.notifyErrorResult(Exception('Track not found'));
+    }
 
     // Optimistic update
     _patchTrack(trackId, name: newName, color: original.color);
@@ -209,7 +212,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
         name: original.name,
         color: original.color,
       ); // Rollback
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -221,7 +224,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Change a track's color with optimistic update and backend rollback.
   Future<Result<void>> changeTrackColor(int trackId, Color newColor) async {
     final original = ref.read(projectProvider).value?.tracks[trackId];
-    if (original == null) return Result.error(Exception('Track not found'));
+    if (original == null) {
+      return ref.notifyErrorResult(Exception('Track not found'));
+    }
 
     final colorStr = newColor.toRGBA();
     _patchTrack(trackId, color: colorStr, name: original.name);
@@ -243,17 +248,17 @@ class TrackListNotifier extends Notifier<TrackListState> {
         color: original.color,
         name: original.name,
       ); // Rollback
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
 
   Future<AsyncValue<Null>> addAudioTrack() async {
-    final createRes = await AsyncValue.guard(() async {
+    final createRes = await ref.guardApi(() async {
       final newTrack = await addNewAudioTrack(ctx: _ctx);
       _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
-        await ref.read(mixerStateProvider.notifier).syncMixerChannel(newTrack.id);
-        await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
+      await ref.read(mixerStateProvider.notifier).syncMixerChannel(newTrack.id);
+      await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
     });
 
     if (createRes.hasError) {
@@ -269,7 +274,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   Future<void> addMidiTrackWithGeneratorId(int id) async {
-    final result = await AsyncValue.guard(() async {
+    final result = await ref.guardApi(() async {
       final newTrack = await track_api.addMidiTrackWithGeneratorId(
         ctx: _ctx,
         registryId: id,
@@ -293,7 +298,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   Future<void> deleteTrack({required int trackId}) async {
-    final result = await AsyncValue.guard(() async {
+    final result = await ref.guardApi(() async {
       await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
       _projectNotifierRead.removeTrack(trackId);
 
@@ -337,16 +342,14 @@ class TrackListNotifier extends Notifier<TrackListState> {
           final newPattern = await getPattern(ctx: _ctx, patternId: patternId);
           _projectNotifierRead.upsertPattern(patternId, newPattern);
         default:
-
       }
-      
     });
 
     if (result.hasError) {
       AppLogger.error(
         'TrackListNotifier: error creating pattern clip: ${result.error}',
       );
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -363,7 +366,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error(
         'TrackListNotifier: error deleting clip: ${result.error}',
       );
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -382,7 +385,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
     if (result.hasError) {
       AppLogger.error('TrackListNotifier: error slicing clip: ${result.error}');
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -409,7 +412,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error(
         'TrackListNotifier: error resizing clip: ${result.error}',
       );
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -421,6 +424,19 @@ class TrackListNotifier extends Notifier<TrackListState> {
     int newStartTime, {
     int? newTrackId,
   }) async {
+    final validationError = _validateClipMove(
+      trackId,
+      newTrackId,
+      plural: false,
+    );
+    if (validationError != null) return validationError;
+
+    final tracks = ref.read(projectProvider).value?.tracks;
+    final originalSourceTrack = tracks?[trackId];
+    final originalTargetTrack = newTrackId == null || newTrackId == trackId
+        ? null
+        : tracks?[newTrackId];
+
     _applyOptimisticMove(trackId, clipId, newStartTime, newTrackId);
     final result = await AsyncValue.guard(
       () => track_api.moveClip(
@@ -434,7 +450,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
     if (result.hasError) {
       AppLogger.error('TrackListNotifier: error moving clip: ${result.error}');
-      return Result.error(Exception(result.error.toString()));
+      _restoreMovedTracks(
+        trackId: trackId,
+        sourceTrack: originalSourceTrack,
+        targetTrackId: newTrackId,
+        targetTrack: originalTargetTrack,
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -450,6 +472,19 @@ class TrackListNotifier extends Notifier<TrackListState> {
     int deltaTicks, {
     int? newTrackId,
   }) async {
+    final validationError = _validateClipMove(
+      trackId,
+      newTrackId,
+      plural: true,
+    );
+    if (validationError != null) return validationError;
+
+    final tracks = ref.read(projectProvider).value?.tracks;
+    final originalSourceTrack = tracks?[trackId];
+    final originalTargetTrack = newTrackId == null || newTrackId == trackId
+        ? null
+        : tracks?[newTrackId];
+
     _applyOptimisticMoveBatch(trackId, clipIds, deltaTicks, newTrackId);
     final result = await AsyncValue.guard(
       () => track_api.moveClipBatch(
@@ -465,7 +500,13 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error(
         'TrackListNotifier: error batch-moving clips: ${result.error}',
       );
-      return Result.error(Exception(result.error.toString()));
+      _restoreMovedTracks(
+        trackId: trackId,
+        sourceTrack: originalSourceTrack,
+        targetTrackId: newTrackId,
+        targetTrack: originalTargetTrack,
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -492,9 +533,49 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error(
         'TrackListNotifier: error batch-resizing clips: ${result.error}',
       );
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
+  }
+
+  /// Atomically duplicate a selected clip group at predetermined start times.
+  /// Start times are in the clips' native unit (samples or ticks). Unlike the
+  /// clipboard APIs below, this operation never changes ClipboardContent.
+  Future<Result<List<UiClip>>> duplicateClipGroups({
+    required int trackId,
+    required List<int> clipIds,
+    required List<int> groupStartTimes,
+  }) async {
+    if (clipIds.isEmpty || groupStartTimes.isEmpty) {
+      return Result.ok(const []);
+    }
+
+    try {
+      final duplicated = await track_api.duplicateClipGroups(
+        ctx: _ctx,
+        trackId: trackId,
+        clipIds: clipIds,
+        groupStartTimes: groupStartTimes,
+      );
+      if (duplicated.isEmpty) return Result.ok(const []);
+
+      final track = ref.read(projectProvider).value?.tracks[trackId];
+      if (track == null) {
+        await syncTrack(trackId);
+      } else {
+        _projectNotifierRead.upsertTrack(
+          trackId,
+          track.copyWith(clips: [...track.clips, ...duplicated]),
+        );
+      }
+
+      return Result.ok(duplicated);
+    } catch (error) {
+      AppLogger.error(
+        'TrackListNotifier: error atomically duplicating clip groups: $error',
+      );
+      return ref.notifyErrorResult(Exception(error.toString()));
+    }
   }
 
   /// Delete multiple clips at once, with an optimistic local removal.
@@ -514,7 +595,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error(
         'TrackListNotifier: error batch-deleting clips: ${result.error}',
       );
-      return Result.error(Exception(result.error.toString()));
+      return ref.notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);
   }
@@ -547,7 +628,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       return Result.ok(null);
     } catch (e) {
       AppLogger.error('TrackListNotifier: error copying clips: $e');
-      return Result.error(Exception('$e'));
+      return ref.notifyErrorResult(Exception('$e'));
     }
   }
 
@@ -570,7 +651,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       return Result.ok(null);
     } catch (e) {
       AppLogger.error('TrackListNotifier: error cutting clips: $e');
-      return Result.error(Exception('$e'));
+      return ref.notifyErrorResult(Exception('$e'));
     }
   }
 
@@ -612,7 +693,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       return Result.ok(null);
     } catch (e) {
       AppLogger.error('TrackListNotifier: error pasting clips: $e');
-      return Result.error(Exception('$e'));
+      return ref.notifyErrorResult(Exception('$e'));
     }
   }
 
@@ -697,6 +778,57 @@ class TrackListNotifier extends Notifier<TrackListState> {
     ref
         .read(projectProvider.notifier)
         .upsertTrack(trackId, track.copyWith(clips: updatedClips));
+  }
+
+  Result<void>? _validateClipMove(
+    int sourceTrackId,
+    int? targetTrackId, {
+    required bool plural,
+  }) {
+    if (targetTrackId == null || targetTrackId == sourceTrackId) return null;
+
+    final tracks = ref.read(projectProvider).value?.tracks;
+    final sourceTrack = tracks?[sourceTrackId];
+    final targetTrack = tracks?[targetTrackId];
+
+    if (sourceTrack == null) {
+      return ref.notifyErrorResult<void>(Exception('Source track not found'));
+    }
+    if (targetTrack == null) {
+      return ref.notifyErrorResult<void>(Exception('Target track not found'));
+    }
+    if (sourceTrack.trackType == targetTrack.trackType) return null;
+
+    final clipLabel = plural ? 'clips' : 'clip';
+    final sourceLabel = _trackTypeLabel(sourceTrack.trackType);
+    final targetLabel = _trackTypeLabel(targetTrack.trackType);
+    return ref.notifyErrorResult<void>(
+      Exception('Cannot move $sourceLabel $clipLabel to $targetLabel track'),
+    );
+  }
+
+  String _trackTypeLabel(UiTrackType type) => switch (type) {
+    UiTrackType.audio => 'audio',
+    UiTrackType.midi => 'MIDI',
+    UiTrackType.automation => 'automation',
+  };
+
+  void _restoreMovedTracks({
+    required int trackId,
+    required UiTrack? sourceTrack,
+    required int? targetTrackId,
+    required UiTrack? targetTrack,
+  }) {
+    final restoredTracks = <int, UiTrack>{};
+    if (sourceTrack != null) restoredTracks[trackId] = sourceTrack;
+    if (targetTrackId != null &&
+        targetTrackId != trackId &&
+        targetTrack != null) {
+      restoredTracks[targetTrackId] = targetTrack;
+    }
+    if (restoredTracks.isNotEmpty) {
+      ref.read(projectProvider.notifier).upsertTracksBulk(restoredTracks);
+    }
   }
 
   void _applyOptimisticMove(
@@ -842,8 +974,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
 final trackListStateProvider =
     NotifierProvider<TrackListNotifier, TrackListState>(TrackListNotifier.new);
 
-final trackWaveformProvider = Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
-  ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
-  final ctx = ref.read(projectProvider.notifier).dawContext;
-  return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
-});
+final trackWaveformProvider =
+    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+      ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
+      final ctx = ref.read(projectProvider.notifier).dawContext;
+      return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
+    });

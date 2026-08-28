@@ -288,3 +288,31 @@ pub fn batch_resize_clips(
     ctx.broadcast_track_graph();
     Ok(modified_clips)
 }
+
+/// Atomically duplicate a selected clip group at predetermined native-unit
+/// start positions. This operation does not read or modify the clipboard.
+pub fn batch_duplicate_clip_groups(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    clip_ids: Vec<ClipId>,
+    group_start_times: Vec<u64>,
+) -> anyhow::Result<Vec<Clip>> {
+    let duplicated = ctx
+        .app_state
+        .duplicate_clip_groups(track_id, &clip_ids, &group_start_times)
+        .map_err(anyhow::Error::msg)?;
+
+    if duplicated.is_empty() {
+        return Ok(duplicated);
+    }
+
+    let actions = duplicated
+        .iter()
+        .cloned()
+        .map(|clip| ProjectAction::AddClip { track_id, clip })
+        .collect();
+    ctx.push_history(ProjectAction::Batch(actions));
+    ctx.broadcast_track_graph();
+
+    Ok(duplicated)
+}

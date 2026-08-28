@@ -2,56 +2,50 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/src/rust/api/track.dart' as track_api;
 
 part 'audio_plugins_service.freezed.dart';
 
 @freezed
 abstract class PluginRegistry with _$PluginRegistry {
-  const factory PluginRegistry(
-    {
-      @Default(IListConst<UiPluginInfo>([])) IList<UiPluginInfo> availablePlugins,
-    }
-  ) = _PluginRegistry;
+  const factory PluginRegistry({
+    @Default(IListConst<UiPluginInfo>([])) IList<UiPluginInfo> availablePlugins,
+  }) = _PluginRegistry;
 }
 
 extension PluginRegistryExtension on PluginRegistry {
   PluginRegistry addPlugin(UiPluginInfo plugin) {
-    return copyWith(
-      availablePlugins: availablePlugins.add(plugin),
-    );
+    return copyWith(availablePlugins: availablePlugins.add(plugin));
   }
 
   PluginRegistry removePlugin(UiPluginInfo plugin) {
-    return copyWith(
-      availablePlugins: availablePlugins.remove(plugin),
-    );
+    return copyWith(availablePlugins: availablePlugins.remove(plugin));
   }
 
   PluginRegistry addPlugins(Iterable<UiPluginInfo> plugins) {
-    return copyWith(
-      availablePlugins: availablePlugins.addAll(plugins),
-    );
+    return copyWith(availablePlugins: availablePlugins.addAll(plugins));
   }
 
   PluginRegistry removePlugins(Iterable<UiPluginInfo> plugins) {
-    return copyWith(
-      availablePlugins: availablePlugins.removeAll(plugins),
-    );
+    return copyWith(availablePlugins: availablePlugins.removeAll(plugins));
   }
 
   PluginRegistry removeAllGenerators() {
     return copyWith(
-      availablePlugins: availablePlugins.where((plugin) => plugin.pluginType != KarbeatPluginType.generator).toIList(),
+      availablePlugins: availablePlugins
+          .where((plugin) => plugin.pluginType != KarbeatPluginType.generator)
+          .toIList(),
     );
   }
 
   PluginRegistry removeAllEffects() {
     return copyWith(
-      availablePlugins: availablePlugins.where((plugin) => plugin.pluginType != KarbeatPluginType.effect).toIList(),
+      availablePlugins: availablePlugins
+          .where((plugin) => plugin.pluginType != KarbeatPluginType.effect)
+          .toIList(),
     );
   }
 }
@@ -62,12 +56,12 @@ abstract class PluginState with _$PluginState {
 }
 
 class PluginNotifier extends AsyncNotifier<PluginState> {
- DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
+  DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
 
   @override
   Future<PluginState> build() async {
     // Await the Project Provider to ensure the DawContext is fully initialized first
-    
+
     final state = const PluginState(PluginRegistry());
 
     // 1. Replicate GlobalAppState constructor behavior: Fetch on boot
@@ -76,11 +70,10 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
       // final effects = await getAvailableEffectsWithIds(ctx: _ctx);
       final plugins = await getAvailablePluginsWithIds(ctx: _ctx);
 
-      return state.copyWith(
-        registry: state.registry.addPlugins(plugins),
-      );
+      return state.copyWith(registry: state.registry.addPlugins(plugins));
     } catch (e) {
       AppLogger.error("Failed to initialize plugin registry: $e");
+      ref.notifyError(e);
       // Return empty registry on failure so the app doesn't fatally crash
       return state;
     }
@@ -91,14 +84,18 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
   // ------------------------------------------------------------------
 
   Future<void> fetchAvailableGenerators() async {
-    final result = await AsyncValue.guard(() async {
+    final result = await ref.guardApi(() async {
       final list = await getAvailableGeneratorsWithIds(ctx: _ctx);
-      
+
       if (state.hasValue) {
         final currentRegistry = state.requireValue.registry;
         // Purge old generators and replace with fresh list to avoid duplicates
-        final updatedRegistry = currentRegistry.removeAllGenerators().addPlugins(list);
-        state = AsyncData(state.requireValue.copyWith(registry: updatedRegistry));
+        final updatedRegistry = currentRegistry
+            .removeAllGenerators()
+            .addPlugins(list);
+        state = AsyncData(
+          state.requireValue.copyWith(registry: updatedRegistry),
+        );
       }
     });
 
@@ -108,14 +105,18 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
   }
 
   Future<void> fetchAvailableEffects() async {
-    final result = await AsyncValue.guard(() async {
+    final result = await ref.guardApi(() async {
       final list = await getAvailableEffectsWithIds(ctx: _ctx);
-      
+
       if (state.hasValue) {
         final currentRegistry = state.requireValue.registry;
         // Purge old effects and replace with fresh list
-        final updatedRegistry = currentRegistry.removeAllEffects().addPlugins(list);
-        state = AsyncData(state.requireValue.copyWith(registry: updatedRegistry));
+        final updatedRegistry = currentRegistry.removeAllEffects().addPlugins(
+          list,
+        );
+        state = AsyncData(
+          state.requireValue.copyWith(registry: updatedRegistry),
+        );
       }
     });
 
@@ -154,7 +155,7 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
   /// Safe to call directly from the UI once the provider `hasValue`.
   Future<List<UiPluginInfo>> getAvailableGenerators() async {
     // Awaiting `future` guarantees build() has finished and state.hasValue is true!
-    final currentState = await future; 
+    final currentState = await future;
     return currentState.registry.availablePlugins
         .where((plugin) => plugin.pluginType == KarbeatPluginType.generator)
         .toList();
@@ -169,4 +170,6 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
   }
 }
 
-final audioPluginProvider = AsyncNotifierProvider<PluginNotifier, PluginState>(PluginNotifier.new);
+final audioPluginProvider = AsyncNotifierProvider<PluginNotifier, PluginState>(
+  PluginNotifier.new,
+);

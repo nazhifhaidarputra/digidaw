@@ -1,6 +1,10 @@
 // src/core/plugin/registry.rs
 use crate::{
-    effect::{parametric_eq::DigiParametricEQ, pitch_shifter::Pitcher}, generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
+    effect::{
+        parametric_eq::DigiParametricEQ, pitch_shifter::Pitcher,
+        sidechain::DigidawSidechainCompressor,
+    },
+    generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
 };
 use hashbrown::HashMap;
 use karbeat_plugin_api::{
@@ -56,6 +60,11 @@ impl PluginRegistry {
             ("synth_my_retro", "My Retro", MyRetro),
             ("effect_param_eq", "Parametric EQ", DigiParametricEQ),
             ("effect_pitcher", "Pitcher", Pitcher),
+            (
+                "effect_digidaw_sidechain_comp",
+                "DigiDAW Sidechain Compressor",
+                DigidawSidechainCompressor
+            ),
         );
         registry
     }

@@ -1,5 +1,8 @@
 use karbeat_plugin_api::manifest::Manifestable;
-use karbeat_plugins::{effect::{pitch_shifter::Pitcher, sidechain::DigidawSidechainCompressor}, plugins::*};
+use karbeat_plugins::{
+    effect::{pitch_shifter::Pitcher, sidechain::DigidawSidechainCompressor},
+    plugins::*,
+};
 
 /// A declarative macro to export manifests for a variadic list of plugins.
 macro_rules! export_plugins {

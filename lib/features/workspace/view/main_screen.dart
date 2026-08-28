@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/constants/toolbar.dart';
 import 'package:karbeat/features/workspace/view/project_export.dart';
 import 'package:karbeat/features/workspace/view/main_content.dart';
@@ -17,14 +18,14 @@ class MainScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentContext = ref.watch(
-          workspaceStateProvider.select((s) => s.currentToolbarContext),
-        );
-        final showMidiKeyboard = ref.watch(
-          workspaceStateProvider.select((s) => s.floatingMidiKeyboardState.showed),
-        );
-        final showExportPanel = ref.watch(
-          workspaceStateProvider.select((s) => s.showExportPanel),
-        );
+      workspaceStateProvider.select((s) => s.currentToolbarContext),
+    );
+    final showMidiKeyboard = ref.watch(
+      workspaceStateProvider.select((s) => s.floatingMidiKeyboardState.showed),
+    );
+    final showExportPanel = ref.watch(
+      workspaceStateProvider.select((s) => s.showExportPanel),
+    );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -88,11 +89,12 @@ class MainScreen extends ConsumerWidget {
         final state = ref.read(workspaceStateProvider.notifier);
         state.closeContextPanel();
         action.callback?.call(context, ref);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Executed: ${action.title}')));
+        ref
+            .read(notificationProvider.notifier)
+            .info('Executed: ${action.title}');
       },
-      onClose: () => ref.read(workspaceStateProvider.notifier).closeContextPanel(),
+      onClose: () =>
+          ref.read(workspaceStateProvider.notifier).closeContextPanel(),
     );
   }
 }

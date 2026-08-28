@@ -4,6 +4,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -24,19 +25,6 @@ use crate::{
     context::DawContext,
     message::TelemetryRegistry,
 };
-
-#[allow(unused)]
-fn host_has_output_device(host: &cpal::Host) -> bool {
-    host.output_devices()
-        .map(|mut devices| devices.next().is_some())
-        .unwrap_or(false)
-}
-
-struct AudioContext {
-    engine: Arc<Mutex<AudioEngine>>,
-    producer: rtrb::Producer<f32>,
-    staging_buffer: Vec<f32>,
-}
 
 /// Macro to generate the stream building logic
 /// $device: cpal device
@@ -93,84 +81,26 @@ macro_rules! run_stream {
         )
     }};
 }
-/// Set host to use the optimized host for each platform.
-/// - Windows: ASIO, then fallback to WASAPI (low latency)
-/// - Android: AAudio (low latency, requires API 26+)
-/// - Linux: JACK
-/// - Other platforms: default host
-fn set_host() -> cpal::Host {
-    #[allow(unused_mut)]
-    let mut host = cpal::default_host();
-
-    #[cfg(target_os = "windows")]
-    {
-        // ASIO is only available when the "asio" feature is enabled
-        #[cfg(feature = "asio")]
-        {
-            if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
-                if host_has_output_device(&asio_host) {
-                    log::info!("Connected to ASIO Host");
-                    return asio_host;
-                } else {
-                    log::warn!(
-                        "ASIO host found but no output devices available; falling back to WASAPI"
-                    );
-                }
-            } else {
-                log::warn!("ASIO host not available; falling back to WASAPI");
-            }
-        }
-
-        #[cfg(not(feature = "asio"))]
-        log::debug!("ASIO support not compiled in; using WASAPI");
-
-        if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
-            log::info!("Connected to WASAPI Host");
-            return wasapi_host;
-        }
-
-        log::warn!("WASAPI not available; falling back to default host");
-    }
-
-    #[cfg(target_os = "android")]
-    {
-        match cpal::host_from_id(cpal::HostId::AAudio) {
-            Ok(aaudio_host) => {
-                log::info!("Connected to AAudio Host");
-                return aaudio_host;
-            }
-            Err(e) => {
-                log::warn!("AAudio not available, falling back to default host: {}", e);
-            }
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        {
-            match cpal::host_from_id(cpal::HostId::Jack) {
-                Ok(jack_host) => {
-                    log::info!("Connected to JACK Host");
-                    return jack_host;
-                }
-                Err(e) => {
-                    log::warn!("JACK not available, falling back to default host: {}", e);
-                }
-            }
-        }
-
-        log::debug!("JACK support not compiled in; using default Linux host (ALSA)");
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        if let Ok(core_audio_host) = cpal::host_from_id(cpal::HostId::CoreAudio) {
-            log::info!("Connected to CoreAudio Host");
-            return core_audio_host;
-        }
-    }
-
+/// Resolve the automatic host.
+///
+/// CPAL's platform default is deliberately used here because it is the host
+/// intended to coexist with ordinary desktop applications. Low-latency hosts
+/// such as ASIO and JACK can take exclusive ownership of an endpoint (or depend
+/// on a separately configured server), so choosing them merely because they can
+/// enumerate a device makes startup fail while applications such as Spotify are
+/// already playing. They remain available through an explicit `host_name`.
+fn automatic_host() -> cpal::Host {
+    let host = cpal::default_host();
+    log::info!("Connected to automatic audio Host: {}", host.id().name());
     host
+}
+
+const INITIAL_RETRY_DELAY: Duration = Duration::from_secs(2);
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
+const STABLE_STREAM_DURATION: Duration = Duration::from_secs(10);
+
+fn next_retry_delay(delay: Duration) -> Duration {
+    delay.saturating_mul(2).min(MAX_RETRY_DELAY)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -223,7 +153,7 @@ fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
         );
     }
 
-    set_host()
+    automatic_host()
 }
 
 /// Returns a list of available host names on the current OS
@@ -461,11 +391,18 @@ pub fn start_audio_stream(
     ctx.telemetry_reg_receiver = Some(Mutex::new(telemetry_reg_receiver));
 
     let engine_arc = Arc::new(Mutex::new(engine));
-    let (restart_tx, restart_rx) = std::sync::mpsc::channel::<()>();
     let monitor_engine = Arc::clone(&engine_arc);
 
     // Spawn the Device Monitor Thread
     std::thread::spawn(move || {
+        enum RestartReason {
+            StreamError,
+            ConfigurationChanged,
+            DefaultDeviceChanged,
+        }
+
+        let mut retry_delay = INITIAL_RETRY_DELAY;
+
         loop {
             log::info!("Monitor: Attempting to build and start audio stream...");
 
@@ -476,10 +413,12 @@ pub fn start_audio_stream(
                 Ok(res) => res,
                 Err(e) => {
                     log::error!(
-                        "Monitor: Failed to resolve audio device: {}. Retrying in 2s...",
-                        e
+                        "Monitor: Failed to resolve audio device: {}. Retrying in {:?}...",
+                        e,
+                        retry_delay
                     );
-                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    std::thread::sleep(retry_delay);
+                    retry_delay = next_retry_delay(retry_delay);
                     continue;
                 }
             };
@@ -556,6 +495,10 @@ pub fn start_audio_stream(
                 log::info!("DSP Thread explicitly shut down gracefully.");
             });
 
+            // Each stream owns its restart signal. A bounded channel coalesces
+            // repeated backend callbacks and cannot carry a stale signal into
+            // the next stream attempt.
+            let (restart_tx, restart_rx) = std::sync::mpsc::sync_channel::<()>(1);
             let tx_clone = restart_tx.clone();
 
             let err_config_arc = Arc::clone(&active_config_arc);
@@ -564,7 +507,7 @@ pub fn start_audio_stream(
                 match err {
                     cpal::StreamError::DeviceNotAvailable => {
                         log::error!("Audio device disconnected: {}. Triggering restart...", err);
-                        let _ = tx_clone.send(());
+                        let _ = tx_clone.try_send(());
                     }
                     cpal::StreamError::BackendSpecific { ref err } => {
                         let err_msg = err.to_string().to_lowercase();
@@ -597,7 +540,7 @@ pub fn start_audio_stream(
                                             new_size
                                         );
                                         cfg.buffer_size = Some(new_size);
-                                        let _ = tx_clone.send(());
+                                        let _ = tx_clone.try_send(());
                                     } else {
                                         log::debug!(
                                             "Buffer size is already synced to {}. Ignoring redundant error.",
@@ -611,7 +554,7 @@ pub fn start_audio_stream(
                                 "Audio stream backend error: {}. Triggering restart...",
                                 err_msg
                             );
-                            let _ = tx_clone.send(());
+                            let _ = tx_clone.try_send(());
                         }
                     }
                     cpal::StreamError::BufferUnderrun => {
@@ -621,7 +564,7 @@ pub fn start_audio_stream(
                     }
                     cpal::StreamError::StreamInvalidated => {
                         log::error!("Audio stream invalidated by the OS. Triggering restart...");
-                        let _ = tx_clone.send(());
+                        let _ = tx_clone.try_send(());
                     }
                 }
             };
@@ -669,39 +612,46 @@ pub fn start_audio_stream(
             let stream = match stream_result {
                 Ok(s) => s,
                 Err(e) => {
-                    log::error!("Monitor: Failed to build stream: {}. Retrying in 2s...", e);
+                    log::error!(
+                        "Monitor: Failed to build stream: {}. Retrying in {:?}...",
+                        e,
+                        retry_delay
+                    );
                     // Abort the DSP thread to prevent memory leak/orphans since stream failed
                     is_dsp_running.store(false, Ordering::Relaxed);
                     let _ = dsp_thread.join();
 
-                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    std::thread::sleep(retry_delay);
+                    retry_delay = next_retry_delay(retry_delay);
                     continue;
                 }
             };
 
             if let Err(e) = stream.play() {
-                log::error!("Monitor: Failed to play stream: {}. Retrying in 2s...", e);
+                log::error!(
+                    "Monitor: Failed to play stream: {}. Retrying in {:?}...",
+                    e,
+                    retry_delay
+                );
                 // Abort the DSP thread cleanly
                 is_dsp_running.store(false, Ordering::Relaxed);
                 let _ = dsp_thread.join();
 
-                std::thread::sleep(std::time::Duration::from_secs(2));
+                std::thread::sleep(retry_delay);
+                retry_delay = next_retry_delay(retry_delay);
                 continue;
             }
 
             log::info!("Monitor: Audio stream is successfully running.");
-
-            // Drain any stale restart signals that piled up from multiple rapid error callbacks
-            // before we enter the polling loop to prevent immediate phantom restarts.
-            while restart_rx.try_recv().is_ok() {}
+            let stream_started_at = Instant::now();
 
             // ---------------------------------------------------------
             // Active Polling Loop (~10 FPS)
             // ---------------------------------------------------------
-            loop {
+            let restart_reason = loop {
                 if restart_rx.try_recv().is_ok() {
                     log::info!("Monitor: Restart signal received from CPAL callback.");
-                    break;
+                    break RestartReason::StreamError;
                 }
                 let latest_config = active_config_arc.read().clone();
 
@@ -709,7 +659,7 @@ pub fn start_audio_stream(
                     log::info!(
                         "Monitor: Audio configuration changed by user. Restarting stream..."
                     );
-                    break;
+                    break RestartReason::ConfigurationChanged;
                 }
 
                 if latest_config.device_id.is_none() {
@@ -722,15 +672,15 @@ pub fn start_audio_stream(
                                         playing_device_id_some,
                                         default_id
                                     );
-                                    break;
+                                    break RestartReason::DefaultDeviceChanged;
                                 }
                             }
                         }
                     }
                 }
 
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
+                std::thread::sleep(Duration::from_millis(100));
+            };
 
             // CLEANUP: Drop the active stream. This safely releases the hardware handle.
             drop(stream);
@@ -741,11 +691,50 @@ pub fn start_audio_stream(
                 log::error!("Failed to join DSP thread cleanly: {:?}", e);
             }
 
-            // Give OS drivers a short moment to map routing before we query devices again
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            match restart_reason {
+                RestartReason::StreamError
+                    if stream_started_at.elapsed() < STABLE_STREAM_DURATION =>
+                {
+                    log::warn!(
+                        "Audio stream failed shortly after startup. Retrying in {:?}...",
+                        retry_delay
+                    );
+                    std::thread::sleep(retry_delay);
+                    retry_delay = next_retry_delay(retry_delay);
+                }
+                _ => {
+                    // A stream that ran stably, or an intentional routing/config
+                    // change, starts a fresh retry cycle.
+                    retry_delay = INITIAL_RETRY_DELAY;
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+            }
         }
     });
 
     log::info!("Successfully initialized Audio backend and Monitor thread");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, next_retry_delay};
+
+    #[test]
+    fn automatic_host_is_the_cpal_platform_default() {
+        assert_eq!(automatic_host().id(), cpal::default_host().id());
+    }
+
+    #[test]
+    fn stream_retry_delay_is_capped() {
+        let mut delay = INITIAL_RETRY_DELAY;
+
+        delay = next_retry_delay(delay);
+        assert_eq!(delay.as_secs(), 4);
+        delay = next_retry_delay(delay);
+        assert_eq!(delay.as_secs(), 8);
+        delay = next_retry_delay(delay);
+        assert_eq!(delay, MAX_RETRY_DELAY);
+        assert_eq!(next_retry_delay(delay), MAX_RETRY_DELAY);
+    }
 }

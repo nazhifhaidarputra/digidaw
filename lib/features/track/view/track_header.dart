@@ -1,18 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/math.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 class TrackHeader extends ConsumerWidget {
   final int trackId;
   final double itemHeight;
 
-  const TrackHeader({required this.trackId, required this.itemHeight});
+  const TrackHeader({super.key, required this.trackId, required this.itemHeight});
 
   Color _getContrastColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5
@@ -87,6 +89,11 @@ class TrackHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds this specific header if the track's name/color/type changes
     final track = ref.watch(projectProvider).value?.tracks[trackId];
+    final magnitude = ref.watch(
+      mixerStateProvider.select(
+        (state) => state.trackMagnitudes[trackId] ?? 0.0,
+      ),
+    );
 
     if (track == null) return const SizedBox();
 
@@ -246,57 +253,77 @@ class TrackHeader extends ConsumerWidget {
               right: BorderSide(color: Colors.grey.shade400, width: 1),
             ),
           ),
-          child: Row(
+          child: Column(
             children: [
-              Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
-              const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      track.name,
-                      style: TextStyle(
-                        color: Colors.grey.shade800,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    Icon(
+                      _getTrackIcon(track.trackType),
+                      color: Colors.grey.shade700,
                     ),
-                    Text(
-                      "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
-                      style: TextStyle(
-                        color: _getContrastColor(track.color.toColor()),
-                        // color: Colors.grey.shade600, // use inverse color of track color for better contrast
-                        fontSize: 10,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            track.name,
+                            style: TextStyle(
+                              color: Colors.grey.shade800,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
+                            style: TextStyle(
+                              color: _getContrastColor(track.color.toColor()),
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        InkWell(
+                          onTap: () {},
+                          child: const Icon(
+                            Icons.mic_off,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: () {},
+                          child: const Icon(
+                            Icons.volume_up,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  InkWell(
-                    onTap: () {},
-                    child: const Icon(
-                      Icons.mic_off,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
+              SizedBox(
+                height: 7,
+                child: Semantics(
+                  label: '${track.name} output level',
+                  value: '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
+                  child: DbLevelMeter(
+                    magnitude: magnitude,
+                    axis: Axis.horizontal,
                   ),
-                  const SizedBox(height: 4),
-                  InkWell(
-                    onTap: () {},
-                    child: const Icon(
-                      Icons.volume_up,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
+                ),
               ),
+              const SizedBox(height: 3),
             ],
           ),
         ),

@@ -13,7 +13,10 @@ def main():
     rust_dir = os.path.join(project_root, 'rust')
     
     # Define the absolute path to the manifest output directory
-    manifest_dir = os.path.join(project_root, 'assets', 'manifest', 'audio_plugin')
+    # Keep the Rust exporter and Dart generator on the same canonical manifest
+    # directory. The previous singular path left newly exported plugins out of
+    # generated Dart specs.
+    manifest_dir = os.path.join(project_root, 'assets', 'manifests', 'audio-plugins')
     
     # Ensure the target directory exists before Rust tries to write to it
     os.makedirs(manifest_dir, exist_ok=True)

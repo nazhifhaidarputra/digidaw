@@ -202,6 +202,7 @@ impl From<UiTransportState> for TransportState {
 }
 
 impl UiTrack {
+    #[frb(ignore)]
     pub fn from_track(value: &AudioTrack, state: &ApplicationState) -> Self {
         let generator_id = value
             .generator

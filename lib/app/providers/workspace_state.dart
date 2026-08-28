@@ -74,6 +74,8 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(false) bool showExportPanel,
 
+    @Default(false) bool sampleBrowserPanelisExpanded,
+
     @Default(FloatingMidiKeyboardFieldState()) FloatingMidiKeyboardFieldState floatingMidiKeyboardState,
   }) = _WorkspaceState;
 }

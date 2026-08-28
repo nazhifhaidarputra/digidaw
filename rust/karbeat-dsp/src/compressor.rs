@@ -203,7 +203,7 @@ pub struct SidechainCompressor {
     )]
     pub ratio: f64,
 
-    #[param(id = "threshold", name = "Threshold", default = 0.0, min = -60.0, max = 0.0, step = 0.1)]
+    #[param(id = "threshold", name = "Threshold", default = -18.0, min = -60.0, max = 0.0, step = 0.1)]
     pub threshold: f64, // In dB
 
     #[param(
@@ -249,7 +249,7 @@ pub struct SidechainCompressor {
     #[param(
         id = "dry_mix",
         name = "Dry mix",
-        default = 1.0,
+        default = 0.0,
         min = 0.0,
         max = 1.0,
         step = 0.01
@@ -353,9 +353,12 @@ impl SidechainCompressor {
             out
         };
 
-        // Dry/Wet Mix
+        // Parallel dry/wet mix. With the defaults (dry = 0, wet = 1), a
+        // silent sidechain is transparent instead of doubling the signal.
         let linear_gain = 10.0_f64.powf((-self.envelope_db + makeup_gain) / 20.0);
-        let out = delayed_main_sample * (dry_mix + (wet_mix * linear_gain));
+        let dry_signal = delayed_main_sample * dry_mix;
+        let wet_signal = delayed_main_sample * linear_gain * wet_mix;
+        let out = dry_signal + wet_signal;
 
         out as f32
     }
@@ -562,7 +565,7 @@ impl DynamicsProcessor {
         };
 
         let linear_gain = 10.0_f64.powf((-self.envelope_db + makeup_gain) / 20.0);
-       let out = delayed_main_sample * (dry_mix + (wet_mix * linear_gain));
+        let out = delayed_main_sample * (dry_mix + (wet_mix * linear_gain));
 
         out as f32
     }

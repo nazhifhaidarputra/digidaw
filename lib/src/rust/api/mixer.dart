@@ -10,7 +10,7 @@ import 'plugin.dart';
 import 'project.dart';
 part 'mixer.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Set a single DSP parameter on a mixer channel.
 /// Routes through the audio thread ring buffer; AppState is only updated on save.
@@ -218,23 +218,22 @@ Future<void> setMixerTelemetrySubs({
 
 /// Get all track channels and bus channels, and also
 /// its current sidechain properties
-Future<List<UiRoutingConnection>> getAvailableSidechainableChannels({
+Future<List<UiSidechainSource>> getSidechainSources({
   required DawContext ctx,
   required UiPluginTarget sidechainPlugin,
-}) => RustLib.instance.api.crateApiMixerGetAvailableSidechainableChannels(
+}) => RustLib.instance.api.crateApiMixerGetSidechainSources(
   ctx: ctx,
   sidechainPlugin: sidechainPlugin,
 );
 
-/// Update the sidechain properties of the sidechain source [target] in [this_plugin]
-///
-/// target should be a valid routing connection with the type of PluginSidechain
-Future<void> upsertSidechainPropOfPlugin({
+/// Add/update a sidechain send when `send_level` is provided, or remove it
+/// when `send_level` is null.
+Future<void> setSidechainSource({
   required DawContext ctx,
   required UiPluginTarget plugin,
   required UiRoutingNode from,
   double? sendLevel,
-}) => RustLib.instance.api.crateApiMixerUpsertSidechainPropOfPlugin(
+}) => RustLib.instance.api.crateApiMixerSetSidechainSource(
   ctx: ctx,
   plugin: plugin,
   from: from,
@@ -373,6 +372,7 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
 sealed class UiMixerChannelSnapshot with _$UiMixerChannelSnapshot {
   const factory UiMixerChannelSnapshot({
     required UiMixerChannelTarget target,
+    required double magnitude,
     required double volume,
     required double pan,
     required bool mute,
@@ -435,4 +435,15 @@ sealed class UiRoutingNode with _$UiRoutingNode {
   const factory UiRoutingNode.bus(int field0) = UiRoutingNode_Bus;
   const factory UiRoutingNode.master() = UiRoutingNode_Master;
   const factory UiRoutingNode.pluginSidechain() = UiRoutingNode_PluginSidechain;
+}
+
+/// A mixer channel that can feed the selected plugin's auxiliary input.
+@freezed
+sealed class UiSidechainSource with _$UiSidechainSource {
+  const factory UiSidechainSource({
+    required UiRoutingNode source,
+    required String name,
+    required bool enabled,
+    required double sendLevel,
+  }) = _UiSidechainSource;
 }

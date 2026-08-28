@@ -2,7 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/piano_roll_state.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
@@ -221,7 +221,6 @@ class DefaultControlPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final transportState = ref.watch(transportProvider).value;
-    final pianoRollState = ref.watch(pianoRollProvider);
     final workspaceState = ref.watch(
       workspaceStateProvider,
     ); // For currentView, selectedTool, etc.
@@ -304,6 +303,7 @@ class DefaultControlPanel extends ConsumerWidget {
                 );
               } catch (e) {
                 AppLogger.error("Failed to toggle playback: $e");
+                ref.read(notificationProvider.notifier).error(e);
               }
             },
           ),

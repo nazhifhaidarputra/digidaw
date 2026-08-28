@@ -1,4 +1,6 @@
 use dasp::slice;
+use hashbrown::HashMap;
+use itertools::{Itertools, izip};
 use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext};
 use karbeat_plugin_types::{Param, SmoothableParam};
 use karbeat_utils::math::hermite_interp;
@@ -45,9 +47,9 @@ pub fn render_audio_waveform(
             let start_elapsed = current_elapsed_samples.as_ref().map(|v| **v).unwrap_or(0);
 
             if target_channels == 2 {
-                let mut iter = target_slice.chunks_exact_mut(16);
+                let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
 
-                for chunk in iter.by_ref() {
+                for chunk in simd_chunks {
                     let mut s = [0.0; 16];
                     let mut f = [0.0; 16];
 
@@ -78,19 +80,15 @@ pub fn render_audio_waveform(
 
                     let samples = f32x16::new(s);
                     let fades = f32x16::new(f);
-
-                    let mut chunk_arr = [0.0; 16];
-                    chunk_arr.copy_from_slice(chunk);
-                    let mut out_v = f32x16::new(chunk_arr);
+                    let mut out_v = f32x16::new(*chunk);
 
                     out_v += samples * fades;
-                    chunk.copy_from_slice(&out_v.to_array());
+                    *chunk = out_v.to_array();
 
                     frames_written += 8;
                 }
 
-                // Handle remaining
-                for chunk in iter.into_remainder().chunks_exact_mut(2) {
+                for (left, right) in remaining_samples.iter_mut().tuples::<(_, _)>() {
                     let elapsed0 = start_elapsed + frames_written;
                     let rp0 = get_read_pos(
                         *source_read_index,
@@ -107,14 +105,14 @@ pub fn render_audio_waveform(
                         1.0
                     } * base_volume;
 
-                    chunk[0] += s0[0] * fade0;
-                    chunk[1] += s0[1] * fade0;
+                    *left += s0[0] * fade0;
+                    *right += s0[1] * fade0;
                     frames_written += 1;
                 }
             } else {
                 // Non-stereo fallback processing 16 mono frames at a time
-                let mut iter = target_slice.chunks_exact_mut(16);
-                for chunk in iter.by_ref() {
+                let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
+                for chunk in simd_chunks {
                     let mut s = [0.0; 16];
                     let mut f = [0.0; 16];
 
@@ -139,19 +137,15 @@ pub fn render_audio_waveform(
 
                     let samples = f32x16::new(s);
                     let fades = f32x16::new(f);
-
-                    let mut chunk_arr = [0.0; 16];
-                    chunk_arr.copy_from_slice(chunk);
-                    let mut out_v = f32x16::new(chunk_arr);
+                    let mut out_v = f32x16::new(*chunk);
 
                     out_v += samples * fades;
-                    chunk.copy_from_slice(&out_v.to_array());
+                    *chunk = out_v.to_array();
 
                     frames_written += 16;
                 }
 
-                // Mono Remainder
-                for chunk in iter.into_remainder().iter_mut() {
+                for sample in remaining_samples {
                     let elapsed = start_elapsed + frames_written;
                     let rp = get_read_pos(
                         *source_read_index,
@@ -169,7 +163,7 @@ pub fn render_audio_waveform(
                         1.0
                     } * base_volume;
 
-                    *chunk += s0[0] * fade0;
+                    *sample += s0[0] * fade0;
                     frames_written += 1;
                 }
             }
@@ -300,18 +294,15 @@ pub fn load_internal_wav(bytes: &[u8]) -> Vec<f32> {
 #[inline(always)]
 pub fn apply_phase_inversion_simd(buffer: &mut [f32]) {
     let neg_one = f32x16::splat(-1.0);
-    let mut iter = buffer.chunks_exact_mut(16);
+    let (simd_chunks, remaining_samples) = buffer.as_chunks_mut::<16>();
 
-    for chunk in iter.by_ref() {
-        let mut chunk_arr = [0.0; 16];
-        chunk_arr.copy_from_slice(chunk);
-
-        let mut v = f32x16::new(chunk_arr);
+    for chunk in simd_chunks {
+        let mut v = f32x16::new(*chunk);
         v *= neg_one;
-        chunk.copy_from_slice(&v.to_array());
+        *chunk = v.to_array();
     }
 
-    for sample in iter.into_remainder() {
+    for sample in remaining_samples {
         *sample = -*sample;
     }
 }
@@ -323,10 +314,8 @@ pub fn apply_volume_and_pan_simd(
     vol_param: &mut Param<f32>,
     pan_param: &mut Param<f32>,
 ) {
-    let iter = buffer.chunks_exact_mut(channels);
-
     if channels == 2 {
-        for chunk in iter {
+        for (left, right) in buffer.iter_mut().tuples::<(_, _)>() {
             let vol_db = vol_param.next_smoothed();
             let pan = pan_param.next_smoothed();
 
@@ -341,19 +330,20 @@ pub fn apply_volume_and_pan_simd(
             let left_gain = (1.0 - p).sqrt() * vol;
             let right_gain = p.sqrt() * vol;
 
-            chunk[0] *= left_gain;
-            chunk[1] *= right_gain;
+            *left *= left_gain;
+            *right *= right_gain;
         }
     } else {
         // Mono fallback
-        for chunk in iter {
+        let frames = buffer.len() / channels;
+        for sample in buffer.iter_mut().step_by(channels).take(frames) {
             let vol_db = vol_param.next_smoothed();
             let vol = if vol_db <= -100.0 {
                 0.0
             } else {
                 db_to_linear(vol_db as f32)
             };
-            chunk[0] *= vol;
+            *sample *= vol;
         }
     }
 }
@@ -372,56 +362,30 @@ pub fn process_plugin_wrapper(
     let frames = interleaved_io.len() / channels;
 
     // Resize all necessary buffers upfront
-    for c in 0..channels {
-        if channel_buffers_in[c].len() < frames {
-            channel_buffers_in[c].resize(frames, 0.0);
-        }
-        if channel_buffers_out[c].len() < frames {
-            channel_buffers_out[c].resize(frames, 0.0);
-        }
-        if aux_interleaved.is_some() {
-            if aux_channel_buffers[c].len() < frames {
-                aux_channel_buffers[c].resize(frames, 0.0);
+    channel_buffers_in
+        .iter_mut()
+        .take(channels)
+        .chain(channel_buffers_out.iter_mut().take(channels))
+        .for_each(|buffer| {
+            if buffer.len() < frames {
+                buffer.resize(frames, 0.0);
             }
-        }
+        });
+    if aux_interleaved.is_some() {
+        aux_channel_buffers
+            .iter_mut()
+            .take(channels)
+            .for_each(|buffer| {
+                if buffer.len() < frames {
+                    buffer.resize(frames, 0.0);
+                }
+            });
     }
 
     // Deinterleave Main & Aux Buses
-    if channels == 2 {
-        // FAST PATH: Stereo (Auto-Vectorized by LLVM into SIMD Shuffles)
-        let (left_split, right_split) = channel_buffers_in.split_at_mut(1);
-        let left_in = &mut left_split[0][..frames];
-        let right_in = &mut right_split[0][..frames];
-
-        for (i, chunk) in interleaved_io.chunks_exact(2).enumerate() {
-            left_in[i] = chunk[0];
-            right_in[i] = chunk[1];
-        }
-
-        if let Some(aux) = aux_interleaved {
-            let (aux_l_split, aux_r_split) = aux_channel_buffers.split_at_mut(1);
-            let aux_l = &mut aux_l_split[0][..frames];
-            let aux_r = &mut aux_r_split[0][..frames];
-
-            for (i, chunk) in aux.chunks_exact(2).enumerate() {
-                aux_l[i] = chunk[0];
-                aux_r[i] = chunk[1];
-            }
-        }
-    } else {
-        // SLOW PATH: Surround / Multi-channel fallback
-        for i in 0..frames {
-            for c in 0..channels {
-                channel_buffers_in[c][i] = interleaved_io[i * channels + c];
-            }
-        }
-        if let Some(aux) = aux_interleaved {
-            for i in 0..frames {
-                for c in 0..channels {
-                    aux_channel_buffers[c][i] = aux[i * channels + c];
-                }
-            }
-        }
+    deinterleave_buffer(interleaved_io, channel_buffers_in, channels, frames);
+    if let Some(aux) = aux_interleaved {
+        deinterleave_buffer(aux, aux_channel_buffers, channels, frames);
     }
 
     // Setup Pointers for the Plugin API
@@ -470,24 +434,64 @@ pub fn process_plugin_wrapper(
     // Execute Plugin DSP
     plugin.process(&mut buffers, ctx);
 
-    // Re-interleave Main Bus
-    if channels == 2 {
-        // FAST PATH: Stereo (Auto-Vectorized by LLVM into SIMD Shuffles)
-        let (left_split, right_split) = channel_buffers_out.split_at_mut(1);
-        let left_out = &left_split[0][..frames];
-        let right_out = &right_split[0][..frames];
+    interleave_buffer(interleaved_io, channel_buffers_out, channels, frames);
+}
 
-        for (i, chunk) in interleaved_io.chunks_exact_mut(2).enumerate() {
-            chunk[0] = left_out[i];
-            chunk[1] = right_out[i];
-        }
-    } else {
-        // SLOW PATH: Surround / Multi-channel fallback
-        for i in 0..frames {
-            for c in 0..channels {
-                interleaved_io[i * channels + c] = channel_buffers_out[c][i];
-            }
-        }
+#[inline]
+fn deinterleave_buffer(
+    interleaved: &[f32],
+    channel_buffers: &mut [Vec<f32>],
+    channels: usize,
+    frames: usize,
+) {
+    if channels == 2 {
+        let (left, right) = channel_buffers.split_at_mut(1);
+        izip!(
+            left[0][..frames].iter_mut(),
+            right[0][..frames].iter_mut(),
+            interleaved.iter().copied().tuples::<(_, _)>()
+        )
+        .for_each(|(left, right, (source_left, source_right))| {
+            *left = source_left;
+            *right = source_right;
+        });
+        return;
+    }
+
+    for (channel_index, destination) in channel_buffers.iter_mut().take(channels).enumerate() {
+        destination[..frames].iter_mut().set_from(
+            interleaved
+                .iter()
+                .skip(channel_index)
+                .step_by(channels)
+                .copied(),
+        );
+    }
+}
+
+#[inline]
+fn interleave_buffer(
+    interleaved: &mut [f32],
+    channel_buffers: &[Vec<f32>],
+    channels: usize,
+    frames: usize,
+) {
+    if channels == 2 {
+        interleaved.iter_mut().set_from(
+            channel_buffers[0][..frames]
+                .iter()
+                .copied()
+                .interleave(channel_buffers[1][..frames].iter().copied()),
+        );
+        return;
+    }
+
+    for (channel_index, source) in channel_buffers.iter().take(channels).enumerate() {
+        interleaved
+            .iter_mut()
+            .skip(channel_index)
+            .step_by(channels)
+            .set_from(source[..frames].iter().copied());
     }
 }
 
@@ -505,8 +509,6 @@ pub fn compute_routing_order(
     bus_ids: impl Iterator<Item = BusId>,
     routing: &[RoutingConnection],
 ) -> Vec<RoutingNode> {
-    use std::collections::HashMap as StdMap;
-    use std::collections::VecDeque;
 
     let bus_ids_vec: Vec<BusId> = bus_ids.collect();
 
@@ -514,8 +516,8 @@ pub fn compute_routing_order(
     let mut order: Vec<RoutingNode> = track_ids.map(RoutingNode::Track).collect();
 
     // Kahn's topological sort for buses
-    let mut in_degree: StdMap<BusId, usize> = bus_ids_vec.iter().map(|&id| (id, 0)).collect();
-    let mut adj: StdMap<BusId, Vec<BusId>> = bus_ids_vec.iter().map(|&id| (id, vec![])).collect();
+    let mut in_degree: HashMap<BusId, usize> = bus_ids_vec.iter().map(|&id| (id, 0)).collect();
+    let mut adj: HashMap<BusId, Vec<BusId>> = bus_ids_vec.iter().map(|&id| (id, vec![])).collect();
 
     for conn in routing {
         if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination) {
@@ -528,7 +530,7 @@ pub fn compute_routing_order(
         }
     }
 
-    let mut queue: VecDeque<BusId> = in_degree
+    let mut queue: std::collections::VecDeque<BusId> = in_degree
         .iter()
         .filter(|(_, deg)| **deg == 0)
         .map(|(&id, _)| id)
@@ -587,4 +589,51 @@ pub fn resolve_target_mixer_param(
     });
 
     (automation_target, val)
+}
+
+#[cfg(test)]
+mod buffer_iteration_tests {
+    use super::{apply_phase_inversion_simd, deinterleave_buffer, interleave_buffer};
+
+    #[test]
+    fn stereo_deinterleave_round_trip_leaves_incomplete_frame_untouched() {
+        let input = [1.0, 2.0, 3.0, 4.0, 99.0];
+        let mut channels = vec![vec![0.0; 2], vec![0.0; 2]];
+
+        deinterleave_buffer(&input, &mut channels, 2, 2);
+
+        assert_eq!(channels, [[1.0, 3.0], [2.0, 4.0]]);
+
+        let mut output = [0.0, 0.0, 0.0, 0.0, 99.0];
+        interleave_buffer(&mut output, &channels, 2, 2);
+
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn multichannel_deinterleave_round_trip() {
+        let input = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let mut channels = vec![vec![0.0; 2], vec![0.0; 2], vec![0.0; 2]];
+
+        deinterleave_buffer(&input, &mut channels, 3, 2);
+
+        assert_eq!(channels, [[1.0, 4.0], [2.0, 5.0], [3.0, 6.0]]);
+
+        let mut output = [0.0; 6];
+        interleave_buffer(&mut output, &channels, 3, 2);
+
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn phase_inversion_processes_simd_remainder() {
+        let mut buffer: Vec<f32> = (1..=19).map(|sample| sample as f32).collect();
+
+        apply_phase_inversion_simd(&mut buffer);
+
+        assert_eq!(
+            buffer,
+            (1..=19).map(|sample| -(sample as f32)).collect::<Vec<_>>()
+        );
+    }
 }

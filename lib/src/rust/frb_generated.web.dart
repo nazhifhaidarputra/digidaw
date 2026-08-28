@@ -418,6 +418,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KarbeatPluginType dco_decode_karbeat_plugin_type(dynamic raw);
 
   @protected
+  List<int> dco_decode_list_CastedPrimitive_u_64(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -528,6 +531,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
+
+  @protected
+  List<UiSidechainSource> dco_decode_list_ui_sidechain_source(dynamic raw);
 
   @protected
   MasterAutomationTargetDto dco_decode_master_automation_target_dto(
@@ -841,6 +847,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode dco_decode_ui_routing_node(dynamic raw);
+
+  @protected
+  UiSidechainSource dco_decode_ui_sidechain_source(dynamic raw);
 
   @protected
   UiSourceType dco_decode_ui_source_type(dynamic raw);
@@ -1285,6 +1294,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<int> sse_decode_list_CastedPrimitive_u_64(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
@@ -1425,6 +1437,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiSidechainSource> sse_decode_list_ui_sidechain_source(
     SseDeserializer deserializer,
   );
 
@@ -1796,6 +1813,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer);
+
+  @protected
+  UiSidechainSource sse_decode_ui_sidechain_source(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
@@ -2315,6 +2337,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_CastedPrimitive_u_64(
+    List<int> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
@@ -2485,6 +2513,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_routing_connection(
     List<UiRoutingConnection> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_sidechain_source(
+    List<UiSidechainSource> self,
     SseSerializer serializer,
   );
 
@@ -2939,6 +2973,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_routing_node(UiRoutingNode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_sidechain_source(
+    UiSidechainSource self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);

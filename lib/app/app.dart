@@ -1,7 +1,11 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/input/input.dart';
+import 'package:karbeat/core/widgets/notification_overlay.dart';
 import 'package:karbeat/features/misc/error_init_screen.dart';
 import 'package:karbeat/features/misc/loading_screen.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
@@ -18,11 +22,29 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
   bool _isRustInitialized = false;
   Object? _rustError;
   StackTrace? _rustStackTrace;
+  late final bool Function(Object, StackTrace) _uncaughtErrorHandler;
+  bool Function(Object, StackTrace)? _previousUncaughtErrorHandler;
 
   @override
   void initState() {
     super.initState();
+    _previousUncaughtErrorHandler = PlatformDispatcher.instance.onError;
+    _uncaughtErrorHandler = (error, stackTrace) {
+      ref
+          .read(notificationProvider.notifier)
+          .error(error, stackTrace: stackTrace);
+      return _previousUncaughtErrorHandler?.call(error, stackTrace) ?? false;
+    };
+    PlatformDispatcher.instance.onError = _uncaughtErrorHandler;
     _initializeRust();
+  }
+
+  @override
+  void dispose() {
+    if (identical(PlatformDispatcher.instance.onError, _uncaughtErrorHandler)) {
+      PlatformDispatcher.instance.onError = _previousUncaughtErrorHandler;
+    }
+    super.dispose();
   }
 
   Future<void> _initializeRust() async {
@@ -31,13 +53,14 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         RustLib.init(),
         Future.delayed(const Duration(seconds: 5)),
       ]);
-      
+
       if (mounted) {
         setState(() {
           _isRustInitialized = true;
         });
       }
     } catch (e, stackTrace) {
+      ref.read(notificationProvider.notifier).error(e, stackTrace: stackTrace);
       if (mounted) {
         setState(() {
           _rustError = e;
@@ -55,6 +78,7 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         title: 'DigiDAW',
         theme: ThemeData.dark(),
         debugShowCheckedModeBanner: false,
+        builder: _notificationBuilder,
         home: ErrorInitScreen(err: _rustError!, stack: _rustStackTrace!),
       );
     }
@@ -65,19 +89,21 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         title: 'DigiDAW',
         theme: ThemeData.dark(),
         debugShowCheckedModeBanner: false,
+        builder: _notificationBuilder,
         home: const LoadingScreen(),
       );
     }
 
     final projectState = ref.watch(projectProvider);
     final activeShortcuts = ref.watch(shortcutManagerProvider);
-    
+
     return Shortcuts(
       shortcuts: activeShortcuts,
       child: MaterialApp(
         title: 'DigiDAW',
         theme: ThemeData.dark(),
         debugShowCheckedModeBanner: false,
+        builder: _notificationBuilder,
         home: projectState.when(
           data: (_) => const MainScreen(),
           loading: () => const LoadingScreen(),
@@ -85,5 +111,9 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         ),
       ),
     );
+  }
+
+  Widget _notificationBuilder(BuildContext context, Widget? child) {
+    return NotificationOverlay(child: child ?? const SizedBox.shrink());
   }
 }

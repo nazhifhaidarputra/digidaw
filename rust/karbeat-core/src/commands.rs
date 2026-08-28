@@ -9,12 +9,12 @@ use crate::{
         render_state::{AudioAutomationLane, AudioGraphState},
     },
     core::project::{
-        AutomationTarget, Clip, GeneratorId, ModulationLink, ModulationSource,
         mixer::{MixerChannelParams, RoutingConnection},
         plugin::AudioPlugin,
-        track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern},
+        track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack},
+        AutomationTarget, Clip, GeneratorId, ModulationLink, ModulationSource,
     },
-    shared::{AutomationId, ModulationId, PatternId, id::*},
+    shared::{id::*, AutomationId, ModulationId, PatternId},
 };
 
 pub enum AudioCommand {
@@ -345,6 +345,8 @@ pub struct EffectParameterSnapshot {
 #[derive(Clone, Debug)]
 pub struct MixerChannelSnapshot {
     pub target: MixerChannelTarget,
+    /// Post-effects, post-fader peak magnitude in linear amplitude.
+    pub magnitude: f32,
     pub volume: f32,
     pub pan: f32,
     pub mute: bool,

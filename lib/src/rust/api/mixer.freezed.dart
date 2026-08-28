@@ -1610,7 +1610,7 @@ as bool,
 /// @nodoc
 mixin _$UiMixerChannelSnapshot {
 
- UiMixerChannelTarget get target; double get volume; double get pan; bool get mute; bool get solo; bool get invertedPhase;
+ UiMixerChannelTarget get target; double get magnitude; double get volume; double get pan; bool get mute; bool get solo; bool get invertedPhase;
 /// Create a copy of UiMixerChannelSnapshot
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1621,16 +1621,16 @@ $UiMixerChannelSnapshotCopyWith<UiMixerChannelSnapshot> get copyWith => _$UiMixe
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelSnapshot&&(identical(other.target, target) || other.target == target)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.solo, solo) || other.solo == solo)&&(identical(other.invertedPhase, invertedPhase) || other.invertedPhase == invertedPhase));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelSnapshot&&(identical(other.target, target) || other.target == target)&&(identical(other.magnitude, magnitude) || other.magnitude == magnitude)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.solo, solo) || other.solo == solo)&&(identical(other.invertedPhase, invertedPhase) || other.invertedPhase == invertedPhase));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,target,volume,pan,mute,solo,invertedPhase);
+int get hashCode => Object.hash(runtimeType,target,magnitude,volume,pan,mute,solo,invertedPhase);
 
 @override
 String toString() {
-  return 'UiMixerChannelSnapshot(target: $target, volume: $volume, pan: $pan, mute: $mute, solo: $solo, invertedPhase: $invertedPhase)';
+  return 'UiMixerChannelSnapshot(target: $target, magnitude: $magnitude, volume: $volume, pan: $pan, mute: $mute, solo: $solo, invertedPhase: $invertedPhase)';
 }
 
 
@@ -1641,7 +1641,7 @@ abstract mixin class $UiMixerChannelSnapshotCopyWith<$Res>  {
   factory $UiMixerChannelSnapshotCopyWith(UiMixerChannelSnapshot value, $Res Function(UiMixerChannelSnapshot) _then) = _$UiMixerChannelSnapshotCopyWithImpl;
 @useResult
 $Res call({
- UiMixerChannelTarget target, double volume, double pan, bool mute, bool solo, bool invertedPhase
+ UiMixerChannelTarget target, double magnitude, double volume, double pan, bool mute, bool solo, bool invertedPhase
 });
 
 
@@ -1658,10 +1658,11 @@ class _$UiMixerChannelSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of UiMixerChannelSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? target = null,Object? volume = null,Object? pan = null,Object? mute = null,Object? solo = null,Object? invertedPhase = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? target = null,Object? magnitude = null,Object? volume = null,Object? pan = null,Object? mute = null,Object? solo = null,Object? invertedPhase = null,}) {
   return _then(_self.copyWith(
 target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
-as UiMixerChannelTarget,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
+as UiMixerChannelTarget,magnitude: null == magnitude ? _self.magnitude : magnitude // ignore: cast_nullable_to_non_nullable
+as double,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
 as double,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
 as double,mute: null == mute ? _self.mute : mute // ignore: cast_nullable_to_non_nullable
 as bool,solo: null == solo ? _self.solo : solo // ignore: cast_nullable_to_non_nullable
@@ -1757,10 +1758,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiMixerChannelTarget target,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiMixerChannelTarget target,  double magnitude,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiMixerChannelSnapshot() when $default != null:
-return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);case _:
+return $default(_that.target,_that.magnitude,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);case _:
   return orElse();
 
 }
@@ -1778,10 +1779,10 @@ return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiMixerChannelTarget target,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiMixerChannelTarget target,  double magnitude,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)  $default,) {final _that = this;
 switch (_that) {
 case _UiMixerChannelSnapshot():
-return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);}
+return $default(_that.target,_that.magnitude,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -1795,10 +1796,10 @@ return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiMixerChannelTarget target,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiMixerChannelTarget target,  double magnitude,  double volume,  double pan,  bool mute,  bool solo,  bool invertedPhase)?  $default,) {final _that = this;
 switch (_that) {
 case _UiMixerChannelSnapshot() when $default != null:
-return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);case _:
+return $default(_that.target,_that.magnitude,_that.volume,_that.pan,_that.mute,_that.solo,_that.invertedPhase);case _:
   return null;
 
 }
@@ -1810,10 +1811,11 @@ return $default(_that.target,_that.volume,_that.pan,_that.mute,_that.solo,_that.
 
 
 class _UiMixerChannelSnapshot implements UiMixerChannelSnapshot {
-  const _UiMixerChannelSnapshot({required this.target, required this.volume, required this.pan, required this.mute, required this.solo, required this.invertedPhase});
+  const _UiMixerChannelSnapshot({required this.target, required this.magnitude, required this.volume, required this.pan, required this.mute, required this.solo, required this.invertedPhase});
   
 
 @override final  UiMixerChannelTarget target;
+@override final  double magnitude;
 @override final  double volume;
 @override final  double pan;
 @override final  bool mute;
@@ -1830,16 +1832,16 @@ _$UiMixerChannelSnapshotCopyWith<_UiMixerChannelSnapshot> get copyWith => __$UiM
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiMixerChannelSnapshot&&(identical(other.target, target) || other.target == target)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.solo, solo) || other.solo == solo)&&(identical(other.invertedPhase, invertedPhase) || other.invertedPhase == invertedPhase));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiMixerChannelSnapshot&&(identical(other.target, target) || other.target == target)&&(identical(other.magnitude, magnitude) || other.magnitude == magnitude)&&(identical(other.volume, volume) || other.volume == volume)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.solo, solo) || other.solo == solo)&&(identical(other.invertedPhase, invertedPhase) || other.invertedPhase == invertedPhase));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,target,volume,pan,mute,solo,invertedPhase);
+int get hashCode => Object.hash(runtimeType,target,magnitude,volume,pan,mute,solo,invertedPhase);
 
 @override
 String toString() {
-  return 'UiMixerChannelSnapshot(target: $target, volume: $volume, pan: $pan, mute: $mute, solo: $solo, invertedPhase: $invertedPhase)';
+  return 'UiMixerChannelSnapshot(target: $target, magnitude: $magnitude, volume: $volume, pan: $pan, mute: $mute, solo: $solo, invertedPhase: $invertedPhase)';
 }
 
 
@@ -1850,7 +1852,7 @@ abstract mixin class _$UiMixerChannelSnapshotCopyWith<$Res> implements $UiMixerC
   factory _$UiMixerChannelSnapshotCopyWith(_UiMixerChannelSnapshot value, $Res Function(_UiMixerChannelSnapshot) _then) = __$UiMixerChannelSnapshotCopyWithImpl;
 @override @useResult
 $Res call({
- UiMixerChannelTarget target, double volume, double pan, bool mute, bool solo, bool invertedPhase
+ UiMixerChannelTarget target, double magnitude, double volume, double pan, bool mute, bool solo, bool invertedPhase
 });
 
 
@@ -1867,10 +1869,11 @@ class __$UiMixerChannelSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of UiMixerChannelSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? target = null,Object? volume = null,Object? pan = null,Object? mute = null,Object? solo = null,Object? invertedPhase = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? target = null,Object? magnitude = null,Object? volume = null,Object? pan = null,Object? mute = null,Object? solo = null,Object? invertedPhase = null,}) {
   return _then(_UiMixerChannelSnapshot(
 target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
-as UiMixerChannelTarget,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
+as UiMixerChannelTarget,magnitude: null == magnitude ? _self.magnitude : magnitude // ignore: cast_nullable_to_non_nullable
+as double,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
 as double,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
 as double,mute: null == mute ? _self.mute : mute // ignore: cast_nullable_to_non_nullable
 as bool,solo: null == solo ? _self.solo : solo // ignore: cast_nullable_to_non_nullable
@@ -3162,5 +3165,283 @@ String toString() {
 
 
 
+
+/// @nodoc
+mixin _$UiSidechainSource {
+
+ UiRoutingNode get source; String get name; bool get enabled; double get sendLevel;
+/// Create a copy of UiSidechainSource
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiSidechainSourceCopyWith<UiSidechainSource> get copyWith => _$UiSidechainSourceCopyWithImpl<UiSidechainSource>(this as UiSidechainSource, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiSidechainSource&&(identical(other.source, source) || other.source == source)&&(identical(other.name, name) || other.name == name)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,source,name,enabled,sendLevel);
+
+@override
+String toString() {
+  return 'UiSidechainSource(source: $source, name: $name, enabled: $enabled, sendLevel: $sendLevel)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiSidechainSourceCopyWith<$Res>  {
+  factory $UiSidechainSourceCopyWith(UiSidechainSource value, $Res Function(UiSidechainSource) _then) = _$UiSidechainSourceCopyWithImpl;
+@useResult
+$Res call({
+ UiRoutingNode source, String name, bool enabled, double sendLevel
+});
+
+
+$UiRoutingNodeCopyWith<$Res> get source;
+
+}
+/// @nodoc
+class _$UiSidechainSourceCopyWithImpl<$Res>
+    implements $UiSidechainSourceCopyWith<$Res> {
+  _$UiSidechainSourceCopyWithImpl(this._self, this._then);
+
+  final UiSidechainSource _self;
+  final $Res Function(UiSidechainSource) _then;
+
+/// Create a copy of UiSidechainSource
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? source = null,Object? name = null,Object? enabled = null,Object? sendLevel = null,}) {
+  return _then(_self.copyWith(
+source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as UiRoutingNode,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,sendLevel: null == sendLevel ? _self.sendLevel : sendLevel // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+/// Create a copy of UiSidechainSource
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiRoutingNodeCopyWith<$Res> get source {
+  
+  return $UiRoutingNodeCopyWith<$Res>(_self.source, (value) {
+    return _then(_self.copyWith(source: value));
+  });
+}
+}
+
+
+/// Adds pattern-matching-related methods to [UiSidechainSource].
+extension UiSidechainSourcePatterns on UiSidechainSource {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiSidechainSource value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiSidechainSource() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiSidechainSource value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiSidechainSource():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiSidechainSource value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiSidechainSource() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiSidechainSource() when $default != null:
+return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel)  $default,) {final _that = this;
+switch (_that) {
+case _UiSidechainSource():
+return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel)?  $default,) {final _that = this;
+switch (_that) {
+case _UiSidechainSource() when $default != null:
+return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiSidechainSource implements UiSidechainSource {
+  const _UiSidechainSource({required this.source, required this.name, required this.enabled, required this.sendLevel});
+  
+
+@override final  UiRoutingNode source;
+@override final  String name;
+@override final  bool enabled;
+@override final  double sendLevel;
+
+/// Create a copy of UiSidechainSource
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiSidechainSourceCopyWith<_UiSidechainSource> get copyWith => __$UiSidechainSourceCopyWithImpl<_UiSidechainSource>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiSidechainSource&&(identical(other.source, source) || other.source == source)&&(identical(other.name, name) || other.name == name)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,source,name,enabled,sendLevel);
+
+@override
+String toString() {
+  return 'UiSidechainSource(source: $source, name: $name, enabled: $enabled, sendLevel: $sendLevel)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiSidechainSourceCopyWith<$Res> implements $UiSidechainSourceCopyWith<$Res> {
+  factory _$UiSidechainSourceCopyWith(_UiSidechainSource value, $Res Function(_UiSidechainSource) _then) = __$UiSidechainSourceCopyWithImpl;
+@override @useResult
+$Res call({
+ UiRoutingNode source, String name, bool enabled, double sendLevel
+});
+
+
+@override $UiRoutingNodeCopyWith<$Res> get source;
+
+}
+/// @nodoc
+class __$UiSidechainSourceCopyWithImpl<$Res>
+    implements _$UiSidechainSourceCopyWith<$Res> {
+  __$UiSidechainSourceCopyWithImpl(this._self, this._then);
+
+  final _UiSidechainSource _self;
+  final $Res Function(_UiSidechainSource) _then;
+
+/// Create a copy of UiSidechainSource
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? source = null,Object? name = null,Object? enabled = null,Object? sendLevel = null,}) {
+  return _then(_UiSidechainSource(
+source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as UiRoutingNode,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,sendLevel: null == sendLevel ? _self.sendLevel : sendLevel // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+/// Create a copy of UiSidechainSource
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiRoutingNodeCopyWith<$Res> get source {
+  
+  return $UiRoutingNodeCopyWith<$Res>(_self.source, (value) {
+    return _then(_self.copyWith(source: value));
+  });
+}
+}
 
 // dart format on

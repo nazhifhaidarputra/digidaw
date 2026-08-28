@@ -13,13 +13,11 @@ class AudioPropertiesScreen extends ConsumerWidget {
   final int sourceId;
   final String sourceName;
 
-  AudioPropertiesScreen({
+  const AudioPropertiesScreen({
     super.key,
     required this.sourceId,
     required this.sourceName,
   });
-
-
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,7 +40,9 @@ class AudioPropertiesScreen extends ConsumerWidget {
         ),
 
         data: (props) {
-          final handle = props.id != null ? getWaveformHandle(ctx: ctx, sourceId: props.id!) : null;
+          final handle = props.id != null
+              ? getWaveformHandle(ctx: ctx, sourceId: props.id!)
+              : null;
           return Column(
             children: [
               // HEADER
@@ -65,7 +65,9 @@ class AudioPropertiesScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: CustomPaint(
                         painter: StereoWaveformPainter(
-                          samples: handle != null ? createZeroCopyWaveformView(handle) : Float32List(0),
+                          samples: handle != null
+                              ? createZeroCopyWaveformView(handle)
+                              : Float32List(0),
                           color: Colors.cyanAccent,
                         ),
                       ),

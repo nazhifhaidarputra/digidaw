@@ -1,7 +1,4 @@
 mod index;
-pub mod sidechain;
-// src/core/project/mod.rs
-
 pub mod automation;
 pub mod clip;
 pub mod clipboard;

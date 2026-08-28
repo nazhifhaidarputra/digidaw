@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -155,6 +156,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
       });
       onParametersUpdated();
     } catch (e) {
+      ref.read(notificationProvider.notifier).error(e);
       if (!mounted) return;
       setState(() {
         errorMessage = 'Failed to load plugin parameters: $e';
@@ -195,6 +197,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
       );
     } catch (e) {
       AppLogger.error('Error setting plugin parameter: $e');
+      ref.read(notificationProvider.notifier).error(e);
     }
   }
 
@@ -209,6 +212,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
       );
     } catch (e) {
       AppLogger.error('Error beginning edit: $e');
+      ref.read(notificationProvider.notifier).error(e);
     }
   }
 
@@ -223,6 +227,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
       );
     } catch (e) {
       AppLogger.error('Error ending edit: $e');
+      ref.read(notificationProvider.notifier).error(e);
     }
   }
 
