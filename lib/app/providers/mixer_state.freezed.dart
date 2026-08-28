@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$MixerEditorState {
 
- mixer_api.UiMixerState? get mixerState; ISet<(int, String)> get touchedParams;
+ mixer_api.UiMixerState? get mixerState; ISet<(int, String)> get touchedParams; IMap<int, double> get trackMagnitudes; IMap<int, double> get busMagnitudes; double get masterMagnitude;
 /// Create a copy of MixerEditorState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $MixerEditorStateCopyWith<MixerEditorState> get copyWith => _$MixerEditorStateCo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is MixerEditorState&&(identical(other.mixerState, mixerState) || other.mixerState == mixerState)&&const DeepCollectionEquality().equals(other.touchedParams, touchedParams));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is MixerEditorState&&(identical(other.mixerState, mixerState) || other.mixerState == mixerState)&&const DeepCollectionEquality().equals(other.touchedParams, touchedParams)&&(identical(other.trackMagnitudes, trackMagnitudes) || other.trackMagnitudes == trackMagnitudes)&&(identical(other.busMagnitudes, busMagnitudes) || other.busMagnitudes == busMagnitudes)&&(identical(other.masterMagnitude, masterMagnitude) || other.masterMagnitude == masterMagnitude));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,mixerState,const DeepCollectionEquality().hash(touchedParams));
+int get hashCode => Object.hash(runtimeType,mixerState,const DeepCollectionEquality().hash(touchedParams),trackMagnitudes,busMagnitudes,masterMagnitude);
 
 @override
 String toString() {
-  return 'MixerEditorState(mixerState: $mixerState, touchedParams: $touchedParams)';
+  return 'MixerEditorState(mixerState: $mixerState, touchedParams: $touchedParams, trackMagnitudes: $trackMagnitudes, busMagnitudes: $busMagnitudes, masterMagnitude: $masterMagnitude)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $MixerEditorStateCopyWith<$Res>  {
   factory $MixerEditorStateCopyWith(MixerEditorState value, $Res Function(MixerEditorState) _then) = _$MixerEditorStateCopyWithImpl;
 @useResult
 $Res call({
- mixer_api.UiMixerState? mixerState, ISet<(int, String)> touchedParams
+ mixer_api.UiMixerState? mixerState, ISet<(int, String)> touchedParams, IMap<int, double> trackMagnitudes, IMap<int, double> busMagnitudes, double masterMagnitude
 });
 
 
@@ -62,11 +62,14 @@ class _$MixerEditorStateCopyWithImpl<$Res>
 
 /// Create a copy of MixerEditorState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? mixerState = freezed,Object? touchedParams = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? mixerState = freezed,Object? touchedParams = null,Object? trackMagnitudes = null,Object? busMagnitudes = null,Object? masterMagnitude = null,}) {
   return _then(_self.copyWith(
 mixerState: freezed == mixerState ? _self.mixerState : mixerState // ignore: cast_nullable_to_non_nullable
 as mixer_api.UiMixerState?,touchedParams: null == touchedParams ? _self.touchedParams : touchedParams // ignore: cast_nullable_to_non_nullable
-as ISet<(int, String)>,
+as ISet<(int, String)>,trackMagnitudes: null == trackMagnitudes ? _self.trackMagnitudes : trackMagnitudes // ignore: cast_nullable_to_non_nullable
+as IMap<int, double>,busMagnitudes: null == busMagnitudes ? _self.busMagnitudes : busMagnitudes // ignore: cast_nullable_to_non_nullable
+as IMap<int, double>,masterMagnitude: null == masterMagnitude ? _self.masterMagnitude : masterMagnitude // ignore: cast_nullable_to_non_nullable
+as double,
   ));
 }
 /// Create a copy of MixerEditorState
@@ -163,10 +166,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( mixer_api.UiMixerState? mixerState,  ISet<(int, String)> touchedParams)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( mixer_api.UiMixerState? mixerState,  ISet<(int, String)> touchedParams,  IMap<int, double> trackMagnitudes,  IMap<int, double> busMagnitudes,  double masterMagnitude)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _MixerEditorState() when $default != null:
-return $default(_that.mixerState,_that.touchedParams);case _:
+return $default(_that.mixerState,_that.touchedParams,_that.trackMagnitudes,_that.busMagnitudes,_that.masterMagnitude);case _:
   return orElse();
 
 }
@@ -184,10 +187,10 @@ return $default(_that.mixerState,_that.touchedParams);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( mixer_api.UiMixerState? mixerState,  ISet<(int, String)> touchedParams)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( mixer_api.UiMixerState? mixerState,  ISet<(int, String)> touchedParams,  IMap<int, double> trackMagnitudes,  IMap<int, double> busMagnitudes,  double masterMagnitude)  $default,) {final _that = this;
 switch (_that) {
 case _MixerEditorState():
-return $default(_that.mixerState,_that.touchedParams);case _:
+return $default(_that.mixerState,_that.touchedParams,_that.trackMagnitudes,_that.busMagnitudes,_that.masterMagnitude);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -204,10 +207,10 @@ return $default(_that.mixerState,_that.touchedParams);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( mixer_api.UiMixerState? mixerState,  ISet<(int, String)> touchedParams)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( mixer_api.UiMixerState? mixerState,  ISet<(int, String)> touchedParams,  IMap<int, double> trackMagnitudes,  IMap<int, double> busMagnitudes,  double masterMagnitude)?  $default,) {final _that = this;
 switch (_that) {
 case _MixerEditorState() when $default != null:
-return $default(_that.mixerState,_that.touchedParams);case _:
+return $default(_that.mixerState,_that.touchedParams,_that.trackMagnitudes,_that.busMagnitudes,_that.masterMagnitude);case _:
   return null;
 
 }
@@ -219,11 +222,14 @@ return $default(_that.mixerState,_that.touchedParams);case _:
 
 
 class _MixerEditorState implements MixerEditorState {
-  const _MixerEditorState({this.mixerState, this.touchedParams = const ISetConst(<(int, String)>{})});
+  const _MixerEditorState({this.mixerState, this.touchedParams = const ISetConst(<(int, String)>{}), this.trackMagnitudes = const IMapConst<int, double>({}), this.busMagnitudes = const IMapConst<int, double>({}), this.masterMagnitude = 0.0});
   
 
 @override final  mixer_api.UiMixerState? mixerState;
 @override@JsonKey() final  ISet<(int, String)> touchedParams;
+@override@JsonKey() final  IMap<int, double> trackMagnitudes;
+@override@JsonKey() final  IMap<int, double> busMagnitudes;
+@override@JsonKey() final  double masterMagnitude;
 
 /// Create a copy of MixerEditorState
 /// with the given fields replaced by the non-null parameter values.
@@ -235,16 +241,16 @@ _$MixerEditorStateCopyWith<_MixerEditorState> get copyWith => __$MixerEditorStat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _MixerEditorState&&(identical(other.mixerState, mixerState) || other.mixerState == mixerState)&&const DeepCollectionEquality().equals(other.touchedParams, touchedParams));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _MixerEditorState&&(identical(other.mixerState, mixerState) || other.mixerState == mixerState)&&const DeepCollectionEquality().equals(other.touchedParams, touchedParams)&&(identical(other.trackMagnitudes, trackMagnitudes) || other.trackMagnitudes == trackMagnitudes)&&(identical(other.busMagnitudes, busMagnitudes) || other.busMagnitudes == busMagnitudes)&&(identical(other.masterMagnitude, masterMagnitude) || other.masterMagnitude == masterMagnitude));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,mixerState,const DeepCollectionEquality().hash(touchedParams));
+int get hashCode => Object.hash(runtimeType,mixerState,const DeepCollectionEquality().hash(touchedParams),trackMagnitudes,busMagnitudes,masterMagnitude);
 
 @override
 String toString() {
-  return 'MixerEditorState(mixerState: $mixerState, touchedParams: $touchedParams)';
+  return 'MixerEditorState(mixerState: $mixerState, touchedParams: $touchedParams, trackMagnitudes: $trackMagnitudes, busMagnitudes: $busMagnitudes, masterMagnitude: $masterMagnitude)';
 }
 
 
@@ -255,7 +261,7 @@ abstract mixin class _$MixerEditorStateCopyWith<$Res> implements $MixerEditorSta
   factory _$MixerEditorStateCopyWith(_MixerEditorState value, $Res Function(_MixerEditorState) _then) = __$MixerEditorStateCopyWithImpl;
 @override @useResult
 $Res call({
- mixer_api.UiMixerState? mixerState, ISet<(int, String)> touchedParams
+ mixer_api.UiMixerState? mixerState, ISet<(int, String)> touchedParams, IMap<int, double> trackMagnitudes, IMap<int, double> busMagnitudes, double masterMagnitude
 });
 
 
@@ -272,11 +278,14 @@ class __$MixerEditorStateCopyWithImpl<$Res>
 
 /// Create a copy of MixerEditorState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? mixerState = freezed,Object? touchedParams = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? mixerState = freezed,Object? touchedParams = null,Object? trackMagnitudes = null,Object? busMagnitudes = null,Object? masterMagnitude = null,}) {
   return _then(_MixerEditorState(
 mixerState: freezed == mixerState ? _self.mixerState : mixerState // ignore: cast_nullable_to_non_nullable
 as mixer_api.UiMixerState?,touchedParams: null == touchedParams ? _self.touchedParams : touchedParams // ignore: cast_nullable_to_non_nullable
-as ISet<(int, String)>,
+as ISet<(int, String)>,trackMagnitudes: null == trackMagnitudes ? _self.trackMagnitudes : trackMagnitudes // ignore: cast_nullable_to_non_nullable
+as IMap<int, double>,busMagnitudes: null == busMagnitudes ? _self.busMagnitudes : busMagnitudes // ignore: cast_nullable_to_non_nullable
+as IMap<int, double>,masterMagnitude: null == masterMagnitude ? _self.masterMagnitude : masterMagnitude // ignore: cast_nullable_to_non_nullable
+as double,
   ));
 }
 

@@ -165,18 +165,9 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                     },
                     onTapUp: (details) async {
                       if (placementState.isPlacing) {
-                        final result = await ref
+                        await ref
                             .read(clipPlacementProvider.notifier)
                             .confirmPlacement();
-                        if (result.isErr() && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                (result as Error<void>).toErrorMessage(),
-                              ),
-                            ),
-                          );
-                        }
                         return;
                       }
 
@@ -201,7 +192,8 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                               gridSize: gridSize,
                               tempo: tempo ?? 120,
                               sampleRate: safeSampleRate,
-                              scrollController: widget.horizontalScrollController,
+                              scrollController:
+                                  widget.horizontalScrollController,
                               viewportWidth: constraints.maxWidth,
                             ),
                           );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -320,6 +321,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
         );
       } catch (e) {
         debugPrint('Error playing note on: $e');
+        ref.read(notificationProvider.notifier).error(e);
       }
     }
   }
@@ -337,6 +339,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
         );
       } catch (e) {
         debugPrint('Error playing note off: $e');
+        ref.read(notificationProvider.notifier).error(e);
       }
     }
   }

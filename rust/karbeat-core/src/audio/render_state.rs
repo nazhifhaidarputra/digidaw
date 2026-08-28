@@ -10,6 +10,7 @@ use crate::shared::id::*;
 use hashbrown::HashMap;
 use karbeat_utils::math::is_power_of_two;
 use karbeat_utils::types::NormalizedF64;
+use slab::Slab;
 
 // =============================================================================
 // Audio Thread Owned Plugin State
@@ -33,9 +34,11 @@ pub struct AudioEffectInstance {
 /// This is managed via AudioCommand, NOT cloned from ApplicationState
 #[derive(Default, Clone)]
 pub struct AudioPluginState {
-    /// Generator plugins stored as an arena. Index = GeneratorId as usize.
-    /// `Option` allows us to "remove" generators without shifting the indices of others.
-    pub generators: Vec<Option<AudioGeneratorInstance>>,
+    /// Generator plugins stored in a compact arena.
+    pub generators: Slab<AudioGeneratorInstance>,
+
+    /// Maps stable project IDs to the corresponding arena entries.
+    generator_keys: HashMap<GeneratorId, usize>,
 
     /// Effect chain per track. Index = TrackId as usize.
     /// Empty tracks simply hold an empty Vec, avoiding `Option` overhead.
@@ -53,31 +56,43 @@ impl AudioPluginState {
     // Generators
     // ==========================================
 
-    /// Safely insert a generator, expanding the vector if the ID is out of bounds
-    pub fn insert_generator(&mut self, id_index: usize, instance: AudioGeneratorInstance) {
-        if id_index >= self.generators.len() {
-            self.generators.resize_with(id_index + 1, || None);
+    /// Insert a generator or replace the existing instance with the same ID.
+    pub fn insert_generator(&mut self, instance: AudioGeneratorInstance) {
+        if let Some(&key) = self.generator_keys.get(&instance.id) {
+            self.generators[key] = instance;
+            return;
         }
-        self.generators[id_index] = Some(instance);
+
+        let id = instance.id;
+        let key = self.generators.insert(instance);
+        self.generator_keys.insert(id, key);
     }
 
-    /// Remove a generator without shifting other elements
-    pub fn remove_generator(&mut self, id_index: usize) {
-        if let Some(slot) = self.generators.get_mut(id_index) {
-            *slot = None;
+    /// Remove a generator without shifting other arena entries.
+    pub fn remove_generator(&mut self, id: GeneratorId) {
+        if let Some(key) = self.generator_keys.remove(&id) {
+            self.generators.remove(key);
         }
+    }
+
+    /// Remove every generator and its ID-to-arena-key mapping.
+    pub fn clear_generators(&mut self) {
+        self.generators.clear();
+        self.generator_keys.clear();
     }
 
     /// Get a mutable reference to a specific generator
     #[inline]
-    pub fn get_generator_mut(&mut self, id_index: usize) -> Option<&mut AudioGeneratorInstance> {
-        self.generators.get_mut(id_index).and_then(|g| g.as_mut())
+    pub fn get_generator_mut(&mut self, id: GeneratorId) -> Option<&mut AudioGeneratorInstance> {
+        let key = *self.generator_keys.get(&id)?;
+        self.generators.get_mut(key)
     }
 
     /// Get an immutable reference to a specific generator
     #[inline]
-    pub fn get_generator(&self, id_index: usize) -> Option<&AudioGeneratorInstance> {
-        self.generators.get(id_index).and_then(|g| g.as_ref())
+    pub fn get_generator(&self, id: GeneratorId) -> Option<&AudioGeneratorInstance> {
+        let key = *self.generator_keys.get(&id)?;
+        self.generators.get(key)
     }
 
     // ==========================================
@@ -180,11 +195,6 @@ impl AudioAutomationLane {
             return *self.default_value;
         }
         *interpolate_points(&self.points, time_ticks)
-    }
-
-    #[inline]
-    fn denormalize(&self, normalized: NormalizedF64) -> f64 {
-        normalized.to_range(self.min, self.max)
     }
 }
 

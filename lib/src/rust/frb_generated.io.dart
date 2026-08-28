@@ -528,6 +528,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
 
   @protected
+  List<UiSidechainSource> dco_decode_list_ui_sidechain_source(dynamic raw);
+
+  @protected
   MasterAutomationTargetDto dco_decode_master_automation_target_dto(
     dynamic raw,
   );
@@ -839,6 +842,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode dco_decode_ui_routing_node(dynamic raw);
+
+  @protected
+  UiSidechainSource dco_decode_ui_sidechain_source(dynamic raw);
 
   @protected
   UiSourceType dco_decode_ui_source_type(dynamic raw);
@@ -1427,6 +1433,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiSidechainSource> sse_decode_list_ui_sidechain_source(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   MasterAutomationTargetDto sse_decode_master_automation_target_dto(
     SseDeserializer deserializer,
   );
@@ -1794,6 +1805,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer);
+
+  @protected
+  UiSidechainSource sse_decode_ui_sidechain_source(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
@@ -2487,6 +2503,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_sidechain_source(
+    List<UiSidechainSource> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_master_automation_target_dto(
     MasterAutomationTargetDto self,
     SseSerializer serializer,
@@ -2937,6 +2959,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_routing_node(UiRoutingNode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_sidechain_source(
+    UiSidechainSource self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);

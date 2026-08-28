@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashSet};
 
 use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
@@ -144,6 +144,23 @@ pub struct Clip {
     pub time: ClipTimeUnit,
 }
 
+fn clip_type_name(clip: &Clip) -> &'static str {
+    match clip.source {
+        Some(DawSource::Audio(_)) => "audio",
+        Some(DawSource::Midi(_)) => "MIDI",
+        Some(DawSource::Automation(_)) => "automation",
+        None => "untyped",
+    }
+}
+
+fn track_type_name(track_type: &TrackType) -> &'static str {
+    match track_type {
+        TrackType::Audio => "audio",
+        TrackType::Midi => "MIDI",
+        TrackType::Automation => "automation",
+    }
+}
+
 impl PartialEq for Clip {
     fn eq(&self, other: &Self) -> bool {
         self.time.start_time_raw() == other.time.start_time_raw() && self.id == other.id
@@ -240,7 +257,9 @@ impl ApplicationState {
             .with_context(|| "Track not found")?;
         if !target.accepts_clip(clip) {
             return Err(anyhow::anyhow!(
-                "Warning: Mismatched Clip Source for Track Type"
+                "Cannot move {} clip to {} track",
+                clip_type_name(clip),
+                track_type_name(&target.track_type)
             ));
         }
 
@@ -545,14 +564,45 @@ impl ApplicationState {
         clip_ids: Vec<ClipId>,
         delta: i64,
     ) -> Result<Vec<Clip>, String> {
-        let target_type = self
-            .tracks
-            .get(target_track_id)
-            .ok_or("Target track not found")?
-            .track_type
-            .clone();
+        // Validate the complete operation before mutating anything. A batch is
+        // atomic: incompatible or missing clips must fail instead of silently
+        // returning a partial/empty success.
+        let requested_ids: HashSet<_> = clip_ids.into_iter().collect();
+        let ids_to_move = {
+            let source_track = self
+                .tracks
+                .get(source_track_id)
+                .ok_or("Source track not found")?;
+            let target_track = self
+                .tracks
+                .get(target_track_id)
+                .ok_or("Target track not found")?;
 
-        let mut ids_to_move = Vec::with_capacity(clip_ids.len());
+            for id in &requested_ids {
+                if !source_track.clips.contains(id) {
+                    return Err(format!("Clip {id:?} not found in source track"));
+                }
+
+                let clip = self
+                    .clips_pool
+                    .get(*id)
+                    .ok_or_else(|| format!("Clip {id:?} not found in global pool"))?;
+                if !target_track.accepts_clip(clip) {
+                    return Err(format!(
+                        "Cannot move {} clip to {} track",
+                        clip_type_name(clip),
+                        track_type_name(&target_track.track_type),
+                    ));
+                }
+            }
+
+            source_track
+                .clips
+                .iter()
+                .filter(|id| requested_ids.contains(id))
+                .copied()
+                .collect::<Vec<_>>()
+        };
 
         // 1. Extract clips from the source track safely
         {
@@ -560,27 +610,6 @@ impl ApplicationState {
                 .tracks
                 .get_mut(source_track_id)
                 .ok_or("Source track not found")?;
-
-            for id in source_track.clips.iter().copied() {
-                if clip_ids.contains(&id) {
-                    let Some(clip) = self.clips_pool.get(id) else {
-                        continue;
-                    };
-                    // Check compatibility if moving cross-track
-                    if source_track_id != target_track_id {
-                        let is_compatible = match (&target_type, &clip.source) {
-                            (TrackType::Audio, Some(DawSource::Audio(_))) => true,
-                            (TrackType::Midi, Some(DawSource::Midi(_))) => true,
-                            (TrackType::Automation, Some(DawSource::Automation(_))) => true,
-                            _ => false,
-                        };
-                        if !is_compatible {
-                            continue; // Skip incompatible clips
-                        }
-                    }
-                    ids_to_move.push(id);
-                }
-            }
 
             // Remove extracted clips in O(N) without multiple memory shifts
             source_track.clips.retain(|id| !ids_to_move.contains(id));

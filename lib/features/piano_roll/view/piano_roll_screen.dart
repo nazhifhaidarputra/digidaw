@@ -6,6 +6,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
@@ -95,6 +96,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
         );
       } catch (e) {
         AppLogger.error("Failed to play preview note: $e");
+        ref.read(notificationProvider.notifier).error(e);
       }
     }
   }
@@ -113,6 +115,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
         );
       } catch (e) {
         AppLogger.error("Failed to play preview note: $e");
+        ref.read(notificationProvider.notifier).error(e);
       }
     }
   }
@@ -479,6 +482,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     );
                                   } catch (e) {
                                     AppLogger.error(e.toString());
+                                    ref
+                                        .read(notificationProvider.notifier)
+                                        .error(e);
                                   }
                                 }
                               },
@@ -1187,6 +1193,7 @@ class _PianoRollToolbar extends ConsumerWidget {
                     );
                   } catch (e) {
                     AppLogger.error("Failed to hot-swap generator: $e");
+                    ref.read(notificationProvider.notifier).error(e);
                   }
                 }
               },
@@ -1214,6 +1221,7 @@ class _PianoRollToolbar extends ConsumerWidget {
       );
     } catch (e) {
       AppLogger.error('Pattern playback error: $e');
+      ref.read(notificationProvider.notifier).error(e);
     }
   }
 }
@@ -1415,6 +1423,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
         );
       } catch (e) {
         AppLogger.error(e.toString());
+        ref.read(notificationProvider.notifier).error(e);
       }
     }
   }
@@ -1536,6 +1545,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
                   );
                 } catch (e) {
                   AppLogger.error(e.toString());
+                  ref.read(notificationProvider.notifier).error(e);
                 }
               }
 
@@ -1779,6 +1789,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
         );
       } catch (e) {
         AppLogger.error(e.toString());
+        ref.read(notificationProvider.notifier).error(e);
       }
     }
   }

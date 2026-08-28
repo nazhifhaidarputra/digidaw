@@ -9,11 +9,11 @@ use smallvec::SmallVec;
 use triple_buffer::Input;
 
 use crate::{
-    DOWNBEAT_BYTES, OFFBEAT_BYTES,
     audio::{engine::helper::load_internal_wav, event::PluginTarget},
     commands::{MixerChannelSnapshot, MixerChannelTarget},
     core::project::{AudioWaveform, MixerChannel, MixerChannelParams},
     shared::*,
+    DOWNBEAT_BYTES, OFFBEAT_BYTES,
 };
 
 pub const MAX_AMPLITUDE: f64 = 1.99526231497;
@@ -172,15 +172,32 @@ impl DelayLine {
         }
 
         let buf_len = self.buffer.len();
-        for i in (0..buffer.len()).step_by(channels) {
-            for c in 0..channels {
-                let delay_idx = self.write_pos + c;
-                let out = self.buffer[delay_idx];
-                self.buffer[delay_idx] = buffer[i + c];
-                buffer[i + c] = out;
+        for frame in buffer.chunks_mut(channels) {
+            let delayed_frame = &mut self.buffer[self.write_pos..self.write_pos + frame.len()];
+            for (sample, delayed_sample) in frame.iter_mut().zip(delayed_frame) {
+                std::mem::swap(sample, delayed_sample);
             }
             self.write_pos = (self.write_pos + channels) % buf_len;
         }
+    }
+}
+
+#[cfg(test)]
+mod delay_line_tests {
+    use super::DelayLine;
+
+    #[test]
+    fn process_block_delays_interleaved_frames() {
+        let mut delay = DelayLine::default();
+        delay.set_delay(2, 2);
+
+        let mut first_block = [1.0, 2.0, 3.0, 4.0];
+        delay.process_block(&mut first_block, 2);
+        assert_eq!(first_block, [0.0; 4]);
+
+        let mut second_block = [5.0, 6.0, 7.0, 8.0];
+        delay.process_block(&mut second_block, 2);
+        assert_eq!(second_block, [1.0, 2.0, 3.0, 4.0]);
     }
 }
 
@@ -292,6 +309,8 @@ impl Default for MetronomeState {
 pub struct AudioMixerChannelValues {
     pub volume: Param<f32>,
     pub pan: Param<f32>,
+    /// Smoothed post-fader peak magnitude, expressed as linear amplitude.
+    pub magnitude: f32,
     pub mute: bool,
     pub solo: bool,
     pub inverted_phase: bool,
@@ -318,6 +337,7 @@ impl Default for AudioMixerChannelValues {
                 1.0,
                 0.01,
             ),
+            magnitude: 0.0,
             mute: false,
             solo: false,
             inverted_phase: false,
@@ -351,6 +371,7 @@ impl AudioMixerChannelValues {
                 1.0,
                 0.01,
             ),
+            magnitude: 0.0,
             mute,
             solo,
             inverted_phase,
@@ -366,6 +387,27 @@ impl AudioMixerChannelValues {
         ch.solo = self.solo;
         ch.inverted_phase = self.inverted_phase;
         ch
+    }
+
+    /// Capture the loudest finite sample in a processed block. The magnitude
+    /// is decayed once per audio block by the engine, producing a fast peak
+    /// response with a readable release rather than a flickering raw value.
+    pub fn observe_magnitude(&mut self, buffer: &[f32]) {
+        let block_peak = buffer.iter().fold(0.0_f32, |peak, sample| {
+            if sample.is_finite() {
+                peak.max(sample.abs())
+            } else {
+                peak
+            }
+        });
+        self.magnitude = self.magnitude.max(block_peak);
+    }
+
+    pub fn decay_magnitude(&mut self, release_factor: f32) {
+        self.magnitude *= release_factor.clamp(0.0, 1.0);
+        if self.magnitude < 1.0e-6 {
+            self.magnitude = 0.0;
+        }
     }
 }
 
@@ -416,11 +458,38 @@ impl AudioMixerState {
         };
         MixerChannelSnapshot {
             target,
+            magnitude: values.magnitude,
             volume: values.volume.get(),
             pan: values.pan.get(),
             mute: values.mute,
             solo: values.solo,
             inverted_phase: values.inverted_phase,
         }
+    }
+}
+
+#[cfg(test)]
+mod mixer_meter_tests {
+    use super::*;
+
+    #[test]
+    fn channel_magnitude_tracks_peak_and_ignores_invalid_samples() {
+        let mut channel = AudioMixerChannelValues::default();
+
+        channel.observe_magnitude(&[0.1, -0.75, f32::NAN, 0.5]);
+        assert!((channel.magnitude - 0.75).abs() < f32::EPSILON);
+
+        channel.observe_magnitude(&[0.2, -0.1]);
+        assert!((channel.magnitude - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn channel_magnitude_decays_and_is_included_in_snapshot() {
+        let mut mixer = AudioMixerState::default();
+        mixer.master.magnitude = 0.8;
+        mixer.master.decay_magnitude(0.5);
+
+        let snapshot = mixer.snapshot(MixerChannelTarget::Master);
+        assert!((snapshot.magnitude - 0.4).abs() < f32::EPSILON);
     }
 }

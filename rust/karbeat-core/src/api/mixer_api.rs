@@ -1,6 +1,3 @@
-use karbeat_plugin_types::ParameterSpec;
-use karbeat_utils::types::NormalizedF64;
-
 use crate::{
     audio::{engine::MixerTelemetrySnapshot, event::PluginTarget},
     commands::{AudioCommand, EffectTarget, MixerChannelTarget},
@@ -14,6 +11,14 @@ use crate::{
     },
     shared::id::*,
 };
+use karbeat_plugin_types::ParameterSpec;
+
+#[derive(Clone, Debug)]
+pub struct SidechainSource {
+    pub source: RoutingNode,
+    pub name: String,
+    pub send_level: Option<f32>,
+}
 
 /// **GETTER: Fetch the mixer state from application state and map it to T value**
 pub fn get_mixer_state<T, F>(ctx: &DawContext, mapper: F) -> T
@@ -403,79 +408,114 @@ pub fn set_mixer_telemetry_subs(ctx: &mut DawContext, active: bool) -> anyhow::R
 
 /// Get all track channels and bus channels, and also
 /// its current sidechain properties
-pub fn get_available_sidechainable_channels(
+pub fn get_sidechain_sources(
     ctx: &DawContext,
     sidechain_plugin: PluginTarget,
-) -> Vec<RoutingConnection> {
+) -> Vec<SidechainSource> {
     let sidechain_route = SidechainRoute::from(sidechain_plugin);
     let destination = RoutingNode::PluginSidechain(sidechain_route);
+    let owner = sidechain_route.owner_node(&ctx.app_state.tracks);
 
-    let mut available_channels = Vec::new();
+    let mut available_sources = Vec::new();
 
-    // Helper closure to check if a routing connection already exists
-    let get_existing_connection = |src: RoutingNode| {
+    let get_existing_level = |source: RoutingNode| {
         ctx.app_state
             .mixer
             .routing
             .iter()
-            .find(|rc| rc.source == src && rc.destination == destination)
-            .cloned()
+            .find(|connection| connection.source == source && connection.destination == destination)
+            .map(|connection| connection.send_level)
     };
 
-    for track_id in ctx.app_state.tracks.keys() {
+    let can_add_source = |source: RoutingNode| {
+        let mut mixer = ctx.app_state.mixer.clone();
+        mixer
+            .add_routing(
+                RoutingConnection::new_send(source, destination, 1.0),
+                &ctx.app_state.tracks,
+            )
+            .is_ok()
+    };
+
+    for (track_id, track) in &ctx.app_state.tracks {
         let source = RoutingNode::Track(track_id);
+        if owner == Some(source) {
+            continue;
+        }
 
-        if let Some(existing_conn) = get_existing_connection(source) {
-            available_channels.push(existing_conn);
-        } else {
-            available_channels.push(RoutingConnection::new_send(source, destination, 0.0));
+        let send_level = get_existing_level(source);
+        if send_level.is_some() || can_add_source(source) {
+            available_sources.push(SidechainSource {
+                source,
+                name: track.name.clone(),
+                send_level,
+            });
         }
     }
-    for bus_id in ctx.app_state.mixer.buses.keys() {
+
+    for (bus_id, bus) in &ctx.app_state.mixer.buses {
         let source = RoutingNode::Bus(bus_id);
+        if owner == Some(source) {
+            continue;
+        }
 
-        if let Some(existing_conn) = get_existing_connection(source) {
-            available_channels.push(existing_conn);
-        } else {
-            available_channels.push(RoutingConnection::new_send(source, destination, 0.0));
+        let send_level = get_existing_level(source);
+        if send_level.is_some() || can_add_source(source) {
+            available_sources.push(SidechainSource {
+                source,
+                name: bus.name.clone(),
+                send_level,
+            });
         }
     }
-    available_channels
+
+    available_sources.sort_by(|a, b| a.name.cmp(&b.name));
+    available_sources
 }
 
-/// Update the sidechain properties of the sidechain source [target] in [this_plugin]
-///
-/// target should be a valid routing connection with the type of PluginSidechain
-pub fn upsert_sidechain_prop_of_plugin(
+/// Add/update a sidechain send when `send_level` is `Some`, or remove it when
+/// `send_level` is `None`.
+pub fn set_sidechain_source(
     ctx: &mut DawContext,
     this_plugin: PluginTarget,
     from: RoutingNode,
-    send_level: Option<NormalizedF64>,
+    send_level: Option<f32>,
 ) -> anyhow::Result<()> {
     let sidechain_route = SidechainRoute::from(this_plugin);
     let routing_node_dest = RoutingNode::PluginSidechain(sidechain_route);
 
-    let existing_conn_idx = ctx
-        .app_state
-        .mixer
-        .routing
-        .iter()
-        .position(|rc| rc.source == from && rc.destination == routing_node_dest);
+    if sidechain_route.owner_node(&ctx.app_state.tracks) == Some(from) {
+        return Err(anyhow::anyhow!(
+            "A plugin cannot use its own mixer channel as a sidechain source"
+        ));
+    }
+    if matches!(from, RoutingNode::Master | RoutingNode::PluginSidechain(_)) {
+        return Err(anyhow::anyhow!("Invalid sidechain source"));
+    }
 
-    if let Some(idx) = existing_conn_idx {
-        if let Some(sl) = send_level {
-            ctx.app_state.mixer.routing[idx].send_level = sl.get() as f32;
+    match send_level {
+        Some(level) => {
+            let connection =
+                RoutingConnection::new_send(from, routing_node_dest, level.clamp(0.0, 1.0));
+            ctx.app_state
+                .mixer
+                .update_routing(connection, &ctx.app_state.tracks)?;
         }
-    } else {
-        let level = send_level.map(|v| v.get() as f32).unwrap_or(0.85);
-        let new_conn = RoutingConnection::new_send(from, routing_node_dest, level);
-
-        ctx.app_state
-            .mixer
-            .add_routing(new_conn, &ctx.app_state.tracks)?;
+        None => {
+            let exists = ctx.app_state.mixer.routing.iter().any(|connection| {
+                connection.source == from
+                    && connection.destination == routing_node_dest
+                    && connection.is_send
+            });
+            if exists {
+                ctx.app_state
+                    .mixer
+                    .remove_routing(from, routing_node_dest, true)?;
+            }
+        }
     }
 
     let routings = ctx.app_state.mixer.routing.clone().into_boxed_slice();
-    ctx.send_audio_command(AudioCommand::UpdateRouting { routing: routings })?;
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing: routings });
     Ok(())
 }

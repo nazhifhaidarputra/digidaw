@@ -3,10 +3,13 @@
 #[cfg(test)]
 mod tests {
     use crate::api::mixer_api;
+    use crate::audio::event::PluginTarget;
 
     use crate::core::project::mixer::{RoutingConnection, RoutingNode};
     use crate::shared::id::{BusId, EffectId, TrackId};
-    use crate::test::helpers::{make_ctx, make_seeded_ctx, param_eq_registry_id};
+    use crate::test::helpers::{
+        make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
+    };
 
     #[test]
     fn get_mixer_state_returns_default_on_empty() {
@@ -177,6 +180,28 @@ mod tests {
     }
 
     #[test]
+    fn sidechain_compressor_is_available_in_the_default_registry() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            audio_id,
+            sidechain_compressor_registry_id(),
+        )
+        .unwrap();
+
+        let effect = ctx.app_state.mixer.channels[audio_id]
+            .channel
+            .effects
+            .last()
+            .unwrap();
+        assert_eq!(
+            effect.instance.registry_id,
+            sidechain_compressor_registry_id()
+        );
+        assert_eq!(effect.instance.name, "DigiDAW Sidechain Compressor");
+    }
+
+    #[test]
     fn remove_effect_from_mixer_channel_missing_effect_returns_err() {
         let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
         let bogus_effect = EffectId::from(99999);
@@ -242,5 +267,125 @@ mod tests {
         let ctx = make_ctx();
         let effects: Vec<u32> = mixer_api::get_master_bus_populated(&ctx, |e| e.id.to_u32());
         assert!(effects.is_empty());
+    }
+
+    #[test]
+    fn sidechain_sources_exclude_the_effect_owner_and_support_crud() {
+        let (mut ctx, target_track, source_track, _pat_id) = make_seeded_ctx();
+        mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            target_track,
+            param_eq_registry_id(),
+        )
+        .unwrap();
+        let effect_id = ctx.app_state.mixer.channels[target_track]
+            .channel
+            .effects
+            .last()
+            .unwrap()
+            .id;
+        let target = PluginTarget::TrackEffect(target_track, effect_id);
+
+        let sources = mixer_api::get_sidechain_sources(&ctx, target);
+        assert!(
+            sources
+                .iter()
+                .any(|item| item.source == RoutingNode::Track(source_track))
+        );
+        assert!(
+            !sources
+                .iter()
+                .any(|item| item.source == RoutingNode::Track(target_track))
+        );
+
+        mixer_api::set_sidechain_source(
+            &mut ctx,
+            target,
+            RoutingNode::Track(source_track),
+            Some(0.5),
+        )
+        .unwrap();
+        let sources = mixer_api::get_sidechain_sources(&ctx, target);
+        let source = sources
+            .iter()
+            .find(|item| item.source == RoutingNode::Track(source_track))
+            .unwrap();
+        assert_eq!(source.send_level, Some(0.5));
+
+        mixer_api::set_sidechain_source(
+            &mut ctx,
+            target,
+            RoutingNode::Track(source_track),
+            Some(0.25),
+        )
+        .unwrap();
+        let matching_routes = ctx
+            .app_state
+            .mixer
+            .routing
+            .iter()
+            .filter(|connection| {
+                connection.source == RoutingNode::Track(source_track)
+                    && matches!(connection.destination, RoutingNode::PluginSidechain(_))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(matching_routes.len(), 1);
+        assert_eq!(matching_routes[0].send_level, 0.25);
+
+        mixer_api::set_sidechain_source(&mut ctx, target, RoutingNode::Track(source_track), None)
+            .unwrap();
+        assert!(!ctx.app_state.mixer.routing.iter().any(|connection| {
+            connection.source == RoutingNode::Track(source_track)
+                && matches!(connection.destination, RoutingNode::PluginSidechain(_))
+        }));
+    }
+
+    #[test]
+    fn sidechain_sources_reject_self_routes_and_feedback_cycles() {
+        let (mut ctx, target_track, _source_track, _pat_id) = make_seeded_ctx();
+        mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            target_track,
+            param_eq_registry_id(),
+        )
+        .unwrap();
+        let effect_id = ctx.app_state.mixer.channels[target_track]
+            .channel
+            .effects
+            .last()
+            .unwrap()
+            .id;
+        let target = PluginTarget::TrackEffect(target_track, effect_id);
+
+        assert!(
+            mixer_api::set_sidechain_source(
+                &mut ctx,
+                target,
+                RoutingNode::Track(target_track),
+                Some(1.0),
+            )
+            .is_err()
+        );
+
+        let bus_id = mixer_api::create_bus(&mut ctx, "Downstream Bus".to_string());
+        mixer_api::set_routing(
+            &mut ctx,
+            RoutingConnection::new_send(
+                RoutingNode::Track(target_track),
+                RoutingNode::Bus(bus_id),
+                1.0,
+            ),
+        )
+        .unwrap();
+
+        assert!(
+            !mixer_api::get_sidechain_sources(&ctx, target)
+                .iter()
+                .any(|item| item.source == RoutingNode::Bus(bus_id))
+        );
+        assert!(
+            mixer_api::set_sidechain_source(&mut ctx, target, RoutingNode::Bus(bus_id), Some(1.0),)
+                .is_err()
+        );
     }
 }

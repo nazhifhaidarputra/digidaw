@@ -798,18 +798,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                             trackType: track.trackType,
                                           );
 
-                                      if (result.isErr() && context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              (result as Error<void>)
-                                                  .toErrorMessage(),
-                                            ),
-                                          ),
-                                        );
-                                      } else if (result.isOk()) {
+                                      if (result.isOk()) {
                                         AppLogger.info("Paste clip");
                                         setState(
                                           () => _lastRightClickPos = null,
@@ -825,7 +814,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                       : const ClampingScrollPhysics(),
                                   slivers: [
                                     SliverToBoxAdapter(
-                                      child: _buildMasterTimelineAutomationLanes(),
+                                      child:
+                                          _buildMasterTimelineAutomationLanes(),
                                     ),
                                     _buildBusAutomationTimelineSection(),
                                     _buildTimelineTrackWidget(),
@@ -925,20 +915,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       .read(trackListStateProvider)
                       .selectedTrackId;
                   if (trackId == null) return;
-                  final result = await ref
+                  await ref
                       .read(trackListStateProvider.notifier)
                       .copySelectedClips(
                         trackId: trackId,
                         clipIds: selectedClipIds.toList(),
                       );
-                  if (!context.mounted) return;
-                  if (result.isErr()) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text((result as Error<void>).toErrorMessage()),
-                      ),
-                    );
-                  }
                 },
               ),
               DawContextAction(
@@ -949,21 +931,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       .read(trackListStateProvider)
                       .selectedTrackId;
                   if (trackId == null) return;
-                  final result = await ref
+                  await ref
                       .read(trackListStateProvider.notifier)
                       .cutSelectedClips(
                         trackId: trackId,
                         clipIds: selectedClipIds.toList(),
                       );
                   ref.read(trackListStateProvider.notifier).deselectAllClips();
-                  if (!context.mounted) return;
-                  if (result.isErr()) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text((result as Error<void>).toErrorMessage()),
-                      ),
-                    );
-                  }
                 },
               ),
               DawContextAction(
@@ -1118,9 +1092,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 loading: () {},
                 error: (error, stack) {
                   AppLogger.error("Error adding audio track: $error");
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(error.toString())));
                 },
               );
             },
@@ -1276,8 +1247,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   Widget _buildBusAutomationHeaderSection() {
     return Consumer(
       builder: (context, ref, _) {
-        final buses = ref.watch(projectProvider.select((s) => s.value?.mixer.buses));
-        if (buses == null || buses.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+        final buses = ref.watch(
+          projectProvider.select((s) => s.value?.mixer.buses),
+        );
+        if (buses == null || buses.isEmpty) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
 
         final busIds = buses.keys.toList()..sort();
 
@@ -1286,12 +1261,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           itemBuilder: (context, index) {
             final busId = busIds[index];
             final bus = buses[busId]!;
-            
+
             return Consumer(
               builder: (context, ref, _) {
                 final lanes = ref.watch(busAutomationProvider(busId)).toIList();
-                final isExpanded = ref.watch(busAutomationExpandedProvider(busId));
-                final trackColor = Colors.teal.shade400; // Distinct color for Buses
+                final isExpanded = ref.watch(
+                  busAutomationExpandedProvider(busId),
+                );
+                final trackColor =
+                    Colors.teal.shade400; // Distinct color for Buses
 
                 if (lanes.isEmpty) return const SizedBox.shrink();
 
@@ -1344,8 +1322,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   Widget _buildBusAutomationTimelineSection() {
     return Consumer(
       builder: (context, ref, _) {
-        final buses = ref.watch(projectProvider.select((s) => s.value?.mixer.buses));
-        if (buses == null || buses.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+        final buses = ref.watch(
+          projectProvider.select((s) => s.value?.mixer.buses),
+        );
+        if (buses == null || buses.isEmpty) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
 
         final busIds = buses.keys.toList()..sort();
         final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
@@ -1354,11 +1336,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           itemCount: busIds.length,
           itemBuilder: (context, index) {
             final busId = busIds[index];
-            
+
             return Consumer(
               builder: (context, ref, _) {
                 final lanes = ref.watch(busAutomationProvider(busId)).toIList();
-                final isExpanded = ref.watch(busAutomationExpandedProvider(busId));
+                final isExpanded = ref.watch(
+                  busAutomationExpandedProvider(busId),
+                );
                 final trackColor = Colors.teal.shade400;
 
                 if (lanes.isEmpty) return const SizedBox.shrink();

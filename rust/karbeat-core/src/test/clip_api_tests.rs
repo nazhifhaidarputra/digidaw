@@ -3,7 +3,11 @@
 #[cfg(test)]
 mod tests {
     use crate::api::clip_api;
-    use crate::core::project::clip::{ClipSourceType, ResizeEdge};
+    use crate::core::project::{
+        DawSource,
+        clip::{Clip, ClipSourceType, ClipTimeUnit, ResizeEdge},
+    };
+    use crate::shared::AudioSourceId;
     use crate::shared::id::{ClipId, TrackId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
@@ -14,6 +18,26 @@ mod tests {
     ) -> crate::core::project::clip::Clip {
         clip_api::add_clip(ctx, None, ClipSourceType::Midi, track_id, start)
             .expect("add_clip should succeed")
+    }
+
+    fn add_audio_clip(ctx: &mut crate::context::DawContext, track_id: TrackId, start: u64) -> Clip {
+        let app = &mut ctx.app_state;
+        let clip_id = app.clips_pool.insert_with_key(|id| Clip {
+            name: "test audio".to_string(),
+            id,
+            source: Some(DawSource::Audio(AudioSourceId::from(9999))),
+            time: ClipTimeUnit::Samples {
+                start_time: start,
+                loop_length: 48_000,
+                offset_start: 0,
+            },
+        });
+        app.tracks
+            .get_mut(track_id)
+            .expect("audio track should exist")
+            .add_clip(clip_id, &app.clips_pool)
+            .expect("audio track should accept audio clip");
+        app.clips_pool[clip_id].clone()
     }
 
     #[test]
@@ -103,6 +127,48 @@ mod tests {
         assert!(result.is_ok(), "{:?}", result.err());
         let new_start = result.unwrap().time.start_time_raw();
         assert_eq!(new_start, 9600);
+    }
+
+    #[test]
+    fn move_audio_clip_to_midi_track_returns_err_without_mutating() {
+        let (mut ctx, audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let clip = add_audio_clip(&mut ctx, audio_id, 24_000);
+
+        let result = clip_api::move_clip(&mut ctx, audio_id, midi_id, clip.id, 48_000);
+
+        let error = result.expect_err("audio-to-MIDI move must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot move audio clip to MIDI track")
+        );
+        assert!(ctx.app_state.tracks[audio_id].clips.contains(&clip.id));
+        assert!(!ctx.app_state.tracks[midi_id].clips.contains(&clip.id));
+        assert_eq!(
+            ctx.app_state.clips_pool[clip.id].time.start_time_raw(),
+            24_000
+        );
+    }
+
+    #[test]
+    fn batch_move_audio_clip_to_midi_track_is_atomic_error() {
+        let (mut ctx, audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let clip = add_audio_clip(&mut ctx, audio_id, 24_000);
+
+        let result = clip_api::batch_move_clips(&mut ctx, audio_id, midi_id, vec![clip.id], 24_000);
+
+        let error = result.expect_err("audio-to-MIDI batch move must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot move audio clip to MIDI track")
+        );
+        assert!(ctx.app_state.tracks[audio_id].clips.contains(&clip.id));
+        assert!(!ctx.app_state.tracks[midi_id].clips.contains(&clip.id));
+        assert_eq!(
+            ctx.app_state.clips_pool[clip.id].time.start_time_raw(),
+            24_000
+        );
     }
 
     #[test]

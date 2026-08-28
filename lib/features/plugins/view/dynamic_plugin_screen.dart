@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/features/plugins/abstract_plugin_screen.dart';
 import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dart';
@@ -84,6 +85,7 @@ class _DynamicPluginScreenState
       );
     } catch (e) {
       AppLogger.error('Error playing note on: $e');
+      ref.read(notificationProvider.notifier).error(e);
     }
   }
 
@@ -114,6 +116,7 @@ class _DynamicPluginScreenState
       );
     } catch (e) {
       AppLogger.error('Error playing note off: $e');
+      ref.read(notificationProvider.notifier).error(e);
     }
   }
 }

@@ -4,6 +4,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/core/services/serializer_service.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/shared/enums/global.dart';
@@ -26,7 +27,10 @@ part 'project_provider.freezed.dart';
 // Global Provider Export
 // ============================================================
 
-final projectProvider = AsyncNotifierProvider<ProjectNotifier, ApplicationDataStore>(ProjectNotifier.new);
+final projectProvider =
+    AsyncNotifierProvider<ProjectNotifier, ApplicationDataStore>(
+      ProjectNotifier.new,
+    );
 
 // ============================================================
 // Single Optimized Data Store (The Absolute Truth)
@@ -78,26 +82,38 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   }
 
   Future<void> newBlankProject() async {
-    state = const AsyncValue.loading();
-    final uiState = await serialization_api.newBlankProject(ctx: dawContext);
-    state = AsyncValue.data(await _fetchFullState(uiState, null));
+    try {
+      state = const AsyncValue.loading();
+      final uiState = await serialization_api.newBlankProject(ctx: dawContext);
+      state = AsyncValue.data(await _fetchFullState(uiState, null));
+    } catch (error, stackTrace) {
+      ref.notifyError(error, stackTrace: stackTrace);
+      rethrow;
+    }
   }
 
   /// Load a project from disk relying on the injected `SerializerService`.
   Future<Result<void>> loadProject(String path) async {
     final result = await AsyncValue.guard(() async {
       final serializer = ref.read(serializerServiceProvider);
-      final uiState = await serializer.loadProject(ctx: dawContext, pathName: path);
+      final uiState = await serializer.loadProject(
+        ctx: dawContext,
+        pathName: path,
+      );
       return _fetchFullState(uiState, path);
     });
     state = result;
-    return result.hasError ? Result.error(Exception(result.error.toString())) : Result.ok(null);
+    return result.hasError
+        ? ref.notifyErrorResult(Exception(result.error.toString()))
+        : Result.ok(null);
   }
 
   void removeGenerator(int genId) {
     if (state.hasValue) {
       final current = state.requireValue;
-      state = AsyncValue.data(current.copyWith(generators: current.generators.remove(genId)));
+      state = AsyncValue.data(
+        current.copyWith(generators: current.generators.remove(genId)),
+      );
     }
   }
 
@@ -110,7 +126,8 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
 
     final idsToDelete = notesToDeleteIds.toSet();
 
-    final notes = List<UiNote>.of(pattern.notes)..removeWhere((note) => idsToDelete.contains(note.id));
+    final notes = List<UiNote>.of(pattern.notes)
+      ..removeWhere((note) => idsToDelete.contains(note.id));
 
     upsertPattern(patternId, pattern.copyWith(notes: notes));
   }
@@ -124,7 +141,9 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   void removePattern(int patternId) {
     if (state.hasValue) {
       final current = state.requireValue;
-      state = AsyncValue.data(current.copyWith(patterns: current.patterns.remove(patternId)));
+      state = AsyncValue.data(
+        current.copyWith(patterns: current.patterns.remove(patternId)),
+      );
     }
   }
 
@@ -132,7 +151,9 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   void removeTrack(int trackId) {
     if (state.hasValue) {
       final current = state.requireValue;
-      state = AsyncValue.data(current.copyWith(tracks: current.tracks.remove(trackId)));
+      state = AsyncValue.data(
+        current.copyWith(tracks: current.tracks.remove(trackId)),
+      );
     }
   }
 
@@ -144,14 +165,16 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
 
       // Softly update the current path immediately
       if (state.hasValue) {
-        state = AsyncValue.data(state.requireValue.copyWith(currentFilePath: path));
+        state = AsyncValue.data(
+          state.requireValue.copyWith(currentFilePath: path),
+        );
       }
 
       AppLogger.info("Project saved successfully to $path");
       return Result.ok(null);
     } catch (e) {
       AppLogger.error("Failed to save project: $e");
-      return Result.error(Exception(e.toString()));
+      return ref.notifyErrorResult(Exception(e.toString()));
     }
   }
 
@@ -193,9 +216,12 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   void _upsertTrackMixChans(Map<int, mixer_api.UiMixerChannel> channels) {
     if (!state.hasValue) return;
     final current = state.requireValue;
-    final newChannels = Map<int, mixer_api.UiMixerChannel>.from(current.mixer.channels)
-    ..addAll(channels);
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(channels: newChannels)));
+    final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+      current.mixer.channels,
+    )..addAll(channels);
+    state = AsyncValue.data(
+      current.copyWith(mixer: current.mixer.copyWith(channels: newChannels)),
+    );
   }
 
   void _upsertBusMixChans(Map<int, mixer_api.UiBus> buses) {
@@ -203,13 +229,17 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     final current = state.requireValue;
     final newBuses = Map<int, mixer_api.UiBus>.from(current.mixer.buses)
       ..addAll(buses);
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(buses: newBuses)));
+    state = AsyncValue.data(
+      current.copyWith(mixer: current.mixer.copyWith(buses: newBuses)),
+    );
   }
 
   void _upsertMasterChan(mixer_api.UiMixerChannel channel) {
     if (!state.hasValue) return;
     final current = state.requireValue;
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(masterBus: channel)));
+    state = AsyncValue.data(
+      current.copyWith(mixer: current.mixer.copyWith(masterBus: channel)),
+    );
   }
 
   /// Upserts a single Track Mixer Channel in O(1) by copying the standard Map.
@@ -217,10 +247,14 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     if (!state.hasValue) return;
     final current = state.requireValue;
 
-    final newChannels = Map<int, mixer_api.UiMixerChannel>.from(current.mixer.channels);
+    final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+      current.mixer.channels,
+    );
     newChannels[trackId] = channel;
 
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(channels: newChannels)));
+    state = AsyncValue.data(
+      current.copyWith(mixer: current.mixer.copyWith(channels: newChannels)),
+    );
   }
 
   /// Removes a single Track Mixer Channel in O(1).
@@ -228,10 +262,14 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     if (!state.hasValue) return;
     final current = state.requireValue;
 
-    final newChannels = Map<int, mixer_api.UiMixerChannel>.from(current.mixer.channels);
+    final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+      current.mixer.channels,
+    );
     newChannels.remove(trackId);
 
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(channels: newChannels)));
+    state = AsyncValue.data(
+      current.copyWith(mixer: current.mixer.copyWith(channels: newChannels)),
+    );
   }
 
   /// Upserts a single Bus Mixer Channel in O(1).
@@ -242,7 +280,9 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     final newBuses = Map<int, mixer_api.UiBus>.from(current.mixer.buses);
     newBuses[busId] = bus;
 
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(buses: newBuses)));
+    state = AsyncValue.data(
+      current.copyWith(mixer: current.mixer.copyWith(buses: newBuses)),
+    );
   }
 
   /// Removes a single Bus Mixer Channel in O(1).
@@ -253,12 +293,16 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     final newBuses = Map<int, mixer_api.UiBus>.from(current.mixer.buses);
     newBuses.remove(busId);
 
-    state = AsyncValue.data(current.copyWith(mixer: current.mixer.copyWith(buses: newBuses)));
+    state = AsyncValue.data(
+      current.copyWith(mixer: current.mixer.copyWith(buses: newBuses)),
+    );
   }
 
   void updateTransport(UiTransportState transport) {
     if (state.hasValue) {
-      state = AsyncValue.data(state.requireValue.copyWith(transport: transport));
+      state = AsyncValue.data(
+        state.requireValue.copyWith(transport: transport),
+      );
     }
   }
 
@@ -266,27 +310,35 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   void upsertGenerator(int genId, UiGeneratorInstance updatedGen) {
     if (state.hasValue) {
       final current = state.requireValue;
-      state = AsyncValue.data(current.copyWith(generators: current.generators.add(genId, updatedGen)));
+      state = AsyncValue.data(
+        current.copyWith(generators: current.generators.add(genId, updatedGen)),
+      );
     }
   }
 
   void upsertPattern(int patternId, UiPattern newPattern) {
     if (!state.hasValue) return;
     final current = state.requireValue;
-    state = AsyncValue.data(current.copyWith(patterns: current.patterns.add(patternId, newPattern)));
+    state = AsyncValue.data(
+      current.copyWith(patterns: current.patterns.add(patternId, newPattern)),
+    );
   }
 
   void upsertPatternBulk(Map<int, UiPattern> updatedPatterns) {
     if (!state.hasValue) return;
     final current = state.requireValue;
-    state = AsyncValue.data(current.copyWith(patterns: current.patterns.addAll(updatedPatterns.lock)));
+    state = AsyncValue.data(
+      current.copyWith(patterns: current.patterns.addAll(updatedPatterns.lock)),
+    );
   }
 
   /// Adds or updates a single track in O(1) time
   void upsertTrack(int trackId, UiTrack updatedTrack) {
     if (state.hasValue) {
       final current = state.requireValue;
-      state = AsyncValue.data(current.copyWith(tracks: current.tracks.add(trackId, updatedTrack)));
+      state = AsyncValue.data(
+        current.copyWith(tracks: current.tracks.add(trackId, updatedTrack)),
+      );
     }
   }
 
@@ -294,12 +346,17 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   void upsertTracksBulk(Map<int, UiTrack> updatedTracks) {
     if (state.hasValue) {
       final current = state.requireValue;
-      state = AsyncValue.data(current.copyWith(tracks: current.tracks.addAll(updatedTracks.lock)));
+      state = AsyncValue.data(
+        current.copyWith(tracks: current.tracks.addAll(updatedTracks.lock)),
+      );
     }
   }
 
   /// Converts the raw mutable Rust FFI structs into our optimized ICollection store.
-  Future<ApplicationDataStore> _fetchFullState(UiApplicationState state, String? path) async {
+  Future<ApplicationDataStore> _fetchFullState(
+    UiApplicationState state,
+    String? path,
+  ) async {
     // Modulations might not be deeply nested in UiApplicationState,
     // so we fetch them alongside the main state load to ensure consistency.
     final (links, lanes, sources) = await (

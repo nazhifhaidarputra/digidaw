@@ -9,6 +9,7 @@ pub use karbeat_core::{
     plugin_types::{ParameterSpec, ParameterValueType},
 };
 
+use crate::api::plugin::UiPluginTarget;
 use karbeat_core::api::mixer_api;
 use karbeat_core::commands::MixerChannelTarget;
 use karbeat_core::context::DawContext;
@@ -16,9 +17,6 @@ use karbeat_core::core::project::mixer::{
     BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
     RoutingConnection, RoutingNode,
 };
-use karbeat_utils::types::NormalizedF64;
-
-use crate::api::plugin::UiPluginTarget;
 
 // ======================================
 // Type Definitions
@@ -63,6 +61,8 @@ impl From<MixerChannelTarget> for UiMixerChannelTarget {
 #[frb(dart_metadata=("freezed"))]
 pub struct UiMixerChannelSnapshot {
     pub target: UiMixerChannelTarget, // u32::MAX for buses, u32::MAX - 1 for master
+    /// Post-effects, post-fader peak magnitude in linear amplitude.
+    pub magnitude: f32,
     pub volume: f32,
     pub pan: f32,
     pub mute: bool,
@@ -74,6 +74,7 @@ impl From<MixerChannelSnapshot> for UiMixerChannelSnapshot {
     fn from(m: MixerChannelSnapshot) -> Self {
         Self {
             target: m.target.into(),
+            magnitude: m.magnitude,
             volume: m.volume,
             pan: m.pan,
             mute: m.mute,
@@ -199,12 +200,23 @@ impl From<UiRoutingConnection> for RoutingConnection {
 }
 
 /// UI DTO describing a routing node (Track, Bus, Master).
+#[derive(Clone, Debug)]
 #[frb]
 pub enum UiRoutingNode {
     Track(u32),
     Bus(u32),
     Master,
     PluginSidechain, // this actually useless because the UI does not need this
+}
+
+/// A mixer channel that can feed the selected plugin's auxiliary input.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiSidechainSource {
+    pub source: UiRoutingNode,
+    pub name: String,
+    pub enabled: bool,
+    pub send_level: f64,
 }
 
 impl From<&RoutingNode> for UiRoutingNode {
@@ -646,30 +658,34 @@ pub fn set_mixer_telemetry_subs(ctx: &mut DawContext, active: bool) -> Result<()
 
 /// Get all track channels and bus channels, and also
 /// its current sidechain properties
-pub fn get_available_sidechainable_channels(
+pub fn get_sidechain_sources(
     ctx: &DawContext,
     sidechain_plugin: UiPluginTarget,
-) -> Vec<UiRoutingConnection> {
-    mixer_api::get_available_sidechainable_channels(ctx, sidechain_plugin.into())
-        .iter()
-        .map(|rc| rc.into())
+) -> Vec<UiSidechainSource> {
+    mixer_api::get_sidechain_sources(ctx, sidechain_plugin.into())
+        .into_iter()
+        .map(|source| UiSidechainSource {
+            source: UiRoutingNode::from(&source.source),
+            name: source.name,
+            enabled: source.send_level.is_some(),
+            send_level: source.send_level.unwrap_or(1.0) as f64,
+        })
         .collect()
 }
 
-/// Update the sidechain properties of the sidechain source ```target``` in ```plugin```
-///
-/// target should be a valid routing connection with the type of PluginSidechain
-pub fn upsert_sidechain_prop_of_plugin(
+/// Add/update a sidechain send when `send_level` is provided, or remove it
+/// when `send_level` is null.
+pub fn set_sidechain_source(
     ctx: &mut DawContext,
     plugin: UiPluginTarget,
     from: UiRoutingNode,
     send_level: Option<f64>,
 ) -> Result<(), String> {
-    mixer_api::upsert_sidechain_prop_of_plugin(
+    mixer_api::set_sidechain_source(
         ctx,
         plugin.into(),
         from.into(),
-        send_level.map(|l| NormalizedF64::new(l)),
+        send_level.map(|level| level as f32),
     )
     .map_err(|e| e.to_string())
 }

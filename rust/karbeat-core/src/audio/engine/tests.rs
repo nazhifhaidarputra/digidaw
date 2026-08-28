@@ -11,8 +11,6 @@ use crate::core::project::automation::{
 use crate::core::project::modulation::{ModulationLink, ModulationSource};
 use crate::core::project::track::AudioTrack;
 use crate::core::project::{ApplicationState, ModulationLinkForOrderedLaneView, TrackType};
-use crate::shared::ModulationId;
-use crate::shared::id::{AutomationId, ModulationLinkId, TrackId};
 use karbeat_utils::color::Color;
 use karbeat_utils::types::NormalizedF64;
 use rtrb::RingBuffer;

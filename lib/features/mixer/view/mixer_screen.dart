@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/plugins/plugin_registry.dart';
@@ -18,7 +20,6 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/project.dart' show DawContext;
 import 'package:multi_split_view/multi_split_view.dart';
-import 'package:flutter/scheduler.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
   const MixerScreen({super.key});
@@ -27,8 +28,7 @@ class MixerScreen extends ConsumerStatefulWidget {
   ConsumerState<MixerScreen> createState() => _MixerScreenState();
 }
 
-class _MixerScreenState extends ConsumerState<MixerScreen>
-    with SingleTickerProviderStateMixin {
+class _MixerScreenState extends ConsumerState<MixerScreen> {
   // Track the currently selected channel ID (or -1 for Master)
   int? _selectedChannelId;
   bool _isSelectedBus = false;
@@ -41,15 +41,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
   // Key to track the exact coordinates of the drawing canvas
   final GlobalKey _overlayKey = GlobalKey();
 
-  late final Ticker _ticker;
-
-  late final DawContext _dawContext;
-
   @override
   void initState() {
     super.initState();
-
-    _dawContext = ref.read(projectProvider.notifier).dawContext;
 
     _trackScrollController = ScrollController();
     _busScrollController = ScrollController();
@@ -68,16 +62,6 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
       ],
     );
 
-    _ticker = createTicker((elapsed) {
-      // Synchronously poll the Rust memory pointer and push it into the UI
-      ref.read(mixerStateProvider.notifier).pollTelemetry();
-    });
-
-    // Start pumping telemetry
-    _ticker.start();
-
-    setMixerTelemetrySubs(ctx: _dawContext, active: true);
-
     // WidgetsBinding.instance.addPostFrameCallback((_) async {
     //   ref.read(mixerStateProvider.notifier).queryAllMixerChannels();
     //   await ref.read(mixerStateProvider.notifier).syncMixerState();
@@ -86,8 +70,6 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
 
   @override
   void dispose() {
-    setMixerTelemetrySubs(ctx: _dawContext, active: false);
-    _ticker.dispose();
     _trackScrollController.dispose();
     _busScrollController.dispose();
     super.dispose();
@@ -97,6 +79,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
     return Consumer(
       builder: (context, ref, _) {
         final projectState = ref.watch(projectProvider);
+        final telemetry = ref.watch(mixerStateProvider);
         final mixerState = projectState.value?.mixer;
         final tracks = projectState.value?.tracks ?? const IMapConst({});
 
@@ -114,6 +97,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
               id: trackId,
               name: trackName,
               channel: channel,
+              magnitude: telemetry.trackMagnitudes[trackId] ?? 0.0,
               isMaster: false,
             ),
           );
@@ -238,6 +222,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
     return Consumer(
       builder: (context, ref, _) {
         final mixerState = ref.watch(projectProvider).value?.mixer;
+        final telemetry = ref.watch(mixerStateProvider);
 
         if (mixerState == null) {
           return const SizedBox.shrink();
@@ -250,6 +235,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
               id: bus.id,
               name: bus.name,
               channel: bus.channel,
+              magnitude: telemetry.busMagnitudes[bus.id] ?? 0.0,
               isMaster: false,
               isBus: true,
             ),
@@ -422,7 +408,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(mixerStateProvider);
+    final telemetry = ref.watch(mixerStateProvider);
     final mixerState = ref.watch(projectProvider).value?.mixer;
 
     if (mixerState == null) return const SizedBox.shrink();
@@ -465,6 +451,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
                           id: -1,
                           name: 'Master',
                           channel: mixerState.masterBus,
+                          magnitude: telemetry.masterMagnitude,
                           isMaster: true,
                         ),
                         onVolumeChanged: (value) {
@@ -733,14 +720,12 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
                               } catch (_) {
                                 // Feedback for effects that don't have a UI yet
                                 if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
+                                ref
+                                    .read(notificationProvider.notifier)
+                                    .warn(
                                       '${effect.name} UI is not implemented yet.',
-                                    ),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
+                                      duration: const Duration(seconds: 2),
+                                    );
                               }
                             },
                           ),
@@ -858,23 +843,17 @@ class _MixerScreenState extends ConsumerState<MixerScreen>
       onTap: () {
         Navigator.pop(ctx);
         if (plugin.pluginType != KarbeatPluginType.effect) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Only effects can be added from the mixer panel for now.',
-              ),
-            ),
-          );
+          ref
+              .read(notificationProvider.notifier)
+              .warn('Only effects can be added from the mixer panel for now.');
           return;
         }
         if (_selectedChannelId == null) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(
-              content: Text(
+          ref
+              .read(notificationProvider.notifier)
+              .warn(
                 'No channel selected. Please select a channel before adding an effect.',
-              ),
-            ),
-          );
+              );
           return;
         }
 
@@ -933,6 +912,7 @@ class _ChannelEntry {
   final int id;
   final String name;
   final UiMixerChannel channel;
+  final double magnitude;
   final bool isMaster;
   final bool isBus;
 
@@ -940,6 +920,7 @@ class _ChannelEntry {
     required this.id,
     required this.name,
     required this.channel,
+    required this.magnitude,
     required this.isMaster,
     this.isBus = false,
   });
@@ -1009,6 +990,7 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
       }
     } catch (e) {
       AppLogger.error("Failed to load channel specs: $e");
+      ref.read(notificationProvider.notifier).error(e);
     }
 
     if (mounted) {
@@ -1100,7 +1082,7 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
     return GestureDetector(
       onTap: widget.onTap,
       child: Container(
-        width: 72,
+        width: 84,
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           color: entry.isMaster
@@ -1163,18 +1145,37 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
               onChangeEnd: widget.onPanChangeEnd,
             ),
 
-            const SizedBox(height: 4),
+            const SizedBox(height: 12),
 
             // === Volume Fader ===
             Expanded(
-              child: _VolumeFader(
-                value: entry.channel.volume,
-                spec: _getVolumeSpec(),
-                accentColor: accentColor,
-                onChanged: widget.onVolumeChanged,
-                onChangeStart: widget.onVolumeChangeStart,
-                onChangeEnd: widget.onVolumeChangeEnd,
-                automationTarget: _getAutomationTarget(isPan: false),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    child: Semantics(
+                      label: '${entry.name} output level',
+                      value:
+                          '${magnitudeToDb(entry.magnitude).toStringAsFixed(1)} dB',
+                      child: DbLevelMeter(
+                        magnitude: entry.magnitude,
+                        showScale: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: _VolumeFader(
+                      value: entry.channel.volume,
+                      spec: _getVolumeSpec(),
+                      accentColor: accentColor,
+                      onChanged: widget.onVolumeChanged,
+                      onChangeStart: widget.onVolumeChangeStart,
+                      onChangeEnd: widget.onVolumeChangeEnd,
+                      automationTarget: _getAutomationTarget(isPan: false),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -1285,7 +1286,7 @@ class _PanKnob extends ConsumerWidget {
               defaultValue: spec.defaultValue,
               min: spec.min,
               max: spec.max,
-              step: spec.step == 0.0 ? 0.01 : spec.step, // Safe fallback step
+              step: spec.step == 0.0 ? 0.01 : spec.step,
               onChanged: onChanged,
               onAddAutomation: () async {
                 AppLogger.info(
@@ -1414,18 +1415,20 @@ class _VolumeFader extends ConsumerWidget {
                     overlayRadius: 12,
                   ),
                 ),
-                child: Slider(
-                  value: value.clamp(visualMin, spec.max),
-                  min: visualMin,
-                  max: spec.max,
-                  onChanged: onChanged,
-                  allowedInteraction: SliderInteraction.slideThumb,
-                  onChangeStart: onChangeStart != null
-                      ? (_) => onChangeStart!()
-                      : null,
-                  onChangeEnd: onChangeEnd != null
-                      ? (_) => onChangeEnd!()
-                      : null,
+                child: DigidawParameterSlider(
+                  slider: Slider(
+                    value: value.clamp(visualMin, spec.max),
+                    min: visualMin,
+                    max: spec.max,
+                    onChanged: onChanged,
+                    allowedInteraction: SliderInteraction.slideThumb,
+                    onChangeStart: onChangeStart != null
+                        ? (_) => onChangeStart!()
+                        : null,
+                    onChangeEnd: onChangeEnd != null
+                        ? (_) => onChangeEnd!()
+                        : null,
+                  ),
                 ),
               ),
             ),
@@ -1679,17 +1682,10 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
     return _getNodeKeyStr(a) == _getNodeKeyStr(b);
   }
 
-  /// Helper to safely handle FFI results and show snackbars on cycle errors
+  /// Result errors are emitted by [MixerNotifier] through notificationProvider.
   void _handleRoutingResult(Result<void> result) {
-    if (result.isErr() && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text((result as Error<void>).toErrorMessage()),
-          backgroundColor: Colors.redAccent.shade700,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    // Awaiting the result still sequences optimistic routing updates. The
+    // global notification observer owns all user-facing failure feedback.
   }
 
   Future<void> _setMainOutput(mixer_api.UiRoutingNode newDest) async {

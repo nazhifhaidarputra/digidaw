@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/shared/enums/global.dart';
@@ -52,9 +53,13 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
 
   // --- New Clip Placement Methods ---
 
-  void startPlacement(int sourceId, {required UiSourceType type, int? initialTrackId}) {
+  void startPlacement(
+    int sourceId, {
+    required UiSourceType type,
+    int? initialTrackId,
+  }) {
     state = state.copyWith(
-      sourceId: sourceId, 
+      sourceId: sourceId,
       sourceType: type,
       trackId: initialTrackId ?? -1, // Spawns on the actual track!
       timeSamples: 0.0, // Spawns exactly at the start of the timeline
@@ -89,7 +94,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
         return Result.ok(null);
       } catch (e) {
         AppLogger.error("Error creating clip: $e");
-        return Result.error(Exception("$e"));
+        return ref.notifyErrorResult(Exception("$e"));
       }
     }
     return Result.ok(null);

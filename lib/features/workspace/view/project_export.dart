@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/export_project_state.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/constants/audio_format.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
@@ -31,7 +32,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   void initState() {
     super.initState();
     final projectState = ref.read(projectProvider).value;
-    _nameController = TextEditingController(text: projectState?.metadata.name ?? 'Untitled');
+    _nameController = TextEditingController(
+      text: projectState?.metadata.name ?? 'Untitled',
+    );
 
     // Ensure the export directory text field updates dynamically when typing the name
     _nameController.addListener(() {
@@ -60,7 +63,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       final file = File(outputFile);
 
       // Update global export state
-      ref.read(exportProjectProvider.notifier).updateExportDirectory(file.parent.path);
+      ref
+          .read(exportProjectProvider.notifier)
+          .updateExportDirectory(file.parent.path);
 
       // Extract filename without extension to cleanly update the local name controller
       final nameWithExt = file.uri.pathSegments.last;
@@ -77,9 +82,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     final ctx = ref.read(projectProvider.notifier).dawContext;
 
     if (exportState.exportDirectory == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Please select an export directory first.")));
+      ref
+          .read(notificationProvider.notifier)
+          .warn('Please select an export directory first.');
       return;
     }
 
@@ -107,9 +112,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Export failed: $e")));
-      }
+      ref.read(notificationProvider.notifier).error(e, title: 'Export failed');
     } finally {
       if (mounted) {
         setState(() {
@@ -147,7 +150,13 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
           decoration: BoxDecoration(
             color: Colors.grey.shade900,
             borderRadius: BorderRadius.circular(8),
-            boxShadow: [BoxShadow(color: Colors.black.withAlpha(128), blurRadius: 20, spreadRadius: 5)],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(128),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
             border: Border.all(color: Colors.grey.shade700),
           ),
           child: Column(
@@ -157,14 +166,20 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade800,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
                       "Export Project",
-                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.white54),
@@ -191,7 +206,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.grey.shade800,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                           isDense: true,
                         ),
                       ),
@@ -201,7 +218,11 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       _buildSectionTitle("Export Location"),
                       TextField(
                         readOnly: true,
-                        style: TextStyle(color: exportState.exportDirectory == null ? Colors.white54 : Colors.white),
+                        style: TextStyle(
+                          color: exportState.exportDirectory == null
+                              ? Colors.white54
+                              : Colors.white,
+                        ),
                         decoration: InputDecoration(
                           hintText: "Select Directory...",
                           hintStyle: const TextStyle(color: Colors.white54),
@@ -212,10 +233,16 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                             borderSide: BorderSide.none,
                           ),
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           // The three dots button
                           suffixIcon: IconButton(
-                            icon: const Icon(Icons.more_horiz, color: Colors.white70),
+                            icon: const Icon(
+                              Icons.more_horiz,
+                              color: Colors.white70,
+                            ),
                             onPressed: _isExporting ? null : _pickSavePath,
                           ),
                         ),
@@ -240,7 +267,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 _buildSectionTitle("Format"),
                                 _buildDropdown<SupportedAudioFormat>(
                                   value: exportState.selectedFormat,
-                                  items: const [SupportedAudioFormat.wav, SupportedAudioFormat.mp3],
+                                  items: const [
+                                    SupportedAudioFormat.wav,
+                                    SupportedAudioFormat.mp3,
+                                  ],
                                   itemLabel: (f) => f.name.toUpperCase(),
                                   onChanged: (val) {
                                     if (val != null) {
@@ -286,17 +316,23 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 _buildDropdown<BitDepthDTO>(
                                   value: exportState.selectedBitDepth,
                                   items:
-                                      exportState.selectedFormat == SupportedAudioFormat.wav ||
-                                          exportState.selectedFormat == SupportedAudioFormat.flac
+                                      exportState.selectedFormat ==
+                                              SupportedAudioFormat.wav ||
+                                          exportState.selectedFormat ==
+                                              SupportedAudioFormat.flac
                                       ? bitPerSampleOptions
                                       : bitPerSecondOptions,
                                   itemLabel: (b) => switch (b) {
-                                    BitDepthDTO_BitPerSample(:final field0) => field0.toString(),
-                                    BitDepthDTO_BitPerSecond(:final field0) => field0.toString(),
+                                    BitDepthDTO_BitPerSample(:final field0) =>
+                                      field0.toString(),
+                                    BitDepthDTO_BitPerSecond(:final field0) =>
+                                      field0.toString(),
                                   },
                                   suffix:
-                                      exportState.selectedFormat == SupportedAudioFormat.wav ||
-                                          exportState.selectedFormat == SupportedAudioFormat.flac
+                                      exportState.selectedFormat ==
+                                              SupportedAudioFormat.wav ||
+                                          exportState.selectedFormat ==
+                                              SupportedAudioFormat.flac
                                       ? "-bit"
                                       : " kbps",
                                   onChanged: (val) {
@@ -317,7 +353,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 _buildDropdown<TailHandling>(
                                   value: exportState.tailHandling,
                                   items: TailHandling.values,
-                                  itemLabel: (t) => t.name.replaceAll(RegExp(r'(?<!^)(?=[A-Z])'), ' '),
+                                  itemLabel: (t) => t.name.replaceAll(
+                                    RegExp(r'(?<!^)(?=[A-Z])'),
+                                    ' ',
+                                  ),
                                   onChanged: (val) {
                                     if (val != null) {
                                       exportNotifier.updateTailHandling(val);
@@ -340,11 +379,16 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 ? null
                                 : (val) {
                                     if (val != null) {
-                                      exportNotifier.setOpenFolderAfterExport(val);
+                                      exportNotifier.setOpenFolderAfterExport(
+                                        val,
+                                      );
                                     }
                                   },
                           ),
-                          const Text("Open folder after export", style: TextStyle(color: Colors.white70)),
+                          const Text(
+                            "Open folder after export",
+                            style: TextStyle(color: Colors.white70),
+                          ),
                         ],
                       ),
 
@@ -354,7 +398,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       if (_isExporting) ...[
                         Text(
                           "Rendering: ${(_exportProgress * 100).toInt()}%",
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         LinearProgressIndicator(
@@ -370,7 +417,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
               // Footer / Actions
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 decoration: BoxDecoration(
                   border: Border(top: BorderSide(color: Colors.grey.shade800)),
                 ),
@@ -379,7 +429,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                   children: [
                     TextButton(
                       onPressed: _isExporting ? null : widget.onClose,
-                      child: const Text("Cancel", style: TextStyle(color: Colors.white70)),
+                      child: const Text(
+                        "Cancel",
+                        style: TextStyle(color: Colors.white70),
+                      ),
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton(
@@ -387,13 +440,19 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.greenAccent.shade700,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
                       ),
                       child: _isExporting
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Text("Export Audio"),
                     ),
@@ -412,7 +471,12 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title.toUpperCase(),
-        style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+        style: TextStyle(
+          color: Colors.grey.shade400,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.1,
+        ),
       ),
     );
   }
@@ -426,7 +490,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade800,
+        borderRadius: BorderRadius.circular(4),
+      ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
@@ -435,7 +502,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
           icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
           style: const TextStyle(color: Colors.white),
           items: items.map((T item) {
-            return DropdownMenuItem<T>(value: item, child: Text("${itemLabel(item)}$suffix"));
+            return DropdownMenuItem<T>(
+              value: item,
+              child: Text("${itemLabel(item)}$suffix"),
+            );
           }).toList(),
           onChanged: _isExporting ? null : onChanged,
         ),
