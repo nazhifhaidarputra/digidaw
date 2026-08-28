@@ -194,91 +194,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  /// Starts a range selection when select tool is active.
-  void _startRangeSelect(Offset localPosition) {
-    if (widget.trackIds.isEmpty) return;
-
-    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
-    final scrollX = _trackContentController.hasClients
-        ? _trackContentController.offset
-        : 0.0;
-    final scrollY = _timelineController.hasClients
-        ? _timelineController.offset
-        : 0.0;
-
-    final absoluteX = localPosition.dx + scrollX;
-    final absoluteY = localPosition.dy + scrollY;
-
-    // Determine which track the drag started on.
-    int trackIndex = (absoluteY / widget.itemHeight).floor();
-    trackIndex = trackIndex.clamp(0, widget.trackIds.length - 1);
-
-    // Convert absolute pixel X to ticks so the overlay can render without
-    // needing the scroll offset.
-    final startTick = absoluteX * zoomLevel;
-    ref
-        .read(rangeSelectProvider.notifier)
-        .start(widget.trackIds[trackIndex], startTick);
-  }
-
-  /// Updates the range selection as the user drags.
-  void _updateRangeSelect(Offset localPosition) {
-    if (!ref.read(rangeSelectProvider).isSelecting) return;
-
-    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
-    final scrollX = _trackContentController.hasClients
-        ? _trackContentController.offset
-        : 0.0;
-
-    final absoluteX = localPosition.dx + scrollX;
-    ref.read(rangeSelectProvider.notifier).update(absoluteX * zoomLevel);
-  }
-
-  /// Confirms the range selection and selects all clips within the time range.
-  void _confirmRangeSelect() {
-    final rangeState = ref.read(rangeSelectProvider);
-    if (!rangeState.isSelecting || rangeState.trackId == -1) {
-      _cancelRangeSelect();
-      return;
-    }
-
-    final minTick = math.min(rangeState.startTick, rangeState.endTick).toInt();
-    final maxTick = math.max(rangeState.startTick, rangeState.endTick).toInt();
-
-    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
-    final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
-
-    final track = ref.read(projectProvider).value?.tracks[rangeState.trackId];
-    if (track == null) {
-      _cancelRangeSelect();
-      return;
-    }
-
-    final selectedClipIds = <int>[];
-    for (final clip in track.clips) {
-      final clipStart = clip.startTimeInTicks(bpm, sr);
-      final clipEnd = clipStart + clip.loopLengthInTicks(bpm, sr);
-      if (clipEnd > minTick && clipStart < maxTick) {
-        selectedClipIds.add(clip.id);
-      }
-    }
-
-    if (selectedClipIds.isNotEmpty) {
-      ref
-          .read(trackListStateProvider.notifier)
-          .selectClips(trackId: rangeState.trackId, clipIds: selectedClipIds);
-    } else {
-      ref.read(trackListStateProvider.notifier).deselectAllClips();
-    }
-
-    _cancelRangeSelect();
-  }
-
-  /// Cancels/resets the range selection.
-  void _cancelRangeSelect() {
-    ref.read(rangeSelectProvider.notifier).cancel();
-  }
-
   /// Helper method to build the cut helper line
   Widget _buildCutHelperLine(BuildContext context) {
     final state = ref.watch(workspaceStateProvider);
@@ -656,7 +571,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       behavior: HitTestBehavior.translucent,
                       onPanUpdate: (details) {
                         if (selectedTool == ToolSelection.select) {
-                          _updateRangeSelect(details.localPosition);
                           return;
                         }
                         if (selectedTool == ToolSelection.zoom) {
@@ -682,15 +596,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                               details.localPosition,
                             ),
                       onPanStart: (details) {
-                        if (selectedTool == ToolSelection.select) {
-                          _startRangeSelect(details.localPosition);
-                        }
+                        if (selectedTool == ToolSelection.select) return;
                       },
                       onPanEnd: (details) {
-                        if (selectedTool == ToolSelection.select &&
-                            ref.read(rangeSelectProvider).isSelecting) {
-                          _confirmRangeSelect();
-                        }
+                        if (selectedTool == ToolSelection.select) return;
                       },
                       child: ScrollConfiguration(
                         behavior:

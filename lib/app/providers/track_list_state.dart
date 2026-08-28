@@ -538,6 +538,46 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
+  /// Atomically duplicate a selected clip group at predetermined start times.
+  /// Start times are in the clips' native unit (samples or ticks). Unlike the
+  /// clipboard APIs below, this operation never changes ClipboardContent.
+  Future<Result<List<UiClip>>> duplicateClipGroups({
+    required int trackId,
+    required List<int> clipIds,
+    required List<int> groupStartTimes,
+  }) async {
+    if (clipIds.isEmpty || groupStartTimes.isEmpty) {
+      return Result.ok(const []);
+    }
+
+    try {
+      final duplicated = await track_api.duplicateClipGroups(
+        ctx: _ctx,
+        trackId: trackId,
+        clipIds: clipIds,
+        groupStartTimes: groupStartTimes,
+      );
+      if (duplicated.isEmpty) return Result.ok(const []);
+
+      final track = ref.read(projectProvider).value?.tracks[trackId];
+      if (track == null) {
+        await syncTrack(trackId);
+      } else {
+        _projectNotifierRead.upsertTrack(
+          trackId,
+          track.copyWith(clips: [...track.clips, ...duplicated]),
+        );
+      }
+
+      return Result.ok(duplicated);
+    } catch (error) {
+      AppLogger.error(
+        'TrackListNotifier: error atomically duplicating clip groups: $error',
+      );
+      return ref.notifyErrorResult(Exception(error.toString()));
+    }
+  }
+
   /// Delete multiple clips at once, with an optimistic local removal.
   Future<Result<void>> deleteClipBatch(int trackId, List<int> clipIds) async {
     _optimisticDeleteClips(trackId, clipIds.toSet());

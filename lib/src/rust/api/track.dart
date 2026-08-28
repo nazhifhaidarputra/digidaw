@@ -135,6 +135,21 @@ Future<List<UiClip>> resizeClipBatch({
   deltaTicks: deltaTicks,
 );
 
+/// Atomically duplicate a selected clip group at predetermined start times.
+/// Start times use the clips' native unit: samples for audio and ticks for
+/// MIDI/automation. Unlike copy/paste, this never changes ClipboardContent.
+Future<List<UiClip>> duplicateClipGroups({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+  required List<int> groupStartTimes,
+}) => RustLib.instance.api.crateApiTrackDuplicateClipGroups(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+  groupStartTimes: groupStartTimes,
+);
+
 /// Delete clips in batch
 Future<void> deleteClipBatch({
   required DawContext ctx,

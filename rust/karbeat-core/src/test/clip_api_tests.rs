@@ -3,9 +3,12 @@
 #[cfg(test)]
 mod tests {
     use crate::api::clip_api;
-    use crate::core::project::{
-        DawSource,
-        clip::{Clip, ClipSourceType, ClipTimeUnit, ResizeEdge},
+    use crate::core::{
+        history::ProjectAction,
+        project::{
+            ClipboardContent, DawSource,
+            clip::{Clip, ClipSourceType, ClipTimeUnit, ResizeEdge},
+        },
     };
     use crate::shared::AudioSourceId;
     use crate::shared::id::{ClipId, TrackId};
@@ -337,5 +340,92 @@ mod tests {
         let resized = result.unwrap();
         assert!(!resized.is_empty());
         assert!(resized[0].time.loop_length_raw() > original_length);
+    }
+
+    #[test]
+    fn batch_duplicate_clip_groups_is_atomic_and_does_not_touch_clipboard() {
+        let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let second = add_midi_clip(&mut ctx, midi_id, 4_800);
+        let first_id = ctx.app_state.tracks[midi_id].clips[0];
+        let source_ids = vec![first_id, second.id];
+        let clip_count_before = ctx.app_state.tracks[midi_id].clips.len();
+        let history_count_before = ctx.history.undo_stack.len();
+
+        assert!(matches!(ctx.app_state.clipboard, ClipboardContent::Empty));
+
+        let duplicated = clip_api::batch_duplicate_clip_groups(
+            &mut ctx,
+            midi_id,
+            source_ids,
+            vec![9_600, 19_200],
+        )
+        .expect("batch duplicate should succeed");
+
+        let starts = duplicated
+            .iter()
+            .map(|clip| clip.time.start_time_raw())
+            .collect::<Vec<_>>();
+        assert_eq!(starts, vec![9_600, 14_400, 19_200, 24_000]);
+        assert_eq!(
+            ctx.app_state.tracks[midi_id].clips.len(),
+            clip_count_before + 4
+        );
+        assert!(matches!(ctx.app_state.clipboard, ClipboardContent::Empty));
+        assert_eq!(ctx.history.undo_stack.len(), history_count_before + 1);
+        assert!(matches!(
+            ctx.history.undo_stack.last(),
+            Some(ProjectAction::Batch(actions)) if actions.len() == 4
+        ));
+
+        ctx.history
+            .undo(&mut ctx.app_state)
+            .expect("one undo should remove the complete draw batch");
+        assert_eq!(ctx.app_state.tracks[midi_id].clips.len(), clip_count_before);
+    }
+
+    #[test]
+    fn batch_duplicate_audio_clip_groups_uses_sample_positions() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        let source = add_audio_clip(&mut ctx, audio_id, 24_000);
+
+        let duplicated = clip_api::batch_duplicate_clip_groups(
+            &mut ctx,
+            audio_id,
+            vec![source.id],
+            vec![72_000, 120_000],
+        )
+        .expect("audio batch duplicate should succeed");
+
+        assert_eq!(
+            duplicated
+                .iter()
+                .map(|clip| clip.time.start_time_raw())
+                .collect::<Vec<_>>(),
+            vec![72_000, 120_000]
+        );
+        assert!(duplicated.iter().all(|clip| clip.time.is_samples()));
+        assert!(matches!(ctx.app_state.clipboard, ClipboardContent::Empty));
+    }
+
+    #[test]
+    fn batch_duplicate_clip_groups_rejects_invalid_source_without_mutating() {
+        let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let valid_id = ctx.app_state.tracks[midi_id].clips[0];
+        let invalid_id = ClipId::from(999_999);
+        let clip_count_before = ctx.app_state.tracks[midi_id].clips.len();
+        let pool_count_before = ctx.app_state.clips_pool.len();
+        let history_count_before = ctx.history.undo_stack.len();
+
+        let result = clip_api::batch_duplicate_clip_groups(
+            &mut ctx,
+            midi_id,
+            vec![valid_id, invalid_id],
+            vec![9_600],
+        );
+
+        assert!(result.is_err());
+        assert_eq!(ctx.app_state.tracks[midi_id].clips.len(), clip_count_before);
+        assert_eq!(ctx.app_state.clips_pool.len(), pool_count_before);
+        assert_eq!(ctx.history.undo_stack.len(), history_count_before);
     }
 }

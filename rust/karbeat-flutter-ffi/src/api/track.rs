@@ -202,6 +202,24 @@ pub fn resize_clip_batch(
     Ok(res.iter().map(UiClip::from).collect())
 }
 
+/// Atomically duplicate a selected clip group at predetermined start times.
+/// Start times use the clips' native unit: samples for audio and ticks for
+/// MIDI/automation. Unlike copy/paste, this never changes ClipboardContent.
+pub fn duplicate_clip_groups(
+    ctx: &mut DawContext,
+    track_id: u32,
+    clip_ids: Vec<u32>,
+    group_start_times: Vec<u64>,
+) -> Result<Vec<UiClip>, String> {
+    let track_id = TrackId::from(track_id);
+    let clip_ids = clip_ids.into_iter().map(ClipId::from).collect();
+    let duplicated =
+        clip_api::batch_duplicate_clip_groups(ctx, track_id, clip_ids, group_start_times)
+            .map_err(|error| error.to_string())?;
+
+    Ok(duplicated.iter().map(UiClip::from).collect())
+}
+
 /// Delete clips in batch
 pub fn delete_clip_batch(
     ctx: &mut DawContext,

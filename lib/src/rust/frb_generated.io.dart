@@ -416,6 +416,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KarbeatPluginType dco_decode_karbeat_plugin_type(dynamic raw);
 
   @protected
+  List<int> dco_decode_list_CastedPrimitive_u_64(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -1287,6 +1290,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KarbeatPluginType sse_decode_karbeat_plugin_type(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<int> sse_decode_list_CastedPrimitive_u_64(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -2325,6 +2331,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_karbeat_plugin_type(
     KarbeatPluginType self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_CastedPrimitive_u_64(
+    List<int> self,
     SseSerializer serializer,
   );
 

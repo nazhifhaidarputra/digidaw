@@ -3231,7 +3231,7 @@ as double,
 @override
 @pragma('vm:prefer-inline')
 $UiRoutingNodeCopyWith<$Res> get source {
-
+  
   return $UiRoutingNodeCopyWith<$Res>(_self.source, (value) {
     return _then(_self.copyWith(source: value));
   });
@@ -3368,7 +3368,7 @@ return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);case _:
 
 class _UiSidechainSource implements UiSidechainSource {
   const _UiSidechainSource({required this.source, required this.name, required this.enabled, required this.sendLevel});
-
+  
 
 @override final  UiRoutingNode source;
 @override final  String name;
@@ -3437,7 +3437,7 @@ as double,
 @override
 @pragma('vm:prefer-inline')
 $UiRoutingNodeCopyWith<$Res> get source {
-
+  
   return $UiRoutingNodeCopyWith<$Res>(_self.source, (value) {
     return _then(_self.copyWith(source: value));
   });

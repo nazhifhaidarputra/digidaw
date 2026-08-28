@@ -714,6 +714,108 @@ impl ApplicationState {
             .collect())
     }
 
+    /// Duplicate a selected clip group at every requested group start.
+    ///
+    /// Start positions use the selected clips' native timeline unit (samples
+    /// for audio, ticks for MIDI/automation). The complete operation is
+    /// validated and all clone templates are built before state is mutated, so
+    /// callers never observe a partially-created draw gesture.
+    pub fn duplicate_clip_groups(
+        &mut self,
+        track_id: TrackId,
+        clip_ids: &[ClipId],
+        group_start_times: &[u64],
+    ) -> Result<Vec<Clip>, String> {
+        if clip_ids.is_empty() || group_start_times.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let requested_ids: HashSet<_> = clip_ids.iter().copied().collect();
+        if requested_ids.len() != clip_ids.len() {
+            return Err("Duplicate source clip IDs are not allowed".to_string());
+        }
+
+        let source_clips = {
+            let track = self.tracks.get(track_id).ok_or("Track not found")?;
+
+            for clip_id in &requested_ids {
+                if !track.clips.contains(clip_id) {
+                    return Err(format!("Clip {clip_id:?} not found in track"));
+                }
+                let clip = self
+                    .clips_pool
+                    .get(*clip_id)
+                    .ok_or_else(|| format!("Clip {clip_id:?} not found in global pool"))?;
+                if !track.accepts_clip(clip) {
+                    return Err(format!("Clip {clip_id:?} is incompatible with track"));
+                }
+            }
+
+            // Follow track order so relative offsets and returned clips are
+            // deterministic regardless of the input ID order.
+            track
+                .clips
+                .iter()
+                .filter(|id| requested_ids.contains(id))
+                .map(|id| self.clips_pool[*id].clone())
+                .collect::<Vec<_>>()
+        };
+
+        let source_start = source_clips
+            .iter()
+            .map(|clip| clip.time.start_time_raw())
+            .min()
+            .ok_or("No source clips found")?;
+        let source_is_samples = source_clips[0].time.is_samples();
+        if source_clips
+            .iter()
+            .any(|clip| clip.time.is_samples() != source_is_samples)
+        {
+            return Err("Cannot duplicate clips with mixed timeline units".to_string());
+        }
+
+        let mut templates = Vec::with_capacity(source_clips.len() * group_start_times.len());
+        for &group_start in group_start_times {
+            for source in &source_clips {
+                let relative_start = source
+                    .time
+                    .start_time_raw()
+                    .checked_sub(source_start)
+                    .ok_or("Invalid source clip start time")?;
+                let new_start = group_start
+                    .checked_add(relative_start)
+                    .ok_or("Duplicated clip start time overflow")?;
+                let mut template = source.clone();
+                match &mut template.time {
+                    ClipTimeUnit::Samples { start_time, .. } => *start_time = new_start,
+                    ClipTimeUnit::Ticks { start_time, .. } => {
+                        *start_time = u32::try_from(new_start)
+                            .map_err(|_| "Duplicated clip tick exceeds u32 range")?;
+                    }
+                }
+                templates.push(template);
+            }
+        }
+
+        // No fallible work remains after this point.
+        let mut new_ids = Vec::with_capacity(templates.len());
+        let mut duplicated = Vec::with_capacity(templates.len());
+        for template in templates {
+            let id = self
+                .clips_pool
+                .insert_with_key(|id| Clip { id, ..template });
+            new_ids.push(id);
+            duplicated.push(self.clips_pool[id].clone());
+        }
+
+        self.tracks
+            .get_mut(track_id)
+            .expect("track was validated before mutation")
+            .add_clips_bulk(&new_ids, &self.clips_pool);
+
+        Ok(duplicated)
+    }
+
     pub fn copy_clip_batch(
         &mut self,
         source_track_id: TrackId,
