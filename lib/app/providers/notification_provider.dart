@@ -1,34 +1,28 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/shared/models/user_notification.dart';
+
+part 'notification_provider.freezed.dart';
 
 /// Immutable public state for the notification queue.
 ///
 /// The queue itself deliberately stays private. Exposing only its active item
 /// and length lets [ListQueue] perform O(1) push/pop operations without copying
 /// the whole buffer every time Riverpod publishes a new state.
-@immutable
-final class NotificationQueueState {
-  const NotificationQueueState({this.current, this.pendingCount = 0});
+@freezed
+abstract class NotificationQueueState with _$NotificationQueueState {
+  const NotificationQueueState._();
 
-  final UserNotificationEvent? current;
-  final int pendingCount;
+  const factory NotificationQueueState({
+    UserNotificationEvent? current,
+    @Default(0) int pendingCount,
+  }) = _NotificationQueueState;
 
   bool get isEmpty => current == null;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is NotificationQueueState &&
-          other.current == current &&
-          other.pendingCount == pendingCount;
-
-  @override
-  int get hashCode => Object.hash(current, pendingCount);
 }
 
 class NotificationNotifier extends Notifier<NotificationQueueState> {
@@ -104,7 +98,7 @@ class NotificationNotifier extends Notifier<NotificationQueueState> {
     if (eventId != null && state.current?.id != eventId) return;
 
     final next = _pending.isEmpty ? null : _pending.removeFirst();
-    state = NotificationQueueState(
+    state = state.copyWith(
       current: next,
       pendingCount: _pending.length,
     );
@@ -135,7 +129,7 @@ class NotificationNotifier extends Notifier<NotificationQueueState> {
 
   void _enqueue(UserNotificationEvent event) {
     if (state.current == null) {
-      state = NotificationQueueState(current: event);
+      state = state.copyWith(current: event);
       return;
     }
 
@@ -143,10 +137,7 @@ class NotificationNotifier extends Notifier<NotificationQueueState> {
       _pending.removeFirst();
     }
     _pending.addLast(event);
-    state = NotificationQueueState(
-      current: state.current,
-      pendingCount: _pending.length,
-    );
+    state = state.copyWith(pendingCount: _pending.length);
   }
 
   static String _readableError(Object error) {

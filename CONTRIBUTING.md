@@ -26,6 +26,7 @@ Welcome to the Digidaw codebase! Building a low-latency Digital Audio Workstatio
 * **Use `fast_immutable_collection`:** All state data classes must use `IList`, `IMap`, or `ISet` to guarantee memory-safe, zero-cost immutability and fast equality comparisons across the UI.
 * **Riverpod as the Source of Truth:** Rely on Riverpod `Notifier` and `AsyncNotifier` classes to govern state. Avoid using `StatefulWidget` for global or complex business logic.
 * **Passive UI:** The UI should be a passive reflection of the state. Avoid driving high-frequency logic (like audio analysis) with UI timers. Rely on the engine's telemetry clock and reactive state.
+* **Freezed is a Must!** Every immutable object used as a state data should use freezed. do not create anything from scratch, just let freezed do the heavy-lifting
 
 ---
 
@@ -49,3 +50,7 @@ Welcome to the Digidaw codebase! Building a low-latency Digital Audio Workstatio
 * **Respect the Audio Thread:** The DSP `process()` loop must **never** allocate heap memory (`Vec::new()`, `Box::new()`), lock a `Mutex`, or block for I/O. All buffers must be pre-allocated and resized via commands from the main thread.
 * **Lock-Free Telemetry:** For pushing visual data (like EQ spectrums or mixer meters) from Rust to Dart, use triple_buffer mapped to each plugin instance.
 * **Zero-Copy Arrays:** When parsing large datasets from the audio engine (like an FFT spectrum), use Dart's `Float32List.sublistView` to parse the flat array efficiently without triggering garbage collection.
+
+# Regarding LLM Contributions
+
+I accept LLM Contributions, since I also use LLM to help me writing some of the code. Although keep it mind that you should know what the LLM writes and not fully "vibe-code" the entire thing without reading, checking, testing, and debugging. I prefer a well-crafted solution rather than a low quality generated code. Any code produced fully by AI Agent without any human guidance, supervision and review will automatically be rejected

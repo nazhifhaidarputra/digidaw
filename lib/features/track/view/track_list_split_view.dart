@@ -25,6 +25,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   late ScrollController _rulerController; // Controller 1: Top Ruler
   late ScrollController _trackContentController; // Controller 2: Bottom Content
 
+  // Sample Browser scroll controller (not linked with other scroll controller like the header and audio slot)
+  late ScrollController _browserPanelController;
+
   late MultiSplitViewController _trackSplitViewController;
 
   // Local state for ghost clip

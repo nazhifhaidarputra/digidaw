@@ -102,8 +102,32 @@ class _MainContentState extends ConsumerState<MainContent>
               child: const DefaultControlPanel(),
             ),
           ),
-          Expanded(child: _buildWorkspaceView(context, ref, currentView)),
+          Expanded(
+            child: _buildMainContentNavigator(context, ref, currentView),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMainContentNavigator(
+    BuildContext context,
+    WidgetRef ref,
+    WorkspaceView currentView,
+  ) {
+    final navigatorKey = _MainContentNavigatorKey(currentView);
+
+    return NavigatorPopHandler<Object?>(
+      onPopWithResult: (result) {
+        navigatorKey.currentState?.pop(result);
+      },
+      child: Navigator(
+        key: navigatorKey,
+        onGenerateRoute: (settings) => MaterialPageRoute<void>(
+          settings: settings,
+          builder: (routeContext) =>
+              _buildWorkspaceView(routeContext, ref, currentView),
+        ),
       ),
     );
   }
@@ -161,4 +185,11 @@ class _MainContentState extends ConsumerState<MainContent>
       generatorId: generatorId,
     );
   }
+}
+
+/// Keeps detail routes scoped below the control panel. Changing the top-level
+/// workspace view produces a different key, discarding that view's detail
+/// stack and showing the new workspace root immediately.
+class _MainContentNavigatorKey extends GlobalObjectKey<NavigatorState> {
+  const _MainContentNavigatorKey(super.value);
 }

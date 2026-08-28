@@ -125,6 +125,7 @@ class SourceListScreen extends ConsumerWidget {
                     );
                   }
 
+                  if (!context.mounted) return;
                   Navigator.of(
                     context,
                   ).push(MaterialPageRoute(builder: (_) => screen));

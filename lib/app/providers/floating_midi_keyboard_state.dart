@@ -1,4 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'floating_midi_keyboard_state.freezed.dart';
 
 // ============================================================
 // State data class
@@ -8,72 +11,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ///
 /// Mirrors the [FloatingMidiKeyboardFieldState] (mutable DTO used inside
 /// [GlobalAppState]) as an immutable Riverpod-compatible value object.
-class FloatingMidiKeyboardState {
-  /// Whether the keyboard panel is currently visible.
-  final bool showed;
+@freezed
+abstract class FloatingMidiKeyboardState with _$FloatingMidiKeyboardState {
+  const factory FloatingMidiKeyboardState({
+    /// Whether the keyboard panel is currently visible.
+    @Default(false) bool showed,
 
-  /// MIDI note number of the lowest visible key.
-  /// Clamped to [21, 120].
-  final int baseKey;
+    /// MIDI note number of the lowest visible key.
+    /// Clamped to [21, 120] by [FloatingMidiKeyboardNotifier.setBaseKey].
+    @Default(48) int baseKey,
 
-  /// Number of keys shown on the keyboard.
-  /// Clamped to [12, 24].
-  final int keyRange;
+    /// Number of keys shown on the keyboard.
+    /// Clamped to [12, 24] by [FloatingMidiKeyboardNotifier.setKeyRange].
+    @Default(15) int keyRange,
 
-  /// The generator (instrument) whose sound is triggered by key presses.
-  /// `null` means no generator is selected yet.
-  final int? selectedGeneratorId;
-
-  const FloatingMidiKeyboardState({
-    this.showed = false,
-    this.baseKey = 48,
-    this.keyRange = 15,
-    this.selectedGeneratorId,
-  });
-
-  FloatingMidiKeyboardState copyWith({
-    bool? showed,
-    int? baseKey,
-    int? keyRange,
-    Object? selectedGeneratorId = _sentinel,
-  }) {
-    return FloatingMidiKeyboardState(
-      showed: showed ?? this.showed,
-      baseKey: (baseKey ?? this.baseKey).clamp(21, 120),
-      keyRange: (keyRange ?? this.keyRange).clamp(12, 24),
-      selectedGeneratorId: identical(selectedGeneratorId, _sentinel)
-          ? this.selectedGeneratorId
-          : selectedGeneratorId as int?,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is FloatingMidiKeyboardState &&
-        other.showed == showed &&
-        other.baseKey == baseKey &&
-        other.keyRange == keyRange &&
-        other.selectedGeneratorId == selectedGeneratorId;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(showed, baseKey, keyRange, selectedGeneratorId);
+    /// The generator whose sound is triggered by key presses.
+    /// `null` means no generator is selected yet.
+    int? selectedGeneratorId,
+  }) = _FloatingMidiKeyboardState;
 }
-
-const Object _sentinel = Object();
 
 // ============================================================
 // Notifier
 // ============================================================
 
-/// Riverpod 3 [Notifier] that owns [FloatingMidiKeyboardState].
-///
-/// All actions here mirror the MIDI keyboard methods of [GlobalAppState]
-/// and are intended as a drop-in replacement during the slow migration.
-class FloatingMidiKeyboardNotifier
-    extends Notifier<FloatingMidiKeyboardState> {
+/// Riverpod [Notifier] that owns [FloatingMidiKeyboardState].
+class FloatingMidiKeyboardNotifier extends Notifier<FloatingMidiKeyboardState> {
   @override
   FloatingMidiKeyboardState build() => const FloatingMidiKeyboardState();
 
@@ -130,5 +93,5 @@ class FloatingMidiKeyboardNotifier
 /// Mutate: `ref.read(floatingMidiKeyboardStateProvider.notifier).toggle()`
 final floatingMidiKeyboardStateProvider =
     NotifierProvider<FloatingMidiKeyboardNotifier, FloatingMidiKeyboardState>(
-  FloatingMidiKeyboardNotifier.new,
-);
+      FloatingMidiKeyboardNotifier.new,
+    );
