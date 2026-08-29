@@ -387,9 +387,15 @@ pub fn play_source_preview(ctx: &mut DawContext, id: u32) {
     }
 }
 
+/// Preview a browser sample without adding it to the project asset library.
+/// Playback is capped by the audio engine at 15 seconds.
+pub fn play_file_preview(ctx: &mut DawContext, file_path: &str) -> Result<(), String> {
+    audio_api::play_file_preview(ctx, file_path).map_err(|error| error.to_string())
+}
+
 pub fn stop_all_previews(ctx: &mut DawContext) {
     audio_api::stop_all_previews(ctx);
-    println!("Stop all preview sounds");
+    log::info!("Stopped all preview sounds");
 }
 
 pub fn get_audio_config(ctx: &DawContext) -> Result<UiAudioHardwareConfig, String> {

@@ -12,7 +12,7 @@ By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio pr
 
 ## Features
 
-- **Cross-Platform**: Built for Windows and Linux, with Android support planned in the near future.
+- **Cross-Platform**: Currently built for Windows and Linux. However, in the future it will be more mobile-focused. Currently Android support is available, but limited.
 - **High-Performance Audio**: Core audio engine built in Rust using [CPAL](https://github.com/RustAudio/cpal).
 - **Minimalist Interface**: A clean UI developed with Flutter for a distraction-free workflow.
 
@@ -22,7 +22,7 @@ More features are currently in active development.
 
 These are features which have been or have not been implemented. All unimplemented features will be implemented in the future
 
-- [x] Ser/De project file
+- [x] Ser/De project file (.dgdaw format)
 - [x] Export Audio to MP3 and Wav
 - [x] Audio Waveform sequencing
 - [x] Working real-time transport controller
@@ -31,24 +31,26 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Piano roll MIDI note drawing
 - [x] Simple Synthesizers
 - [x] Parametric EQ  
-- [x] Mixer Routing (Partially)
+- [x] Mixer Routing
 - [x] Bus Automation lanes rack
-- [x] Real-time pitch shifting (Via Rubberband FFI binding)
-- [ ] Action history (Undo/Redo)
-- [ ] Finishing and optimizing Bus Mixer Routing
+- [x] Real-time pitch shifting (Via Rubberband FFI binding). There is a plan to rewrite the pitch shifting entirely in Rust to remove reliability to an C++ library via FFI boundary
+- [x] Finishing and optimizing Bus Mixer Routing
+- [ ] Action history (Undo/Redo) (WIP)
 - [ ] Time-stretched audio waveform processing
+- [ ] Audio host selector (ASIO, JACK, or AudioCore)
 - [ ] Automation for generator and global parameters
 - [ ] Wavetable Synthesizer
 - [ ] Sample-based Synthesizer (for Real instrument)
 - [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Sidechain Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
 - [ ] Browser panel for easy drag-and-drop audio samples
 - [ ] Input channel for input recording
-- [ ] Auxiliary input handler (WIP)
+- [x] Auxiliary input handler
 - [ ] Refactor UI for better UX and responsiveness in mobile platform
 - [ ] Third-party supports for native audio plugin (In form of Asset Workshop)
 - [ ] Settings/configuration for user
 - [ ] Logging for end-user
-- [ ] VST3/AU Host support
+- [ ] VST3 Host support (WIP)
+- [ ] AU Host support
 - [ ] CLAP Host support
 - [ ] LV2 Host support
 - [ ] Plugin Scanner
@@ -58,6 +60,7 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Tempo detector and Fit-to-tempo functionality
 - [ ] Version manager
 - [ ] Comprehensive Documentation for both User and Developer
+- [ ] Official logo and icon
 
 ## Tech Stack
 

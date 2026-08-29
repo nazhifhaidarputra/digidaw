@@ -25,6 +25,18 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   bool _isCommittingDrawCopies = false;
   int? _rangePointer;
 
+  int _browserDropTick(Offset globalOffset, double zoomLevel) {
+    final renderBox = context.findRenderObject() as RenderBox;
+    var ticks = (renderBox.globalToLocal(globalOffset).dx * zoomLevel)
+        .clamp(0.0, double.infinity)
+        .round();
+    final workspaceState = ref.read(workspaceStateProvider);
+    if (workspaceState.snapToGrid) {
+      ticks = _snapTick(ticks, workspaceState);
+    }
+    return ticks;
+  }
+
   void _handleEmptySpaceClick({
     required BuildContext context,
     required double localDx,
@@ -376,10 +388,28 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
     if (track == null) return const SizedBox();
 
-    final trackSlot = DragTarget<List<int>>(
-      onWillAcceptWithDetails: (details) => true,
-      onAcceptWithDetails: (details) {},
+    final trackSlot = DragTarget<Object>(
+      onWillAcceptWithDetails: (details) => switch (details.data) {
+        BrowserSample() => track.trackType == UiTrackType.audio,
+        List<int>() => true,
+        _ => false,
+      },
+      onAcceptWithDetails: (details) {
+        final data = details.data;
+        if (data is! BrowserSample) return;
+        final startTick = _browserDropTick(details.offset, zoomLevel);
+        unawaited(
+          ref
+              .read(trackListStateProvider.notifier)
+              .createAudioClipFromFile(
+                filePath: data.path,
+                trackId: widget.trackId,
+                startTick: startTick,
+              ),
+        );
+      },
       onMove: (details) {
+        if (details.data is BrowserSample) return;
         final renderBox = context.findRenderObject() as RenderBox;
         final localX = renderBox.globalToLocal(details.offset).dx;
 
@@ -403,7 +433,9 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
               bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
               right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
             ),
-            color: candidateData.isNotEmpty
+            color: candidateData.any((data) => data is BrowserSample)
+                ? Colors.cyanAccent.withAlpha(18)
+                : candidateData.isNotEmpty
                 ? Colors.white.withAlpha(20)
                 : Colors.grey.shade900,
           ),

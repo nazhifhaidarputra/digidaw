@@ -82,6 +82,32 @@ mod tests {
     }
 
     #[test]
+    fn add_audio_source_reuses_an_existing_file_source() {
+        let mut ctx = make_ctx();
+        ctx.active_audio_config.write().sample_rate = Some(48_000);
+        let file = tempfile::NamedTempFile::new().expect("audio fixture file");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::new(file.reopen().expect("fixture handle"), spec)
+            .expect("fixture writer");
+        writer.write_sample(0_i16).expect("fixture sample");
+        writer.finalize().expect("finalize fixture");
+        let path = file.path().to_str().expect("fixture path");
+
+        let first = audio_waveform_api::add_audio_source(&mut ctx, path)
+            .expect("first source import should succeed");
+        let second = audio_waveform_api::add_audio_source(&mut ctx, path)
+            .expect("second source import should succeed");
+
+        assert_eq!(first, second);
+        assert_eq!(ctx.app_state.asset_library.source_map.len(), 1);
+    }
+
+    #[test]
     fn get_audio_waveform_unknown_id_returns_err() {
         let ctx = make_ctx();
         let result = audio_waveform_api::get_audio_waveform(&ctx, 99999, |_w| true);

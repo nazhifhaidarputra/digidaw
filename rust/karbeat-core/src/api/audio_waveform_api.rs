@@ -1,5 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
+use anyhow::Context;
+
 use crate::{
     context::DawContext,
     core::{
@@ -118,6 +120,23 @@ where
 }
 
 pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result<AudioSourceId> {
+    let normalized_path = std::fs::canonicalize(file_path)
+        .with_context(|| format!("Failed to resolve audio file path: {file_path}"))?;
+    if let Some(source_id) =
+        ctx.app_state
+            .asset_library
+            .source_map
+            .iter()
+            .find_map(|(source_id, waveform)| {
+                std::fs::canonicalize(&waveform.file_path)
+                    .ok()
+                    .filter(|existing_path| existing_path == &normalized_path)
+                    .map(|_| source_id)
+            })
+    {
+        return Ok(source_id);
+    }
+
     let sample_rate = { ctx.active_audio_config.read().sample_rate }
         .ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
 

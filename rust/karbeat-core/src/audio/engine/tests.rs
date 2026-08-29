@@ -18,6 +18,60 @@ use std::sync::mpsc;
 // use crate::audio::;
 
 #[test]
+fn browser_preview_stops_at_its_frame_limit() {
+    let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let sample_rate = 44_100;
+    let mut engine = AudioEngine::new(
+        cmd_consumer,
+        pos_producer,
+        fb_producer,
+        sample_rate,
+        2,
+        120.0,
+        16,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_tx,
+    );
+
+    let file = tempfile::NamedTempFile::new().expect("preview fixture file");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::new(file.reopen().expect("fixture handle"), spec)
+        .expect("fixture writer");
+    for _ in 0..64 {
+        writer.write_sample(16_384_i16).expect("fixture sample");
+    }
+    writer.finalize().expect("finalize fixture");
+    let waveform = crate::core::file_manager::audio_loader::load_audio_file(
+        file.path().to_str().expect("fixture path"),
+        None,
+        sample_rate,
+    )
+    .expect("load preview fixture");
+
+    engine.process_command(AudioCommand::PlayPreview {
+        waveform,
+        max_frames: 4,
+    });
+
+    let mut first_block = vec![0.0; 16 * 2];
+    engine.process(&mut first_block);
+    assert!(first_block[..8].iter().any(|sample| *sample != 0.0));
+    assert!(first_block[8..].iter().all(|sample| *sample == 0.0));
+
+    let mut second_block = vec![1.0; 16 * 2];
+    engine.process(&mut second_block);
+    assert!(second_block.iter().all(|sample| *sample == 0.0));
+}
+
+#[test]
 fn test_automation_lane_applied_to_mixer_volume() {
     // Setup Audio Engine
     let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);

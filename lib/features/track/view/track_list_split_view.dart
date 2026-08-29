@@ -27,6 +27,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   // Sample Browser scroll controller (not linked with other scroll controller like the header and audio slot)
   late ScrollController _browserPanelController;
+  ProviderSubscription<bool>? _browserPanelSubscription;
+  late final DawContext _dawContext;
 
   late MultiSplitViewController _trackSplitViewController;
 
@@ -53,10 +55,21 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   @override
   void initState() {
     super.initState();
+    _dawContext = ref.read(projectProvider.notifier).dawContext;
+    unawaited(
+      ref.read(workspaceStateProvider.notifier).restoreSampleDirectories(),
+    );
+    final browserExpanded = ref.read(
+      workspaceStateProvider.select(
+        (state) => state.browserPanelState.isExpanded,
+      ),
+    );
     _trackSplitViewController = MultiSplitViewController(
       areas: [
         Area(size: widget.headerWidth, min: 80, max: 240, data: 'header'),
         Area(min: 200, data: 'timeline'),
+        if (browserExpanded)
+          Area(size: 300, min: 220, max: 480, data: 'browser'),
       ],
     );
 
@@ -67,18 +80,42 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _horizontalControllers = LinkedScrollControllerGroup();
     _rulerController = _horizontalControllers.addAndGet();
     _trackContentController = _horizontalControllers.addAndGet();
+    _browserPanelController = ScrollController();
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
+    _browserPanelSubscription = ref.listenManual<bool>(
+      workspaceStateProvider.select(
+        (state) => state.browserPanelState.isExpanded,
+      ),
+      (_, isExpanded) => _setBrowserPanelExpanded(isExpanded),
+    );
+  }
+
+  void _setBrowserPanelExpanded(bool isExpanded) {
+    final browserIndex = _trackSplitViewController.areas.indexWhere(
+      (area) => area.data == 'browser',
+    );
+    if (isExpanded && browserIndex == -1) {
+      _trackSplitViewController.addArea(
+        Area(size: 300, min: 220, max: 480, data: 'browser'),
+      );
+    } else if (!isExpanded && browserIndex != -1) {
+      _trackSplitViewController.removeAreaAt(browserIndex);
+    }
   }
 
   @override
   void dispose() {
+    _browserPanelSubscription?.close();
     _trackSplitViewController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
     _headerController.dispose();
     _timelineController.dispose();
     _rulerController.dispose();
     _trackContentController.dispose();
+    _browserPanelController.dispose();
+    unawaited(audio_api.stopAllPreviews(ctx: _dawContext));
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvents);
     super.dispose();
   }
 
@@ -283,6 +320,28 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               },
             ),
             const SizedBox(width: 16),
+            TextButton.icon(
+              onPressed: () => ref
+                  .read(workspaceStateProvider.notifier)
+                  .toggleBrowserPanel(),
+              icon: Icon(
+                Icons.library_music,
+                size: 16,
+                color: workspaceState.browserPanelState.isExpanded
+                    ? Colors.cyanAccent
+                    : Colors.white70,
+              ),
+              label: Text(
+                'Samples',
+                style: TextStyle(
+                  color: workspaceState.browserPanelState.isExpanded
+                      ? Colors.cyanAccent
+                      : Colors.white70,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             const Text(
               "Move Step",
               style: TextStyle(color: Colors.white70, fontSize: 12),
@@ -1317,6 +1376,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     return _buildHeaderArea();
                   case 'timeline':
                     return _buildTimelineArea(context);
+                  case 'browser':
+                    return SampleBrowserPanel(
+                      scrollController: _browserPanelController,
+                    );
                   default:
                     return const SizedBox();
                 }

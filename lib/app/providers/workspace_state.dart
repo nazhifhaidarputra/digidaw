@@ -1,4 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/workspace/models/browser_panel_state.dart';
+import 'package:karbeat/features/workspace/services/sample_browser_service.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
@@ -10,7 +15,8 @@ part 'workspace_state.freezed.dart';
 
 /// State for Floating midi keyboard's properties
 @freezed
-abstract class FloatingMidiKeyboardFieldState with _$FloatingMidiKeyboardFieldState {
+abstract class FloatingMidiKeyboardFieldState
+    with _$FloatingMidiKeyboardFieldState {
   const FloatingMidiKeyboardFieldState._(); // enables custom methods
 
   const factory FloatingMidiKeyboardFieldState({
@@ -58,7 +64,8 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(ToolSelection.pointer) ToolSelection selectedTool,
 
-    @Default(ToolbarMenuContextGroup.none) ToolbarMenuContextGroup currentToolbarContext,
+    @Default(ToolbarMenuContextGroup.none)
+    ToolbarMenuContextGroup currentToolbarContext,
 
     InteractionTarget? interactionTarget,
 
@@ -74,9 +81,10 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(false) bool showExportPanel,
 
-    @Default(false) bool sampleBrowserPanelisExpanded,
+    @Default(BrowserPanelState()) BrowserPanelState browserPanelState,
 
-    @Default(FloatingMidiKeyboardFieldState()) FloatingMidiKeyboardFieldState floatingMidiKeyboardState,
+    @Default(FloatingMidiKeyboardFieldState())
+    FloatingMidiKeyboardFieldState floatingMidiKeyboardState,
   }) = _WorkspaceState;
 }
 
@@ -89,6 +97,8 @@ abstract class WorkspaceState with _$WorkspaceState {
 /// All actions here mirror the workspace / editor methods of [GlobalAppState]
 /// and are intended as a drop-in replacement during the slow migration.
 class WorkspaceNotifier extends Notifier<WorkspaceState> {
+  bool _didRestoreSampleDirectories = false;
+
   // ---- static data (menu groups are app-level constants) ----
   static final List<DawToolbarMenuGroup> menuGroups = [
     DawToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -113,7 +123,10 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   /// Open a pattern for editing: sets [editingPatternId] and navigates to
   /// the piano roll view.
   void openPattern(int patternId) {
-    state = state.copyWith(editingPatternId: patternId, currentView: WorkspaceView.pianoRoll);
+    state = state.copyWith(
+      editingPatternId: patternId,
+      currentView: WorkspaceView.pianoRoll,
+    );
   }
 
   // ------------------------------------------------------------------
@@ -134,7 +147,9 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   /// Toggle a toolbar menu group on/off.
   /// Selecting the already-open group collapses it.
   void toggleToolbarContext(ToolbarMenuContextGroup group) {
-    final next = group == state.currentToolbarContext ? ToolbarMenuContextGroup.none : group;
+    final next = group == state.currentToolbarContext
+        ? ToolbarMenuContextGroup.none
+        : group;
     state = state.copyWith(currentToolbarContext: next);
   }
 
@@ -213,6 +228,171 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     state = state.copyWith(showExportPanel: false);
   }
 
+  // ------------------------------------------------------------------
+  // Sample browser
+  // ------------------------------------------------------------------
+
+  void toggleBrowserPanel() {
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(
+        isExpanded: !state.browserPanelState.isExpanded,
+      ),
+    );
+  }
+
+  void closeBrowserPanel() {
+    if (!state.browserPanelState.isExpanded) return;
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(isExpanded: false),
+    );
+  }
+
+  void selectBrowserSample(String path) {
+    if (state.browserPanelState.selectedSamplePath == path) return;
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(
+        selectedSamplePath: path,
+      ),
+    );
+  }
+
+  void toggleBrowserDirectory(String path) {
+    final expandedPaths = state.browserPanelState.expandedDirectoryPaths;
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(
+        expandedDirectoryPaths: expandedPaths.contains(path)
+            ? expandedPaths.remove(path)
+            : expandedPaths.add(path),
+      ),
+    );
+  }
+
+  Future<Result<void>> restoreSampleDirectories() async {
+    if (_didRestoreSampleDirectories) return Result.ok(null);
+    _didRestoreSampleDirectories = true;
+
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(
+        isLoadingDirectory: true,
+      ),
+    );
+
+    final service = ref.read(sampleBrowserServiceProvider);
+    final loadResult = await service.loadPersistedDirectoryPaths();
+    if (loadResult case Error(error: final error)) {
+      _didRestoreSampleDirectories = false;
+      state = state.copyWith(
+        browserPanelState: state.browserPanelState.copyWith(
+          isLoadingDirectory: false,
+        ),
+      );
+      AppLogger.error(
+        'Failed to restore persisted sample directories',
+        error: error,
+      );
+      return ref.notifyErrorResult(error);
+    }
+
+    final restoredTrees = <String, FileTree>{};
+    for (final path in loadResult.ok().toSet()) {
+      final scanResult = await service.scanDirectory(path);
+      switch (scanResult) {
+        case Ok(value: final tree):
+          restoredTrees[tree.path] = tree;
+        case Error(error: final error):
+          // Keep the path persisted: removable or network storage may return.
+          AppLogger.warn(
+            'Persisted sample directory is currently unavailable: $path ($error)',
+          );
+      }
+    }
+
+    var directories = state.browserPanelState.directories;
+    var expandedDirectoryPaths = state.browserPanelState.expandedDirectoryPaths;
+    for (final tree in restoredTrees.values) {
+      directories = directories.add(tree.path, tree);
+      expandedDirectoryPaths = expandedDirectoryPaths.add(tree.path);
+    }
+
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(
+        isLoadingDirectory: false,
+        directories: directories,
+        expandedDirectoryPaths: expandedDirectoryPaths,
+      ),
+    );
+    return Result.ok(null);
+  }
+
+  Future<Result<void>> addSampleDirectory() async {
+    if (state.browserPanelState.isLoadingDirectory) return Result.ok(null);
+
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(
+        isLoadingDirectory: true,
+      ),
+    );
+
+    final service = ref.read(sampleBrowserServiceProvider);
+    final pickResult = await service.pickDirectory();
+    if (pickResult case Error(error: final error)) {
+      state = state.copyWith(
+        browserPanelState: state.browserPanelState.copyWith(
+          isLoadingDirectory: false,
+        ),
+      );
+      AppLogger.error(
+        'Failed to open the sample directory picker',
+        error: error,
+      );
+      return ref.notifyErrorResult(error);
+    }
+
+    final path = pickResult.ok();
+    if (path == null) {
+      state = state.copyWith(
+        browserPanelState: state.browserPanelState.copyWith(
+          isLoadingDirectory: false,
+        ),
+      );
+      return Result.ok(null);
+    }
+
+    final scanResult = await service.scanDirectory(path);
+    if (scanResult case Error(error: final error)) {
+      state = state.copyWith(
+        browserPanelState: state.browserPanelState.copyWith(
+          isLoadingDirectory: false,
+        ),
+      );
+      AppLogger.error('Failed to scan sample directory', error: error);
+      return ref.notifyErrorResult(error);
+    }
+
+    final tree = scanResult.ok();
+    final updatedDirectories = state.browserPanelState.directories.add(
+      tree.path,
+      tree,
+    );
+    state = state.copyWith(
+      browserPanelState: state.browserPanelState.copyWith(
+        isLoadingDirectory: false,
+        directories: updatedDirectories,
+        expandedDirectoryPaths: state.browserPanelState.expandedDirectoryPaths
+            .add(tree.path),
+      ),
+    );
+
+    final saveResult = await service.savePersistedDirectoryPaths(
+      updatedDirectories.keys,
+    );
+    if (saveResult case Error(error: final error)) {
+      AppLogger.error('Failed to persist sample directories', error: error);
+      return ref.notifyErrorResult(error);
+    }
+    return Result.ok(null);
+  }
+
   void setMidiKeyboardBaseKey(int key) {
     state = state.copyWith(
       floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
@@ -220,7 +400,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
       ),
     );
   }
-  
+
   void setMidiKeyboardRange(int range) {
     state = state.copyWith(
       floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
@@ -228,7 +408,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
       ),
     );
   }
-  
+
   void setMidiKeyboardGenerator(int? generatorId) {
     state = state.copyWith(
       floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
@@ -236,7 +416,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
       ),
     );
   }
-  
+
   void toggleFloatingMidiKeyboard() {
     state = state.copyWith(
       floatingMidiKeyboardState: state.floatingMidiKeyboardState.copyWith(
@@ -254,4 +434,5 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
 ///
 /// Read: `ref.watch(workspaceStateProvider)`
 /// Mutate: `ref.read(workspaceStateProvider.notifier).navigateTo(…)`
-final workspaceStateProvider = NotifierProvider<WorkspaceNotifier, WorkspaceState>(WorkspaceNotifier.new);
+final workspaceStateProvider =
+    NotifierProvider<WorkspaceNotifier, WorkspaceState>(WorkspaceNotifier.new);

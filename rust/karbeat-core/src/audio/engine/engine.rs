@@ -687,6 +687,14 @@ impl AudioEngine {
                 self.preview_voices.clear();
                 self.preview_voices.push(PreviewVoice::new(waveform, 1.0));
             }
+            AudioCommand::PlayPreview {
+                waveform,
+                max_frames,
+            } => {
+                self.preview_voices.clear();
+                self.preview_voices
+                    .push(PreviewVoice::with_frame_limit(waveform, 1.0, max_frames));
+            }
             AudioCommand::StopAllPreviews => self.preview_voices.clear(),
             AudioCommand::SetPlaying(val) => {
                 let was_playing = match self.playback_mode {
@@ -2854,7 +2862,7 @@ impl AudioEngine {
             let is_looping = voice.waveform.is_looping && max_len > 0.0;
 
             let max_steps = (max_len - 1.0 - voice.current_frame) / step;
-            let frames_to_process = if !is_looping {
+            let mut frames_to_process = if !is_looping {
                 if max_steps < 0.0 {
                     0
                 } else {
@@ -2863,6 +2871,11 @@ impl AudioEngine {
             } else {
                 buffer_frames
             };
+
+            if let Some(max_rendered_frames) = voice.max_rendered_frames {
+                let remaining_frames = max_rendered_frames.saturating_sub(voice.rendered_frames);
+                frames_to_process = frames_to_process.min(remaining_frames as usize);
+            }
 
             if frames_to_process == 0 {
                 voice.is_finished = true;
@@ -2887,7 +2900,17 @@ impl AudioEngine {
                 0,
             );
 
+            voice.rendered_frames = voice
+                .rendered_frames
+                .saturating_add(frames_to_process as u64);
+
             if !is_looping && voice.current_frame >= max_len - 1.0 {
+                voice.is_finished = true;
+            }
+            if voice
+                .max_rendered_frames
+                .is_some_and(|max_frames| voice.rendered_frames >= max_frames)
+            {
                 voice.is_finished = true;
             }
         }

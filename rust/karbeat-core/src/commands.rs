@@ -9,12 +9,12 @@ use crate::{
         render_state::{AudioAutomationLane, AudioGraphState},
     },
     core::project::{
+        AutomationTarget, Clip, GeneratorId, ModulationLink, ModulationSource,
         mixer::{MixerChannelParams, RoutingConnection},
         plugin::AudioPlugin,
-        track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack},
-        AutomationTarget, Clip, GeneratorId, ModulationLink, ModulationSource,
+        track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern},
     },
-    shared::{id::*, AutomationId, ModulationId, PatternId},
+    shared::{AutomationId, ModulationId, PatternId, id::*},
 };
 
 pub enum AudioCommand {
@@ -22,6 +22,10 @@ pub enum AudioCommand {
     // Transport Command
     // =============================
     PlayOneShot(AudioWaveform),
+    PlayPreview {
+        waveform: AudioWaveform,
+        max_frames: u64,
+    },
     StopAllPreviews,
     /// Set playback state (play/pause)
     SetPlaying(bool),

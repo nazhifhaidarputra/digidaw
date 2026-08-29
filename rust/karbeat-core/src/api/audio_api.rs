@@ -3,10 +3,12 @@ use crate::{
     commands::AudioCommand,
     context::DawContext,
     core::{
-        file_manager::audio_loader::AudioLoader,
+        file_manager::audio_loader::{AudioLoader, load_audio_file},
         project::{AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId},
     },
 };
+
+const SAMPLE_BROWSER_PREVIEW_SECONDS: u64 = 15;
 
 pub fn get_audio_source<T, F>(ctx: &DawContext, id: AudioSourceId, mapper: F) -> Option<T>
 where
@@ -25,6 +27,20 @@ pub fn play_source_preview(ctx: &mut DawContext, id: AudioSourceId) -> anyhow::R
     } else {
         Err(anyhow::anyhow!("Audio source not found"))
     }
+}
+
+pub fn play_file_preview(ctx: &mut DawContext, file_path: &str) -> anyhow::Result<()> {
+    let sample_rate = ctx
+        .active_audio_config
+        .read()
+        .sample_rate
+        .ok_or_else(|| anyhow::anyhow!("Audio output sample rate is unavailable"))?;
+    let waveform = load_audio_file(file_path, None, sample_rate)?;
+    let max_frames = u64::from(sample_rate) * SAMPLE_BROWSER_PREVIEW_SECONDS;
+    ctx.send_audio_command(AudioCommand::PlayPreview {
+        waveform,
+        max_frames,
+    })
 }
 
 pub fn stop_all_previews(ctx: &mut DawContext) {

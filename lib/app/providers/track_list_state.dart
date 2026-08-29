@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
@@ -348,6 +349,62 @@ class TrackListNotifier extends Notifier<TrackListState> {
     if (result.hasError) {
       AppLogger.error(
         'TrackListNotifier: error creating pattern clip: ${result.error}',
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  /// Import [filePath] into the project and place it on an audio track.
+  ///
+  /// The Rust source import and the central project-state merge stay paired so
+  /// the arranger cannot drift from the audio engine after a browser drop.
+  Future<Result<void>> createAudioClipFromFile({
+    required String filePath,
+    required int trackId,
+    required int startTick,
+  }) async {
+    final track = ref.read(projectProvider).value?.tracks[trackId];
+    if (track == null) {
+      return ref.notifyErrorResult(Exception('Target track not found'));
+    }
+    if (track.trackType != UiTrackType.audio) {
+      return ref.notifyErrorResult(
+        Exception('Audio samples can only be dropped on audio tracks'),
+      );
+    }
+
+    final result = await AsyncValue.guard(() async {
+      final sourceId = await addAudioSource(ctx: _ctx, filePath: filePath);
+      final newClip = await createClip(
+        ctx: _ctx,
+        sourceId: sourceId,
+        sourceType: UiSourceType.audio,
+        trackId: trackId,
+        startTime: startTick,
+      );
+
+      final currentTrack = ref.read(projectProvider).value?.tracks[trackId];
+      if (currentTrack == null) {
+        await syncTrack(trackId);
+      } else {
+        _projectNotifierRead.upsertTrack(
+          trackId,
+          currentTrack.copyWith(clips: [...currentTrack.clips, newClip]),
+        );
+      }
+
+      state = state.copyWith(
+        selectedTrackId: trackId,
+        selectedClipIds: IList([newClip.id]),
+        focusClipId: newClip.id,
+      );
+      ref.invalidate(audioSourcesProvider);
+    });
+
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: failed to create browser sample clip: ${result.error}',
       );
       return ref.notifyErrorResult(Exception(result.error.toString()));
     }

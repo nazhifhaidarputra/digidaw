@@ -9,11 +9,11 @@ use smallvec::SmallVec;
 use triple_buffer::Input;
 
 use crate::{
+    DOWNBEAT_BYTES, OFFBEAT_BYTES,
     audio::{engine::helper::load_internal_wav, event::PluginTarget},
     commands::{MixerChannelSnapshot, MixerChannelTarget},
     core::project::{AudioWaveform, MixerChannel, MixerChannelParams},
     shared::*,
-    DOWNBEAT_BYTES, OFFBEAT_BYTES,
 };
 
 pub const MAX_AMPLITUDE: f64 = 1.99526231497;
@@ -264,6 +264,8 @@ pub struct PreviewVoice {
     pub current_frame: f64,
     pub is_finished: bool,
     pub volume: f32,
+    pub rendered_frames: u64,
+    pub max_rendered_frames: Option<u64>,
 }
 
 impl PreviewVoice {
@@ -273,6 +275,15 @@ impl PreviewVoice {
             current_frame: 0.0,
             is_finished: false,
             volume,
+            rendered_frames: 0,
+            max_rendered_frames: None,
+        }
+    }
+
+    pub fn with_frame_limit(waveform: AudioWaveform, volume: f32, max_frames: u64) -> Self {
+        Self {
+            max_rendered_frames: Some(max_frames),
+            ..Self::new(waveform, volume)
         }
     }
 }
