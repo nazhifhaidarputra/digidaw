@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
@@ -38,6 +39,14 @@ class _FakeSampleBrowserService extends SampleBrowserService {
     persistedPaths = paths.toList();
     return Result.ok(null);
   }
+}
+
+class _DelayedRestoreSampleBrowserService extends SampleBrowserService {
+  final Completer<Result<List<String>>> loadCompleter = Completer();
+
+  @override
+  Future<Result<List<String>>> loadPersistedDirectoryPaths() =>
+      loadCompleter.future;
 }
 
 void main() {
@@ -162,6 +171,21 @@ void main() {
     );
     expect(service.scanCount, 2);
     secondSession.dispose();
+  });
+
+  test('stops restoring when its provider container is disposed', () async {
+    final service = _DelayedRestoreSampleBrowserService();
+    final container = ProviderContainer(
+      overrides: [sampleBrowserServiceProvider.overrideWithValue(service)],
+    );
+
+    final restore = container
+        .read(workspaceStateProvider.notifier)
+        .restoreSampleDirectories();
+    container.dispose();
+    service.loadCompleter.complete(Result.ok(const ['/samples']));
+
+    expect(await restore, isA<Ok<void>>());
   });
 
   testWidgets('panel renders browser samples as draggable rows', (

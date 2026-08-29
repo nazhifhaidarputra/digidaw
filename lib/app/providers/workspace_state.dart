@@ -8,6 +8,7 @@ import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
 import 'package:karbeat/shared/models/menu_group.dart';
+import 'package:karbeat/src/rust/api/project.dart' show DawContext;
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -98,6 +99,7 @@ abstract class WorkspaceState with _$WorkspaceState {
 /// and are intended as a drop-in replacement during the slow migration.
 class WorkspaceNotifier extends Notifier<WorkspaceState> {
   bool _didRestoreSampleDirectories = false;
+  DawContext? _dawContextLifetimeAnchor;
 
   // ---- static data (menu groups are app-level constants) ----
   static final List<DawToolbarMenuGroup> menuGroups = [
@@ -267,6 +269,14 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     );
   }
 
+  Future<Result<void>> initializeSampleBrowser(DawContext dawContext) {
+    // The browser does not call the engine while reading preferences, but it
+    // belongs to the DAW session. Retaining this opaque handle guarantees the
+    // Rust context cannot be finalized before an in-flight browser operation.
+    _dawContextLifetimeAnchor ??= dawContext;
+    return restoreSampleDirectories();
+  }
+
   Future<Result<void>> restoreSampleDirectories() async {
     if (_didRestoreSampleDirectories) return Result.ok(null);
     _didRestoreSampleDirectories = true;
@@ -279,6 +289,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
 
     final service = ref.read(sampleBrowserServiceProvider);
     final loadResult = await service.loadPersistedDirectoryPaths();
+    if (!ref.mounted) return Result.ok(null);
     if (loadResult case Error(error: final error)) {
       _didRestoreSampleDirectories = false;
       state = state.copyWith(
@@ -296,6 +307,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     final restoredTrees = <String, FileTree>{};
     for (final path in loadResult.ok().toSet()) {
       final scanResult = await service.scanDirectory(path);
+      if (!ref.mounted) return Result.ok(null);
       switch (scanResult) {
         case Ok(value: final tree):
           restoredTrees[tree.path] = tree;
@@ -335,6 +347,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
 
     final service = ref.read(sampleBrowserServiceProvider);
     final pickResult = await service.pickDirectory();
+    if (!ref.mounted) return Result.ok(null);
     if (pickResult case Error(error: final error)) {
       state = state.copyWith(
         browserPanelState: state.browserPanelState.copyWith(
@@ -359,6 +372,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     }
 
     final scanResult = await service.scanDirectory(path);
+    if (!ref.mounted) return Result.ok(null);
     if (scanResult case Error(error: final error)) {
       state = state.copyWith(
         browserPanelState: state.browserPanelState.copyWith(
@@ -386,6 +400,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     final saveResult = await service.savePersistedDirectoryPaths(
       updatedDirectories.keys,
     );
+    if (!ref.mounted) return Result.ok(null);
     if (saveResult case Error(error: final error)) {
       AppLogger.error('Failed to persist sample directories', error: error);
       return ref.notifyErrorResult(error);

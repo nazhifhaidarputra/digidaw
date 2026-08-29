@@ -56,9 +56,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   void initState() {
     super.initState();
     _dawContext = ref.read(projectProvider.notifier).dawContext;
-    unawaited(
-      ref.read(workspaceStateProvider.notifier).restoreSampleDirectories(),
-    );
     final browserExpanded = ref.read(
       workspaceStateProvider.select(
         (state) => state.browserPanelState.isExpanded,
@@ -104,6 +101,18 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
+  Future<void> _stopBrowserPreviews() async {
+    try {
+      await audio_api.stopAllPreviews(ctx: _dawContext);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to stop browser sample previews during track view teardown',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _browserPanelSubscription?.close();
@@ -114,7 +123,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _rulerController.dispose();
     _trackContentController.dispose();
     _browserPanelController.dispose();
-    unawaited(audio_api.stopAllPreviews(ctx: _dawContext));
+    unawaited(_stopBrowserPreviews());
     HardwareKeyboard.instance.removeHandler(_handleKeyEvents);
     super.dispose();
   }

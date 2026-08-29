@@ -42,7 +42,7 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Wavetable Synthesizer
 - [ ] Sample-based Synthesizer (for Real instrument)
 - [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Sidechain Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
-- [ ] Browser panel for easy drag-and-drop audio samples
+- [x] Browser panel for easy drag-and-drop audio samples
 - [ ] Input channel for input recording
 - [x] Auxiliary input handler
 - [ ] Refactor UI for better UX and responsiveness in mobile platform

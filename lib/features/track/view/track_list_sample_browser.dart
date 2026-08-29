@@ -23,7 +23,11 @@ class SampleBrowserPanel extends ConsumerWidget {
 
   final ScrollController scrollController;
 
-  Future<void> _previewSample(WidgetRef ref, BrowserSample sample) async {
+  Future<void> _previewSample(
+    BuildContext context,
+    WidgetRef ref,
+    BrowserSample sample,
+  ) async {
     ref.read(workspaceStateProvider.notifier).selectBrowserSample(sample.path);
     final result = await AsyncValue.guard(
       () => audio_api.playFilePreview(
@@ -32,6 +36,7 @@ class SampleBrowserPanel extends ConsumerWidget {
       ),
     );
     if (result.hasError) {
+      if (!context.mounted) return;
       ref
           .read(notificationProvider.notifier)
           .error(result.error!, title: 'Unable to preview sample');
@@ -48,7 +53,15 @@ class SampleBrowserPanel extends ConsumerWidget {
         : null;
     ref.read(workspaceStateProvider.notifier).closeBrowserPanel();
     if (dawContext == null) return;
-    await audio_api.stopAllPreviews(ctx: dawContext);
+    try {
+      await audio_api.stopAllPreviews(ctx: dawContext);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to stop browser sample previews',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   List<_BrowserTreeRow> _visibleRows(BrowserPanelState state) {
@@ -169,7 +182,12 @@ class SampleBrowserPanel extends ConsumerWidget {
                             row,
                             state,
                           ),
-                          _BrowserSampleRow() => _sampleTile(ref, row, state),
+                          _BrowserSampleRow() => _sampleTile(
+                            context,
+                            ref,
+                            row,
+                            state,
+                          ),
                         };
                       },
                     ),
@@ -223,6 +241,7 @@ class SampleBrowserPanel extends ConsumerWidget {
   }
 
   Widget _sampleTile(
+    BuildContext context,
     WidgetRef ref,
     _BrowserSampleRow row,
     BrowserPanelState state,
@@ -231,7 +250,7 @@ class SampleBrowserPanel extends ConsumerWidget {
     final tile = Material(
       color: selected ? Colors.cyanAccent.withAlpha(28) : Colors.transparent,
       child: InkWell(
-        onTap: () => unawaited(_previewSample(ref, row.sample)),
+        onTap: () => unawaited(_previewSample(context, ref, row.sample)),
         child: Padding(
           padding: EdgeInsets.only(left: 8 + row.depth * 14.0, right: 8),
           child: Row(
