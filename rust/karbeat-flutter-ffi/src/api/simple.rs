@@ -1,4 +1,4 @@
-use karbeat_core::{context::DawContext, init::init_engine};
+use karbeat_core::{api, context::DawContext, init::init_engine};
 #[cfg(target_os = "android")]
 use once_cell::sync::OnceCell;
 
@@ -23,6 +23,17 @@ pub fn create_daw_context() -> DawContext {
 
     log::info!("DAW Engine System Started. Yielding Context to Flutter.");
     context
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_history_limit(ctx: &DawContext) -> u32 {
+    api::history_limit(ctx) as u32
+}
+
+pub fn set_history_limit(ctx: &mut DawContext, limit: u32) -> Result<u32, String> {
+    api::set_history_limit(ctx, limit as usize)
+        .map(|applied| applied as u32)
+        .map_err(|error| error.to_string())
 }
 
 // ============================================================================

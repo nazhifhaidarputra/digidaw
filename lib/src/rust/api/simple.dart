@@ -9,3 +9,9 @@ import 'project.dart';
 
 DawContext createDawContext() =>
     RustLib.instance.api.crateApiSimpleCreateDawContext();
+
+int getHistoryLimit({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiSimpleGetHistoryLimit(ctx: ctx);
+
+Future<int> setHistoryLimit({required DawContext ctx, required int limit}) =>
+    RustLib.instance.api.crateApiSimpleSetHistoryLimit(ctx: ctx, limit: limit);

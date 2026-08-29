@@ -10,6 +10,8 @@ import 'package:karbeat/features/workspace/view/main_content.dart';
 import 'package:karbeat/features/workspace/view/side_panel.dart';
 import 'package:karbeat/features/workspace/view/sidebar.dart';
 import 'package:karbeat/features/piano_roll/view/floating_midi_keyboard.dart';
+import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/workspace/view/workspace_background.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
 class MainScreen extends ConsumerWidget {
@@ -26,11 +28,27 @@ class MainScreen extends ConsumerWidget {
     final showExportPanel = ref.watch(
       workspaceStateProvider.select((s) => s.showExportPanel),
     );
+    final background = ref.watch(
+      settingsProvider.select(
+        (state) => (
+          path: state.backgroundImagePath,
+          fit: state.backgroundFit,
+          overlay: state.backgroundOverlayOpacity,
+        ),
+      ),
+    );
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Stack(
         children: [
+          Positioned.fill(
+            child: WorkspaceBackground(
+              imagePath: background.path,
+              fit: background.fit,
+              overlayOpacity: background.overlay,
+            ),
+          ),
           const Row(
             children: [
               Sidebar(),

@@ -12,6 +12,7 @@ import 'package:karbeat/features/workspace/view/control_panel.dart';
 import 'package:karbeat/features/mixer/view/mixer_screen.dart';
 import 'package:karbeat/features/piano_roll/view/piano_roll_screen.dart';
 import 'package:karbeat/features/source/view/source_list_screen.dart';
+import 'package:karbeat/features/setting/services/setting_provider.dart';
 import 'package:karbeat/features/track/view/track_list_screen.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -89,9 +90,12 @@ class _MainContentState extends ConsumerState<MainContent>
     final currentView = ref.watch(
       workspaceStateProvider.select((s) => s.currentView),
     );
+    final hasBackground = ref.watch(
+      settingsProvider.select((state) => state.backgroundImagePath != null),
+    );
 
     return Container(
-      color: Colors.grey.shade800,
+      color: hasBackground ? Colors.transparent : Colors.grey.shade800,
       child: Column(
         children: [
           SafeArea(

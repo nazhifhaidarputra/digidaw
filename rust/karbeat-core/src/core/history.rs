@@ -2,6 +2,16 @@ use crate::{
     core::project::{ApplicationState, Clip, ClipId, Note, NoteId, TrackId},
     shared::id::*,
 };
+use thiserror::Error;
+
+pub const DEFAULT_HISTORY_LIMIT: usize = 100;
+pub const MAX_HISTORY_LIMIT: usize = 1000;
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum HistoryLimitError {
+    #[error("History limit {requested} exceeds the maximum of {maximum}")]
+    TooLarge { requested: usize, maximum: usize },
+}
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
@@ -64,9 +74,30 @@ pub struct HistoryManager {
 impl HistoryManager {
     pub fn new() -> Self {
         Self {
-            undo_stack: Vec::with_capacity(100),
-            redo_stack: Vec::with_capacity(100),
-            max_history: 100,
+            undo_stack: Vec::with_capacity(DEFAULT_HISTORY_LIMIT),
+            redo_stack: Vec::with_capacity(DEFAULT_HISTORY_LIMIT),
+            max_history: DEFAULT_HISTORY_LIMIT,
+        }
+    }
+
+    pub fn set_max_history(&mut self, limit: usize) -> Result<(), HistoryLimitError> {
+        if limit > MAX_HISTORY_LIMIT {
+            return Err(HistoryLimitError::TooLarge {
+                requested: limit,
+                maximum: MAX_HISTORY_LIMIT,
+            });
+        }
+
+        self.max_history = limit;
+        Self::trim_oldest(&mut self.undo_stack, limit);
+        Self::trim_oldest(&mut self.redo_stack, limit);
+        Ok(())
+    }
+
+    fn trim_oldest(stack: &mut Vec<ProjectAction>, limit: usize) {
+        let remove_count = stack.len().saturating_sub(limit);
+        if remove_count > 0 {
+            stack.drain(..remove_count);
         }
     }
 
@@ -74,9 +105,7 @@ impl HistoryManager {
         self.undo_stack.push(action);
         self.redo_stack.clear();
 
-        if self.undo_stack.len() > self.max_history {
-            self.undo_stack.remove(0);
-        }
+        Self::trim_oldest(&mut self.undo_stack, self.max_history);
     }
 
     pub fn undo(&mut self, app: &mut ApplicationState) -> Result<(), String> {
@@ -301,5 +330,49 @@ impl HistoryManager {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod history_limit_tests {
+    use super::{HistoryManager, MAX_HISTORY_LIMIT, ProjectAction};
+
+    fn action() -> ProjectAction {
+        ProjectAction::Batch(Vec::new())
+    }
+
+    #[test]
+    fn reducing_limit_trims_oldest_undo_and_redo_entries() {
+        let mut history = HistoryManager::new();
+        history.undo_stack = vec![action(), action(), action()];
+        history.redo_stack = vec![action(), action()];
+
+        history.set_max_history(1).expect("valid history limit");
+
+        assert_eq!(history.undo_stack.len(), 1);
+        assert_eq!(history.redo_stack.len(), 1);
+        assert_eq!(history.max_history, 1);
+    }
+
+    #[test]
+    fn zero_disables_and_clears_history() {
+        let mut history = HistoryManager::new();
+        history.push(action());
+
+        history.set_max_history(0).expect("zero is supported");
+        history.push(action());
+
+        assert!(history.undo_stack.is_empty());
+        assert!(history.redo_stack.is_empty());
+    }
+
+    #[test]
+    fn rejects_limits_above_the_supported_maximum() {
+        let mut history = HistoryManager::new();
+
+        let result = history.set_max_history(MAX_HISTORY_LIMIT + 1);
+
+        assert!(result.is_err());
+        assert_eq!(history.max_history, 100);
     }
 }

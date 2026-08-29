@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
+use thiserror::Error;
 
 pub use super::clip::Clip;
 pub use super::clipboard::ClipboardContent;
@@ -84,8 +85,52 @@ pub enum DawSource {
 pub struct ProjectMetadata {
     pub name: String,
     pub author: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub genre: String,
     pub version: String,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ProjectMetadataError {
+    #[error("Project title cannot be empty")]
+    EmptyTitle,
+    #[error("Project metadata field '{field}' exceeds {maximum} characters")]
+    FieldTooLong { field: &'static str, maximum: usize },
+}
+
+impl ProjectMetadata {
+    pub fn normalize_and_validate(mut self) -> Result<Self, ProjectMetadataError> {
+        self.name = self.name.trim().to_string();
+        self.author = self.author.trim().to_string();
+        self.description = self.description.trim().to_string();
+        self.genre = self.genre.trim().to_string();
+        self.version = self.version.trim().to_string();
+
+        if self.name.is_empty() {
+            return Err(ProjectMetadataError::EmptyTitle);
+        }
+
+        Self::validate_length("title", &self.name, 120)?;
+        Self::validate_length("author", &self.author, 120)?;
+        Self::validate_length("description", &self.description, 4000)?;
+        Self::validate_length("genre", &self.genre, 80)?;
+        Self::validate_length("version", &self.version, 64)?;
+        Ok(self)
+    }
+
+    fn validate_length(
+        field: &'static str,
+        value: &str,
+        maximum: usize,
+    ) -> Result<(), ProjectMetadataError> {
+        if value.chars().count() > maximum {
+            return Err(ProjectMetadataError::FieldTooLong { field, maximum });
+        }
+        Ok(())
+    }
 }
 
 impl Default for ProjectMetadata {
@@ -93,9 +138,51 @@ impl Default for ProjectMetadata {
         Self {
             name: "Untitled".to_string(),
             author: Default::default(),
+            description: Default::default(),
+            genre: Default::default(),
             version: Default::default(),
             created_at: Utc::now(),
         }
+    }
+}
+
+#[cfg(test)]
+mod project_metadata_tests {
+    use super::ProjectMetadata;
+
+    #[test]
+    fn legacy_metadata_without_description_or_genre_still_loads() {
+        let json = r#"{
+            "name":"Legacy",
+            "author":"Author",
+            "version":"1",
+            "created_at":"2025-01-01T00:00:00Z"
+        }"#;
+
+        let metadata: ProjectMetadata = serde_json::from_str(json).expect("legacy metadata");
+
+        assert_eq!(metadata.description, "");
+        assert_eq!(metadata.genre, "");
+    }
+
+    #[test]
+    fn new_metadata_fields_roundtrip() {
+        let metadata = ProjectMetadata {
+            name: "Project".to_string(),
+            author: "Author".to_string(),
+            description: "Description".to_string(),
+            genre: "Electronic".to_string(),
+            version: "2".to_string(),
+            ..ProjectMetadata::default()
+        };
+
+        let encoded = serde_json::to_string(&metadata).expect("serialize metadata");
+        let decoded: ProjectMetadata =
+            serde_json::from_str(&encoded).expect("deserialize metadata");
+
+        assert_eq!(decoded.name, metadata.name);
+        assert_eq!(decoded.description, metadata.description);
+        assert_eq!(decoded.genre, metadata.genre);
     }
 }
 

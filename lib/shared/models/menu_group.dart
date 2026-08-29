@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/features/setting/view/setting_screen.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -187,7 +188,14 @@ class DawToolbarMenuGroupFactory {
           ref.read(workspaceStateProvider.notifier).openExportPanel();
         },
       ),
-      DawToolbarMenuAction('Settings'),
+      DawToolbarMenuAction(
+        'Settings',
+        callback: (context, ref) {
+          Navigator.of(context, rootNavigator: true).push(
+            MaterialPageRoute<void>(builder: (context) => const SettingScreen()),
+          );
+        },
+      ),
     ],
   );
 

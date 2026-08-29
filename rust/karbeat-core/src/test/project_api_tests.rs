@@ -16,6 +16,40 @@ mod tests {
         assert_eq!(result.unwrap(), "Untitled");
     }
 
+    #[test]
+    fn update_project_metadata_normalizes_and_replaces_metadata() {
+        let mut ctx = make_ctx();
+        let created_at = ctx.app_state.metadata.created_at;
+        let metadata = crate::core::project::ProjectMetadata {
+            name: "  New title  ".to_string(),
+            author: " Author ".to_string(),
+            description: " Description ".to_string(),
+            genre: " Electronic ".to_string(),
+            version: " 1.0 ".to_string(),
+            created_at,
+        };
+
+        let updated = project_api::update_project_metadata(&mut ctx, metadata)
+            .expect("metadata should be valid");
+
+        assert_eq!(updated.name, "New title");
+        assert_eq!(updated.description, "Description");
+        assert_eq!(ctx.app_state.metadata.genre, "Electronic");
+        assert_eq!(ctx.app_state.metadata.created_at, created_at);
+    }
+
+    #[test]
+    fn update_project_metadata_rejects_empty_title() {
+        let mut ctx = make_ctx();
+        let mut metadata = ctx.app_state.metadata.clone();
+        metadata.name = "   ".to_string();
+
+        let result = project_api::update_project_metadata(&mut ctx, metadata);
+
+        assert!(result.is_err());
+        assert_eq!(ctx.app_state.metadata.name, "Untitled");
+    }
+
     // ─── get_transport_state ──────────────────────────────────────────────────
 
     #[test]
@@ -103,8 +137,10 @@ mod tests {
     #[test]
     fn load_project_roundtrip_preserves_metadata() {
         let mut ctx = make_ctx();
-        // Set a custom project name
+        // Set custom project metadata
         ctx.app_state.metadata.name = "RoundtripTest".to_string();
+        ctx.app_state.metadata.description = "Roundtrip description".to_string();
+        ctx.app_state.metadata.genre = "Ambient".to_string();
 
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("roundtrip.karbeat");
@@ -115,10 +151,14 @@ mod tests {
 
         // Load into a fresh context
         let mut ctx2 = make_ctx();
-        let loaded_name =
-            project_api::load_project(&mut ctx2, path_str, |state| state.metadata.name.clone());
-        assert!(loaded_name.is_ok(), "{:?}", loaded_name.err());
-        assert_eq!(loaded_name.unwrap(), "RoundtripTest");
+        ctx2.active_audio_config.write().sample_rate = Some(48_000);
+        let loaded_metadata =
+            project_api::load_project(&mut ctx2, path_str, |state| state.metadata.clone());
+        assert!(loaded_metadata.is_ok(), "{:?}", loaded_metadata.err());
+        let loaded_metadata = loaded_metadata.unwrap();
+        assert_eq!(loaded_metadata.name, "RoundtripTest");
+        assert_eq!(loaded_metadata.description, "Roundtrip description");
+        assert_eq!(loaded_metadata.genre, "Ambient");
     }
 
     // ─── hydrate_live_audio_engine ────────────────────────────────────────────

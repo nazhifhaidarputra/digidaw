@@ -26,3 +26,12 @@ pub fn redo(ctx: &mut DawContext) -> Result<(), String> {
     ctx.broadcast_full_graph();
     Ok(())
 }
+
+pub fn history_limit(ctx: &DawContext) -> usize {
+    ctx.history.max_history
+}
+
+pub fn set_history_limit(ctx: &mut DawContext, limit: usize) -> anyhow::Result<usize> {
+    ctx.history.set_max_history(limit)?;
+    Ok(ctx.history.max_history)
+}

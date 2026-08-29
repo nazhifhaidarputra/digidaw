@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/input/input.dart';
@@ -11,6 +12,8 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/notification_overlay.dart';
 import 'package:karbeat/features/misc/error_init_screen.dart';
 import 'package:karbeat/features/misc/loading_screen.dart';
+import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/setting/services/log_provider.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/frb_generated.dart';
@@ -80,6 +83,8 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
   Future<void> _initializeApplication() async {
     try {
+      await ref.read(settingsProvider.notifier).initializeAppearance();
+      if (!mounted) return;
       await Future.wait([
         RustLib.init(),
         Future.delayed(const Duration(seconds: 5)),
@@ -95,6 +100,10 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
       final dawContext = ref.read(projectProvider.notifier).dawContext;
       _dawContextLifetimeAnchor = dawContext;
+      await ref.read(settingsProvider.notifier).initialize(dawContext);
+      if (!mounted) return;
+      await ref.read(logProvider.notifier).initialize();
+      if (!mounted) return;
       await ref
           .read(workspaceStateProvider.notifier)
           .initializeSampleBrowser(dawContext);
@@ -118,11 +127,32 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
   @override
   Widget build(BuildContext context) {
+    final appearance = ref.watch(
+      settingsProvider.select(
+        (state) => (
+          themeMode: state.themeMode,
+          palette: state.colorPalette,
+          fontFamily: state.customFontFamily,
+        ),
+      ),
+    );
+    final lightTheme = AppTheme.light(
+      appearance.palette,
+      fontFamily: appearance.fontFamily,
+    );
+    final darkTheme = AppTheme.dark(
+      appearance.palette,
+      fontFamily: appearance.fontFamily,
+    );
+    final themeMode = AppTheme.themeMode(appearance.themeMode);
+
     // Handle Rust Initialization Errors
     if (_rustError != null) {
       return MaterialApp(
         title: 'DigiDAW',
-        theme: ThemeData.dark(),
+        theme: lightTheme,
+        darkTheme: darkTheme,
+        themeMode: themeMode,
         debugShowCheckedModeBanner: false,
         builder: _notificationBuilder,
         home: ErrorInitScreen(err: _rustError!, stack: _rustStackTrace!),
@@ -133,7 +163,9 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
     if (!_isRustInitialized) {
       return MaterialApp(
         title: 'DigiDAW',
-        theme: ThemeData.dark(),
+        theme: lightTheme,
+        darkTheme: darkTheme,
+        themeMode: themeMode,
         debugShowCheckedModeBanner: false,
         builder: _notificationBuilder,
         home: const LoadingScreen(),
@@ -147,7 +179,9 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
       shortcuts: activeShortcuts,
       child: MaterialApp(
         title: 'DigiDAW',
-        theme: ThemeData.dark(),
+        theme: lightTheme,
+        darkTheme: darkTheme,
+        themeMode: themeMode,
         debugShowCheckedModeBanner: false,
         builder: _notificationBuilder,
         home: projectState.when(

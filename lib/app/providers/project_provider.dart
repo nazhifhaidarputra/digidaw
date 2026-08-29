@@ -306,6 +306,31 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     }
   }
 
+  Future<Result<void>> updateMetadata(UiProjectMetadata metadata) async {
+    final operation = await AsyncValue.guard(
+      () => updateProjectMetadata(ctx: dawContext, metadata: metadata),
+    );
+    if (operation case AsyncError(:final error, :final stackTrace)) {
+      return ref.notifyErrorResult(
+        error,
+        title: 'Could not update project information',
+        stackTrace: stackTrace,
+      );
+    }
+
+    if (!state.hasValue) {
+      return ref.notifyErrorResult(
+        StateError('Project state is unavailable'),
+        title: 'Could not update project information',
+      );
+    }
+
+    state = AsyncValue.data(
+      state.requireValue.copyWith(metadata: operation.requireValue),
+    );
+    return Result.ok(null);
+  }
+
   /// insert or update if exists of generator
   void upsertGenerator(int genId, UiGeneratorInstance updatedGen) {
     if (state.hasValue) {

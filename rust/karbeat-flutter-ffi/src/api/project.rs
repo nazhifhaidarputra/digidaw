@@ -117,6 +117,8 @@ pub struct UiTrack {
 pub struct UiProjectMetadata {
     pub name: String,
     pub author: String,
+    pub description: String,
+    pub genre: String,
     pub version: String,
     pub created_at: String,
 }
@@ -126,6 +128,8 @@ impl From<ProjectMetadata> for UiProjectMetadata {
         Self {
             name: m.name,
             author: m.author,
+            description: m.description,
+            genre: m.genre,
             version: m.version,
             created_at: m.created_at.to_rfc3339(),
         }
@@ -137,6 +141,8 @@ impl From<UiProjectMetadata> for ProjectMetadata {
         Self {
             name: m.name,
             author: m.author,
+            description: m.description,
+            genre: m.genre,
             version: m.version,
             created_at: m.created_at.parse::<DateTime<Utc>>().unwrap_or(Utc::now()),
         }
@@ -515,6 +521,18 @@ pub enum AudioExportConfigDTO {
 pub fn get_project_metadata(ctx: &DawContext) -> Result<UiProjectMetadata, String> {
     project_api::get_project_metadata(ctx, |m| UiProjectMetadata::from(m.clone()))
         .map_err(|e| e.to_string())
+}
+
+pub fn update_project_metadata(
+    ctx: &mut DawContext,
+    metadata: UiProjectMetadata,
+) -> Result<UiProjectMetadata, String> {
+    let created_at = ctx.app_state.metadata.created_at;
+    let mut metadata = ProjectMetadata::from(metadata);
+    metadata.created_at = created_at;
+    project_api::update_project_metadata(ctx, metadata)
+        .map(UiProjectMetadata::from)
+        .map_err(|error| error.to_string())
 }
 
 /// Get the transport state from the backend

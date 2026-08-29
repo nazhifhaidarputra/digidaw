@@ -21,6 +21,15 @@ where
     Ok(mapper(&ctx.app_state.metadata))
 }
 
+pub fn update_project_metadata(
+    ctx: &mut DawContext,
+    metadata: ProjectMetadata,
+) -> anyhow::Result<ProjectMetadata> {
+    let metadata = metadata.normalize_and_validate()?;
+    ctx.app_state.metadata = metadata.clone();
+    Ok(metadata)
+}
+
 pub fn get_transport_state<T, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&TransportState) -> T,

@@ -49,6 +49,14 @@ UiTransportState transportStateNewWithParam({
 Future<UiProjectMetadata> getProjectMetadata({required DawContext ctx}) =>
     RustLib.instance.api.crateApiProjectGetProjectMetadata(ctx: ctx);
 
+Future<UiProjectMetadata> updateProjectMetadata({
+  required DawContext ctx,
+  required UiProjectMetadata metadata,
+}) => RustLib.instance.api.crateApiProjectUpdateProjectMetadata(
+  ctx: ctx,
+  metadata: metadata,
+);
+
 /// Get the transport state from the backend
 Future<UiTransportState> getTransportState({required DawContext ctx}) =>
     RustLib.instance.api.crateApiProjectGetTransportState(ctx: ctx);
@@ -343,6 +351,8 @@ sealed class UiProjectMetadata with _$UiProjectMetadata {
   const factory UiProjectMetadata({
     required String name,
     required String author,
+    required String description,
+    required String genre,
     required String version,
     required String createdAt,
   }) = _UiProjectMetadata;
