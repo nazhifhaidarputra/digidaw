@@ -847,43 +847,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           ),
         ),
 
-        // if (isPlacing)
-        //   Positioned(
-        //     bottom: 30,
-        //     right: 30,
-        //     child: Row(
-        //       children: [
-        //         FloatingActionButton.extended(
-        //           heroTag: 'cancel_place',
-        //           label: const Text("Cancel"),
-        //           icon: const Icon(Icons.close),
-        //           backgroundColor: Colors.redAccent,
-        //           onPressed: () {
-        //             ref.read(clipPlacementProvider.notifier).cancelPlacement();
-        //           },
-        //         ),
-        //         const SizedBox(width: 16),
-        //         FloatingActionButton.extended(
-        //           heroTag: 'confirm_place',
-        //           onPressed: () async {
-        //             final result = await ref
-        //                 .read(clipPlacementProvider.notifier)
-        //                 .confirmPlacement();
-        //             if (result.isErr() && context.mounted) {
-        //               ScaffoldMessenger.of(context).showSnackBar(
-        //                 SnackBar(
-        //                   content: Text((result as Error).toErrorMessage()),
-        //                 ),
-        //               );
-        //             }
-        //           },
-        //           label: const Text('Confirm'),
-        //           icon: const Icon(Icons.check),
-        //           backgroundColor: Colors.greenAccent,
-        //         ),
-        //       ],
-        //     ),
-        //   ),
         if (selectedClipIds.isNotEmpty)
           FloatingContextPanel(
             actions: [

@@ -37,7 +37,7 @@ class MainScreen extends ConsumerWidget {
     final background = ref.watch(
       appearanceSettingsProvider.select(
         (state) => (
-          path: state.backgroundImagePath,
+          // path: state.backgroundImagePath,
           fit: state.backgroundFit,
           overlay: state.backgroundOverlayOpacity,
         ),
@@ -83,7 +83,6 @@ class MainScreen extends ConsumerWidget {
           children: [
             Positioned.fill(
               child: WorkspaceBackground(
-                imagePath: background.path,
                 fit: background.fit,
                 overlayOpacity: background.overlay,
               ),

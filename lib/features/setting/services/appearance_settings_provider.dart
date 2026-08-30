@@ -1,9 +1,35 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_preferences_service.dart';
+
+final workspaceBackgroundImageProvider = FutureProvider<ui.Image?>((ref) async {
+  final path = ref.watch(
+    appearanceSettingsProvider.select((s) => s.backgroundImagePath),
+  );
+  if (path == null) return null;
+
+  final bytes = await File(path).readAsBytes();
+
+  final screenWidth = ui.PlatformDispatcher.instance.views.first.physicalSize.width;
+  final codec = await ui.instantiateImageCodec(
+    bytes,
+    targetWidth: screenWidth.round(),
+  );
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+
+  // Dispose the native buffer when this provider recomputes (path changed)
+  // or is torn down, so we don't leak GPU memory on repeated picks.
+  ref.onDispose(image.dispose);
+
+  return image;
+});
 
 final appearancePreferencesServiceProvider =
     Provider<AppearancePreferencesService>((ref) {

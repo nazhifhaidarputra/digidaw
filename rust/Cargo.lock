@@ -1610,6 +1610,7 @@ dependencies = [
  "rmp-serde",
  "rodio",
  "rtrb",
+ "rubato",
  "serde",
  "serde_json",
  "slab",

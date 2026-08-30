@@ -35,9 +35,9 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Bus Automation lanes rack
 - [x] Real-time pitch shifting (Via Rubberband FFI binding). There is a plan to rewrite the pitch shifting entirely in Rust to remove reliability to an C++ library via FFI boundary
 - [x] Finishing and optimizing Bus Mixer Routing
-- [ ] Action history (Undo/Redo) (WIP)
+- [ ] Action history (Undo/Redo). Currently the system exists, but not all action has HistoryEntry
 - [ ] Time-stretched audio waveform processing
-- [ ] Audio host selector (ASIO, JACK, or AudioCore)
+- [x] Audio host selector (ASIO, JACK, or AudioCore)
 - [ ] Automation for generator and global parameters
 - [ ] Wavetable Synthesizer
 - [ ] Sample-based Synthesizer (for Real instrument)
@@ -47,8 +47,8 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Auxiliary input handler
 - [ ] Refactor UI for better UX and responsiveness in mobile platform
 - [ ] Third-party supports for native audio plugin (In form of Asset Workshop)
-- [ ] Settings/configuration for user
-- [ ] Logging for end-user
+- [x] Settings/configuration for user
+- [x] Logging for end-user
 - [ ] VST3 Host support (WIP)
 - [ ] AU Host support
 - [ ] CLAP Host support
