@@ -594,7 +594,7 @@ pub fn start_audio_stream(
                 }
             }
 
-            // 3. Spawn the Dedicated DSP Thread
+            // Spawn the Dedicated DSP Thread
             let dsp_thread = std::thread::spawn(move || {
                 while is_dsp_running_clone.load(Ordering::Relaxed) {
                     if producer.slots() >= maximum_device_samples {

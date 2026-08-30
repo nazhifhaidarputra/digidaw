@@ -39,6 +39,7 @@ class HostDevicesSettingsPage extends ConsumerWidget {
               const SizedBox(height: 24),
               DropdownButtonFormField<String>(
                 key: ValueKey('output-host-${state.selectedHostName}'),
+                isExpanded: true,
                 initialValue: state.selectedHostName ?? _systemDefault,
                 decoration: const InputDecoration(
                   labelText: 'Audio host',
@@ -74,6 +75,7 @@ class HostDevicesSettingsPage extends ConsumerWidget {
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 key: ValueKey('output-device-${state.selectedOutputDeviceId}'),
+                isExpanded: true,
                 initialValue: state.selectedOutputDeviceId ?? _systemDefault,
                 decoration: const InputDecoration(
                   labelText: 'Output device',

@@ -24,26 +24,40 @@ void main() {
   });
 
   testWidgets('all setting menus render without overflow', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1000, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          theme: ThemeData.dark(),
-          home: const SettingScreen(),
+    for (final size in [const Size(1000, 600), const Size(640, 360)]) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData.dark(),
+            home: const SettingScreen(),
+          ),
         ),
-      ),
-    );
-
-    for (final menu in SettingMenu.values) {
-      await tester.tap(find.byKey(ValueKey(menu)));
-      await tester.pump();
-      expect(
-        find.byKey(ValueKey('settings-page-${menu.name}')),
-        findsOneWidget,
       );
-      expect(tester.takeException(), isNull);
+
+      for (final menu in SettingMenu.values) {
+        final menuItem = find.byKey(ValueKey(menu));
+        if (menuItem.evaluate().isEmpty) {
+          await tester.scrollUntilVisible(
+            menuItem,
+            80,
+            scrollable: find.byType(Scrollable).first,
+          );
+        }
+        await tester.tap(menuItem);
+        await tester.pump();
+        expect(
+          find.byKey(ValueKey('settings-page-${menu.name}')),
+          findsOneWidget,
+        );
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: '${size.width}x${size.height}: ${menu.name}',
+        );
+      }
     }
   });
 

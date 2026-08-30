@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
-import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/constants/toolbar.dart';
 import 'package:karbeat/core/input/intents/workspace/action_history_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/export_intent.dart';
@@ -168,9 +167,6 @@ class MainScreen extends ConsumerWidget {
         final state = ref.read(workspaceStateProvider.notifier);
         state.closeContextPanel();
         action.callback?.call(context, ref);
-        ref
-            .read(notificationProvider.notifier)
-            .info('Executed: ${action.title}');
       },
       onClose: () =>
           ref.read(workspaceStateProvider.notifier).closeContextPanel(),

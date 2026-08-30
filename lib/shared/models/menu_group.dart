@@ -76,7 +76,6 @@ class DawToolbarMenuGroupFactory {
       }
 
       await ref.read(projectProvider.notifier).saveProject(path);
-
       await _updateWindowTitle(path);
 
       if (context.mounted) Navigator.of(context).pop();

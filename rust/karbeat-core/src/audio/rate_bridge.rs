@@ -1,6 +1,4 @@
-use rubato::{
-    audioadapter_buffers::direct::InterleavedSlice, Fft, FixedSync, Indexing, Resampler,
-};
+use rubato::{Fft, FixedSync, Indexing, Resampler, audioadapter_buffers::direct::InterleavedSlice};
 
 /// Bridges the DSP engine's sample rate to whatever rate the CPAL device
 /// actually negotiated. These two rates are independent by design (the engine

@@ -172,6 +172,12 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
       }
 
       AppLogger.info("Project saved successfully to $path");
+      ref
+          .read(notificationProvider.notifier)
+          .info(
+            "Project successfully saved to $path",
+            title: "Project saved",
+          );
       return Result.ok(null);
     } catch (e) {
       AppLogger.error("Failed to save project: $e");
