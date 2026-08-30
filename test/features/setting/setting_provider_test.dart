@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/core/utils/result_type.dart';
-import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/services/settings_service.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:mocktail/mocktail.dart';
@@ -50,13 +50,13 @@ void main() {
     addTearDown(container.dispose);
 
     final result = await container
-        .read(settingsProvider.notifier)
+        .read(generalSettingsProvider.notifier)
         .initialize(_MockDawContext());
 
     expect(result.isOk(), isTrue);
     expect(service.appliedLimit, 250);
-    expect(container.read(settingsProvider).maxHistoryEntries, 250);
-    expect(container.read(settingsProvider).isInitialized, isTrue);
+    expect(container.read(generalSettingsProvider).maxHistoryEntries, 250);
+    expect(container.read(generalSettingsProvider).isInitialized, isTrue);
   });
 
   test('update publishes the applied value and persists it', () async {
@@ -65,7 +65,7 @@ void main() {
       overrides: [settingsServiceProvider.overrideWithValue(service)],
     );
     addTearDown(container.dispose);
-    final notifier = container.read(settingsProvider.notifier);
+    final notifier = container.read(generalSettingsProvider.notifier);
     await notifier.initialize(_MockDawContext());
 
     final result = await notifier.setHistoryLimit(500);
@@ -73,7 +73,7 @@ void main() {
     expect(result.isOk(), isTrue);
     expect(service.appliedLimit, 500);
     expect(service.savedLimit, 500);
-    expect(container.read(settingsProvider).maxHistoryEntries, 500);
+    expect(container.read(generalSettingsProvider).maxHistoryEntries, 500);
   });
 
   test('backend failure keeps the previous provider value', () async {
@@ -82,15 +82,18 @@ void main() {
       overrides: [settingsServiceProvider.overrideWithValue(service)],
     );
     addTearDown(container.dispose);
-    final notifier = container.read(settingsProvider.notifier);
+    final notifier = container.read(generalSettingsProvider.notifier);
     await notifier.initialize(_MockDawContext());
     service.applyError = Exception('backend rejected limit');
 
     final result = await notifier.setHistoryLimit(500);
 
     expect(result.isErr(), isTrue);
-    expect(container.read(settingsProvider).maxHistoryEntries, 100);
-    expect(container.read(settingsProvider).isApplyingHistoryLimit, isFalse);
+    expect(container.read(generalSettingsProvider).maxHistoryEntries, 100);
+    expect(
+      container.read(generalSettingsProvider).isApplyingHistoryLimit,
+      isFalse,
+    );
   });
 
   test('failed initialization can be retried', () async {
@@ -100,7 +103,7 @@ void main() {
       overrides: [settingsServiceProvider.overrideWithValue(service)],
     );
     addTearDown(container.dispose);
-    final notifier = container.read(settingsProvider.notifier);
+    final notifier = container.read(generalSettingsProvider.notifier);
 
     final failed = await notifier.initialize(_MockDawContext());
     service.loadError = null;
@@ -109,6 +112,6 @@ void main() {
 
     expect(failed.isErr(), isTrue);
     expect(retried.isOk(), isTrue);
-    expect(container.read(settingsProvider).maxHistoryEntries, 25);
+    expect(container.read(generalSettingsProvider).maxHistoryEntries, 25);
   });
 }

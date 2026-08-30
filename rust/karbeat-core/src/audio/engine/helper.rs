@@ -509,7 +509,6 @@ pub fn compute_routing_order(
     bus_ids: impl Iterator<Item = BusId>,
     routing: &[RoutingConnection],
 ) -> Vec<RoutingNode> {
-
     let bus_ids_vec: Vec<BusId> = bus_ids.collect();
 
     // All tracks come first

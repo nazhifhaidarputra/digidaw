@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/setting/models/setting_state.dart';
 import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
 import 'package:karbeat/features/setting/view/general_settings_page.dart';
+import 'package:karbeat/features/setting/view/host_devices_settings_page.dart';
 import 'package:karbeat/features/setting/view/appearance_settings_page.dart';
+import 'package:karbeat/features/setting/view/audio_settings_page.dart';
 import 'package:karbeat/features/setting/view/info_settings_page.dart';
+import 'package:karbeat/features/setting/view/key_binding_settings_page.dart';
 import 'package:karbeat/features/setting/view/log_settings_page.dart';
 import 'package:karbeat/features/setting/view/project_settings_page.dart';
 
@@ -110,15 +114,18 @@ class _SettingsMenu extends StatelessWidget {
   }
 }
 
-class _SettingsPlaceholder extends StatelessWidget {
+class _SettingsPlaceholder extends ConsumerWidget {
   const _SettingsPlaceholder({required this.menu});
 
   final SettingMenu menu;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (menu == SettingMenu.general) {
       return const GeneralSettingsPage();
+    }
+    if (menu == SettingMenu.hostAndDevices) {
+      return const HostDevicesSettingsPage();
     }
     if (menu == SettingMenu.info) {
       return const InfoSettingsPage();
@@ -131,6 +138,12 @@ class _SettingsPlaceholder extends StatelessWidget {
     }
     if (menu == SettingMenu.appearance) {
       return const AppearanceSettingsPage();
+    }
+    if (menu == SettingMenu.audio) {
+      return const AudioSettingsPage();
+    }
+    if (menu == SettingMenu.keyBinding) {
+      return const KeyBindingSettingsPage();
     }
 
     final colors = Theme.of(context).colorScheme;
@@ -177,7 +190,9 @@ class _SettingsPlaceholder extends StatelessWidget {
                       Expanded(
                         child: Text(
                           menu == SettingMenu.plugins
-                              ? 'Third-party plugin scanning is unavailable until a plugin host is ready.'
+                              ? ref
+                                    .watch(pluginSettingsProvider)
+                                    .unavailableReason
                               : 'This settings page will be implemented in a later phase.',
                         ),
                       ),

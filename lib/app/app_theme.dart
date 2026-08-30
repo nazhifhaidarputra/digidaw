@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:karbeat/features/setting/models/setting_state.dart';
+import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 
 abstract final class AppTheme {
   static ThemeMode themeMode(AppThemeMode mode) => switch (mode) {

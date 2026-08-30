@@ -12,7 +12,10 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/notification_overlay.dart';
 import 'package:karbeat/features/misc/error_init_screen.dart';
 import 'package:karbeat/features/misc/loading_screen.dart';
-import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
+import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
+import 'package:karbeat/features/setting/services/general_settings_provider.dart';
+import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/features/setting/services/log_provider.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -83,7 +86,8 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
   Future<void> _initializeApplication() async {
     try {
-      await ref.read(settingsProvider.notifier).initializeAppearance();
+      await ref.read(appearanceSettingsProvider.notifier).initialize();
+      await ref.read(shortcutManagerProvider.notifier).initialize();
       if (!mounted) return;
       await Future.wait([
         RustLib.init(),
@@ -100,7 +104,13 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
       final dawContext = ref.read(projectProvider.notifier).dawContext;
       _dawContextLifetimeAnchor = dawContext;
-      await ref.read(settingsProvider.notifier).initialize(dawContext);
+      await ref.read(generalSettingsProvider.notifier).initialize(dawContext);
+      if (!mounted) return;
+      await ref
+          .read(hostDevicesSettingsProvider.notifier)
+          .initialize(dawContext);
+      if (!mounted) return;
+      await ref.read(audioSettingsProvider.notifier).initialize(dawContext);
       if (!mounted) return;
       await ref.read(logProvider.notifier).initialize();
       if (!mounted) return;
@@ -128,7 +138,7 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
   @override
   Widget build(BuildContext context) {
     final appearance = ref.watch(
-      settingsProvider.select(
+      appearanceSettingsProvider.select(
         (state) => (
           themeMode: state.themeMode,
           palette: state.colorPalette,
@@ -173,7 +183,7 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
     }
 
     final projectState = ref.watch(projectProvider);
-    final activeShortcuts = ref.watch(shortcutManagerProvider);
+    final activeShortcuts = ref.watch(activeShortcutMapProvider);
 
     return Shortcuts(
       shortcuts: activeShortcuts,

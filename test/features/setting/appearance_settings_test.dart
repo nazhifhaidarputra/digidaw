@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/core/utils/result_type.dart';
-import 'package:karbeat/features/setting/models/setting_state.dart';
+import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_preferences_service.dart';
-import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 import 'package:karbeat/features/setting/view/appearance_settings_page.dart';
 
 class _FakeAppearanceService extends AppearancePreferencesService {
@@ -62,15 +62,21 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final notifier = container.read(settingsProvider.notifier);
+    final notifier = container.read(appearanceSettingsProvider.notifier);
 
-    final initialized = await notifier.initializeAppearance();
+    final initialized = await notifier.initialize();
     final changed = await notifier.setColorPalette(AppColorPalette.blue);
 
     expect(initialized.isOk(), isTrue);
     expect(changed.isOk(), isTrue);
-    expect(container.read(settingsProvider).themeMode, AppThemeMode.light);
-    expect(container.read(settingsProvider).colorPalette, AppColorPalette.blue);
+    expect(
+      container.read(appearanceSettingsProvider).themeMode,
+      AppThemeMode.light,
+    );
+    expect(
+      container.read(appearanceSettingsProvider).colorPalette,
+      AppColorPalette.blue,
+    );
     expect(service.saved?.colorPalette, AppColorPalette.blue);
   });
 
@@ -83,7 +89,7 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    await container.read(settingsProvider.notifier).initializeAppearance();
+    await container.read(appearanceSettingsProvider.notifier).initialize();
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -102,8 +108,14 @@ void main() {
     await tester.tap(find.text('Dark'));
     await tester.pump();
 
-    expect(container.read(settingsProvider).colorPalette, AppColorPalette.red);
-    expect(container.read(settingsProvider).themeMode, AppThemeMode.dark);
+    expect(
+      container.read(appearanceSettingsProvider).colorPalette,
+      AppColorPalette.red,
+    );
+    expect(
+      container.read(appearanceSettingsProvider).themeMode,
+      AppThemeMode.dark,
+    );
   });
 
   test('derived themes use requested brightness and palette', () {
@@ -128,8 +140,8 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final notifier = container.read(settingsProvider.notifier);
-    await notifier.initializeAppearance();
+    final notifier = container.read(appearanceSettingsProvider.notifier);
+    await notifier.initialize();
 
     expect((await notifier.chooseBackgroundImage()).isOk(), isTrue);
     expect(
@@ -139,21 +151,33 @@ void main() {
     expect((await notifier.setBackgroundOverlayOpacity(0.6)).isOk(), isTrue);
     expect((await notifier.chooseCustomFont()).isOk(), isTrue);
     expect(
-      container.read(settingsProvider).backgroundImagePath,
+      container.read(appearanceSettingsProvider).backgroundImagePath,
       '/tmp/studio.png',
     );
     expect(
-      container.read(settingsProvider).backgroundFit,
+      container.read(appearanceSettingsProvider).backgroundFit,
       AppBackgroundFit.contain,
     );
-    expect(container.read(settingsProvider).backgroundOverlayOpacity, 0.6);
-    expect(container.read(settingsProvider).customFontPath, '/tmp/studio.ttf');
-    expect(container.read(settingsProvider).customFontFamily, isNotNull);
+    expect(
+      container.read(appearanceSettingsProvider).backgroundOverlayOpacity,
+      0.6,
+    );
+    expect(
+      container.read(appearanceSettingsProvider).customFontPath,
+      '/tmp/studio.ttf',
+    );
+    expect(
+      container.read(appearanceSettingsProvider).customFontFamily,
+      isNotNull,
+    );
 
     await notifier.clearBackgroundImage();
     await notifier.clearCustomFont();
-    expect(container.read(settingsProvider).backgroundImagePath, isNull);
-    expect(container.read(settingsProvider).customFontPath, isNull);
+    expect(
+      container.read(appearanceSettingsProvider).backgroundImagePath,
+      isNull,
+    );
+    expect(container.read(appearanceSettingsProvider).customFontPath, isNull);
   });
 
   test('missing restored assets safely fall back and are cleared', () async {
@@ -179,12 +203,15 @@ void main() {
     addTearDown(container.dispose);
 
     expect(
-      (await container.read(settingsProvider.notifier).initializeAppearance())
+      (await container.read(appearanceSettingsProvider.notifier).initialize())
           .isOk(),
       isTrue,
     );
-    expect(container.read(settingsProvider).backgroundImagePath, isNull);
-    expect(container.read(settingsProvider).customFontPath, isNull);
+    expect(
+      container.read(appearanceSettingsProvider).backgroundImagePath,
+      isNull,
+    );
+    expect(container.read(appearanceSettingsProvider).customFontPath, isNull);
     expect(preferences.saved?.backgroundImagePath, isNull);
     expect(preferences.saved?.customFontPath, isNull);
   });

@@ -137,8 +137,7 @@ pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result
         return Ok(source_id);
     }
 
-    let sample_rate = { ctx.active_audio_config.read().sample_rate }
-        .ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
+    let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
 
     let result = ctx.app_state.load_audio(file_path, None, sample_rate);
     let id = match result {

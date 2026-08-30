@@ -1,4 +1,4 @@
-use crate::api::project::UiTrackType;
+use crate::api::project::{UiApplicationState, UiTrackType};
 use crate::api::track::UiResizeEdge;
 use crate::api::{pattern::UiNote, project::UiClip};
 use karbeat_core::api::{self, clip_api, clipboard_api, note_api};
@@ -43,15 +43,15 @@ impl From<&ClipboardContent> for UiClipboardContent {
 // entirely in the Flutter frontend. Only clipboard and editing APIs remain here.
 
 /// Undo the last action.
-pub fn undo(ctx: &mut DawContext) -> Result<(), String> {
+pub fn undo(ctx: &mut DawContext) -> Result<UiApplicationState, String> {
     api::undo(ctx)?;
-    Ok(())
+    Ok(UiApplicationState::from(ctx.app_state.clone()))
 }
 
 /// Redo the last undone action.
-pub fn redo(ctx: &mut DawContext) -> Result<(), String> {
+pub fn redo(ctx: &mut DawContext) -> Result<UiApplicationState, String> {
     api::redo(ctx)?;
-    Ok(())
+    Ok(UiApplicationState::from(ctx.app_state.clone()))
 }
 
 // =============================================

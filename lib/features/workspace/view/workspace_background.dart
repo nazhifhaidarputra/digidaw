@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:karbeat/features/setting/models/setting_state.dart';
+import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 
 class WorkspaceBackground extends StatefulWidget {
   const WorkspaceBackground({

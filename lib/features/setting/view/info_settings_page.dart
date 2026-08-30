@@ -12,7 +12,7 @@ class InfoSettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final packageMetadata = ref.watch(appPackageMetadataProvider);
+    final infoState = ref.watch(infoSettingsProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -36,34 +36,37 @@ class InfoSettingsPage extends ConsumerWidget {
               const SizedBox(height: 24),
               _InfoCard(
                 title: 'Application',
-                child: packageMetadata.when(
-                  data: (metadata) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _InfoRow(label: 'Name', value: 'DigiDAW'),
-                      _InfoRow(label: 'Version', value: metadata.version),
-                      _InfoRow(
-                        label: 'Build',
-                        value: metadata.buildNumber.isEmpty
-                            ? 'Not specified'
-                            : metadata.buildNumber,
+                child: infoState.isLoading
+                    ? const LinearProgressIndicator()
+                    : infoState.errorMessage != null
+                    ? Row(
+                        children: [
+                          const Expanded(
+                            child: Text('Version information is unavailable.'),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                ref.invalidate(appPackageMetadataProvider),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _InfoRow(label: 'Name', value: 'DigiDAW'),
+                          _InfoRow(
+                            label: 'Version',
+                            value: infoState.version ?? 'Unknown',
+                          ),
+                          _InfoRow(
+                            label: 'Build',
+                            value: infoState.buildNumber?.isEmpty ?? true
+                                ? 'Not specified'
+                                : infoState.buildNumber!,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  loading: () => const LinearProgressIndicator(),
-                  error: (error, stackTrace) => Row(
-                    children: [
-                      const Expanded(
-                        child: Text('Version information is unavailable.'),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            ref.invalidate(appPackageMetadataProvider),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
               ),
               const SizedBox(height: 16),
               _InfoCard(

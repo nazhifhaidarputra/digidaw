@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod audio_settings;
 pub mod automation;
 pub mod mixer;
 pub mod monitor;

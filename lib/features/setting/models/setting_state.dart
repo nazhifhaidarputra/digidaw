@@ -35,26 +35,9 @@ enum SettingMenu {
   info,
 }
 
-enum AppThemeMode { system, light, dark }
-
-enum AppColorPalette { purple, blue, teal, orange, red }
-
-enum AppBackgroundFit { cover, contain, fill }
-
 @freezed
 abstract class SettingState with _$SettingState {
   const factory SettingState({
     @Default(SettingMenu.general) SettingMenu selectedMenu,
-    @Default(100) int maxHistoryEntries,
-    @Default(false) bool isApplyingHistoryLimit,
-    @Default(false) bool isInitialized,
-    @Default(AppThemeMode.dark) AppThemeMode themeMode,
-    @Default(AppColorPalette.purple) AppColorPalette colorPalette,
-    @Default(false) bool isAppearanceInitialized,
-    String? backgroundImagePath,
-    @Default(AppBackgroundFit.cover) AppBackgroundFit backgroundFit,
-    @Default(0.35) double backgroundOverlayOpacity,
-    String? customFontPath,
-    String? customFontFamily,
   }) = _SettingState;
 }

@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/app_theme.dart';
-import 'package:karbeat/features/setting/models/setting_state.dart';
-import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
+import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
   const AppearanceSettingsPage({super.key});
@@ -12,7 +12,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appearance = ref.watch(
-      settingsProvider.select(
+      appearanceSettingsProvider.select(
         (state) => (
           themeMode: state.themeMode,
           palette: state.colorPalette,
@@ -23,7 +23,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
         ),
       ),
     );
-    final notifier = ref.read(settingsProvider.notifier);
+    final notifier = ref.read(appearanceSettingsProvider.notifier);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -67,7 +67,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                 onSelectionChanged: (selection) {
                   unawaited(
                     ref
-                        .read(settingsProvider.notifier)
+                        .read(appearanceSettingsProvider.notifier)
                         .setThemeMode(selection.single),
                   );
                 },
@@ -94,7 +94,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                         onSelected: (_) {
                           unawaited(
                             ref
-                                .read(settingsProvider.notifier)
+                                .read(appearanceSettingsProvider.notifier)
                                 .setColorPalette(palette),
                           );
                         },

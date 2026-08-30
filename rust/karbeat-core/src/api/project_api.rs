@@ -264,18 +264,12 @@ pub fn load_project<T, F>(ctx: &mut DawContext, path_name: &str, mapper: F) -> a
 where
     F: FnOnce(&ApplicationState) -> T,
 {
-    let sample_rate = { ctx.active_audio_config.read().sample_rate }
-        .ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
-    // 1. Load the project from disk
+    let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
     let loaded_app = load_daw_project(Path::new(path_name), sample_rate)?;
 
-    // Extract the BPM before we move the loaded app into the global lock
     let bpm = loaded_app.transport.bpm;
 
-    // 2. Halt the audio engine immediately to prevent reading partially overwritten state
     let _ = ctx.send_audio_command(AudioCommand::StopAndReset);
-
-    // 3. Lock, mutate the global state, and map to the UI DTO
     let app = &mut ctx.app_state;
     let current_audio_config = app.audio_config.clone();
     let current_clipboard = app.clipboard.clone();
@@ -287,7 +281,6 @@ where
 
     let mapped_ui_state = mapper(&app);
 
-    // 4. Fire all necessary sync and loading events to the engine/UI
     ctx.broadcast_full_graph();
     let _ = ctx.send_audio_command(AudioCommand::SetBPM(bpm));
     let _ = hydrate_live_audio_engine(ctx);

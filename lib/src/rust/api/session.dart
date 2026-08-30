@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
@@ -14,11 +15,11 @@ part 'session.freezed.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `from`
 
 /// Undo the last action.
-Future<void> undo({required DawContext ctx}) =>
+Future<UiApplicationState> undo({required DawContext ctx}) =>
     RustLib.instance.api.crateApiSessionUndo(ctx: ctx);
 
 /// Redo the last undone action.
-Future<void> redo({required DawContext ctx}) =>
+Future<UiApplicationState> redo({required DawContext ctx}) =>
     RustLib.instance.api.crateApiSessionRedo(ctx: ctx);
 
 /// Copy selected pattern notes to the clipboard.

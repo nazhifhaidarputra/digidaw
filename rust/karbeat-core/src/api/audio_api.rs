@@ -30,11 +30,7 @@ pub fn play_source_preview(ctx: &mut DawContext, id: AudioSourceId) -> anyhow::R
 }
 
 pub fn play_file_preview(ctx: &mut DawContext, file_path: &str) -> anyhow::Result<()> {
-    let sample_rate = ctx
-        .active_audio_config
-        .read()
-        .sample_rate
-        .ok_or_else(|| anyhow::anyhow!("Audio output sample rate is unavailable"))?;
+    let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
     let waveform = load_audio_file(file_path, None, sample_rate)?;
     let max_frames = u64::from(sample_rate) * SAMPLE_BROWSER_PREVIEW_SECONDS;
     ctx.send_audio_command(AudioCommand::PlayPreview {

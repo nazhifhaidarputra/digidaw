@@ -1760,6 +1760,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "chrono",
+ "cpal",
  "env_logger",
  "flutter_rust_bridge",
  "jni 0.22.4",

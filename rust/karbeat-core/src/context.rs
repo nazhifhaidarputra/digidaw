@@ -13,7 +13,7 @@ use rtrb::{Consumer, Producer};
 
 use crate::{
     audio::{
-        backend::AudioDeviceConfig,
+        backend::{AudioDeviceConfig, AudioRuntimeSettings},
         event::TransportFeedback,
         render_state::{AudioAutomationLane, AudioGraphState},
     },
@@ -50,6 +50,8 @@ pub struct DawContext {
     /// The UI writes to this, and the background stream monitor reads from it.
     pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
 
+    pub audio_runtime_settings: Arc<RwLock<AudioRuntimeSettings>>,
+
     pub telemetry_registry: Option<TelemetryRegistry>,
 
     /// Receiver for per-plugin triple-buffer `Output` consumers sent from the audio thread.
@@ -71,6 +73,7 @@ impl DawContext {
             position_consumer: Arc::new(Mutex::new(None)),
             plugin_registry: PluginRegistry::new_with_defaults(),
             active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
+            audio_runtime_settings: Arc::new(RwLock::new(AudioRuntimeSettings::default())),
             telemetry_registry: None,
             telemetry_reg_receiver: None,
         }

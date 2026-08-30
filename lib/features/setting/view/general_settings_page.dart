@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/features/setting/services/setting_provider.dart';
+import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 
 class GeneralSettingsPage extends ConsumerWidget {
   const GeneralSettingsPage({super.key});
@@ -12,7 +12,7 @@ class GeneralSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selection = ref.watch(
-      settingsProvider.select(
+      generalSettingsProvider.select(
         (state) => (
           limit: state.maxHistoryEntries,
           busy: state.isApplyingHistoryLimit,
@@ -56,7 +56,7 @@ class GeneralSettingsPage extends ConsumerWidget {
                         if (value != null) {
                           unawaited(
                             ref
-                                .read(settingsProvider.notifier)
+                                .read(generalSettingsProvider.notifier)
                                 .setHistoryLimit(value),
                           );
                         }

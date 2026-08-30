@@ -1,6 +1,7 @@
 use crate::context::DawContext;
 
 pub mod audio_api;
+pub mod audio_settings_api;
 pub mod audio_waveform_api;
 pub mod automation_api;
 pub mod clip_api;

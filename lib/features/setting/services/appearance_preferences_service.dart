@@ -1,5 +1,5 @@
 import 'package:karbeat/core/utils/result_type.dart';
-import 'package:karbeat/features/setting/models/setting_state.dart';
+import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 typedef AppearancePreferences = ({

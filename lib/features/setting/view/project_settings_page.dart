@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/features/setting/services/project_settings_provider.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 class ProjectSettingsPage extends ConsumerStatefulWidget {
@@ -41,7 +42,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
       controller.addListener(_updateDirtyState);
     }
     _metadataSubscription = ref.listenManual(
-      projectProvider.select((state) => state.value?.metadata),
+      projectSettingsProvider.select((state) => state.metadata),
       (_, metadata) {
         if (metadata != null) _receiveMetadata(metadata);
       },
@@ -117,6 +118,8 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (result.isOk()) {
+      final savedMetadata = ref.read(projectSettingsProvider).metadata;
+      if (savedMetadata != null) _applyMetadata(savedMetadata);
       ref
           .read(notificationProvider.notifier)
           .info('Project information updated');
@@ -126,7 +129,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final projectAvailable = ref.watch(
-      projectProvider.select((state) => state.hasValue),
+      projectSettingsProvider.select((state) => state.hasProject),
     );
 
     return SingleChildScrollView(

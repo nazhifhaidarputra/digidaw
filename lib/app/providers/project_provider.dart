@@ -15,6 +15,7 @@ import 'package:karbeat/src/rust/api/pattern.dart';
 // Rust FFI Imports
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
+import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/src/rust/api/simple.dart';
 
 part 'project_provider.freezed.dart';
@@ -328,6 +329,48 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     state = AsyncValue.data(
       state.requireValue.copyWith(metadata: operation.requireValue),
     );
+    return Result.ok(null);
+  }
+
+  Future<Result<void>> undoLastAction() {
+    return _applyHistoryOperation(
+      () => session_api.undo(ctx: dawContext),
+      errorTitle: 'Could not undo',
+    );
+  }
+
+  Future<Result<void>> redoLastAction() {
+    return _applyHistoryOperation(
+      () => session_api.redo(ctx: dawContext),
+      errorTitle: 'Could not redo',
+    );
+  }
+
+  Future<Result<void>> _applyHistoryOperation(
+    Future<UiApplicationState> Function() operation, {
+    required String errorTitle,
+  }) async {
+    final currentPath = state.value?.currentFilePath;
+    final operationResult = await AsyncValue.guard(operation);
+    if (operationResult case AsyncError(:final error, :final stackTrace)) {
+      return ref.notifyErrorResult(
+        error,
+        title: errorTitle,
+        stackTrace: stackTrace,
+      );
+    }
+
+    final refreshed = await AsyncValue.guard(
+      () => _fetchFullState(operationResult.requireValue, currentPath),
+    );
+    if (refreshed case AsyncError(:final error, :final stackTrace)) {
+      return ref.notifyErrorResult(
+        error,
+        title: '$errorTitle: project refresh failed',
+        stackTrace: stackTrace,
+      );
+    }
+    state = refreshed;
     return Result.ok(null);
   }
 
