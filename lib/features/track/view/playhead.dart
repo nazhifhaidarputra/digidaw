@@ -6,10 +6,14 @@ import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 
 class _PlayheadHandlePainter extends CustomPainter {
+  final Color color;
+
+  const _PlayheadHandlePainter(this.color);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.yellowAccent
+      ..color = color
       ..style = PaintingStyle.fill;
 
     final path = Path();
@@ -19,11 +23,12 @@ class _PlayheadHandlePainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-    canvas.drawShadow(path, Colors.black, 2.0, false);
+    canvas.drawShadow(path, color.withValues(alpha: 0.4), 2.0, false);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _PlayheadHandlePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class PlayheadOverlay extends ConsumerStatefulWidget {
@@ -61,6 +66,7 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.tertiary;
     final positionAsync = ref.watch(transportPositionStreamProvider);
 
     return LayoutBuilder(
@@ -105,8 +111,9 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                       if (left > viewportWidth + 50) return const SizedBox();
 
                       // Hide if it goes behind the header/offset (scrolled too far left)
-                      if (left < widget.offsetAdjustment)
+                      if (left < widget.offsetAdjustment) {
                         return const SizedBox();
+                      }
 
                       return Positioned(
                         left: left - 10, // Center the 20px wide handle
@@ -150,16 +157,15 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                                 height: 20,
                                 width: 20,
                                 child: CustomPaint(
-                                  painter: _PlayheadHandlePainter(),
+                                  painter: _PlayheadHandlePainter(color),
                                 ),
                               ),
                             ),
                             Expanded(
                               child: Container(
                                 width: 1.5,
-                                color: Colors.yellowAccent.withAlpha(
-                                  // If the user is zooming/panning the screen, dim the playhead slightly to indicate interaction
-                                  widget.isInteracting ? 100 : 204,
+                                color: color.withValues(
+                                  alpha: widget.isInteracting ? 0.4 : 0.8,
                                 ),
                               ),
                             ),

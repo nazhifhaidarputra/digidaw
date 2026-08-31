@@ -7,6 +7,9 @@ class GridPainter extends CustomPainter {
   final double tempo;
   final int sampleRate;
   final ScrollController scrollController;
+  final Color lineColor;
+  final Color barLineColor;
+
   /// The pixel width of the visible viewport, passed from the widget's
   /// LayoutBuilder so it is always correct — even on the very first paint
   /// and after a window resize (before the scroll controller reports a
@@ -20,6 +23,8 @@ class GridPainter extends CustomPainter {
     required this.sampleRate,
     required this.scrollController,
     required this.viewportWidth,
+    required this.lineColor,
+    required this.barLineColor,
   }) : super(repaint: scrollController);
 
   @override
@@ -58,11 +63,11 @@ class GridPainter extends CustomPainter {
     }
 
     final paint = Paint()
-      ..color = Colors.white.withAlpha((0.08 * 255).round())
+      ..color = lineColor
       ..strokeWidth = 1.0;
 
     final barPaint = Paint()
-      ..color = Colors.white.withAlpha((0.25 * 255).round())
+      ..color = barLineColor
       ..strokeWidth = 1.0;
 
     // Calculate start index
@@ -102,6 +107,8 @@ class GridPainter extends CustomPainter {
         oldDelegate.tempo != tempo ||
         oldDelegate.sampleRate != sampleRate ||
         oldDelegate.viewportWidth != viewportWidth ||
+        oldDelegate.lineColor != lineColor ||
+        oldDelegate.barLineColor != barLineColor ||
         oldDelegate.scrollController != scrollController;
   }
 }

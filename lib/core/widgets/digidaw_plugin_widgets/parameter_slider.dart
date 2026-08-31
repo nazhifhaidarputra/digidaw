@@ -9,12 +9,13 @@ class DigidawParameterSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
         trackHeight: 14.0, // Thick, boxy track gauge
-        activeTrackColor: Colors.cyanAccent.withAlpha(200),
-        inactiveTrackColor: Colors.black87,
-        thumbColor: Colors.cyanAccent,
+        activeTrackColor: colors.primary.withValues(alpha: 0.8),
+        inactiveTrackColor: colors.surfaceContainerHighest,
+        thumbColor: colors.primary,
         overlayShape: const _StudioFaderOverlayShape(
           thumbWidth: 26.0,
           thumbHeight: 46.0,

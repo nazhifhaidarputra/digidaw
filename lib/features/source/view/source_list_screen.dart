@@ -30,6 +30,7 @@ class SourceListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     // Access the source map from state
     final audioSourcesAsync = ref.watch(audioSourcesProvider);
 
@@ -42,10 +43,8 @@ class SourceListScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade900,
       floatingActionButton: FloatingActionButton(
         onPressed: () => _pickFile(ref),
-        backgroundColor: Colors.cyanAccent,
         child: const Icon(Icons.add),
       ),
       body: CustomScrollView(
@@ -53,13 +52,13 @@ class SourceListScreen extends ConsumerWidget {
           // ================================================
           // 1. GENERATORS SECTION
           // ================================================
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
                 "Instruments / Generators",
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: colors.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -68,13 +67,13 @@ class SourceListScreen extends ConsumerWidget {
           ),
 
           if (generators.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
                   "No Instruments.",
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: colors.onSurfaceVariant,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -100,7 +99,7 @@ class SourceListScreen extends ConsumerWidget {
                 title: name,
                 subtitle: "ID: $id",
                 icon: Icons.piano,
-                color: Colors.orangeAccent,
+                color: colors.tertiary,
                 onTap: () async {
                   Widget screen;
 
@@ -136,18 +135,18 @@ class SourceListScreen extends ConsumerWidget {
             }, childCount: generators.length),
           ),
 
-          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+          SliverToBoxAdapter(child: Divider(color: colors.outlineVariant)),
 
           // ================================================
           // 2. AUDIO CLIPS SECTION
           // ================================================
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
                 "Audio Clips",
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: colors.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -158,13 +157,13 @@ class SourceListScreen extends ConsumerWidget {
           audioSourcesAsync.when(
             data: (audioSources) {
               if (audioSources.isEmpty) {
-                return const SliverToBoxAdapter(
+                return SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(16.0),
                     child: Text(
                       "No Audio Files.",
                       style: TextStyle(
-                        color: Colors.grey,
+                        color: colors.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -181,7 +180,7 @@ class SourceListScreen extends ConsumerWidget {
                     title: source.name,
                     subtitle: "ID: $id | ${source.sampleRate} Hz",
                     icon: Icons.audio_file,
-                    color: Colors.cyanAccent,
+                    color: colors.primary,
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -224,22 +223,22 @@ class SourceListScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
                   "Error loading audio sources: $err",
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: colors.error),
                 ),
               ),
             ),
           ),
 
-          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+          SliverToBoxAdapter(child: Divider(color: colors.outlineVariant)),
 
           // Patterns list
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
                 "Patterns",
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: colors.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -248,13 +247,13 @@ class SourceListScreen extends ConsumerWidget {
           ),
 
           if (patterns.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
                   "No Patterns.",
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: colors.onSurfaceVariant,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -269,7 +268,7 @@ class SourceListScreen extends ConsumerWidget {
                 title: pattern.name,
                 subtitle: "ID: $id | ${pattern.name}",
                 icon: Icons.music_note,
-                color: Colors.purpleAccent,
+                color: colors.secondary,
                 onTap: () {
                   ref.read(pianoRollProvider.notifier).openPattern(id);
                 },
@@ -319,12 +318,16 @@ class _SourceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(icon, color: color),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
-      subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey)),
+      title: Text(title, style: TextStyle(color: colors.onSurface)),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: colors.onSurfaceVariant),
+      ),
       trailing: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert, color: Colors.white),
+        icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
         onSelected: (value) {
           if (value == 'place') onPlace?.call();
         },
@@ -334,7 +337,7 @@ class _SourceTile extends StatelessWidget {
               value: 'place',
               child: Row(
                 children: [
-                  Icon(Icons.input, color: Colors.black54),
+                  Icon(Icons.input),
                   SizedBox(width: 8),
                   Text("Put in timeline"),
                 ],
@@ -344,7 +347,7 @@ class _SourceTile extends StatelessWidget {
             value: 'delete',
             child: Row(
               children: [
-                Icon(Icons.delete, color: Colors.red),
+                Icon(Icons.delete),
                 SizedBox(width: 8),
                 Text("Delete"),
               ],

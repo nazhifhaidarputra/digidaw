@@ -32,7 +32,10 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   }
 
   // Safe resolver that doesn't mutate state during build
-  int? _resolveActiveGeneratorId(int? selectedGeneratorId, IMap<int, UiGeneratorInstance> generators) {
+  int? _resolveActiveGeneratorId(
+    int? selectedGeneratorId,
+    IMap<int, UiGeneratorInstance> generators,
+  ) {
     int? genId = selectedGeneratorId;
     if (genId != null && !generators.containsKey(genId)) {
       genId = null;
@@ -45,21 +48,24 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
 
     final workspaceState = ref.watch(workspaceStateProvider);
-        final kState = workspaceState.floatingMidiKeyboardState;
-        final workspaceNotifier = ref.read(workspaceStateProvider.notifier);
-    
-        // Safely unwrap the async project state
-        final IMap<int, UiGeneratorInstance> generators = ref.watch(projectProvider).maybeWhen(
-              data: (project) => project.generators,
-              orElse: () => const IMapConst<int, UiGeneratorInstance>({}),
-            );
-    
-        final activeGeneratorId = _resolveActiveGeneratorId(
-          kState.selectedGeneratorId,
-          generators,
+    final kState = workspaceState.floatingMidiKeyboardState;
+    final workspaceNotifier = ref.read(workspaceStateProvider.notifier);
+
+    // Safely unwrap the async project state
+    final IMap<int, UiGeneratorInstance> generators = ref
+        .watch(projectProvider)
+        .maybeWhen(
+          data: (project) => project.generators,
+          orElse: () => const IMapConst<int, UiGeneratorInstance>({}),
         );
+
+    final activeGeneratorId = _resolveActiveGeneratorId(
+      kState.selectedGeneratorId,
+      generators,
+    );
 
     return Positioned(
       left: _x,
@@ -93,12 +99,12 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
           child: Container(
             width: 520,
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E), // Hardware synth look
+              color: colors.surfaceContainer,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade700),
-              boxShadow: const [
+              border: Border.all(color: colors.outlineVariant),
+              boxShadow: [
                 BoxShadow(
-                  color: Colors.black54,
+                  color: colors.shadow.withValues(alpha: 0.55),
                   blurRadius: 10,
                   offset: Offset(0, 5),
                 ),
@@ -121,26 +127,26 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade900,
+                      color: colors.surfaceContainerHigh,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(8),
                       ),
                       border: Border(
-                        bottom: BorderSide(color: Colors.grey.shade800),
+                        bottom: BorderSide(color: colors.outlineVariant),
                       ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.drag_indicator,
-                          color: Colors.grey,
+                          color: colors.onSurfaceVariant,
                           size: 16,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
+                        Text(
                           "MIDI CONTROLLER",
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: colors.onSurface,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
@@ -148,11 +154,11 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         ),
                         const Spacer(),
                         InkWell(
-                          onTap: () => workspaceNotifier
-                              .toggleFloatingMidiKeyboard(),
-                          child: const Icon(
+                          onTap: () =>
+                              workspaceNotifier.toggleFloatingMidiKeyboard(),
+                          child: Icon(
                             Icons.close,
-                            color: Colors.grey,
+                            color: colors.onSurfaceVariant,
                             size: 16,
                           ),
                         ),
@@ -164,17 +170,21 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                 // Synth Control Panel
                 Container(
                   padding: const EdgeInsets.all(12),
-                  color: const Color(0xFF232323),
+                  color: colors.surfaceContainerLow,
                   child: Row(
                     children: [
                       _buildControlKnob(
                         "BASE KEY",
                         numToMidiKey(kState.baseKey),
                         () {
-                          workspaceNotifier.setMidiKeyboardBaseKey(kState.baseKey - 1);
+                          workspaceNotifier.setMidiKeyboardBaseKey(
+                            kState.baseKey - 1,
+                          );
                         },
                         () {
-                          workspaceNotifier.setMidiKeyboardBaseKey(kState.baseKey + 1);
+                          workspaceNotifier.setMidiKeyboardBaseKey(
+                            kState.baseKey + 1,
+                          );
                         },
                       ),
                       const SizedBox(width: 20),
@@ -182,10 +192,14 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         "RANGE",
                         "+${kState.keyRange}",
                         () {
-                          workspaceNotifier.setMidiKeyboardRange(kState.keyRange - 1);
+                          workspaceNotifier.setMidiKeyboardRange(
+                            kState.keyRange - 1,
+                          );
                         },
                         () {
-                          workspaceNotifier.setMidiKeyboardRange(kState.keyRange + 1);
+                          workspaceNotifier.setMidiKeyboardRange(
+                            kState.keyRange + 1,
+                          );
                         },
                       ),
                       const Spacer(),
@@ -193,29 +207,28 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         height: 36,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.black,
-                          border: Border.all(color: Colors.red.shade900),
+                          color: colors.surfaceContainerLowest,
+                          border: Border.all(color: colors.outlineVariant),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<int>(
                             value: activeGeneratorId,
-                            hint: const Text(
+                            hint: Text(
                               "Select Synth",
                               style: TextStyle(
-                                color: Colors.redAccent,
+                                color: colors.onSurfaceVariant,
                                 fontSize: 12,
                               ),
                             ),
-                            dropdownColor: Colors.black,
-                            icon: const Icon(
+                            dropdownColor: colors.surfaceContainerHigh,
+                            icon: Icon(
                               Icons.arrow_drop_down,
-                              color: Colors.redAccent,
+                              color: colors.primary,
                             ),
-                            style: const TextStyle(
-                              color: Colors.redAccent,
+                            style: TextStyle(
+                              color: colors.primary,
                               fontSize: 12,
-                              fontFamily: 'monospace',
                             ),
                             onChanged: (val) {
                               workspaceNotifier.setMidiKeyboardGenerator(val);
@@ -241,7 +254,8 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                     totalKeys: kState.keyRange,
                     activeNotes: _activeNotes,
                     onNoteOn: (note) => _handleNoteOn(note, activeGeneratorId),
-                    onNoteOff: (note) => _handleNoteOff(note, activeGeneratorId),
+                    onNoteOff: (note) =>
+                        _handleNoteOff(note, activeGeneratorId),
                   ),
                 ),
               ],
@@ -258,12 +272,13 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     VoidCallback onDec,
     VoidCallback onInc,
   ) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.grey,
+          style: TextStyle(
+            color: colors.onSurfaceVariant,
             fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
@@ -273,9 +288,9 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
           children: [
             InkWell(
               onTap: onDec,
-              child: const Icon(
+              child: Icon(
                 Icons.remove_circle_outline,
-                color: Colors.grey,
+                color: colors.onSurfaceVariant,
                 size: 20,
               ),
             ),
@@ -285,9 +300,8 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
               alignment: Alignment.center,
               child: Text(
                 value,
-                style: const TextStyle(
-                  color: Colors.cyanAccent,
-                  fontFamily: 'monospace',
+                style: TextStyle(
+                  color: colors.primary,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -296,9 +310,9 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
             const SizedBox(width: 8),
             InkWell(
               onTap: onInc,
-              child: const Icon(
+              child: Icon(
                 Icons.add_circle_outline,
-                color: Colors.grey,
+                color: colors.onSurfaceVariant,
                 size: 20,
               ),
             ),
@@ -475,6 +489,7 @@ class _PianoKeyState extends State<_PianoKey> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final isActive = widget.isPressed || _touchActive;
 
     return Listener(
@@ -495,7 +510,7 @@ class _PianoKeyState extends State<_PianoKey> {
         height: widget.height,
         decoration: BoxDecoration(
           color: isActive
-              ? Colors.cyanAccent
+              ? colors.primary
               : (widget.isBlack ? Colors.black : Colors.white),
           border: Border.all(color: Colors.black, width: 1),
           borderRadius: const BorderRadius.only(

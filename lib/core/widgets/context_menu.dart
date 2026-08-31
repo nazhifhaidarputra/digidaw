@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Context action for an context menu available component
-/// 
+///
 /// This is related to [ContextMenuWrapper].
 class DawContextAction {
   final String title;
@@ -38,10 +38,10 @@ class ContextMenuWrapper extends StatelessWidget {
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
         return AlertDialog(
-          backgroundColor: Colors.grey.shade900,
-          title: title != null 
-              ? Text(title!, style: const TextStyle(color: Colors.white)) 
+          title: title != null
+              ? Text(title!, style: TextStyle(color: colors.onSurface))
               : null,
           contentPadding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
           content: Column(
@@ -51,16 +51,21 @@ class ContextMenuWrapper extends StatelessWidget {
               // Header
               if (header != null) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 8.0,
+                  ),
                   child: header!,
                 ),
-                const Divider(color: Colors.white24, height: 16),
+                Divider(color: colors.outlineVariant, height: 16),
               ],
-              
+
               // Actions list
               ...actions.map((action) {
-                final color = action.isDestructive ? Colors.redAccent : Colors.white70;
-                
+                final color =
+                    action.color ??
+                    (action.isDestructive ? colors.error : colors.onSurface);
+
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
                   leading: action.icon != null
@@ -70,10 +75,10 @@ class ContextMenuWrapper extends StatelessWidget {
                     action.title,
                     style: TextStyle(color: color, fontSize: 14),
                   ),
-                  hoverColor: Colors.white10,
+                  hoverColor: colors.onSurface.withValues(alpha: 0.08),
                   onTap: () {
-                    Navigator.of(dialogContext).pop(); 
-                    action.onTap(); 
+                    Navigator.of(dialogContext).pop();
+                    action.onTap();
                   },
                 );
               }),
@@ -87,9 +92,9 @@ class ContextMenuWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      behavior: HitTestBehavior.opaque, 
-      onLongPress: () => _showContextMenu(context), 
-      onSecondaryTap: () => _showContextMenu(context), 
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => _showContextMenu(context),
+      onSecondaryTap: () => _showContextMenu(context),
       child: child,
     );
   }
@@ -112,6 +117,7 @@ class FloatingContextPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (actions.isEmpty) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
 
     return Positioned(
       bottom: 20,
@@ -121,7 +127,7 @@ class FloatingContextPanel extends StatelessWidget {
         child: Material(
           elevation: 8,
           borderRadius: BorderRadius.circular(12),
-          color: const Color(0xFF2A2A2A),
+          color: colors.surfaceContainerHigh,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -135,12 +141,16 @@ class FloatingContextPanel extends StatelessWidget {
                     padding: const EdgeInsets.only(right: 12),
                     child: Row(
                       children: [
-                        const Icon(Icons.close, color: Colors.white54, size: 16),
+                        Icon(
+                          Icons.close,
+                          color: colors.onSurfaceVariant,
+                          size: 16,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           title,
-                          style: const TextStyle(
-                            color: Colors.white54,
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -149,11 +159,13 @@ class FloatingContextPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(width: 1, height: 24, color: Colors.white24),
+                Container(width: 1, height: 24, color: colors.outlineVariant),
                 const SizedBox(width: 8),
 
                 // Action Buttons
-                ...actions.map((action) => _FloatingActionButtonItem(action: action)),
+                ...actions.map(
+                  (action) => _FloatingActionButtonItem(action: action),
+                ),
               ],
             ),
           ),
@@ -171,8 +183,11 @@ class _FloatingActionButtonItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Resolve the final color based on destructive flag or explicit color
-    final color = action.color ?? (action.isDestructive ? Colors.redAccent : Colors.white);
-    
+    final colors = Theme.of(context).colorScheme;
+    final color =
+        action.color ??
+        (action.isDestructive ? colors.error : colors.onSurface);
+
     return Tooltip(
       message: action.title,
       child: InkWell(
@@ -187,10 +202,7 @@ class _FloatingActionButtonItem extends StatelessWidget {
                 Icon(action.icon, color: color, size: 20),
                 const SizedBox(height: 2),
               ],
-              Text(
-                action.title,
-                style: TextStyle(color: color, fontSize: 10),
-              ),
+              Text(action.title, style: TextStyle(color: color, fontSize: 10)),
             ],
           ),
         ),

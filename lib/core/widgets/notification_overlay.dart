@@ -105,19 +105,16 @@ class _NotificationBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final (accent, icon, defaultTitle) = switch (event.type) {
-      UserNotificationType.info => (
-        Colors.lightBlueAccent,
-        Icons.info_outline,
-        'Info',
-      ),
+      UserNotificationType.info => (colors.primary, Icons.info_outline, 'Info'),
       UserNotificationType.warn => (
-        Colors.amberAccent,
+        colors.tertiary,
         Icons.warning_amber_rounded,
         'Warning',
       ),
       UserNotificationType.error => (
-        Colors.redAccent,
+        colors.error,
         Icons.error_outline,
         'Error',
       ),
@@ -132,12 +129,12 @@ class _NotificationBox extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 280, maxWidth: 380),
           padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF24262B),
+            color: colors.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(8),
             border: Border(left: BorderSide(color: accent, width: 4)),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Color(0x66000000),
+                color: colors.shadow.withValues(alpha: 0.4),
                 blurRadius: 18,
                 offset: Offset(0, 6),
               ),
@@ -155,8 +152,8 @@ class _NotificationBox extends StatelessWidget {
                   children: [
                     Text(
                       event.title ?? defaultTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: colors.onSurface,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -166,8 +163,8 @@ class _NotificationBox extends StatelessWidget {
                       event.message,
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFD7D8DC),
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
                         fontSize: 12,
                         height: 1.3,
                       ),
@@ -176,8 +173,8 @@ class _NotificationBox extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         '$pendingCount more',
-                        style: const TextStyle(
-                          color: Colors.white54,
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
                           fontSize: 10,
                         ),
                       ),
@@ -193,7 +190,7 @@ class _NotificationBox extends StatelessWidget {
                   onPressed: onDismiss,
                   visualDensity: VisualDensity.compact,
                   iconSize: 17,
-                  color: Colors.white54,
+                  color: colors.onSurfaceVariant,
                   icon: const Icon(Icons.close),
                 ),
               ),

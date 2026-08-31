@@ -426,18 +426,19 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
             .updatePlacementTarget(widget.trackId, ticks);
       },
       builder: (context, candidateData, rejectedData) {
+        final colors = Theme.of(context).colorScheme;
         return Container(
           height: widget.height,
           decoration: BoxDecoration(
             border: Border(
-              bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
-              right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
+              bottom: BorderSide(color: colors.outlineVariant, width: 1),
+              right: BorderSide(color: colors.outlineVariant, width: 1),
             ),
             color: candidateData.any((data) => data is BrowserSample)
-                ? Colors.cyanAccent.withAlpha(18)
+                ? colors.primary.withValues(alpha: 0.12)
                 : candidateData.isNotEmpty
-                ? Colors.white.withAlpha(20)
-                : Colors.grey.shade900,
+                ? colors.onSurface.withValues(alpha: 0.08)
+                : colors.surface.withValues(alpha: 0.72),
           ),
           child: Stack(
             clipBehavior: Clip.none,
@@ -522,6 +523,12 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                               scrollController:
                                   widget.horizontalScrollController,
                               viewportWidth: constraints.maxWidth,
+                              lineColor: colors.onSurface.withValues(
+                                alpha: 0.08,
+                              ),
+                              barLineColor: colors.onSurface.withValues(
+                                alpha: 0.25,
+                              ),
                             ),
                           );
                         },

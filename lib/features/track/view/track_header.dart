@@ -14,7 +14,11 @@ class TrackHeader extends ConsumerWidget {
   final int trackId;
   final double itemHeight;
 
-  const TrackHeader({super.key, required this.trackId, required this.itemHeight});
+  const TrackHeader({
+    super.key,
+    required this.trackId,
+    required this.itemHeight,
+  });
 
   Color _getContrastColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5
@@ -40,6 +44,7 @@ class TrackHeader extends ConsumerWidget {
     return showDialog<Color>(
       context: context,
       builder: (ctx) {
+        final colors = Theme.of(ctx).colorScheme;
         return AlertDialog(
           title: const Text("Select Track Color"),
           content: SingleChildScrollView(
@@ -57,7 +62,9 @@ class TrackHeader extends ConsumerWidget {
                       color: color,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isSelected ? Colors.white : Colors.transparent,
+                        color: isSelected
+                            ? colors.onSurface
+                            : Colors.transparent,
                         width: isSelected ? 3 : 0,
                       ),
                       boxShadow: [
@@ -87,6 +94,7 @@ class TrackHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     // Only rebuilds this specific header if the track's name/color/type changes
     final track = ref.watch(projectProvider).value?.tracks[trackId];
     final magnitude = ref.watch(
@@ -97,6 +105,9 @@ class TrackHeader extends ConsumerWidget {
 
     if (track == null) return const SizedBox();
 
+    final trackColor = track.color.toColor();
+    final trackForeground = _getContrastColor(trackColor);
+
     return ContextMenuWrapper(
       title: track.name,
       header: Column(
@@ -104,24 +115,24 @@ class TrackHeader extends ConsumerWidget {
         children: [
           Text(
             "Name: ${track.name}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: colors.onSurface, fontSize: 13),
           ),
           const SizedBox(height: 4),
           Text(
             "Type: ${track.trackType.name.toUpperCase()}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: colors.onSurface, fontSize: 13),
           ),
           const SizedBox(height: 4),
           Text(
             "ID: ${track.id}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: colors.onSurface, fontSize: 13),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text(
+              Text(
                 "Color: ",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: colors.onSurface, fontSize: 13),
               ),
               Container(
                 width: 14,
@@ -247,10 +258,10 @@ class TrackHeader extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 2),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: track.color.toColor(),
+            color: trackColor,
             border: Border(
-              bottom: BorderSide(color: Colors.grey.shade400, width: 1),
-              right: BorderSide(color: Colors.grey.shade400, width: 1),
+              bottom: BorderSide(color: colors.outlineVariant, width: 1),
+              right: BorderSide(color: colors.outlineVariant, width: 1),
             ),
           ),
           child: Column(
@@ -260,7 +271,7 @@ class TrackHeader extends ConsumerWidget {
                   children: [
                     Icon(
                       _getTrackIcon(track.trackType),
-                      color: Colors.grey.shade700,
+                      color: trackForeground.withValues(alpha: 0.72),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -271,7 +282,7 @@ class TrackHeader extends ConsumerWidget {
                           Text(
                             track.name,
                             style: TextStyle(
-                              color: Colors.grey.shade800,
+                              color: trackForeground,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
@@ -280,7 +291,7 @@ class TrackHeader extends ConsumerWidget {
                           Text(
                             "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
                             style: TextStyle(
-                              color: _getContrastColor(track.color.toColor()),
+                              color: trackForeground.withValues(alpha: 0.8),
                               fontSize: 10,
                             ),
                           ),
@@ -292,19 +303,19 @@ class TrackHeader extends ConsumerWidget {
                       children: [
                         InkWell(
                           onTap: () {},
-                          child: const Icon(
+                          child: Icon(
                             Icons.mic_off,
                             size: 16,
-                            color: Colors.grey,
+                            color: trackForeground.withValues(alpha: 0.65),
                           ),
                         ),
                         const SizedBox(height: 4),
                         InkWell(
                           onTap: () {},
-                          child: const Icon(
+                          child: Icon(
                             Icons.volume_up,
                             size: 16,
-                            color: Colors.grey,
+                            color: trackForeground.withValues(alpha: 0.65),
                           ),
                         ),
                       ],

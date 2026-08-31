@@ -15,13 +15,14 @@ class AutomationLaneHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       height: itemHeight,
       decoration: BoxDecoration(
-        color: Colors.grey.shade900,
+        color: colors.surfaceContainerLow,
         border: Border(
-          bottom: BorderSide(color: Colors.grey.shade800, width: 1),
-          right: BorderSide(color: Colors.grey.shade400, width: 1),
+          bottom: BorderSide(color: colors.outlineVariant, width: 1),
+          right: BorderSide(color: colors.outlineVariant, width: 1),
         ),
       ),
       child: Row(
@@ -40,7 +41,7 @@ class AutomationLaneHeader extends StatelessWidget {
           // Icon and Label
           Icon(
             Icons.timeline,
-            color: lane.enabled ? trackColor : Colors.grey,
+            color: lane.enabled ? trackColor : colors.onSurfaceVariant,
             size: 16,
           ),
           const SizedBox(width: 8),
@@ -52,7 +53,9 @@ class AutomationLaneHeader extends StatelessWidget {
                 Text(
                   lane.label,
                   style: TextStyle(
-                    color: lane.enabled ? Colors.white70 : Colors.grey,
+                    color: lane.enabled
+                        ? colors.onSurface
+                        : colors.onSurfaceVariant,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -60,7 +63,7 @@ class AutomationLaneHeader extends StatelessWidget {
                 ),
                 Text(
                   "Min: ${lane.min} | Max: ${lane.max}",
-                  style: const TextStyle(color: Colors.white38, fontSize: 9),
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 9),
                 ),
               ],
             ),
@@ -70,7 +73,7 @@ class AutomationLaneHeader extends StatelessWidget {
           IconButton(
             icon: Icon(
               lane.enabled ? Icons.power_settings_new : Icons.power_off,
-              color: lane.enabled ? Colors.greenAccent : Colors.white24,
+              color: lane.enabled ? colors.primary : colors.outline,
               size: 16,
             ),
             onPressed: () {
