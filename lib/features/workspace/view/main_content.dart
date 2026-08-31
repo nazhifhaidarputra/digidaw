@@ -183,10 +183,6 @@ class _MainContentState extends ConsumerState<MainContent>
     // Fallback: Use editingPatternId (from source list)
     resultPatternId ??= ref.read(workspaceStateProvider).editingPatternId;
 
-    AppLogger.info(
-      "Opening piano roll for pattern: $resultPatternId on track: $generatorId",
-    );
-
     return PianoRollScreen(
       patternId: resultPatternId,
       generatorId: generatorId,
