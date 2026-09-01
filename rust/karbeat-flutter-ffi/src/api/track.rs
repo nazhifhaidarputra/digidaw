@@ -277,3 +277,13 @@ pub fn update_track_order(
 ) -> Result<(), String> {
     track_api::update_track_order(ctx, track_id.into(), new_idx).map_err(|e| e.to_string())
 }
+
+/// Rename clip. Could result in error if [new_name]
+/// does not meet the required constraint or the clip not found
+pub fn rename_clip(
+    ctx: &mut DawContext,
+    clip_id: u32,
+    new_name: &str
+) -> Result<(), String> {
+    clip_api::rename_clip(ctx, clip_id.into(), new_name).map_err(|e| e.to_string())
+}

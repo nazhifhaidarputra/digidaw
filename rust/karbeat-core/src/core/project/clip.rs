@@ -185,6 +185,15 @@ impl Ord for Clip {
     }
 }
 
+impl Clip {
+    /// Rename clip. Assume that the naming check is handled before new_name
+    /// are passed into the function.
+    /// (e.g max length of new_name = 50)
+    pub fn rename_clip(&mut self, new_name: &str) {
+        self.name = new_name.into();
+    }
+}
+
 impl ApplicationState {
     pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) -> anyhow::Result<()> {
         let track = self
@@ -211,6 +220,22 @@ impl ApplicationState {
         track.clips.retain(|id| *id != clip_id);
         track.add_clip(clip_id, &self.clips_pool)?;
         Ok(())
+    }
+
+    pub fn rename_clip(
+        &mut self,
+        clip_id: ClipId,
+        new_name: &str,
+    ) -> anyhow::Result<()> {
+        let Some(mut clip) = self.clips_pool.get_mut(clip_id) else {
+            anyhow::bail!("Clip with id [{}] not found", clip_id)
+        };
+
+        anyhow::ensure!(new_name.len() <= 50);
+
+        clip.rename_clip(new_name);
+
+        Ok(())        
     }
 
     pub fn delete_clip_from_track(

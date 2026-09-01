@@ -82,6 +82,64 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     _visualOffset = widget.clip.offsetStartInTicks(bpm, sr);
   }
 
+  void _openInPianoRoll(int patternId) {
+    final generatorId = ref
+        .read(projectProvider)
+        .value
+        ?.tracks[widget.trackId]
+        ?.generatorId;
+
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
+    ref
+        .read(pianoRollProvider.notifier)
+        .openPattern(patternId, previewGeneratorId: generatorId);
+    ref.read(workspaceStateProvider.notifier).openPattern(patternId);
+  }
+
+  Future<void> _renameClip() async {
+    var pendingName = widget.clip.name;
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Rename Clip"),
+        content: TextFormField(
+          initialValue: pendingName,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "New clip name",
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => pendingName = value,
+          onFieldSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, pendingName),
+            child: const Text("Rename"),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+
+    final trimmedName = newName?.trim();
+    if (trimmedName == null ||
+        trimmedName.isEmpty ||
+        trimmedName == widget.clip.name) {
+      return;
+    }
+
+    await ref
+        .read(trackListStateProvider.notifier)
+        .renameClip(widget.trackId, widget.clip.id, trimmedName);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Coordinate Mapping (Pixels)
@@ -452,13 +510,27 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       child: clipRenderer,
     );
 
+    final interactiveChild = ContextMenuWrapper(
+      title: widget.clip.name,
+      actions: [
+        DawContextAction(title: "Rename", icon: Icons.edit, onTap: _renameClip),
+        if (widget.clip.source case UiClipSource_Midi(:final patternId))
+          DawContextAction(
+            title: "Open in Piano Roll",
+            icon: Icons.piano,
+            onTap: () => _openInPianoRoll(patternId),
+          ),
+      ],
+      child: gestureDetector,
+    );
+
     if (widget.selectedTool == ToolSelection.move) {
       return Draggable<List<int>>(
         data: widget.selectedClipIds.isNotEmpty && widget.isSelected
             ? widget.selectedClipIds
             : [widget.clip.id],
         feedback: const SizedBox.shrink(),
-        childWhenDragging: gestureDetector,
+        childWhenDragging: interactiveChild,
         onDragStarted: () {
           setState(() => _currentAction = _DragAction.move);
           _accumulatedDeltaTicks = 0.0;
@@ -576,10 +648,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
           ref.read(clipPlacementProvider.notifier).cancelBatchDrag();
         },
-        child: gestureDetector,
+        child: interactiveChild,
       );
     }
 
-    return gestureDetector;
+    return interactiveChild;
   }
 }

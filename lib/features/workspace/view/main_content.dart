@@ -6,7 +6,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
-import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/workspace/view/control_panel.dart';
 import 'package:karbeat/features/mixer/view/mixer_screen.dart';
@@ -109,19 +108,13 @@ class _MainContentState extends ConsumerState<MainContent>
               child: const DefaultControlPanel(),
             ),
           ),
-          Expanded(
-            child: _buildMainContentNavigator(context, ref, currentView),
-          ),
+          Expanded(child: _buildMainContentNavigator(currentView)),
         ],
       ),
     );
   }
 
-  Widget _buildMainContentNavigator(
-    BuildContext context,
-    WidgetRef ref,
-    WorkspaceView currentView,
-  ) {
+  Widget _buildMainContentNavigator(WorkspaceView currentView) {
     final navigatorKey = _MainContentNavigatorKey(currentView);
 
     return NavigatorPopHandler<Object?>(
@@ -132,61 +125,23 @@ class _MainContentState extends ConsumerState<MainContent>
         key: navigatorKey,
         onGenerateRoute: (settings) => MaterialPageRoute<void>(
           settings: settings,
-          builder: (routeContext) =>
-              _buildWorkspaceView(routeContext, ref, currentView),
+          builder: (_) => _buildWorkspaceView(currentView),
         ),
       ),
     );
   }
 
-  Widget _buildWorkspaceView(
-    BuildContext context,
-    WidgetRef ref,
-    WorkspaceView currentView,
-  ) {
+  Widget _buildWorkspaceView(WorkspaceView currentView) {
     switch (currentView) {
       case WorkspaceView.trackList:
         return const TrackListScreen();
       case WorkspaceView.source:
         return SourceListScreen();
       case WorkspaceView.pianoRoll:
-        return _buildPianoRoll(ref);
+        return const PianoRollScreen();
       case WorkspaceView.mixer:
         return const MixerScreen();
     }
-  }
-
-  Widget _buildPianoRoll(WidgetRef ref) {
-    final trackState = ref.watch(trackListStateProvider);
-    final projectState = ref.watch(projectProvider);
-
-    // Try to get pattern from focused clip (most recently selected)
-    final clipId = trackState.focusClipId;
-    final trackId = trackState.selectedTrackId;
-    int? resultPatternId;
-    int? generatorId;
-
-    if (clipId != null && trackId != null) {
-      final track = projectState.value?.tracks[trackId];
-      if (track != null) {
-        for (final clip in track.clips) {
-          if (clip.id == clipId) {
-            if (clip.source case UiClipSource_Midi(:final patternId)) {
-              resultPatternId = patternId;
-              generatorId = track.generatorId;
-            }
-          }
-        }
-      }
-    }
-
-    // Fallback: Use editingPatternId (from source list)
-    resultPatternId ??= ref.read(workspaceStateProvider).editingPatternId;
-
-    return PianoRollScreen(
-      patternId: resultPatternId,
-      generatorId: generatorId,
-    );
   }
 }
 

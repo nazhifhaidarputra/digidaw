@@ -125,6 +125,11 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   /// Open a pattern for editing: sets [editingPatternId] and navigates to
   /// the piano roll view.
   void openPattern(int patternId) {
+    openPianoRoll(patternId: patternId);
+  }
+
+  /// Open the piano roll, optionally with a pattern selected for editing.
+  void openPianoRoll({int? patternId}) {
     state = state.copyWith(
       editingPatternId: patternId,
       currentView: WorkspaceView.pianoRoll,

@@ -10,6 +10,7 @@ import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/workspace/models/browser_panel_state.dart';
 import 'package:karbeat/features/workspace/services/sample_browser_service.dart';
 import 'package:karbeat/features/track/view/track_list_screen.dart';
+import 'package:karbeat/shared/enums/global.dart';
 
 class _FakeSampleBrowserService extends SampleBrowserService {
   _FakeSampleBrowserService(this.tree, {List<String> persistedPaths = const []})
@@ -50,6 +51,21 @@ class _DelayedRestoreSampleBrowserService extends SampleBrowserService {
 }
 
 void main() {
+  test('piano roll navigation can clear a previously edited pattern', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(workspaceStateProvider.notifier);
+
+    notifier.openPattern(12);
+    expect(container.read(workspaceStateProvider).editingPatternId, 12);
+
+    notifier.openPianoRoll();
+
+    final state = container.read(workspaceStateProvider);
+    expect(state.currentView, WorkspaceView.pianoRoll);
+    expect(state.editingPatternId, isNull);
+  });
+
   test('browser panel uses immutable empty defaults', () {
     const state = BrowserPanelState();
 

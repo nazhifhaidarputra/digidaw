@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/track/view/performance_monitor.dart';
 import 'package:karbeat/shared/enums/global.dart';
+import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/core/utils/formatter.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -218,6 +221,34 @@ class ControlPanelDropdown<T> extends StatelessWidget {
 class DefaultControlPanel extends ConsumerWidget {
   const DefaultControlPanel({super.key});
 
+  void _navigateTo(WidgetRef ref, WorkspaceView view) {
+    if (view != WorkspaceView.pianoRoll) {
+      ref.read(workspaceStateProvider.notifier).navigateTo(view);
+      return;
+    }
+
+    final selection = ref.read(trackListStateProvider);
+    final trackId = selection.selectedTrackId;
+    final clipId = selection.focusClipId;
+    final track = trackId == null
+        ? null
+        : ref.read(projectProvider).value?.tracks[trackId];
+    final clip = clipId == null
+        ? null
+        : track?.clips.where((clip) => clip.id == clipId).firstOrNull;
+
+    if (clip?.source case UiClipSource_Midi(:final patternId)) {
+      ref
+          .read(pianoRollProvider.notifier)
+          .openPattern(patternId, previewGeneratorId: track?.generatorId);
+      ref.read(workspaceStateProvider.notifier).openPattern(patternId);
+      return;
+    }
+
+    ref.read(pianoRollProvider.notifier).clearEditingPattern();
+    ref.read(workspaceStateProvider.notifier).openPianoRoll();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
@@ -243,8 +274,7 @@ class DefaultControlPanel extends ConsumerWidget {
         name: _getViewName(workspaceState.currentView),
         icon: _getViewIcon(workspaceState.currentView),
         color: colors.primary,
-        onSelected: (view) =>
-            ref.read(workspaceStateProvider.notifier).navigateTo(view),
+        onSelected: (view) => _navigateTo(ref, view),
         items: [
           PopupMenuItem(
             value: WorkspaceView.trackList,

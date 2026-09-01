@@ -411,6 +411,37 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
+  Future<Result<void>> renameClip(int trackId, int clipId, String newName) async {
+    final result = await AsyncValue.guard(() async {
+      await track_api.renameClip(ctx: _ctx, clipId: clipId, newName: newName);
+    });
+
+    if (result.hasError) {
+      AppLogger.error('TrackListNotifier: error renaming clip: ${result.error}');
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+
+    final currentTrack = ref.read(projectProvider).value?.tracks[trackId];
+    if (currentTrack == null) {
+      await syncTrack(trackId);
+    } else {
+      _projectNotifierRead.upsertTrack(
+        trackId,
+        currentTrack.copyWith(
+          clips: currentTrack.clips
+              .map(
+                (clip) => clip.id == clipId
+                    ? clip.copyWith(name: newName)
+                    : clip,
+              )
+              .toList(),
+        ),
+      );
+    }
+
+    return Result.ok(null);
+  }
+
   /// Delete a single clip, with an optimistic local removal.
   Future<Result<void>> deleteClip(int trackId, int clipId) async {
     _optimisticDeleteClips(trackId, {clipId});

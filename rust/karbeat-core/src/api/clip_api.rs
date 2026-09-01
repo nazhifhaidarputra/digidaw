@@ -52,6 +52,18 @@ pub fn add_clip(
     Ok(clip)
 }
 
+
+#[inline(always)]
+pub fn rename_clip(ctx: &mut DawContext, clip_id: ClipId, new_name: &str) -> anyhow::Result<()>{
+    let app = &mut ctx.app_state;
+
+    app.rename_clip(clip_id, new_name)?;
+
+    // TODO: Add ProjectAction::Rename clip 
+    // ctx.push_history(action);
+    Ok(())
+}
+
 pub fn delete_clip(
     ctx: &mut DawContext,
     track_id: TrackId,

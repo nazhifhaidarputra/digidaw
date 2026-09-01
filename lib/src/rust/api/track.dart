@@ -198,6 +198,18 @@ Future<void> updateTrackOrder({
   newIdx: newIdx,
 );
 
+/// Rename clip. Could result in error if [new_name]
+/// does not meet the required constraint
+Future<void> renameClip({
+  required DawContext ctx,
+  required int clipId,
+  required String newName,
+}) => RustLib.instance.api.crateApiTrackRenameClip(
+  ctx: ctx,
+  clipId: clipId,
+  newName: newName,
+);
+
 enum UiResizeEdge { left, right }
 
 enum UiSourceType { audio, midi }

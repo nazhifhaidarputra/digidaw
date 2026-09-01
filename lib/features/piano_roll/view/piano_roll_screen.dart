@@ -27,11 +27,7 @@ import 'package:karbeat/core/widgets/daw_input_detector.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
 class PianoRollScreen extends ConsumerStatefulWidget {
-  final int? patternId;
-  // We need the Generator ID to know which Generator to preview sound with
-  final int? generatorId;
-
-  const PianoRollScreen({super.key, this.patternId, this.generatorId});
+  const PianoRollScreen({super.key});
 
   @override
   ConsumerState<PianoRollScreen> createState() {
@@ -95,8 +91,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   }
 
   void _handleNoteOn(int note) {
-    final generatorId =
-        ref.read(pianoRollProvider).previewGeneratorId ?? widget.generatorId;
+    final generatorId = ref.read(pianoRollProvider).previewGeneratorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -114,8 +109,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   }
 
   void _handleNoteOff(int note) {
-    final generatorId =
-        ref.read(pianoRollProvider).previewGeneratorId ?? widget.generatorId;
+    final generatorId = ref.read(pianoRollProvider).previewGeneratorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -377,26 +371,77 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     });
   }
 
+  Widget _buildPatternPicker(
+    BuildContext context,
+    IMap<int, UiPattern> patterns,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final entries = patterns.entries.toList()
+      ..sort((a, b) => a.value.name.compareTo(b.value.name));
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "No Pattern Selected",
+            style: TextStyle(color: colors.onSurface),
+          ),
+          const SizedBox(height: 12),
+          DropdownButton<int>(
+            hint: Text(
+              entries.isEmpty ? "No Patterns Available" : "Choose a Pattern",
+              style: TextStyle(color: colors.onSurfaceVariant),
+            ),
+            menuMaxHeight: 320,
+            dropdownColor: colors.surfaceContainerHigh,
+            underline: const SizedBox(),
+            items: entries
+                .map(
+                  (entry) => DropdownMenuItem<int>(
+                    value: entry.key,
+                    child: Text(entry.value.name),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: entries.isEmpty
+                ? null
+                : (patternId) {
+                    if (patternId == null) return;
+                    final previewGeneratorId = ref
+                        .read(pianoRollProvider)
+                        .previewGeneratorId;
+                    ref
+                        .read(pianoRollProvider.notifier)
+                        .openPattern(
+                          patternId,
+                          previewGeneratorId: previewGeneratorId,
+                        );
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    if (widget.patternId == null) {
-      return Center(
-        child: Text(
-          "No Pattern Selected",
-          style: TextStyle(color: colors.onSurface),
-        ),
-      );
+    final pianoRollState = ref.watch(pianoRollProvider);
+    final projectState = ref.watch(projectProvider);
+    final patternId = pianoRollState.editingPatternId;
+    final patterns =
+        projectState.value?.patterns ?? const IMapConst<int, UiPattern>({});
+    if (patternId == null) {
+      return _buildPatternPicker(context, patterns);
     }
 
-    final projectState = ref.watch(projectProvider);
-    // final pattern = projectState.patterns[widget.patternId];
-    final pattern = projectState.value?.patterns[widget.patternId!];
+    final pattern = patterns[patternId];
 
-    final pianoRollState = ref.watch(pianoRollProvider);
     final zoomX = pianoRollState.zoomLevelTick;
     final selectedTool = pianoRollState.tool;
     final gridDenom = pianoRollState.pianoRollGridDenom;
+    final generatorId = pianoRollState.previewGeneratorId;
 
     final selectedNoteIds = pianoRollState.selectedNoteIds;
     bool isInteracting = false;
@@ -511,21 +556,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                               midiKey: midiKey,
                               height: _keyHeight,
                               onPlayNote: (isOn) {
-                                if (widget.generatorId != null) {
-                                  try {
-                                    playPreviewNoteGenerator(
-                                      ctx: _ctx,
-                                      generatorId: widget.generatorId!,
-                                      noteKey: midiKey,
-                                      velocity: 100,
-                                      isOn: isOn,
-                                    );
-                                  } catch (e) {
-                                    AppLogger.error(e.toString());
-                                    ref
-                                        .read(notificationProvider.notifier)
-                                        .error(e);
-                                  }
+                                if (isOn) {
+                                  _handleNoteOn(midiKey);
+                                } else {
+                                  _handleNoteOff(midiKey);
                                 }
                               },
                             );
@@ -743,8 +777,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     note: note,
                                                     noteId: note.id,
                                                     patternId: pattern.id,
-                                                    generatorId:
-                                                        widget.generatorId,
+                                                    generatorId: generatorId,
                                                     zoomX: zoomX,
                                                     keyHeight: _keyHeight,
                                                     selectedTool: selectedTool,
@@ -802,8 +835,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                   _InteractiveNoteGroup(
                                                     notes: selectedNotes,
                                                     patternId: pattern.id,
-                                                    generatorId:
-                                                        widget.generatorId,
+                                                    generatorId: generatorId,
                                                     zoomX: zoomX,
                                                     keyHeight: _keyHeight,
                                                     selectedTool: selectedTool,
@@ -926,13 +958,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                 DawContextAction(
                                   title: "Copy",
                                   onTap: () async {
-                                    if (widget.patternId == null) {
-                                      return;
-                                    }
                                     await ref
                                         .read(pianoRollProvider.notifier)
                                         .copyNotesFromPattern(
-                                          widget.patternId!,
+                                          pattern.id,
                                           selectedNoteIds.toList(),
                                         );
                                     // we do not clear because every DAW do this
@@ -941,14 +970,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                 DawContextAction(
                                   title: "Cut",
                                   onTap: () async {
-                                    if (widget.patternId == null) {
-                                      return;
-                                    }
-
                                     await ref
                                         .read(pianoRollProvider.notifier)
                                         .cutNotesFromPattern(
-                                          widget.patternId!,
+                                          pattern.id,
                                           selectedNoteIds.toList(),
                                         );
                                   },

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/core/utils/formatter.dart';
+import 'package:karbeat/core/utils/logger.dart';
 
 class FloatingMidiKeyboard extends ConsumerStatefulWidget {
   const FloatingMidiKeyboard({super.key});
@@ -22,7 +25,25 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   double _x = 100;
   double _y = 100;
 
+  final FocusNode _focusNode = FocusNode(debugLabel: 'Floating MIDI keyboard');
   final Set<int> _activeNotes = {};
+  final Map<PhysicalKeyboardKey, ({int note, int? generatorId})>
+  _keyboardNotes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _releaseKeyboardNotes(updateState: false);
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   String _getGeneratorName(UiGeneratorInstance instance) {
     return instance.instanceType.when(
@@ -44,6 +65,67 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
       genId = generators.keys.first;
     }
     return genId;
+  }
+
+  KeyEventResult _handleKeyEvent(
+    KeyEvent event, {
+    required int baseKey,
+    required int? generatorId,
+  }) {
+    if (event is KeyDownEvent) {
+      final note = pianoNoteForKeyEvent(event, baseKey: baseKey);
+      if (note == null) return KeyEventResult.ignored;
+
+      if (!_keyboardNotes.containsKey(event.physicalKey)) {
+        final soundingNote = _keyboardNotes.values
+            .where((activeNote) => activeNote.note == note)
+            .firstOrNull;
+        _keyboardNotes[event.physicalKey] = (
+          note: note,
+          generatorId: soundingNote?.generatorId ?? generatorId,
+        );
+        if (soundingNote == null) _handleNoteOn(note, generatorId);
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (event is KeyRepeatEvent) {
+      return pianoNoteForKeyEvent(event, baseKey: baseKey) == null
+          ? KeyEventResult.ignored
+          : KeyEventResult.handled;
+    }
+
+    if (event is KeyUpEvent) {
+      final activeNote = _keyboardNotes.remove(event.physicalKey);
+      if (activeNote != null) {
+        final isStillHeld = _keyboardNotes.values.any(
+          (otherNote) => otherNote.note == activeNote.note,
+        );
+        if (!isStillHeld) {
+          _handleNoteOff(activeNote.note, activeNote.generatorId);
+        }
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _releaseKeyboardNotes({bool updateState = true}) {
+    if (_keyboardNotes.isEmpty) return;
+
+    final notes = <int, int?>{};
+    for (final activeNote in _keyboardNotes.values) {
+      notes.putIfAbsent(activeNote.note, () => activeNote.generatorId);
+    }
+    _keyboardNotes.clear();
+
+    if (updateState && mounted) {
+      setState(() => _activeNotes.removeAll(notes.keys));
+    }
+    for (final entry in notes.entries) {
+      unawaited(_sendPreviewNote(entry.key, entry.value, isOn: false));
+    }
   }
 
   @override
@@ -71,27 +153,15 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
       left: _x,
       top: _y,
       child: Focus(
-        autofocus: true,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent) {
-            final baseNote = keyMap[event.physicalKey];
-            if (baseNote != null) {
-              final note = baseNote + (kState.baseKey - 48);
-              if (!_activeNotes.contains(note)) {
-                _handleNoteOn(note, activeGeneratorId);
-                return KeyEventResult.handled;
-              }
-            }
-          } else if (event is KeyUpEvent) {
-            final baseNote = keyMap[event.physicalKey];
-            if (baseNote != null) {
-              final note = baseNote + (kState.baseKey - 48);
-              _handleNoteOff(note, activeGeneratorId);
-              return KeyEventResult.handled;
-            }
-          }
-          return KeyEventResult.ignored;
+        focusNode: _focusNode,
+        onFocusChange: (hasFocus) {
+          if (!hasFocus) _releaseKeyboardNotes();
         },
+        onKeyEvent: (_, event) => _handleKeyEvent(
+          event,
+          baseKey: kState.baseKey,
+          generatorId: activeGeneratorId,
+        ),
         child: Material(
           color: Colors.transparent,
           elevation: 12,
@@ -322,38 +392,39 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     );
   }
 
-  void _handleNoteOn(int note, int? generatorId) async {
+  void _handleNoteOn(int note, int? generatorId) {
     setState(() => _activeNotes.add(note));
-    if (generatorId != null) {
-      try {
-        await audio_api.playPreviewNoteGenerator(
-          ctx: ref.read(projectProvider.notifier).dawContext,
-          generatorId: generatorId,
-          noteKey: note,
-          velocity: 100,
-          isOn: true,
-        );
-      } catch (e) {
-        debugPrint('Error playing note on: $e');
-        ref.read(notificationProvider.notifier).error(e);
-      }
-    }
+    unawaited(_sendPreviewNote(note, generatorId, isOn: true));
   }
 
-  void _handleNoteOff(int note, int? generatorId) async {
+  void _handleNoteOff(int note, int? generatorId) {
     setState(() => _activeNotes.remove(note));
-    if (generatorId != null) {
-      try {
-        await audio_api.playPreviewNoteGenerator(
-          ctx: ref.read(projectProvider.notifier).dawContext,
-          generatorId: generatorId,
-          noteKey: note,
-          velocity: 100,
-          isOn: false,
-        );
-      } catch (e) {
-        debugPrint('Error playing note off: $e');
-        ref.read(notificationProvider.notifier).error(e);
+    unawaited(_sendPreviewNote(note, generatorId, isOn: false));
+  }
+
+  Future<void> _sendPreviewNote(
+    int note,
+    int? generatorId, {
+    required bool isOn,
+  }) async {
+    if (generatorId == null) return;
+
+    try {
+      await audio_api.playPreviewNoteGenerator(
+        ctx: ref.read(projectProvider.notifier).dawContext,
+        generatorId: generatorId,
+        noteKey: note,
+        velocity: 100,
+        isOn: isOn,
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to ${isOn ? 'start' : 'stop'} MIDI preview note',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        ref.read(notificationProvider.notifier).error(error);
       }
     }
   }
@@ -494,6 +565,7 @@ class _PianoKeyState extends State<_PianoKey> {
 
     return Listener(
       onPointerDown: (_) {
+        Focus.of(context).requestFocus();
         setState(() => _touchActive = true);
         widget.onNoteOn(widget.note);
       },

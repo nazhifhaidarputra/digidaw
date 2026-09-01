@@ -86,13 +86,20 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     state = state.copyWith(snapToGrid: !state.snapToGrid);
   }
 
-  void openPattern(int patternId) {
-    // Also clear selection when switching patterns to avoid ghost selections
+  void openPattern(int patternId, {int? previewGeneratorId}) {
     state = state.copyWith(
       editingPatternId: patternId,
       selectedNoteIds: const ISetConst({}),
+      previewGeneratorId: previewGeneratorId,
     );
-    // Note: Trigger navigation to WorkspaceView.pianoRoll in your router or WorkspaceProvider
+  }
+
+  void clearEditingPattern() {
+    state = state.copyWith(
+      editingPatternId: null,
+      selectedNoteIds: const ISetConst({}),
+      previewGeneratorId: null,
+    );
   }
 
   void setPreviewGenerator({int? generatorId}) {
