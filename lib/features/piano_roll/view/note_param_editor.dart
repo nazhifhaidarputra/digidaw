@@ -1,5 +1,4 @@
-import 'package:flutter/src/widgets/framework.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Note param editor panel for easily edit note param (Velocity, Pitch)
@@ -12,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Note that note all plugin hosting API supports this kind of note behavior,
 /// so you would expect that some features are not working
 class NoteParamEditorPanel extends ConsumerStatefulWidget {
+  const NoteParamEditorPanel({super.key});
+
   @override
   ConsumerState<ConsumerStatefulWidget> createState() {
     return NoteParamEditorPanelState();
@@ -20,14 +21,52 @@ class NoteParamEditorPanel extends ConsumerStatefulWidget {
 }
 
 class NoteParamEditorPanelState extends ConsumerState<NoteParamEditorPanel> {
+  String _selectedParameter = 'Velocity';
+
+  static const _parameters = <String>[
+    'Velocity',
+    'Pitch',
+    'Pan',
+    'Note release',
+  ];
+
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    return Container(
-      child: Text(
-        "Note param editor"
-      ),
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.centerLeft,
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedParameter,
+              isDense: true,
+              dropdownColor: colors.surfaceContainerHigh,
+              items: _parameters
+                  .map(
+                    (parameter) => DropdownMenuItem(
+                      value: parameter,
+                      child: Text(parameter),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (parameter) {
+                if (parameter != null) {
+                  setState(() => _selectedParameter = parameter);
+                }
+              },
+            ),
+          ),
+        ),
+        Divider(height: 1, color: colors.outlineVariant),
+        const Expanded(
+          child: Center(child: Text('Note param editor')),
+        ),
+      ],
     );
   }
-
 }

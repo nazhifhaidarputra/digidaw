@@ -87,6 +87,27 @@ mod tests {
     }
 
     #[test]
+    fn new_midi_patterns_use_creation_ordinals_for_names() {
+        let (mut ctx, _audio_id, midi_id, first_pattern_id) = make_seeded_ctx();
+
+        let second_clip = add_midi_clip(&mut ctx, midi_id, 3840);
+        let second_pattern_id = match second_clip.source {
+            Some(DawSource::Midi(pattern_id)) => pattern_id,
+            _ => panic!("new MIDI clip should reference a pattern"),
+        };
+
+        assert_eq!(
+            ctx.app_state.pattern_pool[first_pattern_id].name,
+            "Pattern 1"
+        );
+        assert_eq!(
+            ctx.app_state.pattern_pool[second_pattern_id].name,
+            "Pattern 2"
+        );
+        assert_eq!(second_clip.name, "Pattern 2");
+    }
+
+    #[test]
     fn add_clip_invalid_track_returns_err() {
         let mut ctx = make_ctx();
         let bogus_id = TrackId::from(99999);

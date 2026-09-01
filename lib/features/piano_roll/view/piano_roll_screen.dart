@@ -11,6 +11,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dart';
+import 'package:karbeat/features/piano_roll/view/note_param_editor.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
@@ -23,6 +24,7 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/widgets/daw_input_detector.dart';
+import 'package:multi_split_view/multi_split_view.dart';
 
 class PianoRollScreen extends ConsumerStatefulWidget {
   final int? patternId;
@@ -45,6 +47,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   late ScrollController _keysController;
   late ScrollController _gridVerticalController;
   late ScrollController _gridHorizontalController;
+  late final MultiSplitViewController _editorSplitController;
+
+  _PianoRollBottomPanel _bottomPanel = _PianoRollBottomPanel.keyboard;
 
   // Track active notes for Keyboard visualization
   final Set<int> _activeKeyboardNotes = {};
@@ -67,6 +72,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _keysController = _verticalControllers.addAndGet();
     _gridVerticalController = _verticalControllers.addAndGet();
     _gridHorizontalController = ScrollController();
+    _editorSplitController = MultiSplitViewController(
+      areas: [
+        Area(min: 200, data: 'editor'),
+        Area(size: 160, min: 100, max: 360, data: 'bottomPanel'),
+      ],
+    );
 
     // Jump to Middle C (MIDI 72)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -79,6 +90,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _keysController.dispose();
     _gridVerticalController.dispose();
     _gridHorizontalController.dispose();
+    _editorSplitController.dispose();
     super.dispose();
   }
 
@@ -452,7 +464,31 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
               // === EDITOR AREA ===
               Expanded(
-                child: Row(
+                child: MultiSplitViewTheme(
+                  data: MultiSplitViewThemeData(
+                    dividerPainter: DividerPainters.grooved1(
+                      color: colors.outlineVariant,
+                      highlightedColor: colors.primary,
+                      thickness: 1,
+                    ),
+                  ),
+                  child: MultiSplitView(
+                    axis: Axis.vertical,
+                    controller: _editorSplitController,
+                    builder: (context, area) {
+                      if (area.data == 'bottomPanel') {
+                        return _PianoRollBottomPanelView(
+                          selectedPanel: _bottomPanel,
+                          onPanelChanged: (panel) {
+                            setState(() => _bottomPanel = panel);
+                          },
+                          onNoteOn: _handleNoteOn,
+                          onNoteOff: _handleNoteOff,
+                          activeNotes: _activeKeyboardNotes,
+                        );
+                      }
+
+                      return Row(
                   children: [
                     // PIANO KEYS (Left)
                     SizedBox(
@@ -939,21 +975,120 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                       ),
                     ),
                   ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-
-              // ========= SCROLLABLE VIRTUAL KEYBOARD ===========
-              ScrollableVirtualKeyboard(
-                height: 120,
-                onNoteOn: _handleNoteOn,
-                onNoteOff: _handleNoteOff,
-                activeNotes: _activeKeyboardNotes,
-                initialCenterNote: 72,
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+enum _PianoRollBottomPanel { keyboard, noteParameters }
+
+class _PianoRollBottomPanelView extends StatelessWidget {
+  final _PianoRollBottomPanel selectedPanel;
+  final ValueChanged<_PianoRollBottomPanel> onPanelChanged;
+  final ValueChanged<int> onNoteOn;
+  final ValueChanged<int> onNoteOff;
+  final Set<int> activeNotes;
+
+  const _PianoRollBottomPanelView({
+    required this.selectedPanel,
+    required this.onPanelChanged,
+    required this.onNoteOn,
+    required this.onNoteOff,
+    required this.activeNotes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return ColoredBox(
+      color: colors.surfaceContainerLowest,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 32,
+            child: Row(
+              children: [
+                _BottomPanelTab(
+                  label: 'Keyboard',
+                  selected: selectedPanel == _PianoRollBottomPanel.keyboard,
+                  onTap: () => onPanelChanged(_PianoRollBottomPanel.keyboard),
+                ),
+                _BottomPanelTab(
+                  label: 'Note parameters',
+                  selected:
+                      selectedPanel == _PianoRollBottomPanel.noteParameters,
+                  onTap: () =>
+                      onPanelChanged(_PianoRollBottomPanel.noteParameters),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: colors.outlineVariant),
+          Expanded(
+            child: selectedPanel == _PianoRollBottomPanel.keyboard
+                ? LayoutBuilder(
+                    builder: (context, constraints) =>
+                        ScrollableVirtualKeyboard(
+                          height: constraints.maxHeight,
+                          onNoteOn: onNoteOn,
+                          onNoteOff: onNoteOff,
+                          activeNotes: activeNotes,
+                          initialCenterNote: 72,
+                        ),
+                  )
+                : const NoteParamEditorPanel(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomPanelTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _BottomPanelTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? colors.surfaceContainerHigh : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? colors.primary : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: selected ? colors.primary : colors.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 }

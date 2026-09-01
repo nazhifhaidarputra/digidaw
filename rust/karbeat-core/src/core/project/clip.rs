@@ -514,9 +514,10 @@ impl ApplicationState {
                     // Create new pattern
                     let default_ticks = 4 * 960;
                     let timeline_length = 4 * 960; // 4 beats
+                    let pattern_number = self.pattern_pool.len() + 1;
                     let new_pattern_id = self.pattern_pool.insert_with_key(|id| Pattern {
                         id,
-                        name: format!("Pattern {}", id),
+                        name: format!("Pattern {pattern_number}"),
                         length_ticks: default_ticks,
                         notes: Vec::new(),
                         next_note_id: 0,
