@@ -548,7 +548,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                   clip: clip,
                   trackId: widget.trackId,
                   trackType: track.trackType,
-                  color: track.color.toColor(),
+                  color: track.color.fromRGBorRGBAtoColor(),
                   zoomLevel: zoomLevel,
                   height: widget.height,
                   selectedTool: selectedTool,
@@ -585,7 +585,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                         child: _ClipRenderer(
                           clip: clip,
                           trackType: track.trackType,
-                          color: track.color.toColor(),
+                          color: track.color.fromRGBorRGBAtoColor(),
                           zoomLevel: zoomLevel,
                           projectSampleRate: sampleRate,
                           overrideOffset: clip

@@ -1,9 +1,11 @@
+import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/color.dart';
+// import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/math.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
@@ -41,54 +43,75 @@ class TrackHeader extends ConsumerWidget {
     BuildContext context,
     Color currentColor,
   ) {
+    var selectedColor = currentColor;
+
     return showDialog<Color>(
       context: context,
-      builder: (ctx) {
-        final colors = Theme.of(ctx).colorScheme;
-        return AlertDialog(
-          title: const Text("Select Track Color"),
-          content: SingleChildScrollView(
-            child: Wrap(
-              spacing: 12.0,
-              runSpacing: 12.0,
-              children: dawColors.map((color) {
-                final isSelected = currentColor.toARGB32() == color.toARGB32();
-                return GestureDetector(
-                  onTap: () => Navigator.of(ctx).pop(color),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected
-                            ? colors.onSurface
-                            : Colors.transparent,
-                        width: isSelected ? 3 : 0,
-                      ),
-                      boxShadow: [
-                        if (isSelected)
-                          BoxShadow(
-                            color: color.withAlpha(100),
-                            blurRadius: 8,
-                            spreadRadius: 2,
-                          ),
-                      ],
-                    ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text("Select Track Color"),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: ColorPicker(
+                  color: selectedColor,
+                  onColorChanged: (color) {
+                    setDialogState(() => selectedColor = color);
+                  },
+                  pickersEnabled: const {
+                    ColorPickerType.both: true,
+                    ColorPickerType.primary: false,
+                    ColorPickerType.accent: false,
+                    ColorPickerType.bw: true,
+                    ColorPickerType.custom: false,
+                    ColorPickerType.customSecondary: false,
+                    ColorPickerType.wheel: true,
+                  },
+                  enableShadesSelection: true,
+                  enableOpacity: true,
+                  showMaterialName: true,
+                  showColorName: true,
+                  showColorCode: true,
+                  showEditIconButton: true,
+                  colorCodeHasColor: true,
+                  wheelDiameter: 220,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  hasBorder: true,
+                  heading: Text(
+                    'Choose a color',
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
-                );
-              }).toList(),
+                  subheading: Text(
+                    'Choose a shade',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  wheelSubheading: Text(
+                    'Fine tune',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  opacitySubheading: Text(
+                    'Opacity',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text("Cancel"),
-            ),
-          ],
-        );
-      },
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text("Cancel"),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(selectedColor),
+                child: const Text("Select"),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -105,7 +128,7 @@ class TrackHeader extends ConsumerWidget {
 
     if (track == null) return const SizedBox();
 
-    final trackColor = track.color.toColor();
+    final trackColor = track.color.fromRGBorRGBAtoColor();
     final trackForeground = _getContrastColor(trackColor);
 
     return ContextMenuWrapper(
@@ -138,7 +161,7 @@ class TrackHeader extends ConsumerWidget {
                 width: 14,
                 height: 14,
                 decoration: BoxDecoration(
-                  color: track.color.toColor(),
+                  color: track.color.fromRGBorRGBAtoColor(),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -197,7 +220,7 @@ class TrackHeader extends ConsumerWidget {
           title: "Change Color",
           icon: Icons.color_lens,
           onTap: () {
-            final currentColor = track.color.toColor();
+            final currentColor = track.color.fromRGBorRGBAtoColor();
 
             _showColorPickerDialog(context, currentColor).then((selectedColor) {
               if (selectedColor != null &&

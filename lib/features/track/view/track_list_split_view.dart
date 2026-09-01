@@ -418,7 +418,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       final trackColor = ref.watch(
                         projectProvider.select(
                           (s) =>
-                              s.value?.tracks[trackId]?.color.toColor() ??
+                              s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
                               colors.onSurfaceVariant,
                         ),
                       );
@@ -536,6 +536,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
 
     return Stack(
+      clipBehavior: Clip.none,
       children: [
         Column(
           children: [
@@ -922,7 +923,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             final trackColor = ref.watch(
               projectProvider.select(
                 (s) =>
-                    s.value?.tracks[trackId]?.color.toColor() ??
+                    s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
                     Theme.of(context).colorScheme.outline,
               ),
             );
@@ -1358,6 +1359,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
             child: MultiSplitView(
               controller: _trackSplitViewController,
+              areaClipBehavior: Clip.none,
               builder: (context, area) {
                 switch (area.data) {
                   case 'header':
