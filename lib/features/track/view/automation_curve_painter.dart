@@ -7,12 +7,16 @@ class AutomationCurvePainter extends CustomPainter {
   final double zoomLevel;
   final ScrollController scrollController;
   final Color trackColor;
+  final Color disabledColor;
+  final Color pointColor;
 
   AutomationCurvePainter({
     required this.lane,
     required this.zoomLevel,
     required this.scrollController,
     required this.trackColor,
+    required this.disabledColor,
+    required this.pointColor,
   }) : super(repaint: scrollController);
 
   @override
@@ -31,12 +35,12 @@ class AutomationCurvePainter extends CustomPainter {
     }
 
     final linePaint = Paint()
-      ..color = lane.enabled ? trackColor : Colors.grey.shade600
+      ..color = lane.enabled ? trackColor : disabledColor
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
     final pointPaint = Paint()
-      ..color = Colors.white
+      ..color = pointColor
       ..style = PaintingStyle.fill;
 
     final path = Path();
@@ -150,6 +154,8 @@ class AutomationCurvePainter extends CustomPainter {
   bool shouldRepaint(covariant AutomationCurvePainter oldDelegate) {
     return oldDelegate.zoomLevel != zoomLevel ||
         oldDelegate.lane != lane ||
+        oldDelegate.disabledColor != disabledColor ||
+        oldDelegate.pointColor != pointColor ||
         oldDelegate.scrollController != scrollController;
   }
 }

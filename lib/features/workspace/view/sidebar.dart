@@ -8,18 +8,19 @@ class Sidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final currentContext = ref.watch(
       workspaceStateProvider.select((s) => s.currentToolbarContext),
     );
 
     return Container(
       width: 60,
-      color: Colors.grey.shade900,
+      color: colors.surfaceContainerLow,
       child: Column(
         children: [
           Expanded(
             child: Container(
-              color: Colors.grey.shade900,
+              color: colors.surfaceContainerLow,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
@@ -59,13 +60,14 @@ class SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       width: 60,
       height: 60,
       decoration: BoxDecoration(
-        color: isActive ? Colors.purple.shade700 : Colors.transparent,
+        color: isActive ? colors.primaryContainer : Colors.transparent,
         border: isActive
-            ? Border(left: BorderSide(color: Colors.purple.shade300, width: 3))
+            ? Border(left: BorderSide(color: colors.primary, width: 3))
             : null,
       ),
       child: Tooltip(
@@ -73,7 +75,9 @@ class SidebarItem extends StatelessWidget {
         child: IconButton(
           icon: Icon(
             icon,
-            color: isActive ? Colors.white : Colors.grey.shade400,
+            color: isActive
+                ? colors.onPrimaryContainer
+                : colors.onSurfaceVariant,
             size: 22,
           ),
           onPressed: onTap,

@@ -367,11 +367,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (widget.patternId == null) {
-      return const Center(
+      return Center(
         child: Text(
           "No Pattern Selected",
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: colors.onSurface),
         ),
       );
     }
@@ -389,8 +390,11 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     bool isInteracting = false;
 
     if (pattern == null) {
-      return const Center(
-        child: Text("Pattern not found", style: TextStyle(color: Colors.white)),
+      return Center(
+        child: Text(
+          "Pattern not found",
+          style: TextStyle(color: colors.onSurface),
+        ),
       );
     }
 
@@ -686,6 +690,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                                 _keyHeight,
                                                             gridDenom:
                                                                 gridDenom,
+                                                            lineColor: colors
+                                                                .onSurface,
                                                           ),
                                                     ),
                                                   ),
@@ -712,7 +718,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     opacity: isPendingDelete
                                                         ? 0.3
                                                         : 0.8,
-                                                    borderColor: Colors.white30,
+                                                    borderColor:
+                                                        colors.outlineVariant,
                                                     onDragUpdate: (globalPos) {
                                                       if (selectedTool ==
                                                           PianoRollToolSelection
@@ -813,16 +820,17 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     child: IgnorePointer(
                                                       child: Container(
                                                         decoration: BoxDecoration(
-                                                          color: Colors
-                                                              .pinkAccent
-                                                              .withAlpha(128),
+                                                          color: colors.primary
+                                                              .withValues(
+                                                                alpha: 0.5,
+                                                              ),
                                                           borderRadius:
                                                               BorderRadius.circular(
                                                                 2,
                                                               ),
                                                           border: Border.all(
                                                             color:
-                                                                Colors.white54,
+                                                                colors.primary,
                                                           ),
                                                         ),
                                                       ),
@@ -840,11 +848,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     ),
                                                     child: Container(
                                                       decoration: BoxDecoration(
-                                                        color: Colors.blueAccent
-                                                            .withAlpha(80),
+                                                        color: colors.primary
+                                                            .withValues(
+                                                              alpha: 0.32,
+                                                            ),
                                                         border: Border.all(
-                                                          color:
-                                                              Colors.blueAccent,
+                                                          color: colors.primary,
                                                           width: 1.0,
                                                         ),
                                                       ),
@@ -968,6 +977,7 @@ class _PianoRollToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final pianoRollState = ref.watch(pianoRollProvider);
     final projectState = ref.watch(projectProvider);
 
@@ -983,7 +993,7 @@ class _PianoRollToolbar extends ConsumerWidget {
 
     return Container(
       height: 50,
-      color: Colors.grey.shade800,
+      color: colors.surfaceContainer,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -993,7 +1003,9 @@ class _PianoRollToolbar extends ConsumerWidget {
             IconButton(
               icon: Icon(
                 isPatternPlaying ? Icons.stop : Icons.play_arrow,
-                color: isPatternPlaying ? Colors.orange : Colors.white70,
+                color: isPatternPlaying
+                    ? colors.tertiary
+                    : colors.onSurfaceVariant,
               ),
               onPressed: previewGeneratorId != null
                   ? () => _togglePatternPlayback(
@@ -1006,19 +1018,19 @@ class _PianoRollToolbar extends ConsumerWidget {
               iconSize: 24,
             ),
             const SizedBox(width: 4),
-            _buildDivider(),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Pattern name
             Text(
               name,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: colors.onSurface,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(width: 16),
-            _buildDivider(),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Tool buttons
@@ -1071,18 +1083,18 @@ class _PianoRollToolbar extends ConsumerWidget {
                   .selectPianoRollTool(PianoRollToolSelection.zoom),
             ),
             const SizedBox(width: 8),
-            _buildDivider(),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Zoom controls
             IconButton(
-              icon: const Icon(Icons.zoom_in, color: Colors.white70),
+              icon: Icon(Icons.zoom_in, color: colors.onSurfaceVariant),
               onPressed: onZoomIn,
               tooltip: 'Zoom In',
               iconSize: 20,
             ),
             IconButton(
-              icon: const Icon(Icons.zoom_out, color: Colors.white70),
+              icon: Icon(Icons.zoom_out, color: colors.onSurfaceVariant),
               onPressed: onZoomOut,
               tooltip: 'Zoom Out',
               iconSize: 20,
@@ -1092,8 +1104,8 @@ class _PianoRollToolbar extends ConsumerWidget {
             // Grid dropdown
             DropdownButton<GridSize>(
               value: gridDenom,
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: GridSize.values.map((element) {
                 String label = "";
@@ -1146,22 +1158,22 @@ class _PianoRollToolbar extends ConsumerWidget {
               onChanged: onGridDenomChanged,
             ),
             const SizedBox(width: 8),
-            _buildDivider(),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Generator dropdown
-            const Text(
+            Text(
               'Generator: ',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             DropdownButton<int?>(
               value: previewGeneratorId,
-              hint: const Text(
+              hint: Text(
                 'Select',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: colors.onSurfaceVariant),
               ),
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: [
                 const DropdownMenuItem<int?>(value: null, child: Text('None')),
@@ -1204,8 +1216,12 @@ class _PianoRollToolbar extends ConsumerWidget {
     );
   }
 
-  Widget _buildDivider() {
-    return Container(width: 1, height: 30, color: Colors.grey.shade600);
+  Widget _buildDivider(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 30,
+      color: Theme.of(context).colorScheme.outlineVariant,
+    );
   }
 
   void _togglePatternPlayback(
@@ -1241,6 +1257,7 @@ class _ToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Tooltip(
       message: label,
       child: InkWell(
@@ -1250,13 +1267,13 @@ class _ToolButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: isActive
               ? BoxDecoration(
-                  color: Colors.blueAccent.withAlpha(50),
+                  color: colors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 )
               : null,
           child: Icon(
             icon,
-            color: isActive ? Colors.blueAccent : Colors.white70,
+            color: isActive ? colors.primary : colors.onSurfaceVariant,
             size: 20,
           ),
         ),
@@ -1286,6 +1303,7 @@ class _PianoKeyState extends State<_PianoKey> {
   bool _isPressed = false;
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     const blackIndices = [1, 3, 6, 8, 10];
     final isBlack = blackIndices.contains(widget.midiKey % 12);
     final label = numToMidiKey(widget.midiKey);
@@ -1315,7 +1333,7 @@ class _PianoKeyState extends State<_PianoKey> {
         height: widget.height,
         decoration: BoxDecoration(
           color: _isPressed
-              ? Colors.cyanAccent
+              ? colors.primary
               : (isBlack ? Colors.black : Colors.white),
           border: Border(
             bottom: BorderSide(color: Colors.grey.shade700, width: 0.5),
@@ -1354,7 +1372,7 @@ class _InteractiveNote extends ConsumerStatefulWidget {
   final ValueChanged<Offset>? onDragUpdate;
   final VoidCallback? onDragEnd;
   final double opacity;
-  final Color borderColor;
+  final Color? borderColor;
   final VoidCallback? onTapOverride;
 
   const _InteractiveNote({
@@ -1370,7 +1388,7 @@ class _InteractiveNote extends ConsumerStatefulWidget {
     this.onDragUpdate,
     this.onDragEnd,
     this.opacity = 1.0,
-    this.borderColor = Colors.white30,
+    this.borderColor,
     this.onTapOverride,
   });
 
@@ -1430,6 +1448,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     // Determine cursor based on tool
     MouseCursor cursor = SystemMouseCursors.click;
     if (widget.selectedTool == PianoRollToolSelection.delete) {
@@ -1649,17 +1668,17 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
             child: Container(
               decoration: BoxDecoration(
                 color: _mode != _NoteDragMode.none
-                    ? Colors.pink
-                    : Colors.pinkAccent,
+                    ? colors.primary
+                    : colors.primaryContainer,
                 borderRadius: BorderRadius.circular(2),
-                border: Border.all(color: Colors.white30),
+                border: Border.all(color: widget.borderColor ?? colors.primary),
               ),
               child: _localWidth > 30
-                  ? const Center(
+                  ? Center(
                       child: Icon(
                         Icons.drag_handle,
                         size: 12,
-                        color: Colors.white24,
+                        color: colors.onPrimaryContainer.withValues(alpha: 0.5),
                       ),
                     )
                   : null,
@@ -1675,11 +1694,13 @@ class _PianoGridPainter extends CustomPainter {
   final double zoomX;
   final double keyHeight;
   final GridSize gridDenom;
+  final Color lineColor;
 
   _PianoGridPainter({
     required this.zoomX,
     required this.keyHeight,
     required this.gridDenom,
+    required this.lineColor,
   });
 
   @override
@@ -1687,7 +1708,7 @@ class _PianoGridPainter extends CustomPainter {
     final paint = Paint()..strokeWidth = 1.0;
 
     // Horizontal Lines (Keys)
-    paint.color = Colors.white10;
+    paint.color = lineColor.withValues(alpha: 0.12);
     for (int i = 0; i < 128; i++) {
       final y = i * keyHeight;
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
@@ -1711,13 +1732,13 @@ class _PianoGridPainter extends CustomPainter {
       bool isBeat = (currentTick % 960) == 0;
 
       if (isBar) {
-        paint.color = Colors.white54;
+        paint.color = lineColor.withValues(alpha: 0.54);
         paint.strokeWidth = 1.5;
       } else if (isBeat) {
-        paint.color = Colors.white24;
+        paint.color = lineColor.withValues(alpha: 0.24);
         paint.strokeWidth = 1.0;
       } else {
-        paint.color = Colors.white10;
+        paint.color = lineColor.withValues(alpha: 0.12);
         paint.strokeWidth = 0.5;
       }
 
@@ -1734,7 +1755,9 @@ class _PianoGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PianoGridPainter old) =>
-      old.zoomX != zoomX || old.gridDenom != gridDenom;
+      old.zoomX != zoomX ||
+      old.gridDenom != gridDenom ||
+      old.lineColor != lineColor;
 }
 
 /// A specialized widget to handle grouped interactions for multiple selected notes.
@@ -1796,6 +1819,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (widget.notes.isEmpty) return const SizedBox.shrink();
 
     int minTick = widget.notes.map((n) => n.startTick).reduce(min);
@@ -1955,20 +1979,22 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: _mode != _NoteDragMode.none
-                          ? Colors.pink
-                          : Colors.pinkAccent,
+                          ? colors.primary
+                          : colors.primaryContainer,
                       borderRadius: BorderRadius.circular(2),
                       border: Border.all(
-                        color: Colors.white,
+                        color: colors.primary,
                         width: 1.5,
                       ), // Thick white border for selection
                     ),
                     child: noteWidth > 30
-                        ? const Center(
+                        ? Center(
                             child: Icon(
                               Icons.drag_handle,
                               size: 12,
-                              color: Colors.white24,
+                              color: colors.onPrimaryContainer.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                           )
                         : null,
@@ -1984,11 +2010,14 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
 }
 
 class _PianoRollPlayheadPainter extends CustomPainter {
+  final Color color;
+
+  const _PianoRollPlayheadPainter(this.color);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      // Using orange to match your pattern play button theme
-      ..color = Colors.orangeAccent
+      ..color = color
       ..style = PaintingStyle.fill;
 
     final path = Path();
@@ -1998,11 +2027,12 @@ class _PianoRollPlayheadPainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-    canvas.drawShadow(path, Colors.black, 2.0, false);
+    canvas.drawShadow(path, color.withValues(alpha: 0.4), 2.0, false);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _PianoRollPlayheadPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class PianoRollPlayheadOverlay extends ConsumerStatefulWidget {
@@ -2038,6 +2068,7 @@ class _PianoRollPlayheadOverlayState
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     // 1. Watch the transport stream provider directly
     final positionAsync = ref.watch(transportPositionStreamProvider);
 
@@ -2083,14 +2114,14 @@ class _PianoRollPlayheadOverlayState
                         height: 10,
                         width: 15,
                         child: CustomPaint(
-                          painter: _PianoRollPlayheadPainter(),
+                          painter: _PianoRollPlayheadPainter(colors.tertiary),
                         ),
                       ),
                       Expanded(
                         child: Container(
                           width: 1.5,
-                          color: Colors.orangeAccent.withAlpha(
-                            widget.isInteracting ? 100 : 204,
+                          color: colors.tertiary.withValues(
+                            alpha: widget.isInteracting ? 0.4 : 0.8,
                           ),
                         ),
                       ),

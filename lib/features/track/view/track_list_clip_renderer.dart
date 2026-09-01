@@ -27,12 +27,13 @@ class _ClipRenderer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
         color: color.withAlpha(100),
         borderRadius: BorderRadius.circular(4),
         border: isSelected
-            ? Border.all(color: Colors.white, width: 2)
+            ? Border.all(color: colors.primary, width: 2)
             : Border.all(color: color.withAlpha(150), width: 1),
       ),
       child: ClipRRect(
@@ -50,11 +51,11 @@ class _ClipRenderer extends ConsumerWidget {
               height: 16,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                color: Colors.black26,
+                color: colors.inverseSurface.withValues(alpha: 0.72),
                 child: Text(
                   clip.name,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: colors.onInverseSurface,
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
                   ),
@@ -115,10 +116,13 @@ class _ClipRenderer extends ConsumerWidget {
         final pattern = projectState.patterns[patternId];
 
         if (pattern == null) {
-          return const Center(
+          return Center(
             child: Text(
               "?",
-              style: TextStyle(color: Colors.white54, fontSize: 10),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 10,
+              ),
             ),
           );
         }

@@ -245,6 +245,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   /// Helper method to build the cut helper line
   Widget _buildCutHelperLine(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final state = ref.watch(workspaceStateProvider);
     if (_mousePos == null || state.selectedTool != ToolSelection.slice) {
       return const SizedBox();
@@ -282,11 +283,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         child: Column(
           children: [
             const SizedBox(height: 10), // Padding above ruler
-            const Icon(Icons.content_cut, color: Colors.redAccent, size: 16),
+            Icon(Icons.content_cut, color: colors.error, size: 16),
             Expanded(
               child: Container(
                 width: 1.5,
-                color: Colors.redAccent.withAlpha(200),
+                color: colors.error.withValues(alpha: 0.8),
               ),
             ),
           ],
@@ -297,23 +298,24 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   Widget _buildToolbar() {
     final workspaceState = ref.watch(workspaceStateProvider);
+    final colors = Theme.of(context).colorScheme;
     return Container(
       height: 36,
-      color: Colors.grey.shade900,
+      color: colors.surfaceContainerLow,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            const Text(
+            Text(
               "Snap to Grid",
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(width: 8),
             DropdownButton<GridSize>(
               value: workspaceState.gridSize,
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: GridSize.values.map((size) {
                 final label = size.label;
@@ -337,29 +339,29 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 Icons.library_music,
                 size: 16,
                 color: workspaceState.browserPanelState.isExpanded
-                    ? Colors.cyanAccent
-                    : Colors.white70,
+                    ? colors.primary
+                    : colors.onSurfaceVariant,
               ),
               label: Text(
                 'Samples',
                 style: TextStyle(
                   color: workspaceState.browserPanelState.isExpanded
-                      ? Colors.cyanAccent
-                      : Colors.white70,
+                      ? colors.primary
+                      : colors.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               "Move Step",
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(width: 8),
             DropdownButton<MusicalBeatSize>(
               value: workspaceState.horizontalClipShiftSizeDenom,
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: MusicalBeatSize.values.map((size) {
                 return DropdownMenuItem<MusicalBeatSize>(
@@ -382,16 +384,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildHeaderArea() {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         Container(
           height: 30,
-          color: Colors.grey.shade800,
+          color: colors.surfaceContainer,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.only(left: 10),
-          child: const Text(
+          child: Text(
             "Tracks",
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: colors.onSurface, fontSize: 12),
           ),
         ),
         Expanded(
@@ -416,7 +419,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                         projectProvider.select(
                           (s) =>
                               s.value?.tracks[trackId]?.color.toColor() ??
-                              Colors.grey,
+                              colors.onSurfaceVariant,
                         ),
                       );
 
@@ -460,11 +463,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   Consumer _buildMasterHeader() {
     return Consumer(
       builder: (context, ref, _) {
+        final colors = Theme.of(context).colorScheme;
         final lanes = ref.watch(masterAutomationProvider).toIList();
         final isExpanded = ref
             .watch(automationProvider)
             .isMasterAutomationDrawerOpened;
-        final trackColor = const Color.fromRGBO(200, 100, 50, 1.0);
+        final trackColor = colors.tertiary;
 
         if (lanes.isEmpty) return const SizedBox();
 
@@ -475,11 +479,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               height: 30,
               alignment: Alignment.centerLeft,
               padding: const EdgeInsets.only(left: 10),
-              color: Colors.grey.shade900,
-              child: const Text(
+              color: colors.surfaceContainerLow,
+              child: Text(
                 "Master Track",
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colors.onSurface,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -577,7 +581,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               },
               child: Container(
                 height: 30,
-                color: Colors.grey.shade800,
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 width: double.infinity,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -917,7 +921,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             final lanes = ref.watch(trackAutomationProvider(trackId));
             final trackColor = ref.watch(
               projectProvider.select(
-                (s) => s.value?.tracks[trackId]?.color.toColor() ?? Colors.grey,
+                (s) =>
+                    s.value?.tracks[trackId]?.color.toColor() ??
+                    Theme.of(context).colorScheme.outline,
               ),
             );
 
@@ -965,7 +971,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         final isExpanded = ref
             .watch(automationProvider)
             .isMasterAutomationDrawerOpened;
-        final trackColor = const Color.fromRGBO(200, 100, 50, 1.0);
+        final trackColor = Theme.of(context).colorScheme.tertiary;
         final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
         if (lanes.isEmpty) return const SizedBox();
@@ -1003,16 +1009,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildAddButton() {
+    final colors = Theme.of(context).colorScheme;
     return SizedBox(
       height: 60,
       child: Center(
         child: TextButton.icon(
           onPressed: () => _showAddTrackDialog(context),
-          icon: const Icon(Icons.add, color: Colors.white54),
-          label: const Text(
-            "Add New Track",
-            style: TextStyle(color: Colors.white54),
-          ),
+          icon: Icon(Icons.add, color: colors.primary),
+          label: Text("Add New Track", style: TextStyle(color: colors.primary)),
         ),
       ),
     );
@@ -1038,11 +1042,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 },
               );
             },
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.graphic_eq, color: Colors.cyanAccent),
-                SizedBox(width: 10),
-                Text("Audio Track"),
+                Icon(
+                  Icons.graphic_eq,
+                  color: Theme.of(ctx).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                const Text("Audio Track"),
               ],
             ),
           ),
@@ -1052,11 +1059,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               Navigator.pop(ctx);
               _showGeneratorBrowser(context);
             },
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.piano, color: Colors.orangeAccent),
-                SizedBox(width: 10),
-                Text("Add generator..."),
+                Icon(Icons.piano, color: Theme.of(ctx).colorScheme.tertiary),
+                const SizedBox(width: 10),
+                const Text("Add generator..."),
               ],
             ),
           ),
@@ -1094,7 +1101,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     Icon(
                       Icons.extension,
                       size: 16,
-                      color: Colors.deepOrangeAccent,
+                      color: Theme.of(ctx).colorScheme.tertiary,
                     ),
                     const SizedBox(width: 8),
                     Container(
@@ -1103,16 +1110,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.deepOrangeAccent.withAlpha(30),
+                        color: Theme.of(ctx).colorScheme.tertiaryContainer,
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
-                          color: Colors.deepOrangeAccent.withAlpha(80),
+                          color: Theme.of(ctx).colorScheme.tertiary,
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         "Karbeat Native",
                         style: TextStyle(
-                          color: Colors.deepOrangeAccent,
+                          color: Theme.of(ctx).colorScheme.onTertiaryContainer,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1124,11 +1131,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               const Divider(height: 1),
               // Plugin list
               if (availablePlugins.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
                   child: Text(
                     "No generators found",
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 )
               else
@@ -1149,6 +1161,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildGeneratorBrowserItem(BuildContext ctx, UiPluginInfo plugin) {
+    final colors = Theme.of(ctx).colorScheme;
     return InkWell(
       onTap: () {
         Navigator.pop(ctx);
@@ -1160,7 +1173,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         child: Row(
           children: [
-            const Icon(Icons.piano, color: Colors.orangeAccent, size: 20),
+            Icon(Icons.piano, color: colors.tertiary, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1174,9 +1187,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     "Karbeat Native",
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colors.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -1211,8 +1227,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
-                final trackColor =
-                    Colors.teal.shade400; // Distinct color for Buses
+                final trackColor = Theme.of(context).colorScheme.secondary;
 
                 if (lanes.isEmpty) return const SizedBox.shrink();
 
@@ -1223,11 +1238,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       height: 30,
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.only(left: 10),
-                      color: Colors.grey.shade800,
+                      color: Theme.of(context).colorScheme.surfaceContainer,
                       child: Text(
                         bus.name,
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1286,7 +1301,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
-                final trackColor = Colors.teal.shade400;
+                final trackColor = Theme.of(context).colorScheme.secondary;
 
                 if (lanes.isEmpty) return const SizedBox.shrink();
 
@@ -1328,6 +1343,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         _buildToolbar(),
@@ -1335,8 +1351,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           child: MultiSplitViewTheme(
             data: MultiSplitViewThemeData(
               dividerPainter: DividerPainters.grooved1(
-                color: Colors.grey.shade800,
-                highlightedColor: Colors.cyanAccent,
+                color: colors.outlineVariant,
+                highlightedColor: colors.primary,
                 thickness: 1,
               ),
             ),
@@ -1380,14 +1396,15 @@ class AutomationExpandBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       height: 24,
       margin: const EdgeInsets.only(bottom: 2),
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade800,
+        color: colors.surfaceContainer,
         border: Border(
-          right: BorderSide(color: Colors.grey.shade400, width: 1),
+          right: BorderSide(color: colors.outlineVariant, width: 1),
         ),
       ),
       child: InkWell(
@@ -1416,7 +1433,7 @@ class AutomationExpandBar extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               '$laneCount automation lane${laneCount == 1 ? '' : 's'}',
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
             ),
           ],
         ),

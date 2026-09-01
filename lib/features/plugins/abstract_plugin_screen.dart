@@ -16,25 +16,21 @@ abstract class AbstractPluginScreen extends ConsumerStatefulWidget {
   /// The generic target (e.g. Generator(id), TrackEffect(trackId, effectId), etc.)
   final plugin_api.UiPluginTarget target;
 
-
-  const AbstractPluginScreen({
-    super.key,
-    required this.target
-  });
+  const AbstractPluginScreen({super.key, required this.target});
 }
 
-abstract class AbstractPluginScreenState<T extends AbstractPluginScreen> 
-    extends ConsumerState<T> with SingleTickerProviderStateMixin {
-  
+abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
+    extends ConsumerState<T>
+    with SingleTickerProviderStateMixin {
   List<plugin_api.UiPluginParameter> parameters = [];
   bool isLoading = true;
   String? errorMessage;
-  
+
   // Track parameters the user is currently dragging so we don't overwrite them with telemetry
   final Set<int> _touchedParams = {};
 
   late final Ticker _ticker;
-  
+
   @protected
   late final DawContext ctx;
 
@@ -59,9 +55,9 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
 
     // Subscribe to the 30 FPS Rust Audio Engine stream for this specific plugin
     plugin_api.setPluginTelemetrySubs(
-      ctx: ctx, 
-      target: widget.target, 
-      buffers: getRequestedZeroCopyBuffers(), 
+      ctx: ctx,
+      target: widget.target,
+      buffers: getRequestedZeroCopyBuffers(),
       active: true,
     );
 
@@ -73,15 +69,15 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   @override
   void dispose() {
     _ticker.dispose();
-    
+
     // Unsubscribe from telemetry to save CPU when UI is closed
     plugin_api.setPluginTelemetrySubs(
-      ctx: ctx, 
-      target: widget.target, 
-      buffers: [], 
+      ctx: ctx,
+      target: widget.target,
+      buffers: [],
       active: false,
     );
-    
+
     super.dispose();
   }
 
@@ -98,7 +94,10 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     if (isLoading) return;
 
     // Instantly reads the ArcSwap pointer across the FFI boundary
-    final telemetry = plugin_api.getPluginSnapshotTelemetrySync(ctx: ctx, target: widget.target);
+    final telemetry = plugin_api.getPluginSnapshotTelemetrySync(
+      ctx: ctx,
+      target: widget.target,
+    );
     if (telemetry == null) return;
 
     bool paramsChanged = false;
@@ -146,9 +145,9 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
         ctx: ctx,
         target: widget.target,
       );
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         specs.sort((a, b) => a.id.compareTo(b.id));
         parameters = specs;
@@ -234,14 +233,11 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   @protected
   AutomationTargetDto resolveAutomationTarget(int paramId) {
     final t = widget.target;
-    
+
     return switch (t) {
       plugin_api.UiPluginTarget_Generator(:final field0) =>
-        AutomationTargetDto.generator(
-          generatorId: field0,
-          paramId: paramId,
-        ),
-        
+        AutomationTargetDto.generator(generatorId: field0, paramId: paramId),
+
       plugin_api.UiPluginTarget_TrackEffect(:final trackId, :final effectId) =>
         AutomationTargetDto.track(
           trackId: trackId,
@@ -252,7 +248,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
             ),
           ),
         ),
-        
+
       plugin_api.UiPluginTarget_BusEffect(:final busId, :final effectId) =>
         AutomationTargetDto.bus(
           busId: busId,
@@ -261,7 +257,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
             target: EffectAutomationTargetDto.pluginParam(paramId: paramId),
           ),
         ),
-        
+
       plugin_api.UiPluginTarget_MasterEffect(:final field0) =>
         AutomationTargetDto.master(
           MasterAutomationTargetDto.mixerChannel(
@@ -271,7 +267,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
             ),
           ),
         ),
-        
+
       // _ => throw UnimplementedError("Unknown plugin target type: $t"),
     };
   }
@@ -287,7 +283,10 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     if (isLoading) return const Center(child: CircularProgressIndicator());
     if (errorMessage != null) {
       return Center(
-        child: Text(errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+        child: Text(
+          errorMessage!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
       );
     }
 
@@ -301,8 +300,9 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionHeader(entry.key),
+              _buildSectionHeader(context, entry.key),
               _buildSectionContainer(
+                context,
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: entry.value.map((param) {
@@ -370,13 +370,13 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     }
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         title,
-        style: const TextStyle(
-          color: Colors.cyanAccent,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.primary,
           fontSize: 18,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.2,
@@ -385,13 +385,14 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
     );
   }
 
-  Widget _buildSectionContainer(Widget child) {
+  Widget _buildSectionContainer(BuildContext context, Widget child) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade700.withAlpha(128)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: child,
     );
@@ -405,11 +406,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade900,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF16213E),
-        elevation: 0,
-        foregroundColor: Colors.white,
         title: Text(
           pluginName,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),

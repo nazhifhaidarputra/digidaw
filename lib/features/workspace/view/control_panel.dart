@@ -16,25 +16,30 @@ import 'package:karbeat/core/utils/scroll_behavior.dart';
 
 class ControlPanel extends StatelessWidget {
   final List<Widget> items;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final double height;
   const ControlPanel({
     super.key,
     required this.items,
     required this.height,
-    this.backgroundColor = const Color(0xFF1E1E1E),
+    this.backgroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       height: height,
       decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade800)),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+        color: backgroundColor ?? colors.surfaceContainer,
+        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(alpha: 0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -70,12 +75,7 @@ class ControlPanelBuilder {
 
   void addDivider() {
     _items.add(
-      Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        width: 1,
-        height: 30,
-        color: Colors.grey.shade700,
-      ),
+      const SizedBox(width: 17, height: 30, child: VerticalDivider(width: 1)),
     );
   }
 
@@ -106,6 +106,7 @@ class ControlPanelToolbarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
     final double containerHeight = isSmallScreen ? 40.0 : 50.0;
     final double hPadding = isSmallScreen ? 8.0 : 12.0;
@@ -124,7 +125,7 @@ class ControlPanelToolbarItem extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: hPadding),
             decoration: isActive
                 ? BoxDecoration(
-                    color: Colors.white.withAlpha(25),
+                    color: colors.onSurface.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: color.withAlpha(25)),
                   )
@@ -180,7 +181,6 @@ class ControlPanelDropdown<T> extends StatelessWidget {
 
     return PopupMenuButton<T>(
       tooltip: name,
-      color: const Color(0xFF2A2A2A),
       elevation: 8,
       position: PopupMenuPosition.under,
       onSelected: onSelected,
@@ -220,6 +220,7 @@ class DefaultControlPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final transportState = ref.watch(transportProvider).value;
     final workspaceState = ref.watch(
       workspaceStateProvider,
@@ -241,39 +242,39 @@ class DefaultControlPanel extends ConsumerWidget {
       ControlPanelDropdown<WorkspaceView>(
         name: _getViewName(workspaceState.currentView),
         icon: _getViewIcon(workspaceState.currentView),
-        color: Colors.cyanAccent,
+        color: colors.primary,
         onSelected: (view) =>
             ref.read(workspaceStateProvider.notifier).navigateTo(view),
-        items: const [
+        items: [
           PopupMenuItem(
             value: WorkspaceView.trackList,
             child: ListTile(
-              leading: Icon(Icons.view_list, color: Colors.cyanAccent),
-              title: Text("Tracks", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.view_list, color: colors.primary),
+              title: Text("Tracks"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: WorkspaceView.pianoRoll,
             child: ListTile(
-              leading: Icon(Icons.piano, color: Colors.cyanAccent),
-              title: Text("Piano Roll", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.piano, color: colors.primary),
+              title: Text("Piano Roll"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: WorkspaceView.mixer,
             child: ListTile(
-              leading: Icon(Icons.tune, color: Colors.cyanAccent),
-              title: Text("Mixer", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.tune, color: colors.primary),
+              title: Text("Mixer"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: WorkspaceView.source,
             child: ListTile(
-              leading: Icon(Icons.group_work, color: Colors.cyanAccent),
-              title: Text("Source", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.group_work, color: colors.primary),
+              title: Text("Source"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -291,7 +292,7 @@ class DefaultControlPanel extends ConsumerWidget {
           ControlPanelToolbarItem(
             name: isSongPlaying ? "Pause" : "Play",
             icon: isSongPlaying ? Icons.pause : Icons.play_arrow,
-            color: Colors.greenAccent,
+            color: colors.primary,
             isActive: isSongPlaying,
             onTap: () {
               try {
@@ -310,13 +311,13 @@ class DefaultControlPanel extends ConsumerWidget {
           ControlPanelToolbarItem(
             name: "Stop",
             icon: Icons.stop,
-            color: Colors.redAccent,
+            color: colors.error,
             onTap: () => ref.read(transportProvider.notifier).stop(),
           ),
           ControlPanelToolbarItem(
             name: "Loop",
             icon: Icons.loop,
-            color: Colors.orangeAccent,
+            color: colors.tertiary,
             isActive: transportState?.isLooping ?? false,
             onTap: () => ref.read(transportProvider.notifier).toggleLoop(),
           ),
@@ -330,7 +331,7 @@ class DefaultControlPanel extends ConsumerWidget {
           ControlPanelToolbarItem(
             name: "Snap to Grid",
             icon: Icons.grid_on,
-            color: Colors.blueAccent,
+            color: colors.secondary,
             isActive: workspaceState.snapToGrid,
             onTap: () =>
                 ref.read(workspaceStateProvider.notifier).toggleSnapToGrid(),
@@ -339,7 +340,7 @@ class DefaultControlPanel extends ConsumerWidget {
           ControlPanelToolbarItem(
             name: "Metronome",
             icon: MdiIcons.metronome,
-            color: Colors.blueAccent,
+            color: colors.secondary,
             isActive: transportState?.isMetronomeActive ?? false,
             onTap: () =>
                 ref.read(transportProvider.notifier).toggleMetronomeActive(),
@@ -348,7 +349,7 @@ class DefaultControlPanel extends ConsumerWidget {
           ControlPanelToolbarItem(
             name: "MIDI KB",
             icon: Icons.piano,
-            color: Colors.deepPurpleAccent,
+            color: colors.primary,
             isActive: workspaceState.floatingMidiKeyboardState.showed,
             onTap: () => ref
                 .read(workspaceStateProvider.notifier)
@@ -377,67 +378,64 @@ class DefaultControlPanel extends ConsumerWidget {
         name: _getToolName(workspaceState.selectedTool),
         icon: _getToolIcon(workspaceState.selectedTool),
         color: workspaceState.selectedTool == ToolSelection.delete
-            ? Colors.red
-            : Colors.blueAccent,
+            ? colors.error
+            : colors.secondary,
         onSelected: (tool) =>
             ref.read(workspaceStateProvider.notifier).selectTool(tool),
-        items: const [
+        items: [
           PopupMenuItem(
             value: ToolSelection.pointer,
             child: ListTile(
-              leading: Icon(Icons.near_me, color: Colors.blueAccent),
-              title: Text("Pointer", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.near_me, color: colors.secondary),
+              title: const Text("Pointer"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: ToolSelection.slice,
             child: ListTile(
-              leading: Icon(Icons.content_cut, color: Colors.blueAccent),
-              title: Text("Slice", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.content_cut, color: colors.secondary),
+              title: const Text("Slice"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: ToolSelection.draw,
             child: ListTile(
-              leading: Icon(Icons.edit, color: Colors.blueAccent),
-              title: Text("Draw", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.edit, color: colors.secondary),
+              title: const Text("Draw"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: ToolSelection.move,
             child: ListTile(
-              leading: Icon(Icons.open_with, color: Colors.blueAccent),
-              title: Text("Move", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.open_with, color: colors.secondary),
+              title: const Text("Move"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: ToolSelection.delete,
             child: ListTile(
-              leading: Icon(Icons.delete, color: Colors.red),
-              title: Text("Delete", style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.delete, color: colors.error),
+              title: const Text("Delete"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: ToolSelection.select,
             child: ListTile(
-              leading: Icon(Icons.crop_free, color: Colors.blueAccent),
-              title: Text(
-                "Range Select",
-                style: TextStyle(color: Colors.white),
-              ),
+              leading: Icon(Icons.crop_free, color: colors.secondary),
+              title: const Text("Range Select"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
           PopupMenuItem(
             value: ToolSelection.resize,
             child: ListTile(
-              leading: Icon(MdiIcons.arrowLeftRight, color: Colors.blueAccent),
-              title: Text("Resize", style: TextStyle(color: Colors.white)),
+              leading: Icon(MdiIcons.arrowLeftRight, color: colors.secondary),
+              title: const Text("Resize"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -520,9 +518,13 @@ class DefaultControlPanel extends ConsumerWidget {
   }
 
   Widget _buildInfoDisplay(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
     final double dividerWidth = isSmallScreen ? 8.0 : 20.0;
     final horizontalPadding = isSmallScreen ? 8.0 : 12.0;
+    final infoFieldWidth = isSmallScreen ? 28.0 : 36.0;
+    final timeFieldWidth = isSmallScreen ? 58.0 : 72.0;
+    final bpmFieldWidth = isSmallScreen ? 40.0 : 48.0;
 
     final pos = ref.watch(transportPositionStreamProvider).value;
     final bar = pos?.bar ?? 0;
@@ -533,54 +535,88 @@ class DefaultControlPanel extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.black54,
+        color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade700),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: IntrinsicHeight(
         child: Row(
           children: [
-            _buildInfoText("BAR", bar.toString(), isSmallScreen),
-            SizedBox(width: isSmallScreen ? 6 : 10),
-            _buildInfoText("BEAT", beat.toString(), isSmallScreen),
-            VerticalDivider(color: Colors.grey, width: dividerWidth),
             _buildInfoText(
+              context,
+              "BAR",
+              bar.toString(),
+              isSmallScreen,
+              width: infoFieldWidth,
+            ),
+            SizedBox(width: isSmallScreen ? 6 : 10),
+            _buildInfoText(
+              context,
+              "BEAT",
+              beat.toString(),
+              isSmallScreen,
+              width: infoFieldWidth,
+            ),
+            VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
+            _buildInfoText(
+              context,
               "TIME",
               formatTimeFromSamples(samples, sampleRate),
               isSmallScreen,
+              width: timeFieldWidth,
             ),
-            VerticalDivider(color: Colors.grey, width: dividerWidth),
-            const BpmControl(),
-            VerticalDivider(color: Colors.grey, width: dividerWidth),
-            _buildInfoText("SIG", "4/4", isSmallScreen),
+            VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
+            SizedBox(width: bpmFieldWidth, child: const BpmControl()),
+            VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
+            _buildInfoText(
+              context,
+              "SIG",
+              "4/4",
+              isSmallScreen,
+              width: infoFieldWidth,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoText(String label, String value, bool isSmallScreen) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey,
-            fontSize: isSmallScreen ? 6 : 8,
-            fontWeight: FontWeight.bold,
+  Widget _buildInfoText(
+    BuildContext context,
+    String label,
+    String value,
+    bool isSmallScreen, {
+    required double width,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+              fontSize: isSmallScreen ? 6 : 8,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            color: Colors.lightGreenAccent,
-            fontSize: isSmallScreen ? 11 : 14,
-            fontFamily: 'monospace',
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                color: colors.primary,
+                fontSize: isSmallScreen ? 11 : 14,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -590,6 +626,7 @@ class BpmControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final bpm = ref.watch(
       transportProvider.select((s) => s.value?.state?.bpm ?? 120.0),
     );
@@ -627,7 +664,7 @@ class BpmControl extends ConsumerWidget {
                   Text(
                     "BPM",
                     style: TextStyle(
-                      color: Colors.grey,
+                      color: colors.onSurfaceVariant,
                       fontSize: isSmallScreen ? 6 : 8,
                       fontWeight: FontWeight.bold,
                     ),
@@ -635,9 +672,8 @@ class BpmControl extends ConsumerWidget {
                   Text(
                     bpm.toStringAsFixed(1),
                     style: TextStyle(
-                      color: Colors.orangeAccent,
+                      color: colors.tertiary,
                       fontSize: isSmallScreen ? 11 : 14,
-                      fontFamily: 'monospace',
                     ),
                   ),
                 ],

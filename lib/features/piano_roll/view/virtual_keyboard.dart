@@ -138,6 +138,7 @@ class _PianoKeyState extends State<_PianoKey> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     // Combine external press (keyboard) and internal touch
     final isActive = widget.isPressed || _touchActive;
 
@@ -159,7 +160,7 @@ class _PianoKeyState extends State<_PianoKey> {
         height: widget.height,
         decoration: BoxDecoration(
           color: isActive
-              ? Colors.cyanAccent
+              ? colors.primary
               : (widget.isBlack ? Colors.black : Colors.white),
           border: Border.all(color: Colors.black, width: 1),
           borderRadius: BorderRadius.only(

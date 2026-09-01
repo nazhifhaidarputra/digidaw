@@ -183,25 +183,26 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.alt_route, color: Colors.cyanAccent, size: 18),
+              Icon(Icons.alt_route, color: colors.primary, size: 18),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'SIDECHAIN SOURCES',
                   style: TextStyle(
-                    color: Colors.cyanAccent,
+                    color: colors.primary,
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.1,
@@ -217,10 +218,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-            ),
+            Text(_error!, style: TextStyle(color: colors.error, fontSize: 12)),
           ],
           const SizedBox(height: 8),
           if (_loading)
@@ -231,11 +229,11 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
               ),
             )
           else if (_sources.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 'No valid track or bus sources are available.',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: colors.onSurfaceVariant),
               ),
             )
           else
@@ -249,7 +247,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
                   decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(40),
+                    color: colors.surfaceContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -263,12 +261,12 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                                 Text(
                                   source.name,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white),
+                                  style: TextStyle(color: colors.onSurface),
                                 ),
                                 Text(
                                   _sourceType(source.source),
-                                  style: const TextStyle(
-                                    color: Colors.white38,
+                                  style: TextStyle(
+                                    color: colors.onSurfaceVariant,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -287,7 +285,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                             ),
                           Switch(
                             value: source.enabled,
-                            activeThumbColor: Colors.cyanAccent,
+                            activeThumbColor: colors.primary,
                             onChanged: busy
                                 ? null
                                 : (value) => _toggleSource(index, value),
@@ -299,9 +297,10 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                           Expanded(
                             child: SliderTheme(
                               data: SliderTheme.of(context).copyWith(
-                                activeTrackColor: Colors.cyanAccent,
-                                thumbColor: Colors.cyanAccent,
-                                inactiveTrackColor: Colors.white12,
+                                activeTrackColor: colors.primary,
+                                thumbColor: colors.primary,
+                                inactiveTrackColor:
+                                    colors.surfaceContainerHighest,
                               ),
                               child: Slider(
                                 value: source.sendLevel.clamp(0.0, 1.0),
@@ -321,8 +320,8 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                             child: Text(
                               _formatLevel(source.sendLevel),
                               textAlign: TextAlign.end,
-                              style: const TextStyle(
-                                color: Colors.white70,
+                              style: TextStyle(
+                                color: colors.onSurfaceVariant,
                                 fontSize: 11,
                               ),
                             ),

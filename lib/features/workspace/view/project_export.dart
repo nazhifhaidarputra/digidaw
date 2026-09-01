@@ -137,6 +137,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final size = MediaQuery.of(context).size;
     final exportState = ref.watch(exportProjectProvider);
     final exportNotifier = ref.read(exportProjectProvider.notifier);
@@ -148,16 +149,16 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
           width: size.width * 0.5,
           height: size.height * 0.65,
           decoration: BoxDecoration(
-            color: Colors.grey.shade900,
+            color: colors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(128),
+                color: colors.shadow.withValues(alpha: 0.5),
                 blurRadius: 20,
                 spreadRadius: 5,
               ),
             ],
-            border: Border.all(color: Colors.grey.shade700),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Column(
             children: [
@@ -165,7 +166,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade800,
+                  color: colors.surfaceContainer,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(8),
                   ),
@@ -173,16 +174,16 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       "Export Project",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: colors.onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white54),
+                      icon: Icon(Icons.close, color: colors.onSurfaceVariant),
                       onPressed: _isExporting ? null : widget.onClose,
                       splashRadius: 20,
                       padding: EdgeInsets.zero,
@@ -202,10 +203,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       _buildSectionTitle("File Name"),
                       TextField(
                         controller: _nameController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: colors.onSurface),
                         decoration: InputDecoration(
                           filled: true,
-                          fillColor: Colors.grey.shade800,
+                          fillColor: colors.surfaceContainerHigh,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
                           ),
@@ -220,14 +221,14 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         readOnly: true,
                         style: TextStyle(
                           color: exportState.exportDirectory == null
-                              ? Colors.white54
-                              : Colors.white,
+                              ? colors.onSurfaceVariant
+                              : colors.onSurface,
                         ),
                         decoration: InputDecoration(
                           hintText: "Select Directory...",
-                          hintStyle: const TextStyle(color: Colors.white54),
+                          hintStyle: TextStyle(color: colors.onSurfaceVariant),
                           filled: true,
-                          fillColor: Colors.grey.shade800,
+                          fillColor: colors.surfaceContainerHigh,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
                             borderSide: BorderSide.none,
@@ -239,9 +240,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                           ),
                           // The three dots button
                           suffixIcon: IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.more_horiz,
-                              color: Colors.white70,
+                              color: colors.onSurfaceVariant,
                             ),
                             onPressed: _isExporting ? null : _pickSavePath,
                           ),
@@ -253,7 +254,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Colors.white24),
+                      Divider(color: colors.outlineVariant),
                       const SizedBox(height: 16),
 
                       // Format Settings Row
@@ -374,7 +375,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         children: [
                           Checkbox(
                             value: exportState.openFolderAfterExport,
-                            activeColor: Colors.blueAccent,
+                            activeColor: colors.primary,
                             onChanged: _isExporting
                                 ? null
                                 : (val) {
@@ -385,9 +386,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                     }
                                   },
                           ),
-                          const Text(
+                          Text(
                             "Open folder after export",
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: colors.onSurfaceVariant),
                           ),
                         ],
                       ),
@@ -398,16 +399,16 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       if (_isExporting) ...[
                         Text(
                           "Rendering: ${(_exportProgress * 100).toInt()}%",
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
                             fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 8),
                         LinearProgressIndicator(
                           value: _exportProgress,
-                          backgroundColor: Colors.grey.shade800,
-                          color: Colors.greenAccent,
+                          backgroundColor: colors.surfaceContainerHighest,
+                          color: colors.primary,
                         ),
                       ],
                     ],
@@ -422,36 +423,33 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                   vertical: 16,
                 ),
                 decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: Colors.grey.shade800)),
+                  border: Border(top: BorderSide(color: colors.outlineVariant)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
                       onPressed: _isExporting ? null : widget.onClose,
-                      child: const Text(
-                        "Cancel",
-                        style: TextStyle(color: Colors.white70),
-                      ),
+                      child: const Text("Cancel"),
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton(
                       onPressed: _isExporting ? null : _handleExport,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.greenAccent.shade700,
-                        foregroundColor: Colors.white,
+                        backgroundColor: colors.primary,
+                        foregroundColor: colors.onPrimary,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
                           vertical: 16,
                         ),
                       ),
                       child: _isExporting
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: colors.onPrimary,
                               ),
                             )
                           : const Text("Export Audio"),
@@ -467,12 +465,13 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   }
 
   Widget _buildSectionTitle(String title) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
-          color: Colors.grey.shade400,
+          color: colors.onSurfaceVariant,
           fontSize: 10,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.1,
@@ -488,19 +487,20 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     required String Function(T) itemLabel,
     String suffix = "",
   }) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade800,
+        color: colors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(4),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
           isExpanded: true,
-          dropdownColor: Colors.grey.shade800,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-          style: const TextStyle(color: Colors.white),
+          dropdownColor: colors.surfaceContainerHigh,
+          icon: Icon(Icons.arrow_drop_down, color: colors.onSurfaceVariant),
+          style: TextStyle(color: colors.onSurface),
           items: items.map((T item) {
             return DropdownMenuItem<T>(
               value: item,

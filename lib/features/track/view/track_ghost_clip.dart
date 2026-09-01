@@ -19,6 +19,7 @@ class TrackGhostClip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final placementState = ref.watch(clipPlacementProvider);
 
     List<Widget> ghostWidgets = [];
@@ -28,20 +29,20 @@ class TrackGhostClip extends ConsumerWidget {
       // TYPE 1: NEW CLIP FROM AUDIO/MIDI SOURCE
       // ==========================================
       if (placementState.isPlacing) {
-      final left = placementState.timeSamples / zoomLevel;
+        final left = placementState.timeSamples / zoomLevel;
 
-      ghostWidgets.add(
-        Positioned(
-          left: left,
-          top: 0,
-          width: 150,
-          height: trackHeight - 4,
-          child: IgnorePointer(
-            child: _buildNewGhostBox(opacity: 0.7),
+        ghostWidgets.add(
+          Positioned(
+            left: left,
+            top: 0,
+            width: 150,
+            height: trackHeight - 4,
+            child: IgnorePointer(
+              child: _buildNewGhostBox(colors, opacity: 0.7),
+            ),
           ),
-        ),
-      );
-    }
+        );
+      }
       // ==========================================
       // TYPE 2: EXISTING CLIP FROM TIMELINE
       // ==========================================
@@ -97,12 +98,18 @@ class TrackGhostClip extends ConsumerWidget {
                     child: Draggable<List<int>>(
                       data: placementState.draggedClipIds,
                       feedback: _buildExistingGhostBox(
+                        colors,
                         clip.name,
                         safeWidth,
                         0.7,
                       ),
                       childWhenDragging: const SizedBox.shrink(),
-                      child: _buildExistingGhostBox(clip.name, safeWidth, 0.7),
+                      child: _buildExistingGhostBox(
+                        colors,
+                        clip.name,
+                        safeWidth,
+                        0.7,
+                      ),
                     ),
                   ),
                 );
@@ -118,24 +125,24 @@ class TrackGhostClip extends ConsumerWidget {
     );
   }
 
-  Widget _buildNewGhostBox({required double opacity}) {
+  Widget _buildNewGhostBox(ColorScheme colors, {required double opacity}) {
     return Opacity(
       opacity: opacity,
       child: Container(
         width: 150,
         height: trackHeight - 4,
         decoration: BoxDecoration(
-          color: Colors.cyanAccent.withAlpha(100),
-          border: Border.all(color: Colors.cyanAccent, width: 2),
+          color: colors.primaryContainer,
+          border: Border.all(color: colors.primary, width: 2),
           borderRadius: BorderRadius.circular(4),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             "Place Here",
             style: TextStyle(
-              color: Colors.white,
+              color: colors.onPrimaryContainer,
               fontWeight: FontWeight.bold,
-              shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+              shadows: [Shadow(color: colors.shadow, blurRadius: 2)],
             ),
           ),
         ),
@@ -143,22 +150,27 @@ class TrackGhostClip extends ConsumerWidget {
     );
   }
 
-  Widget _buildExistingGhostBox(String name, double width, double opacity) {
+  Widget _buildExistingGhostBox(
+    ColorScheme colors,
+    String name,
+    double width,
+    double opacity,
+  ) {
     return Opacity(
       opacity: opacity,
       child: Container(
         width: width,
         height: trackHeight - 4,
         decoration: BoxDecoration(
-          color: Colors.cyanAccent.withAlpha(150),
-          border: Border.all(color: Colors.cyanAccent, width: 2),
+          color: colors.primaryContainer,
+          border: Border.all(color: colors.primary, width: 2),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Center(
           child: Text(
             name,
-            style: const TextStyle(
-              color: Colors.black,
+            style: TextStyle(
+              color: colors.onPrimaryContainer,
               fontSize: 10,
               fontWeight: FontWeight.bold,
             ),

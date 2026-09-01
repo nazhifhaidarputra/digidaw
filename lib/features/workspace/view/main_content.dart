@@ -87,6 +87,7 @@ class _MainContentState extends ConsumerState<MainContent>
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final currentView = ref.watch(
       workspaceStateProvider.select((s) => s.currentView),
     );
@@ -97,14 +98,14 @@ class _MainContentState extends ConsumerState<MainContent>
     );
 
     return Container(
-      color: hasBackground ? Colors.transparent : Colors.grey.shade800,
+      color: hasBackground ? Colors.transparent : colors.surface,
       child: Column(
         children: [
           SafeArea(
             top: true,
             bottom: false,
             child: Container(
-              color: Colors.grey.shade50,
+              color: colors.surfaceContainer,
               child: const DefaultControlPanel(),
             ),
           ),

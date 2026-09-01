@@ -104,11 +104,12 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         }
 
         if (channelEntries.isEmpty) {
+          final colors = Theme.of(context).colorScheme;
           return Center(
             child: Text(
               'No channels',
               style: TextStyle(
-                color: Colors.grey.shade600,
+                color: colors.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -248,6 +249,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           itemCount: busEntries.length + 1,
           itemBuilder: (context, index) {
+            final colors = Theme.of(context).colorScheme;
             // Last item: "Add Bus" ghost strip
             if (index == busEntries.length) {
               return GestureDetector(
@@ -261,26 +263,23 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   width: 72,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.02),
+                    color: colors.onSurface.withValues(alpha: 0.02),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      width: 1,
-                    ),
+                    border: Border.all(color: colors.outlineVariant, width: 1),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
                         Icons.add_rounded,
-                        color: Colors.white.withValues(alpha: 0.25),
+                        color: colors.onSurfaceVariant,
                         size: 28,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         'Add Bus',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.25),
+                          color: colors.onSurfaceVariant,
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
                         ),
@@ -408,13 +407,13 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final telemetry = ref.watch(mixerStateProvider);
     final mixerState = ref.watch(projectProvider).value?.mixer;
 
     if (mixerState == null) return const SizedBox.shrink();
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade900,
       body: Stack(
         key: _overlayKey,
         children: [
@@ -429,8 +428,8 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       child: MultiSplitViewTheme(
                         data: MultiSplitViewThemeData(
                           dividerPainter: DividerPainters.grooved1(
-                            color: Colors.white10,
-                            highlightedColor: Colors.white70,
+                            color: colors.outlineVariant,
+                            highlightedColor: colors.primary,
                           ),
                         ),
                         child: MultiSplitView(controller: _splitController),
@@ -438,7 +437,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     ),
 
                     // === Divider ===
-                    Container(width: 1, color: Colors.white10),
+                    Container(width: 1, color: colors.outlineVariant),
 
                     // === Master Channel (fixed) ===
                     Padding(
@@ -517,7 +516,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     ),
 
                     // === Divider ===
-                    Container(width: 1, color: Colors.white10),
+                    Container(width: 1, color: colors.outlineVariant),
 
                     // === Effect Rack Panel ===
                     _buildEffectRackPanel(context, mixerState),
@@ -528,10 +527,10 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               Container(
                 height: 120,
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0C0C0F), // Darker trench
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerLowest,
                   border: Border(
-                    top: BorderSide(color: Colors.black, width: 4),
+                    top: BorderSide(color: colors.outlineVariant, width: 4),
                   ),
                 ),
                 child: Stack(
@@ -542,7 +541,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       child: Text(
                         "ROUTING MATRIX",
                         style: TextStyle(
-                          color: Colors.white.withAlpha(40),
+                          color: colors.onSurface.withValues(alpha: 0.16),
                           fontSize: 12,
                           letterSpacing: 3,
                           fontWeight: FontWeight.bold,
@@ -572,6 +571,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       selectedChannelId: _selectedChannelId,
                       isSelectedBus: _isSelectedBus,
                       overlayKey: _overlayKey,
+                      activeColor: colors.primary,
+                      inactiveColor: colors.outlineVariant,
+                      plugColor: colors.surfaceContainerHighest,
                     ),
                   );
                 },
@@ -584,14 +586,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   }
 
   Widget _buildEffectRackPanel(BuildContext ctx, UiMixerState mixerState) {
+    final colors = Theme.of(ctx).colorScheme;
     if (_selectedChannelId == null) {
-      return const SizedBox(
+      return SizedBox(
         width: 250,
         child: Center(
           child: Text(
             'Select a channel to\nview effects',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white54, fontSize: 13),
+            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
           ),
         ),
       );
@@ -616,22 +619,22 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
     return Container(
       width: 250,
-      color: Colors.grey.shade900,
+      color: colors.surfaceContainerLow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            color: Colors.black26,
+            color: colors.surfaceContainer,
             child: Row(
               children: [
-                const Icon(Icons.blur_on, color: Colors.white70, size: 18),
+                Icon(Icons.blur_on, color: colors.primary, size: 18),
                 const SizedBox(width: 8),
                 Text(
                   '$channelName Effects',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: colors.onSurface,
                     fontWeight: FontWeight.bold,
                     backgroundColor: Colors.transparent,
                     fontSize: 14,
@@ -644,11 +647,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           // Effects List
           Expanded(
             child: channel.effects.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'No effects',
                       style: TextStyle(
-                        color: Colors.white38,
+                        color: colors.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -661,24 +664,24 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Material(
-                          color: Colors.white.withAlpha(10),
+                          color: colors.surfaceContainer,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(6),
-                            side: BorderSide(color: Colors.white.withAlpha(20)),
+                            side: BorderSide(color: colors.outlineVariant),
                           ),
                           child: ListTile(
                             dense: true,
                             title: Text(
                               effect.name,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: colors.onSurface),
                             ),
                             subtitle: Text(
                               'ID: ${effect.id}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: TextStyle(color: colors.onSurfaceVariant),
                             ),
-                            trailing: const Icon(
+                            trailing: Icon(
                               Icons.settings,
-                              color: Colors.white54,
+                              color: colors.onSurfaceVariant,
                               size: 16,
                             ),
                             onTap: () async {
@@ -740,8 +743,8 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
             padding: const EdgeInsets.all(8.0),
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white.withAlpha(20),
-                foregroundColor: Colors.white,
+                backgroundColor: colors.secondaryContainer,
+                foregroundColor: colors.onSecondaryContainer,
               ),
               onPressed: () {
                 _showEffectBrowser(context);
@@ -784,7 +787,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     Icon(
                       Icons.extension,
                       size: 16,
-                      color: Colors.deepOrangeAccent,
+                      color: Theme.of(ctx).colorScheme.tertiary,
                     ),
                     const SizedBox(width: 8),
                     Container(
@@ -793,16 +796,16 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.deepOrangeAccent.withAlpha(30),
+                        color: Theme.of(ctx).colorScheme.tertiaryContainer,
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
-                          color: Colors.deepOrangeAccent.withAlpha(80),
+                          color: Theme.of(ctx).colorScheme.tertiary,
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         "Karbeat Native",
                         style: TextStyle(
-                          color: Colors.deepOrangeAccent,
+                          color: Theme.of(ctx).colorScheme.onTertiaryContainer,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -814,11 +817,16 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               const Divider(height: 1),
               // Plugin list
               if (availablePlugins.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
                   child: Text(
                     "No effects found",
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 )
               else
@@ -839,6 +847,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   }
 
   Widget _buildEffectBrowserItem(BuildContext ctx, UiPluginInfo plugin) {
+    final colors = Theme.of(ctx).colorScheme;
     return InkWell(
       onTap: () {
         Navigator.pop(ctx);
@@ -876,7 +885,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         child: Row(
           children: [
-            const Icon(Icons.piano, color: Colors.orangeAccent, size: 20),
+            Icon(Icons.piano, color: colors.tertiary, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -890,9 +899,12 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     "Karbeat Native",
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colors.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -1074,10 +1086,9 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final entry = widget.entry;
-    final accentColor = entry.isMaster
-        ? const Color(0xFFFFD700)
-        : const Color(0xFF00E5FF);
+    final accentColor = entry.isMaster ? colors.tertiary : colors.primary;
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -1086,15 +1097,15 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           color: entry.isMaster
-              ? const Color(0xFF2A2040)
-              : const Color(0xFF16213E),
+              ? colors.tertiaryContainer.withValues(alpha: 0.4)
+              : colors.surfaceContainerLow,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: widget.isSelected
                 ? accentColor
                 : (entry.isMaster
-                      ? Colors.amber.withValues(alpha: 0.3)
-                      : Colors.white.withValues(alpha: 0.06)),
+                      ? colors.tertiary.withValues(alpha: 0.3)
+                      : colors.outlineVariant),
             width: widget.isSelected ? 2 : 1,
           ),
           boxShadow: widget.isSelected
@@ -1184,11 +1195,7 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
             // === dB readout ===
             Text(
               _volumeToDb(entry.channel.volume),
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 9,
-                fontFamily: 'monospace',
-              ),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 9),
             ),
 
             const SizedBox(height: 6),
@@ -1200,14 +1207,14 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
                 _ToggleButton(
                   label: 'M',
                   isActive: entry.channel.mute,
-                  activeColor: Colors.redAccent,
+                  activeColor: colors.error,
                   onTap: widget.onMuteToggled,
                 ),
                 const SizedBox(width: 4),
                 _ToggleButton(
                   label: 'S',
                   isActive: entry.channel.solo,
-                  activeColor: Colors.amber,
+                  activeColor: colors.tertiary,
                   onTap: widget.onSoloToggled,
                 ),
               ],
@@ -1251,6 +1258,7 @@ class _PanKnob extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final label = value == 0
         ? 'C'
         : value < 0
@@ -1261,11 +1269,7 @@ class _PanKnob extends ConsumerWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 9,
-            fontFamily: 'monospace',
-          ),
+          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 9),
         ),
         const SizedBox(height: 2),
         SizedBox(
@@ -1276,7 +1280,7 @@ class _PanKnob extends ConsumerWidget {
               trackHeight: 3,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
               activeTrackColor: accentColor,
-              inactiveTrackColor: Colors.white12,
+              inactiveTrackColor: colors.surfaceContainerHighest,
               thumbColor: accentColor,
               overlayShape: SliderComponentShape.noOverlay,
             ),
@@ -1318,8 +1322,7 @@ class _PanKnob extends ConsumerWidget {
                 step: spec.step == 0.0 ? 0.01 : spec.step,
                 diameter: 30.0, // Perfectly sized for the 72px channel strip
                 activeColor: accentColor,
-                inactiveColor:
-                    Colors.white12, // Matches the previous slider track
+                inactiveColor: colors.surfaceContainerHighest,
                 onChanged: onChanged,
                 onChangeStart: onChangeStart != null
                     ? (_) => onChangeStart!()
@@ -1359,6 +1362,7 @@ class _VolumeFader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         final sliderWidth = constraints.maxHeight;
@@ -1408,7 +1412,7 @@ class _VolumeFader extends ConsumerWidget {
                     enabledThumbRadius: 7,
                   ),
                   activeTrackColor: accentColor,
-                  inactiveTrackColor: Colors.white10,
+                  inactiveTrackColor: colors.surfaceContainerHighest,
                   thumbColor: accentColor,
                   overlayColor: accentColor.withValues(alpha: 0.15),
                   overlayShape: const RoundSliderOverlayShape(
@@ -1458,6 +1462,11 @@ class _ToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final activeForeground =
+        ThemeData.estimateBrightnessForColor(activeColor) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1466,12 +1475,10 @@ class _ToggleButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: isActive
               ? activeColor.withValues(alpha: 0.85)
-              : Colors.white.withValues(alpha: 0.06),
+              : colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isActive
-                ? activeColor
-                : Colors.white.withValues(alpha: 0.12),
+            color: isActive ? activeColor : colors.outlineVariant,
             width: 1,
           ),
         ),
@@ -1479,7 +1486,7 @@ class _ToggleButton extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color: isActive ? Colors.black87 : Colors.grey.shade500,
+            color: isActive ? activeForeground : colors.onSurfaceVariant,
             fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
@@ -1495,6 +1502,9 @@ class _RoutingPainter extends CustomPainter {
   final int? selectedChannelId;
   final bool isSelectedBus;
   final GlobalKey overlayKey;
+  final Color activeColor;
+  final Color inactiveColor;
+  final Color plugColor;
 
   _RoutingPainter({
     required this.routing,
@@ -1502,6 +1512,9 @@ class _RoutingPainter extends CustomPainter {
     required this.selectedChannelId,
     required this.isSelectedBus,
     required this.overlayKey,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.plugColor,
   });
 
   String? _getNodeKeyString(mixer_api.UiRoutingNode node) {
@@ -1519,17 +1532,17 @@ class _RoutingPainter extends CustomPainter {
     if (overlayBox == null) return;
 
     final activePaint = Paint()
-      ..color = Colors.cyanAccent.withAlpha(200)
+      ..color = activeColor.withValues(alpha: 0.8)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
 
     final inactivePaint = Paint()
-      ..color = Colors.white.withAlpha(20)
+      ..color = inactiveColor
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
     final plugPaint = Paint()
-      ..color = Colors.grey.shade800
+      ..color = plugColor
       ..style = PaintingStyle.fill;
 
     for (final conn in routing) {
@@ -1620,7 +1633,7 @@ class _RoutingPainter extends CustomPainter {
       // Arrow indicator for signal direction
       if (isActive) {
         final arrowPaint = Paint()
-          ..color = Colors.cyanAccent.withAlpha(200)
+          ..color = activeColor.withValues(alpha: 0.8)
           ..style = PaintingStyle.fill;
         canvas.drawCircle(Offset(wireEnd.dx, wireEnd.dy + 2), 4, arrowPaint);
       }
@@ -1761,6 +1774,7 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final mixerState = ref.watch(projectProvider).value?.mixer;
     if (mixerState == null) return const SizedBox.shrink();
     // 1. Gather Valid Main Outputs (Master + All Buses except self)
@@ -1785,9 +1799,8 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
 
     return AlertDialog(
       title: Text("Routing: ${widget.sourceName}"),
-      backgroundColor: Colors.grey.shade900,
-      titleTextStyle: const TextStyle(
-        color: Colors.white,
+      titleTextStyle: TextStyle(
+        color: colors.onSurface,
         fontSize: 16,
         fontWeight: FontWeight.bold,
       ),
@@ -1798,10 +1811,10 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- MAIN OUTPUT ---
-            const Text(
+            Text(
               "MAIN OUTPUT (Pre-Fader)",
               style: TextStyle(
-                color: Colors.white54,
+                color: colors.onSurfaceVariant,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
@@ -1810,7 +1823,7 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: Colors.black26,
+                color: colors.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: DropdownButtonHideUnderline(
@@ -1819,8 +1832,8 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                       ? _getNodeKeyStr(mainRoute!.destination)
                       : null,
                   isExpanded: true,
-                  dropdownColor: Colors.black,
-                  style: const TextStyle(color: Colors.cyanAccent),
+                  dropdownColor: colors.surfaceContainerHigh,
+                  style: TextStyle(color: colors.primary),
                   items: availableMainOutputs.map((entry) {
                     return DropdownMenuItem<String>(
                       value: _getNodeKeyStr(entry.value),
@@ -1841,20 +1854,20 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
             const SizedBox(height: 24),
 
             // --- SENDS ---
-            const Text(
+            Text(
               "SENDS (Post-Fader)",
               style: TextStyle(
-                color: Colors.white54,
+                color: colors.onSurfaceVariant,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
             if (availableSends.isEmpty)
-              const Text(
+              Text(
                 "No available buses to send to.",
                 style: TextStyle(
-                  color: Colors.white24,
+                  color: colors.outline,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -1872,7 +1885,7 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                   children: [
                     Switch(
                       value: isEnabled,
-                      activeThumbColor: Colors.cyanAccent,
+                      activeThumbColor: colors.primary,
                       onChanged: (v) => _toggleSend(entry.value, v),
                     ),
                     SizedBox(
@@ -1880,19 +1893,21 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                       child: Text(
                         entry.key,
                         style: TextStyle(
-                          color: isEnabled ? Colors.white : Colors.white38,
+                          color: isEnabled
+                              ? colors.onSurface
+                              : colors.onSurfaceVariant,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Expanded(
                       child: SliderTheme(
-                        data: const SliderThemeData(
-                          activeTrackColor: Colors.cyanAccent,
-                          inactiveTrackColor: Colors.white10,
-                          thumbColor: Colors.cyanAccent,
+                        data: SliderThemeData(
+                          activeTrackColor: colors.primary,
+                          inactiveTrackColor: colors.surfaceContainerHighest,
+                          thumbColor: colors.primary,
                           trackHeight: 2,
-                          thumbShape: RoundSliderThumbShape(
+                          thumbShape: const RoundSliderThumbShape(
                             enabledThumbRadius: 6,
                           ),
                         ),
@@ -1917,7 +1932,9 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
                         "${(level * 100).toInt()}%",
                         textAlign: TextAlign.right,
                         style: TextStyle(
-                          color: isEnabled ? Colors.white54 : Colors.white24,
+                          color: isEnabled
+                              ? colors.onSurfaceVariant
+                              : colors.outline,
                           fontSize: 10,
                         ),
                       ),
@@ -1932,7 +1949,7 @@ class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text("Close", style: TextStyle(color: Colors.white70)),
+          child: const Text("Close"),
         ),
       ],
     );

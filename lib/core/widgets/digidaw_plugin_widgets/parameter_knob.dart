@@ -21,8 +21,8 @@ class DigidawParameterKnob extends StatefulWidget {
   /// Lower = more sensitive.
   final double sensitivity;
 
-  final Color activeColor;
-  final Color inactiveColor;
+  final Color? activeColor;
+  final Color? inactiveColor;
 
   const DigidawParameterKnob({
     super.key,
@@ -36,8 +36,8 @@ class DigidawParameterKnob extends StatefulWidget {
     this.onChangeStart,
     this.onChangeEnd,
     this.sensitivity = 150.0,
-    this.activeColor = Colors.cyanAccent,
-    this.inactiveColor = Colors.black87,
+    this.activeColor,
+    this.inactiveColor,
   });
 
   @override
@@ -59,13 +59,17 @@ class _DigidawParameterKnobState extends State<DigidawParameterKnob> {
     // Hold Shift for fine control — standard DAW knob behavior.
     final fine = HardwareKeyboard.instance.isShiftPressed ? 0.2 : 1.0;
     final deltaValue = -(dyDelta / widget.sensitivity) * _range * fine;
-    final next = _quantize((widget.value + deltaValue).clamp(widget.min, widget.max));
+    final next = _quantize(
+      (widget.value + deltaValue).clamp(widget.min, widget.max),
+    );
     if (next != widget.value) widget.onChanged(next);
   }
 
   void _nudge(int direction) {
     final increment = widget.step > 0 ? widget.step : _range * 0.01;
-    final next = _quantize((widget.value + increment * direction).clamp(widget.min, widget.max));
+    final next = _quantize(
+      (widget.value + increment * direction).clamp(widget.min, widget.max),
+    );
     widget.onChangeStart?.call(widget.value);
     widget.onChanged(next);
     widget.onChangeEnd?.call(next);
@@ -73,6 +77,7 @@ class _DigidawParameterKnobState extends State<DigidawParameterKnob> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final t = _range == 0 ? 0.0 : (widget.value - widget.min) / _range;
 
     return Listener(
@@ -106,8 +111,9 @@ class _DigidawParameterKnobState extends State<DigidawParameterKnob> {
             painter: _StudioKnobPainter(
               t: t,
               pressed: _dragging,
-              activeColor: widget.activeColor,
-              inactiveColor: widget.inactiveColor,
+              activeColor: widget.activeColor ?? colors.primary,
+              inactiveColor:
+                  widget.inactiveColor ?? colors.surfaceContainerHighest,
             ),
           ),
         ),
@@ -184,8 +190,10 @@ class _StudioKnobPainter extends CustomPainter {
     // Tick marks at min / center / max, just outside the track
     for (final frac in [0.0, 0.5, 1.0]) {
       final angle = _startAngle + _sweepAngle * frac;
-      final p1 = center + Offset(math.cos(angle), math.sin(angle)) * (outerRadius + 1);
-      final p2 = center + Offset(math.cos(angle), math.sin(angle)) * (outerRadius + 4);
+      final p1 =
+          center + Offset(math.cos(angle), math.sin(angle)) * (outerRadius + 1);
+      final p2 =
+          center + Offset(math.cos(angle), math.sin(angle)) * (outerRadius + 4);
       canvas.drawLine(
         p1,
         p2,
@@ -204,7 +212,12 @@ class _StudioKnobPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: pressed
             ? [Colors.grey.shade500, Colors.grey.shade800, Colors.grey.shade900]
-            : [Colors.grey.shade400, Colors.grey.shade300, Colors.grey.shade700, Colors.grey.shade900],
+            : [
+                Colors.grey.shade400,
+                Colors.grey.shade300,
+                Colors.grey.shade700,
+                Colors.grey.shade900,
+              ],
         stops: pressed ? const [0.0, 0.5, 1.0] : const [0.0, 0.45, 0.55, 1.0],
       ).createShader(capRect);
     canvas.drawCircle(center, capRadius, capPaint);

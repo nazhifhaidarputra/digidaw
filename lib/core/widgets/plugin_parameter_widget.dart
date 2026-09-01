@@ -49,6 +49,7 @@ class DawFloatParam extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final displayValue = value.toStringAsFixed(2);
 
     int? divisions;
@@ -68,7 +69,9 @@ class DawFloatParam extends ConsumerWidget {
         onChanged: onChanged,
         onAddAutomation: () async {
           if (target == null) return;
-          ref.read(automationProvider.notifier).handleAddAutomationForTarget(
+          ref
+              .read(automationProvider.notifier)
+              .handleAddAutomationForTarget(
                 target: target!,
                 label: name,
                 min: min,
@@ -78,7 +81,9 @@ class DawFloatParam extends ConsumerWidget {
         },
         onRemoveAutomation: () async {
           if (target == null) return;
-          ref.read(automationProvider.notifier).handleRemoveAutomationForTarget(target: target!);
+          ref
+              .read(automationProvider.notifier)
+              .handleRemoveAutomationForTarget(target: target!);
         },
         child: controlStyle == DawControlStyle.knob
             ? DigidawParameterKnob(
@@ -109,16 +114,18 @@ class DawFloatParam extends ConsumerWidget {
       if (controlStyle == DawControlStyle.slider) {
         final themed = SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: Colors.cyanAccent,
-            inactiveTrackColor: Colors.grey.shade700,
-            thumbColor: Colors.cyanAccent,
-            overlayColor: Colors.cyanAccent.withAlpha(51),
+            activeTrackColor: colors.primary,
+            inactiveTrackColor: colors.surfaceContainerHighest,
+            thumbColor: colors.primary,
+            overlayColor: colors.primary.withValues(alpha: 0.2),
             trackHeight: 4,
             tickMarkShape: SliderTickMarkShape.noTickMark,
           ),
           child: wrapped,
         );
-        return sliderWidth != null ? SizedBox(width: sliderWidth!, child: themed) : themed;
+        return sliderWidth != null
+            ? SizedBox(width: sliderWidth!, child: themed)
+            : themed;
       }
       return wrapped;
     }
@@ -131,8 +138,14 @@ class DawFloatParam extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(name, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-            Text('$displayValue$suffix', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            Text(
+              name,
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+            ),
+            Text(
+              '$displayValue$suffix',
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -165,12 +178,16 @@ class DawChoiceParam extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final currentChoice = value.toInt().clamp(0, choices.length - 1);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(name, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Text(
+          name,
+          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+        ),
         const SizedBox(height: 8),
         ParameterInteractionWrapper<double>(
           parameterName: name,
@@ -199,20 +216,22 @@ class DawChoiceParam extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? Colors.cyanAccent.withAlpha(51)
-                        : Colors.grey.shade800,
+                        ? colors.primaryContainer
+                        : colors.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isSelected
-                          ? Colors.cyanAccent
-                          : Colors.grey.shade700,
+                          ? colors.primary
+                          : colors.outlineVariant,
                       width: isSelected ? 2 : 1,
                     ),
                   ),
                   child: Text(
                     choices[index],
                     style: TextStyle(
-                      color: isSelected ? Colors.cyanAccent : Colors.white70,
+                      color: isSelected
+                          ? colors.onPrimaryContainer
+                          : colors.onSurfaceVariant,
                       fontWeight: isSelected
                           ? FontWeight.bold
                           : FontWeight.normal,
@@ -249,6 +268,7 @@ class DawBoolParam extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final isOn = value >= 0.5;
 
     return ParameterInteractionWrapper<double>(
@@ -266,10 +286,13 @@ class DawBoolParam extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(name, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          Text(
+            name,
+            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 14),
+          ),
           Switch(
             value: isOn,
-            activeThumbColor: Colors.cyanAccent,
+            activeThumbColor: colors.primary,
             onChanged: (val) => onChanged(val ? 1.0 : 0.0),
           ),
         ],

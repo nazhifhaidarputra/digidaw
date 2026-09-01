@@ -86,26 +86,27 @@ class SampleBrowserPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final state = ref.watch(
       workspaceStateProvider.select((workspace) => workspace.browserPanelState),
     );
     final rows = _visibleRows(state);
 
     return ColoredBox(
-      color: Colors.grey.shade900,
+      color: colors.surfaceContainerLow,
       child: Column(
         children: [
           Container(
             height: 30,
             padding: const EdgeInsets.only(left: 10, right: 2),
-            color: Colors.grey.shade800,
+            color: colors.surfaceContainer,
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Sample Browser',
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                    style: TextStyle(color: colors.onSurface, fontSize: 12),
                   ),
                 ),
                 IconButton(
@@ -139,17 +140,17 @@ class SampleBrowserPanel extends ConsumerWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.audio_file_outlined,
-                            color: Colors.white30,
+                            color: colors.outline,
                             size: 32,
                           ),
                           const SizedBox(height: 10),
-                          const Text(
+                          Text(
                             'Add a directory to browse audio samples.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Colors.white54,
+                              color: colors.onSurfaceVariant,
                               fontSize: 12,
                             ),
                           ),
@@ -178,6 +179,7 @@ class SampleBrowserPanel extends ConsumerWidget {
                         final row = rows[index];
                         return switch (row) {
                           _BrowserDirectoryRow() => _directoryTile(
+                            context,
                             ref,
                             row,
                             state,
@@ -199,10 +201,12 @@ class SampleBrowserPanel extends ConsumerWidget {
   }
 
   Widget _directoryTile(
+    BuildContext context,
     WidgetRef ref,
     _BrowserDirectoryRow row,
     BrowserPanelState state,
   ) {
+    final colors = Theme.of(context).colorScheme;
     final isExpanded = state.expandedDirectoryPaths.contains(
       row.directory.path,
     );
@@ -219,19 +223,19 @@ class SampleBrowserPanel extends ConsumerWidget {
                   ? Icons.keyboard_arrow_down
                   : Icons.keyboard_arrow_right,
               size: 16,
-              color: Colors.white54,
+              color: colors.onSurfaceVariant,
             ),
             Icon(
               isExpanded ? Icons.folder_open_outlined : Icons.folder_outlined,
               size: 16,
-              color: Colors.amber.shade300,
+              color: colors.tertiary,
             ),
             const SizedBox(width: 5),
             Expanded(
               child: Text(
                 row.directory.name,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: TextStyle(color: colors.onSurface, fontSize: 12),
               ),
             ),
           ],
@@ -246,9 +250,12 @@ class SampleBrowserPanel extends ConsumerWidget {
     _BrowserSampleRow row,
     BrowserPanelState state,
   ) {
+    final colors = Theme.of(context).colorScheme;
     final selected = state.selectedSamplePath == row.sample.path;
     final tile = Material(
-      color: selected ? Colors.cyanAccent.withAlpha(28) : Colors.transparent,
+      color: selected
+          ? colors.primary.withValues(alpha: 0.12)
+          : Colors.transparent,
       child: InkWell(
         onTap: () => unawaited(_previewSample(context, ref, row.sample)),
         child: Padding(
@@ -258,7 +265,7 @@ class SampleBrowserPanel extends ConsumerWidget {
               Icon(
                 selected ? Icons.volume_up : Icons.audio_file_outlined,
                 size: 15,
-                color: selected ? Colors.cyanAccent : Colors.white54,
+                color: selected ? colors.primary : colors.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -266,7 +273,9 @@ class SampleBrowserPanel extends ConsumerWidget {
                   row.sample.name,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: selected ? Colors.white : Colors.white70,
+                    color: selected
+                        ? colors.onSurface
+                        : colors.onSurfaceVariant,
                     fontSize: 12,
                   ),
                 ),
@@ -285,7 +294,7 @@ class SampleBrowserPanel extends ConsumerWidget {
           .selectBrowserSample(row.sample.path),
       feedback: Material(
         elevation: 6,
-        color: Colors.grey.shade800,
+        color: colors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(3),
         child: SizedBox(
           width: 220,
@@ -293,13 +302,13 @@ class SampleBrowserPanel extends ConsumerWidget {
           child: Row(
             children: [
               const SizedBox(width: 8),
-              const Icon(Icons.audio_file, size: 15, color: Colors.cyanAccent),
+              Icon(Icons.audio_file, size: 15, color: colors.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   row.sample.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(color: colors.onSurface, fontSize: 12),
                 ),
               ),
               const SizedBox(width: 8),

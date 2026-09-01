@@ -39,6 +39,30 @@ abstract final class AppTheme {
       colorScheme: colorScheme,
       fontFamily: fontFamily,
       scaffoldBackgroundColor: colorScheme.surface,
+      canvasColor: colorScheme.surface,
+      dividerColor: colorScheme.outlineVariant,
+      appBarTheme: AppBarTheme(
+        backgroundColor: colorScheme.surfaceContainer,
+        foregroundColor: colorScheme.onSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colorScheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: colorScheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+      ),
+      cardTheme: CardThemeData(
+        color: colorScheme.surfaceContainerLow,
+        surfaceTintColor: Colors.transparent,
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: colorScheme.primaryContainer,
+        foregroundColor: colorScheme.onPrimaryContainer,
+      ),
       inputDecorationTheme: const InputDecorationTheme(isDense: true),
       listTileTheme: const ListTileThemeData(dense: true),
     );

@@ -25,6 +25,7 @@ class TrackRangeSelectOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final rangeState = ref.watch(rangeSelectProvider);
 
     List<Widget> children = [];
@@ -45,8 +46,8 @@ class TrackRangeSelectOverlay extends ConsumerWidget {
           child: IgnorePointer(
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.blueAccent.withAlpha(50),
-                border: Border.all(color: Colors.blueAccent, width: 2),
+                color: colors.primary.withValues(alpha: 0.2),
+                border: Border.all(color: colors.primary, width: 2),
                 borderRadius: BorderRadius.circular(4),
               ),
             ),

@@ -21,22 +21,18 @@ class AudioPropertiesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final propsAsync = ref.watch(audioPropertiesProvider(sourceId));
 
     final ctx = ref.read(projectProvider.notifier).dawContext;
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade900,
-      appBar: AppBar(
-        title: Text(sourceName),
-        backgroundColor: const Color.fromARGB(255, 9, 7, 7),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: Text(sourceName)),
       body: propsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
 
         error: (err, _) => Center(
-          child: Text("Error: $err", style: const TextStyle(color: Colors.red)),
+          child: Text("Error: $err", style: TextStyle(color: colors.error)),
         ),
 
         data: (props) {
@@ -46,9 +42,9 @@ class AudioPropertiesScreen extends ConsumerWidget {
           return Column(
             children: [
               // HEADER
-              _buildInfoSection(props),
+              _buildInfoSection(context, props),
 
-              const Divider(color: Colors.grey),
+              Divider(color: colors.outlineVariant),
 
               // WAVEFORM
               Expanded(
@@ -57,8 +53,8 @@ class AudioPropertiesScreen extends ConsumerWidget {
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.black,
-                      border: Border.all(color: Colors.grey.shade700),
+                      color: colors.surfaceContainerLowest,
+                      border: Border.all(color: colors.outlineVariant),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: ClipRRect(
@@ -68,7 +64,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
                           samples: handle != null
                               ? createZeroCopyWaveformView(handle)
                               : Float32List(0),
-                          color: Colors.cyanAccent,
+                          color: colors.primary,
                         ),
                       ),
                     ),
@@ -79,7 +75,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
               // CONTROLS
               Container(
                 padding: const EdgeInsets.all(24),
-                color: Colors.grey.shade800,
+                color: colors.surfaceContainerLow,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -90,8 +86,8 @@ class AudioPropertiesScreen extends ConsumerWidget {
                       },
                       icon: const Icon(Icons.play_arrow),
                       label: const Text("Preview"),
-                      backgroundColor: Colors.cyanAccent,
-                      foregroundColor: Colors.black,
+                      backgroundColor: colors.primaryContainer,
+                      foregroundColor: colors.onPrimaryContainer,
                     ),
                     const SizedBox(width: 10),
                     FloatingActionButton.extended(
@@ -101,8 +97,8 @@ class AudioPropertiesScreen extends ConsumerWidget {
                       },
                       label: const Text("Stop"),
                       icon: const Icon(Icons.stop),
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.black,
+                      backgroundColor: colors.errorContainer,
+                      foregroundColor: colors.onErrorContainer,
                     ),
                   ],
                 ),
@@ -114,31 +110,44 @@ class AudioPropertiesScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildInfoSection(AudioWaveformUiForAudioProperties props) {
+  Widget _buildInfoSection(
+    BuildContext context,
+    AudioWaveformUiForAudioProperties props,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
-          _row("Format", "${props.sampleRate} Hz / ${props.channels} Ch"),
-          _row("Duration", "${props.duration.toStringAsFixed(2)} sec"),
-          _row("Path", props.filePath, isSmall: true),
+          _row(
+            context,
+            "Format",
+            "${props.sampleRate} Hz / ${props.channels} Ch",
+          ),
+          _row(context, "Duration", "${props.duration.toStringAsFixed(2)} sec"),
+          _row(context, "Path", props.filePath, isSmall: true),
         ],
       ),
     );
   }
 
-  Widget _row(String label, String value, {bool isSmall = false}) {
+  Widget _row(
+    BuildContext context,
+    String label,
+    String value, {
+    bool isSmall = false,
+  }) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(label, style: TextStyle(color: colors.onSurfaceVariant)),
           Flexible(
             child: Text(
               value,
               style: TextStyle(
-                color: Colors.white,
+                color: colors.onSurface,
                 fontSize: isSmall ? 10 : 14,
                 overflow: TextOverflow.ellipsis,
               ),

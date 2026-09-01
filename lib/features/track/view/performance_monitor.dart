@@ -56,14 +56,15 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return AspectRatio(
       aspectRatio: 3.5, // Width will always be 3.5x the height
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.black87,
+          color: colors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.grey.shade800),
+          border: Border.all(color: colors.outlineVariant),
         ),
         child: Column(
           children: [
@@ -75,20 +76,16 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
                   Text(
                     "DSP: ${_currentDsp.toStringAsFixed(1)}%",
                     style: TextStyle(
-                      color: _currentDsp > 85
-                          ? Colors.redAccent
-                          : Colors.cyanAccent,
+                      color: _currentDsp > 85 ? colors.error : colors.primary,
                       fontSize: 10,
-                      fontFamily: 'monospace',
                     ),
                   ),
                   const SizedBox(width: 16),
                   Text(
                     "RAM: ${(_currentRamMb / 1024).toStringAsFixed(1)} GB / ${(_totalRamMb / 1024).toStringAsFixed(1)} GB",
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
                       fontSize: 10,
-                      fontFamily: 'monospace',
                     ),
                   ),
                 ],
@@ -102,6 +99,8 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
                   painter: _RollingGraphPainter(
                     dspData: _dspHistory.toList(),
                     cpuData: _cpuHistory.toList(),
+                    dspColor: colors.primary,
+                    cpuColor: colors.onSurface.withValues(alpha: 0.2),
                   ),
                 ),
               ),
@@ -116,8 +115,15 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
 class _RollingGraphPainter extends CustomPainter {
   final List<double> dspData;
   final List<double> cpuData;
+  final Color dspColor;
+  final Color cpuColor;
 
-  _RollingGraphPainter({required this.dspData, required this.cpuData});
+  _RollingGraphPainter({
+    required this.dspData,
+    required this.cpuData,
+    required this.dspColor,
+    required this.cpuColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -128,14 +134,14 @@ class _RollingGraphPainter extends CustomPainter {
     // CPU Line (Background/Dim)
     final cpuPath = Path();
     final cpuPaint = Paint()
-      ..color = Colors.white.withAlpha(50)
+      ..color = cpuColor
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
     // DSP Line (Foreground/Bright)
     final dspPath = Path();
     final dspPaint = Paint()
-      ..color = Colors.cyanAccent
+      ..color = dspColor
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 

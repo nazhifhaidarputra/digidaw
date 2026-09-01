@@ -120,11 +120,20 @@ void main() {
 
   test('derived themes use requested brightness and palette', () {
     final light = AppTheme.light(AppColorPalette.orange);
-    final dark = AppTheme.dark(AppColorPalette.orange);
+    final dark = AppTheme.dark(
+      AppColorPalette.orange,
+      fontFamily: 'StudioFont',
+    );
 
     expect(light.brightness, Brightness.light);
     expect(dark.brightness, Brightness.dark);
     expect(light.colorScheme.primary, isNot(dark.colorScheme.primary));
+    expect(dark.textTheme.bodyMedium?.fontFamily, 'StudioFont');
+    expect(dark.appBarTheme.backgroundColor, dark.colorScheme.surfaceContainer);
+    expect(
+      dark.floatingActionButtonTheme.backgroundColor,
+      dark.colorScheme.primaryContainer,
+    );
     expect(AppTheme.themeMode(AppThemeMode.system), ThemeMode.system);
   });
 

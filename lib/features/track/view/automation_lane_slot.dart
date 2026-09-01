@@ -201,7 +201,9 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   Widget _buildTooltip() {
     // Determine if we should show the tooltip based on dragging or hovering
     final targetId = _draggedPointId ?? _hoveredPointId;
-    if (targetId == null) return const Positioned.fill(child: SizedBox.shrink());
+    if (targetId == null) {
+      return const Positioned.fill(child: SizedBox.shrink());
+    }
 
     final points = _localPoints ?? widget.lane.points;
     final p = points.where((p) => p.id == targetId).firstOrNull;
@@ -212,10 +214,12 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final py = widget.height - (p.value * widget.height);
 
     final realVal = _getDenormalizedValue(p.value);
-    
+    final colors = Theme.of(context).colorScheme;
+
     // Constrain the tooltip position so it doesn't clip out of the lane bounds
     final double top = (py - 32).clamp(4.0, widget.height - 24.0);
-    final double left = px + 12; // Render slightly to the right of the cursor/finger
+    final double left =
+        px + 12; // Render slightly to the right of the cursor/finger
 
     return Positioned(
       left: left,
@@ -224,21 +228,21 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E).withAlpha(230),
+            color: colors.inverseSurface.withValues(alpha: 0.92),
             border: Border.all(color: widget.trackColor.withAlpha(128)),
             borderRadius: BorderRadius.circular(6),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(150),
+                color: colors.shadow.withValues(alpha: 0.6),
                 blurRadius: 6,
                 offset: const Offset(0, 3),
-              )
+              ),
             ],
           ),
           child: Text(
             realVal.toStringAsFixed(2),
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: colors.onInverseSurface,
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
@@ -251,6 +255,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final state = ref.watch(workspaceStateProvider);
     final transportState = ref.watch(transportProvider).value;
     final zoomLevel = state.horizontalZoomLevel;
@@ -265,10 +270,10 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     return Container(
       height: widget.height,
       decoration: BoxDecoration(
-        color: Colors.black.withAlpha(80),
+        color: colors.surface.withValues(alpha: 0.55),
         border: Border(
-          bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
-          right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
+          bottom: BorderSide(color: colors.outlineVariant, width: 1),
+          right: BorderSide(color: colors.outlineVariant, width: 1),
         ),
       ),
       child: GestureDetector(
@@ -299,6 +304,10 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                           sampleRate: safeSampleRate,
                           scrollController: widget.horizontalScrollController,
                           viewportWidth: constraint.maxWidth,
+                          lineColor: colors.onSurface.withValues(alpha: 0.08),
+                          barLineColor: colors.onSurface.withValues(
+                            alpha: 0.25,
+                          ),
                         ),
                       );
                     },
@@ -315,6 +324,8 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                       zoomLevel: zoomLevel,
                       scrollController: widget.horizontalScrollController,
                       trackColor: widget.trackColor,
+                      disabledColor: colors.outline,
+                      pointColor: colors.onSurface,
                     ),
                   ),
                 ),

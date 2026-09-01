@@ -19,6 +19,8 @@ class _TimelineRuler extends ConsumerWidget {
       transportProvider.select((s) => s.value?.state?.bpm ?? 120),
     );
     final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     return RepaintBoundary(
       // LayoutBuilder gives us the real viewport width on every layout pass
@@ -34,6 +36,12 @@ class _TimelineRuler extends ConsumerWidget {
               sampleRate: safeSampleRate,
               scrollController: scrollController,
               viewportWidth: constraints.maxWidth,
+              majorTickColor: colors.onSurface.withValues(alpha: 0.54),
+              minorTickColor: colors.onSurface.withValues(alpha: 0.24),
+              labelStyle: theme.textTheme.labelSmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontSize: 10,
+              ),
             ),
           );
         },
@@ -47,10 +55,14 @@ class _TimelineRulerPainter extends CustomPainter {
   final double tempo;
   final int sampleRate;
   final ScrollController scrollController;
+
   /// The pixel width of the visible viewport. Supplied by the widget's
   /// LayoutBuilder so it is accurate on first paint and after every window
   /// resize, without depending on scrollController.viewportDimension.
   final double viewportWidth;
+  final Color majorTickColor;
+  final Color minorTickColor;
+  final TextStyle? labelStyle;
 
   _TimelineRulerPainter({
     required this.zoomLevel,
@@ -58,6 +70,9 @@ class _TimelineRulerPainter extends CustomPainter {
     required this.sampleRate,
     required this.scrollController,
     required this.viewportWidth,
+    required this.majorTickColor,
+    required this.minorTickColor,
+    required this.labelStyle,
   }) : super(repaint: scrollController);
 
   @override
@@ -77,11 +92,11 @@ class _TimelineRulerPainter extends CustomPainter {
     );
 
     final Paint majorTickPaint = Paint()
-      ..color = Colors.white54
+      ..color = majorTickColor
       ..strokeWidth = 1.0;
 
     final Paint minorTickPaint = Paint()
-      ..color = Colors.white24
+      ..color = minorTickColor
       ..strokeWidth = 1.0;
 
     const int beatsPerBar = 4;
@@ -107,6 +122,12 @@ class _TimelineRulerPainter extends CustomPainter {
     if (barIndex < 1) barIndex = 1;
 
     double currentX = (barIndex - 1) * pixelsPerBar;
+    final lastVisibleBar = (endPixel / pixelsPerBar).ceil() + 1;
+    final barLabelStep = _barLabelStep(
+      textPainter: textPainter,
+      lastVisibleBar: lastVisibleBar,
+      pixelsPerBar: pixelsPerBar,
+    );
 
     // Draw Loop
     while (currentX < endPixel) {
@@ -120,13 +141,11 @@ class _TimelineRulerPainter extends CustomPainter {
           majorTickPaint,
         );
 
-        // Draw Bar Number
-        textPainter.text = TextSpan(
-          text: '$barIndex',
-          style: const TextStyle(color: Colors.white70, fontSize: 10),
-        );
-        textPainter.layout();
-        textPainter.paint(canvas, Offset(currentX + 4, 2));
+        if ((barIndex - 1) % barLabelStep == 0) {
+          textPainter.text = TextSpan(text: '$barIndex', style: labelStyle);
+          textPainter.layout();
+          textPainter.paint(canvas, Offset(currentX + 4, 2));
+        }
       }
 
       // Draw Beat Ticks
@@ -149,12 +168,34 @@ class _TimelineRulerPainter extends CustomPainter {
     }
   }
 
+  int _barLabelStep({
+    required TextPainter textPainter,
+    required int lastVisibleBar,
+    required double pixelsPerBar,
+  }) {
+    double widestDigit = 0;
+    for (int digit = 0; digit <= 9; digit++) {
+      textPainter.text = TextSpan(text: '$digit', style: labelStyle);
+      textPainter.layout();
+      widestDigit = math.max(widestDigit, textPainter.width);
+    }
+
+    final widestLabel = widestDigit * lastVisibleBar.toString().length;
+    final requiredSpacing = math.max(24.0, widestLabel + 4.0);
+    if (pixelsPerBar >= requiredSpacing) return 1;
+    if (pixelsPerBar * 2 >= requiredSpacing) return 2;
+    return 4;
+  }
+
   @override
   bool shouldRepaint(covariant _TimelineRulerPainter oldDelegate) {
     return oldDelegate.zoomLevel != zoomLevel ||
         oldDelegate.tempo != tempo ||
         oldDelegate.sampleRate != sampleRate ||
         oldDelegate.viewportWidth != viewportWidth ||
+        oldDelegate.majorTickColor != majorTickColor ||
+        oldDelegate.minorTickColor != minorTickColor ||
+        oldDelegate.labelStyle != labelStyle ||
         oldDelegate.scrollController != scrollController;
   }
 }

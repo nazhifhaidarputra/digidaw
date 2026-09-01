@@ -285,6 +285,7 @@ class _KeyWidgetState extends State<_KeyWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final isActive = widget.isPressed || _touchActive;
 
     return Listener(
@@ -305,7 +306,7 @@ class _KeyWidgetState extends State<_KeyWidget> {
         height: widget.height,
         decoration: BoxDecoration(
           color: isActive
-              ? Colors.cyanAccent
+              ? colors.primary
               : (widget.isBlack ? Colors.black : Colors.white),
           border: Border.all(color: Colors.black54, width: 0.5),
           borderRadius: const BorderRadius.only(
