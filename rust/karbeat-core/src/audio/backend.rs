@@ -9,11 +9,11 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use cpal::{
-    DeviceId, OutputCallbackInfo,
+    DeviceId, FromSample, OutputCallbackInfo, SizedSample,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use parking_lot::Mutex;
-use rtrb::{Consumer, RingBuffer};
+use rtrb::{Consumer, Producer, RingBuffer};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -28,9 +28,59 @@ use crate::{
 };
 
 static OUTPUT_UNDERRUN_SAMPLES: AtomicU64 = AtomicU64::new(0);
+const OUTPUT_CHANNELS: usize = 2;
+type OutputFrame = [f32; OUTPUT_CHANNELS];
 
 pub fn output_underrun_samples() -> u64 {
     OUTPUT_UNDERRUN_SAMPLES.load(Ordering::Relaxed)
+}
+
+#[inline(always)]
+fn sanitize_output_sample(sample: f32) -> f32 {
+    if sample.is_finite() {
+        sample.clamp(-1.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+#[inline]
+fn write_output_data<T>(data: &mut [T], consumer: &mut Consumer<OutputFrame>)
+where
+    T: SizedSample + FromSample<f32>,
+{
+    let mut output_frames = data.chunks_exact_mut(OUTPUT_CHANNELS);
+    for output_frame in &mut output_frames {
+        let engine_frame = consumer.pop().unwrap_or_else(|_| {
+            OUTPUT_UNDERRUN_SAMPLES.fetch_add(OUTPUT_CHANNELS as u64, Ordering::Relaxed);
+            [0.0; OUTPUT_CHANNELS]
+        });
+
+        for (output, sample) in output_frame.iter_mut().zip(engine_frame) {
+            *output = T::from_sample(sanitize_output_sample(sample));
+        }
+    }
+
+    // A valid stereo CPAL callback is frame-aligned. Keep any malformed tail
+    // silent without consuming half of the next engine frame.
+    for output in output_frames.into_remainder() {
+        *output = T::from_sample(0.0);
+    }
+}
+
+#[inline]
+fn push_output_frames(producer: &mut Producer<OutputFrame>, samples: &[f32]) -> bool {
+    if !samples.len().is_multiple_of(OUTPUT_CHANNELS) {
+        return false;
+    }
+
+    for frame in samples.chunks_exact(OUTPUT_CHANNELS) {
+        if producer.push([frame[0], frame[1]]).is_err() {
+            return false;
+        }
+    }
+
+    true
 }
 
 enum RestartReason {
@@ -45,20 +95,12 @@ enum RestartReason {
 /// $ctx: The AudioContext (moved into the closure)
 /// $consumer: The RingBuffer consumer (moved into the closure)
 /// $sample_type: The primitive type (f32, i16, etc)
-/// $converter: A closure |f32_sample| -> $sample_type
-/// Macro to generate the stream building logic
-/// $device: cpal device
-/// $config: cpal config
-/// $consumer: The RingBuffer consumer (moved into the closure)
-/// $sample_type: The primitive type (f32, i16, etc)
-/// $converter: A closure |f32_sample| -> $sample_type
 macro_rules! run_stream {
     (
         $device:expr,
         $config:expr,
         $consumer:expr,
         $sample_type:ty,
-        $converter:expr,
         $err_fn:expr
     ) => {{
         let mut consumer = $consumer;
@@ -66,13 +108,7 @@ macro_rules! run_stream {
         $device.build_output_stream(
             &$config,
             move |data: &mut [$sample_type], _: &OutputCallbackInfo| {
-                for out in data {
-                    let sample = consumer.pop().unwrap_or_else(|_| {
-                        OUTPUT_UNDERRUN_SAMPLES.fetch_add(1, Ordering::Relaxed);
-                        0.0
-                    });
-                    *out = $converter(sample);
-                }
+                write_output_data(data, &mut consumer);
             },
             $err_fn,
             None,
@@ -99,6 +135,53 @@ const STABLE_STREAM_DURATION: Duration = Duration::from_secs(10);
 
 fn next_retry_delay(delay: Duration) -> Duration {
     delay.saturating_mul(2).min(MAX_RETRY_DELAY)
+}
+
+fn output_sample_format_priority(format: cpal::SampleFormat) -> u8 {
+    match format {
+        // The engine renders f32. Keeping that representation all the way to
+        // the device avoids integer quantization of quiet signals.
+        cpal::SampleFormat::F32 => 10,
+        cpal::SampleFormat::F64 => 9,
+        cpal::SampleFormat::I64 | cpal::SampleFormat::U64 => 8,
+        cpal::SampleFormat::I32 | cpal::SampleFormat::U32 => 7,
+        cpal::SampleFormat::I24 | cpal::SampleFormat::U24 => 6,
+        cpal::SampleFormat::I16 | cpal::SampleFormat::U16 => 5,
+        cpal::SampleFormat::I8 | cpal::SampleFormat::U8 => 4,
+        _ => 0,
+    }
+}
+
+fn select_output_config(
+    configs: impl IntoIterator<Item = cpal::SupportedStreamConfigRange>,
+    target_sample_rate: u32,
+    native_sample_rate: u32,
+) -> Option<(cpal::SupportedStreamConfig, bool)> {
+    let stereo_configs = configs
+        .into_iter()
+        .filter(|config| config.channels() == OUTPUT_CHANNELS as u16)
+        .filter(|config| output_sample_format_priority(config.sample_format()) > 0)
+        .collect::<Vec<_>>();
+
+    if let Some(config) = stereo_configs
+        .iter()
+        .filter(|config| {
+            config.min_sample_rate() <= target_sample_rate
+                && config.max_sample_rate() >= target_sample_rate
+        })
+        .max_by_key(|config| output_sample_format_priority(config.sample_format()))
+    {
+        return Some((config.with_sample_rate(target_sample_rate), false));
+    }
+
+    stereo_configs
+        .iter()
+        .max_by_key(|config| output_sample_format_priority(config.sample_format()))
+        .map(|config| {
+            let sample_rate =
+                native_sample_rate.clamp(config.min_sample_rate(), config.max_sample_rate());
+            (config.with_sample_rate(sample_rate), true)
+        })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -340,30 +423,18 @@ fn get_device_and_config(
 
     let target_sample_rate = config_pref.sample_rate.unwrap_or(native_sample_rate);
 
-    let supported_configs_range = device
+    let supported_configs = device
         .supported_output_configs()
-        .map_err(|e| anyhow!("error querying configs: {e}"))?;
+        .map_err(|e| anyhow!("error querying configs: {e}"))?
+        .collect::<Vec<_>>();
 
-    let supported_config = supported_configs_range
-        .filter(|c| c.channels() == 2)
-        .find(|c| {
-            c.min_sample_rate() <= target_sample_rate && c.max_sample_rate() >= target_sample_rate
-        })
-        .map(|c| c.with_sample_rate(target_sample_rate))
-        .or_else(|| {
-            // Fallback: If requested rate fails, force fallback to default native
-            log::warn!("Requested sample rate unsupported by device, falling back");
-            device
-                .supported_output_configs()
-                .ok()?
-                .find(|c| c.channels() == 2)
-                .map(|c| {
-                    let clamped =
-                        native_sample_rate.clamp(c.min_sample_rate(), c.max_sample_rate());
-                    c.with_sample_rate(clamped)
-                })
-        })
-        .context("device does not support stereo (2 channels) output")?;
+    let (supported_config, used_fallback_rate) =
+        select_output_config(supported_configs, target_sample_rate, native_sample_rate)
+            .context("device does not support stereo (2 channels) output")?;
+
+    if used_fallback_rate {
+        log::warn!("Requested sample rate unsupported by device, falling back");
+    }
 
     // Yield to the Server's globally locked buffer size if using JACK to prevent crash loop
     let buffer_size = if host.id().name() == "JACK" {
@@ -574,34 +645,31 @@ pub fn start_audio_stream(
                     continue;
                 }
             };
-            let ring_buffer_capacity = (rate_bridge.maximum_output_samples() * 8)
-                .next_power_of_two()
-                .max(8_192);
-            let (mut producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
+            let maximum_device_frames = rate_bridge.maximum_output_samples() / OUTPUT_CHANNELS;
+            let ring_buffer_capacity = (maximum_device_frames * 8).next_power_of_two().max(4_096);
+            let (mut producer, consumer) = RingBuffer::<OutputFrame>::new(ring_buffer_capacity);
             let mut staging_buffer = vec![0.0; current_dsp_config.block_size as usize * channels];
 
             // Setup Dedicated DSP Thread State
             let is_dsp_running = Arc::new(AtomicBool::new(true));
             let is_dsp_running_clone = Arc::clone(&is_dsp_running);
-            let maximum_device_samples = rate_bridge.maximum_output_samples();
-
             // Pre-fill ring buffer to create a latency cushion to withstand OS scheduling jitter
-            let prefill_blocks = (ring_buffer_capacity / 2) / maximum_device_samples;
+            let prefill_blocks = (ring_buffer_capacity / 2) / maximum_device_frames;
             for _ in 0..prefill_blocks {
                 engine.process(&mut staging_buffer);
-                for &sample in rate_bridge.process(&staging_buffer) {
-                    let _ = producer.push(sample);
-                }
+                let queued =
+                    push_output_frames(&mut producer, rate_bridge.process(&staging_buffer));
+                debug_assert!(queued, "pre-filled output must fit in the ring buffer");
             }
 
             // Spawn the Dedicated DSP Thread
             let dsp_thread = std::thread::spawn(move || {
                 while is_dsp_running_clone.load(Ordering::Relaxed) {
-                    if producer.slots() >= maximum_device_samples {
+                    if producer.slots() >= maximum_device_frames {
                         engine.process(&mut staging_buffer);
-                        for &sample in rate_bridge.process(&staging_buffer) {
-                            let _ = producer.push(sample);
-                        }
+                        let queued =
+                            push_output_frames(&mut producer, rate_bridge.process(&staging_buffer));
+                        debug_assert!(queued, "rendered output must fit in the ring buffer");
                     } else {
                         // Sleep slightly to prevent a 100% CPU busy-wait loop
                         std::thread::sleep(std::time::Duration::from_millis(1));
@@ -686,42 +754,18 @@ pub fn start_audio_stream(
             };
 
             let stream_result = match sample_format {
-                cpal::SampleFormat::F32 => {
-                    run_stream!(device, config, consumer, f32, |s| s, err_fn)
-                }
-                cpal::SampleFormat::I32 => run_stream!(
-                    device,
-                    config,
-                    consumer,
-                    i32,
-                    |s: f32| (s * (i32::MAX as f32)).clamp(i32::MIN as f32, i32::MAX as f32) as i32,
-                    err_fn
-                ),
-                cpal::SampleFormat::I16 => run_stream!(
-                    device,
-                    config,
-                    consumer,
-                    i16,
-                    |s: f32| (s * (i16::MAX as f32)).clamp(i16::MIN as f32, i16::MAX as f32) as i16,
-                    err_fn
-                ),
-                cpal::SampleFormat::U16 => run_stream!(
-                    device,
-                    config,
-                    consumer,
-                    u16,
-                    |s: f32| ((s + 1.0) * 0.5 * (u16::MAX as f32)).clamp(0.0, u16::MAX as f32)
-                        as u16,
-                    err_fn
-                ),
-                cpal::SampleFormat::U8 => run_stream!(
-                    device,
-                    config,
-                    consumer,
-                    u8,
-                    |s: f32| ((s + 1.0) * 0.5 * 255.0).clamp(0.0, 255.0) as u8,
-                    err_fn
-                ),
+                cpal::SampleFormat::I8 => run_stream!(device, config, consumer, i8, err_fn),
+                cpal::SampleFormat::I16 => run_stream!(device, config, consumer, i16, err_fn),
+                cpal::SampleFormat::I24 => run_stream!(device, config, consumer, cpal::I24, err_fn),
+                cpal::SampleFormat::I32 => run_stream!(device, config, consumer, i32, err_fn),
+                cpal::SampleFormat::I64 => run_stream!(device, config, consumer, i64, err_fn),
+                cpal::SampleFormat::U8 => run_stream!(device, config, consumer, u8, err_fn),
+                cpal::SampleFormat::U16 => run_stream!(device, config, consumer, u16, err_fn),
+                cpal::SampleFormat::U24 => run_stream!(device, config, consumer, cpal::U24, err_fn),
+                cpal::SampleFormat::U32 => run_stream!(device, config, consumer, u32, err_fn),
+                cpal::SampleFormat::U64 => run_stream!(device, config, consumer, u64, err_fn),
+                cpal::SampleFormat::F32 => run_stream!(device, config, consumer, f32, err_fn),
+                cpal::SampleFormat::F64 => run_stream!(device, config, consumer, f64, err_fn),
                 _ => Err(cpal::BuildStreamError::StreamConfigNotSupported),
             };
 
@@ -886,7 +930,12 @@ fn actual_stream_config(
 
 #[cfg(test)]
 mod tests {
-    use super::{INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, next_retry_delay};
+    use super::{
+        INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, next_retry_delay, push_output_frames,
+        select_output_config, write_output_data,
+    };
+    use cpal::{SampleFormat, SupportedBufferSize, SupportedStreamConfigRange};
+    use rtrb::RingBuffer;
 
     #[test]
     fn automatic_host_is_the_cpal_platform_default() {
@@ -904,5 +953,96 @@ mod tests {
         delay = next_retry_delay(delay);
         assert_eq!(delay, MAX_RETRY_DELAY);
         assert_eq!(next_retry_delay(delay), MAX_RETRY_DELAY);
+    }
+
+    #[test]
+    fn device_output_is_finite_and_in_cpals_nominal_range() {
+        let (mut producer, mut consumer) = RingBuffer::new(1);
+        producer.push([f32::NAN, 2.0]).unwrap();
+
+        let mut output = [42.0_f32; 2];
+        write_output_data(&mut output, &mut consumer);
+
+        assert_eq!(output, [0.0, 1.0]);
+    }
+
+    #[test]
+    fn quiet_float_samples_are_not_quantized_or_gated() {
+        let (mut producer, mut consumer) = RingBuffer::new(1);
+        producer.push([1.0e-6, -1.0e-6]).unwrap();
+
+        let mut output = [0.0_f32; 2];
+        write_output_data(&mut output, &mut consumer);
+
+        assert_eq!(output, [1.0e-6, -1.0e-6]);
+    }
+
+    #[test]
+    fn stream_config_prefers_f32_over_enumeration_order() {
+        let configs = [
+            supported_config(SampleFormat::U8, 44_100, 96_000),
+            supported_config(SampleFormat::I16, 44_100, 96_000),
+            supported_config(SampleFormat::F32, 44_100, 96_000),
+        ];
+
+        let (selected, used_fallback_rate) = select_output_config(configs, 48_000, 48_000).unwrap();
+
+        assert_eq!(selected.sample_format(), SampleFormat::F32);
+        assert_eq!(selected.sample_rate(), 48_000);
+        assert!(!used_fallback_rate);
+    }
+
+    #[test]
+    fn stream_config_keeps_high_precision_when_rate_falls_back() {
+        let configs = [
+            supported_config(SampleFormat::I16, 44_100, 96_000),
+            supported_config(SampleFormat::F32, 44_100, 96_000),
+        ];
+
+        let (selected, used_fallback_rate) =
+            select_output_config(configs, 192_000, 48_000).unwrap();
+
+        assert_eq!(selected.sample_format(), SampleFormat::F32);
+        assert_eq!(selected.sample_rate(), 48_000);
+        assert!(used_fallback_rate);
+    }
+
+    fn supported_config(
+        sample_format: SampleFormat,
+        min_sample_rate: u32,
+        max_sample_rate: u32,
+    ) -> SupportedStreamConfigRange {
+        SupportedStreamConfigRange::new(
+            2,
+            min_sample_rate,
+            max_sample_rate,
+            SupportedBufferSize::Unknown,
+            sample_format,
+        )
+    }
+
+    #[test]
+    fn malformed_callback_tail_does_not_shift_stereo_frames() {
+        let (mut producer, mut consumer) = RingBuffer::new(2);
+        producer.push([0.25, -0.25]).unwrap();
+        producer.push([0.5, -0.5]).unwrap();
+
+        let mut malformed_output = [1.0_f32; 1];
+        write_output_data(&mut malformed_output, &mut consumer);
+        assert_eq!(malformed_output, [0.0]);
+
+        let mut aligned_output = [0.0_f32; 4];
+        write_output_data(&mut aligned_output, &mut consumer);
+        assert_eq!(aligned_output, [0.25, -0.25, 0.5, -0.5]);
+    }
+
+    #[test]
+    fn engine_output_is_queued_as_complete_frames() {
+        let (mut producer, mut consumer) = RingBuffer::new(2);
+
+        assert!(push_output_frames(&mut producer, &[0.25, -0.25, 0.5, -0.5]));
+        assert_eq!(consumer.pop().unwrap(), [0.25, -0.25]);
+        assert_eq!(consumer.pop().unwrap(), [0.5, -0.5]);
+        assert!(!push_output_frames(&mut producer, &[0.25]));
     }
 }

@@ -161,4 +161,45 @@ mod tests {
         }
         assert_eq!(bridge.maximum_output_samples(), capacity);
     }
+
+    #[test]
+    fn mismatched_rates_preserve_a_continuous_stereo_tone() {
+        let input_rate = 44_100_u32;
+        let output_rate = 48_000_u32;
+        let block_frames = 441_usize;
+        let mut bridge = DeviceRateBridge::new(input_rate, output_rate, 2, block_frames).unwrap();
+        let mut input = vec![0.0; block_frames * 2];
+        let mut output = Vec::new();
+        let mut input_frame = 0_usize;
+
+        for _ in 0..100 {
+            for frame in input.chunks_exact_mut(2) {
+                let phase =
+                    std::f32::consts::TAU * 1_000.0 * input_frame as f32 / input_rate as f32;
+                let sample = phase.sin() * 0.5;
+                frame.copy_from_slice(&[sample, sample]);
+                input_frame += 1;
+            }
+            output.extend_from_slice(bridge.process(&input));
+        }
+
+        let settled = &output[4_096.min(output.len())..];
+        assert!(settled.len() > output_rate as usize);
+        assert!(settled.iter().all(|sample| sample.is_finite()));
+        assert!(settled.iter().all(|sample| sample.abs() <= 0.51));
+        assert!(
+            settled
+                .chunks_exact(2)
+                .all(|frame| (frame[0] - frame[1]).abs() < 1.0e-6)
+        );
+
+        let max_step = settled
+            .chunks_exact(2)
+            .map(|frame| frame[0])
+            .collect::<Vec<_>>()
+            .windows(2)
+            .map(|pair| (pair[1] - pair[0]).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(max_step < 0.08, "resampled tone discontinuity: {max_step}");
+    }
 }
