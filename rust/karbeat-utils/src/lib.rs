@@ -1,3 +1,4 @@
+mod general;
 pub mod error;
 pub mod audio;
 pub mod audio_utils;
@@ -7,3 +8,5 @@ pub mod macros;
 pub mod math;
 pub mod parser;
 pub mod types;
+
+pub use general::*;

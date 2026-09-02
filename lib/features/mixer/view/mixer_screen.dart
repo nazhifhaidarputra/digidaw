@@ -616,6 +616,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         : (_isSelectedBus
               ? 'Bus $_selectedChannelId'
               : 'Track $_selectedChannelId');
+    final channelTarget = isMaster
+        ? const mixer_api.UiMixerChannelTarget.master()
+        : _isSelectedBus
+        ? mixer_api.UiMixerChannelTarget.bus(_selectedChannelId!)
+        : mixer_api.UiMixerChannelTarget.track(_selectedChannelId!);
 
     return Container(
       width: 250,
@@ -656,12 +661,23 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       ),
                     ),
                   )
-                : ListView.builder(
+                : ReorderableListView.builder(
                     padding: const EdgeInsets.all(8),
                     itemCount: channel.effects.length,
+                    buildDefaultDragHandles: false,
+                    onReorderItem: (oldIndex, newIndex) {
+                      ref
+                          .read(mixerStateProvider.notifier)
+                          .moveEffectOrder(
+                            target: channelTarget,
+                            effectId: channel.effects[oldIndex].id,
+                            newPosition: newIndex,
+                          );
+                    },
                     itemBuilder: (context, index) {
                       final effect = channel.effects[index];
                       return Padding(
+                        key: ValueKey(effect.id),
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Material(
                           color: colors.surfaceContainer,
@@ -679,10 +695,38 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                               'ID: ${effect.id}',
                               style: TextStyle(color: colors.onSurfaceVariant),
                             ),
-                            trailing: Icon(
-                              Icons.settings,
-                              color: colors.onSurfaceVariant,
-                              size: 16,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Remove effect',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: () {
+                                    ref
+                                        .read(mixerStateProvider.notifier)
+                                        .removeEffectFromTargetMixerChannel(
+                                          target: channelTarget,
+                                          effectId: effect.id,
+                                        );
+                                  },
+                                  icon: Icon(
+                                    Icons.close,
+                                    color: colors.error,
+                                    size: 16,
+                                  ),
+                                ),
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Icon(
+                                      Icons.drag_handle,
+                                      color: colors.onSurfaceVariant,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             onTap: () async {
                               try {

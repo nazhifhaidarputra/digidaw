@@ -1002,6 +1002,19 @@ impl AudioEngine {
                         target: plugin_target,
                     });
             }
+            AudioCommand::MoveEffect {
+                target,
+                effect_id,
+                new_position,
+            } => {
+                if let Some(effects) = self.get_effect_list_mut(&target)
+                    && let Some(old_position) =
+                        effects.iter().position(|effect| effect.id == effect_id)
+                {
+                    let effect = effects.remove(old_position);
+                    effects.insert(new_position.min(effects.len()), effect);
+                }
+            }
 
             AudioCommand::QueryGeneratorParameters { generator_id } => {
                 // Get all parameter values from the generator and send back

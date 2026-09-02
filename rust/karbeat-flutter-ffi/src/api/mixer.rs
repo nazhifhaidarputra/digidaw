@@ -524,6 +524,34 @@ pub fn remove_effect_from_mixer_channel(
     Ok(())
 }
 
+pub fn move_effect_order(
+    ctx: &mut DawContext,
+    target: UiMixerChannelTarget,
+    effect_instance_id: u32,
+    new_position: u32,
+) -> Result<(), String> {
+    mixer_api::move_effect_order(
+        ctx,
+        MixerChannelTarget::from(&target),
+        EffectId::from(effect_instance_id),
+        new_position as usize,
+    )
+    .map_err(|error| error.to_string())
+}
+
+pub fn remove_effect_from_target_mixer_channel(
+    ctx: &mut DawContext,
+    target: UiMixerChannelTarget,
+    effect_instance_id: u32,
+) -> Result<(), String> {
+    mixer_api::remove_effect_from_target_mixer_channel(
+        ctx,
+        MixerChannelTarget::from(&target),
+        EffectId::from(effect_instance_id),
+    )
+    .map_err(|error| error.to_string())
+}
+
 pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> Result<(), String> {
     mixer_api::add_effect_to_master_bus(ctx, registry_id).map_err(|e| e.to_string())?;
     log::info!(

@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::api::pattern_api;
+    use crate::core::project::{DawSource, clip::ClipSourceType};
     use crate::shared::id::{GeneratorId, PatternId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
@@ -43,6 +44,40 @@ mod tests {
             "Seeded context should have at least one pattern"
         );
         assert_eq!(ids.len(), ctx.app_state.pattern_pool.len());
+    }
+
+    #[test]
+    fn rename_pattern_cascades_only_to_clips_with_the_default_name() {
+        let (mut ctx, _audio_id, midi_id, pattern_id) = make_seeded_ctx();
+        let custom_clip_id = ctx.app_state.tracks[midi_id].clips[0];
+        ctx.app_state
+            .rename_clip(custom_clip_id, "Custom clip")
+            .expect("clip should exist");
+        let default_clip = crate::api::clip_api::add_clip(
+            &mut ctx,
+            Some(pattern_id.into()),
+            ClipSourceType::Midi,
+            midi_id,
+            960,
+        )
+        .expect("clip should be added");
+
+        pattern_api::rename_pattern(&mut ctx, pattern_id, "Renamed Pattern")
+            .expect("pattern should be renamed");
+
+        assert_eq!(
+            ctx.app_state.pattern_pool[pattern_id].name,
+            "Renamed Pattern"
+        );
+        assert_eq!(ctx.app_state.clips_pool[custom_clip_id].name, "Custom clip");
+        assert_eq!(
+            ctx.app_state.clips_pool[default_clip.id].name,
+            "Renamed Pattern"
+        );
+        assert!(matches!(
+            ctx.app_state.clips_pool[default_clip.id].source,
+            Some(DawSource::Midi(id)) if id == pattern_id
+        ));
     }
 
     // ─── play_pattern_preview ─────────────────────────────────────────────────

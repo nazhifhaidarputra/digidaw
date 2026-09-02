@@ -199,7 +199,7 @@ Future<void> updateTrackOrder({
 );
 
 /// Rename clip. Could result in error if [new_name]
-/// does not meet the required constraint
+/// does not meet the required constraint or the clip not found
 Future<void> renameClip({
   required DawContext ctx,
   required int clipId,

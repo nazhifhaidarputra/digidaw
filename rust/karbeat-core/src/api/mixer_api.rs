@@ -11,6 +11,7 @@ use crate::{
     },
     shared::id::*,
 };
+use anyhow::Context;
 use karbeat_plugin_types::ParameterSpec;
 
 #[derive(Clone, Debug)]
@@ -288,6 +289,63 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
         );
     }
     Ok(())
+}
+
+pub fn move_effect_order(
+    ctx: &mut DawContext,
+    mixer_channel_target: MixerChannelTarget,
+    effect_id: EffectId,
+    new_position: usize,
+) -> anyhow::Result<()> {
+    let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
+    ctx.app_state
+        .get_mixer_channel_from_target_mut(mixer_channel_target)
+        .with_context(|| "Cannot find the target mixer channel")?
+        .move_and_shift_effect_chain(effect_id, new_position)?;
+    let _ = ctx.send_audio_command(AudioCommand::MoveEffect {
+        target: effect_target,
+        effect_id,
+        new_position,
+    });
+    Ok(())
+}
+
+pub fn remove_effect_from_target_mixer_channel(
+    ctx: &mut DawContext,
+    mixer_channel_target: MixerChannelTarget,
+    effect_instance_id: EffectId,
+) -> anyhow::Result<()> {
+    let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
+    match mixer_channel_target {
+        MixerChannelTarget::Track(track_id) => {
+            ctx.app_state
+                .mixer
+                .remove_effect_by_id(&track_id, effect_instance_id)?;
+        }
+        MixerChannelTarget::Bus(bus_id) => {
+            ctx.app_state
+                .mixer
+                .remove_effect_from_bus(bus_id, effect_instance_id)?;
+        }
+        MixerChannelTarget::Master => {
+            ctx.app_state
+                .mixer
+                .remove_effect_from_master_bus(effect_instance_id)?;
+        }
+    }
+    let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
+        target: effect_target,
+        effect_id: effect_instance_id,
+    });
+    Ok(())
+}
+
+fn effect_target_from_mixer_target(target: &MixerChannelTarget) -> EffectTarget {
+    match target {
+        MixerChannelTarget::Track(track_id) => EffectTarget::Track(*track_id),
+        MixerChannelTarget::Bus(bus_id) => EffectTarget::Bus(*bus_id),
+        MixerChannelTarget::Master => EffectTarget::Master,
+    }
 }
 
 pub fn remove_effect_from_master_bus(

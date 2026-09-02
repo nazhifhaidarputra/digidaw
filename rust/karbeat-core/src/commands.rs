@@ -95,6 +95,12 @@ pub enum AudioCommand {
         target: EffectTarget,
         effect_id: EffectId,
     },
+    /// Move an effect to a new index in the target's effect chain.
+    MoveEffect {
+        target: EffectTarget,
+        effect_id: EffectId,
+        new_position: usize,
+    },
 
     /// Request parameter feedback for a target effect (triggers EffectParameterSnapshot response)
     QueryEffectParameters {

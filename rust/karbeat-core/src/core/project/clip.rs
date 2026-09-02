@@ -227,11 +227,12 @@ impl ApplicationState {
         clip_id: ClipId,
         new_name: &str,
     ) -> anyhow::Result<()> {
-        let Some(mut clip) = self.clips_pool.get_mut(clip_id) else {
+        let Some(clip) = self.clips_pool.get_mut(clip_id) else {
             anyhow::bail!("Clip with id [{}] not found", clip_id)
         };
 
-        anyhow::ensure!(new_name.len() <= 50);
+        anyhow::ensure!(!new_name.trim().is_empty(), "Clip name cannot be empty");
+        anyhow::ensure!(new_name.len() <= 50, "Max character for clip name is 50");
 
         clip.rename_clip(new_name);
 

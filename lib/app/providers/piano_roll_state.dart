@@ -137,6 +137,55 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     }
   }
 
+  Future<Result<void>> renamePattern({
+    required int patternId,
+    required String newName,
+  }) async {
+    final project = _projectState.value;
+    final pattern = project?.patterns[patternId];
+    if (project == null || pattern == null) {
+      return ref.notifyErrorResult(Exception("Pattern not found"));
+    }
+
+    final result = await AsyncValue.guard(
+      () => pattern_api.renamePattern(
+        ctx: _ctx,
+        patternId: patternId,
+        newName: newName,
+      ),
+    );
+    if (result.hasError) {
+      AppLogger.error("Error renaming pattern: ${result.error}");
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+
+    _projectNotifier.upsertPattern(patternId, pattern.copyWith(name: newName));
+    for (final entry in project.tracks.entries) {
+      var changed = false;
+      final clips = entry.value.clips.map((clip) {
+        final usesPattern = switch (clip.source) {
+          UiClipSource_Midi(patternId: final clipPatternId) =>
+            clipPatternId == patternId,
+          _ => false,
+        };
+        if (usesPattern && clip.name == pattern.name) {
+          changed = true;
+          return clip.copyWith(name: newName);
+        }
+        return clip;
+      }).toList();
+
+      if (changed) {
+        _projectNotifier.upsertTrack(
+          entry.key,
+          entry.value.copyWith(clips: clips),
+        );
+      }
+    }
+
+    return Result.ok(null);
+  }
+
   // ==========================================
   // Selection Actions
   // ==========================================

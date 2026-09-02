@@ -507,6 +507,24 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                 },
               ),
 
+              SizedBox(
+                height: 30,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: _keyWidth,
+                      child: ColoredBox(color: colors.surfaceContainer),
+                    ),
+                    Expanded(
+                      child: _PianoRollRuler(
+                        scrollController: _gridHorizontalController,
+                        zoomX: zoomX,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               // === EDITOR AREA ===
               Expanded(
                 child: MultiSplitViewTheme(
@@ -1918,6 +1936,153 @@ class _PianoGridPainter extends CustomPainter {
       old.zoomX != zoomX ||
       old.gridDenom != gridDenom ||
       old.lineColor != lineColor;
+}
+
+class _PianoRollRuler extends StatelessWidget {
+  final ScrollController scrollController;
+  final double zoomX;
+
+  const _PianoRollRuler({
+    required this.scrollController,
+    required this.zoomX,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return ColoredBox(
+      color: colors.surfaceContainer,
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _PianoRollRulerPainter(
+            scrollController: scrollController,
+            zoomX: zoomX,
+            majorTickColor: colors.onSurface.withValues(alpha: 0.54),
+            minorTickColor: colors.onSurface.withValues(alpha: 0.24),
+            labelStyle: theme.textTheme.labelSmall?.copyWith(
+              color: colors.onSurfaceVariant,
+              fontSize: 10,
+            ),
+          ),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+  }
+}
+
+class _PianoRollRulerPainter extends CustomPainter {
+  final ScrollController scrollController;
+  final double zoomX;
+  final Color majorTickColor;
+  final Color minorTickColor;
+  final TextStyle? labelStyle;
+
+  _PianoRollRulerPainter({
+    required this.scrollController,
+    required this.zoomX,
+    required this.majorTickColor,
+    required this.minorTickColor,
+    required this.labelStyle,
+  }) : super(repaint: scrollController);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (zoomX <= 0) return;
+
+    const ticksPerBeat = 960.0;
+    const beatsPerBar = 4;
+    final pixelsPerBeat = ticksPerBeat * zoomX;
+    final pixelsPerBar = pixelsPerBeat * beatsPerBar;
+    if (pixelsPerBeat < 1) return;
+
+    final scrollOffset = scrollController.hasClients
+        ? scrollController.positions.first.pixels
+        : 0.0;
+    const buffer = 200.0;
+    final startPixel = (scrollOffset - buffer).clamp(0.0, double.infinity);
+    final endPixel = scrollOffset + size.width + buffer;
+    var barIndex = (startPixel / pixelsPerBar).floor() + 1;
+    var currentX = (barIndex - 1) * pixelsPerBar;
+    final lastVisibleBar = (endPixel / pixelsPerBar).ceil() + 1;
+
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    final barLabelStep = _barLabelStep(
+      textPainter: textPainter,
+      lastVisibleBar: lastVisibleBar,
+      pixelsPerBar: pixelsPerBar,
+    );
+    final majorTickPaint = Paint()
+      ..color = majorTickColor
+      ..strokeWidth = 1;
+    final minorTickPaint = Paint()
+      ..color = minorTickColor
+      ..strokeWidth = 1;
+
+    while (currentX < endPixel) {
+      final viewportX = currentX - scrollOffset;
+      if (currentX >= startPixel) {
+        canvas.drawLine(
+          Offset(viewportX, 15),
+          Offset(viewportX, size.height),
+          majorTickPaint,
+        );
+
+        if ((barIndex - 1) % barLabelStep == 0) {
+          textPainter.text = TextSpan(text: '$barIndex', style: labelStyle);
+          textPainter.layout();
+          textPainter.paint(canvas, Offset(viewportX + 4, 2));
+        }
+      }
+
+      if (pixelsPerBeat > 5) {
+        for (var beat = 1; beat < beatsPerBar; beat++) {
+          final beatX = currentX + pixelsPerBeat * beat;
+          if (beatX >= startPixel && beatX < endPixel) {
+            final beatViewportX = beatX - scrollOffset;
+            canvas.drawLine(
+              Offset(beatViewportX, 22),
+              Offset(beatViewportX, size.height),
+              minorTickPaint,
+            );
+          }
+        }
+      }
+
+      currentX += pixelsPerBar;
+      barIndex++;
+    }
+  }
+
+  int _barLabelStep({
+    required TextPainter textPainter,
+    required int lastVisibleBar,
+    required double pixelsPerBar,
+  }) {
+    var widestDigit = 0.0;
+    for (var digit = 0; digit <= 9; digit++) {
+      textPainter.text = TextSpan(text: '$digit', style: labelStyle);
+      textPainter.layout();
+      widestDigit = max(widestDigit, textPainter.width);
+    }
+
+    final widestLabel = widestDigit * lastVisibleBar.toString().length;
+    final requiredSpacing = max(24.0, widestLabel + 4);
+    if (pixelsPerBar >= requiredSpacing) return 1;
+    if (pixelsPerBar * 2 >= requiredSpacing) return 2;
+    return 4;
+  }
+
+  @override
+  bool shouldRepaint(covariant _PianoRollRulerPainter oldDelegate) {
+    return oldDelegate.scrollController != scrollController ||
+        oldDelegate.zoomX != zoomX ||
+        oldDelegate.majorTickColor != majorTickColor ||
+        oldDelegate.minorTickColor != minorTickColor ||
+        oldDelegate.labelStyle != labelStyle;
+  }
 }
 
 /// A specialized widget to handle grouped interactions for multiple selected notes.

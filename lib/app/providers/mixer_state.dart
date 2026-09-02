@@ -390,6 +390,53 @@ class MixerNotifier extends Notifier<MixerEditorState> {
     );
     _projectNotifier.upsertBusMixerChannel(busId, updatedBus);
   }
+
+  List<mixer_api.UiEffectSummary>? _effectsForTarget(
+    mixer_api.UiMixerState mixer,
+    mixer_api.UiMixerChannelTarget target,
+  ) {
+    return switch (target) {
+      mixer_api.UiMixerChannelTarget_Track(:final field0) =>
+        mixer.channels[field0]?.effects,
+      mixer_api.UiMixerChannelTarget_Bus(:final field0) =>
+        mixer.buses[field0]?.channel.effects,
+      mixer_api.UiMixerChannelTarget_Master() => mixer.masterBus.effects,
+    };
+  }
+
+  void _replaceTargetEffects(
+    mixer_api.UiMixerState mixer,
+    mixer_api.UiMixerChannelTarget target,
+    List<mixer_api.UiEffectSummary> effects,
+  ) {
+    mixer_api.UiMixerChannel withEffects(mixer_api.UiMixerChannel channel) {
+      return mixer_api.UiMixerChannel(
+        volume: channel.volume,
+        pan: channel.pan,
+        mute: channel.mute,
+        solo: channel.solo,
+        invertedPhase: channel.invertedPhase,
+        effects: effects,
+      );
+    }
+
+    final updatedMixer = switch (target) {
+      mixer_api.UiMixerChannelTarget_Track(:final field0) => mixer.copyWith(
+        channels: Map<int, mixer_api.UiMixerChannel>.from(mixer.channels)
+          ..[field0] = withEffects(mixer.channels[field0]!),
+      ),
+      mixer_api.UiMixerChannelTarget_Bus(:final field0) => mixer.copyWith(
+        buses: Map<int, mixer_api.UiBus>.from(mixer.buses)
+          ..[field0] = mixer.buses[field0]!.copyWith(
+            channel: withEffects(mixer.buses[field0]!.channel),
+          ),
+      ),
+      mixer_api.UiMixerChannelTarget_Master() => mixer.copyWith(
+        masterBus: withEffects(mixer.masterBus),
+      ),
+    };
+    _projectNotifier.updateMixer(updatedMixer);
+  }
 }
 
 extension MixerService on MixerNotifier {
@@ -498,6 +545,90 @@ extension MixerService on MixerNotifier {
       AppLogger.error(
         'MixerNotifier: failed to add effect to master bus: ${result.error}',
       );
+      return notifyErrorResult(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  Future<Result<void>> moveEffectOrder({
+    required mixer_api.UiMixerChannelTarget target,
+    required int effectId,
+    required int newPosition,
+  }) async {
+    final originalMixer = _mixerState;
+    final originalEffects = originalMixer == null
+        ? null
+        : _effectsForTarget(originalMixer, target);
+    if (originalMixer == null || originalEffects == null) {
+      return notifyErrorResult(Exception("Mixer channel not found"));
+    }
+
+    final oldPosition = originalEffects.indexWhere(
+      (effect) => effect.id == effectId,
+    );
+    if (oldPosition == -1) {
+      return notifyErrorResult(Exception("Effect not found"));
+    }
+
+    final clampedPosition = newPosition.clamp(0, originalEffects.length - 1);
+    if (oldPosition == clampedPosition) return Result.ok(null);
+    final reorderedEffects = List<mixer_api.UiEffectSummary>.from(
+      originalEffects,
+    );
+    final effect = reorderedEffects.removeAt(oldPosition);
+    reorderedEffects.insert(clampedPosition, effect);
+    _replaceTargetEffects(originalMixer, target, reorderedEffects);
+
+    final result = await AsyncValue.guard(
+      () => mixer_api.moveEffectOrder(
+        ctx: _ctx,
+        target: target,
+        effectInstanceId: effectId,
+        newPosition: clampedPosition,
+      ),
+    );
+    if (result.hasError) {
+      AppLogger.error(
+        "MixerNotifier: failed to reorder effect: ${result.error}",
+      );
+      _projectNotifier.updateMixer(originalMixer);
+      return notifyErrorResult(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  Future<Result<void>> removeEffectFromTargetMixerChannel({
+    required mixer_api.UiMixerChannelTarget target,
+    required int effectId,
+  }) async {
+    final originalMixer = _mixerState;
+    final originalEffects = originalMixer == null
+        ? null
+        : _effectsForTarget(originalMixer, target);
+    if (originalMixer == null || originalEffects == null) {
+      return notifyErrorResult(Exception("Mixer channel not found"));
+    }
+    if (!originalEffects.any((effect) => effect.id == effectId)) {
+      return notifyErrorResult(Exception("Effect not found"));
+    }
+
+    _replaceTargetEffects(
+      originalMixer,
+      target,
+      originalEffects.where((effect) => effect.id != effectId).toList(),
+    );
+    final result = await AsyncValue.guard(
+      () => mixer_api.removeEffectFromTargetMixerChannel(
+        ctx: _ctx,
+        target: target,
+        effectInstanceId: effectId,
+      ),
+    );
+    if (result.hasError) {
+      AppLogger.error(
+        "MixerNotifier: failed to remove effect: ${result.error}",
+      );
+      _projectNotifier.updateMixer(originalMixer);
       return notifyErrorResult(Exception(result.error.toString()));
     }
     return Result.ok(null);

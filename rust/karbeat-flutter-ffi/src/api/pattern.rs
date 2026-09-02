@@ -5,7 +5,7 @@ use karbeat_core::shared::id::*;
 use karbeat_core::{
     api::{note_api, pattern_api},
     context::DawContext,
-    core::project::{track::midi::Pattern, GeneratorId, Note, NoteId},
+    core::project::{GeneratorId, Note, NoteId, track::midi::Pattern},
 };
 
 #[derive(Clone)]
@@ -71,6 +71,11 @@ pub fn get_patterns(ctx: &DawContext) -> Result<HashMap<u32, UiPattern>, String>
     let patterns = pattern_api::get_patterns(ctx, |id, pattern| (id, UiPattern::from(pattern)))
         .map_err(|e| e.to_string())?;
     Ok(patterns)
+}
+
+pub fn rename_pattern(ctx: &mut DawContext, pattern_id: u32, new_name: &str) -> Result<(), String> {
+    pattern_api::rename_pattern(ctx, PatternId::from(pattern_id), new_name)
+        .map_err(|error| error.to_string())
 }
 
 pub fn add_note(

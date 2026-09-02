@@ -28,6 +28,53 @@ class SourceListScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _renamePattern(
+    BuildContext context,
+    WidgetRef ref,
+    int patternId,
+    String currentName,
+  ) async {
+    var pendingName = currentName;
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Rename Pattern"),
+        content: TextFormField(
+          initialValue: currentName,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "New pattern name",
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => pendingName = value,
+          onFieldSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, pendingName),
+            child: const Text("Rename"),
+          ),
+        ],
+      ),
+    );
+
+    final trimmedName = newName?.trim();
+    if (!context.mounted ||
+        trimmedName == null ||
+        trimmedName.isEmpty ||
+        trimmedName == currentName) {
+      return;
+    }
+
+    await ref
+        .read(pianoRollProvider.notifier)
+        .renamePattern(patternId: patternId, newName: trimmedName);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
@@ -287,6 +334,7 @@ class SourceListScreen extends ConsumerWidget {
                         initialTrackId: firstTrackId,
                       );
                 },
+                onRename: () => _renamePattern(context, ref, id, pattern.name),
               );
             }, childCount: patterns.length),
           ),
@@ -306,6 +354,7 @@ class _SourceTile extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final VoidCallback? onPlace;
+  final VoidCallback? onRename;
 
   const _SourceTile({
     required this.title,
@@ -314,6 +363,7 @@ class _SourceTile extends StatelessWidget {
     required this.color,
     required this.onTap,
     this.onPlace,
+    this.onRename,
   });
 
   @override
@@ -330,6 +380,7 @@ class _SourceTile extends StatelessWidget {
         icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
         onSelected: (value) {
           if (value == 'place') onPlace?.call();
+          if (value == 'rename') onRename?.call();
         },
         itemBuilder: (context) => [
           if (onPlace != null)
@@ -340,6 +391,17 @@ class _SourceTile extends StatelessWidget {
                   Icon(Icons.input),
                   SizedBox(width: 8),
                   Text("Put in timeline"),
+                ],
+              ),
+            ),
+          if (onRename != null)
+            const PopupMenuItem(
+              value: 'rename',
+              child: Row(
+                children: [
+                  Icon(Icons.edit),
+                  SizedBox(width: 8),
+                  Text("Rename"),
                 ],
               ),
             ),

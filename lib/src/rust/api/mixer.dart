@@ -116,6 +116,28 @@ Future<void> removeEffectFromMixerChannel({
   effectInstanceId: effectInstanceId,
 );
 
+Future<void> moveEffectOrder({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required int effectInstanceId,
+  required int newPosition,
+}) => RustLib.instance.api.crateApiMixerMoveEffectOrder(
+  ctx: ctx,
+  target: target,
+  effectInstanceId: effectInstanceId,
+  newPosition: newPosition,
+);
+
+Future<void> removeEffectFromTargetMixerChannel({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required int effectInstanceId,
+}) => RustLib.instance.api.crateApiMixerRemoveEffectFromTargetMixerChannel(
+  ctx: ctx,
+  target: target,
+  effectInstanceId: effectInstanceId,
+);
+
 Future<void> addEffectToMasterBus({
   required DawContext ctx,
   required int registryId,

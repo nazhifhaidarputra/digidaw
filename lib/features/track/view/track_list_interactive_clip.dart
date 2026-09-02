@@ -365,8 +365,9 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               if (track != null && currentSelectedIds.isNotEmpty) {
                 final tempo = ref.read(transportProvider).value?.state?.bpm;
                 final sr = ref.read(transportProvider).value?.sampleRate;
-                if (tempo == null || sr == null)
+                if (tempo == null || sr == null) {
                   throw Exception("Tempo or Sample Rate is null");
+                }
 
                 final leaderClip = track.clips
                     .where((c) => currentSelectedIds.contains(c.id))
@@ -418,12 +419,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
               if (_currentAction == _DragAction.resizeRight) {
                 final maxShrink = -(shortestClip.loopLength - minTicks);
-                if (rawTotalDelta < maxShrink)
+                if (rawTotalDelta < maxShrink) {
                   rawTotalDelta = maxShrink.toInt();
+                }
               } else if (_currentAction == _DragAction.resizeLeft) {
                 final maxShrink = shortestClip.loopLength - minTicks;
-                if (rawTotalDelta > maxShrink)
+                if (rawTotalDelta > maxShrink) {
                   rawTotalDelta = maxShrink.toInt();
+                }
               }
 
               int snappedTotalDelta = rawTotalDelta;

@@ -2,7 +2,7 @@ use crate::{
     audio::engine::PlaybackMode,
     commands::AudioCommand,
     context::DawContext,
-    core::project::{GeneratorId, Pattern, PatternId},
+    core::project::{DawSource, GeneratorId, Pattern, PatternId},
 };
 
 pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<Pattern> {
@@ -32,6 +32,35 @@ where
         .collect::<C>(); // Collect dynamically resolves to type C
 
     Ok(patterns)
+}
+
+pub fn rename_pattern(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    new_name: &str,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(!new_name.trim().is_empty(), "Pattern name cannot be empty");
+    anyhow::ensure!(
+        new_name.len() <= 50,
+        "Pattern name cannot exceed 50 characters"
+    );
+
+    let pattern = ctx
+        .app_state
+        .pattern_pool
+        .get_mut(pattern_id)
+        .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
+    let old_name = std::mem::replace(&mut pattern.name, new_name.to_owned());
+
+    for (_, clip) in ctx.app_state.clips_pool.iter_mut() {
+        if clip.name == old_name
+            && matches!(clip.source, Some(DawSource::Midi(id)) if id == pattern_id)
+        {
+            clip.rename_clip(new_name);
+        }
+    }
+
+    Ok(())
 }
 
 pub fn play_pattern_preview(

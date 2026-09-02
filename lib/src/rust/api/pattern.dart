@@ -22,6 +22,16 @@ Future<UiPattern> getPattern({
 Future<Map<int, UiPattern>> getPatterns({required DawContext ctx}) =>
     RustLib.instance.api.crateApiPatternGetPatterns(ctx: ctx);
 
+Future<void> renamePattern({
+  required DawContext ctx,
+  required int patternId,
+  required String newName,
+}) => RustLib.instance.api.crateApiPatternRenamePattern(
+  ctx: ctx,
+  patternId: patternId,
+  newName: newName,
+);
+
 Future<UiNote> addNote({
   required DawContext ctx,
   required int patternId,

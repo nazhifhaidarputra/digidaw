@@ -1,6 +1,7 @@
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::{Param, ParameterSpec};
 use karbeat_plugins::registry::PluginRegistry;
+use karbeat_utils::move_element;
 use smallvec::SmallVec;
 
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,7 @@ use thiserror::Error;
 
 use crate::{
     audio::event::PluginTarget,
-    commands::EffectTarget,
+    commands::{EffectTarget, MixerChannelTarget},
     core::project::{ApplicationState, AudioTrack, PluginInstance, TrackId, plugin::AudioPlugin},
     shared::{BusId, EffectId, GeneratorId, GraphNodeId},
 };
@@ -405,6 +406,26 @@ impl MixerChannel {
             self.pan.to_spec(),
             // Note: maybe I will change the bool parameter to Param<bool> too
         ]
+    }
+
+    pub fn move_and_shift_effect_chain(
+        &mut self,
+        effect_id: EffectId,
+        new_pos: usize,
+    ) -> anyhow::Result<()> {
+        let Some(old_pos) = self
+            .effects
+            .order
+            .iter()
+            .position(|eff_id| *eff_id == effect_id)
+        else {
+            anyhow::bail!("Effect {:?} not found", effect_id)
+        };
+        let new_pos_clamped = new_pos.min(self.effects.len().saturating_sub(1));
+
+        move_element(&mut self.effects.order, old_pos, new_pos_clamped);
+
+        Ok(())
     }
 }
 
@@ -963,6 +984,40 @@ impl MixerState {
             self.graph_nodes.remove(node_id);
         }
     }
+
+    pub fn get_mixer_channel_from_target(
+        &self,
+        target: MixerChannelTarget,
+    ) -> Option<&MixerChannel> {
+        match target {
+            MixerChannelTarget::Track(track_id) => self
+                .channels
+                .get(track_id)
+                .map(|track_channel| &track_channel.channel),
+            MixerChannelTarget::Bus(bus_id) => self
+                .buses
+                .get(bus_id)
+                .map(|bus_channel| &bus_channel.channel),
+            MixerChannelTarget::Master => Some(&self.master_bus),
+        }
+    }
+
+    pub fn get_mixer_channel_from_target_mut(
+        &mut self,
+        target: MixerChannelTarget,
+    ) -> Option<&mut MixerChannel> {
+        match target {
+            MixerChannelTarget::Track(track_id) => self
+                .channels
+                .get_mut(track_id)
+                .map(|track_channel| &mut track_channel.channel),
+            MixerChannelTarget::Bus(bus_id) => self
+                .buses
+                .get_mut(bus_id)
+                .map(|bus_channel| &mut bus_channel.channel),
+            MixerChannelTarget::Master => Some(&mut self.master_bus),
+        }
+    }
 }
 
 impl ApplicationState {
@@ -979,6 +1034,20 @@ impl ApplicationState {
     /// Get the entire mixer state
     pub fn get_mixer_state(&self) -> &MixerState {
         return &self.mixer;
+    }
+
+    pub fn get_mixer_channel_from_target(
+        &self,
+        target: MixerChannelTarget,
+    ) -> Option<&MixerChannel> {
+        self.mixer.get_mixer_channel_from_target(target)
+    }
+
+    pub fn get_mixer_channel_from_target_mut(
+        &mut self,
+        target: MixerChannelTarget,
+    ) -> Option<&mut MixerChannel> {
+        self.mixer.get_mixer_channel_from_target_mut(target)
     }
 }
 /// Helper to find cycle using DFS over the full RoutingNode graph

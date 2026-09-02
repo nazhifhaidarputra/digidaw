@@ -4,6 +4,7 @@
 mod tests {
     use crate::api::mixer_api;
     use crate::audio::event::PluginTarget;
+    use crate::commands::MixerChannelTarget;
 
     use crate::core::project::mixer::{RoutingConnection, RoutingNode};
     use crate::shared::id::{BusId, EffectId, TrackId};
@@ -231,6 +232,45 @@ mod tests {
     }
 
     #[test]
+    fn move_effect_order_updates_the_target_chain() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, audio_id, param_eq_registry_id())
+            .unwrap();
+        mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            audio_id,
+            sidechain_compressor_registry_id(),
+        )
+        .unwrap();
+        let second_effect_id = ctx.app_state.mixer.channels[audio_id]
+            .channel
+            .effects
+            .iter()
+            .nth(1)
+            .unwrap()
+            .id;
+
+        mixer_api::move_effect_order(
+            &mut ctx,
+            MixerChannelTarget::Track(audio_id),
+            second_effect_id,
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(
+            ctx.app_state.mixer.channels[audio_id]
+                .channel
+                .effects
+                .iter()
+                .next()
+                .unwrap()
+                .id,
+            second_effect_id
+        );
+    }
+
+    #[test]
     fn add_effect_to_master_bus_happy_path() {
         let mut ctx = make_ctx();
         let result = mixer_api::add_effect_to_master_bus(&mut ctx, param_eq_registry_id());
@@ -260,6 +300,29 @@ mod tests {
         let bus_id = mixer_api::create_bus(&mut ctx, "FX Bus".to_string());
         let result = mixer_api::add_effect_to_bus(&mut ctx, bus_id, param_eq_registry_id());
         assert!(result.is_ok(), "{:?}", result.err());
+    }
+
+    #[test]
+    fn remove_effect_from_target_mixer_channel_supports_buses() {
+        let mut ctx = make_ctx();
+        let bus_id = mixer_api::create_bus(&mut ctx, "FX Bus".to_string());
+        mixer_api::add_effect_to_bus(&mut ctx, bus_id, param_eq_registry_id()).unwrap();
+        let effect_id = ctx.app_state.mixer.buses[bus_id]
+            .channel
+            .effects
+            .iter()
+            .next()
+            .unwrap()
+            .id;
+
+        mixer_api::remove_effect_from_target_mixer_channel(
+            &mut ctx,
+            MixerChannelTarget::Bus(bus_id),
+            effect_id,
+        )
+        .unwrap();
+
+        assert!(ctx.app_state.mixer.buses[bus_id].channel.effects.is_empty());
     }
 
     #[test]
