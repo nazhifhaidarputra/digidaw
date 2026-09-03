@@ -1,8 +1,25 @@
+mod buffer;
+mod command;
 mod engine;
 mod helper;
 mod macros;
+mod metronome;
+mod modulation;
+mod routing;
+mod runtime;
+mod telemetry;
 pub mod tests;
+mod transport;
 mod types;
+mod voices;
+mod workspace;
 
+pub use buffer::*;
 pub use engine::*;
+pub use metronome::*;
+pub use modulation::{LiveLfo, LiveModulationSource};
+pub use routing::DelayLine;
+pub use telemetry::*;
+pub use transport::{PatternPlaybackState, PlaybackMode, SongPlaybackState};
 pub use types::*;
+pub use voices::{AudioVoice, GeneratorVoice, PreviewVoice};

@@ -7,6 +7,7 @@ use crate::{
         project::{AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId},
     },
 };
+use karbeat_plugin_api::types::MidiEvent;
 
 const SAMPLE_BROWSER_PREVIEW_SECONDS: u64 = 15;
 
@@ -115,4 +116,16 @@ pub fn play_preview_note_generator(
         is_note_on: is_on,
     })?;
     Ok(())
+}
+
+/// Queues a sample-accurate MIDI event for a generator on the audio thread.
+pub fn send_midi_event(
+    ctx: &mut DawContext,
+    generator_id: GeneratorId,
+    event: MidiEvent,
+) -> anyhow::Result<()> {
+    ctx.send_audio_command(AudioCommand::SendMidiEvent {
+        generator_id,
+        event,
+    })
 }

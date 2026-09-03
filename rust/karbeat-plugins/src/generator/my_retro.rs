@@ -56,6 +56,10 @@ pub struct MyRetro {
 
     // Internal Decoupled State
     pub active_voices: Vec<SynthVoice>,
+    #[serde(default)]
+    pub midi_channels: [MidiChannelState; 16],
+    #[serde(default)]
+    pub next_note_id: u64,
     pub sample_rate: f32,
     pub channels: usize,
 
@@ -80,10 +84,12 @@ impl Default for MyRetro {
 
         // Init internal state
         engine.active_voices = Vec::with_capacity(16);
+        engine.midi_channels = [MidiChannelState::default(); 16];
+        engine.next_note_id = 1;
         engine.sample_rate = 48000.0;
         engine.channels = 2;
 
-        engine.mix_buffer = vec![0.0; 4096];
+        engine.mix_buffer = vec![0.0; 8192];
 
         engine
     }
@@ -101,13 +107,19 @@ impl MyRetro {
         crush_steps: f32,
         sample_rate: f32,
         voice: &mut SynthVoice,
-        mono_buffer: &mut [f32],
+        channel: &MidiChannelState,
+        buffer: &mut [f32],
+        channels: usize,
         base_freq: f32,
     ) {
-        let actual_freq = base_freq as f64 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
-        let velocity_gain = (voice.velocity as f32) / 127.0;
+        let frames = buffer.len() / channels;
+        let pitch_ratio = voice.pitch_ratio(channel, sample_rate, frames) as f64;
+        let actual_freq = base_freq as f64
+            * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0)
+            * pitch_ratio;
+        let (left_gain, right_gain) = voice.pan_gains(channel);
 
-        for sample in mono_buffer.iter_mut() {
+        for frame in buffer.chunks_exact_mut(channels) {
             if !voice.is_active {
                 break; // Instantly skip the rest of the block if dead
             }
@@ -119,7 +131,7 @@ impl MyRetro {
                 break; // Massive CPU save: don't iterate remaining frames!
             }
 
-            let current_gain = velocity_gain * env_level;
+            let current_gain = voice.gain(channel) * env_level;
             let mut temp_sample = 0.0;
 
             for (i, osc) in oscillators.iter().enumerate() {
@@ -140,10 +152,18 @@ impl MyRetro {
                 temp_sample += osc_output[0]; // We only care about Mono L
             }
 
-            let crushed_sample = (temp_sample * crush_steps).round() / crush_steps;
+            let crushed_sample =
+                voice.apply_brightness((temp_sample * crush_steps).round() / crush_steps, channel);
 
             // ACCUMULATE directly into the shared block buffer
-            *sample += crushed_sample * current_gain;
+            for (channel_index, sample) in frame.iter_mut().enumerate() {
+                let pan_gain = match channel_index {
+                    0 => left_gain,
+                    1 => right_gain,
+                    _ => 1.0,
+                };
+                *sample += crushed_sample * current_gain * pan_gain;
+            }
         }
     }
 
@@ -156,12 +176,17 @@ impl MyRetro {
         sample_rate: f32,
         channels: usize,
         voice: &mut SynthVoice,
+        channel: &MidiChannelState,
         buffer: &mut [f32],
         base_freq: f32,
     ) {
         buffer.fill(0.0);
 
-        let base_freq = base_freq as f64 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
+        let pitch_ratio = voice.pitch_ratio(channel, sample_rate, buffer.len() / channels) as f64;
+        let base_freq = base_freq as f64
+            * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0)
+            * pitch_ratio;
+        let (left_gain, right_gain) = voice.pan_gains(channel);
 
         for frame in buffer.chunks_exact_mut(channels) {
             if !voice.is_active {
@@ -175,8 +200,7 @@ impl MyRetro {
                 continue;
             }
 
-            let velocity_gain = (voice.velocity as f32) / 127.0;
-            let current_gain = velocity_gain * env_level;
+            let current_gain = voice.gain(channel) * env_level;
 
             // Temporary buffer to hold the output of the oscillators BEFORE bitcrush
             let mut temp_sample = 0.0;
@@ -204,11 +228,140 @@ impl MyRetro {
 
             // Apply the bitcrush ONCE to the cleanly summed signal,
             // and apply the envelope GAIN *AFTER* the bitcrush!
-            let crushed_sample = (temp_sample * crush_steps).round() / crush_steps;
+            let crushed_sample =
+                voice.apply_brightness((temp_sample * crush_steps).round() / crush_steps, channel);
             let final_sample = crushed_sample * current_gain;
 
-            for ch in frame.iter_mut() {
-                *ch = final_sample;
+            for (channel_index, sample) in frame.iter_mut().enumerate() {
+                let pan_gain = match channel_index {
+                    0 => left_gain,
+                    1 => right_gain,
+                    _ => 1.0,
+                };
+                *sample = final_sample * pan_gain;
+            }
+        }
+    }
+
+    fn handle_midi_message(&mut self, message: &MidiMessage) {
+        match message {
+            MidiMessage::NoteOn {
+                note_id,
+                channel,
+                key,
+                velocity,
+            } => {
+                let channel = (*channel).min(15);
+                if *velocity == 0 {
+                    let sustain = self.midi_channels[channel as usize].sustain;
+                    for voice in self
+                        .active_voices
+                        .iter_mut()
+                        .filter(|voice| voice.matches_note(*note_id, channel, *key))
+                    {
+                        voice.release_key(sustain);
+                    }
+                    return;
+                }
+
+                let note_id = note_id.unwrap_or_else(|| {
+                    let id = self.next_note_id;
+                    self.next_note_id = self.next_note_id.wrapping_add(1).max(1);
+                    id
+                });
+                let mut voice = SynthVoice::new_with_identity(
+                    note_id,
+                    channel,
+                    *key,
+                    *velocity,
+                    self.sample_rate,
+                    self.oscillators.len(),
+                );
+                for (index, oscillator) in self.oscillators.iter().enumerate() {
+                    voice.phase[index] = oscillator.phase_offset.get() as f64;
+                    voice.filter_state[index] = 0.0;
+                }
+                self.active_voices.push(voice);
+            }
+            MidiMessage::NoteOff {
+                note_id,
+                channel,
+                key,
+            } => {
+                let channel = (*channel).min(15);
+                let sustain = self.midi_channels[channel as usize].sustain;
+                for voice in self
+                    .active_voices
+                    .iter_mut()
+                    .filter(|voice| voice.matches_note(*note_id, channel, *key))
+                {
+                    voice.release_key(sustain);
+                }
+            }
+            MidiMessage::ControlChange {
+                channel,
+                controller,
+                value,
+            } => {
+                let channel = (*channel).min(15);
+                let state = &mut self.midi_channels[channel as usize];
+                match state.apply_control_change(*controller, *value) {
+                    MidiChannelAction::None => {}
+                    MidiChannelAction::ReleaseSustained => {
+                        for voice in self
+                            .active_voices
+                            .iter_mut()
+                            .filter(|voice| voice.channel == channel && voice.key_released)
+                        {
+                            voice.release();
+                        }
+                    }
+                    MidiChannelAction::ReleaseNotes => {
+                        let sustain = state.sustain;
+                        for voice in self
+                            .active_voices
+                            .iter_mut()
+                            .filter(|voice| voice.channel == channel)
+                        {
+                            voice.release_key(sustain);
+                        }
+                    }
+                    MidiChannelAction::StopSound => {
+                        for voice in self
+                            .active_voices
+                            .iter_mut()
+                            .filter(|voice| voice.channel == channel)
+                        {
+                            voice.is_active = false;
+                        }
+                    }
+                }
+            }
+            MidiMessage::PitchBend { channel, value } => {
+                self.midi_channels[(*channel).min(15) as usize].set_pitch_bend(*value);
+            }
+            MidiMessage::NoteExpression {
+                note_id,
+                expression,
+                value,
+            } => {
+                let value = value.clamp(0.0, 1.0);
+                for voice in self
+                    .active_voices
+                    .iter_mut()
+                    .filter(|voice| voice.note_id == *note_id)
+                {
+                    match expression {
+                        NoteExpressionType::Volume => voice.expressions.volume = value,
+                        NoteExpressionType::Pan => voice.expressions.pan = value * 2.0 - 1.0,
+                        NoteExpressionType::Tuning => {
+                            voice.expressions.tuning_semitones = value * 4.0 - 2.0
+                        }
+                        NoteExpressionType::Vibrato => voice.expressions.vibrato = value,
+                        NoteExpressionType::Brightness => voice.expressions.brightness = value,
+                        NoteExpressionType::Pressure => voice.expressions.pressure = value,
+                    }
+                }
             }
         }
     }
@@ -224,8 +377,10 @@ impl AudioPlugin for MyRetro {
         "My Retro"
     }
 
-    fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
+    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
         self.sample_rate = sample_rate;
+        self.mix_buffer
+            .resize(max_buffer_size.saturating_mul(self.channels), 0.0);
     }
 
     fn set_io_layout(&mut self, _inputs: &[BusConfig], outputs: &[BusConfig]) {
@@ -255,11 +410,11 @@ impl AudioPlugin for MyRetro {
             return;
         }
 
-        // Ensure mono mix buffer is large enough and cleared
-        if self.mix_buffer.len() < total_frames {
-            self.mix_buffer.resize(total_frames, 0.0);
+        let output_samples = total_frames * self.channels;
+        if self.mix_buffer.len() < output_samples {
+            self.mix_buffer.resize(output_samples, 0.0);
         }
-        self.mix_buffer[..total_frames].fill(0.0);
+        self.mix_buffer[..output_samples].fill(0.0);
 
         let midi_events = context.midi_events;
 
@@ -281,10 +436,12 @@ impl AudioPlugin for MyRetro {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice = &mut self.mix_buffer[current_frame..end_frame];
+                let out_slice = &mut self.mix_buffer
+                    [current_frame * self.channels..end_frame * self.channels];
 
                 let MyRetro {
                     active_voices,
+                    midi_channels,
                     oscillators,
                     amp_envelope,
                     sample_rate,
@@ -297,19 +454,22 @@ impl AudioPlugin for MyRetro {
                         continue;
                     }
 
+                    let channel = midi_channels[voice.channel as usize];
                     Self::accumulate_voice_block(
                         oscillators,
                         amp_envelope,
                         crush_steps,
                         *sample_rate,
                         voice,
+                        &channel,
                         out_slice,
+                        self.channels,
                         base_freq,
                     );
                 }
 
                 // 2. Apply Master Gain once to the combined mono block
-                for sample in out_slice.iter_mut() {
+                for sample in out_slice {
                     *sample *= master_gain;
                 }
             }
@@ -317,37 +477,7 @@ impl AudioPlugin for MyRetro {
             // Handle MIDI events at this exact frame
             while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
             {
-                match midi_events[event_idx].data {
-                    MidiMessage::NoteOn { key, velocity, .. } => {
-                        if velocity > 0 {
-                            let mut voice = SynthVoice::new(
-                                key,
-                                velocity,
-                                self.sample_rate,
-                                self.oscillators.len(),
-                            );
-                            for (i, osc) in self.oscillators.iter().enumerate() {
-                                voice.phase[i] = osc.phase_offset.get() as f64;
-                                voice.filter_state[i] = 0.0;
-                            }
-                            self.active_voices.push(voice);
-                        } else {
-                            for v in self.active_voices.iter_mut() {
-                                if v.note == key && v.is_active {
-                                    v.release();
-                                }
-                            }
-                        }
-                    }
-                    MidiMessage::NoteOff { key, .. } => {
-                        for v in self.active_voices.iter_mut() {
-                            if v.note == key && v.is_active {
-                                v.release();
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+                self.handle_midi_message(&midi_events[event_idx].data);
                 event_idx += 1;
             }
 
@@ -356,9 +486,11 @@ impl AudioPlugin for MyRetro {
 
         self.active_voices.retain(|v| v.is_active);
 
-        // 3. Ultra-fast SIMD copy: duplicate the finished mono mix to Left and Right
+        // 3. De-interleave the rendered mix into plugin outputs.
         for c in 0..self.channels {
-            outputs[c][..total_frames].copy_from_slice(&self.mix_buffer[..total_frames]);
+            for frame in 0..total_frames {
+                outputs[c][frame] = self.mix_buffer[frame * self.channels + c];
+            }
         }
     }
 
@@ -395,6 +527,48 @@ impl AudioPlugin for MyRetro {
 impl AudioPluginBuilder for MyRetro {
     fn build() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod rich_midi_tests {
+    use super::MyRetro;
+    use karbeat_plugin_api::types::MidiMessage;
+
+    #[test]
+    fn sustain_holds_then_releases_a_voice() {
+        let mut synth = MyRetro::default();
+        synth.handle_midi_message(&MidiMessage::ControlChange {
+            channel: 0,
+            controller: 64,
+            value: 127,
+        });
+        synth.handle_midi_message(&MidiMessage::NoteOn {
+            note_id: Some(9),
+            channel: 0,
+            key: 60,
+            velocity: 100,
+        });
+        synth.handle_midi_message(&MidiMessage::NoteOff {
+            note_id: Some(9),
+            channel: 0,
+            key: 60,
+        });
+        assert!(synth.active_voices[0].key_released);
+        assert_ne!(
+            synth.active_voices[0].adsr.state,
+            karbeat_dsp::envelope::EnvelopeState::Release
+        );
+
+        synth.handle_midi_message(&MidiMessage::ControlChange {
+            channel: 0,
+            controller: 64,
+            value: 0,
+        });
+        assert_eq!(
+            synth.active_voices[0].adsr.state,
+            karbeat_dsp::envelope::EnvelopeState::Release
+        );
     }
 }
 

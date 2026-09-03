@@ -46,6 +46,10 @@ pub struct KarbeatzerV2 {
 
     // Internal Decoupled State (Ignored by Param UI)
     pub active_voices: Vec<SynthVoice>,
+    #[serde(default)]
+    pub midi_channels: [MidiChannelState; 16],
+    #[serde(default)]
+    pub next_note_id: u64,
     pub sample_rate: f32,
     pub channels: usize,
 
@@ -79,6 +83,8 @@ impl Default for KarbeatzerV2 {
 
         // Init internal state
         engine.active_voices = Vec::with_capacity(16);
+        engine.midi_channels = [MidiChannelState::default(); 16];
+        engine.next_note_id = 1;
         engine.sample_rate = 48000.0;
         engine.channels = 2;
 
@@ -96,10 +102,13 @@ impl KarbeatzerV2 {
         amp_envelope: &EnvelopeSettings,
         sample_rate: f32,
         voice: &mut SynthVoice,
+        channel: &MidiChannelState,
         buffer: &mut [f32],
     ) {
         let block_size = buffer.len();
-        let base_freq = 440.0 * (2.0_f32).powf(((voice.note as f32) - 69.0) / 12.0);
+        let pitch_ratio = voice.pitch_ratio(channel, sample_rate, block_size);
+        let base_freq =
+            440.0 * (2.0_f32).powf(((voice.note as f32) - 69.0) / 12.0) * pitch_ratio;
         // let dt = 1.0 / sample_rate;
 
         // Extract oscillator parameters
@@ -127,8 +136,7 @@ impl KarbeatzerV2 {
                 continue;
             }
 
-            let velocity_gain = (voice.velocity as f32) / 127.0;
-            let current_gain = velocity_gain * env_level;
+            let current_gain = voice.gain(channel) * env_level;
             let mut sample_accum = 0.0;
 
             for i in 0..3 {
@@ -160,7 +168,125 @@ impl KarbeatzerV2 {
                 }
             }
 
-            buffer[frame] = sample_accum * current_gain;
+            buffer[frame] = voice.apply_brightness(sample_accum, channel) * current_gain;
+        }
+    }
+
+    fn handle_midi_message(&mut self, message: &MidiMessage) {
+        match message {
+            MidiMessage::NoteOn {
+                note_id,
+                channel,
+                key,
+                velocity,
+            } => {
+                let channel = (*channel).min(15);
+                if *velocity == 0 {
+                    let sustain = self.midi_channels[channel as usize].sustain;
+                    for voice in self
+                        .active_voices
+                        .iter_mut()
+                        .filter(|voice| voice.matches_note(*note_id, channel, *key))
+                    {
+                        voice.release_key(sustain);
+                    }
+                    return;
+                }
+
+                let note_id = note_id.unwrap_or_else(|| {
+                    let id = self.next_note_id;
+                    self.next_note_id = self.next_note_id.wrapping_add(1).max(1);
+                    id
+                });
+                self.active_voices.push(SynthVoice::new_with_identity(
+                    note_id,
+                    channel,
+                    *key,
+                    *velocity,
+                    self.sample_rate,
+                    self.oscillators.len(),
+                ));
+            }
+            MidiMessage::NoteOff {
+                note_id,
+                channel,
+                key,
+            } => {
+                let channel = (*channel).min(15);
+                let sustain = self.midi_channels[channel as usize].sustain;
+                for voice in self
+                    .active_voices
+                    .iter_mut()
+                    .filter(|voice| voice.matches_note(*note_id, channel, *key))
+                {
+                    voice.release_key(sustain);
+                }
+            }
+            MidiMessage::ControlChange {
+                channel,
+                controller,
+                value,
+            } => {
+                let channel = (*channel).min(15);
+                let state = &mut self.midi_channels[channel as usize];
+                match state.apply_control_change(*controller, *value) {
+                    MidiChannelAction::None => {}
+                    MidiChannelAction::ReleaseSustained => {
+                        for voice in self
+                            .active_voices
+                            .iter_mut()
+                            .filter(|voice| voice.channel == channel && voice.key_released)
+                        {
+                            voice.release();
+                        }
+                    }
+                    MidiChannelAction::ReleaseNotes => {
+                        let sustain = state.sustain;
+                        for voice in self
+                            .active_voices
+                            .iter_mut()
+                            .filter(|voice| voice.channel == channel)
+                        {
+                            voice.release_key(sustain);
+                        }
+                    }
+                    MidiChannelAction::StopSound => {
+                        for voice in self
+                            .active_voices
+                            .iter_mut()
+                            .filter(|voice| voice.channel == channel)
+                        {
+                            voice.is_active = false;
+                        }
+                    }
+                }
+            }
+            MidiMessage::PitchBend { channel, value } => {
+                self.midi_channels[(*channel).min(15) as usize].set_pitch_bend(*value);
+            }
+            MidiMessage::NoteExpression {
+                note_id,
+                expression,
+                value,
+            } => {
+                let value = value.clamp(0.0, 1.0);
+                for voice in self
+                    .active_voices
+                    .iter_mut()
+                    .filter(|voice| voice.note_id == *note_id)
+                {
+                    match expression {
+                        NoteExpressionType::Volume => voice.expressions.volume = value,
+                        NoteExpressionType::Pan => voice.expressions.pan = value * 2.0 - 1.0,
+                        NoteExpressionType::Tuning => {
+                            voice.expressions.tuning_semitones = value * 4.0 - 2.0
+                        }
+                        NoteExpressionType::Vibrato => voice.expressions.vibrato = value,
+                        NoteExpressionType::Brightness => voice.expressions.brightness = value,
+                        NoteExpressionType::Pressure => voice.expressions.pressure = value,
+                    }
+                }
+            }
         }
     }
 
@@ -250,6 +376,7 @@ impl AudioPlugin for KarbeatzerV2 {
 
                 let KarbeatzerV2 {
                     active_voices,
+                    midi_channels,
                     oscillators,
                     amp_envelope,
                     sample_rate,
@@ -265,18 +392,26 @@ impl AudioPlugin for KarbeatzerV2 {
                         continue;
                     }
 
+                    let channel = midi_channels[voice.channel as usize];
                     Self::generate_voice_block(
                         oscillators,
                         amp_envelope,
                         *sample_rate,
                         voice,
+                        &channel,
                         scratch_slice,
                     );
 
                     // Mix mono voice into interleaved stereo output buffer
+                    let (left_gain, right_gain) = voice.pan_gains(&channel);
                     for (i, &sample) in scratch_slice.iter().enumerate() {
                         for ch in 0..self.channels {
-                            out_slice[i * self.channels + ch] += sample;
+                            let pan_gain = match ch {
+                                0 => left_gain,
+                                1 => right_gain,
+                                _ => 1.0,
+                            };
+                            out_slice[i * self.channels + ch] += sample * pan_gain;
                         }
                     }
                 }
@@ -303,29 +438,7 @@ impl AudioPlugin for KarbeatzerV2 {
             // Process MIDI
             while event_idx < midi_events.len() && midi_events[event_idx].sample_offset == end_frame
             {
-                match midi_events[event_idx].data {
-                    // Ignored the new `channel` field using `..`
-                    MidiMessage::NoteOn { key, velocity, .. } => {
-                        if velocity > 0 {
-                            self.active_voices.push(SynthVoice::new(
-                                key,
-                                velocity,
-                                self.sample_rate,
-                                self.oscillators.len(),
-                            ));
-                        } else {
-                            for v in self.active_voices.iter_mut().filter(|v| v.note == key) {
-                                v.release();
-                            }
-                        }
-                    }
-                    MidiMessage::NoteOff { key, .. } => {
-                        for v in self.active_voices.iter_mut().filter(|v| v.note == key) {
-                            v.release();
-                        }
-                    }
-                    _ => {}
-                }
+                self.handle_midi_message(&midi_events[event_idx].data);
                 event_idx += 1;
             }
             current_frame = end_frame;
@@ -375,6 +488,35 @@ impl AudioPlugin for KarbeatzerV2 {
 impl AudioPluginBuilder for KarbeatzerV2 {
     fn build() -> Self {
         Self::default()
+    }
+}
+
+#[cfg(test)]
+mod rich_midi_tests {
+    use super::KarbeatzerV2;
+    use karbeat_plugin_api::types::{MidiMessage, NoteExpressionType};
+
+    #[test]
+    fn routes_channel_and_per_note_expression() {
+        let mut synth = KarbeatzerV2::default();
+        synth.handle_midi_message(&MidiMessage::NoteOn {
+            note_id: Some(42),
+            channel: 3,
+            key: 64,
+            velocity: 127,
+        });
+        synth.handle_midi_message(&MidiMessage::PitchBend {
+            channel: 3,
+            value: 8191,
+        });
+        synth.handle_midi_message(&MidiMessage::NoteExpression {
+            note_id: 42,
+            expression: NoteExpressionType::Pan,
+            value: 1.0,
+        });
+
+        assert_eq!(synth.midi_channels[3].pitch_bend_semitones, 2.0);
+        assert_eq!(synth.active_voices[0].expressions.pan, 1.0);
     }
 }
 

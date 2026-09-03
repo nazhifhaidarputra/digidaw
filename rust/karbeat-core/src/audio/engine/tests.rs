@@ -1,6 +1,7 @@
 #![cfg(test)]
 
-use crate::audio::engine::{AudioEngine, AudioEngineTelemetry};
+use crate::audio::engine::voices::VoiceState;
+use crate::audio::engine::{AudioBuffer, AudioEngine, AudioEngineTelemetry};
 use crate::audio::event::TransportFeedback;
 use crate::audio::render_state::AudioGraphState;
 use crate::commands::{AudioCommand, AudioFeedback, TelemetryRegistration};
@@ -11,11 +12,96 @@ use crate::core::project::automation::{
 use crate::core::project::modulation::{ModulationLink, ModulationSource};
 use crate::core::project::track::AudioTrack;
 use crate::core::project::{ApplicationState, ModulationLinkForOrderedLaneView, TrackType};
+use karbeat_plugin_api::types::{MidiMessage, NoteExpressionType};
 use karbeat_utils::color::Color;
 use karbeat_utils::types::NormalizedF64;
 use rtrb::RingBuffer;
 use std::sync::mpsc;
 // use crate::audio::;
+
+struct TimestampedAudioBlock {
+    timestamp_micros: u64,
+    samples: Vec<f32>,
+}
+
+impl AudioBuffer for TimestampedAudioBlock {
+    fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+
+    fn samples_mut(&mut self) -> &mut [f32] {
+        &mut self.samples
+    }
+}
+
+#[test]
+fn engine_processes_custom_audio_buffer() {
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        44_100,
+        2,
+        120.0,
+        16,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut block = TimestampedAudioBlock {
+        timestamp_micros: 42,
+        samples: vec![1.0; 32],
+    };
+
+    engine.process(&mut block);
+
+    assert!(block.samples.iter().all(|sample| *sample == 0.0));
+    assert_eq!(block.timestamp_micros, 42);
+}
+
+#[test]
+fn non_note_midi_messages_preserve_playing_keys() {
+    let messages = [
+        MidiMessage::ControlChange {
+            channel: 0,
+            controller: 1,
+            value: 64,
+        },
+        MidiMessage::PitchBend {
+            channel: 0,
+            value: 1024,
+        },
+        MidiMessage::NoteExpression {
+            note_id: 1,
+            expression: NoteExpressionType::Pressure,
+            value: 0.5,
+        },
+    ];
+
+    for message in messages {
+        let mut playing_keys = vec![60, 64];
+        VoiceState::update_playing_keys(&mut playing_keys, &message);
+        assert_eq!(playing_keys, [60, 64]);
+    }
+}
+
+#[test]
+fn channel_mode_midi_messages_clear_playing_keys() {
+    for controller in [120, 123, 124, 125, 126, 127] {
+        let mut playing_keys = vec![60, 64];
+        let message = MidiMessage::ControlChange {
+            channel: 0,
+            controller,
+            value: 0,
+        };
+
+        VoiceState::update_playing_keys(&mut playing_keys, &message);
+        assert!(playing_keys.is_empty());
+    }
+}
 
 #[test]
 fn browser_preview_stops_at_its_frame_limit() {

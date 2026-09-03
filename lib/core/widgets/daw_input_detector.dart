@@ -8,6 +8,7 @@ class DawInputDetector extends StatelessWidget {
   final void Function(double scrollDelta, Offset localPosition)? onCtrlScroll;
   final void Function(double scrollDelta, Offset localPosition)? onAltScroll;
   final void Function(ScaleUpdateDetails details)? onPinchZoom;
+  final ValueChanged<Offset>? onOneFingerPan;
 
   const DawInputDetector({
     super.key,
@@ -15,15 +16,24 @@ class DawInputDetector extends StatelessWidget {
     this.onCtrlScroll,
     this.onAltScroll,
     this.onPinchZoom,
+    this.onOneFingerPan,
   });
 
   bool get _isCtrlPressed =>
-      HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.controlLeft) ||
-      HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.controlRight);
+      HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.controlLeft,
+      ) ||
+      HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.controlRight,
+      );
 
   bool get _isAltPressed =>
-      HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.altLeft) ||
-      HardwareKeyboard.instance.logicalKeysPressed.contains(LogicalKeyboardKey.altRight);
+      HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.altLeft,
+      ) ||
+      HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.altRight,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +49,15 @@ class DawInputDetector extends StatelessWidget {
       },
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onScaleUpdate: onPinchZoom,
+        onScaleUpdate: onPinchZoom == null && onOneFingerPan == null
+            ? null
+            : (details) {
+                if (details.pointerCount > 1) {
+                  onPinchZoom?.call(details);
+                } else {
+                  onOneFingerPan?.call(details.focalPointDelta);
+                }
+              },
         child: child,
       ),
     );

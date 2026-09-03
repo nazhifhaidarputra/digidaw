@@ -8,11 +8,15 @@ pub struct MidiEvent {
 
 pub enum MidiMessage {
     NoteOn {
+        /// Stable identity for per-note expression routing when available.
+        note_id: Option<u64>,
         channel: u8,
         key: u8,
         velocity: u8,
     },
     NoteOff {
+        /// Identity of the corresponding note-on when available.
+        note_id: Option<u64>,
         channel: u8,
         key: u8,
     },
@@ -28,7 +32,7 @@ pub enum MidiMessage {
 
     /// Allows per-note modulation (e.g., individual pitch bend or pressure per key).
     NoteExpression {
-        note_id: u32, // Unique ID to track overlapping notes
+        note_id: u64, // Unique ID to track overlapping notes
         expression: NoteExpressionType,
         value: f32, // Normalized 0.0 to 1.0
     },

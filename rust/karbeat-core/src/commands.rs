@@ -1,6 +1,7 @@
 use hashbrown::HashMap;
 use indexmap::IndexMap;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
+use karbeat_plugin_api::types::MidiEvent;
 
 use crate::{
     audio::{
@@ -44,6 +45,11 @@ pub enum AudioCommand {
         generator_id: GeneratorId,
         velocity: u8,
         is_note_on: bool,
+    },
+    /// Queue a sample-accurate MIDI event for a generator.
+    SendMidiEvent {
+        generator_id: GeneratorId,
+        event: MidiEvent,
     },
     /// Set BPM to the field0 value
     SetBPM(f32),
