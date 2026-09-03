@@ -665,7 +665,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     padding: const EdgeInsets.all(8),
                     itemCount: channel.effects.length,
                     buildDefaultDragHandles: false,
-                    onReorderItem: (oldIndex, newIndex) {
+                    onReorder: (oldIndex, newIndex) {
                       ref
                           .read(mixerStateProvider.notifier)
                           .moveEffectOrder(

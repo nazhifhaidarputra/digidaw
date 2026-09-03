@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
@@ -332,6 +333,54 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _autoScrollTimer = null;
   }
 
+  void _handleEditorPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+
+    final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
+    final isControlPressed =
+        pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.controlRight);
+    final isAltPressed =
+        pressedKeys.contains(LogicalKeyboardKey.altLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.altRight);
+    if (isControlPressed || isAltPressed) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (
+      resolvedEvent,
+    ) {
+      if (resolvedEvent is! PointerScrollEvent) return;
+
+      final isShiftPressed =
+          pressedKeys.contains(LogicalKeyboardKey.shiftLeft) ||
+          pressedKeys.contains(LogicalKeyboardKey.shiftRight);
+      var horizontalDelta = resolvedEvent.scrollDelta.dx;
+      var verticalDelta = resolvedEvent.scrollDelta.dy;
+
+      // Mouse wheels report vertical deltas. Shift maps the wheel to the
+      // timeline, while trackpads can scroll both axes directly.
+      if (isShiftPressed) {
+        horizontalDelta = horizontalDelta == 0
+            ? verticalDelta
+            : horizontalDelta;
+        verticalDelta = 0;
+      }
+
+      _scrollBy(_gridHorizontalController, horizontalDelta);
+      _scrollBy(_gridVerticalController, verticalDelta);
+    });
+  }
+
+  void _scrollBy(ScrollController controller, double delta) {
+    if (delta == 0 || !controller.hasClients) return;
+
+    controller.jumpTo(
+      (controller.offset + delta).clamp(
+        controller.position.minScrollExtent,
+        controller.position.maxScrollExtent,
+      ),
+    );
+  }
+
   // void _handleVirtualKeyPan(Offset localPos) {
   //   const double whiteKeyWidth = 40.0;
   // }
@@ -556,32 +605,35 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                     // PIANO KEYS (Left)
                     SizedBox(
                       width: _keyWidth,
-                      child: ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(
-                          context,
-                        ).copyWith(scrollbars: false),
-                        child: ListView.builder(
-                          controller: _keysController,
-                          itemCount: 128,
-                          itemExtent: _keyHeight,
-                          physics: isPan
-                              ? const ClampingScrollPhysics()
-                              : const NeverScrollableScrollPhysics(),
-                          itemBuilder: (context, index) {
-                            // MIDI 127 is top, 0 is bottom. List index 0 is top.
-                            final midiKey = 127 - index;
-                            return _PianoKey(
-                              midiKey: midiKey,
-                              height: _keyHeight,
-                              onPlayNote: (isOn) {
-                                if (isOn) {
-                                  _handleNoteOn(midiKey);
-                                } else {
-                                  _handleNoteOff(midiKey);
-                                }
-                              },
-                            );
-                          },
+                      child: Listener(
+                        onPointerSignal: _handleEditorPointerSignal,
+                        child: ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(
+                            context,
+                          ).copyWith(scrollbars: false),
+                          child: ListView.builder(
+                            controller: _keysController,
+                            itemCount: 128,
+                            itemExtent: _keyHeight,
+                            physics: isPan
+                                ? const ClampingScrollPhysics()
+                                : const NeverScrollableScrollPhysics(),
+                            itemBuilder: (context, index) {
+                              // MIDI 127 is top, 0 is bottom. List index 0 is top.
+                              final midiKey = 127 - index;
+                              return _PianoKey(
+                                midiKey: midiKey,
+                                height: _keyHeight,
+                                onPlayNote: (isOn) {
+                                  if (isOn) {
+                                    _handleNoteOn(midiKey);
+                                  } else {
+                                    _handleNoteOff(midiKey);
+                                  }
+                                },
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -611,6 +663,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     ? const AlwaysScrollableScrollPhysics()
                                     : const NeverScrollableScrollPhysics(),
                                 child: Listener(
+                                  onPointerSignal: _handleEditorPointerSignal,
                                   onPointerDown: (event) {
                                     _lastInteractionPos = event.localPosition;
                                     if (isZoom || isPan) {

@@ -123,7 +123,9 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
   // Handle horizontal scroll wheel
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is PointerScrollEvent) {
-      // Use vertical scroll delta for horizontal scrolling
+      // Native horizontal trackpad deltas are handled by the Scrollable.
+      // Translate a mouse wheel's vertical delta to horizontal.
+      if (event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs()) return;
       final scrollDelta = event.scrollDelta.dy;
       if (_scrollController.hasClients) {
         final newOffset = _scrollController.offset + scrollDelta;
@@ -164,26 +166,43 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
                 double blackKeyHeight = keyHeight * 0.6;
                 double blackKeyWidth = _whiteKeyWidth * 0.7;
 
-                return SingleChildScrollView(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: SizedBox(
-                    width: totalWidth,
-                    height: keyHeight,
-                    child: Stack(
-                      children: [
-                        // White keys
-                        Row(
-                          children: _buildWhiteKeys(keyHeight, allActiveNotes),
+                return ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.trackpad,
+                    },
+                  ),
+                  child: Scrollbar(
+                    controller: _scrollController,
+                    thumbVisibility: true,
+                    scrollbarOrientation: ScrollbarOrientation.bottom,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: SizedBox(
+                        width: totalWidth,
+                        height: keyHeight,
+                        child: Stack(
+                          children: [
+                            // White keys
+                            Row(
+                              children: _buildWhiteKeys(
+                                keyHeight,
+                                allActiveNotes,
+                              ),
+                            ),
+                            // Black keys (positioned)
+                            ..._buildBlackKeys(
+                              blackKeyWidth,
+                              blackKeyHeight,
+                              allActiveNotes,
+                            ),
+                          ],
                         ),
-                        // Black keys (positioned)
-                        ..._buildBlackKeys(
-                          blackKeyWidth,
-                          blackKeyHeight,
-                          allActiveNotes,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 );
