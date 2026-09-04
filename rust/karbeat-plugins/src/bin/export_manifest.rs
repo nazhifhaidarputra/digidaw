@@ -14,8 +14,11 @@ macro_rules! export_plugins {
     };
 }
 
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::expect_used)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "the manifest export command must fail immediately when its inputs or writes are invalid"
+)]
 fn main() {
     println!("Starting Karbeat Manifest Extractor...");
 

@@ -2,7 +2,6 @@ use hashbrown::HashMap;
 
 use crate::{core::project::SidechainRoute, shared::BusId};
 
-#[derive(Clone)]
 pub(super) struct RenderWorkspace {
     pub mix_buffer: Vec<f32>,
     pub bus_buffers: HashMap<BusId, Vec<f32>>,

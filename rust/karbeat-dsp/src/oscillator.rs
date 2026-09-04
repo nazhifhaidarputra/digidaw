@@ -1,9 +1,14 @@
+#![allow(
+    clippy::as_conversions,
+    reason = "oscillator phase and sample calculations intentionally cross f32 and f64 domains"
+)]
+
 use dasp::Frame;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
 
 // Import your universal parameter types and macros
-use karbeat_macros::{karbeat_plugin, EnumParam};
+use karbeat_macros::{EnumParam, karbeat_plugin};
 
 // ============================================================================
 // WAVEFORM ENUM
@@ -160,7 +165,10 @@ impl Oscillator {
     }
 
     /// Frequency Modulation (FM) output using dasp zip iterators
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the real-time oscillator path passes independent preallocated state explicitly"
+    )]
     pub fn output_wave_fm(
         &self,
         out_block: &mut [f32],

@@ -215,8 +215,11 @@ fn parse_embedded_audio_path(zip_name: &str) -> Option<(u64, String)> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
-#[allow(clippy::unwrap_used)]
+#[allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "project round-trip tests fail immediately when fixture I/O or serialization breaks"
+)]
 mod test {
     use super::*;
     use std::io::{Read, Write};

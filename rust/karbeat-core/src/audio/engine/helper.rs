@@ -19,7 +19,10 @@ use crate::{
 /// Unified entry point to render an audio waveform slice.
 /// Safely delegates to the correct DSP algorithm based on the chosen sample mode.
 #[inline(always)]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the real-time render path passes independent preallocated state explicitly"
+)]
 pub fn render_audio_waveform(
     mode: &AudioSampleMode,
     source_buffer: &[f32],

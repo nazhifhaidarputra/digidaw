@@ -42,7 +42,7 @@ impl DelayLine {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub(super) struct RoutingState {
     pub cached_order: Vec<RoutingNode>,
     pub track_tails: HashMap<TrackId, u32>,
@@ -56,12 +56,6 @@ pub(super) struct RoutingState {
 }
 
 impl RoutingState {
-    pub fn for_export(&self) -> Self {
-        let mut state = self.clone();
-        state.node_has_signal.clear();
-        state
-    }
-
     pub fn recalculate_latencies(
         &mut self,
         graph: &AudioGraphState,

@@ -171,17 +171,16 @@ impl Eq for Clip {}
 
 impl PartialOrd for Clip {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // Primary ordering by start_time, then by id for tie-breaking
-        match self.time.start_time_raw().cmp(&other.time.start_time_raw()) {
-            Ordering::Equal => Some(self.id.cmp(&other.id)),
-            ordering => Some(ordering),
-        }
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for Clip {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+        self.time
+            .start_time_raw()
+            .cmp(&other.time.start_time_raw())
+            .then_with(|| self.id.cmp(&other.id))
     }
 }
 
@@ -222,11 +221,7 @@ impl ApplicationState {
         Ok(())
     }
 
-    pub fn rename_clip(
-        &mut self,
-        clip_id: ClipId,
-        new_name: &str,
-    ) -> anyhow::Result<()> {
+    pub fn rename_clip(&mut self, clip_id: ClipId, new_name: &str) -> anyhow::Result<()> {
         let Some(clip) = self.clips_pool.get_mut(clip_id) else {
             anyhow::bail!("Clip with id [{}] not found", clip_id)
         };
@@ -236,7 +231,7 @@ impl ApplicationState {
 
         clip.rename_clip(new_name);
 
-        Ok(())        
+        Ok(())
     }
 
     pub fn delete_clip_from_track(
@@ -354,7 +349,10 @@ impl ApplicationState {
         let first_length = cut_point - clip_start;
         let second_length = clip_length - first_length;
         let second_offset = source.time.offset_start_raw() + first_length;
-        let left = self.clips_pool.get_mut(*clip_id).unwrap();
+        let left = self
+            .clips_pool
+            .get_mut(*clip_id)
+            .with_context(|| "Clip disappeared from the global pool during cut")?;
         match &mut left.time {
             ClipTimeUnit::Samples { loop_length, .. } => *loop_length = first_length,
             ClipTimeUnit::Ticks { loop_length, .. } => *loop_length = first_length as u32,
@@ -835,10 +833,10 @@ impl ApplicationState {
             duplicated.push(self.clips_pool[id].clone());
         }
 
-        self.tracks
-            .get_mut(track_id)
-            .expect("track was validated before mutation")
-            .add_clips_bulk(&new_ids, &self.clips_pool);
+        let Some(track) = self.tracks.get_mut(track_id) else {
+            return Err("Track disappeared while duplicating validated clips".to_string());
+        };
+        track.add_clips_bulk(&new_ids, &self.clips_pool);
 
         Ok(duplicated)
     }

@@ -1,5 +1,8 @@
-#![allow(clippy::unwrap_used)]
-#![allow(clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "missing build dependencies must fail the build with a direct diagnostic"
+)]
 
 use std::env;
 use std::path::PathBuf;
@@ -15,25 +18,29 @@ fn main() {
         // Tell Cargo where the .lib is
         println!("cargo:rustc-link-search=native={}\\lib", vcpkg_env);
         println!("cargo:rustc-link-lib=rubberband");
-        header_path = Some(PathBuf::from(format!("{}\\include\\rubberband\\rubberband-c.h", vcpkg_env)));
-        
+        header_path = Some(PathBuf::from(format!(
+            "{}\\include\\rubberband\\rubberband-c.h",
+            vcpkg_env
+        )));
     } else if target_os == "linux" || target_os == "macos" {
         let lib = pkg_config::Config::new()
             .probe("rubberband")
             .expect("Failed to find rubberband via pkg-config!");
-            
+
         if let Some(include_dir) = lib.include_paths.first() {
             header_path = Some(include_dir.join("rubberband").join("rubberband-c.h"));
         }
-        
     } else if target_os == "android" {
         // Android: Manual linking to the JNI libs folder
         let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        println!("cargo:rustc-link-search=native={}/../android/app/src/main/jniLibs/arm64-v8a", manifest_dir);
-        
+        println!(
+            "cargo:rustc-link-search=native={}/../android/app/src/main/jniLibs/arm64-v8a",
+            manifest_dir
+        );
+
         // Only manually link for Android. vcpkg and pkg-config do this automatically for desktop!
         println!("cargo:rustc-link-lib=rubberband");
-        
+
         // Note: Cross-compiling for Android usually means the system headers aren't available locally.
         // If you need bindgen on Android, you will need to download the header and hardcode a fallback path here.
     }

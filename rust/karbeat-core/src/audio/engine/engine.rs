@@ -64,6 +64,19 @@ pub struct AudioEngine {
     pub(super) telemetry: AudioEngineTelemetry,
 }
 
+/// Immutable capture of the live engine data needed to construct an offline renderer.
+pub struct AudioExportSnapshot {
+    render_state: AudioRenderState,
+    config: AudioEngineConfig,
+    bpm: f32,
+    time_sig_numerator: u8,
+    time_sig_denominator: u8,
+    bus_ids: Vec<BusId>,
+    plugin_state: AudioPluginState,
+    mixer_state: AudioMixerState,
+    modulation: ModulationState,
+}
+
 impl AudioEngine {
     pub fn new(
         command_consumer: Consumer<AudioCommand>,
@@ -105,33 +118,78 @@ impl AudioEngine {
         }
     }
 
-    /// Creates a perfect replica of the current engine state for offline rendering.
-    /// Replaces the communication channels with the provided ones for the new thread.
-    pub fn clone_for_export(
-        &self,
+    /// Captures only the live engine state required for offline rendering.
+    pub fn export_snapshot(&self) -> AudioExportSnapshot {
+        AudioExportSnapshot {
+            render_state: self.current_state.clone(),
+            config: self.config,
+            bpm: self.transport.bpm,
+            time_sig_numerator: self.transport.time_sig_numerator,
+            time_sig_denominator: self.transport.time_sig_denominator,
+            bus_ids: self.workspace.bus_buffers.keys().copied().collect(),
+            plugin_state: self.plugin_state.clone(),
+            mixer_state: self.mixer_state.clone(),
+            modulation: self.modulation.for_export(),
+        }
+    }
+
+    /// Builds a fresh offline renderer from a read-only live-engine snapshot.
+    pub fn from_export_snapshot(
+        snapshot: AudioExportSnapshot,
         command_consumer: Consumer<AudioCommand>,
         position_producer: Producer<TransportFeedback>,
         feedback_producer: Producer<AudioFeedback>,
     ) -> Self {
-        Self {
+        let AudioExportSnapshot {
+            render_state,
+            config,
+            bpm,
+            time_sig_numerator,
+            time_sig_denominator,
+            bus_ids,
+            plugin_state,
+            mixer_state,
+            modulation,
+        } = snapshot;
+
+        let mut transport = TransportState::new(bpm);
+        transport.time_sig_numerator = time_sig_numerator;
+        transport.time_sig_denominator = time_sig_denominator;
+
+        let mut workspace =
+            RenderWorkspace::new(render_state.graph.buffer_size, config.num_channels);
+        for &bus_id in &bus_ids {
+            workspace.bus_buffers.insert(bus_id, Vec::new());
+        }
+
+        let mut routing = RoutingState::default();
+        routing.cached_order = compute_routing_order(
+            render_state.graph.tracks.iter().map(|track| track.id),
+            bus_ids.into_iter(),
+            &render_state.graph.routing,
+        );
+
+        let mut engine = Self {
             io: EngineIo {
                 command_consumer,
                 position_producer,
                 feedback_producer,
                 telemetry_reg_sender: mpsc::sync_channel(0).0,
             },
-            current_state: self.current_state.clone(),
-            config: self.config,
-            transport: self.transport.clone(),
+            current_state: render_state,
+            config,
+            transport,
             voices: VoiceState::for_export(),
-            plugin_state: self.plugin_state.clone(),
-            mixer_state: self.mixer_state.clone(),
-            workspace: self.workspace.clone(),
-            routing: self.routing.for_export(),
-            modulation: self.modulation.for_export(),
+            plugin_state,
+            mixer_state,
+            workspace,
+            routing,
+            modulation,
             metronome_state: MetronomeState::default(),
             telemetry: AudioEngineTelemetry::new_for_export(),
-        }
+        };
+        engine.recalculate_latencies();
+        engine
     }
 
     pub fn plugin_state(&self) -> &AudioPluginState {
@@ -1616,7 +1674,7 @@ impl AudioEngine {
         );
     }
 
-    fn recalculate_latencies(&mut self) {
+    pub(super) fn recalculate_latencies(&mut self) {
         let max_system_latency = self.routing.recalculate_latencies(
             &self.current_state.graph,
             &self.plugin_state,

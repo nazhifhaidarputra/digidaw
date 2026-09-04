@@ -4,7 +4,12 @@
 //! as a component or building block for
 //! DSP implementation
 
-use karbeat_macros::{karbeat_plugin, EnumParam};
+#![allow(
+    clippy::as_conversions,
+    reason = "compressor sample-domain conversions intentionally narrow bounded DSP values"
+)]
+
+use karbeat_macros::{EnumParam, karbeat_plugin};
 use serde::{Deserialize, Serialize};
 
 /// Standard compressor DSP Module with lookahead delay

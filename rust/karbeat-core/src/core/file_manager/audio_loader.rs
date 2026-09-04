@@ -36,7 +36,10 @@ mod err {
 
     #[derive(Error, Debug)]
     #[error("Failed to load the audio: {message}")]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the typed loader error is retained for the planned file I/O boundary migration"
+    )]
     // TODO: Use this in Audio File I/O
     pub struct LoadAudioError<'a> {
         pub message: &'a str,
@@ -97,6 +100,8 @@ pub fn load_audio_file(
     // let byte_slice: &[u8] = bytemuck::cast_slice(&all_samples);
     // cache_file.write_all(byte_slice)?;
 
+    // SAFETY: The temporary file remains open while the immutable mapping is created, and the
+    // returned mapping owns the mapped region independently of the file handle.
     let mmap = unsafe { MmapOptions::new().map(&cache_file)? };
 
     let duration_seconds = if sample_rate > 0 {

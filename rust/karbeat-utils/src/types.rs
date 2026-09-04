@@ -107,6 +107,7 @@ macro_rules! bounded_fixed {
 
             fn try_from(value: $inner) -> Result<Self, Self::Error> {
                 if value >= Self::MIN && value <= Self::MAX {
+                    // SAFETY: The bounds check above establishes the constructor's invariant.
                     Ok(unsafe { Self::new_unchecked(value) })
                 } else {
                     Err(concat!("Value is out of bounds for ", stringify!($name)))

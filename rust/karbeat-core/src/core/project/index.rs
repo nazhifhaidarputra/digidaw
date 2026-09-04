@@ -147,6 +147,10 @@ impl Default for ProjectMetadata {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "metadata compatibility tests fail immediately when fixed JSON fixtures are invalid"
+)]
 mod project_metadata_tests {
     use super::ProjectMetadata;
 
@@ -292,6 +296,10 @@ impl ApplicationState {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "slotmap persistence tests fail immediately when deterministic fixtures cannot round-trip"
+)]
 mod slotmap_persistence_tests {
     use super::*;
     use crate::core::project::{

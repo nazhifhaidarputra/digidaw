@@ -87,9 +87,8 @@ pub fn init_engine(ctx: &mut DawContext) {
                 }
             }
         }
-        Err(e) => {
-            log::error!("Failed to start audio engine: {}", e);
-            panic!()
+        Err(error) => {
+            log::error!("Failed to start audio engine: {error}");
         }
     }
 }

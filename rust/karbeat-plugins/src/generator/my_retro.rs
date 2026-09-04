@@ -3,6 +3,11 @@
 // Author: Haidar Wibowo
 // ====================================================
 
+#![allow(
+    clippy::as_conversions,
+    reason = "synth rendering intentionally converts bounded MIDI, phase, and sample values"
+)]
+
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
@@ -114,9 +119,8 @@ impl MyRetro {
     ) {
         let frames = buffer.len() / channels;
         let pitch_ratio = voice.pitch_ratio(channel, sample_rate, frames) as f64;
-        let actual_freq = base_freq as f64
-            * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0)
-            * pitch_ratio;
+        let actual_freq =
+            base_freq as f64 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0) * pitch_ratio;
         let (left_gain, right_gain) = voice.pan_gains(channel);
 
         for frame in buffer.chunks_exact_mut(channels) {
@@ -183,9 +187,8 @@ impl MyRetro {
         buffer.fill(0.0);
 
         let pitch_ratio = voice.pitch_ratio(channel, sample_rate, buffer.len() / channels) as f64;
-        let base_freq = base_freq as f64
-            * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0)
-            * pitch_ratio;
+        let base_freq =
+            base_freq as f64 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0) * pitch_ratio;
         let (left_gain, right_gain) = voice.pan_gains(channel);
 
         for frame in buffer.chunks_exact_mut(channels) {
@@ -436,8 +439,8 @@ impl AudioPlugin for MyRetro {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice = &mut self.mix_buffer
-                    [current_frame * self.channels..end_frame * self.channels];
+                let out_slice =
+                    &mut self.mix_buffer[current_frame * self.channels..end_frame * self.channels];
 
                 let MyRetro {
                     active_voices,

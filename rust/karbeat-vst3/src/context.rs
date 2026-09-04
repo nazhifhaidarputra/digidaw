@@ -1,5 +1,10 @@
-use vst3::{Class, Steinberg::{Vst::{IHostApplication, IHostApplicationTrait}, kNotImplemented, kResultOk}};
-
+use vst3::{
+    Class,
+    Steinberg::{
+        Vst::{IHostApplication, IHostApplicationTrait},
+        kNotImplemented, kResultOk,
+    },
+};
 
 pub struct Vst3HostContext {
     pub host_name: String,
@@ -9,7 +14,10 @@ impl Class for Vst3HostContext {
     type Interfaces = (IHostApplication,);
 }
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "the implementation method names are fixed by the VST3 COM interface"
+)]
 impl IHostApplicationTrait for Vst3HostContext {
     unsafe fn getName(
         &self,
@@ -19,9 +27,8 @@ impl IHostApplicationTrait for Vst3HostContext {
         let mut encoded: Vec<u16> = self.host_name.encode_utf16().collect();
         encoded.push(0); // Null terminator
 
-        let out_slice = unsafe { 
-            std::slice::from_raw_parts_mut(name as *mut u16, 128) 
-        };
+        // SAFETY: VST3 supplies a writable String128 buffer for the duration of this call.
+        let out_slice = unsafe { std::slice::from_raw_parts_mut(name.cast::<u16>(), 128) };
         let len = encoded.len().min(128);
         out_slice[..len].copy_from_slice(&encoded[..len]);
 

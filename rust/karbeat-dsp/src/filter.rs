@@ -10,6 +10,11 @@
 //! Replaces the 4-state DF1 (x1,x2,y1,y2) with a 2-state DF2T (s1,s2).
 //! Same frequency response, half the memory, better numerical properties.
 //!
+#![allow(
+    clippy::as_conversions,
+    reason = "filter coefficient calculations intentionally convert between scalar and SIMD sample domains"
+)]
+
 //! ### 3. `f32x8` cascade-parallel SIMD (`BiquadStateWide8`)
 //! All 8 cascade stages for ONE channel are held in a single `f32x8`
 //! register pair. One `f32x8` multiply-add sweeps all stages in parallel —
@@ -24,10 +29,10 @@
 //! using `f32x8`, reducing transcendental-function overhead for spectrum
 //! display.
 
-use karbeat_macros::{karbeat_plugin, EnumParam};
+use karbeat_macros::{EnumParam, karbeat_plugin};
 use karbeat_plugin_types::EnumParam;
 use serde::{Deserialize, Serialize};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use wide::{f32x4, f32x8};
 
 const DEFAULT_CASCADES: usize = 8;
@@ -130,7 +135,7 @@ impl FilterMode for SimpleFilterMode {
                 1.0 - alpha,
             ),
             Self::BandPass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w, 1.0 - alpha),
-            Self::Off => unreachable!(),
+            Self::Off => return BiquadCoefficients::BYPASS,
         };
         BiquadCoefficients::from_raw(b0, b1, b2, a0, a1, a2)
     }
@@ -207,7 +212,7 @@ impl FilterMode for BiquadFilterType {
                 -2.0 * cos_w,
                 1.0 - alpha,
             ),
-            Self::Off => unreachable!(),
+            Self::Off => return BiquadCoefficients::BYPASS,
         };
         BiquadCoefficients::from_raw(b0, b1, b2, a0, a1, a2)
     }

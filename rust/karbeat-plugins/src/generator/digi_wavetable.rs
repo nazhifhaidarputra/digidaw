@@ -1,7 +1,7 @@
 use karbeat_dsp::{
     distortion::DistortionType, envelope::AdvancedEnvelopeSettings, lfo::Lfo, noise::NoiseColor,
 };
-use karbeat_macros::{karbeat_plugin, EnumParam};
+use karbeat_macros::{EnumParam, karbeat_plugin};
 use karbeat_plugin_api::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -230,7 +230,6 @@ pub struct WavetableOsc {
         default = FilterDestination::Both
     )]
     pub destination: FilterDestination,
-
     // buffer: Vec<Vec<f64>>,
 }
 
@@ -550,13 +549,9 @@ impl AudioPlugin for DigiWavetableSynth {
         PluginCategory::Instrument
     }
 
-    fn prepare(&mut self, _sample_rate: f32, _max_buffer_size: usize) {
-        todo!()
-    }
+    fn prepare(&mut self, _sample_rate: f32, _max_buffer_size: usize) {}
 
-    fn reset(&mut self) {
-        todo!()
-    }
+    fn reset(&mut self) {}
 
     fn set_io_layout(
         &mut self,
@@ -571,6 +566,5 @@ impl AudioPlugin for DigiWavetableSynth {
         _buffers: &mut karbeat_plugin_api::prelude::AudioBuffers,
         _context: &ProcessContext,
     ) {
-        todo!()
     }
 }

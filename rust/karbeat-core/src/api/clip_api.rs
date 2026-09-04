@@ -32,13 +32,10 @@ pub fn add_clip(
         let app = &mut ctx.app_state;
         let res = app.create_new_clip(source_id, source_type, track_id, start_time);
 
-        if let Err(the_err) = res {
-            log::error!("Error creating clip: {:?}", the_err);
-            return Err(the_err);
-        }
-
-        #[allow(clippy::unwrap_used)]
-        res.unwrap()
+        res.map_err(|error| {
+            log::error!("Error creating clip: {error:?}");
+            error
+        })?
     };
 
     // 2. Update history
@@ -52,14 +49,13 @@ pub fn add_clip(
     Ok(clip)
 }
 
-
 #[inline(always)]
-pub fn rename_clip(ctx: &mut DawContext, clip_id: ClipId, new_name: &str) -> anyhow::Result<()>{
+pub fn rename_clip(ctx: &mut DawContext, clip_id: ClipId, new_name: &str) -> anyhow::Result<()> {
     let app = &mut ctx.app_state;
 
     app.rename_clip(clip_id, new_name)?;
 
-    // TODO: Add ProjectAction::Rename clip 
+    // TODO: Add ProjectAction::Rename clip
     // ctx.push_history(action);
     Ok(())
 }

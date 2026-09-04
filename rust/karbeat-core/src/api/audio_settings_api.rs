@@ -107,6 +107,10 @@ pub fn select_output(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "audio configuration tests fail immediately when a fixed fixture is invalid"
+)]
 mod tests {
     use super::{select_output, set_dsp_config};
     use crate::{

@@ -334,6 +334,10 @@ impl HistoryManager {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "history tests fail immediately when a deterministic state transition is rejected"
+)]
 mod history_limit_tests {
     use super::{HistoryManager, MAX_HISTORY_LIMIT, ProjectAction};
 

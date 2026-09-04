@@ -1,3 +1,8 @@
+#![allow(
+    clippy::as_conversions,
+    reason = "sidechain timing calculations intentionally convert bounded sample-domain values"
+)]
+
 use karbeat_dsp::{channel::StandardChannelMode, compressor::SidechainCompressor};
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
@@ -220,6 +225,10 @@ mod tests {
         }
     }
 
+    #[allow(
+        clippy::panic,
+        reason = "a missing declared parameter is a test fixture failure"
+    )]
     fn parameter_id(plugin: &DigidawSidechainCompressor, path: &str) -> u32 {
         plugin
             .get_parameter_specs()
@@ -339,6 +348,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::expect_used,
+        reason = "the test asserts that the statically declared parameter exists"
+    )]
     fn channel_mode_metadata_uses_choice_indices() {
         let plugin = DigidawSidechainCompressor::default();
         let spec = plugin

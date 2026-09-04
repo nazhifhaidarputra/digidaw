@@ -1,11 +1,8 @@
-use core::unimplemented;
-
 use crate::{api::*, context::Vst3HostContext};
 use karbeat_plugin_api::prelude::*;
 use vst3::{
-    ComPtr, ComWrapper, Steinberg::{
-        Vst::{IComponent, IEditController}
-    },
+    ComPtr, ComWrapper,
+    Steinberg::Vst::{IComponent, IEditController},
 };
 
 /// Wrapper for VST3 plugin so that it compatibles with karbeat plugin host system
@@ -25,7 +22,7 @@ impl Clone for Vst3Wrapper {
         Self {
             component: self.component.clone(),
             edit_ctrl: self.edit_ctrl.clone(),
-            _host_context: self._host_context.clone(), 
+            _host_context: self._host_context.clone(),
         }
     }
 }
@@ -95,10 +92,10 @@ impl AudioPlugin for Vst3Wrapper {
         //     log::error!("Failed to serialize Plugin state: {}", err);
         //     Vec::new()
         // })
-        todo!()
+        Vec::new()
     }
 
-    fn set_state(&mut self, state: &[u8]) {
+    fn set_state(&mut self, _state: &[u8]) {
         // if state.is_empty() {
         //     return;
         // }
@@ -113,7 +110,6 @@ impl AudioPlugin for Vst3Wrapper {
         //         log::error!("Failed to deserialize Plugin state: {}", err);
         //     }
         // }
-        todo!()
     }
 
     fn get_factory_presets(&self) -> Vec<(String, Vec<u8>)> {
@@ -153,62 +149,50 @@ impl AudioPlugin for Vst3Wrapper {
         PluginCategory::Effect
     }
 
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
-        todo!()
-    }
+    fn prepare(&mut self, _sample_rate: f32, _max_buffer_size: usize) {}
 
-    fn reset(&mut self) {
-        todo!()
-    }
+    fn reset(&mut self) {}
 
     fn set_io_layout(
         &mut self,
-        inputs: &[karbeat_plugin_api::prelude::BusConfig],
-        outputs: &[karbeat_plugin_api::prelude::BusConfig],
+        _inputs: &[karbeat_plugin_api::prelude::BusConfig],
+        _outputs: &[karbeat_plugin_api::prelude::BusConfig],
     ) {
-        todo!()
     }
 
     fn process(
         &mut self,
-        buffers: &mut karbeat_plugin_api::prelude::AudioBuffers,
-        context: &karbeat_plugin_api::prelude::ProcessContext,
+        _buffers: &mut karbeat_plugin_api::prelude::AudioBuffers,
+        _context: &karbeat_plugin_api::prelude::ProcessContext,
     ) {
-        todo!()
     }
 
-    fn set_parameter(&mut self, id: u32, value: f32) {
-        todo!()
+    fn set_parameter(&mut self, _id: u32, _value: f32) {}
+
+    fn get_parameter(&self, _id: u32) -> f32 {
+        0.0
     }
 
-    fn get_parameter(&self, id: u32) -> f32 {
-        todo!()
-    }
+    fn apply_automation(&mut self, _id: u32, _value: f32) {}
 
-    fn apply_automation(&mut self, id: u32, value: f32) {
-        todo!()
-    }
-
-    fn clear_automation(&mut self, id: u32) {
-        todo!()
-    }
+    fn clear_automation(&mut self, _id: u32) {}
 
     fn default_parameters(&self) -> HashMap<u32, f32> {
-        todo!()
+        HashMap::new()
     }
 
     fn static_parameter_specs() -> Vec<karbeat_plugin_api::prelude::ParameterSpec>
     where
         Self: Sized,
     {
-        todo!()
+        Vec::new()
     }
 
     fn get_parameter_specs(&self) -> Vec<karbeat_plugin_api::prelude::ParameterSpec> {
-        todo!()
+        Vec::new()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 }

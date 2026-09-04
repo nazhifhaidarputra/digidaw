@@ -1,3 +1,8 @@
+#![allow(
+    clippy::as_conversions,
+    reason = "voice rendering intentionally converts bounded MIDI and sample-domain values"
+)]
+
 use serde::{Deserialize, Serialize};
 
 use crate::envelope::AdsrProcessor;
@@ -122,14 +127,7 @@ pub struct SynthVoice {
 
 impl SynthVoice {
     pub fn new(note: u8, velocity: u8, sample_rate: f32, num_voices: usize) -> Self {
-        Self::new_with_identity(
-            u64::from(note),
-            0,
-            note,
-            velocity,
-            sample_rate,
-            num_voices,
-        )
+        Self::new_with_identity(u64::from(note), 0, note, velocity, sample_rate, num_voices)
     }
 
     pub fn new_with_identity(

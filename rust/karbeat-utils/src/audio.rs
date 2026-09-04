@@ -1,7 +1,7 @@
-/// Audio utility functions for signal processing
-///
-/// Provides decibel-to-linear and linear-to-decibel conversions
-/// following standard audio engineering conventions.
+//! Audio utility functions for signal processing.
+//!
+//! Provides decibel-to-linear and linear-to-decibel conversions following
+//! standard audio engineering conventions.
 
 /// Convert decibels to linear gain.
 ///

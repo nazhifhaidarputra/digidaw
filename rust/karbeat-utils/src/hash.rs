@@ -10,6 +10,10 @@ pub const fn hash_str(s: &str) -> u32 {
 }
 
 /// Resume a hash from a previous prefix state
+#[allow(
+    clippy::as_conversions,
+    reason = "widening u8 to u32 is lossless and From is not const-stable"
+)]
 pub const fn hash_str_from(mut state: u32, s: &str) -> u32 {
     let bytes = s.as_bytes();
     let mut i = 0;

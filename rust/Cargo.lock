@@ -1702,6 +1702,7 @@ name = "karbeat-plugin-types"
 version = "0.3.0"
 dependencies = [
  "karbeat-utils",
+ "num-traits",
  "serde",
 ]
 

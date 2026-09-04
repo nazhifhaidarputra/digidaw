@@ -1,9 +1,10 @@
 use std::io::Write;
 
 use dasp::slice;
+use num_traits::ToPrimitive;
 use rubato::{
-    audioadapter_buffers::direct::{InterleavedSlice, SequentialSlice},
     Fft, FixedSync, Indexing, Resampler,
+    audioadapter_buffers::direct::{InterleavedSlice, SequentialSlice},
 };
 
 use crate::error::AudioResamplingError;
@@ -126,7 +127,7 @@ pub fn quantize_to_i8(input: &[f32]) -> Vec<i8> {
         .iter()
         .map(|&v| {
             let clamped = v.clamp(-1.0, 1.0);
-            (clamped * 127.0) as i8
+            (clamped * 127.0).to_i8().unwrap_or(0)
         })
         .collect()
 }
@@ -158,7 +159,9 @@ pub fn setup_mipmaps(buffer: &[f32], channels: usize) -> hashbrown::HashMap<u32,
         let downsampled_f32 = downsample(buffer, channels, target_bins);
         // Step 2: quantize → i8
         let quantized = quantize_to_i8(&downsampled_f32);
-        mipmaps.insert(samples_per_bin as u32, quantized);
+        if let Ok(level) = u32::try_from(samples_per_bin) {
+            mipmaps.insert(level, quantized);
+        }
     }
     mipmaps
 }
@@ -352,7 +355,10 @@ where
                     .map_err(|e| AudioResamplingError {
                         err_source: e.to_string(),
                     })?;
-                total_written_samples += buf.len() as u32;
+                let written = u32::try_from(buf.len()).map_err(|error| AudioResamplingError {
+                    err_source: error.to_string(),
+                })?;
+                total_written_samples += written;
                 buf.clear();
             }
         }
@@ -362,7 +368,10 @@ where
                 .map_err(|e| AudioResamplingError {
                     err_source: e.to_string(),
                 })?;
-            total_written_samples += buf.len() as u32;
+            let written = u32::try_from(buf.len()).map_err(|error| AudioResamplingError {
+                err_source: error.to_string(),
+            })?;
+            total_written_samples += written;
         }
         return Ok(total_written_samples);
     }
@@ -437,7 +446,11 @@ where
                     err_source: e.to_string(),
                 })?;
 
-            total_written_samples += valid_out_samples as u32;
+            let written =
+                u32::try_from(valid_out_samples).map_err(|error| AudioResamplingError {
+                    err_source: error.to_string(),
+                })?;
+            total_written_samples += written;
         }
         if actual_frames_read < frames_to_read {
             break;

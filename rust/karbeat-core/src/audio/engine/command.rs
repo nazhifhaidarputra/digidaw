@@ -93,11 +93,10 @@ impl AudioEngine {
                 generator_id,
                 event,
             } => {
-                if !self.voices.queue_generator_event(
-                    &self.plugin_state,
-                    generator_id,
-                    event,
-                ) {
+                if !self
+                    .voices
+                    .queue_generator_event(&self.plugin_state, generator_id, event)
+                {
                     log::warn!("MIDI event target {:?} was not found", generator_id);
                 }
             }
@@ -833,18 +832,8 @@ impl AudioEngine {
                         buffer: buffer_opt,
                     });
             }
-            AudioCommand::QueryAudioEngine {
-                command_consumer,
-                position_producer,
-                feedback_producer,
-                response_tx,
-            } => {
-                // Clone the engine using its own internal graph state (no triple-buffer).
-                let cloned_engine =
-                    self.clone_for_export(command_consumer, position_producer, feedback_producer);
-
-                // Fire the fully hydrated engine back to the export thread
-                let _ = response_tx.send(Box::new(cloned_engine));
+            AudioCommand::QueryAudioExportSnapshot { response_tx } => {
+                let _ = response_tx.send(self.export_snapshot());
             }
             AudioCommand::AddModulationSource { id, source } => {
                 self.modulation.add_source(id, &source);
@@ -930,9 +919,7 @@ impl AudioEngine {
                 };
 
                 if sr_changed || buf_changed {
-                    if sr_changed {
-                        #[allow(clippy::unwrap_used)]
-                        let sample_rate = sample_rate.unwrap(); // This is a safe unwrap
+                    if let Some(sample_rate) = sample_rate.filter(|_| sr_changed) {
                         let ratio = sample_rate as f64 / self.config.sample_rate as f64;
                         self.transport.song.playhead_samples =
                             (self.transport.song.playhead_samples as f64 * ratio) as u32;
@@ -969,6 +956,7 @@ impl AudioEngine {
                     self.current_state.graph.buffer_size = buf_size;
 
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
+                    self.recalculate_latencies();
 
                     log::info!(
                         "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",

@@ -1,21 +1,26 @@
+#![allow(
+    clippy::as_conversions,
+    reason = "the analyzer intentionally converts bounded FFT indices and f32 display values"
+)]
+
 use karbeat_dsp::filter::{
     BiquadCoefficients, BiquadFilterType, FilterMode, SingleBiquadFilterStage,
 };
 
-use karbeat_macros::{karbeat_plugin, EnumParam};
+use karbeat_macros::{EnumParam, karbeat_plugin};
 use karbeat_plugin_api::prelude::*;
 use karbeat_utils::hash::hash_str;
 use num_complex::Complex32;
 use realfft::{RealFftPlanner, RealToComplex};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use smallvec::{smallvec, SmallVec};
+use serde_json::{Value, json};
+use smallvec::{SmallVec, smallvec};
 use std::sync::Arc;
 
 const FFT_SIZE: usize = 4096;
 /// 20.0 / ln(10.0) — used for fast dB conversion: dB = FAST_DB_SCALE * ln(x)
 const FAST_DB_SCALE: f32 = 8.685_889_6; // 20.0 / LN_10
-                                        // const LN_10: f32 = std::f32::consts::LN_10;
+// const LN_10: f32 = std::f32::consts::LN_10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Default, EnumParam, Deserialize, Serialize)]
 pub enum FilterSlope {
@@ -494,20 +499,16 @@ impl DigiParametricEQ {
     /// the compiler can auto-vectorize.
     fn compute_and_update_spectrum(&mut self) {
         // Ensure tables are initialized
-        let tables = match &mut self.tables {
-            Some(t) => {
-                t.rebuild_if_needed(Self::SPECTRUM_POINTS, self.last_sample_rate);
-                t
-            }
-            None => {
-                self.tables = Some(Box::new(AnalyzerTables::build(
-                    Self::SPECTRUM_POINTS,
-                    self.last_sample_rate,
-                )));
-
-                #[allow(clippy::unwrap_used)]
-                self.tables.as_mut().unwrap() // This is a safe unwrap
-            }
+        if let Some(tables) = &mut self.tables {
+            tables.rebuild_if_needed(Self::SPECTRUM_POINTS, self.last_sample_rate);
+        } else {
+            self.tables = Some(Box::new(AnalyzerTables::build(
+                Self::SPECTRUM_POINTS,
+                self.last_sample_rate,
+            )));
+        }
+        let Some(tables) = self.tables.as_mut() else {
+            return;
         };
 
         let num_points = Self::SPECTRUM_POINTS;
@@ -538,7 +539,9 @@ impl DigiParametricEQ {
             };
             // realfft processes in-place on the input slice and writes to output.
             // It allocates no scratch of its own when called this way.
-            let _ = plan.process(fft_in, fft_out); // errors only on length mismatch
+            if plan.process(fft_in, fft_out).is_err() {
+                return;
+            }
         }
 
         // 3. Convert to dB magnitude

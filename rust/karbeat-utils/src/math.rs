@@ -10,7 +10,10 @@ pub fn is_power_of_two(n: u64) -> bool {
 /// Extremely fast 4-point, 3rd-order Hermite interpolation.
 /// Optimized for Fused Multiply-Add (FMA) instructions.
 #[inline(always)]
-#[allow(clippy::unwrap_used)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "the required primitive float constants are representable for every supported Float"
+)]
 pub fn hermite_interp<T>(frac: T, p0: T, p1: T, p2: T, p3: T) -> T
 where
     T: Float,
@@ -18,7 +21,7 @@ where
     let half: T = T::from(0.5).unwrap();
     let two: T = T::from(2.0).unwrap();
     let two_half: T = T::from(2.5).unwrap();
-    let one_half: T = T::from(1.5).unwrap(); 
+    let one_half: T = T::from(1.5).unwrap();
 
     let c1: T = half * (p2 - p0);
     let c2: T = p0 - two_half * p1 + two * p2 - half * p3;

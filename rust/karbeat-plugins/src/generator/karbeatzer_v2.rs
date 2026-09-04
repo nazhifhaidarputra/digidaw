@@ -1,5 +1,10 @@
 //! src/plugin/generator/karbeatzer_v2.rs
 
+#![allow(
+    clippy::as_conversions,
+    reason = "synth rendering intentionally converts bounded MIDI, phase, and sample values"
+)]
+
 use std::f32::consts::PI;
 
 use karbeat_dsp::prelude::*;
@@ -107,8 +112,7 @@ impl KarbeatzerV2 {
     ) {
         let block_size = buffer.len();
         let pitch_ratio = voice.pitch_ratio(channel, sample_rate, block_size);
-        let base_freq =
-            440.0 * (2.0_f32).powf(((voice.note as f32) - 69.0) / 12.0) * pitch_ratio;
+        let base_freq = 440.0 * (2.0_f32).powf(((voice.note as f32) - 69.0) / 12.0) * pitch_ratio;
         // let dt = 1.0 / sample_rate;
 
         // Extract oscillator parameters

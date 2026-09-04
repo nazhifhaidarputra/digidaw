@@ -929,6 +929,10 @@ fn actual_stream_config(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "backend tests fail immediately when deterministic fixtures violate their invariants"
+)]
 mod tests {
     use super::{
         INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, next_retry_delay, push_output_frames,

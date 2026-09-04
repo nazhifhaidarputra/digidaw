@@ -116,6 +116,10 @@ impl DeviceRateBridge {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "rate bridge tests fail immediately when a supported fixed-rate fixture cannot be built"
+)]
 mod tests {
     use super::DeviceRateBridge;
 

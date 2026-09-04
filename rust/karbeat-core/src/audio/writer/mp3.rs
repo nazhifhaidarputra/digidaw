@@ -128,6 +128,7 @@ impl AudioWriter for Mp3AudioWriter {
             .encode(input, self.mp3_out_buffer.spare_capacity_mut())
             .map_err(|e| anyhow::anyhow!("Encoding error: {:?}", e))?;
 
+        // SAFETY: The encoder initialized exactly `encoded_size` bytes in the spare capacity.
         unsafe {
             let new_len = self.mp3_out_buffer.len().wrapping_add(encoded_size);
             self.mp3_out_buffer.set_len(new_len);
@@ -145,6 +146,7 @@ impl AudioWriter for Mp3AudioWriter {
             .flush::<FlushNoGap>(self.mp3_out_buffer.spare_capacity_mut())
             .map_err(|e| anyhow::anyhow!("Flush error: {:?}", e))?;
 
+        // SAFETY: The encoder initialized exactly `encoded_size` bytes in the spare capacity.
         unsafe {
             let new_len = self.mp3_out_buffer.len().wrapping_add(encoded_size);
             self.mp3_out_buffer.set_len(new_len);
@@ -164,6 +166,7 @@ impl AudioWriter for Mp3AudioWriter {
                 .lame_tag_encode(&mut lame_tag)
                 .ok_or_else(|| anyhow::anyhow!("Failed to encode LAME tag because it is empty"))?;
 
+            // SAFETY: `lame_tag_encode` initialized `lame_tag_size` bytes in `lame_tag`.
             let lame_tag_slice = unsafe {
                 slice::from_raw_parts(lame_tag.as_ptr() as *const u8, lame_tag_size.get())
             };

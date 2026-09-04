@@ -18,10 +18,15 @@
 //! `build.rs` emits `cargo:rustc-link-lib=rubberband` so that the linker finds
 //! the system-installed `librubberband.so`.
 
-use std::ptr::NonNull;
-use std::mem::MaybeUninit;
+#![allow(
+    clippy::as_conversions,
+    reason = "the Rubber Band C ABI requires explicit numeric and pointer representation conversions"
+)]
 
-use karbeat_macros::{karbeat_plugin, EnumParam};
+use std::mem::MaybeUninit;
+use std::ptr::NonNull;
+
+use karbeat_macros::{EnumParam, karbeat_plugin};
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -46,7 +51,13 @@ pub const GRAIN_SIZE: usize = 512;
 // Raw FFI — rubberband-c.h (C linkage)
 // ============================================================================
 
-#[allow(non_camel_case_types, non_snake_case, non_upper_case_globals, dead_code)]
+#[allow(
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals,
+    dead_code,
+    reason = "bindgen preserves the names and complete surface of the upstream C API"
+)]
 pub mod ffi {
     // This instantly brings in every function, struct, and all the C documentation!
     // Hover over any ffi:: function below in your IDE to see the C++ docs.
@@ -83,6 +94,7 @@ impl std::fmt::Debug for RbLiveShifter {
 // and we uphold that contract.  `AudioPlugin` requires `Send + Sync`, so we
 // implement both.  Access is always from the same audio thread in practice.
 unsafe impl Send for RbLiveShifter {}
+// SAFETY: The host serializes all access to each plugin instance on its audio thread.
 unsafe impl Sync for RbLiveShifter {}
 
 impl RbLiveShifter {
@@ -90,18 +102,21 @@ impl RbLiveShifter {
         // OPTIMIZATION 1: Disabled CHANNELS_APART to process stereo as a unified coherent phase
         // let mut options = ffi::OPTION_WINDOW_SHORT
         let mut options = ffi::RubberBandLiveOption_RubberBandLiveOptionWindowShort;
-        
+
         // OPTIMIZATION 2: Only enable formant preservation if explicitly requested
         if preserve_formants {
             // options |= ffi::OPTION_FORMANT_SHIFTED;
             options = ffi::RubberBandOption_RubberBandOptionFormantShifted;
         }
-        
+
         let options = options.try_into().ok()?;
+        // SAFETY: Arguments satisfy the C API contract and ownership of the returned state is
+        // transferred to this wrapper.
         let state_raw =
             unsafe { ffi::rubberband_live_new(sample_rate as _, channels as _, options) };
 
         let state = NonNull::new(state_raw)?;
+        // SAFETY: `state` is a live Rubber Band instance owned by this wrapper.
         let block_size = unsafe { ffi::rubberband_live_get_block_size(state.as_ptr()) } as usize;
 
         Some(Self {
@@ -118,11 +133,13 @@ impl RbLiveShifter {
 
     #[inline]
     fn start_delay(&self) -> usize {
+        // SAFETY: `self.state` remains valid until `Drop` and access is serialized by the host.
         unsafe { ffi::rubberband_live_get_start_delay(self.state.as_ptr()) as usize }
     }
 
     #[inline]
     fn set_pitch_scale(&self, scale: f64) {
+        // SAFETY: `self.state` remains valid until `Drop` and access is serialized by the host.
         unsafe { ffi::rubberband_live_set_pitch_scale(self.state.as_ptr(), scale) }
     }
 
@@ -135,31 +152,36 @@ impl RbLiveShifter {
 
         // Build the pointer arrays that rubberband_live_shift expects.
         // Using stack storage for up to 8 channels.
-        // OPTIMIZATION: Avoid zeroing stack arrays before initializing pointers
-        let mut in_ptrs: [MaybeUninit<*const f32>; 8] = unsafe { MaybeUninit::uninit().assume_init() };
-        let mut out_ptrs: [MaybeUninit<*mut f32>; 8] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut in_ptrs: [MaybeUninit<*const f32>; 8] =
+            std::array::from_fn(|_| MaybeUninit::uninit());
+        let mut out_ptrs: [MaybeUninit<*mut f32>; 8] =
+            std::array::from_fn(|_| MaybeUninit::uninit());
 
         for (ch, slice) in channels_data.iter_mut().enumerate().take(8) {
             in_ptrs[ch] = MaybeUninit::new(slice.as_ptr());
             out_ptrs[ch] = MaybeUninit::new(slice.as_mut_ptr());
         }
 
+        // SAFETY: The first `self.channels` pointers are initialized above, each slice has at
+        // least `self.block_size` samples, and Rubber Band does not retain the pointers.
         unsafe {
             ffi::rubberband_live_shift(
                 self.state.as_ptr(),
-                in_ptrs.as_ptr() as *const *const f32,
-                out_ptrs.as_ptr() as *const *mut f32,
+                in_ptrs.as_ptr().cast::<*const f32>(),
+                out_ptrs.as_ptr().cast::<*mut f32>(),
             );
         }
     }
 
     fn reset(&self) {
+        // SAFETY: `self.state` remains valid until `Drop` and access is serialized by the host.
         unsafe { ffi::rubberband_live_reset(self.state.as_ptr()) }
     }
 }
 
 impl Drop for RbLiveShifter {
     fn drop(&mut self) {
+        // SAFETY: This wrapper owns the state and `drop` runs exactly once.
         unsafe { ffi::rubberband_live_delete(self.state.as_ptr()) }
     }
 }
@@ -196,7 +218,10 @@ pub struct PitchShiftEngine {
 
     /// The underlying rubberband live-shifter instance, created lazily on the
     /// first `process_block()` call so we know the sample rate and channel count.
-    #[allow(clippy::box_collection)]
+    #[allow(
+        clippy::box_collection,
+        reason = "the box keeps the FFI resource address stable while the option changes state"
+    )]
     shifter: Option<Box<RbLiveShifter>>,
 
     /// Sample rate captured at `prepare()`.
@@ -219,7 +244,7 @@ pub struct PitchShiftEngine {
 
     last_pitch_ratio: f64,
     last_preserve_formants: bool,
-    
+
     // Tracks consecutive silent frames to trigger smart sleep
     silence_counter: usize,
 }
@@ -268,10 +293,9 @@ impl PitchShiftEngine {
         let pf = self.preserve_formants.get();
 
         // Rebuild the shifter if config changed.
-        let needs_rebuild = self
-            .shifter
-            .as_ref()
-            .map_or(true, |s| s.channels != channels || self.sample_rate != sr || self.last_preserve_formants != pf);
+        let needs_rebuild = self.shifter.as_ref().map_or(true, |s| {
+            s.channels != channels || self.sample_rate != sr || self.last_preserve_formants != pf
+        });
 
         if needs_rebuild {
             self.sample_rate = sr;
@@ -281,19 +305,10 @@ impl PitchShiftEngine {
 
             let block = self.shifter_block_size();
             self.input_staging = vec![vec![0.0_f32; block]; channels];
-           
+
             // reserve some uninitialized space
             let target_cap = block * 4;
-            self.output_staging = (0..channels)
-                .map(|_| {
-                    let mut uninit_buf: Vec<MaybeUninit<f32>> = Vec::with_capacity(target_cap);
-                    unsafe {
-                        uninit_buf.set_len(target_cap);
-                        // Safe cast since MaybeUninit<f32> and f32 have identical layout
-                        std::mem::transmute::<Vec<MaybeUninit<f32>>, Vec<f32>>(uninit_buf)
-                    }
-                })
-                .collect();
+            self.output_staging = (0..channels).map(|_| vec![0.0; target_cap]).collect();
             self.staging_fill = 0;
             self.output_pending = 0;
             self.output_read_pos = 0;
@@ -319,7 +334,8 @@ impl PitchShiftEngine {
 
         // Lazy init
         let pf = self.preserve_formants.get();
-        if self.shifter.is_none() || self.channels != channels || self.last_preserve_formants != pf {
+        if self.shifter.is_none() || self.channels != channels || self.last_preserve_formants != pf
+        {
             self.prepare(self.sample_rate as f32, channels);
         }
 
@@ -333,7 +349,9 @@ impl PitchShiftEngine {
                     break;
                 }
             }
-            if !is_silent { break; }
+            if !is_silent {
+                break;
+            }
         }
 
         if is_silent {
@@ -346,9 +364,9 @@ impl PitchShiftEngine {
         let is_unity = (ratio - 1.0).abs() < 1e-2;
 
         let tail_length = self.shifter_block_size() * 3;
-        
-        if (is_silent && self.silence_counter > tail_length) 
-            || (is_unity && self.staging_fill == 0 && self.output_pending == 0) 
+
+        if (is_silent && self.silence_counter > tail_length)
+            || (is_unity && self.staging_fill == 0 && self.output_pending == 0)
         {
             if is_silent {
                 for ch in channels_data.iter_mut() {

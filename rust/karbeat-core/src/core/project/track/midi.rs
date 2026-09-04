@@ -722,8 +722,9 @@ impl ApplicationState {
             return Ok(Vec::new());
         }
 
-        #[allow(clippy::unwrap_used)]
-        let earliest_note = notes_vec.iter().min_by_key(|n| n.start_tick).unwrap();
+        let Some(earliest_note) = notes_vec.iter().min_by_key(|note| note.start_tick) else {
+            return Ok(Vec::new());
+        };
 
         let min_tick = earliest_note.start_tick;
         let tick_offset = (left_bound_tick as i64) - (min_tick as i64);

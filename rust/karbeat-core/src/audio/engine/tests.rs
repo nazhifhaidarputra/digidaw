@@ -1,4 +1,8 @@
 #![cfg(test)]
+#![allow(
+    clippy::expect_used,
+    reason = "engine tests fail immediately when deterministic fixtures violate their invariants"
+)]
 
 use crate::audio::engine::voices::VoiceState;
 use crate::audio::engine::{AudioBuffer, AudioEngine, AudioEngineTelemetry};
@@ -60,6 +64,76 @@ fn engine_processes_custom_audio_buffer() {
 
     assert!(block.samples.iter().all(|sample| *sample == 0.0));
     assert_eq!(block.timestamp_micros, 42);
+}
+
+#[test]
+fn export_snapshot_builds_fresh_offline_runtime() {
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+
+    let mut app_state = ApplicationState::default();
+    let track_id = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(
+            id,
+            "Export Track",
+            Color::new_from_rgb(0, 0, 0),
+            TrackType::Audio,
+        )
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine.process_command(AudioCommand::SetBPM(96.0));
+    engine.transport.time_sig_numerator = 7;
+    engine.transport.time_sig_denominator = 8;
+    engine.transport.song.playhead_samples = 24_000;
+    engine.transport.song.is_playing = true;
+    engine.workspace.mix_buffer.extend_from_slice(&[0.5, -0.5]);
+    let bus_id = crate::shared::BusId::from(3);
+    engine.workspace.bus_buffers.insert(bus_id, vec![0.25]);
+    engine.routing.track_tails.insert(track_id, 1_024);
+    engine.mixer_state.master.mute = true;
+
+    let snapshot = engine.export_snapshot();
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let offline_engine = AudioEngine::from_export_snapshot(
+        snapshot,
+        command_consumer,
+        position_producer,
+        feedback_producer,
+    );
+
+    assert_eq!(offline_engine.current_state.graph.tracks.len(), 1);
+    assert_eq!(offline_engine.transport.bpm, 96.0);
+    assert_eq!(offline_engine.transport.time_sig_numerator, 7);
+    assert_eq!(offline_engine.transport.time_sig_denominator, 8);
+    assert_eq!(offline_engine.transport.song.playhead_samples, 0);
+    assert!(!offline_engine.transport.song.is_playing);
+    assert!(offline_engine.workspace.mix_buffer.is_empty());
+    assert!(
+        offline_engine
+            .workspace
+            .bus_buffers
+            .get(&bus_id)
+            .is_some_and(Vec::is_empty)
+    );
+    assert!(offline_engine.routing.track_tails.is_empty());
+    assert!(offline_engine.mixer_state.master.mute);
 }
 
 #[test]

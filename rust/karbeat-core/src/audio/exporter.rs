@@ -2,6 +2,7 @@ use rtrb::RingBuffer;
 use thiserror::Error;
 
 use crate::{
+    audio::engine::AudioEngine,
     audio::writer::{AudioExportConfig, AudioWriter, create_writer},
     commands::AudioCommand,
     context::DawContext,
@@ -61,21 +62,21 @@ where
     let (pos_producer, mut _pos_consumer) = RingBuffer::new(1024);
     let (feedback_producer, mut _feedback_consumer) = RingBuffer::new(1024);
 
-    // Create a oneshot channel to receive the cloned engine
-    let (engine_tx, engine_rx) = std::sync::mpsc::channel();
+    let (snapshot_tx, snapshot_rx) = std::sync::mpsc::channel();
 
-    // Send audio command to get a copy of Audio Engine from live engine.
-    ctx.send_audio_command(AudioCommand::QueryAudioEngine {
-        command_consumer: cmd_consumer,
-        position_producer: pos_producer,
-        feedback_producer: feedback_producer,
-        response_tx: engine_tx,
+    ctx.send_audio_command(AudioCommand::QueryAudioExportSnapshot {
+        response_tx: snapshot_tx,
     })
-    .map_err(|_| AudioExportError::new("Engine", "Failed to Query audio engine"))?;
+    .map_err(|_| AudioExportError::new("Engine", "Failed to query audio export snapshot"))?;
 
-    let mut offline_engine = *engine_rx.recv().map_err(|_| {
-        AudioExportError::new("QueryEngineReceiver", "Failed to received offline engine")
+    let snapshot = snapshot_rx.recv().map_err(|_| {
+        AudioExportError::new(
+            "QueryExportSnapshotReceiver",
+            "Failed to receive audio export snapshot",
+        )
     })?;
+    let mut offline_engine =
+        AudioEngine::from_export_snapshot(snapshot, cmd_consumer, pos_producer, feedback_producer);
 
     // We change the sample rate following the writer's sample rate
     cmd_producer

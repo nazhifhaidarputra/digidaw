@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
 use indexmap::IndexMap;
-use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugin_api::types::MidiEvent;
+use karbeat_plugin_api::types::ZeroCopyBuffer;
 
 use crate::{
     audio::{
@@ -196,15 +196,9 @@ pub enum AudioCommand {
         request_id: u32, // To track the response in the UI
     },
 
-    /// Ask the engine to get the copied version of the latest engine snapshot.
-    /// This is only used when exporting a project into a sound file.
-    /// The export engine is cloned from the live engine's own internal state
-    /// (no triple-buffer involved).
-    QueryAudioEngine {
-        command_consumer: rtrb::Consumer<AudioCommand>,
-        position_producer: rtrb::Producer<crate::audio::event::TransportFeedback>,
-        feedback_producer: rtrb::Producer<crate::commands::AudioFeedback>,
-        response_tx: std::sync::mpsc::Sender<Box<crate::audio::engine::AudioEngine>>,
+    /// Request the read-only live-engine state needed to construct an offline renderer.
+    QueryAudioExportSnapshot {
+        response_tx: std::sync::mpsc::Sender<crate::audio::engine::AudioExportSnapshot>,
     },
 
     // =========================================================================
