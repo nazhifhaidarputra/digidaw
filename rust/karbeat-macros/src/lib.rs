@@ -420,6 +420,44 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     });
 
+    let get_current_match_arms = params.iter().map(|p| {
+        let field = &p.field_name;
+        let id_str = &p.id_str;
+
+        quote! {
+            if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                let val = self.#field.get();
+                let any_val = &val as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<V>() {
+                    return ::core::option::Option::Some(*v);
+                } else {
+                    return ::core::option::Option::Some(V::from_f64(val.to_f64()));
+                }
+            }
+        }
+    });
+
+    let nested_get_current_stmts = nested_fields.iter().map(|(f, is_iterable, prefix)| {
+        if *is_iterable {
+            quote! {
+                for (i, item) in self.#f.iter().enumerate() {
+                    let child_prefix = format!("{}{}/", #prefix, i);
+                    let child_hash = ::karbeat_utils::hash::hash_str_from(prefix_hash, &child_prefix);
+                    if let Some(v) = item.auto_get_current_parameter(child_hash, id) {
+                        return Some(v);
+                    }
+                }
+            }
+        } else {
+            quote! {
+                let child_hash = ::karbeat_utils::hash::hash_str_from(prefix_hash, #prefix);
+                if let Some(v) = self.#f.auto_get_current_parameter(child_hash, id) {
+                    return Some(v);
+                }
+            }
+        }
+    });
+
     let apply_auto_arms = params.iter().map(|p| {
         let field = &p.field_name;
         let id_str = &p.id_str;
@@ -720,6 +758,12 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn auto_get_parameter<V: ::karbeat_plugin_types::parameter::ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V> {
                     #(#get_match_arms)*
                     #(#nested_get_stmts)*
+                    None
+                }
+
+                fn auto_get_current_parameter<V: ::karbeat_plugin_types::parameter::ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V> {
+                    #(#get_current_match_arms)*
+                    #(#nested_get_current_stmts)*
                     None
                 }
 
@@ -1106,6 +1150,7 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
     // Check if methods are already implemented
     let mut has_set_parameter = false;
     let mut has_get_parameter = false;
+    let mut has_get_current_parameter = false;
     let mut has_apply_automation = false;
     let mut has_clear_automation = false;
     let mut has_default_parameters = false;
@@ -1121,6 +1166,9 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
             }
             if name == "get_parameter" {
                 has_get_parameter = true;
+            }
+            if name == "get_current_parameter" {
+                has_get_current_parameter = true;
             }
             if name == "apply_automation" {
                 has_apply_automation = true;
@@ -1164,6 +1212,16 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
         let method: syn::ImplItemFn = syn::parse_quote! {
             fn get_parameter(&self, id: u32) -> f32 {
                 self.auto_get_parameter(::karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_get_current_parameter {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn get_current_parameter(&self, id: u32) -> f32 {
+                self.auto_get_current_parameter(::karbeat_utils::hash::FNV_OFFSET, id)
+                    .unwrap_or_else(|| self.get_parameter(id))
             }
         };
         item_impl.items.push(syn::ImplItem::Fn(method));

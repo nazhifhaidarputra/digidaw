@@ -38,7 +38,8 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Action history (Undo/Redo). Currently the system exists, but not all action has HistoryEntry
 - [ ] Time-stretched audio waveform processing
 - [x] Audio host selector (ASIO, JACK, or AudioCore)
-- [ ] Automation for generator and global parameters
+- [x] Automation for generator 
+- [ ] Automation for global parameters (BPM, Master pan, Master Gain)
 - [ ] Wavetable Synthesizer
 - [ ] Sample-based Synthesizer (for Real instrument)
 - [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Sidechain Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)

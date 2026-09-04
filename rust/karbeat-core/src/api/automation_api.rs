@@ -29,11 +29,11 @@ pub fn add_automation_lane_for_track(
     label: impl Into<String>,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> anyhow::Result<AutomationLane> {
     let app = &mut ctx.app_state;
     let (lane, link_id) =
-        app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?;
+        app.add_automation_lane_for_track(track_id, target, label, min, max, initial_value)?;
 
     broadcast_modulation(ctx, link_id)?;
 
@@ -51,10 +51,10 @@ pub fn add_automation_lane(
     label: impl Into<String>,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> anyhow::Result<(AutomationLane, ModulationLinkForOrderedLaneView)> {
     let app = &mut ctx.app_state;
-    let (lane, link_id) = app.add_automation_lane(target, label, min, max, default_value)?;
+    let (lane, link_id) = app.add_automation_lane(target, label, min, max, initial_value)?;
 
     broadcast_modulation(ctx, link_id)?;
 
@@ -78,11 +78,11 @@ pub fn add_automation_lane_for_bus(
     label: impl Into<String>,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> anyhow::Result<AutomationLane> {
     let (lane, link_id) = {
         let app = &mut ctx.app_state;
-        app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
+        app.add_automation_lane_for_bus(bus_id, target, label, min, max, initial_value)?
     };
 
     broadcast_modulation(ctx, link_id)?;

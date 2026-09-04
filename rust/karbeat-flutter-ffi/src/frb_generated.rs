@@ -1908,7 +1908,7 @@ fn wire__crate__api__automation__add_automation_lane_impl(
             let api_label = <String>::sse_decode(&mut deserializer);
             let api_min = <f64>::sse_decode(&mut deserializer);
             let api_max = <f64>::sse_decode(&mut deserializer);
-            let api_default_value = <f64>::sse_decode(&mut deserializer);
+            let api_initial_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -1932,7 +1932,7 @@ fn wire__crate__api__automation__add_automation_lane_impl(
                         &api_label,
                         api_min,
                         api_max,
-                        api_default_value,
+                        api_initial_value,
                     )?;
                     Ok(output_ok)
                 })())
@@ -1971,7 +1971,7 @@ fn wire__crate__api__automation__add_automation_lane_for_bus_impl(
             let api_label = <String>::sse_decode(&mut deserializer);
             let api_min = <f64>::sse_decode(&mut deserializer);
             let api_max = <f64>::sse_decode(&mut deserializer);
-            let api_default_value = <f64>::sse_decode(&mut deserializer);
+            let api_initial_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -1996,7 +1996,7 @@ fn wire__crate__api__automation__add_automation_lane_for_bus_impl(
                         &api_label,
                         api_min,
                         api_max,
-                        api_default_value,
+                        api_initial_value,
                     )?;
                     Ok(output_ok)
                 })())
@@ -2035,7 +2035,7 @@ fn wire__crate__api__automation__add_automation_lane_for_track_impl(
             let api_label = <String>::sse_decode(&mut deserializer);
             let api_min = <f64>::sse_decode(&mut deserializer);
             let api_max = <f64>::sse_decode(&mut deserializer);
-            let api_default_value = <f64>::sse_decode(&mut deserializer);
+            let api_initial_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -2060,7 +2060,7 @@ fn wire__crate__api__automation__add_automation_lane_for_track_impl(
                         &api_label,
                         api_min,
                         api_max,
-                        api_default_value,
+                        api_initial_value,
                     )?;
                     Ok(output_ok)
                 })())

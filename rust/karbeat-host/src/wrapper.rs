@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
+use karbeat_plugin_api::prelude::*;
 use serde_json::Value;
 use std::{any::Any, fmt::Debug};
-use karbeat_plugin_api::prelude::*;
 
 // ============================================================================
 // FORMAT ENUMERATIONS
@@ -185,6 +185,10 @@ impl AudioPlugin for PluginHost {
 
     fn get_parameter(&self, id: u32) -> f32 {
         self.wrapper.as_plugin().get_parameter(id)
+    }
+
+    fn get_current_parameter(&self, id: u32) -> f32 {
+        self.wrapper.as_plugin().get_current_parameter(id)
     }
 
     fn begin_parameter_edit(&mut self, id: u32) {

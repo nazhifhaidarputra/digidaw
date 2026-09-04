@@ -160,7 +160,7 @@ impl ApplicationState {
         label: impl Into<String>,
         min: f64,
         max: f64,
-        default_value: f64,
+        initial_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         // === PREVENT DUPLICATES ===
         // Check if this exact target already has an Automation source linked to it.
@@ -184,9 +184,14 @@ impl ApplicationState {
 
         // Create the Lane (Pure Data)
         let label = label.into();
-        let lane_id = self
-            .automation_pool
-            .insert_with_key(|id| AutomationLane::new(id, label, min, max, default_value));
+        let lane_id = self.automation_pool.insert_with_key(|id| {
+            let mut lane = AutomationLane::new(id, label, min, max, initial_value);
+            lane.add_point(AutomationPoint::new(
+                0,
+                NormalizedF64::from_range(initial_value, min, max),
+            ));
+            lane
+        });
         let lane = self.automation_pool[lane_id].clone();
 
         // Create the Source Generator
@@ -212,12 +217,12 @@ impl ApplicationState {
         label: impl Into<String>,
         min: f64,
         max: f64,
-        default_value: f64,
+        initial_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_track(track_id) {
             return Err(anyhow!("Target does not reference the specified track"));
         }
-        self.add_automation_lane(target, label, min, max, default_value)
+        self.add_automation_lane(target, label, min, max, initial_value)
     }
 
     /// Get all Modulations AND their associated Automation Lanes for a specific Track.
@@ -326,12 +331,12 @@ impl ApplicationState {
         label: impl Into<String>,
         min: f64,
         max: f64,
-        default_value: f64,
+        initial_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_bus(bus_id) {
             return Err(anyhow!("Target does not reference the specified bus"));
         }
-        self.add_automation_lane(target, label, min, max, default_value)
+        self.add_automation_lane(target, label, min, max, initial_value)
     }
 
     /// Get all Modulations AND their associated Automation Lanes for a specific Bus.
@@ -504,5 +509,32 @@ impl ApplicationState {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::project::MasterAutomationTarget;
+
+    #[test]
+    fn new_automation_lane_starts_with_the_initial_value_at_project_start() {
+        let mut app = ApplicationState::default();
+
+        let result = app.add_automation_lane(
+            AutomationTarget::Master(MasterAutomationTarget::TempoBpm),
+            "Tempo",
+            40.0,
+            240.0,
+            140.0,
+        );
+        assert!(result.is_ok());
+        if let Ok((lane, _)) = result {
+            assert_eq!(lane.points.len(), 1);
+            if let Some(point) = lane.points.first() {
+                assert_eq!(point.time_ticks, 0);
+                assert!((point.value.get() - 0.5).abs() < f64::EPSILON);
+            }
+        }
     }
 }

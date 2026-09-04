@@ -364,4 +364,16 @@ mod tests {
         assert_eq!(spec.min, 0.0);
         assert_eq!(spec.max, 1.0);
     }
+
+    #[test]
+    fn current_parameter_reports_the_automation_applied_value() {
+        let mut plugin = DigidawSidechainCompressor::default();
+        let wet_mix_id = parameter_id(&plugin, "compressor/wet_mix");
+
+        assert_eq!(plugin.get_parameter(wet_mix_id), 1.0);
+        plugin.apply_automation(wet_mix_id, 0.25);
+
+        assert_eq!(plugin.get_parameter(wet_mix_id), 1.0);
+        assert_eq!(plugin.get_current_parameter(wet_mix_id), 0.25);
+    }
 }

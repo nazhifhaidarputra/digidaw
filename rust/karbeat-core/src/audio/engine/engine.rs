@@ -2017,7 +2017,7 @@ impl AudioEngine {
                 let specs = plugin.get_parameter_specs();
                 plugin_snap.parameters = specs
                     .iter()
-                    .map(|s| (s.id, plugin.get_parameter(s.id)))
+                    .map(|s| (s.id, plugin.get_current_parameter(s.id)))
                     .collect();
 
                 // Fetch requested zero-copy buffers (e.g., "telemetry" or "magnitude")

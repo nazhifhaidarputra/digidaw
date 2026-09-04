@@ -63,7 +63,7 @@ void main() {
       expect(service.loadCount, 1);
       expect(container.read(shortcutManagerProvider).overrides, isEmpty);
       final shortcuts = container.read(activeShortcutMapProvider);
-      expect(shortcuts.length, 7);
+      expect(shortcuts.length, 10);
       expect(
         shortcuts.entries
             .singleWhere(

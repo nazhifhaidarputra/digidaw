@@ -84,7 +84,7 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   }) async {
     final projectData = ref.read(projectProvider).value;
 
@@ -106,11 +106,11 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
         label: label,
         min: min,
         max: max,
-        defaultValue: defaultValue,
+        initialValue: initialValue,
       );
 
       AppLogger.debug(
-        "Add automation lane for $target with $min - $max default: $defaultValue",
+        "Add automation lane for $target with $min - $max initial value: $initialValue",
       );
 
       // Fetch the generated source based on the new link
@@ -466,19 +466,46 @@ final trackAutomationProvider =
 
       for (final link in projectData.modulationLinks.values) {
         final target = link.target;
+        target.when(
+          generator: (generatorId, paramId) {
+            // find the track associated with this generator
+            final findTrackRes = attempt(() {
+              return projectData.tracks.toValueIList().firstWhere((track) {
+                return track.generatorId != null &&
+                    track.generatorId == generatorId;
+              });
+            });
 
-        if (target is AutomationTargetDto_Track && target.trackId == trackId) {
-          final source = projectData.modulationSources[link.sourceId];
+            if (findTrackRes.isOk()) {
+              if (findTrackRes.ok().id == trackId) {
+                final source = projectData.modulationSources[link.sourceId];
+                if (source is ModulationSourceDto_Automation) {
+                  final laneId = source.laneId;
+                  final lane = projectData.automationPool[laneId];
 
-          if (source is ModulationSourceDto_Automation) {
-            final laneId = source.laneId;
-            final lane = projectData.automationPool[laneId];
-
-            if (lane != null) {
-              lanes.add((laneId, link.id, lane));
+                  if (lane != null) {
+                    lanes.add((laneId, link.id, lane));
+                  }
+                }
+              }
             }
-          }
-        }
+          },
+          track: (trackTargetId, trackTarget) {
+            if (trackTargetId == trackId) {
+              final source = projectData.modulationSources[link.sourceId];
+              if (source is ModulationSourceDto_Automation) {
+                final laneId = source.laneId;
+                final lane = projectData.automationPool[laneId];
+
+                if (lane != null) {
+                  lanes.add((laneId, link.id, lane));
+                }
+              }
+            }
+          },
+          bus: (_, _) {},
+          master: (_) {},
+        );
       }
 
       // Sort visually based on the UI order index

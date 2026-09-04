@@ -271,7 +271,7 @@ abstract class RustLibApi extends BaseApi {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   });
 
   Future<AutomationLaneDto> crateApiAutomationAddAutomationLaneForBus({
@@ -281,7 +281,7 @@ abstract class RustLibApi extends BaseApi {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   });
 
   Future<AutomationLaneDto> crateApiAutomationAddAutomationLaneForTrack({
@@ -291,7 +291,7 @@ abstract class RustLibApi extends BaseApi {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   });
 
   Future<void> crateApiMixerAddEffectToBus({
@@ -2482,7 +2482,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -2496,7 +2496,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(label, serializer);
           sse_encode_f_64(min, serializer);
           sse_encode_f_64(max, serializer);
-          sse_encode_f_64(defaultValue, serializer);
+          sse_encode_f_64(initialValue, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2510,7 +2510,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAutomationAddAutomationLaneConstMeta,
-        argValues: [ctx, target, label, min, max, defaultValue],
+        argValues: [ctx, target, label, min, max, initialValue],
         apiImpl: this,
       ),
     );
@@ -2519,7 +2519,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAutomationAddAutomationLaneConstMeta =>
       const TaskConstMeta(
         debugName: "add_automation_lane",
-        argNames: ["ctx", "target", "label", "min", "max", "defaultValue"],
+        argNames: ["ctx", "target", "label", "min", "max", "initialValue"],
       );
 
   @override
@@ -2530,7 +2530,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -2545,7 +2545,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(label, serializer);
           sse_encode_f_64(min, serializer);
           sse_encode_f_64(max, serializer);
-          sse_encode_f_64(defaultValue, serializer);
+          sse_encode_f_64(initialValue, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2558,7 +2558,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAutomationAddAutomationLaneForBusConstMeta,
-        argValues: [ctx, busId, target, label, min, max, defaultValue],
+        argValues: [ctx, busId, target, label, min, max, initialValue],
         apiImpl: this,
       ),
     );
@@ -2574,7 +2574,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "label",
           "min",
           "max",
-          "defaultValue",
+          "initialValue",
         ],
       );
 
@@ -2586,7 +2586,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -2601,7 +2601,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(label, serializer);
           sse_encode_f_64(min, serializer);
           sse_encode_f_64(max, serializer);
-          sse_encode_f_64(defaultValue, serializer);
+          sse_encode_f_64(initialValue, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2614,7 +2614,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAutomationAddAutomationLaneForTrackConstMeta,
-        argValues: [ctx, trackId, target, label, min, max, defaultValue],
+        argValues: [ctx, trackId, target, label, min, max, initialValue],
         apiImpl: this,
       ),
     );
@@ -2630,7 +2630,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "label",
           "min",
           "max",
-          "defaultValue",
+          "initialValue",
         ],
       );
 

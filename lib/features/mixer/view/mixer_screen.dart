@@ -1347,7 +1347,7 @@ class _PanKnob extends ConsumerWidget {
                       label: spec.name,
                       min: spec.min,
                       max: spec.max,
-                      defaultValue: spec.defaultValue,
+                      initialValue: value,
                     );
               },
               onRemoveAutomation: () {
@@ -1435,7 +1435,7 @@ class _VolumeFader extends ConsumerWidget {
                     label: spec.name,
                     min: spec.min,
                     max: spec.max,
-                    defaultValue: spec.defaultValue,
+                    initialValue: value,
                   );
             },
             onRemoveAutomation: () async {

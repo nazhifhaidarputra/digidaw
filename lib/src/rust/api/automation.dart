@@ -38,14 +38,14 @@ Future<(AutomationLaneDto, ModulationLinkDto)> addAutomationLane({
   required String label,
   required double min,
   required double max,
-  required double defaultValue,
+  required double initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLane(
   ctx: ctx,
   target: target,
   label: label,
   min: min,
   max: max,
-  defaultValue: defaultValue,
+  initialValue: initialValue,
 );
 
 /// Fetch all automation lanes across all targets
@@ -69,7 +69,7 @@ Future<AutomationLaneDto> addAutomationLaneForTrack({
   required String label,
   required double min,
   required double max,
-  required double defaultValue,
+  required double initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForTrack(
   ctx: ctx,
   trackId: trackId,
@@ -77,7 +77,7 @@ Future<AutomationLaneDto> addAutomationLaneForTrack({
   label: label,
   min: min,
   max: max,
-  defaultValue: defaultValue,
+  initialValue: initialValue,
 );
 
 Future<AutomationLaneDto> addAutomationLaneForBus({
@@ -87,7 +87,7 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   required String label,
   required double min,
   required double max,
-  required double defaultValue,
+  required double initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForBus(
   ctx: ctx,
   busId: busId,
@@ -95,7 +95,7 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   label: label,
   min: min,
   max: max,
-  defaultValue: defaultValue,
+  initialValue: initialValue,
 );
 
 /// ## Overview

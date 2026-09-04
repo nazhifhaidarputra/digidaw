@@ -427,9 +427,9 @@ pub fn add_automation_lane(
     label: &str,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> Result<(AutomationLaneDto, ModulationLinkDto), String> {
-    match automation_api::add_automation_lane(ctx, target.into(), label, min, max, default_value) {
+    match automation_api::add_automation_lane(ctx, target.into(), label, min, max, initial_value) {
         Ok((lane, mod_link)) => {
             let lane_dto = AutomationLaneDto::from(&lane);
             let mod_link_dto = ModulationLinkDto::from(&mod_link);
@@ -458,7 +458,7 @@ pub fn add_automation_lane_for_track(
     label: &str,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane_for_track(
         ctx,
@@ -467,7 +467,7 @@ pub fn add_automation_lane_for_track(
         label,
         min,
         max,
-        default_value,
+        initial_value,
     ) {
         Ok(lane) => {
             let lane_dto = AutomationLaneDto::from(&lane);
@@ -484,7 +484,7 @@ pub fn add_automation_lane_for_bus(
     label: &str,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> Result<AutomationLaneDto, String> {
     match automation_api::add_automation_lane_for_bus(
         ctx,
@@ -493,7 +493,7 @@ pub fn add_automation_lane_for_bus(
         label,
         min,
         max,
-        default_value,
+        initial_value,
     ) {
         Ok(lane) => {
             let lane_dto = AutomationLaneDto::from(&lane);

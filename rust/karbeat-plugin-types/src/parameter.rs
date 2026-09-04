@@ -661,6 +661,9 @@ impl<T: EnumParam> Param<T> {
 pub trait AutoParams {
     fn auto_set_parameter<V: ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool;
     fn auto_get_parameter<V: ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V>;
+    fn auto_get_current_parameter<V: ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V> {
+        self.auto_get_parameter(prefix_hash, id)
+    }
     fn auto_apply_automation<V: ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool;
     fn auto_clear_automation(&mut self, prefix_hash: u32, id: u32) -> bool;
     fn auto_get_parameter_specs(&self, prefix_hash: u32, prefix_str: &str) -> Vec<ParameterSpec>;

@@ -76,7 +76,7 @@ class DawFloatParam extends ConsumerWidget {
                 label: name,
                 min: min,
                 max: max,
-                defaultValue: defaultValue,
+                initialValue: value,
               );
         },
         onRemoveAutomation: () async {
