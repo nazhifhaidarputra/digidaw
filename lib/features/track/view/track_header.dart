@@ -15,11 +15,15 @@ import 'package:karbeat/src/rust/api/project.dart';
 class TrackHeader extends ConsumerWidget {
   final int trackId;
   final double itemHeight;
+  final VoidCallback onDragStarted;
+  final ValueChanged<bool> onDragEnded;
 
   const TrackHeader({
     super.key,
     required this.trackId,
     required this.itemHeight,
+    required this.onDragStarted,
+    required this.onDragEnded,
   });
 
   Color _getContrastColor(Color backgroundColor) {
@@ -243,7 +247,6 @@ class TrackHeader extends ConsumerWidget {
             ref
                 .read(trackListStateProvider.notifier)
                 .handleUpdateTrackOrder(
-                  ref: ref,
                   trackId: trackId,
                   newIdx: (track.orderIdx - 1).complyU32(),
                 );
@@ -257,7 +260,6 @@ class TrackHeader extends ConsumerWidget {
             ref
                 .read(trackListStateProvider.notifier)
                 .handleUpdateTrackOrder(
-                  ref: ref,
                   trackId: trackId,
                   newIdx: (track.orderIdx + 1).complyU32(),
                 );
@@ -279,7 +281,7 @@ class TrackHeader extends ConsumerWidget {
         height: itemHeight,
         child: Container(
           margin: const EdgeInsets.only(bottom: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.only(right: 10),
           decoration: BoxDecoration(
             color: trackColor,
             border: Border(
@@ -287,77 +289,133 @@ class TrackHeader extends ConsumerWidget {
               right: BorderSide(color: colors.outlineVariant, width: 1),
             ),
           ),
-          child: Column(
+          child: Row(
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Icon(
-                      _getTrackIcon(track.trackType),
-                      color: trackForeground.withValues(alpha: 0.72),
+              Draggable<int>(
+                data: trackId,
+                dragAnchorStrategy: pointerDragAnchorStrategy,
+                rootOverlay: true,
+                onDragStarted: onDragStarted,
+                onDragEnd: (details) => onDragEnded(details.wasAccepted),
+                feedback: Material(
+                  color: Colors.transparent,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black38, blurRadius: 6),
+                      ],
                     ),
-                    const SizedBox(width: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 18,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+                childWhenDragging: const SizedBox(width: 20),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Semantics(
+                    label: 'Reorder ${track.name}',
+                    button: true,
+                    child: SizedBox(
+                      width: 20,
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 16,
+                        color: trackForeground.withValues(alpha: 0.65),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
                     Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            track.name,
-                            style: TextStyle(
-                              color: trackForeground,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                          Icon(
+                            _getTrackIcon(track.trackType),
+                            color: trackForeground.withValues(alpha: 0.72),
                           ),
-                          Text(
-                            "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
-                            style: TextStyle(
-                              color: trackForeground.withValues(alpha: 0.8),
-                              fontSize: 10,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  track.name,
+                                  style: TextStyle(
+                                    color: trackForeground,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
+                                  style: TextStyle(
+                                    color: trackForeground.withValues(
+                                      alpha: 0.8,
+                                    ),
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
+                          ),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              InkWell(
+                                onTap: () {},
+                                child: Icon(
+                                  Icons.mic_off,
+                                  size: 16,
+                                  color: trackForeground.withValues(
+                                    alpha: 0.65,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              InkWell(
+                                onTap: () {},
+                                child: Icon(
+                                  Icons.volume_up,
+                                  size: 16,
+                                  color: trackForeground.withValues(
+                                    alpha: 0.65,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        InkWell(
-                          onTap: () {},
-                          child: Icon(
-                            Icons.mic_off,
-                            size: 16,
-                            color: trackForeground.withValues(alpha: 0.65),
-                          ),
+                    SizedBox(
+                      height: 7,
+                      child: Semantics(
+                        label: '${track.name} output level',
+                        value:
+                            '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
+                        child: DbLevelMeter(
+                          magnitude: magnitude,
+                          axis: Axis.horizontal,
                         ),
-                        const SizedBox(height: 4),
-                        InkWell(
-                          onTap: () {},
-                          child: Icon(
-                            Icons.volume_up,
-                            size: 16,
-                            color: trackForeground.withValues(alpha: 0.65),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
+                    const SizedBox(height: 3),
                   ],
                 ),
               ),
-              SizedBox(
-                height: 7,
-                child: Semantics(
-                  label: '${track.name} output level',
-                  value: '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
-                  child: DbLevelMeter(
-                    magnitude: magnitude,
-                    axis: Axis.horizontal,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 3),
             ],
           ),
         ),

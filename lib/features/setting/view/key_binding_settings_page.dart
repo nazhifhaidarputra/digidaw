@@ -311,7 +311,11 @@ String shortcutLabel(ShortcutChord chord) {
   if (chord.alt) parts.add(macOS ? 'Option' : 'Alt');
   if (chord.shift) parts.add('Shift');
   if (chord.meta) parts.add(macOS ? 'Command' : 'Meta');
-  final key = LogicalKeyboardKey(chord.logicalKeyId).keyLabel;
+  final logicalKey = LogicalKeyboardKey(chord.logicalKeyId);
+  final key = switch (logicalKey) {
+    LogicalKeyboardKey.space => 'Space',
+    _ => logicalKey.keyLabel,
+  };
   parts.add(key.isEmpty ? 'Key ${chord.logicalKeyId}' : key.toUpperCase());
   return parts.join('+');
 }

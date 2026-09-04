@@ -23,6 +23,15 @@ class _FakeShortcutPreferencesService extends ShortcutPreferencesService {
 }
 
 void main() {
+  test('formats the Space shortcut with a visible label', () {
+    expect(
+      shortcutLabel(
+        ShortcutChord(logicalKeyId: LogicalKeyboardKey.space.keyId),
+      ),
+      'SPACE',
+    );
+  });
+
   late ProviderContainer container;
   late _FakeShortcutPreferencesService preferences;
 

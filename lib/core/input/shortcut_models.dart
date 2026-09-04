@@ -52,6 +52,7 @@ abstract class ShortcutChord with _$ShortcutChord {
     shift: shift,
     alt: alt,
     meta: meta,
+    includeRepeats: false,
   );
 
   Map<String, Object> toStorageJson() => {

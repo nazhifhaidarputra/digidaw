@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/input/intents/song_timeline/playback_intent.dart';
 import 'package:karbeat/core/input/input.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/input/shortcut_preferences_service.dart';
@@ -60,7 +62,28 @@ void main() {
 
       expect(service.loadCount, 1);
       expect(container.read(shortcutManagerProvider).overrides, isEmpty);
-      expect(container.read(activeShortcutMapProvider).length, 5);
+      final shortcuts = container.read(activeShortcutMapProvider);
+      expect(shortcuts.length, 7);
+      expect(
+        shortcuts.entries
+            .singleWhere(
+              (entry) =>
+                  (entry.key as SingleActivator).trigger ==
+                  LogicalKeyboardKey.space,
+            )
+            .value,
+        isA<TogglePlayIntent>(),
+      );
+      expect(
+        shortcuts.entries
+            .singleWhere(
+              (entry) =>
+                  (entry.key as SingleActivator).trigger ==
+                  LogicalKeyboardKey.end,
+            )
+            .value,
+        isA<StopIntent>(),
+      );
     },
   );
 

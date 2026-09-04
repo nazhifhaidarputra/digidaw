@@ -4,12 +4,19 @@ import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/floating_midi_keyboard_state.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/constants/toolbar.dart';
+import 'package:karbeat/core/input/intents/song_timeline/playback_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/action_history_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/export_intent.dart';
+import 'package:karbeat/core/input/intents/workspace/open_midi_keyboard_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/save_intent.dart';
+import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/features/workspace/view/project_export.dart';
 import 'package:karbeat/features/workspace/view/main_content.dart';
 import 'package:karbeat/features/workspace/view/side_panel.dart';
@@ -18,6 +25,7 @@ import 'package:karbeat/features/piano_roll/view/floating_midi_keyboard.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 import 'package:karbeat/features/workspace/view/workspace_background.dart';
 import 'package:karbeat/shared/enums/global.dart';
+import 'package:karbeat/src/rust/api/transport.dart';
 
 class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
@@ -75,58 +83,94 @@ class MainScreen extends ConsumerWidget {
             return null;
           },
         ),
+        TogglePlayIntent: CallbackAction<TogglePlayIntent>(
+          onInvoke: (_) {
+            unawaited(_togglePlayback(ref));
+            return null;
+          },
+        ),
+        StopIntent: CallbackAction<StopIntent>(
+          onInvoke: (_) {
+            unawaited(ref.read(transportProvider.notifier).stop());
+            return null;
+          },
+        ),
+        ToggleLoopIntent: CallbackAction<ToggleLoopIntent>(
+          onInvoke: (_) {
+            unawaited(ref.read(transportProvider.notifier).toggleLoop());
+            return null;
+          },
+        ),
+        ToggleMetronomeIntent: CallbackAction<ToggleMetronomeIntent>(
+          onInvoke: (_) {
+            ref.read(transportProvider.notifier).toggleMetronomeActive();
+            return null;
+          },
+        ),
+        ToggleVirtualMidiKeyboardIntent:
+            CallbackAction<ToggleVirtualMidiKeyboardIntent>(
+              onInvoke: (_) {
+                ref
+                .read(workspaceStateProvider.notifier)
+                .toggleFloatingMidiKeyboard();
+                return null;
+              },
+            ),
       },
-      child: Scaffold(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: WorkspaceBackground(
-                fit: background.fit,
-                overlayOpacity: background.overlay,
-              ),
-            ),
-            const Row(
-              children: [
-                Sidebar(),
-                Expanded(child: MainContent()),
-              ],
-            ),
-            // Optimized Context Panel Overlay
-            if (currentContext != ToolbarMenuContextGroup.none)
-              Positioned(
-                left: 60,
-                top: 0,
-                bottom: 0,
-                child: _buildContextPanel(context, ref, currentContext),
-              ),
-
-            if (showMidiKeyboard) const FloatingMidiKeyboard(),
-            if (showExportPanel) ...[
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          body: Stack(
+            children: [
               Positioned.fill(
-                child: GestureDetector(
-                  onTap: () {
-                    // ref.read(karbeatStateProvider).closeExportPanel();
-                  },
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-                    child: Container(color: Colors.black.withAlpha(100)),
+                child: WorkspaceBackground(
+                  fit: background.fit,
+                  overlayOpacity: background.overlay,
+                ),
+              ),
+              const Row(
+                children: [
+                  Sidebar(),
+                  Expanded(child: MainContent()),
+                ],
+              ),
+              // Optimized Context Panel Overlay
+              if (currentContext != ToolbarMenuContextGroup.none)
+                Positioned(
+                  left: 60,
+                  top: 0,
+                  bottom: 0,
+                  child: _buildContextPanel(context, ref, currentContext),
+                ),
+
+              if (showMidiKeyboard) const FloatingMidiKeyboard(),
+              if (showExportPanel) ...[
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: () {
+                      // ref.read(karbeatStateProvider).closeExportPanel();
+                    },
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                      child: Container(color: Colors.black.withAlpha(100)),
+                    ),
                   ),
                 ),
-              ),
 
-              // Export panel
-              Positioned.fill(
-                child: ProjectExportPanel(
-                  onClose: () {
-                    ref
-                        .read(workspaceStateProvider.notifier)
-                        .closeExportPanel();
-                  },
+                // Export panel
+                Positioned.fill(
+                  child: ProjectExportPanel(
+                    onClose: () {
+                      ref
+                          .read(workspaceStateProvider.notifier)
+                          .closeExportPanel();
+                    },
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -150,6 +194,40 @@ class MainScreen extends ConsumerWidget {
   Future<void> _runHistoryAction(WidgetRef ref, {required bool undo}) async {
     final project = ref.read(projectProvider.notifier);
     await (undo ? project.undoLastAction() : project.redoLastAction());
+  }
+
+  Future<void> _togglePlayback(WidgetRef ref) async {
+    try {
+      final context = ref.read(projectProvider.notifier).dawContext;
+      if (ref.read(workspaceStateProvider).currentView ==
+          WorkspaceView.pianoRoll) {
+        final pianoRoll = ref.read(pianoRollProvider);
+        final patternId = pianoRoll.editingPatternId;
+        final generatorId = pianoRoll.previewGeneratorId;
+        if (patternId == null || generatorId == null) return;
+
+        await togglePatternPlayback(
+          ctx: context,
+          patternId: patternId,
+          generatorId: generatorId,
+        );
+        return;
+      }
+
+      await togglePlaybackWithMode(
+        ctx: context,
+        playbackMode: const PlaybackModeDto.song(),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to toggle playback',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      ref
+          .read(notificationProvider.notifier)
+          .error(error, stackTrace: stackTrace);
+    }
   }
 
   Widget _buildContextPanel(

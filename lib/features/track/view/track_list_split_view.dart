@@ -19,6 +19,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   late LinkedScrollControllerGroup _verticalControllers;
   late ScrollController _headerController;
   late ScrollController _timelineController;
+  late final ValueNotifier<List<int>> _trackOrderController;
+  List<int>? _trackOrderBeforeDrag;
+  int? _draggedTrackId;
 
   // Horizontal Scrolling (Ruler <-> Tracks)
   late LinkedScrollControllerGroup _horizontalControllers;
@@ -56,6 +59,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   void initState() {
     super.initState();
     _dawContext = ref.read(projectProvider.notifier).dawContext;
+    _trackOrderController = ValueNotifier(List.unmodifiable(widget.trackIds));
     final browserExpanded = ref.read(
       workspaceStateProvider.select(
         (state) => state.browserPanelState.isExpanded,
@@ -88,6 +92,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  @override
+  void didUpdateWidget(covariant _SplitTrackView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_draggedTrackId == null &&
+        !listEquals(_trackOrderController.value, widget.trackIds)) {
+      _trackOrderController.value = List.unmodifiable(widget.trackIds);
+    }
+  }
+
   void _setBrowserPanelExpanded(bool isExpanded) {
     final browserIndex = _trackSplitViewController.areas.indexWhere(
       (area) => area.data == 'browser',
@@ -116,6 +129,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   @override
   void dispose() {
     _browserPanelSubscription?.close();
+    _trackOrderController.dispose();
     _trackSplitViewController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
     _headerController.dispose();
@@ -403,54 +417,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             slivers: [
               SliverToBoxAdapter(child: _buildMasterHeader()),
               _buildBusAutomationHeaderSection(),
-              SliverList.builder(
-                itemCount: widget.trackIds.length,
-                itemBuilder: (context, index) {
-                  final trackId = widget.trackIds[index];
-                  return Consumer(
-                    builder: (context, ref, _) {
-                      final isExpanded = ref.watch(
-                        trackAutomationExpandedProvider(trackId),
-                      );
-                      final lanes = ref.watch(
-                        trackAutomationProvider(trackId),
-                      ); // Using the API from previous steps
-                      final trackColor = ref.watch(
-                        projectProvider.select(
-                          (s) =>
-                              s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
-                              colors.onSurfaceVariant,
-                        ),
-                      );
-
-                      return Column(
-                        children: [
-                          TrackHeader(
-                            trackId: trackId,
-                            itemHeight: widget.itemHeight,
-                          ),
-                          if (lanes.isNotEmpty)
-                            AutomationExpandBar(
-                              isExpanded: isExpanded,
-                              laneCount: lanes.length,
-                              trackColor: trackColor,
-                              onTap: () => ref
-                                  .read(automationProvider.notifier)
-                                  .toggleTrackAutomationExpanded(trackId),
-                            ),
-                          if (isExpanded)
-                            ...lanes.map(
-                              (entry) => AutomationLaneHeader(
-                                lane: entry.$3,
-                                itemHeight: 60,
-                                trackColor: trackColor,
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  );
-                },
+              ValueListenableBuilder<List<int>>(
+                valueListenable: _trackOrderController,
+                builder: (context, trackIds, _) => SliverList.builder(
+                  itemCount: trackIds.length,
+                  findChildIndexCallback: _findTrackIndex,
+                  itemBuilder: (context, index) =>
+                      _buildHeaderItem(context, trackIds, index),
+                ),
               ),
               SliverToBoxAdapter(child: _buildAddButton()),
             ],
@@ -458,6 +432,114 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         ),
       ],
     );
+  }
+
+  Widget _buildHeaderItem(BuildContext context, List<int> trackIds, int index) {
+    final trackId = trackIds[index];
+    final colors = Theme.of(context).colorScheme;
+
+    return DragTarget<int>(
+      key: ValueKey(trackId),
+      onWillAcceptWithDetails: (details) {
+        _previewTrackOrder(details.data, index);
+        return true;
+      },
+      onAcceptWithDetails: (details) {
+        unawaited(_commitTrackOrder(details.data));
+      },
+      builder: (context, _, _) => Consumer(
+        builder: (context, ref, _) {
+          final isExpanded = ref.watch(
+            trackAutomationExpandedProvider(trackId),
+          );
+          final lanes = ref.watch(trackAutomationProvider(trackId));
+          final trackColor = ref.watch(
+            projectProvider.select(
+              (s) =>
+                  s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
+                  colors.onSurfaceVariant,
+            ),
+          );
+
+          return Column(
+            children: [
+              TrackHeader(
+                trackId: trackId,
+                itemHeight: widget.itemHeight,
+                onDragStarted: () => _startTrackDrag(trackId),
+                onDragEnded: _endTrackDrag,
+              ),
+              if (lanes.isNotEmpty)
+                AutomationExpandBar(
+                  isExpanded: isExpanded,
+                  laneCount: lanes.length,
+                  trackColor: trackColor,
+                  onTap: () => ref
+                      .read(automationProvider.notifier)
+                      .toggleTrackAutomationExpanded(trackId),
+                ),
+              if (isExpanded)
+                ...lanes.map(
+                  (entry) => AutomationLaneHeader(
+                    lane: entry.$3,
+                    itemHeight: 60,
+                    trackColor: trackColor,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  int? _findTrackIndex(Key key) {
+    if (key is! ValueKey<int>) return null;
+    final index = _trackOrderController.value.indexOf(key.value);
+    return index == -1 ? null : index;
+  }
+
+  void _startTrackDrag(int trackId) {
+    _draggedTrackId = trackId;
+    _trackOrderBeforeDrag = _trackOrderController.value;
+  }
+
+  void _previewTrackOrder(int trackId, int newIndex) {
+    if (_draggedTrackId != trackId) return;
+    final trackIds = _trackOrderController.value;
+    final oldIndex = trackIds.indexOf(trackId);
+    if (oldIndex == -1 || oldIndex == newIndex) return;
+
+    final reordered = List<int>.from(trackIds)
+      ..removeAt(oldIndex)
+      ..insert(newIndex, trackId);
+    _trackOrderController.value = List.unmodifiable(reordered);
+  }
+
+  Future<void> _commitTrackOrder(int trackId) async {
+    if (_draggedTrackId != trackId) return;
+    final newIndex = _trackOrderController.value.indexOf(trackId);
+    _draggedTrackId = null;
+    _trackOrderBeforeDrag = null;
+    if (newIndex == -1) return;
+
+    AppLogger.info("Update track order requested for track ID: $trackId");
+    final result = await ref
+        .read(trackListStateProvider.notifier)
+        .handleUpdateTrackOrder(trackId: trackId, newIdx: newIndex);
+    if (mounted && result.isErr()) {
+      _trackOrderController.value = List.unmodifiable(widget.trackIds);
+    }
+  }
+
+  void _endTrackDrag(bool wasAccepted) {
+    if (wasAccepted) return;
+    final previousOrder = _trackOrderBeforeDrag;
+    _draggedTrackId = null;
+    _trackOrderBeforeDrag = null;
+    if (previousOrder != null) {
+      _trackOrderController.value = previousOrder;
+    }
   }
 
   Consumer _buildMasterHeader() {
@@ -910,58 +992,63 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildTimelineTrackWidget() {
-    return SliverList.builder(
-      itemCount: widget.trackIds.length,
-      itemBuilder: (context, index) {
-        final trackId = widget.trackIds[index];
-        return Consumer(
-          builder: (context, ref, _) {
-            final isExpanded = ref.watch(
-              trackAutomationExpandedProvider(trackId),
-            );
-            final lanes = ref.watch(trackAutomationProvider(trackId));
-            final trackColor = ref.watch(
-              projectProvider.select(
-                (s) =>
-                    s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
-                    Theme.of(context).colorScheme.outline,
-              ),
-            );
-
-            final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
-
-            return Column(
-              children: [
-                AudioTrackSlot(
-                  trackId: trackId,
-                  height: widget.itemHeight,
-                  horizontalScrollController: _trackContentController,
-                  sampleRate: sr,
+    return ValueListenableBuilder<List<int>>(
+      valueListenable: _trackOrderController,
+      builder: (context, trackIds, _) => SliverList.builder(
+        itemCount: trackIds.length,
+        findChildIndexCallback: _findTrackIndex,
+        itemBuilder: (context, index) {
+          final trackId = trackIds[index];
+          return Consumer(
+            key: ValueKey(trackId),
+            builder: (context, ref, _) {
+              final isExpanded = ref.watch(
+                trackAutomationExpandedProvider(trackId),
+              );
+              final lanes = ref.watch(trackAutomationProvider(trackId));
+              final trackColor = ref.watch(
+                projectProvider.select(
+                  (s) =>
+                      s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
+                      Theme.of(context).colorScheme.outline,
                 ),
-                if (lanes.isNotEmpty)
-                  AutomationExpandBar(
-                    isExpanded: isExpanded,
-                    laneCount: lanes.length,
-                    trackColor: trackColor,
-                    onTap: () => ref
-                        .read(automationProvider.notifier)
-                        .toggleTrackAutomationExpanded(trackId),
+              );
+
+              final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
+
+              return Column(
+                children: [
+                  AudioTrackSlot(
+                    trackId: trackId,
+                    height: widget.itemHeight,
+                    horizontalScrollController: _trackContentController,
+                    sampleRate: sr,
                   ),
-                if (isExpanded)
-                  ...lanes.map(
-                    (entry) => AutomationLaneSlot(
-                      lane: entry.$3,
-                      height: 60,
-                      horizontalScrollController: _trackContentController,
+                  if (lanes.isNotEmpty)
+                    AutomationExpandBar(
+                      isExpanded: isExpanded,
+                      laneCount: lanes.length,
                       trackColor: trackColor,
-                      sampleRate: sr,
+                      onTap: () => ref
+                          .read(automationProvider.notifier)
+                          .toggleTrackAutomationExpanded(trackId),
                     ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
+                  if (isExpanded)
+                    ...lanes.map(
+                      (entry) => AutomationLaneSlot(
+                        lane: entry.$3,
+                        height: 60,
+                        horizontalScrollController: _trackContentController,
+                        trackColor: trackColor,
+                        sampleRate: sr,
+                      ),
+                    ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

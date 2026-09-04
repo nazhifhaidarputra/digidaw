@@ -1,12 +1,42 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:karbeat/core/input/intents/song_timeline/playback_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/export_intent.dart';
+import 'package:karbeat/core/input/intents/workspace/open_midi_keyboard_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/save_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/action_history_intent.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
 
 const workspaceShortcuts = IListConst<DawShortcut>([
+  DawShortcut(
+    id: "transport.togglePlayback",
+    title: "Play/Pause",
+    category: "Transport",
+    intent: TogglePlayIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.space),
+  ),
+  DawShortcut(
+    id: "transport.stopPlayback",
+    title: "Stop",
+    category: "Transport",
+    intent: StopIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.end),
+  ),
+  DawShortcut(
+    id: "transport.toggleLoop",
+    title: "Toggle Loop",
+    category: "Transport",
+    intent: ToggleLoopIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyL),
+  ),
+  DawShortcut(
+    id: 'transport.toggleMetronome',
+    title: 'Toggle Metronome',
+    category: 'Transport',
+    intent: ToggleMetronomeIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyM),
+  ),
   DawShortcut(
     id: "workspace.save",
     title: "Save Project",
@@ -53,5 +83,12 @@ const workspaceShortcuts = IListConst<DawShortcut>([
       control: true,
       shift: true,
     ),
+  ),
+  DawShortcut(
+    id: 'workspace.toggleMidiKeyboard',
+    title: 'Toggle Virtual MIDI Keyboard',
+    category: 'Workspace',
+    intent: ToggleVirtualMidiKeyboardIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyK, alt: true),
   ),
 ]);

@@ -411,13 +411,19 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
-  Future<Result<void>> renameClip(int trackId, int clipId, String newName) async {
+  Future<Result<void>> renameClip(
+    int trackId,
+    int clipId,
+    String newName,
+  ) async {
     final result = await AsyncValue.guard(() async {
       await track_api.renameClip(ctx: _ctx, clipId: clipId, newName: newName);
     });
 
     if (result.hasError) {
-      AppLogger.error('TrackListNotifier: error renaming clip: ${result.error}');
+      AppLogger.error(
+        'TrackListNotifier: error renaming clip: ${result.error}',
+      );
       return ref.notifyErrorResult(Exception(result.error.toString()));
     }
 
@@ -430,9 +436,8 @@ class TrackListNotifier extends Notifier<TrackListState> {
         currentTrack.copyWith(
           clips: currentTrack.clips
               .map(
-                (clip) => clip.id == clipId
-                    ? clip.copyWith(name: newName)
-                    : clip,
+                (clip) =>
+                    clip.id == clipId ? clip.copyWith(name: newName) : clip,
               )
               .toList(),
         ),
@@ -785,11 +790,68 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
-  Future<void> handleUpdateTrackOrder({
-    required WidgetRef ref,
+  /// Reorder [trackId] to [newIdx] within the track list.
+  ///
+  /// Updates the project tracks before calling the backend so the header and
+  /// timeline rows move together immediately. Restores the previous order if
+  /// the backend rejects the change.
+  Future<Result<void>> handleUpdateTrackOrder({
     required int trackId,
     required int newIdx,
-  }) async {}
+  }) async {
+    final tracks = ref.read(projectProvider).value?.tracks;
+    if (tracks == null || !tracks.containsKey(trackId)) {
+      return ref.notifyErrorResult(Exception('Track not found'));
+    }
+
+    final sortedEntries = tracks.entries.toList()
+      ..sort((a, b) => a.value.orderIdx.compareTo(b.value.orderIdx));
+    final orderedIds = sortedEntries.map((e) => e.key).toList();
+
+    final oldIdx = orderedIds.indexOf(trackId);
+    final clampedIdx = newIdx.clamp(0, orderedIds.length - 1);
+    if (oldIdx == -1 || oldIdx == clampedIdx) return Result.ok(null);
+
+    final reorderedIds = List<int>.from(orderedIds)
+      ..removeAt(oldIdx)
+      ..insert(clampedIdx, trackId);
+
+    // Snapshot the original order fields for rollback.
+    final originalTracksById = {for (final id in reorderedIds) id: tracks[id]!};
+
+    // Optimistic update: reassign contiguous order values 0..n-1 to match the
+    // new sequence. Only tracks whose order actually shifted get pushed.
+    final updates = <int, UiTrack>{};
+    for (var i = 0; i < reorderedIds.length; i++) {
+      final id = reorderedIds[i];
+      final track = tracks[id]!;
+      if (track.orderIdx != i) {
+        updates[id] = track.copyWith(orderIdx: i);
+      }
+    }
+    _projectNotifierRead.upsertTracksBulk(updates);
+
+    final result = await ref.guardApi(
+      () => track_api.updateTrackOrder(
+        ctx: _ctx,
+        trackId: trackId,
+        newIdx: clampedIdx,
+      ),
+    );
+
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: error updating track order: ${result.error}',
+      );
+      _projectNotifierRead.upsertTracksBulk(originalTracksById); // rollback
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+
+    // Resync in case the backend's order values don't exactly match our
+    // contiguous 0..n-1 guess (e.g. it leaves gaps or uses a different scheme).
+    await syncTracks();
+    return Result.ok(null);
+  }
 
   // ------------------------------------------------------------------
   // View metadata (non-backend)
