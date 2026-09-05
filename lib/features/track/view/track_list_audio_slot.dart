@@ -70,7 +70,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     // Clips later in the list are painted on top, so use the same ordering for
     // hit testing in the unlikely event that a project already has overlaps.
     for (final clip in clips.reversed) {
-      final start = clip.startTimeInTicks(tempo, sampleRate);
+      final start = clip.startTimeInTicks;
       final end = start + clip.loopLengthInTicks(tempo, sampleRate);
       if (tick >= start && tick < end) return clip;
     }
@@ -78,16 +78,11 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   }
 
   _ClipTickRange _clipRangeInTicks(UiClip clip, double tempo, int sampleRate) {
-    if (!clip.isSampleBased) {
-      return _ClipTickRange(clip.startTime, clip.startTime + clip.loopLength);
-    }
-
-    final samplesPerTimelineTick = samplesPerTick(tempo, sampleRate);
-    if (samplesPerTimelineTick <= 0) return const _ClipTickRange(0, 0);
-    final start = (clip.startTime / samplesPerTimelineTick).floor();
-    final end = ((clip.startTime + clip.loopLength) / samplesPerTimelineTick)
-        .ceil();
-    return _ClipTickRange(start, end);
+    final start = clip.startTimeInTicks;
+    return _ClipTickRange(
+      start,
+      start + clip.loopLengthInTicks(tempo, sampleRate),
+    );
   }
 
   void _startDrawSwipe({
@@ -205,47 +200,24 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     final sourceIdSet = sourceIds.toSet();
     final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
     final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
-    final snapToGrid = ref.read(workspaceStateProvider).snapToGrid;
-    final isSampleBased = sourceClips.every((clip) => clip.isSampleBased);
     final sourceStart = sourceClips
-        .map((clip) => clip.startTime)
+        .map((clip) => clip.startTimeInTicks)
         .reduce(math.min);
-    final sourceEnd = sourceClips
-        .map((clip) => clip.startTime + clip.loopLength)
-        .reduce(math.max);
-    final sourceLength = sourceEnd - sourceStart;
     final relativeSourceRanges = sourceClips
-        .map(
-          (clip) => _ClipTickRange(
-            clip.startTime - sourceStart,
-            clip.startTime + clip.loopLength - sourceStart,
-          ),
-        )
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
+        .map((range) => range.shifted(-sourceStart))
         .toList(growable: false);
     final occupiedRanges = track.clips
         .where((clip) => !sourceIdSet.contains(clip.id))
-        .map(
-          (clip) =>
-              _ClipTickRange(clip.startTime, clip.startTime + clip.loopLength),
-        )
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
         .toList(growable: false);
     final generatedRanges = sourceClips
-        .map(
-          (clip) =>
-              _ClipTickRange(clip.startTime, clip.startTime + clip.loopLength),
-        )
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
         .toList();
     final pasteStartTimes = <int>[];
 
     for (var index = 0; index < startsInTicks.length; index++) {
-      final pasteStartTime = isSampleBased
-          ? snapToGrid
-                ? ticksToSamples(startsInTicks[index], tempo, sampleRate)
-                // Sample-based clips must be adjacent at sample precision;
-                // round-tripping their length through ticks can otherwise
-                // introduce a one-sample overlap or gap.
-                : sourceEnd + (sourceLength * index)
-          : startsInTicks[index];
+      final pasteStartTime = startsInTicks[index];
       final copyRanges = relativeSourceRanges
           .map((range) => range.shifted(pasteStartTime))
           .toList(growable: false);
@@ -567,10 +539,10 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                 final sampleRate =
                     ref.read(transportProvider).value?.sampleRate ?? 48000;
                 final sourceStart = _drawSourceClips
-                    .map((clip) => clip.startTimeInTicks(tempo, sampleRate))
+                    .map((clip) => clip.startTimeInTicks)
                     .reduce(math.min);
                 return _drawSourceClips.map((clip) {
-                  final clipStart = clip.startTimeInTicks(tempo, sampleRate);
+                  final clipStart = clip.startTimeInTicks;
                   final clipLength = clip.loopLengthInTicks(tempo, sampleRate);
                   final previewLeft =
                       (copyStart + clipStart - sourceStart) / zoomLevel;

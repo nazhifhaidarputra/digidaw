@@ -1535,6 +1535,15 @@ impl AudioEngine {
                     let os = ((*offset_start as f64) * samples_per_tick) as u32;
                     (st, ll, os)
                 }
+                ClipTimeUnit::Audio {
+                    start_tick,
+                    loop_length,
+                    offset_start,
+                } => (
+                    ((*start_tick as f64) * samples_per_tick).round() as u32,
+                    *loop_length as u32,
+                    *offset_start as u32,
+                ),
             };
 
             if clip_start > end_time {
@@ -1971,6 +1980,16 @@ impl AudioEngine {
                         let end_tick = *start_time + *loop_length;
                         // Accurately project MIDI ticks into exact sample lengths
                         ((end_tick as f64) * (60.0 / bpm) * (sample_rate / PPQ)) as u32
+                    }
+                    crate::core::project::clip::ClipTimeUnit::Audio {
+                        start_tick,
+                        loop_length,
+                        ..
+                    } => {
+                        let start_sample =
+                            ((*start_tick as f64) * (60.0 / bpm) * (sample_rate / PPQ)).round()
+                                as u32;
+                        start_sample.saturating_add(*loop_length as u32)
                     }
                 };
                 if end_sample > max_clip_end {

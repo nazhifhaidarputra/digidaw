@@ -196,9 +196,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                         syn::Error::new_spanned(
                                             &lit_str,
                                             format!(
-                                                "Parameter ID collision! Local ID `{}` is already used by field `{}`.",
-                                                p_id_str,
-                                                existing_field
+                                                "Parameter ID collision! Local ID `{p_id_str}` is already used by field `{existing_field}`.",
                                             )
                                         )
                                     );
@@ -253,7 +251,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             return Err(
                                 syn::Error::new_spanned(
                                     &meta.path,
-                                    format!("{:?} is not a valid parameter", &meta.path)
+                                    format!("{:?} is not a valid parameter", meta.path)
                                 )
                             );
                         }
@@ -822,7 +820,7 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 
     let mut param_fields = Vec::new();
 
-    for field in fields.iter() {
+    for field in fields {
         let is_nested = field.attrs.iter().any(|attr| attr.path().is_ident("skip"));
 
         if !is_nested {
@@ -834,10 +832,10 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                 && segment.ident == "Param"
             {
                 is_valid_param = true;
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(ty)) = args.args.first() {
-                        inner_ty = Some(ty.clone());
-                    }
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                    && let Some(syn::GenericArgument::Type(ty)) = args.args.first()
+                {
+                    inner_ty = Some(ty.clone());
                 }
             }
 

@@ -275,14 +275,14 @@ pub fn transport_state_new_with_param(bpm: f32, time_signature: (u8, u8)) -> UiT
 pub struct UiClip {
     pub name: String,
     pub id: u32,
-    /// Start time in native units (samples if is_sample_based, ticks otherwise)
+    /// Timeline placement in ticks.
     pub start_time: u64,
     pub source: UiClipSource,
-    /// Offset from start of source content in native units
+    /// Offset from source content in samples for audio, ticks otherwise.
     pub offset_start: u64,
-    /// Loop length in native units
+    /// Loop length in samples for audio, ticks otherwise.
     pub loop_length: u64,
-    /// True if units are raw samples (audio clips), false if ticks (MIDI/automation)
+    /// True when loop length and source offset are raw samples.
     pub is_sample_based: bool,
 }
 

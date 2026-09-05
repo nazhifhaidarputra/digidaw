@@ -132,16 +132,13 @@ impl AudioTrack {
         &mut self,
         clip_id: ClipId,
         clips_pool: &SlotMap<ClipId, Clip>,
-    ) -> anyhow::Result<u32> {
+    ) -> anyhow::Result<()> {
         let clip = clips_pool
             .get(clip_id)
             .ok_or_else(|| anyhow::anyhow!("Clip not found in global pool"))?;
         let is_valid = self.accepts_clip(clip);
 
         if is_valid {
-            // Calculate potential new max index BEFORE moving clip (in native units)
-            let clip_end = clip.time.start_time_raw() + clip.time.loop_length_raw();
-
             let start_time = clip.time.start_time_raw();
             let insert_pos = self
                 .clips
@@ -151,8 +148,7 @@ impl AudioTrack {
             // Insert directly at the sorted position (O(N) memory shift, highly cache-friendly)
             self.clips.insert(insert_pos, clip_id);
 
-            // Return the end sample of this new clip
-            return Ok(clip_end as u32);
+            return Ok(());
         } else {
             return Err(anyhow::anyhow!(
                 "Warning: Mismatched Clip Source for Track Type"

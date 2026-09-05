@@ -122,7 +122,7 @@ pub fn move_clip(
 ///
 /// - source_track_id: Track where clip resides
 /// - clip_id: The cut clip id inside the track
-/// - cut_point_sample: Absolute sample point of cut location
+/// - cut_point: Absolute timeline tick of the cut location
 pub fn slice_clip(
     ctx: &mut DawContext,
     source_track_id: u32,
@@ -203,8 +203,8 @@ pub fn resize_clip_batch(
 }
 
 /// Atomically duplicate a selected clip group at predetermined start times.
-/// Start times use the clips' native unit: samples for audio and ticks for
-/// MIDI/automation. Unlike copy/paste, this never changes ClipboardContent.
+/// Start times use timeline ticks. Unlike copy/paste, this never changes
+/// ClipboardContent.
 pub fn duplicate_clip_groups(
     ctx: &mut DawContext,
     track_id: u32,

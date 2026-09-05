@@ -29,7 +29,7 @@ class TrackGhostClip extends ConsumerWidget {
       // TYPE 1: NEW CLIP FROM AUDIO/MIDI SOURCE
       // ==========================================
       if (placementState.isPlacing) {
-        final left = placementState.timeSamples / zoomLevel;
+        final left = placementState.startTick / zoomLevel;
 
         ghostWidgets.add(
           Positioned(
@@ -71,7 +71,7 @@ class TrackGhostClip extends ConsumerWidget {
                   .where((c) => c.id == clipId)
                   .firstOrNull;
               if (clip != null) {
-                final screenLeft = clip.startTimeInTicks(bpm, sr) / zoomLevel;
+                final screenLeft = clip.startTimeInTicks / zoomLevel;
                 final clipWidth = clip.loopLengthInTicks(bpm, sr) / zoomLevel;
 
                 double activeWidth = clipWidth;

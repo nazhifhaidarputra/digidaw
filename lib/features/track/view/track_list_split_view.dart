@@ -198,8 +198,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     for (final track in tracks) {
       for (final clip in track.clips) {
         final endTick =
-            clip.startTimeInTicks(tempo, sampleRate) +
-            clip.loopLengthInTicks(tempo, sampleRate);
+            clip.startTimeInTicks + clip.loopLengthInTicks(tempo, sampleRate);
         if (endTick > maxContentTicks) {
           maxContentTicks = endTick.toDouble();
         }
@@ -832,30 +831,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                         ).toDouble();
                                       }
 
-                                      int pasteStartTime;
-                                      if (track.trackType ==
-                                          UiTrackType.audio) {
-                                        final sr =
-                                            ref
-                                                .read(transportProvider)
-                                                .value
-                                                ?.sampleRate ??
-                                            48000;
-                                        final tempo =
-                                            ref
-                                                .read(transportProvider)
-                                                .value
-                                                ?.state
-                                                ?.bpm ??
-                                            120.0;
-                                        pasteStartTime = ticksToSamples(
-                                          ticks.toInt(),
-                                          tempo,
-                                          sr,
-                                        );
-                                      } else {
-                                        pasteStartTime = ticks.toInt();
-                                      }
+                                      final pasteStartTime = ticks.toInt();
 
                                       final result = await ref
                                           .read(trackListStateProvider.notifier)

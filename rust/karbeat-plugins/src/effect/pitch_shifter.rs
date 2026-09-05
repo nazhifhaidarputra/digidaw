@@ -19,6 +19,7 @@ pub struct Pitcher {
 
     channels: usize,
     sample_rate: f32,
+    reported_latency_samples: u32,
 }
 
 impl Default for Pitcher {
@@ -47,6 +48,7 @@ impl AudioPlugin for Pitcher {
     fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
         self.sample_rate = sample_rate;
         self.pitch_shift_engine.prepare(sample_rate, self.channels);
+        self.reported_latency_samples = self.latency_samples();
     }
 
     fn set_io_layout(&mut self, inputs: &[BusConfig], _outputs: &[BusConfig]) {
@@ -74,7 +76,10 @@ impl AudioPlugin for Pitcher {
     }
 
     fn has_latency_changed(&mut self) -> bool {
-        false
+        let current = self.latency_samples();
+        let changed = current != self.reported_latency_samples;
+        self.reported_latency_samples = current;
+        changed
     }
 
     fn process(&mut self, buffers: &mut AudioBuffers, _context: &ProcessContext) {
@@ -139,5 +144,26 @@ impl Manifestable for Pitcher {
 impl AudioPluginBuilder for Pitcher {
     fn build() -> Self {
         Self::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reports_pitch_dependent_latency_changes() {
+        let mut plugin = Pitcher::default();
+        plugin.prepare(48000.0, 512);
+        let initial_latency = plugin.latency_samples();
+        assert!(!plugin.has_latency_changed());
+        plugin.pitch_shift_engine.pitch_ratio.set_base(0.5);
+        plugin
+            .pitch_shift_engine
+            .process_block(&mut [&mut [0.0; 512], &mut [0.0; 512]]);
+        assert_ne!(plugin.latency_samples(), initial_latency);
+        assert!(plugin.has_latency_changed());
+        assert!(!plugin.has_latency_changed());
+        assert_eq!(plugin.tail_samples(), plugin.latency_samples());
     }
 }

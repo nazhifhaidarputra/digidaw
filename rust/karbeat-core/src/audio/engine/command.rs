@@ -934,17 +934,27 @@ impl AudioEngine {
                         self.current_state.graph.max_sample_index =
                             (self.current_state.graph.max_sample_index as f64 * ratio) as u32;
 
-                        // Scale all Audio Clips that are mapped in Absolute Samples
+                        // Scale sample-domain audio clip values while preserving tick placement.
                         for clip in self.current_state.graph.clips.values_mut() {
-                            if let crate::core::project::clip::ClipTimeUnit::Samples {
-                                start_time,
-                                loop_length,
-                                offset_start,
-                            } = &mut clip.time
-                            {
-                                *start_time = (*start_time as f64 * ratio) as u64;
-                                *loop_length = (*loop_length as f64 * ratio) as u64;
-                                *offset_start = (*offset_start as f64 * ratio) as u64;
+                            match &mut clip.time {
+                                crate::core::project::clip::ClipTimeUnit::Samples {
+                                    start_time,
+                                    loop_length,
+                                    offset_start,
+                                } => {
+                                    *start_time = (*start_time as f64 * ratio) as u64;
+                                    *loop_length = (*loop_length as f64 * ratio) as u64;
+                                    *offset_start = (*offset_start as f64 * ratio) as u64;
+                                }
+                                crate::core::project::clip::ClipTimeUnit::Audio {
+                                    loop_length,
+                                    offset_start,
+                                    ..
+                                } => {
+                                    *loop_length = (*loop_length as f64 * ratio) as u64;
+                                    *offset_start = (*offset_start as f64 * ratio) as u64;
+                                }
+                                crate::core::project::clip::ClipTimeUnit::Ticks { .. } => {}
                             }
                         }
 

@@ -5,6 +5,8 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
@@ -464,7 +466,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
-  /// Slice a clip at [cutPoint] (sample position).
+  /// Slice a clip at the timeline tick [cutPoint].
   Future<Result<void>> sliceClip(int trackId, int clipId, int cutPoint) async {
     final result = await AsyncValue.guard(() async {
       await track_api.sliceClip(
@@ -632,8 +634,8 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   /// Atomically duplicate a selected clip group at predetermined start times.
-  /// Start times are in the clips' native unit (samples or ticks). Unlike the
-  /// clipboard APIs below, this operation never changes ClipboardContent.
+  /// Start times are timeline ticks. Unlike the clipboard APIs below, this
+  /// operation never changes ClipboardContent.
   Future<Result<List<UiClip>>> duplicateClipGroups({
     required int trackId,
     required List<int> clipIds,
@@ -904,7 +906,29 @@ class TrackListNotifier extends Notifier<TrackListState> {
     int newLength = clip.loopLength.toInt();
     int newOffset = clip.offsetStart.toInt();
 
-    if (edge == UiResizeEdge.right) {
+    if (clip.isSampleBased) {
+      final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+      final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+      final oldEndTick =
+          clip.startTime + samplesToTicks(clip.loopLength, bpm, sampleRate);
+      if (edge == UiResizeEdge.right) {
+        if (newTime > clip.startTime) {
+          newLength = ticksToSamples(newTime - clip.startTime, bpm, sampleRate);
+        }
+      } else if (newTime < oldEndTick) {
+        final deltaSamples = ticksToSamples(
+          newTime - clip.startTime,
+          bpm,
+          sampleRate,
+        );
+        final potentialOffset = clip.offsetStart + deltaSamples;
+        if (potentialOffset >= 0 && clip.loopLength - deltaSamples > 0) {
+          newStart = newTime;
+          newLength = clip.loopLength - deltaSamples;
+          newOffset = potentialOffset;
+        }
+      }
+    } else if (edge == UiResizeEdge.right) {
       if (newTime > clip.startTime) newLength = newTime - clip.startTime;
     } else {
       final oldEnd = clip.startTime + clip.loopLength;
@@ -1023,7 +1047,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   void _applyOptimisticMoveBatch(
     int trackId,
     List<int> clipIds,
-    int deltaSamples,
+    int deltaTicks,
     int? newTrackId,
   ) {
     final tracks = ref.read(projectProvider).value?.tracks;
@@ -1045,7 +1069,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
           .toList();
       final targetClips = List<UiClip>.from(targetTrack.clips);
       for (final clip in clipsToMove) {
-        final newStart = (clip.startTime + deltaSamples).clamp(0, 1 << 62);
+        final newStart = (clip.startTime + deltaTicks).clamp(0, 1 << 62);
         targetClips.add(clip.copyWith(startTime: newStart.toInt()));
       }
       ref.read(projectProvider.notifier).upsertTracksBulk({
@@ -1055,7 +1079,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     } else {
       final updatedClips = track.clips.map((clip) {
         if (clipIdSet.contains(clip.id)) {
-          final newStart = (clip.startTime + deltaSamples).clamp(0, 1 << 62);
+          final newStart = (clip.startTime + deltaTicks).clamp(0, 1 << 62);
           return clip.copyWith(startTime: newStart.toInt());
         }
         return clip;
@@ -1070,12 +1094,14 @@ class TrackListNotifier extends Notifier<TrackListState> {
     int trackId,
     List<int> clipIds,
     UiResizeEdge edge,
-    int deltaSamples,
+    int deltaTicks,
   ) {
     final track = ref.read(projectProvider).value?.tracks[trackId];
     if (track == null) return;
 
     final clipIdSet = clipIds.toSet();
+    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
     final updatedClips = track.clips.map((clip) {
       if (!clipIdSet.contains(clip.id)) return clip;
@@ -1083,16 +1109,46 @@ class TrackListNotifier extends Notifier<TrackListState> {
       int newLength = clip.loopLength.toInt();
       int newOffset = clip.offsetStart.toInt();
 
-      if (edge == UiResizeEdge.right) {
-        final newEnd = (clip.startTime + clip.loopLength + deltaSamples).clamp(
-          clip.startTime + 100,
+      if (clip.isSampleBased) {
+        final oldLengthTicks = samplesToTicks(clip.loopLength, bpm, sampleRate);
+        final oldEndTick = clip.startTime + oldLengthTicks;
+        if (edge == UiResizeEdge.right) {
+          final newEndTick = (oldEndTick + deltaTicks).clamp(
+            clip.startTime + 10,
+            1 << 62,
+          );
+          newLength = ticksToSamples(
+            newEndTick - clip.startTime,
+            bpm,
+            sampleRate,
+          );
+        } else {
+          final newStartTick = (clip.startTime + deltaTicks)
+              .clamp(0, oldEndTick - 10)
+              .toInt();
+          final deltaSamples = ticksToSamples(
+            newStartTick - clip.startTime,
+            bpm,
+            sampleRate,
+          );
+          newStart = newStartTick;
+          newLength = (clip.loopLength - deltaSamples)
+              .clamp(1, 1 << 62)
+              .toInt();
+          newOffset = (clip.offsetStart + deltaSamples)
+              .clamp(0, 1 << 62)
+              .toInt();
+        }
+      } else if (edge == UiResizeEdge.right) {
+        final newEnd = (clip.startTime + clip.loopLength + deltaTicks).clamp(
+          clip.startTime + 10,
           1 << 62,
         );
         newLength = newEnd.toInt() - clip.startTime.toInt();
       } else {
         final oldEnd = clip.startTime + clip.loopLength;
-        int newStartProposed = (clip.startTime + deltaSamples)
-            .clamp(0, oldEnd - 100)
+        int newStartProposed = (clip.startTime + deltaTicks)
+            .clamp(0, oldEnd - 10)
             .toInt();
         final delta = newStartProposed - clip.startTime;
         final newOffsetProposed = (clip.offsetStart + delta).clamp(0, 1 << 62);

@@ -98,6 +98,7 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
     }
     let mut app_state: ApplicationState =
         rmp_serde::from_slice(&project_bytes).context("Failed to deserialize project.msgpack")?;
+    app_state.migrate_legacy_audio_clip_placement();
 
     let library = &mut app_state.asset_library;
     // Create a persistent cache directory for this session, avoiding randomized file names

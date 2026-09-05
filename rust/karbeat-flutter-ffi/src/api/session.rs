@@ -143,7 +143,7 @@ pub fn cut_clips(ctx: &mut DawContext, track_id: u32, clip_ids: Vec<u32>) -> Res
     Ok(())
 }
 
-/// Paste clips from clipboard to a target track at a specified start time.
+/// Paste clips from clipboard to a target track at a specified start tick.
 /// Clips are offset relative to the earliest clip's start time.
 pub fn paste_clips(
     ctx: &mut DawContext,
@@ -152,8 +152,8 @@ pub fn paste_clips(
     track_type: UiTrackType,
 ) -> Result<Vec<UiClip>, String> {
     let clip_time_unit = match track_type {
-        UiTrackType::Audio => ClipTimeUnit::Samples {
-            start_time: paste_start_time as u64,
+        UiTrackType::Audio => ClipTimeUnit::Audio {
+            start_tick: paste_start_time as u64,
             loop_length: 0,
             offset_start: 0,
         },
@@ -184,7 +184,7 @@ pub fn delete_clips(ctx: &mut DawContext, track_id: u32, clip_ids: Vec<u32>) -> 
     Ok(())
 }
 
-/// Move a clip from one track to another (or within the same track) with a new start time.
+/// Move a clip to a new timeline start tick, optionally changing tracks.
 pub fn move_clip(
     ctx: &mut DawContext,
     old_track_id: u32,
@@ -204,7 +204,7 @@ pub fn move_clip(
     Ok(())
 }
 
-/// Resize a clip by updating its start_time, offset_start, and/or loop_length.
+/// Resize a clip at a timeline tick, updating sample dimensions for audio.
 /// Supports both left (slip edit) and right edge resizing with history support.
 pub fn resize_clip(
     ctx: &mut DawContext,

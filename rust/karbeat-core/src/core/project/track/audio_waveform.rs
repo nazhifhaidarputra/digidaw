@@ -12,13 +12,12 @@ use std::{path::PathBuf, sync::Arc};
 
 /// ======================================
 /// AudioSampleMode
-/// Determines how an audio clip's timeline position is interpreted.
-/// - Default: raw samples (BPM-independent, for standard audio playback)
-/// - Stretch: ticks (BPM-dependent, for time-stretched audio — future feature)
+/// Determines how source content responds to project tempo.
+/// Clip placement is tick-based in every mode.
 /// ======================================
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub enum AudioSampleMode {
-    /// raw samples (BPM-independent, for standard audio playback)
+    /// Sample-based duration with no tempo stretching.
     #[default]
     Default,
     /// ticks (BPM-dependent, for time-stretched audio, preserved pitch)
@@ -62,7 +61,7 @@ pub struct AudioWaveform {
     pub normalized: bool,
     /// Whether the audio waveform is muted
     pub muted: bool,
-    /// How this audio source maps to the timeline (raw samples vs tempo-locked ticks)
+    /// How source duration and playback rate respond to tempo.
     pub sample_mode: AudioSampleMode,
 }
 

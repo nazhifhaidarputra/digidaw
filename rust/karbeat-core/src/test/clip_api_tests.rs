@@ -29,8 +29,8 @@ mod tests {
             name: "test audio".to_string(),
             id,
             source: Some(DawSource::Audio(AudioSourceId::from(9999))),
-            time: ClipTimeUnit::Samples {
-                start_time: start,
+            time: ClipTimeUnit::Audio {
+                start_tick: start,
                 loop_length: 48_000,
                 offset_start: 0,
             },
@@ -405,7 +405,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_duplicate_audio_clip_groups_uses_sample_positions() {
+    fn batch_duplicate_audio_clip_groups_uses_tick_positions() {
         let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
         let source = add_audio_clip(&mut ctx, audio_id, 24_000);
 
@@ -426,6 +426,97 @@ mod tests {
         );
         assert!(duplicated.iter().all(|clip| clip.time.is_samples()));
         assert!(matches!(ctx.app_state.clipboard, ClipboardContent::Empty));
+    }
+
+    #[test]
+    fn audio_clip_start_tick_tracks_tempo_without_stretching_content() {
+        let time = ClipTimeUnit::Audio {
+            start_tick: 960,
+            loop_length: 48_000,
+            offset_start: 240,
+        };
+
+        assert_eq!(time.start_time_raw(), 960);
+        assert_eq!(time.start_time_samples(120.0, 48_000), 24_000);
+        assert_eq!(time.start_time_samples(60.0, 48_000), 48_000);
+        assert_eq!(time.loop_length_samples(60.0, 48_000), 48_000);
+        assert_eq!(time.offset_start_samples(60.0, 48_000), 240);
+    }
+
+    #[test]
+    fn audio_clip_tick_placement_roundtrips_through_project_encoding() {
+        let time = ClipTimeUnit::Audio {
+            start_tick: 1_920,
+            loop_length: 48_000,
+            offset_start: 240,
+        };
+
+        let encoded = rmp_serde::to_vec(&time).expect("audio clip time should serialize");
+        let decoded: ClipTimeUnit =
+            rmp_serde::from_slice(&encoded).expect("audio clip time should deserialize");
+
+        assert_eq!(decoded, time);
+    }
+
+    #[test]
+    fn slice_audio_clip_converts_tick_delta_to_sample_dimensions() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        ctx.app_state.transport.bpm = 120.0;
+        ctx.app_state.audio_config.sample_rate = 48_000;
+        let clip = add_audio_clip(&mut ctx, audio_id, 960);
+
+        let (left, right) = clip_api::slice_clip(&mut ctx, audio_id, clip.id, 1_920)
+            .expect("audio clip should split at a timeline tick");
+
+        assert_eq!(left.time.start_time_raw(), 960);
+        assert_eq!(left.time.loop_length_raw(), 24_000);
+        assert_eq!(right.time.start_time_raw(), 1_920);
+        assert_eq!(right.time.loop_length_raw(), 24_000);
+        assert_eq!(right.time.offset_start_raw(), 24_000);
+    }
+
+    #[test]
+    fn resize_audio_clip_keeps_tick_anchor_and_changes_sample_length() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        ctx.app_state.transport.bpm = 120.0;
+        ctx.app_state.audio_config.sample_rate = 48_000;
+        let clip = add_audio_clip(&mut ctx, audio_id, 960);
+
+        let resized =
+            clip_api::batch_resize_clips(&mut ctx, audio_id, vec![clip.id], ResizeEdge::Right, 960)
+                .expect("audio clip should resize by a tick delta");
+
+        assert_eq!(resized[0].time.start_time_raw(), 960);
+        assert_eq!(resized[0].time.loop_length_raw(), 72_000);
+    }
+
+    #[test]
+    fn legacy_audio_sample_placement_migrates_to_ticks() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        let app = &mut ctx.app_state;
+        app.transport.bpm = 120.0;
+        app.audio_config.sample_rate = 48_000;
+        let clip_id = app.clips_pool.insert_with_key(|id| Clip {
+            name: "legacy audio".to_string(),
+            id,
+            source: Some(DawSource::Audio(AudioSourceId::from(9999))),
+            time: ClipTimeUnit::Samples {
+                start_time: 24_000,
+                loop_length: 48_000,
+                offset_start: 120,
+            },
+        });
+        app.tracks[audio_id].clips.push(clip_id);
+
+        assert_eq!(app.migrate_legacy_audio_clip_placement(), 1);
+        assert_eq!(
+            app.clips_pool[clip_id].time,
+            ClipTimeUnit::Audio {
+                start_tick: 960,
+                loop_length: 48_000,
+                offset_start: 120,
+            }
+        );
     }
 
     #[test]
