@@ -67,7 +67,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
     _trackSplitViewController = MultiSplitViewController(
       areas: [
-        Area(size: widget.headerWidth, min: 80, max: 240, data: 'header'),
+        Area(size: widget.headerWidth, min: 160, max: 300, data: 'header'),
         Area(min: 200, data: 'timeline'),
         if (browserExpanded)
           Area(size: 300, min: 220, max: 480, data: 'browser'),
@@ -396,6 +396,21 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  /// Maps a Y offset (scroll offset included) to the index of the track
+  /// occupying it, taking per-track heights into account.
+  int _trackIndexAtY(double y) {
+    final heights = ref.read(trackListStateProvider).trackIdHeightMap;
+    final trackIds = _trackOrderController.value;
+    if (trackIds.isEmpty) return 0;
+    double top = 0;
+    for (var i = 0; i < trackIds.length; i++) {
+      final h = (heights.get(trackIds[i]) ?? widget.itemHeight).toDouble();
+      if (y < top + h) return i;
+      top += h;
+    }
+    return trackIds.length - 1;
+  }
+
   Widget _buildHeaderArea() {
     final colors = Theme.of(context).colorScheme;
     return Column(
@@ -460,13 +475,33 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
           );
 
+          final height = ref.watch(
+            trackListStateProvider.select(
+              (s) => (s.trackIdHeightMap.get(trackId) ?? widget.itemHeight)
+                  .toDouble(),
+            ),
+          );
+
           return Column(
             children: [
-              TrackHeader(
-                trackId: trackId,
-                itemHeight: widget.itemHeight,
-                onDragStarted: () => _startTrackDrag(trackId),
-                onDragEnded: _endTrackDrag,
+              Stack(
+                children: [
+                  TrackHeader(
+                    trackId: trackId,
+                    itemHeight: height,
+                    onDragStarted: () => _startTrackDrag(trackId),
+                    onDragEnded: _endTrackDrag,
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: HeaderResizeHandle(
+                      onDelta: (dy) => _onHeaderResize(trackId, dy),
+                      onReset: () => _onHeaderResizeReset(trackId),
+                    ),
+                  ),
+                ],
               ),
               if (lanes.isNotEmpty)
                 AutomationExpandBar(
@@ -490,6 +525,25 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         },
       ),
     );
+  }
+
+  void _onHeaderResize(int trackId, double dy) {
+    final current =
+        ref
+            .read(trackListStateProvider)
+            .trackIdHeightMap
+            .get(trackId)
+            ?.toDouble() ??
+        widget.itemHeight;
+    ref
+        .read(trackListStateProvider.notifier)
+        .changeHeight(trackId: trackId, newHeight: (current + dy).round());
+  }
+
+  void _onHeaderResizeReset(int trackId) {
+    ref
+        .read(trackListStateProvider.notifier)
+        .resetTrackHeight(trackId: trackId);
   }
 
   int? _findTrackIndex(Key key) {
@@ -797,16 +851,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                           : 0;
                                       double absoluteY = targetPos.dy + scrollY;
 
-                                      if (widget.trackIds.isEmpty) return;
-                                      int trackIndex =
-                                          (absoluteY / widget.itemHeight)
-                                              .floor();
-                                      trackIndex = trackIndex.clamp(
-                                        0,
-                                        widget.trackIds.length - 1,
+                                      final trackIds =
+                                          _trackOrderController.value;
+                                      if (trackIds.isEmpty) return;
+                                      final trackIndex = _trackIndexAtY(
+                                        absoluteY,
                                       );
                                       final targetTrackId =
-                                          widget.trackIds[trackIndex];
+                                          trackIds[trackIndex];
                                       final track = ref
                                           .read(projectProvider)
                                           .value
@@ -990,13 +1042,20 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 ),
               );
 
+              final height = ref.watch(
+                trackListStateProvider.select(
+                  (s) => (s.trackIdHeightMap.get(trackId) ?? widget.itemHeight)
+                      .toDouble(),
+                ),
+              );
+
               final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
               return Column(
                 children: [
                   AudioTrackSlot(
                     trackId: trackId,
-                    height: widget.itemHeight,
+                    height: height,
                     horizontalScrollController: _trackContentController,
                     sampleRate: sr,
                   ),

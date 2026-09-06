@@ -1,6 +1,6 @@
 use karbeat_plugin_api::manifest::Manifestable;
 use karbeat_plugins::{
-    effect::{pitch_shifter::Pitcher, sidechain::DigidawSidechainCompressor},
+    effect::{pitch_shifter::PitchShifter, sidechain::DigidawSidechainCompressor},
     plugins::*,
 };
 
@@ -32,8 +32,9 @@ fn main() {
         MyRetro,
         KarbeatzerV2,
         DigiParametricEQ,
-        Pitcher,
-        DigidawSidechainCompressor
+        PitchShifter,
+        DigidawSidechainCompressor,
+        DigidawDelay
     );
 
     println!("INFO: All manifests exported successfully to Flutter assets!");

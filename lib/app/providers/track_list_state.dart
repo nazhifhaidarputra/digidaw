@@ -74,9 +74,34 @@ class TrackListNotifier extends Notifier<TrackListState> {
     );
     return ref.read(projectProvider.notifier).dawContext;
   }
-  // ------------------------------------------------------------------
+
+  // ==================================================================
+  // CLIENT-SIDE REACTIVITY
+  // ==================================================================
+
+  static const int minTrackHeight = 48;
+  static const int maxTrackHeight = 400;
+
+  /// Sets (upserts) the pixel height of [trackId].
+  void changeHeight({required int trackId, required int newHeight}) {
+    final clamped = newHeight.clamp(minTrackHeight, maxTrackHeight).toInt();
+    // Skip no-op notifications (e.g. when pinned at min/max during a drag).
+    if (state.trackIdHeightMap.get(trackId) == clamped) return;
+
+    final builder = state.trackIdHeightMap.unlock..[trackId] = clamped;
+    state = state.copyWith(trackIdHeightMap: builder.lock);
+  }
+
+  /// Removes the override so the track falls back to the default height.
+  void resetTrackHeight({required int trackId}) {
+    if (state.trackIdHeightMap.get(trackId) == null) return;
+    final builder = state.trackIdHeightMap.unlock..remove(trackId);
+    state = state.copyWith(trackIdHeightMap: builder.lock);
+  }
+
+  // ==================================================================
   // Synchronisation
-  // ------------------------------------------------------------------
+  // ==================================================================
 
   /// Sync a single track by its backend [trackId].
   Future<void> syncTracks() async {

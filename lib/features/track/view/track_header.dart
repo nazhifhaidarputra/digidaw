@@ -423,3 +423,62 @@ class TrackHeader extends ConsumerWidget {
     );
   }
 }
+
+class HeaderResizeHandle extends StatefulWidget {
+  const HeaderResizeHandle({
+    super.key, 
+    required this.onDelta,
+    required this.onReset,
+    this.hitExtent = 6.0,
+  });
+
+  /// Positive values grow the header, negative values shrink it.
+  final ValueChanged<double> onDelta;
+
+  /// Double-click resets the height to the default.
+  final VoidCallback onReset;
+
+  /// Height of the draggable strip along the bottom border.
+  final double hitExtent;
+
+  @override
+  State<HeaderResizeHandle> createState() => HeaderResizeHandleState();
+}
+
+class HeaderResizeHandleState extends State<HeaderResizeHandle> {
+  bool _hovering = false;
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final highlight = _hovering || _dragging;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeUpDown,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragStart: (_) => setState(() => _dragging = true),
+        onVerticalDragEnd: (_) => setState(() => _dragging = false),
+        onVerticalDragCancel: () => setState(() => _dragging = false),
+        onVerticalDragUpdate: (details) => widget.onDelta(details.delta.dy),
+        onDoubleTap: widget.onReset,
+        child: Container(
+          height: widget.hitExtent,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                width: 1,
+                color: highlight
+                    ? colors.primary
+                    : colors.outlineVariant.withValues(alpha: 0.35),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

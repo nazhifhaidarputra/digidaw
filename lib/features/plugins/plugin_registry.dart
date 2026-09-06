@@ -22,9 +22,12 @@ class PluginRegistryFlutter {
   static final Map<int, PluginScreenBuilder> _effects = {
     DigiParametricEQSpecs.id: (target, id) =>
         KarbeatParametricEq(target: target),
-    PitcherSpecs.id: (target, pluginId) => DigidawPitcher(target: target),
+    PitchShifterSpecs.id: (target, pluginId) =>
+        DigidawPitchShifter(target: target),
     DigidawSidechainCompressorSpecs.id: (target, pluginId) =>
         DigidawSidechainCompressor(target: target),
+    DigidawDelaySpecs.id: (target, pluginId) =>
+        DigidawDelay(target: target),
   };
 
   // ===========================================================================
@@ -49,17 +52,15 @@ class PluginRegistryFlutter {
     required int instanceId,
     required plugin_api.UiPluginTarget target,
   }) {
-    // 1. Check Effects First
     if (_effects.containsKey(registryId)) {
       return _effects[registryId]!(target, instanceId);
     }
 
-    // 2. Check Generators Second
     if (_generators.containsKey(registryId)) {
       return _generators[registryId]!(target, instanceId);
     }
 
-    // 3. Throw a helpful error if totally unregistered
+    // Throw a helpful error if totally unregistered
     throw Exception(
       'UI Screen not found for Registry ID $registryId. '
       'Did you forget to add it to the PluginRegistry mappings?',

@@ -91,16 +91,14 @@ pub fn move_clip(
     let app = &mut ctx.app_state;
     let old_clip = app.get_clip(&source_track_id, &clip_id).ok_or_else(|| {
         anyhow::anyhow!(
-            "Clip {:?} not found in track {:?}",
-            clip_id,
-            source_track_id
+            "Clip {clip_id} not found in track {source_track_id}"
         )
     })?;
 
     // 2. Mutate state
     let modified_clip = app
         .move_clip(source_track_id, target_track_id, clip_id, new_start_time)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // 3. Update history
     ctx.push_history(ProjectAction::MoveClip {

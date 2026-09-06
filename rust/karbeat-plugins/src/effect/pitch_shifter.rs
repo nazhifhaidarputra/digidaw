@@ -10,7 +10,7 @@ use karbeat_utils::hash::hash_str;
 /// For further information, see https://breakfastquay.com/rubberband/
 #[karbeat_plugin]
 #[derive(Clone, Debug)]
-pub struct Pitcher {
+pub struct PitchShifter {
     // ==========================
     // Pitch shift algorithm engine
     // ==========================
@@ -22,7 +22,7 @@ pub struct Pitcher {
     reported_latency_samples: u32,
 }
 
-impl Default for Pitcher {
+impl Default for PitchShifter {
     fn default() -> Self {
         let mut def = Self::base_default();
         def.channels = 2; // Default to stereo
@@ -32,9 +32,9 @@ impl Default for Pitcher {
 }
 
 #[auto_param]
-impl AudioPlugin for Pitcher {
+impl AudioPlugin for PitchShifter {
     fn name(&self) -> &str {
-        "Digidaw Pitcher"
+        "Digidaw Pitch Shifter"
     }
 
     fn category(&self) -> PluginCategory {
@@ -128,20 +128,20 @@ impl AudioPlugin for Pitcher {
     }
 }
 
-impl Manifestable for Pitcher {
+impl Manifestable for PitchShifter {
     fn build_manifest() -> PluginManifest {
         PluginManifest {
-            id: hash_str("effect_pitcher"),
-            id_string: "effect_pitcher".to_string(),
-            name: "Pitcher".to_string(),
-            internal_type: "Pitcher".to_string(),
+            id: hash_str("effect_pitch_shifter"),
+            id_string: "effect_pitch_shifter".to_string(),
+            name: "Pitch Shifter".to_string(),
+            internal_type: "PitchShifter".to_string(),
             is_synth: false,
             parameters: Self::static_parameter_specs(),
         }
     }
 }
 
-impl AudioPluginBuilder for Pitcher {
+impl AudioPluginBuilder for PitchShifter {
     fn build() -> Self {
         Self::default()
     }
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn reports_pitch_dependent_latency_changes() {
-        let mut plugin = Pitcher::default();
+        let mut plugin = PitchShifter::default();
         plugin.prepare(48000.0, 512);
         let initial_latency = plugin.latency_samples();
         assert!(!plugin.has_latency_changed());

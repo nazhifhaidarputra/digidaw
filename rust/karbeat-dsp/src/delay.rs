@@ -8,24 +8,171 @@
     reason = "the prepared layout and parameter bounds keep delay indices, sample arithmetic, and numeric conversions valid"
 )]
 
-use karbeat_macros::karbeat_plugin;
+use karbeat_macros::{EnumParam, karbeat_plugin};
+use karbeat_plugin_types::EnumParam;
 use karbeat_plugin_types::parameter::SmoothableParam;
+use serde::{Deserialize, Serialize};
 
 const MAX_DELAY_SECONDS: usize = 5;
 const PARAMETER_SMOOTHING_SECONDS: f64 = 0.01;
 
-#[derive(Clone, Copy)]
-struct DelayFrameParameters {
-    delay_samples: f64,
-    feedback: f64,
-    dry_mix: f64,
-    wet_mix: f64,
+// ▱▱▱▱▱ Traits ▱▱▱▱▱
+
+/// Trait defining the routing and delay behavior for a delay algorithm.
+///
+/// Injecting `DelayDsp` allows each dynamic variant to access delay state
+/// variables such as ring buffers, write position, parameters, and interpolation helpers.
+pub trait DelayMode: Copy + Default + PartialEq + EnumParam + Send + Sync {
+    /// Process a deinterleaved audio block in place using the provided `DelayDsp` state.
+    fn process_block<T: DelayMode + 'static>(
+        &self,
+        delay: &mut DelayDsp<T>,
+        buffers: &mut [&mut [f64]],
+    );
+
+    /// Whether this mode is bypassed / off.
+    fn is_off(&self) -> bool;
 }
 
-/// Parameters and delay-line storage shared by all delay processors.
+// ▱▱▱▱▱ Delay type enums ▱▱▱▱
+
+#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam, Deserialize, Serialize)]
+#[repr(usize)]
+pub enum SimpleDelayMode {
+    #[default]
+    Feedback = 0,
+    PingPong = 1,
+    MultiTap = 2,
+    Off = 3,
+}
+
+impl From<f32> for SimpleDelayMode {
+    fn from(v: f32) -> Self {
+        match v as u32 {
+            0 => Self::Feedback,
+            1 => Self::PingPong,
+            2 => Self::MultiTap,
+            _ => Self::Off,
+        }
+    }
+}
+
+pub type DelayType = SimpleDelayMode;
+
+// ▱▱▱▱▱ Mode implementation for SimpleDelayMode ▱▱▱▱▱
+
+impl DelayMode for SimpleDelayMode {
+    #[inline]
+    fn is_off(&self) -> bool {
+        *self == Self::Off
+    }
+
+    fn process_block<T: DelayMode + 'static>(
+        &self,
+        delay: &mut DelayDsp<T>,
+        buffers: &mut [&mut [f64]],
+    ) {
+        if self.is_off() {
+            return;
+        }
+
+        match self {
+            Self::Feedback => {
+                let frame_count = buffers[0].len();
+                for frame in 0..frame_count {
+                    let parameters = delay.next_frame_parameters();
+                    for (channel, buffer) in buffers.iter_mut().enumerate() {
+                        let input = buffer[frame];
+                        let delayed = delay.read(channel, parameters.delay_samples);
+                        buffer[frame] = input * parameters.dry_mix + delayed * parameters.wet_mix;
+                        delay.write(channel, input + delayed * parameters.feedback);
+                    }
+                    delay.advance();
+                }
+            }
+            Self::PingPong => {
+                let frame_count = buffers[0].len();
+                for frame in 0..frame_count {
+                    let parameters = delay.next_frame_parameters();
+                    let paired_channels = buffers.len() - buffers.len() % 2;
+
+                    for left in (0..paired_channels).step_by(2) {
+                        let right = left + 1;
+                        let left_input = buffers[left][frame];
+                        let right_input = buffers[right][frame];
+                        let left_delayed = delay.read(left, parameters.delay_samples);
+                        let right_delayed = delay.read(right, parameters.delay_samples);
+
+                        buffers[left][frame] =
+                            left_input * parameters.dry_mix + left_delayed * parameters.wet_mix;
+                        buffers[right][frame] =
+                            right_input * parameters.dry_mix + right_delayed * parameters.wet_mix;
+
+                        delay.write(left, left_input + right_delayed * parameters.feedback);
+                        delay.write(right, right_input + left_delayed * parameters.feedback);
+                    }
+
+                    if paired_channels < buffers.len() {
+                        let channel = paired_channels;
+                        let input = buffers[channel][frame];
+                        let delayed = delay.read(channel, parameters.delay_samples);
+                        buffers[channel][frame] =
+                            input * parameters.dry_mix + delayed * parameters.wet_mix;
+                        delay.write(channel, input + delayed * parameters.feedback);
+                    }
+
+                    delay.advance();
+                }
+            }
+            Self::MultiTap => {
+                let frame_count = buffers[0].len();
+                for frame in 0..frame_count {
+                    let parameters = delay.next_frame_parameters();
+                    let tap_count = delay.tap_count.get().clamp(2, 8) as usize;
+                    let tap_decay = delay.tap_decay.next_smoothed().clamp(0.0, 1.0);
+
+                    for (channel, buffer) in buffers.iter_mut().enumerate() {
+                        let input = buffer[frame];
+                        let mut wet_sample = 0.0;
+                        let mut weight_sum = 0.0;
+                        let mut weight = 1.0;
+
+                        for tap in 1..=tap_count {
+                            let tap_delay =
+                                parameters.delay_samples * tap as f64 / tap_count as f64;
+                            wet_sample += delay.read(channel, tap_delay) * weight;
+                            weight_sum += weight;
+                            weight *= tap_decay;
+                        }
+
+                        let final_tap = delay.read(channel, parameters.delay_samples);
+                        buffer[frame] =
+                            input * parameters.dry_mix + (wet_sample / weight_sum) * parameters.wet_mix;
+                        delay.write(channel, input + final_tap * parameters.feedback);
+                    }
+
+                    delay.advance();
+                }
+            }
+            Self::Off => {}
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DelayFrameParameters {
+    pub delay_samples: f64,
+    pub feedback: f64,
+    pub dry_mix: f64,
+    pub wet_mix: f64,
+}
+
+// ▱▱▱▱▱ DelayDsp — the top-level delay processor ▱▱▱▱▱
+
+/// Parameters and delay-line storage for delay processors.
 #[derive(Clone, Debug)]
 #[karbeat_plugin]
-pub struct DelayDsp {
+pub struct DelayDsp<T: DelayMode + 'static = SimpleDelayMode> {
     /// Time of the final delay tap in milliseconds.
     #[param(
         id = "delay_ms",
@@ -74,19 +221,49 @@ pub struct DelayDsp {
     )]
     pub wet_mix: f64,
 
+    /// Mode / routing algorithm of the delay.
+    #[param(id = "type", name = "Type", group = "Delay", default = 0.0)]
+    pub delay_type: T,
+
+    /// Number of evenly spaced delay taps (for MultiTap mode).
+    #[param(
+        id = "tap_count",
+        name = "Tap Count",
+        group = "Multi Tap",
+        default = 4,
+        min = 2,
+        max = 8,
+        step = 1
+    )]
+    pub tap_count: i32,
+
+    /// Level multiplier applied between consecutive taps (for MultiTap mode).
+    #[param(
+        id = "tap_decay",
+        name = "Tap Decay",
+        group = "Multi Tap",
+        default = 0.7,
+        min = 0.0,
+        max = 1.0,
+        step = 0.001
+    )]
+    pub tap_decay: f64,
+
     sample_rate: u32,
     channels: usize,
     ring_buffers: Vec<Vec<f64>>,
     write_position: usize,
 }
 
-impl Default for DelayDsp {
+impl<T: DelayMode + 'static> Default for DelayDsp<T> {
     fn default() -> Self {
-        Self::base_default()
+        let mut d = Self::base_default();
+        d.delay_type.set_base(T::default());
+        d
     }
 }
 
-impl DelayDsp {
+impl<T: DelayMode + 'static> DelayDsp<T> {
     /// Allocate delay storage for the requested stream layout.
     pub fn prepare(&mut self, sample_rate: u32, num_channels: usize) {
         if sample_rate == 0 || num_channels == 0 {
@@ -116,6 +293,16 @@ impl DelayDsp {
         self.reset_smoothers();
     }
 
+    /// Process a deinterleaved audio block in place using the active delay mode.
+    pub fn process_block(&mut self, buffers: &mut [&mut [f64]]) {
+        if !self.layout_is_valid(buffers) {
+            return;
+        }
+
+        let mode = self.delay_type.get();
+        mode.process_block(self, buffers);
+    }
+
     fn configure_smoothers(&mut self) {
         let sample_rate = f64::from(self.sample_rate);
         self.delay_ms
@@ -126,6 +313,8 @@ impl DelayDsp {
             .set_smoothing_time(PARAMETER_SMOOTHING_SECONDS, sample_rate);
         self.wet_mix
             .set_smoothing_time(PARAMETER_SMOOTHING_SECONDS, sample_rate);
+        self.tap_decay
+            .set_smoothing_time(PARAMETER_SMOOTHING_SECONDS, sample_rate);
         self.reset_smoothers();
     }
 
@@ -134,9 +323,10 @@ impl DelayDsp {
         self.feedback.smoother.reset(self.feedback.get());
         self.dry_mix.smoother.reset(self.dry_mix.get());
         self.wet_mix.smoother.reset(self.wet_mix.get());
+        self.tap_decay.smoother.reset(self.tap_decay.get());
     }
 
-    fn layout_is_valid(&self, buffers: &[&mut [f64]]) -> bool {
+    pub fn layout_is_valid(&self, buffers: &[&mut [f64]]) -> bool {
         if self.sample_rate == 0 || self.ring_buffers.is_empty() || buffers.len() != self.channels {
             return false;
         }
@@ -148,7 +338,7 @@ impl DelayDsp {
     }
 
     #[inline]
-    fn next_frame_parameters(&mut self) -> DelayFrameParameters {
+    pub fn next_frame_parameters(&mut self) -> DelayFrameParameters {
         let capacity = self.ring_buffers[0].len();
         let maximum_delay = capacity.saturating_sub(2) as f64;
         let delay_samples = (self.delay_ms.next_smoothed() * f64::from(self.sample_rate) * 0.001)
@@ -163,7 +353,7 @@ impl DelayDsp {
     }
 
     #[inline]
-    fn read(&self, channel: usize, delay_samples: f64) -> f64 {
+    pub fn read(&self, channel: usize, delay_samples: f64) -> f64 {
         let buffer = &self.ring_buffers[channel];
         let capacity = buffer.len();
         let read_position =
@@ -176,18 +366,45 @@ impl DelayDsp {
     }
 
     #[inline]
-    fn write(&mut self, channel: usize, sample: f64) {
+    pub fn write(&mut self, channel: usize, sample: f64) {
         self.ring_buffers[channel][self.write_position] = sample;
     }
 
     #[inline]
-    fn advance(&mut self) {
+    pub fn advance(&mut self) {
         self.write_position += 1;
         if self.write_position == self.ring_buffers[0].len() {
             self.write_position = 0;
         }
     }
+
+    #[inline]
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    #[inline]
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
+    #[inline]
+    pub fn write_position(&self) -> usize {
+        self.write_position
+    }
+
+    #[inline]
+    pub fn ring_buffers(&self) -> &[Vec<f64>] {
+        &self.ring_buffers
+    }
+
+    #[inline]
+    pub fn ring_buffers_mut(&mut self) -> &mut [Vec<f64>] {
+        &mut self.ring_buffers
+    }
 }
+
+// ▱▱▱▱▱ Legacy / Helper Wrappers ▱▱▱▱▱
 
 /// A feedback delay with an independent delay line for each channel.
 #[derive(Clone, Debug)]
@@ -195,44 +412,28 @@ impl DelayDsp {
 pub struct FeedbackDelayDsp {
     /// Shared parameters and delay-line state.
     #[nested(prefix = "delay/")]
-    pub delay: DelayDsp,
+    pub delay: DelayDsp<SimpleDelayMode>,
 }
 
 impl Default for FeedbackDelayDsp {
     fn default() -> Self {
-        Self::base_default()
+        let mut inst = Self::base_default();
+        inst.delay.delay_type.set_base(SimpleDelayMode::Feedback);
+        inst
     }
 }
 
 impl FeedbackDelayDsp {
-    /// Prepare the delay for a sample rate and channel layout.
     pub fn prepare(&mut self, sample_rate: u32, num_channels: usize) {
         self.delay.prepare(sample_rate, num_channels);
     }
 
-    /// Clear all pending echoes while retaining allocated storage.
     pub fn reset(&mut self) {
         self.delay.reset();
     }
 
-    /// Process a deinterleaved audio block in place.
     pub fn process_block(&mut self, buffers: &mut [&mut [f64]]) {
-        if !self.delay.layout_is_valid(buffers) {
-            return;
-        }
-
-        let frame_count = buffers[0].len();
-        for frame in 0..frame_count {
-            let parameters = self.delay.next_frame_parameters();
-            for (channel, buffer) in buffers.iter_mut().enumerate() {
-                let input = buffer[frame];
-                let delayed = self.delay.read(channel, parameters.delay_samples);
-                buffer[frame] = input * parameters.dry_mix + delayed * parameters.wet_mix;
-                self.delay
-                    .write(channel, input + delayed * parameters.feedback);
-            }
-            self.delay.advance();
-        }
+        self.delay.process_block(buffers);
     }
 }
 
@@ -242,66 +443,28 @@ impl FeedbackDelayDsp {
 pub struct PingPongDelayDsp {
     /// Shared parameters and delay-line state.
     #[nested(prefix = "delay/")]
-    pub delay: DelayDsp,
+    pub delay: DelayDsp<SimpleDelayMode>,
 }
 
 impl Default for PingPongDelayDsp {
     fn default() -> Self {
-        Self::base_default()
+        let mut inst = Self::base_default();
+        inst.delay.delay_type.set_base(SimpleDelayMode::PingPong);
+        inst
     }
 }
 
 impl PingPongDelayDsp {
-    /// Prepare the delay for a sample rate and channel layout.
     pub fn prepare(&mut self, sample_rate: u32, num_channels: usize) {
         self.delay.prepare(sample_rate, num_channels);
     }
 
-    /// Clear all pending echoes while retaining allocated storage.
     pub fn reset(&mut self) {
         self.delay.reset();
     }
 
-    /// Process a deinterleaved audio block in place.
     pub fn process_block(&mut self, buffers: &mut [&mut [f64]]) {
-        if !self.delay.layout_is_valid(buffers) {
-            return;
-        }
-
-        let frame_count = buffers[0].len();
-        for frame in 0..frame_count {
-            let parameters = self.delay.next_frame_parameters();
-            let paired_channels = buffers.len() - buffers.len() % 2;
-
-            for left in (0..paired_channels).step_by(2) {
-                let right = left + 1;
-                let left_input = buffers[left][frame];
-                let right_input = buffers[right][frame];
-                let left_delayed = self.delay.read(left, parameters.delay_samples);
-                let right_delayed = self.delay.read(right, parameters.delay_samples);
-
-                buffers[left][frame] =
-                    left_input * parameters.dry_mix + left_delayed * parameters.wet_mix;
-                buffers[right][frame] =
-                    right_input * parameters.dry_mix + right_delayed * parameters.wet_mix;
-
-                self.delay
-                    .write(left, left_input + right_delayed * parameters.feedback);
-                self.delay
-                    .write(right, right_input + left_delayed * parameters.feedback);
-            }
-
-            if paired_channels < buffers.len() {
-                let channel = paired_channels;
-                let input = buffers[channel][frame];
-                let delayed = self.delay.read(channel, parameters.delay_samples);
-                buffers[channel][frame] = input * parameters.dry_mix + delayed * parameters.wet_mix;
-                self.delay
-                    .write(channel, input + delayed * parameters.feedback);
-            }
-
-            self.delay.advance();
-        }
+        self.delay.process_block(buffers);
     }
 }
 
@@ -311,90 +474,28 @@ impl PingPongDelayDsp {
 pub struct MultiTapDelayDsp {
     /// Shared parameters and delay-line state.
     #[nested(prefix = "delay/")]
-    pub delay: DelayDsp,
-
-    /// Number of evenly spaced delay taps.
-    #[param(
-        id = "tap_count",
-        name = "Tap Count",
-        group = "Multi Tap",
-        default = 4,
-        min = 2,
-        max = 8,
-        step = 1
-    )]
-    pub tap_count: i32,
-
-    /// Level multiplier applied between consecutive taps.
-    #[param(
-        id = "tap_decay",
-        name = "Tap Decay",
-        group = "Multi Tap",
-        default = 0.7,
-        min = 0.0,
-        max = 1.0,
-        step = 0.001
-    )]
-    pub tap_decay: f64,
+    pub delay: DelayDsp<SimpleDelayMode>,
 }
 
 impl Default for MultiTapDelayDsp {
     fn default() -> Self {
-        Self::base_default()
+        let mut inst = Self::base_default();
+        inst.delay.delay_type.set_base(SimpleDelayMode::MultiTap);
+        inst
     }
 }
 
 impl MultiTapDelayDsp {
-    /// Prepare the delay for a sample rate and channel layout.
     pub fn prepare(&mut self, sample_rate: u32, num_channels: usize) {
         self.delay.prepare(sample_rate, num_channels);
-        if sample_rate > 0 {
-            self.tap_decay
-                .set_smoothing_time(PARAMETER_SMOOTHING_SECONDS, f64::from(sample_rate));
-            self.tap_decay.smoother.reset(self.tap_decay.get());
-        }
     }
 
-    /// Clear all pending echoes while retaining allocated storage.
     pub fn reset(&mut self) {
         self.delay.reset();
-        self.tap_decay.smoother.reset(self.tap_decay.get());
     }
 
-    /// Process a deinterleaved audio block in place.
     pub fn process_block(&mut self, buffers: &mut [&mut [f64]]) {
-        if !self.delay.layout_is_valid(buffers) {
-            return;
-        }
-
-        let frame_count = buffers[0].len();
-        for frame in 0..frame_count {
-            let parameters = self.delay.next_frame_parameters();
-            let tap_count = self.tap_count.get().clamp(2, 8) as usize;
-            let tap_decay = self.tap_decay.next_smoothed().clamp(0.0, 1.0);
-
-            for (channel, buffer) in buffers.iter_mut().enumerate() {
-                let input = buffer[frame];
-                let mut wet_sample = 0.0;
-                let mut weight_sum = 0.0;
-                let mut weight = 1.0;
-
-                for tap in 1..=tap_count {
-                    let tap_delay = parameters.delay_samples * tap as f64 / tap_count as f64;
-                    wet_sample += self.delay.read(channel, tap_delay) * weight;
-                    weight_sum += weight;
-                    weight *= tap_decay;
-                }
-
-                let final_tap = self.delay.read(channel, parameters.delay_samples);
-                buffer[frame] =
-                    input * parameters.dry_mix + (wet_sample / weight_sum) * parameters.wet_mix;
-                self.delay
-                    .write(channel, input + final_tap * parameters.feedback);
-            }
-
-            self.delay.advance();
-        }
+        self.delay.process_block(buffers);
     }
 }
 
@@ -405,7 +506,7 @@ mod tests {
 
     const EPSILON: f64 = 1.0e-10;
 
-    fn configure_delay(delay: &mut DelayDsp, delay_ms: f64, feedback: f64) {
+    fn configure_delay<T: DelayMode + 'static>(delay: &mut DelayDsp<T>, delay_ms: f64, feedback: f64) {
         delay.delay_ms.set_base(delay_ms);
         delay.feedback.set_base(feedback);
         delay.dry_mix.set_base(0.0);
@@ -433,6 +534,30 @@ mod tests {
         assert_close(audio[3], 1.0);
         assert_close(audio[6], 0.5);
         assert_close(audio[9], 0.25);
+    }
+
+    #[test]
+    fn delay_dsp_direct_mode_switching() {
+        let mut delay = DelayDsp::<SimpleDelayMode>::default();
+        assert_eq!(delay.delay_type.get(), SimpleDelayMode::Feedback);
+
+        configure_delay(&mut delay, 3.0, 0.5);
+        delay.prepare(1000, 1);
+
+        let mut audio = [0.0; 12];
+        audio[0] = 1.0;
+        delay.process_block(&mut [&mut audio]);
+
+        assert_close(audio[0], 0.0);
+        assert_close(audio[3], 1.0);
+        assert_close(audio[6], 0.5);
+
+        // Switch mode to Off dynamically
+        delay.reset();
+        delay.delay_type.set_base(SimpleDelayMode::Off);
+        let mut audio_off = [1.0, 2.0, 3.0];
+        delay.process_block(&mut [&mut audio_off]);
+        assert_eq!(audio_off, [1.0, 2.0, 3.0]);
     }
 
     #[test]
@@ -485,8 +610,8 @@ mod tests {
     fn multi_tap_uses_even_spacing_and_normalized_decay() {
         let mut delay = MultiTapDelayDsp::default();
         configure_delay(&mut delay.delay, 6.0, 0.0);
-        delay.tap_count.set_base(3);
-        delay.tap_decay.set_base(0.5);
+        delay.delay.tap_count.set_base(3);
+        delay.delay.tap_decay.set_base(0.5);
         delay.prepare(1000, 1);
 
         let mut audio = [0.0; 8];
@@ -577,7 +702,7 @@ mod tests {
         let pointers: Vec<_> = delay.delay.ring_buffers.iter().map(Vec::as_ptr).collect();
 
         delay.delay.delay_ms.set_base(5000.0);
-        delay.tap_count.set_base(8);
+        delay.delay.tap_count.set_base(8);
         let mut left = [0.0; 128];
         let mut right = [0.0; 128];
         delay.process_block(&mut [&mut left, &mut right]);
@@ -605,7 +730,7 @@ mod tests {
 
     #[test]
     fn multi_tap_exposes_shared_and_specific_parameters() {
-        let delay = MultiTapDelayDsp::default();
+        let delay = DelayDsp::<SimpleDelayMode>::default();
         let paths: Vec<_> = delay
             .auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
@@ -615,12 +740,13 @@ mod tests {
         assert_eq!(
             paths,
             [
+                "delay_ms",
+                "feedback",
+                "dry_mix",
+                "wet_mix",
+                "type",
                 "tap_count",
                 "tap_decay",
-                "delay/delay_ms",
-                "delay/feedback",
-                "delay/dry_mix",
-                "delay/wet_mix",
             ]
         );
     }
