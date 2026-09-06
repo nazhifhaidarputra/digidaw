@@ -1,10 +1,13 @@
 use vst3::{
     Class,
     Steinberg::{
-        Vst::{IHostApplication, IHostApplicationTrait},
+        Vst::{IEventList, IEventListTrait, IHostApplication, IHostApplicationTrait},
         kNotImplemented, kResultOk,
     },
 };
+
+const NON_SNAKE_CASE_VST3_REASON: &str =
+    "the implementation method names are fixed by the VST3 COM interface";
 
 pub struct Vst3HostContext {
     pub host_name: String,
@@ -43,5 +46,35 @@ impl IHostApplicationTrait for Vst3HostContext {
     ) -> vst3::Steinberg::tresult {
         // Used for advanced routing/sub-plugins. Safe to return Not Implemented for now.
         kNotImplemented
+    }
+}
+
+pub struct Vst3EventContext {
+    pub process_mode: i32,
+}
+
+impl Class for Vst3EventContext {
+    type Interfaces = (IEventList,);
+}
+
+#[allow(
+    non_snake_case,
+    reason = "the implementation method names are fixed by the VST3 COM interface"
+)]
+impl IEventListTrait for Vst3EventContext {
+    unsafe fn getEventCount(&self) -> vst3::Steinberg::int32 {
+        todo!()
+    }
+
+    unsafe fn getEvent(
+        &self,
+        index: vst3::Steinberg::int32,
+        e: *mut vst3::Steinberg::Vst::Event,
+    ) -> vst3::Steinberg::tresult {
+        todo!()
+    }
+
+    unsafe fn addEvent(&self, e: *mut vst3::Steinberg::Vst::Event) -> vst3::Steinberg::tresult {
+        todo!()
     }
 }
