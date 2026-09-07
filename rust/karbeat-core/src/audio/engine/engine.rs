@@ -554,7 +554,7 @@ impl AudioEngine {
     pub(super) fn get_plugin_mut<'a>(
         &'a mut self,
         target: &PluginTarget,
-    ) -> Option<&'a mut Box<dyn crate::core::project::plugin::AudioPlugin + Send + Sync>> {
+    ) -> Option<&'a mut Box<dyn crate::core::project::plugin::AudioPlugin>> {
         match target {
             PluginTarget::Generator(id) => self
                 .plugin_state
@@ -581,7 +581,7 @@ impl AudioEngine {
     pub(super) fn get_plugin<'a>(
         &'a self,
         target: &PluginTarget,
-    ) -> Option<&'a Box<dyn crate::core::project::plugin::AudioPlugin + Send + Sync>> {
+    ) -> Option<&'a Box<dyn crate::core::project::plugin::AudioPlugin>> {
         match target {
             PluginTarget::Generator(id) => self.plugin_state.get_generator(*id).map(|i| &i.plugin),
             PluginTarget::TrackEffect(track_id, effect_id) => self

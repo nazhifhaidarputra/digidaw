@@ -7,7 +7,7 @@ use std::sync::{Arc, Once, mpsc};
 
 use hashbrown::HashMap;
 use karbeat_plugin_api::traits::AudioPlugin;
-use karbeat_plugins::registry::PluginRegistry;
+use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 use parking_lot::{Mutex, RwLock};
 use rtrb::{Consumer, Producer};
 
@@ -102,7 +102,7 @@ impl DawContext {
         Ok(())
     }
 
-    pub fn get_plugin_box(&self, registry_id: u32) -> Option<Box<dyn AudioPlugin + Send + Sync>> {
+    pub fn get_plugin_factory(&self, registry_id: u32) -> Option<PluginFactory> {
         let registry = &self.plugin_registry;
         let Some((plugin, _)) = registry.create_plugin_by_id(registry_id) else {
             return None;

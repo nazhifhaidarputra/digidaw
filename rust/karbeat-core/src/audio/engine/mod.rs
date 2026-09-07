@@ -1,3 +1,4 @@
+pub mod factory;
 mod buffer;
 mod command;
 mod engine;

@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use karbeat_plugin_api::traits::AudioPlugin;
-use karbeat_plugins::registry::PluginRegistry;
+use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
@@ -288,7 +288,7 @@ impl ApplicationState {
         &mut self,
         registry: &mut PluginRegistry,
         registry_id: u32,
-    ) -> anyhow::Result<(AudioTrack, GeneratorId, Box<dyn AudioPlugin + Send + Sync>)> {
+    ) -> anyhow::Result<(AudioTrack, GeneratorId, PluginFactory)> {
         // Create the plugin via registry using ID
         let (generator_plugin, generator_name) = {
             if let Some((generator_box, name)) = registry.create_plugin_by_id(registry_id) {

@@ -5,8 +5,7 @@
 //! are implemented
 
 use std::{
-    cell::{Cell, RefCell},
-    sync::Arc,
+    cell::{Cell, RefCell}, rc::Rc, sync::Arc,
 };
 
 use crate::{
@@ -114,7 +113,7 @@ impl Vst3Wrapper {
         let bypass_param_id = edit_ctrl.as_ref().and_then(|ctrl| find_bypass_param(ctrl));
 
         Ok(Self {
-            inner: Arc::new(Vst3Instance {
+            inner: Rc::new(Vst3Instance {
                 class_id: *cid,
                 plugin_info: info,
                 component,

@@ -17,14 +17,14 @@ pub fn add_midi_track_with_generator_id(
     ctx: &mut DawContext,
     registry_id: u32,
 ) -> anyhow::Result<AudioTrack> {
-    let (audio_track, gen_id, generator_plugin) = ctx
+    let (audio_track, gen_id, generator_plugin_factory) = ctx
         .app_state
         .add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
 
     let _ = ctx.send_audio_command(AudioCommand::AddGenerator {
         generator_id: gen_id,
         track_id: audio_track.id,
-        plugin: generator_plugin,
+        plugin_factory: generator_plugin_factory,
     });
 
     ctx.broadcast_track_graph();

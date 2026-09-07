@@ -46,7 +46,7 @@ pub trait PluginEditor {
 /// This trait is now fully aligned with VST3/CLAP capabilities,
 /// supporting non-interleaved audio, sample-accurate automation,
 /// parameter gestures, and rich transport context.
-pub trait AudioPlugin: DynClone + Send + Sync {
+pub trait AudioPlugin: DynClone {
     // --- Metadata ---
     fn name(&self) -> &str;
     fn category(&self) -> PluginCategory;

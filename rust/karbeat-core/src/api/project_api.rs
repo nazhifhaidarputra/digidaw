@@ -332,10 +332,11 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     // 1. Hydrate Generators
     for (gen_id, gen_arc) in &ctx.app_state.generator_pool {
         if let GeneratorInstanceType::Plugin(plugin_instance) = &gen_arc.instance_type {
-            if let Some((mut plugin, _)) = ctx
+            if let Some(( plugin_factory, _)) = ctx
                 .plugin_registry
                 .create_plugin_by_id(plugin_instance.registry_id)
             {
+                let mut plugin = plugin_factory();
                 // Pass the binary state to the plugin
                 if !plugin_instance.plugin_state.is_empty() {
                     plugin.set_state(&plugin_instance.plugin_state);
@@ -354,10 +355,11 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     for (track_id, channel_arc) in &ctx.app_state.mixer.channels {
         let mut track_chain = IndexMap::new();
         for effect in &channel_arc.channel.effects {
-            if let Some((mut plugin, _)) = ctx
+            if let Some((mut plugin_factory, _)) = ctx
                 .plugin_registry
                 .create_plugin_by_id(effect.instance.registry_id)
             {
+                
                 if !effect.instance.plugin_state.is_empty() {
                     plugin.set_state(&effect.instance.plugin_state);
                 }

@@ -14,7 +14,7 @@ use karbeat_plugin_api::{
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_utils::hash::hash_str;
 
-type PluginFactory = Box<dyn Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync>;
+pub type PluginFactory = fn() -> Box<dyn AudioPlugin>;
 
 /// A declarative macro to quickly register a list of plugins.
 /// Usage: `register_plugins!(registry, ("id", "Name", PluginStruct), ...);`
@@ -26,7 +26,7 @@ macro_rules! register_plugins {
     };
 }
 
-struct RegisteredPlugin {
+pub struct RegisteredPlugin {
     name: String,
     factory: PluginFactory,
     parameter_specs: Vec<ParameterSpec>,
@@ -70,9 +70,7 @@ impl PluginRegistry {
         registry
     }
 
-    pub fn register_plugin<F>(&mut self, id_str: &str, name: &str, factory: F) -> u32
-    where
-        F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
+    pub fn register_plugin(&mut self, id_str: &str, name: &str, factory: PluginFactory) -> u32
     {
         let id = hash_str(id_str);
         let temp_plugin = factory();
@@ -82,30 +80,12 @@ impl PluginRegistry {
             id,
             RegisteredPlugin {
                 name: name.to_string(),
-                factory: Box::new(factory),
+                factory: factory,
                 parameter_specs,
                 is_synth,
             },
         );
         id
-    }
-
-    /// Deprecated: use `register_plugin` instead.
-    #[deprecated(note = "use register_plugin instead")]
-    pub fn register_generator<F>(&mut self, id_str: &str, name: &str, factory: F) -> u32
-    where
-        F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
-    {
-        self.register_plugin(id_str, name, factory)
-    }
-
-    /// Deprecated: use `register_plugin` instead.
-    #[deprecated(note = "use register_plugin instead")]
-    pub fn register_effect<F>(&mut self, id_str: &str, name: &str, factory: F) -> u32
-    where
-        F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
-    {
-        self.register_plugin(id_str, name, factory)
     }
 
     // =========================================================================
@@ -115,30 +95,13 @@ impl PluginRegistry {
     pub fn create_plugin_by_id(
         &self,
         id: u32,
-    ) -> Option<(Box<dyn AudioPlugin + Send + Sync>, String)> {
+    ) -> Option<(PluginFactory, String)> {
         self.plugins.get(&id).map(|reg| {
-            let plugin = (reg.factory)();
-            (plugin, reg.name.clone())
+            // let plugin = (reg.factory)();
+            (reg.factory, reg.name.clone())
         })
     }
 
-    /// Deprecated: use `create_plugin_by_id` instead.
-    #[deprecated(note = "use create_plugin_by_id instead")]
-    pub fn create_generator_by_id(
-        &self,
-        id: u32,
-    ) -> Option<(Box<dyn AudioPlugin + Send + Sync>, String)> {
-        self.create_plugin_by_id(id)
-    }
-
-    /// Deprecated: use `create_plugin_by_id` instead.
-    #[deprecated(note = "use create_plugin_by_id instead")]
-    pub fn create_effect_by_id(
-        &self,
-        id: u32,
-    ) -> Option<(Box<dyn AudioPlugin + Send + Sync>, String)> {
-        self.create_plugin_by_id(id)
-    }
 
     // =========================================================================
     // Cached Parameter Specs

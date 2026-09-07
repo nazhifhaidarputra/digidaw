@@ -234,11 +234,11 @@ pub fn add_effect_to_mixer_channel_by_id(
         .map(|e| e.id)
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
-    if let Some(plugin) = ctx.get_plugin_box(registry_id) {
+    if let Some(plugin) = ctx.get_plugin_factory(registry_id) {
         let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Track(track_id),
             effect_id,
-            effect: plugin,
+            effect_factory: plugin,
         });
     } else {
         log::warn!(
@@ -276,11 +276,11 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
         .map(|e| e.id)
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
-    if let Some(plugin) = ctx.get_plugin_box(registry_id) {
+    if let Some(plugin) = ctx.get_plugin_factory(registry_id) {
         let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Master,
             effect_id,
-            effect: plugin,
+            effect_factory: plugin,
         });
     } else {
         log::warn!(
@@ -390,11 +390,11 @@ pub fn add_effect_to_bus(
         .map(|e| e.id)
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
-    if let Some(plugin) = ctx.get_plugin_box(registry_id) {
+    if let Some(plugin) = ctx.get_plugin_factory(registry_id) {
         let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Bus(bus_id),
             effect_id,
-            effect: plugin,
+            effect_factory: plugin,
         });
     } else {
         log::warn!(

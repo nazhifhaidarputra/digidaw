@@ -134,8 +134,9 @@ impl AudioEngine {
             AudioCommand::AddGenerator {
                 generator_id,
                 track_id,
-                mut plugin,
+                plugin_factory,
             } => {
+                let mut plugin = plugin_factory(); 
                 // Prepare the plugin with current sample rate and buffer size
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 plugin.prepare(self.config.sample_rate as f32, buf_size);
@@ -273,8 +274,9 @@ impl AudioEngine {
             AudioCommand::AddEffect {
                 target,
                 effect_id,
-                mut effect,
+                effect_factory,
             } => {
+                let mut effect = effect_factory();
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 effect.prepare(self.config.sample_rate as f32, buf_size);
                 let bus_cfg = BusConfig {
@@ -563,7 +565,8 @@ impl AudioEngine {
                     Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
                 > = HashMap::new();
 
-                for (gen_id, mut plugin) in generators.into_iter() {
+                for (gen_id, plugin_factory) in generators.into_iter() {
+                    let mut plugin = plugin_factory();
                     plugin.prepare(sample_rate, buf_size);
                     let bus = BusConfig {
                         name: "Main".into(),
@@ -600,7 +603,8 @@ impl AudioEngine {
 
                 // Batch load Track Effects
                 for (track_id, effects_map) in track_effects.into_iter() {
-                    for (effect_id, mut plugin) in effects_map.into_iter() {
+                    for (effect_id, plugin_factory) in effects_map.into_iter() {
+                        let mut plugin = plugin_factory();
                         plugin.prepare(sample_rate, buf_size);
                         let bus = BusConfig {
                             name: "Main".into(),
@@ -632,7 +636,8 @@ impl AudioEngine {
                     self.plugin_state.add_bus(bus_id_index);
                     self.workspace.bus_buffers.insert(bus_id, Vec::new());
 
-                    for (effect_id, mut plugin) in effects_map.into_iter() {
+                    for (effect_id, plugin_factory) in effects_map.into_iter() {
+                        let mut plugin = plugin_factory();
                         plugin.prepare(sample_rate, buf_size);
                         let bus = BusConfig {
                             name: "Main".into(),
@@ -668,7 +673,8 @@ impl AudioEngine {
                 }
 
                 // Batch load Master Effects
-                for (effect_id, mut plugin) in master_effects.into_iter() {
+                for (effect_id, plugin_factory) in master_effects.into_iter() {
+                    let mut plugin = plugin_factory();
                     plugin.prepare(sample_rate, buf_size);
                     let bus = BusConfig {
                         name: "Main".into(),

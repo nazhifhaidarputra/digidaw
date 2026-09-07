@@ -432,8 +432,8 @@ pub fn execute_plugin_command_by_registry_id(
     command: &str,
     payload_value: &serde_json::Value,
 ) -> Option<serde_json::Value> {
-    let (mut plugin, _) = ctx.plugin_registry.create_plugin_by_id(registry_id)?;
-    plugin.execute_custom_command(command, payload_value)
+    let (plugin_factory, _) = ctx.plugin_registry.create_plugin_by_id(registry_id)?;
+    plugin_factory().execute_custom_command(command, payload_value)
 }
 
 /// Executes a command synchronously on the main thread using an instantiated plugin's saved state
@@ -516,7 +516,7 @@ pub fn execute_plugin_instance_command(
         .plugin_registry
         .create_plugin_by_id(plugin_registry_id)
         .map(|(p, _)| p))
-    .ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found in registry", plugin_name))?;
+    .ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found in registry", plugin_name))?();
 
     if !plugin_state.is_empty() {
         temp_plugin.set_state(&plugin_state);

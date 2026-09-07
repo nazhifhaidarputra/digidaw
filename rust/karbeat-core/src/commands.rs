@@ -2,6 +2,7 @@ use hashbrown::HashMap;
 use indexmap::IndexMap;
 use karbeat_plugin_api::types::MidiEvent;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
+use karbeat_plugins::registry::PluginFactory;
 
 use crate::{
     audio::{
@@ -65,7 +66,7 @@ pub enum AudioCommand {
     AddGenerator {
         generator_id: GeneratorId,
         track_id: TrackId,
-        plugin: Box<dyn AudioPlugin + Send>,
+        plugin_factory: PluginFactory,
     },
     /// Remove a generator plugin from the audio thread
     RemoveGenerator {
@@ -94,7 +95,7 @@ pub enum AudioCommand {
     AddEffect {
         target: EffectTarget,
         effect_id: EffectId,
-        effect: Box<dyn AudioPlugin + Send + Sync>,
+        effect_factory: PluginFactory,
     },
     /// Remove an effect from the target's effect chain
     RemoveEffect {
@@ -159,10 +160,10 @@ pub enum AudioCommand {
     /// Prepare all plugins and seed the audio thread's mixer channel state.
     /// Called on project load / new project to fully hydrate the audio thread.
     HydratePlugin {
-        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
-        master_effects: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>,
-        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
-        generators: IndexMap<GeneratorId, Box<dyn AudioPlugin + Send + Sync>>,
+        track_effects: IndexMap<TrackId, IndexMap<EffectId, PluginFactory>>,
+        master_effects: IndexMap<EffectId, PluginFactory>,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, PluginFactory>>,
+        generators: IndexMap<GeneratorId, PluginFactory>,
         /// Initial DSP values for every track channel (volume, pan, mute, solo, inverted_phase)
         track_channels: IndexMap<TrackId, MixerChannelSeed>,
         /// Initial DSP values for every bus channel

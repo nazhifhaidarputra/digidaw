@@ -1,6 +1,6 @@
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::{Param, ParameterSpec};
-use karbeat_plugins::registry::PluginRegistry;
+use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 use karbeat_utils::move_element;
 use smallvec::SmallVec;
 
@@ -370,11 +370,11 @@ impl MixerChannel {
         &mut self,
         registry: &mut PluginRegistry,
         effect_registry_id: u32,
-    ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
-        let (effect_plugin, effect_name, _default_params) = {
-            if let Some((effect_box, name)) = registry.create_plugin_by_id(effect_registry_id) {
-                let default_params = effect_box.default_parameters();
-                (effect_box, name, default_params)
+    ) -> anyhow::Result<(PluginFactory, String, EffectId)> {
+        let (effect_factory, effect_name, _default_params) = {
+            if let Some((effect_factory, name)) = registry.create_plugin_by_id(effect_registry_id) {
+                let default_params = effect_factory().default_parameters();
+                (effect_factory, name, default_params)
             } else {
                 let message = format!(
                     "Effect with ID {} not found in registry",
@@ -389,7 +389,7 @@ impl MixerChannel {
 
         let effect_id = self.effects.insert(plugin_instance);
 
-        Ok((effect_plugin, effect_name, effect_id))
+        Ok((effect_factory, effect_name, effect_id))
     }
 
     pub fn remove_effect(&mut self, effect_id: EffectId) -> anyhow::Result<()> {
@@ -436,14 +436,14 @@ impl MixerState {
         registry: &mut PluginRegistry,
         track_id: &TrackId,
         registry_id: u32,
-    ) -> anyhow::Result<(EffectTarget, EffectId, Box<dyn AudioPlugin + Send + Sync>)> {
+    ) -> anyhow::Result<(EffectTarget, EffectId, PluginFactory)> {
         let mixer_channel = self
             .channels
             .get_mut(*track_id)
             .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        let (effect_plugin, effect_name, effect_id) =
+        let (effect_factory, effect_name, effect_id) =
             mixer_channel.channel.add_effect(registry, registry_id)?;
 
         log::info!(
@@ -453,7 +453,7 @@ impl MixerState {
             track_id
         );
 
-        Ok((EffectTarget::Track(*track_id), effect_id, effect_plugin))
+        Ok((EffectTarget::Track(*track_id), effect_id, effect_factory))
     }
 
     pub fn remove_effect_by_id(
@@ -494,16 +494,16 @@ impl MixerState {
         &mut self,
         registry: &mut PluginRegistry,
         registry_id: u32,
-    ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
+    ) -> anyhow::Result<(PluginFactory, String, EffectId)> {
         let channel = &mut self.master_bus;
-        let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
+        let (effect_factory, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
 
         log::info!(
             "Effect {} (registry_id={}) added to master bus",
             effect_name,
             registry_id
         );
-        Ok((effect_plugin, effect_name, effect_id))
+        Ok((effect_factory, effect_name, effect_id))
     }
 
     pub fn remove_effect_from_master_bus(&mut self, effect_id: EffectId) -> anyhow::Result<()> {
@@ -590,13 +590,13 @@ impl MixerState {
         registry: &mut PluginRegistry,
         bus_id: BusId,
         registry_id: u32,
-    ) -> anyhow::Result<(EffectTarget, EffectId, Box<dyn AudioPlugin + Send + Sync>)> {
+    ) -> anyhow::Result<(EffectTarget, EffectId, PluginFactory)> {
         let bus = self
             .buses
             .get_mut(bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
-        let (effect_plugin, effect_name, effect_id) =
+        let (effect_factory, effect_name, effect_id) =
             bus.channel.add_effect(registry, registry_id)?;
 
         log::info!(
@@ -606,7 +606,7 @@ impl MixerState {
             bus_id
         );
 
-        Ok((EffectTarget::Bus(bus_id), effect_id, effect_plugin))
+        Ok((EffectTarget::Bus(bus_id), effect_id, effect_factory))
     }
 
     pub fn remove_effect_from_bus(

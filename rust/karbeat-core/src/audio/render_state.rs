@@ -21,13 +21,13 @@ use slab::Slab;
 pub struct AudioGeneratorInstance {
     pub id: GeneratorId,
     pub track_id: TrackId,
-    pub plugin: Box<dyn AudioPlugin + Send + Sync>,
+    pub plugin: Box<dyn AudioPlugin>,
 }
 
 #[derive(Clone)]
 pub struct AudioEffectInstance {
     pub id: EffectId,
-    pub plugin: Box<dyn AudioPlugin + Send + Sync>,
+    pub plugin: Box<dyn AudioPlugin>,
 }
 
 /// Audio thread's owned plugin instances - NO locks required for access
