@@ -4,6 +4,7 @@ use karbeat_plugin_api::types::MidiEvent;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugins::registry::PluginFactory;
 
+use crate::core::project::PluginInstance;
 use crate::{
     audio::{
         engine::{PlaybackMode, PluginTelemetrySnapshot},
@@ -160,10 +161,10 @@ pub enum AudioCommand {
     /// Prepare all plugins and seed the audio thread's mixer channel state.
     /// Called on project load / new project to fully hydrate the audio thread.
     HydratePlugin {
-        track_effects: IndexMap<TrackId, IndexMap<EffectId, PluginFactory>>,
-        master_effects: IndexMap<EffectId, PluginFactory>,
-        bus_effects: IndexMap<BusId, IndexMap<EffectId, PluginFactory>>,
-        generators: IndexMap<GeneratorId, PluginFactory>,
+        track_effects: IndexMap<TrackId, IndexMap<EffectId, (PluginInstance, PluginFactory)>>,
+        master_effects: IndexMap<EffectId, (PluginInstance, PluginFactory)>,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, (PluginInstance, PluginFactory)>>,
+        generators: IndexMap<GeneratorId, (PluginInstance, PluginFactory)>,
         /// Initial DSP values for every track channel (volume, pan, mute, solo, inverted_phase)
         track_channels: IndexMap<TrackId, MixerChannelSeed>,
         /// Initial DSP values for every bus channel

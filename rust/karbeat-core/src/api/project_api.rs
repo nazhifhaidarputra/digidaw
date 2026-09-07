@@ -336,17 +336,17 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
                 .plugin_registry
                 .create_plugin_by_id(plugin_instance.registry_id)
             {
-                let mut plugin = plugin_factory();
-                // Pass the binary state to the plugin
-                if !plugin_instance.plugin_state.is_empty() {
-                    plugin.set_state(&plugin_instance.plugin_state);
-                } else {
-                    // Fallback for older project files that only saved parameters
-                    for spec in &plugin_instance.parameter_specs {
-                        plugin.set_parameter(spec.id, spec.value as f32);
-                    }
-                }
-                generators.insert(gen_id, plugin);
+                // let mut plugin = plugin_factory();
+                // // Pass the binary state to the plugin
+                // if !plugin_instance.plugin_state.is_empty() {
+                //     plugin.set_state(&plugin_instance.plugin_state);
+                // } else {
+                //     // Fallback for older project files that only saved parameters
+                //     for spec in &plugin_instance.parameter_specs {
+                //         plugin.set_parameter(spec.id, spec.value as f32);
+                //     }
+                // }
+                generators.insert(gen_id, (plugin_instance.clone(), plugin_factory));
             }
         }
     }
@@ -355,20 +355,20 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     for (track_id, channel_arc) in &ctx.app_state.mixer.channels {
         let mut track_chain = IndexMap::new();
         for effect in &channel_arc.channel.effects {
-            if let Some((mut plugin_factory, _)) = ctx
+            if let Some((plugin_factory, _)) = ctx
                 .plugin_registry
                 .create_plugin_by_id(effect.instance.registry_id)
             {
                 
-                if !effect.instance.plugin_state.is_empty() {
-                    plugin.set_state(&effect.instance.plugin_state);
-                }
-                {
-                    for spec in &effect.instance.parameter_specs {
-                        plugin.set_parameter(spec.id, spec.value as f32);
-                    }
-                }
-                track_chain.insert(effect.id, plugin);
+                // if !effect.instance.plugin_state.is_empty() {
+                //     plugin.set_state(&effect.instance.plugin_state);
+                // }
+                // {
+                //     for spec in &effect.instance.parameter_specs {
+                //         plugin.set_parameter(spec.id, spec.value as f32);
+                //     }
+                // }
+                track_chain.insert(effect.id, (effect.instance.clone(), plugin_factory));
             }
         }
         if !track_chain.is_empty() {
@@ -380,19 +380,19 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     for (bus_id, bus_arc) in &ctx.app_state.mixer.buses {
         let mut bus_chain = IndexMap::new();
         for effect in &bus_arc.channel.effects {
-            if let Some((mut plugin, _)) = ctx
+            if let Some((plugin_factory, _)) = ctx
                 .plugin_registry
                 .create_plugin_by_id(effect.instance.registry_id)
             {
-                if !effect.instance.plugin_state.is_empty() {
-                    plugin.set_state(&effect.instance.plugin_state);
-                }
-                {
-                    for spec in &effect.instance.parameter_specs {
-                        plugin.set_parameter(spec.id, spec.value as f32);
-                    }
-                }
-                bus_chain.insert(effect.id, plugin);
+                // if !effect.instance.plugin_state.is_empty() {
+                //     plugin.set_state(&effect.instance.plugin_state);
+                // }
+                // {
+                //     for spec in &effect.instance.parameter_specs {
+                //         plugin.set_parameter(spec.id, spec.value as f32);
+                //     }
+                // }
+                bus_chain.insert(effect.id, (effect.instance.clone(), plugin_factory));
             }
         }
         if !bus_chain.is_empty() {
@@ -402,19 +402,19 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
 
     // 4. Hydrate Master Effects
     for effect in &ctx.app_state.mixer.master_bus.effects {
-        if let Some((mut plugin, _)) = ctx
+        if let Some((plugin_factory, _)) = ctx
             .plugin_registry
             .create_plugin_by_id(effect.instance.registry_id)
         {
-            if !effect.instance.plugin_state.is_empty() {
-                plugin.set_state(&effect.instance.plugin_state);
-            }
-            {
-                for spec in &effect.instance.parameter_specs {
-                    plugin.set_parameter(spec.id, spec.value as f32);
-                }
-            }
-            master_effects.insert(effect.id, plugin);
+            // if !effect.instance.plugin_state.is_empty() {
+            //     plugin.set_state(&effect.instance.plugin_state);
+            // }
+            // {
+            //     for spec in &effect.instance.parameter_specs {
+            //         plugin.set_parameter(spec.id, spec.value as f32);
+            //     }
+            // }
+            master_effects.insert(effect.id, (effect.instance.clone(), plugin_factory));
         }
     }
 

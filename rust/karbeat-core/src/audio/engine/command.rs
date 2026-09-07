@@ -565,8 +565,9 @@ impl AudioEngine {
                     Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
                 > = HashMap::new();
 
-                for (gen_id, plugin_factory) in generators.into_iter() {
+                for (gen_id, (plugin_instance, plugin_factory)) in generators.into_iter() {
                     let mut plugin = plugin_factory();
+                    fill_plugin_with_param_state(&mut plugin, &plugin_instance);
                     plugin.prepare(sample_rate, buf_size);
                     let bus = BusConfig {
                         name: "Main".into(),
@@ -603,8 +604,9 @@ impl AudioEngine {
 
                 // Batch load Track Effects
                 for (track_id, effects_map) in track_effects.into_iter() {
-                    for (effect_id, plugin_factory) in effects_map.into_iter() {
+                    for (effect_id, (plugin_instance, plugin_factory)) in effects_map.into_iter() {
                         let mut plugin = plugin_factory();
+                        fill_plugin_with_param_state(&mut plugin, &plugin_instance);
                         plugin.prepare(sample_rate, buf_size);
                         let bus = BusConfig {
                             name: "Main".into(),
@@ -636,8 +638,9 @@ impl AudioEngine {
                     self.plugin_state.add_bus(bus_id_index);
                     self.workspace.bus_buffers.insert(bus_id, Vec::new());
 
-                    for (effect_id, plugin_factory) in effects_map.into_iter() {
+                    for (effect_id, (plugin_instance, plugin_factory)) in effects_map.into_iter() {
                         let mut plugin = plugin_factory();
+                        fill_plugin_with_param_state(&mut plugin, &plugin_instance);
                         plugin.prepare(sample_rate, buf_size);
                         let bus = BusConfig {
                             name: "Main".into(),
@@ -673,8 +676,9 @@ impl AudioEngine {
                 }
 
                 // Batch load Master Effects
-                for (effect_id, plugin_factory) in master_effects.into_iter() {
+                for (effect_id, (plugin_instance, plugin_factory)) in master_effects.into_iter() {
                     let mut plugin = plugin_factory();
+                    fill_plugin_with_param_state(&mut plugin, &plugin_instance);
                     plugin.prepare(sample_rate, buf_size);
                     let bus = BusConfig {
                         name: "Main".into(),

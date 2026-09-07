@@ -1,7 +1,10 @@
 use dasp::slice;
 use hashbrown::HashMap;
 use itertools::{Itertools, izip};
-use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext};
+use karbeat_plugin_api::{
+    traits::AudioPlugin,
+    types::{AudioBuffers, AudioBusBuffer, ProcessContext},
+};
 use karbeat_plugin_types::{Param, SmoothableParam};
 use karbeat_utils::math::hermite_interp;
 use rodio::math::db_to_linear;
@@ -10,8 +13,8 @@ use wide::f32x16;
 use crate::{
     commands::MixerChannelTarget,
     core::project::{
-        AutomationTarget, MixerChannelParamTarget, MixerChannelParams, RoutingConnection,
-        RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
+        AutomationTarget, MixerChannelParamTarget, MixerChannelParams, PluginInstance,
+        RoutingConnection, RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
     },
     shared::{BusId, TrackId},
 };
@@ -469,6 +472,17 @@ fn deinterleave_buffer(
                 .step_by(channels)
                 .copied(),
         );
+    }
+}
+
+pub fn fill_plugin_with_param_state(plugin: &mut Box<dyn AudioPlugin>, instance: &PluginInstance) {
+    if !instance.plugin_state.is_empty() {
+        plugin.set_state(&instance.plugin_state);
+    }
+    {
+        for spec in &instance.parameter_specs {
+            plugin.set_parameter(spec.id, spec.value as f32);
+        }
     }
 }
 
