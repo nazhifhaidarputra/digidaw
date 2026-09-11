@@ -48,9 +48,10 @@ where
     M: Fn(&PluginInfo) -> U,
     C: FromIterator<U>,
 {
-    ctx.plugin_registry
-        .list_generators_with_ids()
+    ctx.plugin_catalog
+        .list()
         .iter()
+        .filter(|plugin| plugin.is_synth)
         .map(mapper)
         .collect()
 }
@@ -60,9 +61,10 @@ where
     M: Fn(&PluginInfo) -> U,
     C: FromIterator<U>,
 {
-    ctx.plugin_registry
-        .list_effects_with_ids()
+    ctx.plugin_catalog
+        .list()
         .iter()
+        .filter(|plugin| !plugin.is_synth)
         .map(mapper)
         .collect()
 }
@@ -72,8 +74,8 @@ where
     P: From<PluginInfo>,
     C: FromIterator<P>,
 {
-    ctx.plugin_registry
-        .list_plugins_with_ids()
+    ctx.plugin_catalog
+        .list()
         .into_iter()
         .map(|p| P::from(p))
         .collect()
@@ -145,6 +147,10 @@ pub fn get_generator_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
+    let target = PluginTarget::Generator(*generator_id);
+    if super::external_plugin_api::descriptor(ctx, target).is_some() {
+        return get_plugin_parameter_specs(ctx, &target, mapper).map_err(|error| error.to_string());
+    }
     let generator_arc = ctx
         .app_state
         .generator_pool
@@ -187,6 +193,14 @@ pub fn get_effect_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
+    let plugin_target = match target {
+        EffectTarget::Track(id) => PluginTarget::TrackEffect(*id, *effect_id),
+        EffectTarget::Bus(id) => PluginTarget::BusEffect(*id, *effect_id),
+        EffectTarget::Master => PluginTarget::MasterEffect(*effect_id),
+    };
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return get_plugin_parameter_specs(ctx, &plugin_target, mapper).map_err(|error| error.to_string());
+    }
     let (plugin_name, plugin_registry_id) = match target {
         EffectTarget::Track(track_id) => {
             let channel = ctx
@@ -265,6 +279,13 @@ pub fn get_plugin_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
+    if let Some(plugin) = super::external_plugin_api::plugin_instance(ctx, *target).filter(|plugin| plugin.external.is_some()) {
+        return Ok(plugin.parameter_specs.iter().cloned().map(|spec| {
+            #[allow(clippy::as_conversions, reason = "normalized parameter defaults fit in the engine's f32 value range")]
+            let value = spec.default_value as f32;
+            mapper(spec, value)
+        }).collect());
+    }
     let (plugin_name, plugin_registry_id) = match target {
         PluginTarget::Generator(gen_id) => {
             let generator = ctx

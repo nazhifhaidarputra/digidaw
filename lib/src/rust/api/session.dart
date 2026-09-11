@@ -91,7 +91,7 @@ Future<void> cutClips({
   clipIds: clipIds,
 );
 
-/// Paste clips from clipboard to a target track at a specified start time.
+/// Paste clips from clipboard to a target track at a specified start tick.
 /// Clips are offset relative to the earliest clip's start time.
 Future<List<UiClip>> pasteClips({
   required DawContext ctx,
@@ -116,7 +116,7 @@ Future<void> deleteClips({
   clipIds: clipIds,
 );
 
-/// Move a clip from one track to another (or within the same track) with a new start time.
+/// Move a clip to a new timeline start tick, optionally changing tracks.
 Future<void> moveClip({
   required DawContext ctx,
   required int oldTrackId,
@@ -131,7 +131,7 @@ Future<void> moveClip({
   newStartTime: newStartTime,
 );
 
-/// Resize a clip by updating its start_time, offset_start, and/or loop_length.
+/// Resize a clip at a timeline tick, updating sample dimensions for audio.
 /// Supports both left (slip edit) and right edge resizing with history support.
 Future<void> resizeClip({
   required DawContext ctx,

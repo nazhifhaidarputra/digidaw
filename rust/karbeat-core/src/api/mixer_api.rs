@@ -211,7 +211,10 @@ pub fn set_mixer_channel_param(
 /// Ask the audio thread to emit a full MixerChannelSnapshot for the given
 /// channel. Poll the result with `poll_mixer_channel_feedback`.
 pub fn query_mixer_channel(ctx: &mut DawContext, target: MixerChannelTarget) {
-    let _ = ctx.send_audio_command(AudioCommand::QueryMixerChannel { target });
+    let _ = ctx.send_audio_command(AudioCommand::QueryMixerChannel {
+        target,
+        request_id: None,
+    });
 }
 
 // ======================================
@@ -223,6 +226,9 @@ pub fn add_effect_to_mixer_channel_by_id(
     track_id: TrackId,
     registry_id: u32,
 ) -> anyhow::Result<()> {
+    if ctx.plugin_catalog.external(registry_id).is_some() {
+        return super::external_plugin_api::add_effect(ctx, EffectTarget::Track(track_id), registry_id).map(|_| ());
+    }
     let app = &mut ctx.app_state;
     app.mixer
         .add_effect_descriptor_by_id(&mut ctx.plugin_registry, &track_id, registry_id)?;
@@ -238,6 +244,7 @@ pub fn add_effect_to_mixer_channel_by_id(
         let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Track(track_id),
             effect_id,
+            registry_id,
             effect_factory: plugin,
         });
     } else {
@@ -254,6 +261,15 @@ pub fn remove_effect_from_mixer_channel(
     track_id: TrackId,
     effect_instance_id: EffectId,
 ) -> anyhow::Result<()> {
+    let plugin_target = PluginTarget::TrackEffect(track_id, effect_instance_id);
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return super::external_plugin_api::remove_effect(
+            ctx,
+            EffectTarget::Track(track_id),
+            effect_instance_id,
+        );
+    }
+
     ctx.app_state
         .mixer
         .remove_effect_by_id(&track_id, effect_instance_id)?;
@@ -265,6 +281,10 @@ pub fn remove_effect_from_mixer_channel(
 }
 
 pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<()> {
+    if ctx.plugin_catalog.external(registry_id).is_some() {
+        return super::external_plugin_api::add_effect(ctx, EffectTarget::Master, registry_id)
+            .map(|_| ());
+    }
     let app = &mut ctx.app_state;
     app.mixer
         .add_effect_to_master_bus(&mut ctx.plugin_registry, registry_id)?;
@@ -280,6 +300,7 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
         let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Master,
             effect_id,
+            registry_id,
             effect_factory: plugin,
         });
     } else {
@@ -315,6 +336,19 @@ pub fn remove_effect_from_target_mixer_channel(
     mixer_channel_target: MixerChannelTarget,
     effect_instance_id: EffectId,
 ) -> anyhow::Result<()> {
+    let plugin_target = match &mixer_channel_target {
+        MixerChannelTarget::Track(id) => PluginTarget::TrackEffect(*id, effect_instance_id),
+        MixerChannelTarget::Bus(id) => PluginTarget::BusEffect(*id, effect_instance_id),
+        MixerChannelTarget::Master => PluginTarget::MasterEffect(effect_instance_id),
+    };
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return super::external_plugin_api::remove_effect(
+            ctx,
+            effect_target_from_mixer_target(&mixer_channel_target),
+            effect_instance_id,
+        );
+    }
+
     let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
     match mixer_channel_target {
         MixerChannelTarget::Track(track_id) => {
@@ -352,6 +386,15 @@ pub fn remove_effect_from_master_bus(
     ctx: &mut DawContext,
     effect_instance_id: EffectId,
 ) -> anyhow::Result<()> {
+    let plugin_target = PluginTarget::MasterEffect(effect_instance_id);
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return super::external_plugin_api::remove_effect(
+            ctx,
+            EffectTarget::Master,
+            effect_instance_id,
+        );
+    }
+
     ctx.app_state
         .mixer
         .remove_effect_from_master_bus(effect_instance_id)?;
@@ -369,6 +412,13 @@ pub fn create_bus(ctx: &mut DawContext, name: String) -> BusId {
 }
 
 pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
+    if super::external_plugin_api::bus_targets(ctx, bus_id)
+        .iter()
+        .any(|target| super::external_plugin_api::descriptor(ctx, *target).is_some())
+    {
+        return super::external_plugin_api::delete_bus(ctx, bus_id);
+    }
+
     ctx.app_state.mixer.remove_bus(bus_id)?;
     let _ = ctx.send_audio_command(AudioCommand::RemoveBus { bus_id });
     Ok(())
@@ -379,6 +429,10 @@ pub fn add_effect_to_bus(
     bus_id: BusId,
     registry_id: u32,
 ) -> anyhow::Result<()> {
+    if ctx.plugin_catalog.external(registry_id).is_some() {
+        return super::external_plugin_api::add_effect(ctx, EffectTarget::Bus(bus_id), registry_id)
+            .map(|_| ());
+    }
     let app = &mut ctx.app_state;
     app.mixer
         .add_effect_to_bus(&mut ctx.plugin_registry, bus_id, registry_id)?;
@@ -394,6 +448,7 @@ pub fn add_effect_to_bus(
         let _ = ctx.send_audio_command(AudioCommand::AddEffect {
             target: EffectTarget::Bus(bus_id),
             effect_id,
+            registry_id,
             effect_factory: plugin,
         });
     } else {

@@ -17,6 +17,9 @@ pub fn add_midi_track_with_generator_id(
     ctx: &mut DawContext,
     registry_id: u32,
 ) -> anyhow::Result<AudioTrack> {
+    if ctx.plugin_catalog.external(registry_id).is_some() {
+        return super::external_plugin_api::add_instrument(ctx, registry_id);
+    }
     let (audio_track, gen_id, generator_plugin_factory) = ctx
         .app_state
         .add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
@@ -24,6 +27,7 @@ pub fn add_midi_track_with_generator_id(
     let _ = ctx.send_audio_command(AudioCommand::AddGenerator {
         generator_id: gen_id,
         track_id: audio_track.id,
+        registry_id,
         plugin_factory: generator_plugin_factory,
     });
 
@@ -97,6 +101,13 @@ where
 }
 
 pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
+    if super::external_plugin_api::track_targets(ctx, track_id)
+        .iter()
+        .any(|target| super::external_plugin_api::descriptor(ctx, *target).is_some())
+    {
+        return super::external_plugin_api::delete_track(ctx, track_id);
+    }
+
     let generator_id = ctx
         .app_state
         .tracks

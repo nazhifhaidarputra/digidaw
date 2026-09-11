@@ -74,6 +74,9 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+include("../rust/karbeat-host/scanner.cmake")
+digidaw_add_plugin_scanner("${CMAKE_CURRENT_SOURCE_DIR}/../rust")
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
@@ -92,6 +95,9 @@ set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
+install(PROGRAMS "${DIGIDAW_SCANNER_EXECUTABLE}" DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"

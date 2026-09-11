@@ -8,6 +8,7 @@ use crate::core::project::{
 use crate::core::project::{AutomationLane, ModulationLink, ModulationSource};
 use crate::shared::id::*;
 use hashbrown::HashMap;
+use karbeat_host::HostedProcessor;
 use karbeat_utils::math::is_power_of_two;
 use karbeat_utils::types::NormalizedF64;
 use slab::Slab;
@@ -17,22 +18,67 @@ use slab::Slab;
 // =============================================================================
 
 /// A generator plugin instance owned by the audio thread
-#[derive(Clone)]
 pub struct AudioGeneratorInstance {
     pub id: GeneratorId,
     pub track_id: TrackId,
+    /// Stable plugin type identifier used to create another instance.
+    pub registry_id: u32,
     pub plugin: Box<dyn AudioPlugin>,
 }
 
-#[derive(Clone)]
 pub struct AudioEffectInstance {
     pub id: EffectId,
+    /// Stable plugin type identifier used to create another instance.
+    pub registry_id: u32,
     pub plugin: Box<dyn AudioPlugin>,
+}
+
+#[derive(Default, Clone)]
+pub struct AudioPluginSnapshotState {
+    /// Generator plugins stored in a compact arena.
+    pub generators: Vec<GeneratorPluginSnapshot>,
+
+    /// Effect chain per track. Index = TrackId as usize.
+    /// Empty tracks simply hold an empty Vec, avoiding `Option` overhead.
+    pub track_effects: Vec<Vec<EffectPluginSnapshot>>,
+
+    /// Master effect chain
+    pub master_effects: Vec<EffectPluginSnapshot>,
+
+    /// Bus effect chains. Index = BusId as usize.
+    pub bus_effects: Vec<Vec<EffectPluginSnapshot>>,
+}
+
+#[derive(Clone)]
+pub struct GeneratorPluginSnapshot {
+    /// Project instance identifier.
+    pub id: GeneratorId,
+    /// Track that receives this generator's output.
+    pub track_id: TrackId,
+    /// Stable plugin type identifier used to create the offline instance.
+    pub registry_id: u32,
+    /// First-party state; hosted state is captured separately on the native UI thread.
+    pub serialized_state: Vec<u8>,
+    /// Hosted state must be captured by the native owner after the audio snapshot.
+    pub host_instance: Option<karbeat_host::HostInstanceId>,
+    pub host_bypass: bool,
+}
+
+#[derive(Clone)]
+pub struct EffectPluginSnapshot {
+    /// Project instance identifier.
+    pub id: EffectId,
+    /// Stable plugin type identifier used to create the offline instance.
+    pub registry_id: u32,
+    /// First-party state; hosted state is captured separately on the native UI thread.
+    pub serialized_state: Vec<u8>,
+    pub host_instance: Option<karbeat_host::HostInstanceId>,
+    pub host_bypass: bool,
 }
 
 /// Audio thread's owned plugin instances - NO locks required for access
 /// This is managed via AudioCommand, NOT cloned from ApplicationState
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct AudioPluginState {
     /// Generator plugins stored in a compact arena.
     pub generators: Slab<AudioGeneratorInstance>,
@@ -52,6 +98,17 @@ pub struct AudioPluginState {
 }
 
 impl AudioPluginState {
+    pub fn plugin(&self, target: &crate::audio::event::PluginTarget) -> Option<&dyn AudioPlugin> {
+        use crate::audio::event::PluginTarget;
+        let effect = match target {
+            PluginTarget::Generator(id) => return self.get_generator(*id).map(|generator| generator.plugin.as_ref()),
+            PluginTarget::TrackEffect(track, effect) => self.track_effects.get(usize::try_from(track.to_u32()).ok()?)?.iter().find(|entry| entry.id == *effect),
+            PluginTarget::BusEffect(bus, effect) => self.bus_effects.get(usize::try_from(bus.to_u32()).ok()?)?.iter().find(|entry| entry.id == *effect),
+            PluginTarget::MasterEffect(effect) => self.master_effects.iter().find(|entry| entry.id == *effect),
+        }?;
+        Some(effect.plugin.as_ref())
+    }
+
     // ==========================================
     // Generators
     // ==========================================
@@ -59,7 +116,9 @@ impl AudioPluginState {
     /// Insert a generator or replace the existing instance with the same ID.
     pub fn insert_generator(&mut self, instance: AudioGeneratorInstance) {
         if let Some(&key) = self.generator_keys.get(&instance.id) {
-            self.generators[key] = instance;
+            std::mem::replace(&mut self.generators[key], instance)
+                .plugin
+                .retire();
             return;
         }
 
@@ -71,14 +130,34 @@ impl AudioPluginState {
     /// Remove a generator without shifting other arena entries.
     pub fn remove_generator(&mut self, id: GeneratorId) {
         if let Some(key) = self.generator_keys.remove(&id) {
-            self.generators.remove(key);
+            self.generators.remove(key).plugin.retire();
         }
     }
 
     /// Remove every generator and its ID-to-arena-key mapping.
     pub fn clear_generators(&mut self) {
-        self.generators.clear();
+        for generator in self.generators.drain() {
+            generator.plugin.retire();
+        }
         self.generator_keys.clear();
+    }
+
+    /// Return hosted endpoints before replacing or dropping effect chains.
+    pub fn clear_effects(&mut self) {
+        for chain in self
+            .track_effects
+            .iter_mut()
+            .chain(self.bus_effects.iter_mut())
+        {
+            for effect in chain.drain(..) {
+                effect.plugin.retire();
+            }
+        }
+        for effect in self.master_effects.drain(..) {
+            effect.plugin.retire();
+        }
+        self.track_effects.clear();
+        self.bus_effects.clear();
     }
 
     /// Get a mutable reference to a specific generator
@@ -136,12 +215,16 @@ impl AudioPluginState {
         if bus_id_index >= self.bus_effects.len() {
             self.bus_effects.resize_with(bus_id_index + 1, Vec::new);
         }
-        self.bus_effects[bus_id_index] = Vec::new();
+        for effect in self.bus_effects[bus_id_index].drain(..) {
+            effect.plugin.retire();
+        }
     }
 
     pub fn remove_bus(&mut self, bus_id_index: usize) {
         if let Some(bus) = self.bus_effects.get_mut(bus_id_index) {
-            bus.clear();
+            for effect in bus.drain(..) {
+                effect.plugin.retire();
+            }
         }
     }
 
@@ -156,6 +239,73 @@ impl AudioPluginState {
     #[inline]
     pub fn get_bus_effects(&self, bus_id_index: usize) -> Option<&Vec<AudioEffectInstance>> {
         self.bus_effects.get(bus_id_index)
+    }
+}
+
+impl Drop for AudioPluginState {
+    fn drop(&mut self) {
+        self.clear_generators();
+        self.clear_effects();
+    }
+}
+
+impl From<&AudioGeneratorInstance> for GeneratorPluginSnapshot {
+    fn from(value: &AudioGeneratorInstance) -> Self {
+        let hosted = value.plugin.as_any().downcast_ref::<HostedProcessor>();
+        let host_instance = hosted.map(|plugin| plugin.instance);
+        Self {
+            id: value.id,
+            track_id: value.track_id,
+            registry_id: value.registry_id,
+            serialized_state: if host_instance.is_some() {
+                Vec::new()
+            } else {
+                value.plugin.get_state()
+            },
+            host_instance,
+            host_bypass: hosted.is_some_and(HostedProcessor::is_bypassed),
+        }
+    }
+}
+
+impl From<&AudioEffectInstance> for EffectPluginSnapshot {
+    fn from(value: &AudioEffectInstance) -> Self {
+        let hosted = value.plugin.as_any().downcast_ref::<HostedProcessor>();
+        let host_instance = hosted.map(|plugin| plugin.instance);
+        Self {
+            id: value.id,
+            registry_id: value.registry_id,
+            serialized_state: if host_instance.is_some() {
+                Vec::new()
+            } else {
+                value.plugin.get_state()
+            },
+            host_instance,
+            host_bypass: hosted.is_some_and(HostedProcessor::is_bypassed),
+        }
+    }
+}
+
+impl From<&AudioPluginState> for AudioPluginSnapshotState {
+    fn from(value: &AudioPluginState) -> Self {
+        Self {
+            generators: value.generators.iter().map(|(_, g)| g.into()).collect(),
+            track_effects: value
+                .track_effects
+                .iter()
+                .map(|chain| chain.iter().map(EffectPluginSnapshot::from).collect())
+                .collect(),
+            master_effects: value
+                .master_effects
+                .iter()
+                .map(EffectPluginSnapshot::from)
+                .collect(),
+            bus_effects: value
+                .bus_effects
+                .iter()
+                .map(|chain| chain.iter().map(EffectPluginSnapshot::from).collect())
+                .collect(),
+        }
     }
 }
 

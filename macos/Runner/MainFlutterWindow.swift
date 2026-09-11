@@ -11,5 +11,6 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
+    digidaw_native_host_start(self)
   }
 }

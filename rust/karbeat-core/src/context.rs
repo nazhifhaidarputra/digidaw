@@ -36,6 +36,8 @@ pub struct DawContext {
 
     /// Parameter feedback consumer (Audio → UI)
     pub feedback_consumer: Arc<Mutex<Option<rtrb::Consumer<AudioFeedback>>>>,
+    /// Save replies intercepted by the control worker that owns the feedback consumer.
+    pub project_state_feedback: Arc<Mutex<crate::audio::project_state::ProjectStateFeedback>>,
 
     /// Audio stream handle
     pub stream_guard: Option<cpal::Stream>,
@@ -45,6 +47,11 @@ pub struct DawContext {
 
     /// Plugin factory registry
     pub plugin_registry: PluginRegistry,
+
+    /// External discovery descriptors and UI IDs, separate from first-party factories.
+    pub external_plugin_failures: HashMap<crate::audio::event::PluginTarget, String>,
+
+    pub plugin_catalog: crate::audio::plugin_catalog::PluginCatalog,
 
     /// The live, thread-safe audio configuration.
     /// The UI writes to this, and the background stream monitor reads from it.
@@ -64,14 +71,19 @@ pub struct DawContext {
 
 impl DawContext {
     pub fn new() -> Self {
+        let plugin_registry = PluginRegistry::new_with_defaults();
+        let plugin_catalog = crate::audio::plugin_catalog::PluginCatalog::new(&plugin_registry);
         Self {
             app_state: ApplicationState::default(),
             history: HistoryManager::new(),
             command_sender: Mutex::new(None),
             feedback_consumer: Arc::new(Mutex::new(None)),
+            project_state_feedback: Arc::new(Mutex::new(Default::default())),
             stream_guard: None,
             position_consumer: Arc::new(Mutex::new(None)),
-            plugin_registry: PluginRegistry::new_with_defaults(),
+            plugin_registry,
+            plugin_catalog,
+            external_plugin_failures: HashMap::new(),
             active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
             audio_runtime_settings: Arc::new(RwLock::new(AudioRuntimeSettings::default())),
             telemetry_registry: None,
@@ -81,7 +93,9 @@ impl DawContext {
 
     pub fn send_audio_command(&mut self, command: AudioCommand) -> anyhow::Result<()> {
         if let Some(sender) = self.command_sender.lock().as_mut() {
-            let _ = sender.push(command);
+            sender
+                .push(command)
+                .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
         } else {
             return Err(anyhow::anyhow!("Audio stream is not initialized"));
         };

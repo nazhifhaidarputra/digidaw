@@ -21,6 +21,10 @@ use crate::{
 };
 
 pub enum AudioCommand {
+    InstallHostedProject(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedProjectInstall>),
+    /// Publish an already prepared native endpoint; completion is acknowledged separately.
+    RemoveHostedPlugins(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginRemoval>),
+    InstallHostedPlugin(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginInstall>),
     // =============================
     // Transport Command
     // =============================
@@ -67,6 +71,7 @@ pub enum AudioCommand {
     AddGenerator {
         generator_id: GeneratorId,
         track_id: TrackId,
+        registry_id: u32,
         plugin_factory: PluginFactory,
     },
     /// Remove a generator plugin from the audio thread
@@ -96,6 +101,7 @@ pub enum AudioCommand {
     AddEffect {
         target: EffectTarget,
         effect_id: EffectId,
+        registry_id: u32,
         effect_factory: PluginFactory,
     },
     /// Remove an effect from the target's effect chain
@@ -138,6 +144,7 @@ pub enum AudioCommand {
     /// The audio thread responds with AudioFeedback::MixerChannelSnapshot.
     QueryMixerChannel {
         target: MixerChannelTarget,
+        request_id: Option<u32>,
     },
 
     // =====================================================
@@ -357,6 +364,7 @@ pub struct EffectParameterSnapshot {
 #[derive(Clone, Debug)]
 pub struct MixerChannelSnapshot {
     pub target: MixerChannelTarget,
+    pub request_id: Option<u32>,
     /// Post-effects, post-fader peak magnitude in linear amplitude.
     pub magnitude: f32,
     pub volume: f32,
@@ -398,6 +406,7 @@ pub enum AudioFeedback {
         target: PluginTarget,
         state: Vec<u8>,
         request_id: u32,
+        host_instance: Option<karbeat_host::HostInstanceId>,
     },
 
     ZeroCopyBufferResponse {

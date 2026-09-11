@@ -1595,10 +1595,12 @@ dependencies = [
  "indexmap",
  "itertools 0.14.0",
  "karbeat-dsp",
+ "karbeat-host",
  "karbeat-plugin-api",
  "karbeat-plugin-types",
  "karbeat-plugins",
  "karbeat-utils",
+ "karbeat-vst3",
  "log",
  "memmap2",
  "minimp3",
@@ -1655,13 +1657,15 @@ dependencies = [
 name = "karbeat-host"
 version = "0.4.0"
 dependencies = [
- "dyn-clone",
  "hashbrown 0.17.1",
- "karbeat-core",
  "karbeat-plugin-api",
  "log",
  "raw-window-handle",
+ "rtrb",
+ "serde",
  "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1680,7 +1684,6 @@ name = "karbeat-plugin-api"
 version = "0.4.0"
 dependencies = [
  "anyhow",
- "dyn-clone",
  "hashbrown 0.17.1",
  "heck",
  "indexmap",
@@ -1751,7 +1754,15 @@ dependencies = [
 name = "karbeat-vst3"
 version = "0.4.0"
 dependencies = [
+ "karbeat-host",
  "karbeat-plugin-api",
+ "libloading 0.8.9",
+ "log",
+ "raw-window-handle",
+ "rtrb",
+ "serde",
+ "serde_json",
+ "tempfile",
  "vst3",
 ]
 
@@ -1767,9 +1778,11 @@ dependencies = [
  "flutter_rust_bridge",
  "jni 0.22.4",
  "karbeat-core",
+ "karbeat-host",
  "karbeat-plugin-api",
  "karbeat-plugins",
  "karbeat-utils",
+ "karbeat-vst3",
  "log",
  "memmap2",
  "ndk-context",

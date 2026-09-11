@@ -11,6 +11,8 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 karbeat-core.workspace = true
+karbeat-vst3.workspace = true
+karbeat-host.workspace = true
 karbeat-plugin-api.workspace = true
 karbeat-utils.workspace = true
 

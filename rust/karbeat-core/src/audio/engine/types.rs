@@ -170,6 +170,7 @@ impl AudioMixerState {
         };
         MixerChannelSnapshot {
             target,
+            request_id: None,
             magnitude: values.magnitude,
             volume: values.volume.get(),
             pan: values.pan.get(),

@@ -1,4 +1,3 @@
-pub use dyn_clone::{DynClone, clone_trait_object};
 pub use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
 pub use serde_json::Value;
@@ -46,7 +45,9 @@ pub trait PluginEditor {
 /// This trait is now fully aligned with VST3/CLAP capabilities,
 /// supporting non-interleaved audio, sample-accurate automation,
 /// parameter gestures, and rich transport context.
-pub trait AudioPlugin: DynClone {
+pub trait AudioPlugin: Any {
+    /// Release an owned endpoint. Hosted plugins return native resources to their control owner.
+    fn retire(self: Box<Self>) {}
     // --- Metadata ---
     fn name(&self) -> &str;
     fn category(&self) -> PluginCategory;
@@ -246,5 +247,3 @@ pub trait AudioPluginBuilder {
     /// Creates a fresh, default instance of the plugin.
     fn build() -> Self;
 }
-
-clone_trait_object!(AudioPlugin);

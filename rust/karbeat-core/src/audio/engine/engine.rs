@@ -15,7 +15,9 @@ use crate::{
             workspace::RenderWorkspace,
         },
         event::{PluginTarget, TransportFeedback},
-        render_state::{AudioEffectInstance, AudioPluginState, AudioRenderState},
+        render_state::{
+            AudioEffectInstance, AudioPluginSnapshotState, AudioPluginState, AudioRenderState,
+        },
     },
     commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration},
     core::project::*,
@@ -23,13 +25,16 @@ use crate::{
     utils::{apply_simd_mix, apply_simd_mix_gain},
 };
 use hashbrown::HashMap;
+use karbeat_host::{HostError, HostInstanceId, PreparedProcessor};
 use karbeat_plugin_types::SmoothableParam;
+use karbeat_plugins::registry::PluginRegistry;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
 use std::{
     sync::{atomic::Ordering, mpsc},
     time::Instant,
 };
+use thiserror::Error;
 
 pub struct AudioEngine {
     pub(super) io: EngineIo,
@@ -41,6 +46,7 @@ pub struct AudioEngine {
     pub(super) current_state: AudioRenderState,
 
     pub(super) config: AudioEngineConfig,
+    pub(super) processing_mode: ProcessingMode,
     pub(super) transport: TransportState,
 
     pub(super) voices: VoiceState,
@@ -64,7 +70,7 @@ pub struct AudioEngine {
     pub(super) telemetry: AudioEngineTelemetry,
 }
 
-/// Immutable capture of the live engine data needed to construct an offline renderer.
+/// Live-engine data and separately prepared endpoints used to construct an offline renderer.
 pub struct AudioExportSnapshot {
     render_state: AudioRenderState,
     config: AudioEngineConfig,
@@ -72,12 +78,108 @@ pub struct AudioExportSnapshot {
     time_sig_numerator: u8,
     time_sig_denominator: u8,
     bus_ids: Vec<BusId>,
-    plugin_state: AudioPluginState,
+    plugin_snapshot_state: AudioPluginSnapshotState,
     mixer_state: AudioMixerState,
     modulation: ModulationState,
+    hosted_processors: HashMap<HostInstanceId, PreparedProcessor>,
+}
+
+#[derive(Debug, Error)]
+pub enum AudioExportSnapshotError {
+    #[error("plugin registry ID {registry_id} is unavailable while hydrating the export engine")]
+    PluginNotFound { registry_id: u32 },
+    #[error("hosted plugin {instance:?} could not be prepared for export: {source}")]
+    HostedPlugin {
+        instance: HostInstanceId,
+        #[source]
+        source: HostError,
+    },
+}
+
+impl AudioExportSnapshot {
+    pub fn hosted_instance(&self, target: PluginTarget) -> Option<HostInstanceId> {
+        match target {
+            PluginTarget::Generator(id) => self
+                .plugin_snapshot_state
+                .generators
+                .iter()
+                .find(|plugin| plugin.id == id)
+                .and_then(|plugin| plugin.host_instance),
+            PluginTarget::TrackEffect(track, id) => self
+                .plugin_snapshot_state
+                .track_effects
+                .get(usize::try_from(track.to_u32()).ok()?)?
+                .iter()
+                .find(|plugin| plugin.id == id)
+                .and_then(|plugin| plugin.host_instance),
+            PluginTarget::BusEffect(bus, id) => self
+                .plugin_snapshot_state
+                .bus_effects
+                .get(usize::try_from(bus.to_u32()).ok()?)?
+                .iter()
+                .find(|plugin| plugin.id == id)
+                .and_then(|plugin| plugin.host_instance),
+            PluginTarget::MasterEffect(id) => self
+                .plugin_snapshot_state
+                .master_effects
+                .iter()
+                .find(|plugin| plugin.id == id)
+                .and_then(|plugin| plugin.host_instance),
+        }
+    }
+
+    /// Run on a control worker. Commit prepared endpoints only after every capture succeeds.
+    pub fn prepare_hosted(
+        &mut self,
+        mut prepare: impl FnMut(HostInstanceId) -> Result<PreparedProcessor, HostError>,
+    ) -> Result<(), AudioExportSnapshotError> {
+        let ids = self
+            .plugin_snapshot_state
+            .generators
+            .iter()
+            .filter_map(|plugin| plugin.host_instance)
+            .chain(
+                self.plugin_snapshot_state
+                    .track_effects
+                    .iter()
+                    .flatten()
+                    .filter_map(|plugin| plugin.host_instance),
+            )
+            .chain(
+                self.plugin_snapshot_state
+                    .bus_effects
+                    .iter()
+                    .flatten()
+                    .filter_map(|plugin| plugin.host_instance),
+            )
+            .chain(
+                self.plugin_snapshot_state
+                    .master_effects
+                    .iter()
+                    .filter_map(|plugin| plugin.host_instance),
+            );
+        let mut prepared = HashMap::new();
+        for instance in ids {
+            if prepared.contains_key(&instance) || !self.hosted_processors.is_empty() {
+                return Err(AudioExportSnapshotError::HostedPlugin {
+                    instance,
+                    source: HostError::InvalidTransition,
+                });
+            }
+            let processor = prepare(instance)
+                .map_err(|source| AudioExportSnapshotError::HostedPlugin { instance, source })?;
+            prepared.insert(instance, processor);
+        }
+        self.hosted_processors = prepared;
+        Ok(())
+    }
 }
 
 impl AudioEngine {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "It is still okay to have this number of param for instantiation"
+    )]
     pub fn new(
         command_consumer: Consumer<AudioCommand>,
         position_producer: Producer<TransportFeedback>,
@@ -106,6 +208,7 @@ impl AudioEngine {
             },
             current_state: initial_state,
             config: AudioEngineConfig::new(sample_rate, num_channels),
+            processing_mode: ProcessingMode::Realtime,
             transport: TransportState::new(initial_bpm),
             voices: VoiceState::new(),
             plugin_state: AudioPluginState::default(),
@@ -127,30 +230,35 @@ impl AudioEngine {
             time_sig_numerator: self.transport.time_sig_numerator,
             time_sig_denominator: self.transport.time_sig_denominator,
             bus_ids: self.workspace.bus_buffers.keys().copied().collect(),
-            plugin_state: self.plugin_state.clone(),
+            plugin_snapshot_state: AudioPluginSnapshotState::from(&self.plugin_state),
             mixer_state: self.mixer_state.clone(),
             modulation: self.modulation.for_export(),
+            hosted_processors: HashMap::new(),
         }
     }
 
     /// Builds a fresh offline renderer from a read-only live-engine snapshot.
     pub fn from_export_snapshot(
         snapshot: AudioExportSnapshot,
+        plugin_registry: &PluginRegistry,
+        num_channels: u16,
         command_consumer: Consumer<AudioCommand>,
         position_producer: Producer<TransportFeedback>,
         feedback_producer: Producer<AudioFeedback>,
-    ) -> Self {
+    ) -> Result<Self, AudioExportSnapshotError> {
         let AudioExportSnapshot {
             render_state,
-            config,
+            mut config,
             bpm,
             time_sig_numerator,
             time_sig_denominator,
             bus_ids,
-            plugin_state,
+            plugin_snapshot_state,
             mixer_state,
             modulation,
+            mut hosted_processors,
         } = snapshot;
+        config.num_channels = num_channels;
 
         let mut transport = TransportState::new(bpm);
         transport.time_sig_numerator = time_sig_numerator;
@@ -169,6 +277,56 @@ impl AudioEngine {
             &render_state.graph.routing,
         );
 
+        let sample_rate = config.sample_rate as f32;
+        let buffer_size = render_state.graph.buffer_size.max(512);
+        let channels = config.num_channels as usize;
+        let mut plugin_state = AudioPluginState::default();
+
+        for generator in plugin_snapshot_state.generators {
+            let plugin = Self::plugin_from_snapshot(
+                plugin_registry,
+                generator.registry_id,
+                &generator.serialized_state,
+                generator.host_instance,
+                generator.host_bypass,
+                &mut hosted_processors,
+                sample_rate,
+                buffer_size,
+                channels,
+            )?;
+            plugin_state.insert_generator(crate::audio::render_state::AudioGeneratorInstance {
+                id: generator.id,
+                track_id: generator.track_id,
+                registry_id: generator.registry_id,
+                plugin,
+            });
+        }
+
+        plugin_state.track_effects = Self::effects_from_snapshot(
+            plugin_snapshot_state.track_effects,
+            &mut hosted_processors,
+            plugin_registry,
+            sample_rate,
+            buffer_size,
+            channels,
+        )?;
+        plugin_state.master_effects = Self::effect_chain_from_snapshot(
+            plugin_snapshot_state.master_effects,
+            &mut hosted_processors,
+            plugin_registry,
+            sample_rate,
+            buffer_size,
+            channels,
+        )?;
+        plugin_state.bus_effects = Self::effects_from_snapshot(
+            plugin_snapshot_state.bus_effects,
+            &mut hosted_processors,
+            plugin_registry,
+            sample_rate,
+            buffer_size,
+            channels,
+        )?;
+
         let mut engine = Self {
             io: EngineIo {
                 command_consumer,
@@ -178,6 +336,7 @@ impl AudioEngine {
             },
             current_state: render_state,
             config,
+            processing_mode: ProcessingMode::Offline,
             transport,
             voices: VoiceState::for_export(),
             plugin_state,
@@ -189,7 +348,102 @@ impl AudioEngine {
             telemetry: AudioEngineTelemetry::new_for_export(),
         };
         engine.recalculate_latencies();
-        engine
+        Ok(engine)
+    }
+
+    fn effects_from_snapshot(
+        chains: Vec<Vec<crate::audio::render_state::EffectPluginSnapshot>>,
+        hosted_processors: &mut HashMap<HostInstanceId, PreparedProcessor>,
+        plugin_registry: &PluginRegistry,
+        sample_rate: f32,
+        buffer_size: usize,
+        channels: usize,
+    ) -> Result<Vec<Vec<AudioEffectInstance>>, AudioExportSnapshotError> {
+        chains
+            .into_iter()
+            .map(|chain| {
+                Self::effect_chain_from_snapshot(
+                    chain,
+                    hosted_processors,
+                    plugin_registry,
+                    sample_rate,
+                    buffer_size,
+                    channels,
+                )
+            })
+            .collect()
+    }
+
+    fn effect_chain_from_snapshot(
+        chain: Vec<crate::audio::render_state::EffectPluginSnapshot>,
+        hosted_processors: &mut HashMap<HostInstanceId, PreparedProcessor>,
+        plugin_registry: &PluginRegistry,
+        sample_rate: f32,
+        buffer_size: usize,
+        channels: usize,
+    ) -> Result<Vec<AudioEffectInstance>, AudioExportSnapshotError> {
+        chain
+            .into_iter()
+            .map(|effect| {
+                let plugin = Self::plugin_from_snapshot(
+                    plugin_registry,
+                    effect.registry_id,
+                    &effect.serialized_state,
+                    effect.host_instance,
+                    effect.host_bypass,
+                    hosted_processors,
+                    sample_rate,
+                    buffer_size,
+                    channels,
+                )?;
+                Ok(AudioEffectInstance {
+                    id: effect.id,
+                    registry_id: effect.registry_id,
+                    plugin,
+                })
+            })
+            .collect()
+    }
+
+    fn plugin_from_snapshot(
+        plugin_registry: &PluginRegistry,
+        registry_id: u32,
+        state: &[u8],
+        host_instance: Option<HostInstanceId>,
+        host_bypass: bool,
+        hosted_processors: &mut HashMap<HostInstanceId, PreparedProcessor>,
+        sample_rate: f32,
+        buffer_size: usize,
+        channels: usize,
+    ) -> Result<Box<dyn AudioPlugin>, AudioExportSnapshotError> {
+        if let Some(instance) = host_instance {
+            let endpoint = hosted_processors.remove(&instance).ok_or(
+                AudioExportSnapshotError::HostedPlugin {
+                    instance,
+                    source: HostError::InvalidState(
+                        "fresh native export state was not prepared".into(),
+                    ),
+                },
+            )?;
+            let mut plugin = endpoint
+                .install()
+                .map_err(|source| AudioExportSnapshotError::HostedPlugin { instance, source })?;
+            plugin.set_bypass(host_bypass);
+            return Ok(plugin);
+        }
+        let (factory, _) = plugin_registry
+            .create_plugin_by_id(registry_id)
+            .ok_or(AudioExportSnapshotError::PluginNotFound { registry_id })?;
+        let mut plugin = factory();
+        plugin.set_state(state);
+        plugin.prepare(sample_rate, buffer_size);
+        let bus = BusConfig {
+            name: "Main".into(),
+            channel_count: channels,
+            is_optional: false,
+        };
+        plugin.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
+        Ok(plugin)
     }
 
     pub fn plugin_state(&self) -> &AudioPluginState {
@@ -375,13 +629,10 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
-        let pattern = match self.current_state.graph.patterns.get(&pattern_id) {
-            Some(p) => p,
-            None => {
-                // Pattern deleted? Stop.
-                self.stop_playback();
-                return;
-            }
+         let Some(pattern) = self.current_state.graph.patterns.get(&pattern_id) else {
+            // Pattern deleted? Stop.
+            self.stop_playback();
+            return;
         };
 
         // Verify the generator exists in plugin_state
@@ -581,25 +832,8 @@ impl AudioEngine {
     pub(super) fn get_plugin<'a>(
         &'a self,
         target: &PluginTarget,
-    ) -> Option<&'a Box<dyn crate::core::project::plugin::AudioPlugin>> {
-        match target {
-            PluginTarget::Generator(id) => self.plugin_state.get_generator(*id).map(|i| &i.plugin),
-            PluginTarget::TrackEffect(track_id, effect_id) => self
-                .get_effect_list(&EffectTarget::Track(*track_id))?
-                .iter()
-                .find(|e| e.id == *effect_id)
-                .map(|e| &e.plugin),
-            PluginTarget::BusEffect(bus_id, effect_id) => self
-                .get_effect_list(&EffectTarget::Bus(*bus_id))?
-                .iter()
-                .find(|e| e.id == *effect_id)
-                .map(|e| &e.plugin),
-            PluginTarget::MasterEffect(effect_id) => self
-                .get_effect_list(&EffectTarget::Master)?
-                .iter()
-                .find(|e| e.id == *effect_id)
-                .map(|e| &e.plugin),
-        }
+    ) -> Option<&'a dyn crate::core::project::plugin::AudioPlugin> {
+        self.plugin_state.plugin(target)
     }
 
     pub(super) fn reset_pattern_state(&mut self) {
@@ -894,7 +1128,7 @@ impl AudioEngine {
             time_sig_denominator: self.transport.time_sig_denominator,
             is_playing,
             is_recording: self.transport.song.is_recording,
-            mode: ProcessingMode::Realtime, // Note: Set to Offline if cloning for export loop
+            mode: self.processing_mode,
             project_time_seconds: (sample_position as f64) / sample_rate,
             project_time_samples: sample_position,
             beat_position,
@@ -2020,11 +2254,37 @@ impl AudioEngine {
             return;
         }
 
+        for (target, producer) in &mut self.telemetry.param_telemetry_producers {
+            if !self
+                .telemetry
+                .active_telemetry_subscriptions
+                .contains_key(target)
+            {
+                continue;
+            }
+            if let Some(hosted) = self.plugin_state.plugin(target).and_then(|plugin| {
+                plugin
+                    .as_any()
+                    .downcast_ref::<karbeat_host::HostedProcessor>()
+            }) {
+                for (id, value) in &mut producer.input_buffer_mut().parameters {
+                    *value = hosted.get_current_parameter(*id);
+                }
+                producer.publish();
+            }
+        }
+
         // Collect the (target, snapshot) pairs first to satisfy the borrow checker.
         let targets_and_names: Vec<(PluginTarget, Vec<String>)> = self
             .telemetry
             .active_telemetry_subscriptions
             .iter()
+            .filter(|(target, _)| {
+                !self
+                    .plugin_state
+                    .plugin(target)
+                    .is_some_and(|plugin| plugin.as_any().is::<karbeat_host::HostedProcessor>())
+            })
             .map(|(t, names)| (t.clone(), names.iter().cloned().collect()))
             .collect();
 

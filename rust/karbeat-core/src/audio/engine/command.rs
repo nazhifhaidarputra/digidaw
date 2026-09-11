@@ -20,6 +20,22 @@ impl AudioEngine {
     /// Process incoming commands from command queue buffer
     pub fn process_command(&mut self, cmd: AudioCommand) {
         match cmd {
+            AudioCommand::InstallHostedProject(mut transfer) => {
+                use crate::audio::hosted_plugin::HostedInstallStatus;
+                let Some(project) = transfer.get_mut() else { return; };
+                if !project.begin() { return; }
+                if self.config.sample_rate != project.sample_rate || self.config.num_channels != 2 || self.processing_mode != karbeat_plugin_api::types::ProcessingMode::Realtime {
+                    project.complete(HostedInstallStatus::InvalidConfiguration);
+                    return;
+                }
+                for command in &mut project.commands {
+                    if let Some(command) = command.take() { self.process_command(command); }
+                }
+                project.complete(HostedInstallStatus::Installed);
+            }
+
+            AudioCommand::RemoveHostedPlugins(removal) => self.remove_hosted_plugins(removal),
+            AudioCommand::InstallHostedPlugin(install) => self.install_hosted_plugin(install),
             AudioCommand::PlayOneShot(waveform) => {
                 self.voices.preview_voices.clear();
                 self.voices
@@ -134,9 +150,10 @@ impl AudioEngine {
             AudioCommand::AddGenerator {
                 generator_id,
                 track_id,
+                registry_id,
                 plugin_factory,
             } => {
-                let mut plugin = plugin_factory(); 
+                let mut plugin = plugin_factory();
                 // Prepare the plugin with current sample rate and buffer size
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 plugin.prepare(self.config.sample_rate as f32, buf_size);
@@ -151,6 +168,7 @@ impl AudioEngine {
                 self.plugin_state.insert_generator(AudioGeneratorInstance {
                     id: generator_id,
                     track_id,
+                    registry_id,
                     plugin,
                 });
 
@@ -274,6 +292,7 @@ impl AudioEngine {
             AudioCommand::AddEffect {
                 target,
                 effect_id,
+                registry_id,
                 effect_factory,
             } => {
                 let mut effect = effect_factory();
@@ -288,6 +307,7 @@ impl AudioEngine {
 
                 let instance = AudioEffectInstance {
                     id: effect_id,
+                    registry_id,
                     plugin: effect,
                 };
 
@@ -338,7 +358,7 @@ impl AudioEngine {
             AudioCommand::RemoveEffect { target, effect_id } => {
                 if let Some(effects) = self.get_effect_list_mut(&target) {
                     if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
-                        effects.remove(pos);
+                        effects.remove(pos).plugin.retire();
                     }
                 }
 
@@ -420,8 +440,9 @@ impl AudioEngine {
                     param
                 );
             }
-            AudioCommand::QueryMixerChannel { target } => {
-                let snapshot = self.mixer_state.snapshot(target);
+            AudioCommand::QueryMixerChannel { target, request_id } => {
+                let mut snapshot = self.mixer_state.snapshot(target);
+                snapshot.request_id = request_id;
                 let _ = self
                     .io
                     .feedback_producer
@@ -446,6 +467,7 @@ impl AudioEngine {
             AudioCommand::RemoveBus { bus_id } => {
                 let id_index = bus_id.to_u32() as usize;
                 self.plugin_state.remove_bus(id_index);
+                self.current_state.graph.bus_ids.retain(|id| *id != bus_id);
                 self.workspace.bus_buffers.remove(&bus_id);
                 self.mixer_state.bus_channels.remove(&bus_id);
                 let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
@@ -506,9 +528,7 @@ impl AudioEngine {
 
                 // Completely clear the previous project's plugin state, voices, and tails
                 self.plugin_state.clear_generators();
-                self.plugin_state.track_effects.clear();
-                self.plugin_state.master_effects.clear();
-                self.plugin_state.bus_effects.clear();
+                self.plugin_state.clear_effects();
                 self.voices.active_generators.clear();
                 self.workspace.bus_buffers.clear();
                 self.routing.track_tails.clear();
@@ -590,6 +610,7 @@ impl AudioEngine {
                     self.plugin_state.insert_generator(AudioGeneratorInstance {
                         id: gen_id,
                         track_id,
+                        registry_id: plugin_instance.registry_id,
                         plugin,
                     });
 
@@ -618,6 +639,7 @@ impl AudioEngine {
                             track_id.to_u32() as usize,
                             AudioEffectInstance {
                                 id: effect_id,
+                                registry_id: plugin_instance.registry_id,
                                 plugin,
                             },
                         );
@@ -652,6 +674,7 @@ impl AudioEngine {
                             bus_id_index,
                             AudioEffectInstance {
                                 id: effect_id,
+                                registry_id: plugin_instance.registry_id,
                                 plugin,
                             },
                         );
@@ -688,6 +711,7 @@ impl AudioEngine {
                     plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
                     self.plugin_state.master_effects.push(AudioEffectInstance {
                         id: effect_id,
+                        registry_id: plugin_instance.registry_id,
                         plugin,
                     });
 
@@ -815,7 +839,15 @@ impl AudioEngine {
             }
             AudioCommand::QueryPluginState { target, request_id } => {
                 if let Some(plugin) = self.get_plugin(&target) {
-                    let state = plugin.get_state();
+                    let host_instance = plugin
+                        .as_any()
+                        .downcast_ref::<karbeat_host::HostedProcessor>()
+                        .map(|hosted| hosted.instance);
+                    let state = if host_instance.is_some() {
+                        Vec::new()
+                    } else {
+                        plugin.get_state()
+                    };
                     let _ = self
                         .io
                         .feedback_producer
@@ -823,6 +855,7 @@ impl AudioEngine {
                             target,
                             state,
                             request_id,
+                            host_instance,
                         });
                 }
             }

@@ -1,4 +1,5 @@
 #include "flutter_window.h"
+#include "plugin_windows.h"
 
 #include <optional>
 
@@ -25,6 +26,7 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  digidaw_native_host_start(GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

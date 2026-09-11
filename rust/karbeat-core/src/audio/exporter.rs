@@ -2,11 +2,12 @@ use rtrb::RingBuffer;
 use thiserror::Error;
 
 use crate::{
-    audio::engine::AudioEngine,
+    audio::engine::{AudioEngine, AudioExportSnapshot},
     audio::writer::{AudioExportConfig, AudioWriter, create_writer},
     commands::AudioCommand,
     context::DawContext,
 };
+use karbeat_plugins::registry::PluginRegistry;
 
 #[derive(Debug, Clone, Error)]
 #[error("Audio export failed ({error_source}): {message}")]
@@ -36,7 +37,6 @@ pub enum TailHandling {
 /// Generic, UI-agnostic.
 /// `progress_callback` should return `true` to continue, or `false` to abort rendering.
 pub fn export_project<F>(
-    // app_state: &ApplicationState, <- we should put app context here
     ctx: &mut DawContext,
     output_path: &str,
     config: AudioExportConfig,
@@ -44,23 +44,10 @@ pub fn export_project<F>(
     mut progress_callback: F,
 ) -> Result<(), AudioExportError>
 where
-    F: FnMut(f32) -> bool,
+    F: FnMut(f32) -> bool + Send,
 {
     log::info!("Starting offline render to: {}", output_path);
-    let path = std::path::Path::new(output_path);
-
-    let sample_rate = config.sample_rate();
-    let channels = config.channels() as usize;
-    let block_size = 4096; // Faster offline rendering
-
-    let mut writer = create_writer(path, config).map_err(|e| {
-        AudioExportError::new("WriterInit", format!("Failed to create writer: {}", e))
-    })?;
-
-    // Set up Dummy Communication Channels
-    let (mut cmd_producer, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
-    let (pos_producer, mut _pos_consumer) = RingBuffer::new(1024);
-    let (feedback_producer, mut _feedback_consumer) = RingBuffer::new(1024);
+    let plugin_registry = ctx.plugin_registry.clone();
 
     let (snapshot_tx, snapshot_rx) = std::sync::mpsc::channel();
 
@@ -69,23 +56,135 @@ where
     })
     .map_err(|_| AudioExportError::new("Engine", "Failed to query audio export snapshot"))?;
 
-    let snapshot = snapshot_rx.recv().map_err(|_| {
-        AudioExportError::new(
-            "QueryExportSnapshotReceiver",
-            "Failed to receive audio export snapshot",
-        )
-    })?;
-    let mut offline_engine =
-        AudioEngine::from_export_snapshot(snapshot, cmd_consumer, pos_producer, feedback_producer);
+    let snapshot = snapshot_rx
+        .recv_timeout(std::time::Duration::from_secs(30))
+        .map_err(|e| {
+            AudioExportError::new(
+                "QueryExportSnapshotReceiver",
+                format!("Failed to receive audio export snapshot: {e}"),
+            )
+        })?;
+    validate_external_plugins(&ctx.app_state, &snapshot)?;
+    let output_path = output_path.to_owned();
 
-    // We change the sample rate following the writer's sample rate
+    std::thread::scope(|scope| {
+        scope
+            .spawn(move || {
+                render_snapshot(
+                    snapshot,
+                    &output_path,
+                    config,
+                    tail_handling,
+                    plugin_registry,
+                    &mut progress_callback,
+                )
+            })
+            .join()
+            .map_err(|_| AudioExportError::new("Thread", "Offline render thread panicked"))?
+    })
+}
+
+fn validate_external_plugins(
+    app: &crate::core::project::ApplicationState,
+    snapshot: &AudioExportSnapshot,
+) -> Result<(), AudioExportError> {
+    use crate::{audio::event::PluginTarget, core::project::GeneratorInstanceType};
+    let generators =
+        app.generator_pool
+            .iter()
+            .filter_map(|(id, generator)| match &generator.instance_type {
+                GeneratorInstanceType::Plugin(instance) => {
+                    Some((PluginTarget::Generator(id), instance))
+                }
+                _ => None,
+            });
+    let tracks = app.mixer.channels.iter().flat_map(|(track, channel)| {
+        channel.channel.effects.iter().map(move |effect| {
+            (
+                PluginTarget::TrackEffect(track, effect.id),
+                &effect.instance,
+            )
+        })
+    });
+    let buses = app.mixer.buses.iter().flat_map(|(bus, channel)| {
+        channel
+            .channel
+            .effects
+            .iter()
+            .map(move |effect| (PluginTarget::BusEffect(bus, effect.id), &effect.instance))
+    });
+    let master = app
+        .mixer
+        .master_bus
+        .effects
+        .iter()
+        .map(|effect| (PluginTarget::MasterEffect(effect.id), &effect.instance));
+    for (target, instance) in generators.chain(tracks).chain(buses).chain(master) {
+        if let Some(external) = &instance.external {
+            if snapshot.hosted_instance(target).is_none() {
+                return Err(AudioExportError::new(
+                    "HostedPlugin",
+                    format!(
+                        "{} ({:?}: {}) is missing from the audio engine; restore the plugin before exporting",
+                        external.descriptor.name,
+                        external.descriptor.identity.format,
+                        external.descriptor.identity.native_id,
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn render_snapshot<F>(
+    mut snapshot: AudioExportSnapshot,
+    output_path: &str,
+    config: AudioExportConfig,
+    tail_handling: TailHandling,
+    plugin_registry: PluginRegistry,
+    progress_callback: &mut F,
+) -> Result<(), AudioExportError>
+where
+    F: FnMut(f32) -> bool,
+{
+    let sample_rate = config.sample_rate();
+    let channels = config.channels() as usize;
+    let block_size = 4096;
+    snapshot
+        .prepare_hosted(|instance| {
+            karbeat_vst3::native::prepare_offline_instance(
+                instance,
+                sample_rate,
+                block_size,
+                channels,
+            )
+            .map(|prepared| prepared.processor)
+        })
+        .map_err(|error| AudioExportError::new("HostedPlugin", error.to_string()))?;
+    let (mut cmd_producer, cmd_consumer) = RingBuffer::<AudioCommand>::new(16);
+    let (pos_producer, mut pos_consumer) = RingBuffer::new(1024);
+    let (feedback_producer, mut feedback_consumer) = RingBuffer::new(1024);
+    let mut offline_engine = AudioEngine::from_export_snapshot(
+        snapshot,
+        &plugin_registry,
+        channels as u16,
+        cmd_consumer,
+        pos_producer,
+        feedback_producer,
+    )
+    .map_err(|e| AudioExportError::new("Snapshot", e.to_string()))?;
+    let path = std::path::Path::new(output_path);
+    let mut writer = create_writer(path, config).map_err(|e| {
+        AudioExportError::new("WriterInit", format!("Failed to create writer: {e}"))
+    })?;
+
     cmd_producer
         .push(AudioCommand::UpdateAudioConfig {
             sample_rate: Some(sample_rate),
-            buffer_size: None,
+            buffer_size: Some(block_size),
         })
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-
     cmd_producer
         .push(AudioCommand::SetPlaybackMode(
             crate::audio::engine::PlaybackMode::Song,
@@ -98,180 +197,266 @@ where
         .push(AudioCommand::SetPlaying(true))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
 
-    // ========================================================================
-    // ENGINE SYNCHRONIZATION
-    // Process a 0-frame block to force the engine to consume the config commands,
-    // recalculate the PDC latencies, and stretch the time bounds to the target sample rate!
-    // ========================================================================
     offline_engine.process(&mut []);
+    validate_rendered_block(&offline_engine, &[])?;
 
-    // Get true mathematically accurate lengths directly from the engine
     let tail_samples = offline_engine.get_project_tail_length();
     let song_length_samples = offline_engine.get_export_length() - tail_samples;
-
-    let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<f32>>(4);
-
-    let writer_thread = std::thread::spawn(move || -> Result<(), AudioExportError> {
-        // This thread wakes up whenever a new block of audio is ready
-        while let Ok(buffer) = rx.recv() {
-            writer
-                .write(&buffer)
-                .map_err(|e| AudioExportError::new("Writer", format!("Write error: {}", e)))?;
-        }
-
-        writer
-            .finalize()
-            .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {}", e)))?;
-
-        Ok(())
-    });
-
     let mut mix_buffer = vec![0.0; block_size * channels];
-
-    let throttle_limit = (sample_rate / (block_size as u32) / 30).max(1);
+    let throttle_limit = (sample_rate / block_size as u32 / 30).max(1);
     let mut loop_counter = 0;
 
-    // ========================================================================
-    // PHASE 1: PRE-ROLL (Only for WrapRemainder)
-    // Plays the entire track into memory to prime the delay and reverb buffers
-    // ========================================================================
     if matches!(tail_handling, TailHandling::WrapRemainder) {
-        log::info!("Pre-rolling engine for WrapRemainder...");
         let mut preroll_processed = 0;
-
         while preroll_processed < song_length_samples {
-            let remaining = song_length_samples - preroll_processed;
-            let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
-            let samples_to_process = frames_to_process * (channels as usize);
-
-            let active_slice = &mut mix_buffer[..samples_to_process];
-            offline_engine.process(active_slice);
-
-            // Discard the audio, just clear queues
-            while let Ok(_) = _pos_consumer.pop() {}
-            while let Ok(_) = _feedback_consumer.pop() {}
-
-            preroll_processed += frames_to_process as u32;
+            let frames = (song_length_samples - preroll_processed).min(block_size as u32) as usize;
+            offline_engine.process(&mut mix_buffer[..frames * channels]);
+            validate_rendered_block(&offline_engine, &mix_buffer[..frames * channels])?;
+            drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
+            preroll_processed += frames as u32;
             loop_counter += 1;
 
-            if loop_counter % throttle_limit == 0 {
-                // UI Progress (0% to 50%)
-                let progress = ((preroll_processed as f32) / (song_length_samples as f32)) * 0.5;
-                if !progress_callback(progress) {
-                    return Ok(());
-                }
+            if loop_counter % throttle_limit == 0
+                && !progress_callback(preroll_processed as f32 / song_length_samples as f32 * 0.5)
+            {
+                return finalize_cancelled(writer);
             }
         }
 
-        // Reset playhead for the actual render. We do NOT recreate plugins,
-        // ensuring their delay buffers carry over seamlessly into the actual render.
         cmd_producer
             .push(AudioCommand::SetPlayhead(0))
             .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
     }
 
-    // ========================================================================
-    // PHASE 2: MAIN RENDER
-    // ========================================================================
-    log::info!("Rendering main track bounds...");
-    let mut processed_samples: u32 = 0;
+    let (progress_base, progress_scale) = match tail_handling {
+        TailHandling::CutRemainder => (0.0, 1.0),
+        TailHandling::LeaveRemainder => (0.0, 0.95),
+        TailHandling::WrapRemainder => (0.5, 0.5),
+    };
+    let mut processed_samples = 0;
 
-    // The "Faster-Than-Realtime" Loop
     while processed_samples < song_length_samples {
-        let remaining = song_length_samples - processed_samples;
-        let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
-        let samples_to_process = frames_to_process * channels;
-
-        // Process the exact slice needed
-        let active_slice = &mut mix_buffer[..samples_to_process];
+        let frames = (song_length_samples - processed_samples).min(block_size as u32) as usize;
+        let active_slice = &mut mix_buffer[..frames * channels];
         offline_engine.process(active_slice);
-
-        if tx.send(active_slice.to_vec()).is_err() {
-            break; // Stop rendering if the writer thread panicked/crashed
-        }
-
-        // Keep the position/feedback queues from filling up and blocking
-        while let Ok(_) = _pos_consumer.pop() {}
-        while let Ok(_) = _feedback_consumer.pop() {}
-
-        processed_samples += frames_to_process as u32;
+        validate_rendered_block(&offline_engine, active_slice)?;
+        writer
+            .write(active_slice)
+            .map_err(|e| AudioExportError::new("Writer", format!("Write error: {e}")))?;
+        drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
+        processed_samples += frames as u32;
         loop_counter += 1;
 
-        // Callback reporting
         if loop_counter % throttle_limit == 0 {
-            // Adjust progress scaling based on the mode
-            let base_progress = if matches!(tail_handling, TailHandling::WrapRemainder) {
-                0.5
-            } else {
-                0.0
-            };
-            let progress_scale = if matches!(tail_handling, TailHandling::LeaveRemainder) {
-                0.95
-            } else {
-                0.5
-            };
-
-            let progress = base_progress
-                + ((processed_samples as f32) / (song_length_samples as f32)) * progress_scale;
+            let progress = progress_base
+                + processed_samples as f32 / song_length_samples as f32 * progress_scale;
             if !progress_callback(progress) {
-                log::warn!("Export cancelled by callback.");
-                return Ok(());
+                return finalize_cancelled(writer);
             }
         }
     }
 
-    // ========================================================================
-    // PHASE 3: DYNAMIC TAIL RENDERING (Only for LeaveRemainder)
-    // ========================================================================
     if matches!(tail_handling, TailHandling::LeaveRemainder) {
-        log::info!("Calculating exact plugin tail (LeaveRemainder)...");
-
-        // We must stop the transport first! This triggers the engine's internal
-        // "stop_all_active_generators" logic which queues NoteOffs,
-        // effectively starting the final ADSR release phase.
         cmd_producer
             .push(AudioCommand::SetPlaying(false))
             .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-
-        // Process one empty block just to let the engine digest the SetPlaying(false) command
         offline_engine.process(&mut []);
+        validate_rendered_block(&offline_engine, &[])?;
 
-        log::info!("Maximum tail calculated as {} samples", tail_samples);
-
-        // Now simply render exactly that many samples!
         let mut tail_processed = 0;
-
         while tail_processed < tail_samples {
-            let remaining = tail_samples - tail_processed;
-            let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
-            let samples_to_process = frames_to_process * (channels as usize);
-
-            let active_slice = &mut mix_buffer[..samples_to_process];
-
-            // Because transport is stopped, the engine will just pull from
-            // the ringing effects and fading synths without advancing the sequencer.
+            let frames = (tail_samples - tail_processed).min(block_size as u32) as usize;
+            let active_slice = &mut mix_buffer[..frames * channels];
             offline_engine.process(active_slice);
+            validate_rendered_block(&offline_engine, active_slice)?;
+            writer
+                .write(active_slice)
+                .map_err(|e| AudioExportError::new("Writer", format!("Write error: {e}")))?;
+            drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
+            tail_processed += frames as u32;
 
-            if tx.send(active_slice.to_vec()).is_err() {
-                break;
+            let progress = if tail_samples == 0 {
+                1.0
+            } else {
+                0.95 + tail_processed as f32 / tail_samples as f32 * 0.05
+            };
+            if !progress_callback(progress) {
+                return finalize_cancelled(writer);
             }
-
-            while let Ok(_) = _pos_consumer.pop() {}
-            while let Ok(_) = _feedback_consumer.pop() {}
-
-            tail_processed += frames_to_process as u32;
         }
-        log::info!("Tail rendering complete.");
     }
 
-    progress_callback(1.0);
-
-    drop(tx);
-
-    writer_thread
-        .join()
-        .map_err(|_| AudioExportError::new("Thread", "Writer thread panicked"))??;
-
-    log::info!("Offline render successfully completed!");
+    let _ = progress_callback(1.0);
+    writer
+        .finalize()
+        .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))?;
+    log::info!("Offline render successfully completed");
     Ok(())
+}
+
+fn drain_engine_feedback(
+    position: &mut rtrb::Consumer<crate::audio::event::TransportFeedback>,
+    feedback: &mut rtrb::Consumer<crate::commands::AudioFeedback>,
+) {
+    while position.pop().is_ok() {}
+    while feedback.pop().is_ok() {}
+}
+
+fn validate_rendered_block(engine: &AudioEngine, samples: &[f32]) -> Result<(), AudioExportError> {
+    engine
+        .validate_hosted_processing()
+        .map_err(|error| AudioExportError::new("HostedPlugin", error.to_string()))?;
+    if samples.iter().any(|sample| !sample.is_finite()) {
+        return Err(AudioExportError::new(
+            "Render",
+            "audio processing produced non-finite samples",
+        ));
+    }
+    Ok(())
+}
+
+fn finalize_cancelled(mut writer: Box<dyn AudioWriter>) -> Result<(), AudioExportError> {
+    log::warn!("Export cancelled by callback");
+    writer
+        .finalize()
+        .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "export fixtures assert setup and file preservation"
+)]
+mod tests {
+    use super::*;
+    use crate::{
+        audio::{
+            engine::AudioEngineTelemetry,
+            event::PluginTarget,
+            hosted_plugin::HostedPluginInstall,
+            writer::{BitDepth, BitPerSample, WavAudioWriterConfig},
+        },
+        core::project::{
+            ApplicationState, ExternalPluginInstance, GeneratorInstanceType, PluginInstance,
+        },
+        shared::EffectId,
+    };
+    use karbeat_host::{
+        HostInstanceId, HostedProcessor, PluginDescriptor, PluginFormat, PluginIdentity,
+        PluginKind, ProcessingConfig,
+    };
+    use karbeat_plugin_api::traits::AudioPluginBuilder;
+    use karbeat_plugins::effect::delay::DigidawDelay;
+
+    fn engine() -> AudioEngine {
+        let (_, commands) = RingBuffer::new(8);
+        let (position, _) = RingBuffer::new(8);
+        let (feedback, _) = RingBuffer::new(8);
+        let (telemetry, _) = std::sync::mpsc::sync_channel(8);
+        AudioEngine::new(
+            commands,
+            position,
+            feedback,
+            48_000,
+            2,
+            120.0,
+            512,
+            AudioEngineTelemetry::new_for_export(),
+            telemetry,
+        )
+    }
+
+    #[test]
+    fn missing_external_generators_and_effects_fail_export_validation() {
+        let snapshot = engine().export_snapshot();
+        let mut plugin = PluginInstance::new("Missing external");
+        plugin.external = Some(ExternalPluginInstance {
+            descriptor: PluginDescriptor {
+                identity: PluginIdentity {
+                    format: PluginFormat::Vst3,
+                    native_id: "missing.class".into(),
+                },
+                path: "missing.vst3".into(),
+                name: "Missing external".into(),
+                vendor: String::new(),
+                version: "1".into(),
+                kind: PluginKind::Instrument,
+            },
+            state: None,
+        });
+        for instrument in [true, false] {
+            let mut app = ApplicationState::default();
+            assert!(validate_external_plugins(&app, &snapshot).is_ok());
+            if instrument {
+                app.add_generator(GeneratorInstanceType::Plugin(plugin.clone()));
+            } else {
+                app.mixer.master_bus.effects.insert(plugin.clone());
+            }
+            let error = validate_external_plugins(&app, &snapshot).unwrap_err();
+            assert_eq!(error.error_source, "HostedPlugin");
+            assert!(error.message.contains("missing.class"));
+        }
+    }
+
+    #[test]
+    fn unavailable_native_capture_preserves_an_existing_export_file() {
+        let mut engine = engine();
+        let (processor, mut retirement) = Box::new(HostedProcessor::new(
+            Box::new(DigidawDelay::build()),
+            HostInstanceId(99),
+        ))
+        .prepare_transfer()
+        .unwrap();
+        let (command, _) = HostedPluginInstall::new(
+            PluginTarget::MasterEffect(EffectId::from(1)),
+            None,
+            123,
+            ProcessingConfig {
+                sample_rate: 48_000.0,
+                max_block_size: 4096,
+                main_input_channels: 2,
+                main_output_channels: 2,
+                sidechain_channels: 0,
+                offline: false,
+            },
+            processor,
+        );
+        let (command, mut control) = karbeat_host::ControlTransfer::new(command);
+        engine.process_command(AudioCommand::InstallHostedPlugin(command));
+        assert!(control.collect());
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("existing.wav");
+        std::fs::write(&path, b"previous export").unwrap();
+        let config = AudioExportConfig::Wav(WavAudioWriterConfig {
+            sample_rate: 44_100,
+            channels: 2,
+            bit_depth: BitDepth::BitPerSample(BitPerSample::B32),
+        });
+        let result = render_snapshot(
+            engine.export_snapshot(),
+            path.to_str().unwrap(),
+            config,
+            TailHandling::CutRemainder,
+            PluginRegistry::new_with_defaults(),
+            &mut |_| true,
+        );
+        assert_eq!(result.unwrap_err().error_source, "HostedPlugin");
+        assert_eq!(std::fs::read(path).unwrap(), b"previous export");
+        drop(engine);
+        assert!(retirement.take().is_some());
+    }
+
+    #[test]
+    fn non_finite_rendered_audio_is_rejected_before_writing() {
+        let engine = engine();
+        assert!(validate_rendered_block(&engine, &[0.0, -0.5, 1.0]).is_ok());
+        for sample in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                validate_rendered_block(&engine, &[sample])
+                    .unwrap_err()
+                    .error_source,
+                "Render"
+            );
+        }
+    }
 }

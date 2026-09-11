@@ -23,7 +23,9 @@ pub fn load_project(
     Ok(ui_state)
 }
 
-pub fn new_blank_project(ctx: &mut DawContext) -> crate::api::project::UiApplicationState {
-    let app = project_api::new_blank_project(ctx);
-    UiApplicationState::from(app)
+pub fn new_blank_project(
+    ctx: &mut DawContext,
+) -> anyhow::Result<crate::api::project::UiApplicationState> {
+    let app = project_api::new_blank_project(ctx)?;
+    Ok(UiApplicationState::from(app))
 }

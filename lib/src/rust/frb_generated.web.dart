@@ -9,6 +9,7 @@
 import 'api/audio.dart';
 import 'api/audio_settings.dart';
 import 'api/automation.dart';
+import 'api/external_plugins.dart';
 import 'api/mixer.dart';
 import 'api/monitor.dart';
 import 'api/pattern.dart';
@@ -231,6 +232,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<UiPluginScanEvent>
+  dco_decode_StreamSink_ui_plugin_scan_event_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
@@ -353,6 +358,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   UiActualDeviceStreamConfig
   dco_decode_box_autoadd_ui_actual_device_stream_config(dynamic raw);
+
+  @protected
+  UiExternalPluginDescriptor
+  dco_decode_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
 
   @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
@@ -532,6 +541,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw);
 
   @protected
+  List<UiExternalPluginDescriptor>
+  dco_decode_list_ui_external_plugin_descriptor(dynamic raw);
+
+  @protected
+  List<UiExternalPluginEntry> dco_decode_list_ui_external_plugin_entry(
+    dynamic raw,
+  );
+
+  @protected
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
@@ -542,6 +560,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
+
+  @protected
+  List<UiPluginScanFailure> dco_decode_list_ui_plugin_scan_failure(dynamic raw);
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
@@ -646,6 +667,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   UiActualDeviceStreamConfig?
   dco_decode_opt_box_autoadd_ui_actual_device_stream_config(dynamic raw);
+
+  @protected
+  UiExternalPluginDescriptor?
+  dco_decode_opt_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
 
   @protected
   UiMixerChannelSnapshot? dco_decode_opt_box_autoadd_ui_mixer_channel_snapshot(
@@ -824,6 +849,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiEffectSummary dco_decode_ui_effect_summary(dynamic raw);
 
   @protected
+  UiExternalPluginCapabilities dco_decode_ui_external_plugin_capabilities(
+    dynamic raw,
+  );
+
+  @protected
+  UiExternalPluginDescriptor dco_decode_ui_external_plugin_descriptor(
+    dynamic raw,
+  );
+
+  @protected
+  UiExternalPluginEntry dco_decode_ui_external_plugin_entry(dynamic raw);
+
+  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
@@ -873,6 +911,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
+
+  @protected
+  UiPluginScanEvent dco_decode_ui_plugin_scan_event(dynamic raw);
+
+  @protected
+  UiPluginScanFailure dco_decode_ui_plugin_scan_failure(dynamic raw);
+
+  @protected
+  UiPluginScanSettings dco_decode_ui_plugin_scan_settings(dynamic raw);
 
   @protected
   UiPluginTarget dco_decode_ui_plugin_target(dynamic raw);
@@ -1109,6 +1156,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<UiPluginScanEvent>
+  sse_decode_StreamSink_ui_plugin_scan_event_Sse(SseDeserializer deserializer);
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
@@ -1259,6 +1310,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   UiActualDeviceStreamConfig
   sse_decode_box_autoadd_ui_actual_device_stream_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiExternalPluginDescriptor
+  sse_decode_box_autoadd_ui_external_plugin_descriptor(
     SseDeserializer deserializer,
   );
 
@@ -1486,6 +1543,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiExternalPluginDescriptor>
+  sse_decode_list_ui_external_plugin_descriptor(SseDeserializer deserializer);
+
+  @protected
+  List<UiExternalPluginEntry> sse_decode_list_ui_external_plugin_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
@@ -1500,6 +1566,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiPluginScanFailure> sse_decode_list_ui_plugin_scan_failure(
     SseDeserializer deserializer,
   );
 
@@ -1620,6 +1691,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   UiActualDeviceStreamConfig?
   sse_decode_opt_box_autoadd_ui_actual_device_stream_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiExternalPluginDescriptor?
+  sse_decode_opt_box_autoadd_ui_external_plugin_descriptor(
     SseDeserializer deserializer,
   );
 
@@ -1834,6 +1911,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer);
 
   @protected
+  UiExternalPluginCapabilities sse_decode_ui_external_plugin_capabilities(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiExternalPluginDescriptor sse_decode_ui_external_plugin_descriptor(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiExternalPluginEntry sse_decode_ui_external_plugin_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
     SseDeserializer deserializer,
   );
@@ -1899,6 +1991,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter sse_decode_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiPluginScanEvent sse_decode_ui_plugin_scan_event(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiPluginScanFailure sse_decode_ui_plugin_scan_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiPluginScanSettings sse_decode_ui_plugin_scan_settings(
     SseDeserializer deserializer,
   );
 
@@ -2184,6 +2291,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_plugin_scan_event_Sse(
+    RustStreamSink<UiPluginScanEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_ui_transport_feedback_Sse(
     RustStreamSink<UiTransportFeedback> self,
     SseSerializer serializer,
@@ -2357,6 +2470,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_actual_device_stream_config(
     UiActualDeviceStreamConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_external_plugin_descriptor(
+    UiExternalPluginDescriptor self,
     SseSerializer serializer,
   );
 
@@ -2631,6 +2750,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_external_plugin_descriptor(
+    List<UiExternalPluginDescriptor> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_external_plugin_entry(
+    List<UiExternalPluginEntry> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
@@ -2648,6 +2779,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_plugin_parameter(
     List<UiPluginParameter> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_plugin_scan_failure(
+    List<UiPluginScanFailure> self,
     SseSerializer serializer,
   );
 
@@ -2783,6 +2920,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_ui_actual_device_stream_config(
     UiActualDeviceStreamConfig? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_external_plugin_descriptor(
+    UiExternalPluginDescriptor? self,
     SseSerializer serializer,
   );
 
@@ -3053,6 +3196,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_external_plugin_capabilities(
+    UiExternalPluginCapabilities self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_external_plugin_descriptor(
+    UiExternalPluginDescriptor self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_external_plugin_entry(
+    UiExternalPluginEntry self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_generator_instance(
     UiGeneratorInstance self,
     SseSerializer serializer,
@@ -3136,6 +3297,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_plugin_parameter(
     UiPluginParameter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_plugin_scan_event(
+    UiPluginScanEvent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_plugin_scan_failure(
+    UiPluginScanFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_plugin_scan_settings(
+    UiPluginScanSettings self,
     SseSerializer serializer,
   );
 

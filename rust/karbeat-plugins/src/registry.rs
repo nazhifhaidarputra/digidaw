@@ -26,6 +26,7 @@ macro_rules! register_plugins {
     };
 }
 
+#[derive(Clone)]
 pub struct RegisteredPlugin {
     name: String,
     factory: PluginFactory,
@@ -41,6 +42,7 @@ pub struct PluginInfo {
     pub is_synth: bool,
 }
 
+#[derive(Clone)]
 pub struct PluginRegistry {
     plugins: HashMap<u32, RegisteredPlugin>,
 }
