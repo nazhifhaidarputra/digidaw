@@ -60,7 +60,7 @@ impl IBStreamTrait for MemoryStream {
                     data.as_ptr().wrapping_add(position),
                     buffer.cast::<u8>(),
                     taken,
-                )
+                );
             };
         }
         self.position.set(position + taken);

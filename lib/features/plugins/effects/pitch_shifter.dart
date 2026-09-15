@@ -5,10 +5,11 @@ class DigidawPitchShifter extends AbstractPluginScreen {
   const DigidawPitchShifter({super.key, required super.target});
 
   @override
-  ConsumerState<ConsumerStatefulWidget> createState() => DigidawPitcherState();
+  ConsumerState<ConsumerStatefulWidget> createState() =>
+      DigidawPitchShifterState();
 }
 
-class DigidawPitcherState
+class DigidawPitchShifterState
     extends AbstractPluginScreenState<DigidawPitchShifter> {
   @override
   String get pluginName => 'Digidaw Pitcher';

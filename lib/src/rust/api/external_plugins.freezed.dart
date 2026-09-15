@@ -271,7 +271,7 @@ as bool,
 /// @nodoc
 mixin _$UiExternalPluginDescriptor {
 
- String get format; String get nativeId; String get path; String get name; String get vendor; String get version; bool get instrument;
+ UiExternalPluginFormat get format; String get nativeId; String get path; String get name; String get vendor; String get version; bool get instrument;
 /// Create a copy of UiExternalPluginDescriptor
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -302,7 +302,7 @@ abstract mixin class $UiExternalPluginDescriptorCopyWith<$Res>  {
   factory $UiExternalPluginDescriptorCopyWith(UiExternalPluginDescriptor value, $Res Function(UiExternalPluginDescriptor) _then) = _$UiExternalPluginDescriptorCopyWithImpl;
 @useResult
 $Res call({
- String format, String nativeId, String path, String name, String vendor, String version, bool instrument
+ UiExternalPluginFormat format, String nativeId, String path, String name, String vendor, String version, bool instrument
 });
 
 
@@ -322,7 +322,7 @@ class _$UiExternalPluginDescriptorCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') @override $Res call({Object? format = null,Object? nativeId = null,Object? path = null,Object? name = null,Object? vendor = null,Object? version = null,Object? instrument = null,}) {
   return _then(_self.copyWith(
 format: null == format ? _self.format : format // ignore: cast_nullable_to_non_nullable
-as String,nativeId: null == nativeId ? _self.nativeId : nativeId // ignore: cast_nullable_to_non_nullable
+as UiExternalPluginFormat,nativeId: null == nativeId ? _self.nativeId : nativeId // ignore: cast_nullable_to_non_nullable
 as String,path: null == path ? _self.path : path // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,vendor: null == vendor ? _self.vendor : vendor // ignore: cast_nullable_to_non_nullable
@@ -410,7 +410,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String format,  String nativeId,  String path,  String name,  String vendor,  String version,  bool instrument)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiExternalPluginFormat format,  String nativeId,  String path,  String name,  String vendor,  String version,  bool instrument)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiExternalPluginDescriptor() when $default != null:
 return $default(_that.format,_that.nativeId,_that.path,_that.name,_that.vendor,_that.version,_that.instrument);case _:
@@ -431,7 +431,7 @@ return $default(_that.format,_that.nativeId,_that.path,_that.name,_that.vendor,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String format,  String nativeId,  String path,  String name,  String vendor,  String version,  bool instrument)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiExternalPluginFormat format,  String nativeId,  String path,  String name,  String vendor,  String version,  bool instrument)  $default,) {final _that = this;
 switch (_that) {
 case _UiExternalPluginDescriptor():
 return $default(_that.format,_that.nativeId,_that.path,_that.name,_that.vendor,_that.version,_that.instrument);}
@@ -448,7 +448,7 @@ return $default(_that.format,_that.nativeId,_that.path,_that.name,_that.vendor,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String format,  String nativeId,  String path,  String name,  String vendor,  String version,  bool instrument)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiExternalPluginFormat format,  String nativeId,  String path,  String name,  String vendor,  String version,  bool instrument)?  $default,) {final _that = this;
 switch (_that) {
 case _UiExternalPluginDescriptor() when $default != null:
 return $default(_that.format,_that.nativeId,_that.path,_that.name,_that.vendor,_that.version,_that.instrument);case _:
@@ -466,7 +466,7 @@ class _UiExternalPluginDescriptor implements UiExternalPluginDescriptor {
   const _UiExternalPluginDescriptor({required this.format, required this.nativeId, required this.path, required this.name, required this.vendor, required this.version, required this.instrument});
   
 
-@override final  String format;
+@override final  UiExternalPluginFormat format;
 @override final  String nativeId;
 @override final  String path;
 @override final  String name;
@@ -504,7 +504,7 @@ abstract mixin class _$UiExternalPluginDescriptorCopyWith<$Res> implements $UiEx
   factory _$UiExternalPluginDescriptorCopyWith(_UiExternalPluginDescriptor value, $Res Function(_UiExternalPluginDescriptor) _then) = __$UiExternalPluginDescriptorCopyWithImpl;
 @override @useResult
 $Res call({
- String format, String nativeId, String path, String name, String vendor, String version, bool instrument
+ UiExternalPluginFormat format, String nativeId, String path, String name, String vendor, String version, bool instrument
 });
 
 
@@ -524,7 +524,7 @@ class __$UiExternalPluginDescriptorCopyWithImpl<$Res>
 @override @pragma('vm:prefer-inline') $Res call({Object? format = null,Object? nativeId = null,Object? path = null,Object? name = null,Object? vendor = null,Object? version = null,Object? instrument = null,}) {
   return _then(_UiExternalPluginDescriptor(
 format: null == format ? _self.format : format // ignore: cast_nullable_to_non_nullable
-as String,nativeId: null == nativeId ? _self.nativeId : nativeId // ignore: cast_nullable_to_non_nullable
+as UiExternalPluginFormat,nativeId: null == nativeId ? _self.nativeId : nativeId // ignore: cast_nullable_to_non_nullable
 as String,path: null == path ? _self.path : path // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,vendor: null == vendor ? _self.vendor : vendor // ignore: cast_nullable_to_non_nullable
@@ -926,11 +926,11 @@ return failed(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int id)?  started,TResult Function( int completed,  int total,  String path,  String? error)?  progress,TResult Function( List<UiExternalPluginDescriptor> plugins,  List<UiPluginScanFailure> failures,  bool cancelled)?  finished,TResult Function( String message)?  failed,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int id)?  started,TResult Function( int completed,  int total,  int discovered,  String path,  String? error)?  progress,TResult Function( List<UiExternalPluginDescriptor> plugins,  List<UiPluginScanFailure> failures,  bool cancelled)?  finished,TResult Function( String message)?  failed,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case UiPluginScanEvent_Started() when started != null:
 return started(_that.id);case UiPluginScanEvent_Progress() when progress != null:
-return progress(_that.completed,_that.total,_that.path,_that.error);case UiPluginScanEvent_Finished() when finished != null:
+return progress(_that.completed,_that.total,_that.discovered,_that.path,_that.error);case UiPluginScanEvent_Finished() when finished != null:
 return finished(_that.plugins,_that.failures,_that.cancelled);case UiPluginScanEvent_Failed() when failed != null:
 return failed(_that.message);case _:
   return orElse();
@@ -950,11 +950,11 @@ return failed(_that.message);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int id)  started,required TResult Function( int completed,  int total,  String path,  String? error)  progress,required TResult Function( List<UiExternalPluginDescriptor> plugins,  List<UiPluginScanFailure> failures,  bool cancelled)  finished,required TResult Function( String message)  failed,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int id)  started,required TResult Function( int completed,  int total,  int discovered,  String path,  String? error)  progress,required TResult Function( List<UiExternalPluginDescriptor> plugins,  List<UiPluginScanFailure> failures,  bool cancelled)  finished,required TResult Function( String message)  failed,}) {final _that = this;
 switch (_that) {
 case UiPluginScanEvent_Started():
 return started(_that.id);case UiPluginScanEvent_Progress():
-return progress(_that.completed,_that.total,_that.path,_that.error);case UiPluginScanEvent_Finished():
+return progress(_that.completed,_that.total,_that.discovered,_that.path,_that.error);case UiPluginScanEvent_Finished():
 return finished(_that.plugins,_that.failures,_that.cancelled);case UiPluginScanEvent_Failed():
 return failed(_that.message);}
 }
@@ -970,11 +970,11 @@ return failed(_that.message);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int id)?  started,TResult? Function( int completed,  int total,  String path,  String? error)?  progress,TResult? Function( List<UiExternalPluginDescriptor> plugins,  List<UiPluginScanFailure> failures,  bool cancelled)?  finished,TResult? Function( String message)?  failed,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int id)?  started,TResult? Function( int completed,  int total,  int discovered,  String path,  String? error)?  progress,TResult? Function( List<UiExternalPluginDescriptor> plugins,  List<UiPluginScanFailure> failures,  bool cancelled)?  finished,TResult? Function( String message)?  failed,}) {final _that = this;
 switch (_that) {
 case UiPluginScanEvent_Started() when started != null:
 return started(_that.id);case UiPluginScanEvent_Progress() when progress != null:
-return progress(_that.completed,_that.total,_that.path,_that.error);case UiPluginScanEvent_Finished() when finished != null:
+return progress(_that.completed,_that.total,_that.discovered,_that.path,_that.error);case UiPluginScanEvent_Finished() when finished != null:
 return finished(_that.plugins,_that.failures,_that.cancelled);case UiPluginScanEvent_Failed() when failed != null:
 return failed(_that.message);case _:
   return null;
@@ -1054,11 +1054,12 @@ as int,
 
 
 class UiPluginScanEvent_Progress extends UiPluginScanEvent {
-  const UiPluginScanEvent_Progress({required this.completed, required this.total, required this.path, this.error}): super._();
+  const UiPluginScanEvent_Progress({required this.completed, required this.total, required this.discovered, required this.path, this.error}): super._();
   
 
  final  int completed;
  final  int total;
+ final  int discovered;
  final  String path;
  final  String? error;
 
@@ -1072,16 +1073,16 @@ $UiPluginScanEvent_ProgressCopyWith<UiPluginScanEvent_Progress> get copyWith => 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginScanEvent_Progress&&(identical(other.completed, completed) || other.completed == completed)&&(identical(other.total, total) || other.total == total)&&(identical(other.path, path) || other.path == path)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginScanEvent_Progress&&(identical(other.completed, completed) || other.completed == completed)&&(identical(other.total, total) || other.total == total)&&(identical(other.discovered, discovered) || other.discovered == discovered)&&(identical(other.path, path) || other.path == path)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,completed,total,path,error);
+int get hashCode => Object.hash(runtimeType,completed,total,discovered,path,error);
 
 @override
 String toString() {
-  return 'UiPluginScanEvent.progress(completed: $completed, total: $total, path: $path, error: $error)';
+  return 'UiPluginScanEvent.progress(completed: $completed, total: $total, discovered: $discovered, path: $path, error: $error)';
 }
 
 
@@ -1092,7 +1093,7 @@ abstract mixin class $UiPluginScanEvent_ProgressCopyWith<$Res> implements $UiPlu
   factory $UiPluginScanEvent_ProgressCopyWith(UiPluginScanEvent_Progress value, $Res Function(UiPluginScanEvent_Progress) _then) = _$UiPluginScanEvent_ProgressCopyWithImpl;
 @useResult
 $Res call({
- int completed, int total, String path, String? error
+ int completed, int total, int discovered, String path, String? error
 });
 
 
@@ -1109,10 +1110,11 @@ class _$UiPluginScanEvent_ProgressCopyWithImpl<$Res>
 
 /// Create a copy of UiPluginScanEvent
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? completed = null,Object? total = null,Object? path = null,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') $Res call({Object? completed = null,Object? total = null,Object? discovered = null,Object? path = null,Object? error = freezed,}) {
   return _then(UiPluginScanEvent_Progress(
 completed: null == completed ? _self.completed : completed // ignore: cast_nullable_to_non_nullable
 as int,total: null == total ? _self.total : total // ignore: cast_nullable_to_non_nullable
+as int,discovered: null == discovered ? _self.discovered : discovered // ignore: cast_nullable_to_non_nullable
 as int,path: null == path ? _self.path : path // ignore: cast_nullable_to_non_nullable
 as String,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,

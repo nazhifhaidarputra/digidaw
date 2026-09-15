@@ -122,6 +122,7 @@ impl ScanCache {
 pub struct ScanProgress {
     pub completed: usize,
     pub total: usize,
+    pub discovered: usize,
     pub path: PathBuf,
     pub error: Option<String>,
 }
@@ -335,6 +336,7 @@ pub fn scan(
                 progress(ScanProgress {
                     completed: index + 1,
                     total: modules.len(),
+                    discovered: result.plugins.len(),
                     path: path.clone(),
                     error: Some(error),
                 });
@@ -403,6 +405,7 @@ pub fn scan(
             progress(ScanProgress {
                 completed: index + 1,
                 total: modules.len(),
+                discovered: result.plugins.len(),
                 path: path.clone(),
                 error: entry.quarantine.clone(),
             });

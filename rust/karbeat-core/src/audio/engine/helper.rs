@@ -11,6 +11,7 @@ use rodio::math::db_to_linear;
 use wide::f32x16;
 
 use crate::{
+    audio::engine::runtime::consts::MAX_ENGINE_CHANNELS,
     commands::MixerChannelTarget,
     core::project::{
         AutomationTarget, MixerChannelParamTarget, MixerChannelParams, PluginInstance,
@@ -354,7 +355,6 @@ pub fn apply_volume_and_pan_simd(
     }
 }
 
-#[inline(always)]
 pub fn process_plugin_wrapper(
     plugin: &mut dyn crate::core::project::plugin::AudioPlugin,
     interleaved_io: &mut [f32],
@@ -365,79 +365,96 @@ pub fn process_plugin_wrapper(
     channel_buffers_out: &mut [Vec<f32>],
     aux_channel_buffers: &mut [Vec<f32>],
 ) {
+    let max_engine_channels = MAX_ENGINE_CHANNELS as usize;
+    if channels == 0 || channels > max_engine_channels {
+        interleaved_io.fill(0.0);
+        return;
+    }
+    if interleaved_io.len() % channels != 0 {
+        interleaved_io.fill(0.0);
+        return;
+    }
     let frames = interleaved_io.len() / channels;
 
-    // Resize all necessary buffers upfront
-    channel_buffers_in
-        .iter_mut()
-        .take(channels)
-        .chain(channel_buffers_out.iter_mut().take(channels))
-        .for_each(|buffer| {
-            if buffer.len() < frames {
-                buffer.resize(frames, 0.0);
-            }
-        });
-    if aux_interleaved.is_some() {
-        aux_channel_buffers
-            .iter_mut()
-            .take(channels)
-            .for_each(|buffer| {
-                if buffer.len() < frames {
-                    buffer.resize(frames, 0.0);
-                }
-            });
+    if channel_buffers_in.len() < channels || channel_buffers_out.len() < channels {
+        interleaved_io.fill(0.0);
+        return;
+    }
+    if channel_buffers_in[..channels]
+        .iter()
+        .any(|b| b.len() < frames)
+        || channel_buffers_out[..channels]
+            .iter()
+            .any(|b| b.len() < frames)
+    {
+        interleaved_io.fill(0.0);
+        return;
     }
 
-    // Deinterleave Main & Aux Buses
+    let has_aux = aux_interleaved.is_some();
+    if has_aux
+        && (aux_channel_buffers.len() < channels
+            || aux_channel_buffers[..channels]
+                .iter()
+                .any(|b| b.len() < frames))
+    {
+        interleaved_io.fill(0.0);
+        return;
+    }
+
     deinterleave_buffer(interleaved_io, channel_buffers_in, channels, frames);
+
     if let Some(aux) = aux_interleaved {
-        deinterleave_buffer(aux, aux_channel_buffers, channels, frames);
+        if aux.len() < frames * channels {
+            for buffer in aux_channel_buffers.iter_mut().take(channels) {
+                buffer[..frames].fill(0.0);
+            }
+        } else {
+            deinterleave_buffer(aux, aux_channel_buffers, channels, frames);
+        }
     }
 
-    // Setup Pointers for the Plugin API
-    let mut in_ptrs: Vec<&mut [f32]> = channel_buffers_in
-        .iter_mut()
-        .take(channels)
-        .map(|v| &mut v[..frames])
-        .collect();
+    let mut in_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+        std::array::from_fn(|_| &mut [][..]);
+    for (i, buffer) in channel_buffers_in.iter_mut().take(channels).enumerate() {
+        in_ptrs[i] = &mut buffer[..frames];
+    }
 
-    let mut out_ptrs: Vec<&mut [f32]> = channel_buffers_out
-        .iter_mut()
-        .take(channels)
-        .map(|v| &mut v[..frames])
-        .collect();
+    let mut out_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+        std::array::from_fn(|_| &mut [][..]);
+    for (i, buffer) in channel_buffers_out.iter_mut().take(channels).enumerate() {
+        out_ptrs[i] = &mut buffer[..frames];
+    }
+
+    let mut aux_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+        std::array::from_fn(|_| &mut [][..]);
+    if has_aux {
+        for (i, buffer) in aux_channel_buffers.iter_mut().take(channels).enumerate() {
+            aux_ptrs[i] = &mut buffer[..frames];
+        }
+    }
 
     let mut main_in = [AudioBusBuffer {
-        channel_data: &mut in_ptrs,
+        channel_data: &mut in_ptrs[..channels],
         is_silent: false,
     }];
     let mut main_out = [AudioBusBuffer {
-        channel_data: &mut out_ptrs,
+        channel_data: &mut out_ptrs[..channels],
         is_silent: false,
     }];
-
-    let mut aux_in_bus = vec![];
-    let mut aux_in_ptrs: Vec<&mut [f32]>;
-    if aux_interleaved.is_some() {
-        aux_in_ptrs = aux_channel_buffers
-            .iter_mut()
-            .take(channels)
-            .map(|v| &mut v[..frames])
-            .collect();
-        aux_in_bus.push(AudioBusBuffer {
-            channel_data: &mut aux_in_ptrs,
-            is_silent: false,
-        });
-    }
+    let mut aux_in = [AudioBusBuffer {
+        channel_data: &mut aux_ptrs[..channels],
+        is_silent: false,
+    }];
+    let aux_len = has_aux as usize;
 
     let mut buffers = AudioBuffers {
         main_inputs: &mut main_in,
         main_outputs: &mut main_out,
-        aux_inputs: &mut aux_in_bus,
+        aux_inputs: &mut aux_in[..aux_len],
         aux_outputs: &mut [],
     };
 
-    // Execute Plugin DSP
     plugin.process(&mut buffers, ctx);
 
     interleave_buffer(interleaved_io, channel_buffers_out, channels, frames);

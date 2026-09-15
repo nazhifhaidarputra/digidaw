@@ -301,7 +301,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return createRes;
   }
 
-  Future<void> addMidiTrackWithGeneratorId(int id) async {
+  Future<Result<void>> addMidiTrackWithGeneratorId(int id) async {
     final result = await ref.guardApi(() async {
       final newTrack = await track_api.addMidiTrackWithGeneratorId(
         ctx: _ctx,
@@ -322,7 +322,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
     if (result.hasError) {
       AppLogger.error("Error adding MIDI track: ${result.error}");
+      return Result.error(Exception(result.error.toString()));
     }
+    return Result.ok(null);
   }
 
   Future<void> deleteTrack({required int trackId}) async {

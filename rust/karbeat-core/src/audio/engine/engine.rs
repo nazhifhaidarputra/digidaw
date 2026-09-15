@@ -31,8 +31,7 @@ use karbeat_plugins::registry::PluginRegistry;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
 use std::{
-    sync::{atomic::Ordering, mpsc},
-    time::Instant,
+    num::{NonZero, NonZeroU16}, sync::{atomic::Ordering, mpsc}, time::Instant,
 };
 use thiserror::Error;
 
@@ -265,7 +264,7 @@ impl AudioEngine {
         transport.time_sig_denominator = time_sig_denominator;
 
         let mut workspace =
-            RenderWorkspace::new(render_state.graph.buffer_size, config.num_channels);
+            RenderWorkspace::new(render_state.graph.buffer_size,  config.num_channels);
         for &bus_id in &bus_ids {
             workspace.bus_buffers.insert(bus_id, Vec::new());
         }
@@ -1143,6 +1142,7 @@ impl AudioEngine {
         for node in self.routing.cached_order.clone().iter() {
             match node {
                 RoutingNode::Track(track_id) => {
+                    let sample_rate =  f64::from(self.config.sample_rate);
                     // Read channel DSP values from audio-thread-owned mixer state
                     let channel_mut = self
                         .mixer_state
@@ -1151,10 +1151,10 @@ impl AudioEngine {
                         .or_default();
                     channel_mut
                         .volume
-                        .set_smoothing_time(0.015, self.config.sample_rate as f64);
+                        .set_smoothing_time(0.015, sample_rate);
                     channel_mut
                         .pan
-                        .set_smoothing_time(0.015, self.config.sample_rate as f64);
+                        .set_smoothing_time(0.015, sample_rate);
 
                     // Check mute/solo
                     if channel_mut.mute {

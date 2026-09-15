@@ -84,6 +84,29 @@ fn save_scan_settings(settings: &ScanSettings) -> Result<(), HostError> {
     Ok(())
 }
 
+fn normalize_scan_settings(mut settings: ScanSettings) -> Result<ScanSettings, HostError> {
+    if !(1..=300).contains(&settings.timeout_seconds)
+        || settings
+            .directories
+            .iter()
+            .any(|path| path.as_os_str().is_empty())
+    {
+        return Err(HostError::InvalidConfiguration);
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    settings
+        .directories
+        .retain(|directory| seen.insert(directory.clone()));
+    Ok(settings)
+}
+
+pub fn update_scan_settings(settings: ScanSettings) -> Result<ScanSettings, HostError> {
+    let settings = normalize_scan_settings(settings)?;
+    save_scan_settings(&settings)?;
+    Ok(settings)
+}
+
 /// Starts isolated discovery without retaining the project context or blocking native UI dispatch.
 pub fn start_scan(
     mut settings: ScanSettings,
@@ -115,7 +138,7 @@ pub fn start_scan(
                 return;
             }
             let result = (|| {
-                save_scan_settings(&settings)?;
+                settings = update_scan_settings(settings)?;
                 settings.directories.extend(default_scan_paths());
                 let path = cache_path()?;
                 let mut cache = ScanCache::load(&path)?;
@@ -175,6 +198,33 @@ pub fn refresh_catalog(ctx: &mut DawContext) -> Result<Vec<ExternalPluginEntry>,
 )]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scan_settings_validate_and_deduplicate_directories() {
+        let settings = normalize_scan_settings(ScanSettings {
+            directories: vec!["/plugins".into(), "/more".into(), "/plugins".into()],
+            timeout_seconds: 30,
+        })
+        .unwrap();
+        assert_eq!(
+            settings.directories,
+            vec![PathBuf::from("/plugins"), PathBuf::from("/more")]
+        );
+        assert!(
+            normalize_scan_settings(ScanSettings {
+                directories: vec![PathBuf::new()],
+                timeout_seconds: 30,
+            })
+            .is_err()
+        );
+        assert!(
+            normalize_scan_settings(ScanSettings {
+                directories: Vec::new(),
+                timeout_seconds: 0,
+            })
+            .is_err()
+        );
+    }
 
     #[test]
     fn only_one_scan_runs_and_cancellation_cannot_target_another_scan() {

@@ -61,7 +61,7 @@ impl PluginRegistry {
             ("synth_karbeatzer_v2", "Karbeatzer V2", KarbeatzerV2),
             ("synth_my_retro", "My Retro", MyRetro),
             ("effect_param_eq", "Parametric EQ", DigiParametricEQ),
-            ("effect_pitcher", "Pitcher", PitchShifter),
+            ("effect_pitch_shifter", "Pitch Shifter", PitchShifter),
             (
                 "effect_digidaw_sidechain_comp",
                 "DigiDAW Sidechain Compressor",

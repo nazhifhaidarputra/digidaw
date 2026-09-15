@@ -862,6 +862,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiExternalPluginEntry dco_decode_ui_external_plugin_entry(dynamic raw);
 
   @protected
+  UiExternalPluginFormat dco_decode_ui_external_plugin_format(dynamic raw);
+
+  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
@@ -1922,6 +1925,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiExternalPluginEntry sse_decode_ui_external_plugin_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiExternalPluginFormat sse_decode_ui_external_plugin_format(
     SseDeserializer deserializer,
   );
 
@@ -3210,6 +3218,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_external_plugin_entry(
     UiExternalPluginEntry self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_external_plugin_format(
+    UiExternalPluginFormat self,
     SseSerializer serializer,
   );
 

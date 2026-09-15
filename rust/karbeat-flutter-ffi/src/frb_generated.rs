@@ -41,7 +41,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 764649555;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1685906100;
 
 // Section: executor
 
@@ -9316,6 +9316,45 @@ fn wire__crate__api__external_plugins__retry_external_plugin_impl(
         },
     )
 }
+fn wire__crate__api__external_plugins__save_plugin_scan_settings_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "save_plugin_scan_settings",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_directories = <Vec<String>>::sse_decode(&mut deserializer);
+            let api_timeout_seconds = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::external_plugins::save_plugin_scan_settings(
+                            api_directories,
+                            api_timeout_seconds,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__serialization__save_project_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -13456,7 +13495,8 @@ impl SseDecode for crate::api::external_plugins::UiExternalPluginCapabilities {
 impl SseDecode for crate::api::external_plugins::UiExternalPluginDescriptor {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_format = <String>::sse_decode(deserializer);
+        let mut var_format =
+            <crate::api::external_plugins::UiExternalPluginFormat>::sse_decode(deserializer);
         let mut var_nativeId = <String>::sse_decode(deserializer);
         let mut var_path = <String>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
@@ -13486,6 +13526,20 @@ impl SseDecode for crate::api::external_plugins::UiExternalPluginEntry {
             id: var_id,
             available: var_available,
             descriptor: var_descriptor,
+        };
+    }
+}
+
+impl SseDecode for crate::api::external_plugins::UiExternalPluginFormat {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::external_plugins::UiExternalPluginFormat::Vst3,
+            1 => crate::api::external_plugins::UiExternalPluginFormat::Lv2,
+            2 => crate::api::external_plugins::UiExternalPluginFormat::Clap,
+            3 => crate::api::external_plugins::UiExternalPluginFormat::Au,
+            _ => unreachable!("Invalid variant for UiExternalPluginFormat: {}", inner),
         };
     }
 }
@@ -13846,11 +13900,13 @@ impl SseDecode for crate::api::external_plugins::UiPluginScanEvent {
             1 => {
                 let mut var_completed = <u32>::sse_decode(deserializer);
                 let mut var_total = <u32>::sse_decode(deserializer);
+                let mut var_discovered = <u32>::sse_decode(deserializer);
                 let mut var_path = <String>::sse_decode(deserializer);
                 let mut var_error = <Option<String>>::sse_decode(deserializer);
                 return crate::api::external_plugins::UiPluginScanEvent::Progress {
                     completed: var_completed,
                     total: var_total,
+                    discovered: var_discovered,
                     path: var_path,
                     error: var_error,
                 };
@@ -14670,131 +14726,137 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        180 => {
+        180 => wire__crate__api__external_plugins__save_plugin_scan_settings_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        181 => {
             wire__crate__api__serialization__save_project_impl(port, ptr, rust_vec_len, data_len)
         }
-        182 => wire__crate__api__transport__set_bpm_impl(port, ptr, rust_vec_len, data_len),
-        183 => {
+        183 => wire__crate__api__transport__set_bpm_impl(port, ptr, rust_vec_len, data_len),
+        184 => {
             wire__crate__api__audio_settings__set_dsp_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        184 => wire__crate__api__external_plugins__set_external_plugin_parameter_impl(
+        185 => wire__crate__api__external_plugins__set_external_plugin_parameter_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        185 => wire__crate__api__simple__set_history_limit_impl(port, ptr, rust_vec_len, data_len),
-        186 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
-        188 => {
+        186 => wire__crate__api__simple__set_history_limit_impl(port, ptr, rust_vec_len, data_len),
+        187 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
+        189 => {
             wire__crate__api__mixer__set_mixer_channel_param_impl(port, ptr, rust_vec_len, data_len)
         }
-        189 => wire__crate__api__mixer__set_mixer_telemetry_subs_impl(
+        190 => wire__crate__api__mixer__set_mixer_telemetry_subs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        190 => wire__crate__api__audio_settings__set_output_selection_impl(
+        191 => wire__crate__api__audio_settings__set_output_selection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        191 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
-        192 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
-        193 => {
+        192 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
+        193 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
+        194 => {
             wire__crate__api__plugin__set_plugin_parameter_impl(port, ptr, rust_vec_len, data_len)
         }
-        194 => wire__crate__api__plugin__set_plugin_telemetry_subs_impl(
+        195 => wire__crate__api__plugin__set_plugin_telemetry_subs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        195 => wire__crate__api__mixer__set_routing_impl(port, ptr, rust_vec_len, data_len),
-        196 => {
+        196 => wire__crate__api__mixer__set_routing_impl(port, ptr, rust_vec_len, data_len),
+        197 => {
             wire__crate__api__mixer__set_sidechain_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        197 => wire__crate__api__track__slice_clip_impl(port, ptr, rust_vec_len, data_len),
-        199 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
-        200 => {
+        198 => wire__crate__api__track__slice_clip_impl(port, ptr, rust_vec_len, data_len),
+        200 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
+        201 => {
             wire__crate__api__pattern__stop_pattern_preview_impl(port, ptr, rust_vec_len, data_len)
         }
-        201 => wire__crate__api__pattern__stop_pattern_preview_local_impl(
+        202 => wire__crate__api__pattern__stop_pattern_preview_local_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        202 => {
+        203 => {
             wire__crate__api__transport__stop_song_playback_impl(port, ptr, rust_vec_len, data_len)
         }
-        203 => wire__crate__api__audio_settings__supported_dsp_block_sizes_impl(
+        204 => wire__crate__api__audio_settings__supported_dsp_block_sizes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        204 => wire__crate__api__audio_settings__supported_dsp_sample_rates_impl(
+        205 => wire__crate__api__audio_settings__supported_dsp_sample_rates_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        205 => wire__crate__api__transport__switch_pattern_generator_impl(
+        206 => wire__crate__api__transport__switch_pattern_generator_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        206 => wire__crate__api__transport__toggle_pattern_playback_impl(
+        207 => wire__crate__api__transport__toggle_pattern_playback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        207 => wire__crate__api__transport__toggle_playback_with_mode_impl(
+        208 => wire__crate__api__transport__toggle_playback_with_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        210 => wire__crate__api__session__ui_clipboard_content_default_impl(
+        211 => wire__crate__api__session__ui_clipboard_content_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        213 => {
+        214 => {
             wire__crate__api__plugin__ui_param_id_resolve_impl(port, ptr, rust_vec_len, data_len)
         }
-        214 => wire__crate__api__project__ui_project_metadata_default_impl(
+        215 => wire__crate__api__project__ui_project_metadata_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        215 => wire__crate__api__project__ui_transport_state_default_impl(
+        216 => wire__crate__api__project__ui_transport_state_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        216 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
-        217 => wire__crate__api__automation__update_automation_point_impl(
+        217 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
+        218 => wire__crate__api__automation__update_automation_point_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        218 => wire__crate__api__project__update_project_metadata_impl(
+        219 => wire__crate__api__project__update_project_metadata_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        219 => wire__crate__api__mixer__update_routing_impl(port, ptr, rust_vec_len, data_len),
-        220 => wire__crate__api__track__update_track_order_impl(port, ptr, rust_vec_len, data_len),
+        220 => wire__crate__api__mixer__update_routing_impl(port, ptr, rust_vec_len, data_len),
+        221 => wire__crate__api__track__update_track_order_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -14852,13 +14914,13 @@ fn pde_ffi_dispatcher_sync_impl(
 135 => wire__crate__api__waveform__get_waveform_handles_for_track_impl(ptr, rust_vec_len, data_len),
 136 => wire__crate__api__utils__hash_str_fnv1a_impl(ptr, rust_vec_len, data_len),
 159 => wire__crate__api__project__project_metadata_new_impl(ptr, rust_vec_len, data_len),
-181 => wire__crate__api__external_plugins__scan_external_plugins_impl(ptr, rust_vec_len, data_len),
-187 => wire__crate__api__audio__set_metronome_active_impl(ptr, rust_vec_len, data_len),
-198 => wire__crate__api__monitor__start_performance_monitor_impl(ptr, rust_vec_len, data_len),
-208 => wire__crate__api__project__transport_state_new_impl(ptr, rust_vec_len, data_len),
-209 => wire__crate__api__project__transport_state_new_with_param_impl(ptr, rust_vec_len, data_len),
-211 => wire__crate__api__mixer__ui_mixer_state_new_impl(ptr, rust_vec_len, data_len),
-212 => wire__crate__api__mixer__ui_mixer_state_new_with_param_impl(ptr, rust_vec_len, data_len),
+182 => wire__crate__api__external_plugins__scan_external_plugins_impl(ptr, rust_vec_len, data_len),
+188 => wire__crate__api__audio__set_metronome_active_impl(ptr, rust_vec_len, data_len),
+199 => wire__crate__api__monitor__start_performance_monitor_impl(ptr, rust_vec_len, data_len),
+209 => wire__crate__api__project__transport_state_new_impl(ptr, rust_vec_len, data_len),
+210 => wire__crate__api__project__transport_state_new_with_param_impl(ptr, rust_vec_len, data_len),
+212 => wire__crate__api__mixer__ui_mixer_state_new_impl(ptr, rust_vec_len, data_len),
+213 => wire__crate__api__mixer__ui_mixer_state_new_with_param_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -16014,6 +16076,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::external_plugins::UiExternalP
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::external_plugins::UiExternalPluginFormat {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Vst3 => 0.into_dart(),
+            Self::Lv2 => 1.into_dart(),
+            Self::Clap => 2.into_dart(),
+            Self::Au => 3.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::external_plugins::UiExternalPluginFormat
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::external_plugins::UiExternalPluginFormat>
+    for crate::api::external_plugins::UiExternalPluginFormat
+{
+    fn into_into_dart(self) -> crate::api::external_plugins::UiExternalPluginFormat {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::UiGeneratorInstance {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -16462,12 +16547,14 @@ impl flutter_rust_bridge::IntoDart for crate::api::external_plugins::UiPluginSca
             crate::api::external_plugins::UiPluginScanEvent::Progress {
                 completed,
                 total,
+                discovered,
                 path,
                 error,
             } => [
                 1.into_dart(),
                 completed.into_into_dart().into_dart(),
                 total.into_into_dart().into_dart(),
+                discovered.into_into_dart().into_dart(),
                 path.into_into_dart().into_dart(),
                 error.into_into_dart().into_dart(),
             ]
@@ -18708,7 +18795,7 @@ impl SseEncode for crate::api::external_plugins::UiExternalPluginCapabilities {
 impl SseEncode for crate::api::external_plugins::UiExternalPluginDescriptor {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.format, serializer);
+        <crate::api::external_plugins::UiExternalPluginFormat>::sse_encode(self.format, serializer);
         <String>::sse_encode(self.native_id, serializer);
         <String>::sse_encode(self.path, serializer);
         <String>::sse_encode(self.name, serializer);
@@ -18725,6 +18812,24 @@ impl SseEncode for crate::api::external_plugins::UiExternalPluginEntry {
         <bool>::sse_encode(self.available, serializer);
         <crate::api::external_plugins::UiExternalPluginDescriptor>::sse_encode(
             self.descriptor,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::external_plugins::UiExternalPluginFormat {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::external_plugins::UiExternalPluginFormat::Vst3 => 0,
+                crate::api::external_plugins::UiExternalPluginFormat::Lv2 => 1,
+                crate::api::external_plugins::UiExternalPluginFormat::Clap => 2,
+                crate::api::external_plugins::UiExternalPluginFormat::Au => 3,
+                _ => {
+                    unimplemented!("");
+                }
+            },
             serializer,
         );
     }
@@ -19007,12 +19112,14 @@ impl SseEncode for crate::api::external_plugins::UiPluginScanEvent {
             crate::api::external_plugins::UiPluginScanEvent::Progress {
                 completed,
                 total,
+                discovered,
                 path,
                 error,
             } => {
                 <i32>::sse_encode(1, serializer);
                 <u32>::sse_encode(completed, serializer);
                 <u32>::sse_encode(total, serializer);
+                <u32>::sse_encode(discovered, serializer);
                 <String>::sse_encode(path, serializer);
                 <Option<String>>::sse_encode(error, serializer);
             }

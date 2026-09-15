@@ -9,8 +9,8 @@ import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
-import 'package:karbeat/features/plugins/plugin_registry.dart';
-import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
+import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
+import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' hide removeRouting;
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -729,51 +729,27 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                               ],
                             ),
                             onTap: () async {
-                              try {
-                                final target = isMaster
-                                    ? plugin_api.UiPluginTarget.masterEffect(
-                                        effect.id,
-                                      )
-                                    : _isSelectedBus
-                                    ? plugin_api.UiPluginTarget.busEffect(
-                                        busId: _selectedChannelId!,
-                                        effectId: effect.id,
-                                      )
-                                    : plugin_api.UiPluginTarget.trackEffect(
-                                        trackId: _selectedChannelId!,
-                                        effectId: effect.id,
-                                      );
-                                final availableEffects = await ref
-                                    .read(audioPluginProvider.notifier)
-                                    .getAvailableEffects();
-                                final registryId = availableEffects
-                                    .firstWhere(
-                                      (p) => p.id == effect.registryId,
+                              final target = isMaster
+                                  ? plugin_api.UiPluginTarget.masterEffect(
+                                      effect.id,
                                     )
-                                    .id;
-
-                                final screen = PluginRegistryFlutter.getScreen(
-                                  registryId: registryId,
-                                  instanceId: effect.id,
-                                  target: target,
-                                );
-                                if (!context.mounted) return;
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => screen,
-                                  ),
-                                );
-                              } catch (_) {
-                                // Feedback for effects that don't have a UI yet
-                                if (!context.mounted) return;
-                                ref
-                                    .read(notificationProvider.notifier)
-                                    .warn(
-                                      '${effect.name} UI is not implemented yet.',
-                                      duration: const Duration(seconds: 2),
+                                  : _isSelectedBus
+                                  ? plugin_api.UiPluginTarget.busEffect(
+                                      busId: _selectedChannelId!,
+                                      effectId: effect.id,
+                                    )
+                                  : plugin_api.UiPluginTarget.trackEffect(
+                                      trackId: _selectedChannelId!,
+                                      effectId: effect.id,
                                     );
-                              }
+                              await openPluginInterface(
+                                context: context,
+                                ref: ref,
+                                target: target,
+                                registryId: effect.registryId,
+                                instanceId: effect.id,
+                                pluginName: effect.name,
+                              );
                             },
                           ),
                         ),
@@ -803,159 +779,35 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   }
 
   void _showEffectBrowser(BuildContext context) async {
-    final availablePlugins = await ref
-        .read(audioPluginProvider.notifier)
-        .getAvailableEffects();
+    final channelId = _selectedChannelId;
+    final isBus = _isSelectedBus;
+    if (channelId == null) {
+      ref
+          .read(notificationProvider.notifier)
+          .warn(
+            'No channel selected. Please select a channel before adding an effect.',
+          );
+      return;
+    }
 
-    if (!context.mounted) return;
-
-    showDialog(
+    await showPluginBrowserDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Generator Browser"),
-        contentPadding: const EdgeInsets.only(top: 12, bottom: 24),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Category header: Karbeat Native
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.extension,
-                      size: 16,
-                      color: Theme.of(ctx).colorScheme.tertiary,
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(ctx).colorScheme.tertiaryContainer,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: Theme.of(ctx).colorScheme.tertiary,
-                        ),
-                      ),
-                      child: Text(
-                        "Karbeat Native",
-                        style: TextStyle(
-                          color: Theme.of(ctx).colorScheme.onTertiaryContainer,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              // Plugin list
-              if (availablePlugins.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
-                  ),
-                  child: Text(
-                    "No effects found",
-                    style: TextStyle(
-                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else
-                ...availablePlugins.map(
-                  (plugin) => _buildEffectBrowserItem(ctx, plugin),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEffectBrowserItem(BuildContext ctx, UiPluginInfo plugin) {
-    final colors = Theme.of(ctx).colorScheme;
-    return InkWell(
-      onTap: () {
-        Navigator.pop(ctx);
-        if (plugin.pluginType != KarbeatPluginType.effect) {
-          ref
-              .read(notificationProvider.notifier)
-              .warn('Only effects can be added from the mixer panel for now.');
-          return;
-        }
-        if (_selectedChannelId == null) {
-          ref
-              .read(notificationProvider.notifier)
-              .warn(
-                'No channel selected. Please select a channel before adding an effect.',
-              );
-          return;
-        }
-
-        if (_selectedChannelId == -1 && !_isSelectedBus) {
-          ref.read(mixerStateProvider.notifier).addEffectToMasterBus(plugin.id);
-          return;
-        }
-
-        if (_isSelectedBus) {
-          ref
+      pluginType: KarbeatPluginType.effect,
+      onAdd: (plugin) {
+        if (channelId == -1 && !isBus) {
+          return ref
               .read(mixerStateProvider.notifier)
-              .addEffectToBusChannel(_selectedChannelId!, plugin.id);
-        } else {
-          ref
-              .read(mixerStateProvider.notifier)
-              .addEffectToMixerChannel(_selectedChannelId!, plugin.id);
+              .addEffectToMasterBus(plugin.registryId);
         }
+        if (isBus) {
+          return ref
+              .read(mixerStateProvider.notifier)
+              .addEffectToBusChannel(channelId, plugin.registryId);
+        }
+        return ref
+            .read(mixerStateProvider.notifier)
+            .addEffectToMixerChannel(channelId, plugin.registryId);
       },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-        child: Row(
-          children: [
-            Icon(Icons.piano, color: colors.tertiary, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    plugin.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "Karbeat Native",
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -6,14 +6,33 @@ use karbeat_core::{
     },
     context::DawContext,
 };
-use karbeat_host::{PluginDescriptor, PluginKind, scanner::ScanSettings};
+use karbeat_host::{PluginDescriptor, PluginFormat, PluginKind, scanner::ScanSettings};
 
 use crate::{api::plugin::UiPluginTarget, frb_generated::StreamSink};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UiExternalPluginFormat {
+    Vst3,
+    Lv2,
+    Clap,
+    Au,
+}
+
+impl From<PluginFormat> for UiExternalPluginFormat {
+    fn from(value: PluginFormat) -> Self {
+        match value {
+            PluginFormat::Vst3 => Self::Vst3,
+            PluginFormat::Lv2 => Self::Lv2,
+            PluginFormat::Clap => Self::Clap,
+            PluginFormat::Au => Self::Au,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct UiExternalPluginDescriptor {
-    pub format: String,
+    pub format: UiExternalPluginFormat,
     pub native_id: String,
     pub path: String,
     pub name: String,
@@ -25,7 +44,7 @@ pub struct UiExternalPluginDescriptor {
 impl From<PluginDescriptor> for UiExternalPluginDescriptor {
     fn from(value: PluginDescriptor) -> Self {
         Self {
-            format: format!("{:?}", value.identity.format),
+            format: value.identity.format.into(),
             native_id: value.identity.native_id,
             path: value.path.to_string_lossy().into_owned(),
             name: value.name,
@@ -60,6 +79,7 @@ pub enum UiPluginScanEvent {
     Progress {
         completed: u32,
         total: u32,
+        discovered: u32,
         path: String,
         error: Option<String>,
     },
@@ -80,6 +100,7 @@ impl From<PluginScanEvent> for UiPluginScanEvent {
             PluginScanEvent::Progress(progress) => Self::Progress {
                 completed: u32::try_from(progress.completed).unwrap_or(u32::MAX),
                 total: u32::try_from(progress.total).unwrap_or(u32::MAX),
+                discovered: u32::try_from(progress.discovered).unwrap_or(u32::MAX),
                 path: progress.path.to_string_lossy().into_owned(),
                 error: progress.error,
             },
@@ -116,6 +137,24 @@ pub struct UiPluginScanSettings {
 
 pub fn plugin_scan_settings() -> anyhow::Result<UiPluginScanSettings> {
     let settings = plugin_discovery_api::scan_settings()?;
+    Ok(UiPluginScanSettings {
+        directories: settings
+            .directories
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect(),
+        timeout_seconds: u32::try_from(settings.timeout_seconds)?.clamp(1, 300),
+    })
+}
+
+pub fn save_plugin_scan_settings(
+    directories: Vec<String>,
+    timeout_seconds: u32,
+) -> anyhow::Result<UiPluginScanSettings> {
+    let settings = plugin_discovery_api::update_scan_settings(ScanSettings {
+        directories: directories.into_iter().map(Into::into).collect(),
+        timeout_seconds: u64::from(timeout_seconds),
+    })?;
     Ok(UiPluginScanSettings {
         directories: settings
             .directories
