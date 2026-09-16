@@ -5,9 +5,8 @@ use karbeat_host::{
 use karbeat_plugin_api::types::{
     AudioBuffers, AudioBusBuffer, MidiEvent, MidiMessage, ProcessContext, ProcessingMode,
 };
-use karbeat_vst3::native::{self, NativeWindowApi};
+use karbeat_vst3::native;
 use std::{
-    ffi::c_char,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -15,48 +14,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-unsafe extern "C" fn create(_: *const c_char, _: u32, _: u32, _: *mut usize) -> usize {
-    0
-}
-unsafe extern "C" fn window_action(_: usize) {}
-unsafe extern "C" fn resize(_: usize, _: u32, _: u32) -> bool {
-    false
-}
-unsafe extern "C" fn poll_window(_: usize, _: *mut u32, _: *mut u32) -> u32 {
-    0
-}
-unsafe extern "C" fn set_title(_: usize, _: *const c_char) -> bool {
-    false
-}
-unsafe extern "C" fn set_resizable(_: usize, _: bool) -> bool {
-    false
-}
-
-static API: NativeWindowApi = NativeWindowApi {
-    version: 2,
-    parent_kind: 1,
-    create,
-    destroy: window_action,
-    focus: window_action,
-    resize,
-    poll: poll_window,
-    set_title,
-    set_resizable,
-};
-
 pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingConfig) {
-    let legacy_version = 1_u32;
-    // SAFETY: Unsupported tables expose only their version; the gateway must not read further.
-    unsafe { native::poll(std::ptr::from_ref(&legacy_version).cast()) };
     assert!(!native::available());
-    // SAFETY: The fixture invokes the gateway only on the OS main thread; static callbacks
-    // remain available until exit and do not create windows or reenter the gateway.
-    unsafe { native::poll(&raw const API) };
-    assert!(native::available());
-    assert!(matches!(
-        native::call(|_| Ok(())),
-        Err(HostError::WrongThread)
-    ));
     let worker = std::thread::spawn(move || {
         let initial_descriptor = descriptor.clone();
         let initial_config = config.clone();
@@ -161,7 +120,15 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
             block
         });
         for _ in 0..3 {
-            let state = native::capture_state(id).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let state = loop {
+                match native::capture_state(id) {
+                    Err(HostError::Busy) if Instant::now() < deadline => {
+                        std::thread::yield_now();
+                    }
+                    result => break result.unwrap(),
+                }
+            };
             assert!(!state.component.is_empty());
             assert!(native::call(move |owner| owner.host.is_processing(id)).unwrap());
             native::restore_state(id, state).unwrap();
@@ -300,12 +267,17 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
             }
         }
     });
+    let context = glib::MainContext::default();
     let deadline = Instant::now() + Duration::from_secs(60);
     while !worker.is_finished() {
         assert!(Instant::now() < deadline, "native state gateway timed out");
-        // SAFETY: Same main-thread callback table and ownership as initialization above.
-        unsafe { native::poll(&raw const API) };
+        context.iteration(false);
         std::thread::sleep(Duration::from_millis(1));
     }
     worker.join().unwrap();
+    assert!(native::available());
+    assert!(matches!(
+        native::call(|_| Ok(())),
+        Err(HostError::WrongThread)
+    ));
 }

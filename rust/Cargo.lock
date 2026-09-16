@@ -1698,6 +1698,7 @@ dependencies = [
  "derive_builder",
  "fastrand",
  "flutter_rust_bridge",
+ "glib",
  "hashbrown 0.17.1",
  "hound",
  "indexmap",
@@ -1866,6 +1867,7 @@ dependencies = [
 name = "karbeat-vst3"
 version = "0.4.0"
 dependencies = [
+ "glib",
  "karbeat-host",
  "karbeat-plugin-api",
  "libloading 0.8.9",

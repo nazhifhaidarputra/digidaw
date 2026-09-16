@@ -1,6 +1,7 @@
 //! Native UI-loop gateway. Only message payloads and exclusive audio endpoints cross threads.
 
 use crate::Vst3PluginHost;
+use glib::ControlFlow;
 use karbeat_host::{
     HostCapabilities, HostError, HostInstanceId, NativeEditorBinding, NativeEditorEvent,
     NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform, NativeWindow, NativeWindowId,
@@ -13,32 +14,13 @@ use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{
     cell::RefCell,
     collections::HashMap,
-    ffi::c_char,
     rc::Rc,
     sync::{
-        OnceLock,
+        atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver, SyncSender},
     },
     time::Duration,
 };
-
-/// ABI shared with the small native desktop-runner window service.
-/// All callbacks are invoked only on the native application's UI thread.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct NativeWindowApi {
-    pub version: u32,
-    /// 1 = X11 window ID, 2 = HWND, 3 = NSView pointer.
-    pub parent_kind: u32,
-    pub create: unsafe extern "C" fn(*const c_char, u32, u32, *mut usize) -> usize,
-    pub destroy: unsafe extern "C" fn(usize),
-    pub focus: unsafe extern "C" fn(usize),
-    pub resize: unsafe extern "C" fn(usize, u32, u32) -> bool,
-    /// Bit 0: close requested, bit 1: resized. Output dimensions are content dimensions.
-    pub poll: unsafe extern "C" fn(usize, *mut u32, *mut u32) -> u32,
-    pub set_title: unsafe extern "C" fn(usize, *const c_char) -> bool,
-    pub set_resizable: unsafe extern "C" fn(usize, bool) -> bool,
-}
 
 type NativeBinding = NativeEditorBinding<<SystemNativeUi as NativeUiPlatform>::Window>;
 
@@ -88,7 +70,7 @@ impl NativeStateRequest {
     }
 
     pub fn wait(self, timeout: Duration) -> Result<StateResult, HostError> {
-        if ON_UI_THREAD.with(std::cell::Cell::get) {
+        if NativeUiDispatcher::is_owner_thread() {
             return Err(HostError::WrongThread);
         }
         match self.response.recv_timeout(timeout) {
@@ -470,15 +452,13 @@ impl Drop for NativeHost {
     }
 }
 
-type Task = Box<dyn FnOnce(&mut NativeHost) + Send>;
-static SENDER: OnceLock<SyncSender<Task>> = OnceLock::new();
 thread_local! {
-    static RUNTIME: RefCell<Option<(NativeHost, Receiver<Task>)>> = const { RefCell::new(None) };
-    static ON_UI_THREAD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static RUNTIME: RefCell<Option<NativeHost>> = const { RefCell::new(None) };
 }
+static RUNTIME_READY: AtomicBool = AtomicBool::new(false);
 
 pub fn available() -> bool {
-    SENDER.get().is_some()
+    RUNTIME_READY.load(Ordering::Acquire)
 }
 
 /// Captures fresh opaque state without holding an engine or project lock on the native UI thread.
@@ -556,115 +536,53 @@ pub fn restore_state(instance: HostInstanceId, state: PluginState) -> Result<(),
 pub fn call<T: Send + 'static>(
     action: impl FnOnce(&mut NativeHost) -> Result<T, HostError> + Send + 'static,
 ) -> Result<T, HostError> {
-    if ON_UI_THREAD.with(std::cell::Cell::get) {
+    if NativeUiDispatcher::is_owner_thread() {
         return Err(HostError::WrongThread);
     }
-    let sender = SENDER.get().ok_or(HostError::Unsupported(
-        "native desktop host is not initialized",
-    ))?;
-    let (reply, response) = mpsc::sync_channel(1);
-    let status = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0));
-    let task_status = status.clone();
-    sender
-        .try_send(Box::new(move |host| {
-            if task_status
-                .compare_exchange(
-                    0,
-                    1,
-                    std::sync::atomic::Ordering::AcqRel,
-                    std::sync::atomic::Ordering::Acquire,
-                )
-                .is_err()
-            {
-                return;
-            }
-            drop(reply.try_send(action(host)));
-        }))
-        .map_err(|_| HostError::Busy)?;
-    match response.recv_timeout(Duration::from_secs(30)) {
-        Ok(result) => result,
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            if status
-                .compare_exchange(
-                    0,
-                    2,
-                    std::sync::atomic::Ordering::AcqRel,
-                    std::sync::atomic::Ordering::Acquire,
-                )
-                .is_ok()
-            {
-                Err(HostError::NativeDispatch(
-                    "UI request timed out before execution".into(),
-                ))
-            } else {
-                // Once a native mutation starts, wait for its actual result. Reporting a
-                // timeout here could orphan a successfully created instance or editor.
-                response
-                    .recv()
-                    .map_err(|error| HostError::NativeDispatch(error.to_string()))?
-            }
-        }
-        Err(error) => Err(HostError::NativeDispatch(error.to_string())),
-    }
+    let dispatcher = NativeUiDispatcher::initialize()?;
+    let request = dispatcher.dispatch(move || Ok(with_native_host(action)))?;
+    request.wait(Duration::from_secs(30))?
 }
 
-/// Drives queued lifecycle/editor work from the existing native application's event loop.
-///
-/// # Safety
-/// `api` must point to a callback table beginning with its u32 ABI version. Version 2 tables
-/// must be complete and their functions must remain loaded until
-/// shutdown. Repeated calls must come from the same OS main thread. No callback may reenter poll.
-pub unsafe fn poll(api: *const NativeWindowApi) {
-    if api.is_null() {
-        return;
-    }
-    // SAFETY: Read only the common version field before accessing the rest of the ABI table.
-    if unsafe { api.cast::<u32>().read() } != 2 {
-        return;
-    }
+fn with_native_host<T>(
+    action: impl FnOnce(&mut NativeHost) -> Result<T, HostError>,
+) -> Result<T, HostError> {
+    RUNTIME.with(|runtime| {
+        let mut runtime = runtime
+            .try_borrow_mut()
+            .map_err(|_| HostError::WrongThread)?;
+        if runtime.is_none() {
+            let (native_ui, _) = SystemNativeUi::initialize()?;
+            *runtime = Some(NativeHost {
+                host: Vst3PluginHost::new(),
+                native_ui,
+                window_ids: NativeWindowIdAllocator::default(),
+                windows: HashMap::new(),
+                window_owners: HashMap::new(),
+                editor_contexts: HashMap::new(),
+                events: Vec::new(),
+                event_overflow: None,
+                parameter_flush_due: HashMap::new(),
+                retirements: HashMap::new(),
+                state_requests: HashMap::new(),
+                control_retirements: Vec::new(),
+            });
+            karbeat_host::install_ui_interval(Duration::from_millis(8), pump_runtime)?;
+            RUNTIME_READY.store(true, Ordering::Release);
+        }
+        action(runtime.as_mut().ok_or(HostError::WrongThread)?)
+    })
+}
+
+fn pump_runtime() -> ControlFlow {
     RUNTIME.with(|runtime| {
         let Ok(mut runtime) = runtime.try_borrow_mut() else {
-            return;
+            return ControlFlow::Continue;
         };
-        if runtime.is_none() {
-            drop(NativeUiDispatcher::initialize());
-            if SENDER.get().is_some() {
-                return;
-            }
-            let Ok((native_ui, _wake_handle)) = SystemNativeUi::initialize() else {
-                return;
-            };
-            let (sender, receiver) = mpsc::sync_channel(128);
-            if SENDER.set(sender).is_err() {
-                return;
-            }
-            ON_UI_THREAD.with(|ui| ui.set(true));
-            *runtime = Some((
-                NativeHost {
-                    host: Vst3PluginHost::new(),
-                    native_ui,
-                    window_ids: NativeWindowIdAllocator::default(),
-                    windows: HashMap::new(),
-                    window_owners: HashMap::new(),
-                    editor_contexts: HashMap::new(),
-                    events: Vec::new(),
-                    event_overflow: None,
-                    parameter_flush_due: HashMap::new(),
-                    retirements: HashMap::new(),
-                    state_requests: HashMap::new(),
-                    control_retirements: Vec::new(),
-                },
-                receiver,
-            ));
-        }
-        if let Some((host, receiver)) = runtime.as_mut() {
-            for _ in 0..64 {
-                match receiver.try_recv() {
-                    Ok(task) => task(host),
-                    Err(_) => break,
-                }
-            }
-            host.pump();
-        }
-    });
+        let Some(host) = runtime.as_mut() else {
+            return ControlFlow::Break;
+        };
+        host.pump();
+        ControlFlow::Continue
+    })
 }

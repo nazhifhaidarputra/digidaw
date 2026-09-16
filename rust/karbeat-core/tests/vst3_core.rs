@@ -12,45 +12,13 @@ use karbeat_core::{
     message::TelemetryRegistry,
 };
 use karbeat_host::PluginDescriptor;
-use karbeat_vst3::{
-    module::Vst3Module,
-    native::{self, NativeWindowApi},
-};
+use karbeat_vst3::module::Vst3Module;
 use std::{
-    ffi::c_char,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
-};
-
-unsafe extern "C" fn create(_: *const c_char, _: u32, _: u32, _: *mut usize) -> usize {
-    0
-}
-unsafe extern "C" fn action(_: usize) {}
-unsafe extern "C" fn resize(_: usize, _: u32, _: u32) -> bool {
-    false
-}
-unsafe extern "C" fn poll(_: usize, _: *mut u32, _: *mut u32) -> u32 {
-    0
-}
-unsafe extern "C" fn title(_: usize, _: *const c_char) -> bool {
-    false
-}
-unsafe extern "C" fn resizable(_: usize, _: bool) -> bool {
-    false
-}
-static API: NativeWindowApi = NativeWindowApi {
-    version: 2,
-    parent_kind: 1,
-    create,
-    destroy: action,
-    focus: action,
-    resize,
-    poll,
-    set_title: title,
-    set_resizable: resizable,
 };
 
 fn workflow(descriptor: PluginDescriptor) {
@@ -266,25 +234,16 @@ fn main() {
         .into_iter()
         .find(|plugin| plugin.name == "Vital")
         .unwrap();
-    // SAFETY: The OS main thread owns the static native dispatch table throughout the test.
-    unsafe {
-        native::poll(&raw const API);
-    }
     let worker = std::thread::spawn(move || workflow(descriptor));
+    let context = glib::MainContext::default();
     let deadline = Instant::now() + Duration::from_secs(90);
     while !worker.is_finished() {
         assert!(Instant::now() < deadline, "Core workflow timed out");
-        // SAFETY: Dispatch stays on the OS main thread with the same static table.
-        unsafe {
-            native::poll(&raw const API);
-        }
+        context.iteration(false);
         std::thread::sleep(Duration::from_millis(1));
     }
     worker.join().unwrap();
     for _ in 0..5 {
-        // SAFETY: Drain endpoint retirement on the original native owner.
-        unsafe {
-            native::poll(&raw const API);
-        }
+        context.iteration(false);
     }
 }

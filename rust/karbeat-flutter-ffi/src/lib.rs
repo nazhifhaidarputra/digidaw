@@ -42,13 +42,3 @@ pub fn init_logger() {
         );
     });
 }
-
-/// Drives plugin lifecycle and native editors from the platform runner's main event loop.
-///
-/// # Safety
-/// The runner must supply a live versioned window API and call only from its OS main thread.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn digidaw_native_host_poll(api: *const karbeat_vst3::native::NativeWindowApi) {
-    // SAFETY: The desktop runner guarantees the callback-table lifetime and native thread affinity.
-    unsafe { karbeat_vst3::native::poll(api) };
-}

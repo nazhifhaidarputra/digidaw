@@ -58,6 +58,9 @@ rubato.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 cpal = { workspace = true, features = ["jack"] }
 
+[dev-dependencies]
+glib.workspace = true
+
 [features]
 default = []
 asio = ["cpal/asio"]
