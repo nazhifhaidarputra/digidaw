@@ -146,6 +146,8 @@ pub enum HostError {
     Scanner(String),
     #[error("native plugin dispatch: {0}")]
     NativeDispatch(String),
+    #[error(transparent)]
+    NativeUi(#[from] crate::native_ui::NativeUiError),
     #[error("plugin I/O: {0}")]
     Io(#[from] std::io::Error),
 }

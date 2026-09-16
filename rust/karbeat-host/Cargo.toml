@@ -16,5 +16,11 @@ thiserror.workspace = true
 rtrb.workspace = true
 tempfile.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+glib.workspace = true
+x11rb.workspace = true
+wayland-client.workspace = true
+smithay-client-toolkit.workspace = true
+
 [lints]
 workspace = true
