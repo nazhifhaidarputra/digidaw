@@ -4,10 +4,12 @@
 //! module are valid only while the corresponding [`NativeWindow`] remains alive.
 
 mod binding;
+pub mod platform;
 mod traits;
 mod types;
 
 pub use binding::*;
+pub use platform::SystemNativeUi;
 pub use traits::*;
 pub use types::*;
 

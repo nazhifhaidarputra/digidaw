@@ -232,3 +232,9 @@ fn externally_destroyed_window_requires_best_effort_close() {
     assert_eq!(binding.lifecycle(), NativeEditorLifecycle::Closing);
     binding.finish_close().unwrap();
 }
+
+#[test]
+fn unavailable_wake_handle_is_explicit() {
+    let error = platform::UnavailableWakeHandle.wake().unwrap_err();
+    assert!(matches!(error, NativeUiError::RuntimeUnavailable));
+}
