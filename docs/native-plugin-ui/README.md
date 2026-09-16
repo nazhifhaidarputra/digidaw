@@ -5,7 +5,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 
 ## Current status
 
-- Active phase: 10 — Cooperative VST3 work
+- Active phase: 11 — Flutter/Vital acceptance
 - Overall status: in progress
 - Target branch: `feat/vst3`
 - Commit author: `the_great_anoa <nazhifhaidarputra@gmail.com>`
@@ -22,7 +22,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 7. [VST3 migration](phase-07-vst3-migration.md) — complete
 8. [Self-bootstrap](phase-08-self-bootstrap.md) — complete
 9. [Runner cleanup](phase-09-runner-cleanup.md) — complete
-10. [Cooperative VST3 work](phase-10-cooperative-vst3.md)
+10. [Cooperative VST3 work](phase-10-cooperative-vst3.md) — complete
 11. [Flutter/Vital acceptance](phase-11-flutter-vital.md)
 
 ## Tracker convention

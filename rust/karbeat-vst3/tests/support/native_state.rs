@@ -19,10 +19,7 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
     let worker = std::thread::spawn(move || {
         let initial_descriptor = descriptor.clone();
         let initial_config = config.clone();
-        let prepared = native::call(move |owner| {
-            owner.create_prepared(&initial_descriptor, &initial_config, None)
-        })
-        .unwrap();
+        let prepared = native::prepare_instance(initial_descriptor, initial_config, None).unwrap();
         let id = prepared.instance;
         assert!(prepared.capabilities.controller);
         assert!(!prepared.parameters.is_empty());

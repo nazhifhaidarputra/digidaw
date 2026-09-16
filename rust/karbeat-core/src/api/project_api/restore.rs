@@ -187,11 +187,8 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
             sidechain_channels: 0,
             offline: false,
         };
-        let native_config = config.clone();
         let state = external.state.clone();
-        let prepared = karbeat_vst3::native::call(move |owner| {
-            owner.create_prepared(&descriptor, &native_config, state.as_ref())
-        });
+        let prepared = karbeat_vst3::native::prepare_instance(descriptor, config.clone(), state);
         let prepared = match prepared {
             Ok(prepared) => prepared,
             Err(error) => {

@@ -22,6 +22,20 @@ use vst3::{
     Steinberg::{Vst::*, *},
 };
 
+const MIDI_MAPPING_CHANNELS: usize = 16;
+const MIDI_MAPPING_SLOTS: usize = 130;
+pub(crate) const MIDI_MAPPING_QUERY_COUNT: usize = MIDI_MAPPING_CHANNELS * MIDI_MAPPING_SLOTS;
+
+fn mapping_batch_end(next: usize, limit: usize) -> usize {
+    next.saturating_add(limit).min(MIDI_MAPPING_QUERY_COUNT)
+}
+
+pub(crate) struct Vst3PrepareJob {
+    dsp: Option<Dsp>,
+    mapping: Option<ComPtr<IMidiMapping>>,
+    next_mapping: usize,
+}
+
 pub(crate) fn check(operation: &'static str, code: i32) -> Result<(), HostError> {
     if code == kResultOk {
         Ok(())
@@ -209,7 +223,10 @@ impl Vst3Instance {
         Ok(specs)
     }
 
-    pub fn prepare(&mut self, config: &ProcessingConfig) -> Result<(), HostError> {
+    pub(crate) fn begin_prepare(
+        &mut self,
+        config: &ProcessingConfig,
+    ) -> Result<Vst3PrepareJob, HostError> {
         config.validate()?;
         self.suspend()?;
         self.config = None;
@@ -337,7 +354,7 @@ impl Vst3Instance {
             processor.setupProcessing(&raw mut setup)
         })?;
         let ids = self.specs.iter().map(|p| p.id).collect::<Vec<_>>();
-        let mut dsp = Dsp::new(
+        let dsp = Dsp::new(
             processor.clone(),
             config.clone(),
             input_channels,
@@ -345,29 +362,63 @@ impl Vst3Instance {
             &ids,
             use_f64,
         );
-        if let Some(mapping) = self
+        let mapping = self
             .controller
             .as_ref()
-            .and_then(|c| c.cast::<IMidiMapping>())
-        {
-            for channel in 0..16 {
-                for cc in 0..130 {
-                    let mut id = 0;
-                    // SAFETY: MIDI mapping queries occur on the controller's UI thread.
-                    if unsafe {
-                        mapping.getMidiControllerAssignment(
-                            0,
-                            i16::try_from(channel).unwrap_or(0),
-                            i16::try_from(cc).unwrap_or(0),
-                            &raw mut id,
-                        )
-                    } == kResultOk
-                    {
-                        dsp.midi_mapping[channel][cc] = Some(id);
-                    }
+            .and_then(|controller| controller.cast::<IMidiMapping>());
+        Ok(Vst3PrepareJob {
+            dsp: Some(dsp),
+            mapping,
+            next_mapping: 0,
+        })
+    }
+
+    pub(crate) fn advance_prepare(
+        &mut self,
+        job: &mut Vst3PrepareJob,
+        max_mapping_queries: usize,
+    ) -> Result<bool, HostError> {
+        if max_mapping_queries == 0 {
+            return Err(HostError::InvalidConfiguration);
+        }
+        if let Some(mapping) = &job.mapping {
+            let end = mapping_batch_end(job.next_mapping, max_mapping_queries);
+            let dsp = job.dsp.as_mut().ok_or(HostError::InvalidTransition)?;
+            for index in job.next_mapping..end {
+                let channel = index / MIDI_MAPPING_SLOTS;
+                let cc = index % MIDI_MAPPING_SLOTS;
+                let mut id = 0;
+                // SAFETY: MIDI mapping queries occur on the controller's UI thread and both
+                // indices are within the VST3 channel/controller ranges.
+                if unsafe {
+                    mapping.getMidiControllerAssignment(
+                        0,
+                        i16::try_from(channel).unwrap_or(0),
+                        i16::try_from(cc).unwrap_or(0),
+                        &raw mut id,
+                    )
+                } == kResultOk
+                {
+                    dsp.midi_mapping[channel][cc] = Some(id);
                 }
             }
+            job.next_mapping = end;
+        } else {
+            job.next_mapping = MIDI_MAPPING_QUERY_COUNT;
         }
+        if job.next_mapping < MIDI_MAPPING_QUERY_COUNT {
+            return Ok(false);
+        }
+        let dsp = job.dsp.take().ok_or(HostError::InvalidTransition)?;
+        let config = dsp.config.clone();
+        let component = self
+            .component
+            .as_ref()
+            .ok_or(HostError::InvalidTransition)?;
+        let processor = self
+            .processor
+            .as_ref()
+            .ok_or(HostError::InvalidTransition)?;
         // SAFETY: All negotiated buffers are ready and setupProcessing has succeeded.
         check("component.setActive(true)", unsafe {
             component.setActive(1)
@@ -391,7 +442,13 @@ impl Vst3Instance {
                 endpoint_alive: AtomicBool::new(false),
             }));
         }
-        self.config = Some(config.clone());
+        self.config = Some(config);
+        Ok(true)
+    }
+
+    pub fn prepare(&mut self, config: &ProcessingConfig) -> Result<(), HostError> {
+        let mut job = self.begin_prepare(config)?;
+        while !self.advance_prepare(&mut job, MIDI_MAPPING_QUERY_COUNT)? {}
         Ok(())
     }
 
@@ -565,5 +622,26 @@ impl Drop for Vst3Instance {
         self.processor.take();
         self.component.take();
         self.handler.take();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn midi_mapping_cursor_covers_all_queries_in_bounded_batches() {
+        let batch_size = 64;
+        let mut next = 0;
+        let mut batches = 0;
+        while next < MIDI_MAPPING_QUERY_COUNT {
+            let end = mapping_batch_end(next, batch_size);
+            assert!(end > next);
+            assert!(end - next <= batch_size);
+            next = end;
+            batches += 1;
+        }
+        assert_eq!(next, 2_080);
+        assert_eq!(batches, 33);
     }
 }

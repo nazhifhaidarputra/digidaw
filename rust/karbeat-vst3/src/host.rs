@@ -3,7 +3,7 @@
 use crate::{
     context::Vst3HostContext,
     editor::Vst3Editor,
-    instance::{Vst3Instance, check},
+    instance::{Vst3Instance, Vst3PrepareJob, check},
     module::{self, Vst3Module},
     wrapper::Vst3Processor,
 };
@@ -79,6 +79,22 @@ impl Vst3PluginHost {
             .parameters
             .iter()
             .any(|parameter| parameter.pending.load(Ordering::Acquire)))
+    }
+    pub(crate) fn begin_prepare(
+        &mut self,
+        id: HostInstanceId,
+        config: &ProcessingConfig,
+    ) -> Result<Vst3PrepareJob, HostError> {
+        self.instance_mut(id)?.begin_prepare(config)
+    }
+    pub(crate) fn advance_prepare(
+        &mut self,
+        id: HostInstanceId,
+        job: &mut Vst3PrepareJob,
+        max_mapping_queries: usize,
+    ) -> Result<bool, HostError> {
+        self.instance_mut(id)?
+            .advance_prepare(job, max_mapping_queries)
     }
     pub fn pump(&self) -> Result<(), HostError> {
         self.check_thread()?;

@@ -60,11 +60,8 @@ fn prepare(
         sidechain_channels: 0,
         offline: false,
     };
-    let native_config = config.clone();
-    let native_descriptor = descriptor.clone();
-    let prepared = karbeat_vst3::native::call(move |owner| {
-        owner.create_prepared(&native_descriptor, &native_config, None)
-    })?;
+    let prepared =
+        karbeat_vst3::native::prepare_instance(descriptor.clone(), config.clone(), None)?;
     let plugin = PluginInstance {
         registry_id,
         name: descriptor.name.clone(),
@@ -528,11 +525,8 @@ pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
         sidechain_channels: 0,
         offline: false,
     };
-    let native_config = config.clone();
     let state = external.state.clone();
-    let prepared = karbeat_vst3::native::call(move |owner| {
-        owner.create_prepared(&descriptor, &native_config, state.as_ref())
-    })?;
+    let prepared = karbeat_vst3::native::prepare_instance(descriptor, config.clone(), state)?;
     let instance = prepared.instance;
     let track = if let PluginTarget::Generator(id) = target {
         Some(
