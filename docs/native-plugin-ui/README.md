@@ -5,7 +5,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 
 ## Current status
 
-- Active phase: 04 — GLib owner runtime
+- Active phase: 05 — Linux X11/XWayland
 - Overall status: in progress
 - Target branch: `feat/vst3`
 - Commit author: `the_great_anoa <nazhifhaidarputra@gmail.com>`
@@ -16,7 +16,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 1. [Shared contracts](phase-01-shared-contracts.md) — complete
 2. [Editor binding policy](phase-02-editor-binding.md) — complete
 3. [Platform stubs](phase-03-platform-stubs.md) — complete
-4. [GLib owner runtime](phase-04-glib-runtime.md)
+4. [GLib owner runtime](phase-04-glib-runtime.md) — complete
 5. [Linux X11/XWayland](phase-05-linux-x11.md)
 6. [Linux Wayland](phase-06-linux-wayland.md)
 7. [VST3 migration](phase-07-vst3-migration.md)
