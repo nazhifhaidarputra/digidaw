@@ -2,18 +2,18 @@
 
 use crate::Vst3PluginHost;
 use karbeat_host::{
-    HostCapabilities, HostError, HostInstanceId, PluginController, PluginDescriptor,
-    PluginEditorManager, PluginInstanceManager, PluginState, PreparedProcessor, ProcessingConfig,
-    StateOperation, StateResult, StateTransaction, StateTransactionControl,
+    HostCapabilities, HostError, HostInstanceId, NativeEditorBinding, NativeEditorEvent,
+    NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform, NativeWindow, NativeWindowId,
+    NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginController,
+    PluginDescriptor, PluginEditorManager, PluginInstanceManager, PluginState, PreparedProcessor,
+    ProcessingConfig, StateOperation, StateResult, StateTransaction, StateTransactionControl,
+    SystemNativeUi,
 };
 use karbeat_plugin_api::prelude::ParameterSpec;
-use raw_window_handle::{AppKitWindowHandle, RawWindowHandle, Win32WindowHandle, XlibWindowHandle};
 use std::{
     cell::RefCell,
     collections::HashMap,
-    ffi::{CString, c_char},
-    num::NonZeroIsize,
-    ptr::NonNull,
+    ffi::c_char,
     rc::Rc,
     sync::{
         OnceLock,
@@ -40,21 +40,14 @@ pub struct NativeWindowApi {
     pub set_resizable: unsafe extern "C" fn(usize, bool) -> bool,
 }
 
-struct Window {
-    token: usize,
-    api: NativeWindowApi,
-}
-impl Drop for Window {
-    fn drop(&mut self) {
-        // SAFETY: Window token was created by this backend and the editor has already detached.
-        unsafe { (self.api.destroy)(self.token) };
-    }
-}
+type NativeBinding = NativeEditorBinding<<SystemNativeUi as NativeUiPlatform>::Window>;
 
 pub struct NativeHost {
     pub host: Vst3PluginHost,
-    api: NativeWindowApi,
-    windows: HashMap<HostInstanceId, Rc<Window>>,
+    native_ui: SystemNativeUi,
+    window_ids: NativeWindowIdAllocator,
+    windows: HashMap<HostInstanceId, Rc<RefCell<NativeBinding>>>,
+    window_owners: HashMap<NativeWindowId, HostInstanceId>,
     editor_contexts: HashMap<HostInstanceId, String>,
     events: Vec<karbeat_host::HostEvent>,
     event_overflow: Option<HostInstanceId>,
@@ -211,82 +204,72 @@ impl NativeHost {
         Ok(endpoint)
     }
     pub fn open_editor(&mut self, id: HostInstanceId) -> Result<(), HostError> {
-        if let Some(window) = self.windows.get(&id) {
-            // SAFETY: Stored native window token remains live on this UI thread.
-            unsafe { (window.api.focus)(window.token) };
+        if let Some(binding) = self.windows.get(&id) {
+            binding.borrow_mut().request_focus()?;
             return Ok(());
         }
-        let (width, height) = self.host.editor_size(id)?;
-        let resizable = self.host.editor_resizable(id)?;
-        let title = self.editor_title(id, self.editor_contexts.get(&id).map(String::as_str))?;
-        let mut parent = 0;
-        // SAFETY: Title and writable parent output live through creation on the native UI thread.
-        let token = unsafe { (self.api.create)(title.as_ptr(), width, height, &raw mut parent) };
-        if token == 0 || parent == 0 {
-            if token != 0 {
-                // SAFETY: Reclaim a window whose backend failed to expose an editor parent.
-                unsafe { (self.api.destroy)(token) };
-            }
-            self.host.close_editor(id)?;
+        let size = self.host.editor_size(id)?;
+        let constraints = self.host.editor_constraints(id)?;
+        let preferred_surface = self.host.editor_surface_preference(id)?;
+        if matches!(preferred_surface, NativeSurfacePreference::Require(kind) if !self.native_ui.capabilities().supports(kind))
+        {
             return Err(HostError::Unsupported(
-                "native editor window unavailable (Linux requires X11/XWayland)",
+                "VST3 native editor requires X11/XWayland on Linux",
             ));
         }
-        let window = Rc::new(Window {
-            token,
-            api: self.api,
-        });
-        // SAFETY: The newly created window is live on its UI thread, before editor attachment.
-        if !unsafe { (self.api.set_resizable)(token, resizable) } {
-            self.host.close_editor(id)?;
-            return Err(HostError::NativeDispatch(
-                "could not configure editor window controls".into(),
-            ));
-        }
-        let handle = match self.api.parent_kind {
-            1 => RawWindowHandle::Xlib(XlibWindowHandle::new(
-                std::ffi::c_ulong::try_from(parent).map_err(|_| HostError::InvalidConfiguration)?,
-            )),
-            2 => RawWindowHandle::Win32(Win32WindowHandle::new(
-                NonZeroIsize::new(
-                    isize::try_from(parent).map_err(|_| HostError::InvalidConfiguration)?,
-                )
-                .ok_or(HostError::InvalidConfiguration)?,
-            )),
-            3 => RawWindowHandle::AppKit(AppKitWindowHandle::new(
-                NonNull::new(std::ptr::with_exposed_provenance_mut(parent))
-                    .ok_or(HostError::InvalidConfiguration)?,
-            )),
-            _ => return Err(HostError::Unsupported("native window ABI parent kind")),
-        };
-        let resize_window = Rc::downgrade(&window);
+        let title = self.editor_title(id, self.editor_contexts.get(&id).map(String::as_str))?;
+        let window_id = self.window_ids.allocate()?;
+        let window = self.native_ui.create_window(
+            window_id,
+            &NativeWindowSpec {
+                title: &title,
+                initial_size: size,
+                constraints,
+                initially_visible: false,
+                preferred_surface,
+            },
+        )?;
+        let binding = Rc::new(RefCell::new(NativeEditorBinding::new(window)?));
+        let resize_binding = Rc::downgrade(&binding);
         self.host.set_editor_resize_handler(
             id,
             Rc::new(move |width, height| {
-                resize_window.upgrade().is_some_and(|window| {
-                    // SAFETY: Upgraded owner retains the token while the native backend resizes it.
-                    unsafe { (window.api.resize)(window.token, width, height) }
+                let Ok(size) = NativeWindowSize::new(width, height) else {
+                    return false;
+                };
+                resize_binding.upgrade().is_some_and(|binding| {
+                    binding
+                        .try_borrow_mut()
+                        .is_ok_and(|mut binding| binding.resize_window(size).is_ok())
                 })
             }),
         )?;
-        if let Err(error) = self.host.open_editor(id, handle) {
+        let parent = binding.borrow().window()?.parent_handle()?;
+        if let Err(error) = self.host.open_editor(id, &parent) {
             drop(self.host.close_editor(id));
             return Err(error);
         }
-        // SAFETY: Editor attached successfully to this live native parent.
-        unsafe { (self.api.focus)(token) };
-        self.windows.insert(id, window);
+        let show_result = (|| {
+            let mut binding = binding.borrow_mut();
+            binding.mark_attached()?;
+            binding.show()?;
+            binding.request_focus()
+        })();
+        if let Err(error) = show_result {
+            drop(self.host.close_editor(id));
+            let mut binding = binding.borrow_mut();
+            binding.begin_close();
+            drop(binding.finish_close());
+            return Err(error.into());
+        }
+        self.window_owners.insert(window_id, id);
+        self.windows.insert(id, binding);
         Ok(())
     }
-    fn editor_title(
-        &self,
-        id: HostInstanceId,
-        context: Option<&str>,
-    ) -> Result<CString, HostError> {
+    fn editor_title(&self, id: HostInstanceId, context: Option<&str>) -> Result<String, HostError> {
         let descriptor = self.host.descriptor(id)?;
         let context = context.map_or_else(|| format!("Instance {}", id.0), str::to_owned);
-        CString::new(format!("DigiDAW — {} — {context}", descriptor.name))
-            .map_err(|_| HostError::InvalidState("editor title contains a null character".into()))
+        Ok(format!("DigiDAW — {} — {context}", descriptor.name))
     }
     /// Applies project context labels without replacing the editor or its processing instance.
     pub fn set_editor_context(
@@ -295,20 +278,24 @@ impl NativeHost {
         context: String,
     ) -> Result<(), HostError> {
         let title = self.editor_title(id, Some(&context))?;
-        if let Some(window) = self.windows.get(&id) {
-            // SAFETY: The title and retained window remain live throughout the native UI call.
-            if !unsafe { (window.api.set_title)(window.token, title.as_ptr()) } {
-                return Err(HostError::NativeDispatch(
-                    "could not update editor window title".into(),
-                ));
-            }
+        if let Some(binding) = self.windows.get(&id) {
+            binding.borrow_mut().window_mut()?.set_title(&title)?;
         }
         self.editor_contexts.insert(id, context);
         Ok(())
     }
     pub fn close_editor(&mut self, id: HostInstanceId) -> Result<(), HostError> {
-        self.host.close_editor(id)?;
-        self.windows.remove(&id);
+        let Some(binding) = self.windows.remove(&id) else {
+            return self.host.close_editor(id);
+        };
+        let window_id = binding.borrow().id();
+        binding.borrow_mut().begin_close();
+        if let Err(error) = self.host.close_editor(id) {
+            self.windows.insert(id, binding);
+            return Err(error);
+        }
+        binding.borrow_mut().finish_close()?;
+        self.window_owners.remove(&window_id);
         Ok(())
     }
     pub fn destroy(&mut self, id: HostInstanceId) -> Result<(), HostError> {
@@ -388,29 +375,49 @@ impl NativeHost {
         if let Err(error) = self.host.pump() {
             log::error!("VST3 native loop: {error}");
         }
+        let mut native_events = Vec::new();
+        if let Err(error) = self
+            .native_ui
+            .poll_events(|event| native_events.push(event))
+        {
+            log::error!("native editor event loop: {error}");
+        }
         let mut closed = Vec::new();
-        for (&id, window) in &self.windows {
-            let (mut width, mut height) = (0, 0);
-            // SAFETY: Poll is nonblocking, token is live, and dimensions are writable outputs.
-            let flags = unsafe { (window.api.poll)(window.token, &raw mut width, &raw mut height) };
-            if flags & 1 != 0 {
-                closed.push(id);
-            } else if flags & 2 != 0 {
-                if let Err(error) = self.host.resize_editor(id, width, height) {
-                    log::debug!("VST3 editor size unchanged: {error}");
-                    if let Ok((accepted_width, accepted_height)) = self.host.editor_size(id) {
-                        if (width, height) != (accepted_width, accepted_height) {
-                            // SAFETY: Restore this live native client's size after a rejected resize.
-                            if !unsafe {
-                                (window.api.resize)(window.token, accepted_width, accepted_height)
-                            } {
-                                log::warn!(
-                                    "VST3 native window could not restore editor dimensions"
-                                );
-                            }
+        for event in native_events {
+            let Some(id) = self.window_owners.get(&event.window()).copied() else {
+                continue;
+            };
+            let Some(binding) = self.windows.get(&id) else {
+                continue;
+            };
+            let editor_event = match binding.borrow_mut().handle_event(event) {
+                Ok(event) => event,
+                Err(error) => {
+                    log::warn!("native editor event: {error}");
+                    continue;
+                }
+            };
+            match editor_event {
+                NativeEditorEvent::ExternalResize(size) => {
+                    if let Err(error) = self.host.resize_editor(id, size.width, size.height) {
+                        log::debug!("VST3 editor size unchanged: {error}");
+                        if let Ok(accepted) = self.host.editor_size(id)
+                            && accepted != size
+                            && let Err(resize_error) = binding.borrow_mut().resize_window(accepted)
+                        {
+                            log::warn!("VST3 native window resize restore: {resize_error}");
                         }
                     }
                 }
+                NativeEditorEvent::CloseRequested | NativeEditorEvent::Destroyed => {
+                    if !closed.contains(&id) {
+                        closed.push(id);
+                    }
+                }
+                NativeEditorEvent::Ignored
+                | NativeEditorEvent::ProgrammaticResizeAcknowledged
+                | NativeEditorEvent::ScaleFactorChanged(_)
+                | NativeEditorEvent::FocusChanged(_) => {}
             }
         }
         for id in closed {
@@ -418,6 +425,9 @@ impl NativeHost {
                 log::warn!("VST3 editor close: {error}");
             }
             self.push_event(karbeat_host::HostEvent::EditorClosed { instance: id });
+        }
+        if let Err(error) = self.native_ui.pump() {
+            log::error!("native editor flush: {error}");
         }
         let now = std::time::Instant::now();
         for event in self.host.drain_events() {
@@ -612,16 +622,18 @@ pub unsafe fn poll(api: *const NativeWindowApi) {
     if unsafe { api.cast::<u32>().read() } != 2 {
         return;
     }
-    // SAFETY: A version-2 runner guarantees the complete callback table and retained callbacks.
-    let api = unsafe { *api };
     RUNTIME.with(|runtime| {
         let Ok(mut runtime) = runtime.try_borrow_mut() else {
             return;
         };
         if runtime.is_none() {
+            drop(NativeUiDispatcher::initialize());
             if SENDER.get().is_some() {
                 return;
             }
+            let Ok((native_ui, _wake_handle)) = SystemNativeUi::initialize() else {
+                return;
+            };
             let (sender, receiver) = mpsc::sync_channel(128);
             if SENDER.set(sender).is_err() {
                 return;
@@ -630,8 +642,10 @@ pub unsafe fn poll(api: *const NativeWindowApi) {
             *runtime = Some((
                 NativeHost {
                     host: Vst3PluginHost::new(),
-                    api,
+                    native_ui,
+                    window_ids: NativeWindowIdAllocator::default(),
                     windows: HashMap::new(),
+                    window_owners: HashMap::new(),
                     editor_contexts: HashMap::new(),
                     events: Vec::new(),
                     event_overflow: None,

@@ -5,8 +5,8 @@ use std::thread::{self, ThreadId};
 
 use crate::native_ui::{
     GlibWakeHandle, NativeParentHandle, NativeSurfaceCapabilities, NativeSurfaceKind,
-    NativeUiDispatcher, NativeUiError, NativeUiPlatform, NativeWindow, NativeWindowConstraints,
-    NativeWindowEvent, NativeWindowId, NativeWindowMetrics, NativeWindowSize, NativeWindowSpec,
+    NativeUiError, NativeUiPlatform, NativeWindow, NativeWindowConstraints, NativeWindowEvent,
+    NativeWindowId, NativeWindowMetrics, NativeWindowSize, NativeWindowSpec,
 };
 
 use self::{
@@ -105,9 +105,6 @@ impl NativeUiPlatform for LinuxNativeUi {
     type WakeHandle = GlibWakeHandle;
 
     fn initialize() -> Result<(Self, Self::WakeHandle), NativeUiError> {
-        if !NativeUiDispatcher::is_owner_thread() {
-            return Err(NativeUiError::WrongThread);
-        }
         Ok((
             Self {
                 owner: thread::current().id(),

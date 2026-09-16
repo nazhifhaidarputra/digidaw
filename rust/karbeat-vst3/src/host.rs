@@ -9,7 +9,6 @@ use crate::{
 };
 use karbeat_host::*;
 use karbeat_plugin_api::prelude::ParameterSpec;
-use raw_window_handle::RawWindowHandle;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, sync::atomic::Ordering, thread::ThreadId};
 use vst3::{
     ComWrapper,
@@ -412,26 +411,52 @@ impl PluginController for Vst3PluginHost {
     }
 }
 impl PluginEditorManager for Vst3PluginHost {
-    fn editor_resizable(&mut self, id: HostInstanceId) -> Result<bool, HostError> {
+    fn editor_constraints(
+        &mut self,
+        id: HostInstanceId,
+    ) -> Result<NativeWindowConstraints, HostError> {
         self.ensure_editor(id)?;
-        self.instance(id)?
+        let editor = self
+            .instance(id)?
             .editor
             .as_ref()
-            .ok_or(HostError::InvalidTransition)?
-            .resizable()
+            .ok_or(HostError::InvalidTransition)?;
+        if editor.resizable()? {
+            Ok(NativeWindowConstraints::resizable())
+        } else {
+            let (width, height) = editor.size()?;
+            Ok(NativeWindowConstraints::fixed(NativeWindowSize::new(
+                width, height,
+            )?))
+        }
     }
-    fn editor_size(&mut self, id: HostInstanceId) -> Result<(u32, u32), HostError> {
+    fn editor_size(&mut self, id: HostInstanceId) -> Result<NativeWindowSize, HostError> {
         self.ensure_editor(id)?;
-        self.instance(id)?
+        let (width, height) = self
+            .instance(id)?
             .editor
             .as_ref()
             .ok_or(HostError::InvalidTransition)?
-            .size()
+            .size()?;
+        Ok(NativeWindowSize::new(width, height)?)
+    }
+    fn editor_surface_preference(
+        &self,
+        id: HostInstanceId,
+    ) -> Result<NativeSurfacePreference, HostError> {
+        self.instance(id)?;
+        #[cfg(target_os = "linux")]
+        let surface = NativeSurfaceKind::X11;
+        #[cfg(target_os = "windows")]
+        let surface = NativeSurfaceKind::Win32;
+        #[cfg(target_os = "macos")]
+        let surface = NativeSurfaceKind::AppKit;
+        Ok(NativeSurfacePreference::Require(surface))
     }
     fn open_editor(
         &mut self,
         id: HostInstanceId,
-        parent: RawWindowHandle,
+        parent: &NativeParentHandle,
     ) -> Result<(), HostError> {
         self.ensure_editor(id)?;
         self.instance_mut(id)?

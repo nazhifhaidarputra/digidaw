@@ -5,7 +5,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 
 ## Current status
 
-- Active phase: 07 — VST3 migration
+- Active phase: 08 — Self-bootstrap
 - Overall status: in progress
 - Target branch: `feat/vst3`
 - Commit author: `the_great_anoa <nazhifhaidarputra@gmail.com>`
@@ -19,7 +19,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 4. [GLib owner runtime](phase-04-glib-runtime.md) — complete
 5. [Linux X11/XWayland](phase-05-linux-x11.md) — complete
 6. [Linux Wayland](phase-06-linux-wayland.md) — complete
-7. [VST3 migration](phase-07-vst3-migration.md)
+7. [VST3 migration](phase-07-vst3-migration.md) — complete
 8. [Self-bootstrap](phase-08-self-bootstrap.md)
 9. [Runner cleanup](phase-09-runner-cleanup.md)
 10. [Cooperative VST3 work](phase-10-cooperative-vst3.md)

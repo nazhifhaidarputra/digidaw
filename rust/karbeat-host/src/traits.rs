@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use karbeat_plugin_api::prelude::ParameterSpec;
-use raw_window_handle::RawWindowHandle;
 
 use crate::{
-    HostCapabilities, HostError, HostEvent, HostInstanceId, PluginDescriptor, PluginFormat,
-    PluginState, ProcessingConfig,
+    HostCapabilities, HostError, HostEvent, HostInstanceId, NativeParentHandle,
+    NativeSurfacePreference, NativeWindowConstraints, NativeWindowSize, PluginDescriptor,
+    PluginFormat, PluginState, ProcessingConfig,
 };
 
 pub trait PluginScanner {
@@ -90,12 +90,19 @@ pub trait PluginController {
 
 /// Handles are native windows owned by the platform window service, never Flutter views.
 pub trait PluginEditorManager {
-    fn editor_size(&mut self, instance: HostInstanceId) -> Result<(u32, u32), HostError>;
-    fn editor_resizable(&mut self, instance: HostInstanceId) -> Result<bool, HostError>;
+    fn editor_size(&mut self, instance: HostInstanceId) -> Result<NativeWindowSize, HostError>;
+    fn editor_constraints(
+        &mut self,
+        instance: HostInstanceId,
+    ) -> Result<NativeWindowConstraints, HostError>;
+    fn editor_surface_preference(
+        &self,
+        instance: HostInstanceId,
+    ) -> Result<NativeSurfacePreference, HostError>;
     fn open_editor(
         &mut self,
         instance: HostInstanceId,
-        parent: RawWindowHandle,
+        parent: &NativeParentHandle,
     ) -> Result<(), HostError>;
     fn resize_editor(
         &mut self,

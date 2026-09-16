@@ -2,7 +2,7 @@
 #![allow(non_snake_case, reason = "VST3 interface method names are ABI-defined")]
 
 use crate::{instance::check, run_loop::RunLoop};
-use karbeat_host::HostError;
+use karbeat_host::{HostError, NativeParentHandle, NativeSurfaceKind};
 use raw_window_handle::RawWindowHandle;
 use std::{
     cell::{Cell, RefCell},
@@ -122,34 +122,37 @@ impl Vst3Editor {
             })
         }
     }
-    pub fn open(&mut self, handle: RawWindowHandle) -> Result<(), HostError> {
+    pub fn open(&mut self, parent_handle: &NativeParentHandle) -> Result<(), HostError> {
         if self.attached {
             return Ok(());
         }
-        let (parent, platform): (*mut c_void, &std::ffi::CStr) = match handle {
-            RawWindowHandle::Xlib(handle) => (
-                ptr::without_provenance_mut(
-                    usize::try_from(handle.window).map_err(|_| HostError::InvalidConfiguration)?,
+        let (parent, platform): (*mut c_void, &std::ffi::CStr) =
+            match (parent_handle.kind, parent_handle.window) {
+                (NativeSurfaceKind::X11, RawWindowHandle::Xcb(handle)) => (
+                    ptr::without_provenance_mut(
+                        usize::try_from(handle.window.get())
+                            .map_err(|_| HostError::InvalidConfiguration)?,
+                    ),
+                    c"X11EmbedWindowID",
                 ),
-                c"X11EmbedWindowID",
-            ),
-            RawWindowHandle::Xcb(handle) => (
-                ptr::without_provenance_mut(
-                    usize::try_from(handle.window.get())
-                        .map_err(|_| HostError::InvalidConfiguration)?,
+                #[cfg(target_os = "windows")]
+                (NativeSurfaceKind::Win32, RawWindowHandle::Win32(handle)) => (
+                    ptr::with_exposed_provenance_mut(
+                        usize::try_from(handle.hwnd.get())
+                            .map_err(|_| HostError::InvalidConfiguration)?,
+                    ),
+                    c"HWND",
                 ),
-                c"X11EmbedWindowID",
-            ),
-            RawWindowHandle::Win32(handle) => (
-                ptr::with_exposed_provenance_mut(
-                    usize::try_from(handle.hwnd.get())
-                        .map_err(|_| HostError::InvalidConfiguration)?,
-                ),
-                c"HWND",
-            ),
-            RawWindowHandle::AppKit(handle) => (handle.ns_view.as_ptr(), c"NSView"),
-            _ => return Err(HostError::Unsupported("native editor window platform")),
-        };
+                #[cfg(target_os = "macos")]
+                (NativeSurfaceKind::AppKit, RawWindowHandle::AppKit(handle)) => {
+                    (handle.ns_view.as_ptr(), c"NSView")
+                }
+                _ => {
+                    return Err(HostError::Unsupported(
+                        "VST3 editor requires an X11/XCB parent on Linux",
+                    ));
+                }
+            };
         // SAFETY: This static platform string is one of the VST3 SDK's native parent types.
         check("editor.isPlatformTypeSupported", unsafe {
             self.view.isPlatformTypeSupported(platform.as_ptr())
@@ -226,7 +229,8 @@ fn dimensions(rect: &ViewRect) -> Option<(u32, u32)> {
 )]
 mod tests {
     use super::*;
-    use raw_window_handle::XlibWindowHandle;
+    use raw_window_handle::XcbWindowHandle;
+    use std::num::NonZeroU32;
 
     struct View {
         calls: Rc<RefCell<Vec<&'static str>>>,
@@ -354,10 +358,14 @@ mod tests {
             let (mut editor, view) = fixture();
             view.attach_result
                 .set(if success { kResultOk } else { kResultFalse });
-            let parent = RawWindowHandle::Xlib(XlibWindowHandle::new(1));
-            assert_eq!(editor.open(parent).is_ok(), success);
+            let parent = NativeParentHandle {
+                kind: NativeSurfaceKind::X11,
+                window: RawWindowHandle::Xcb(XcbWindowHandle::new(NonZeroU32::MIN)),
+                display: None,
+            };
+            assert_eq!(editor.open(&parent).is_ok(), success);
             if success {
-                editor.open(parent).unwrap();
+                editor.open(&parent).unwrap();
             }
             editor.close().unwrap();
             editor.close().unwrap();

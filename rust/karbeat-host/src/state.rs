@@ -149,12 +149,12 @@ impl StateTransaction {
 mod tests {
     use super::*;
     use crate::{
-        HostCapabilities, HostEvent, HostedProcessor, PluginController, PluginDescriptor,
+        HostCapabilities, HostEvent, HostedProcessor, NativeParentHandle, NativeSurfacePreference,
+        NativeWindowConstraints, NativeWindowSize, PluginController, PluginDescriptor,
         PluginEditorManager, PluginFormat, PluginIdentity, PluginInstanceManager, PluginScanner,
         ProcessingConfig, ProcessingGate,
     };
     use karbeat_plugin_api::prelude::ParameterSpec;
-    use raw_window_handle::RawWindowHandle;
     use std::path::PathBuf;
 
     struct MockHost {
@@ -325,14 +325,28 @@ mod tests {
         }
     }
     impl PluginEditorManager for MockHost {
-        fn editor_resizable(&mut self, id: HostInstanceId) -> Result<bool, HostError> {
-            self.editor_size(id).map(|_| false)
-        }
-        fn editor_size(&mut self, id: HostInstanceId) -> Result<(u32, u32), HostError> {
+        fn editor_size(&mut self, id: HostInstanceId) -> Result<NativeWindowSize, HostError> {
             self.check(id)?;
             Err(HostError::Unsupported("native editor"))
         }
-        fn open_editor(&mut self, id: HostInstanceId, _: RawWindowHandle) -> Result<(), HostError> {
+        fn editor_constraints(
+            &mut self,
+            id: HostInstanceId,
+        ) -> Result<NativeWindowConstraints, HostError> {
+            self.editor_size(id).map(NativeWindowConstraints::fixed)
+        }
+        fn editor_surface_preference(
+            &self,
+            id: HostInstanceId,
+        ) -> Result<NativeSurfacePreference, HostError> {
+            self.check(id)?;
+            Ok(NativeSurfacePreference::AnySupported)
+        }
+        fn open_editor(
+            &mut self,
+            id: HostInstanceId,
+            _: &NativeParentHandle,
+        ) -> Result<(), HostError> {
             self.editor_size(id).map(|_| ())
         }
         fn resize_editor(&mut self, id: HostInstanceId, _: u32, _: u32) -> Result<(), HostError> {

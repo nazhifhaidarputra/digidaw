@@ -220,9 +220,6 @@ pub fn install_ui_fd_source(
     fd: c_int,
     mut callback: impl FnMut() -> ControlFlow + 'static,
 ) -> Result<UiFdSource, NativeUiError> {
-    if !NativeUiDispatcher::is_owner_thread() {
-        return Err(NativeUiError::WrongThread);
-    }
     let active = Arc::new(AtomicBool::new(true));
     let callback_active = active.clone();
     let callback: Box<dyn FnMut() -> ControlFlow> = Box::new(move || {
@@ -296,6 +293,11 @@ unsafe extern "C" fn drop_fd_source(user_data: *mut c_void) {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "runtime test fixtures fail on unexpected results"
+)]
 mod tests {
     use std::sync::{
         Arc,

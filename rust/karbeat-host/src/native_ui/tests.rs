@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "native UI test fixtures fail on unexpected results"
+)]
+
 use super::*;
 use raw_window_handle::{RawWindowHandle, XcbWindowHandle};
 use std::{
