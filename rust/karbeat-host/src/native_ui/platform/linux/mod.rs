@@ -1,87 +1,163 @@
+mod x11;
+
+use std::thread::{self, ThreadId};
+
 use crate::native_ui::{
-    NativeParentHandle, NativeSurfaceCapabilities, NativeSurfaceKind, NativeUiError,
-    NativeUiPlatform, NativeWindow, NativeWindowConstraints, NativeWindowEvent, NativeWindowId,
-    NativeWindowMetrics, NativeWindowSize, NativeWindowSpec,
+    GlibWakeHandle, NativeParentHandle, NativeSurfaceCapabilities, NativeSurfaceKind,
+    NativeUiDispatcher, NativeUiError, NativeUiPlatform, NativeWindow, NativeWindowConstraints,
+    NativeWindowEvent, NativeWindowId, NativeWindowMetrics, NativeWindowSize, NativeWindowSpec,
 };
 
-use super::UnavailableWakeHandle;
+use self::x11::{X11Backend, X11Window};
 
-pub struct LinuxNativeUi;
-pub struct LinuxNativeWindow {
-    id: NativeWindowId,
+pub struct LinuxNativeUi {
+    owner: ThreadId,
+    x11: Option<X11Backend>,
+}
+
+pub enum LinuxNativeWindow {
+    X11(X11Window),
 }
 
 impl NativeWindow for LinuxNativeWindow {
     fn id(&self) -> NativeWindowId {
-        self.id
+        match self {
+            Self::X11(window) => window.id(),
+        }
     }
 
     fn surface_kind(&self) -> NativeSurfaceKind {
-        NativeSurfaceKind::X11
+        match self {
+            Self::X11(window) => window.surface_kind(),
+        }
     }
 
     fn parent_handle(&self) -> Result<NativeParentHandle, NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        match self {
+            Self::X11(window) => window.parent_handle(),
+        }
     }
 
     fn show(&mut self) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        match self {
+            Self::X11(window) => window.show(),
+        }
     }
 
     fn hide(&mut self) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        match self {
+            Self::X11(window) => window.hide(),
+        }
     }
 
     fn request_focus(&mut self) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        match self {
+            Self::X11(window) => window.request_focus(),
+        }
     }
 
-    fn set_title(&mut self, _: &str) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+    fn set_title(&mut self, title: &str) -> Result<(), NativeUiError> {
+        match self {
+            Self::X11(window) => window.set_title(title),
+        }
     }
 
-    fn set_constraints(&mut self, _: NativeWindowConstraints) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+    fn set_constraints(
+        &mut self,
+        constraints: NativeWindowConstraints,
+    ) -> Result<(), NativeUiError> {
+        match self {
+            Self::X11(window) => window.set_constraints(constraints),
+        }
     }
 
-    fn set_client_size(&mut self, _: NativeWindowSize) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+    fn set_client_size(&mut self, size: NativeWindowSize) -> Result<(), NativeUiError> {
+        match self {
+            Self::X11(window) => window.set_client_size(size),
+        }
     }
 
     fn metrics(&self) -> Result<NativeWindowMetrics, NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        match self {
+            Self::X11(window) => window.metrics(),
+        }
     }
 }
 
 impl NativeUiPlatform for LinuxNativeUi {
     type Window = LinuxNativeWindow;
-    type WakeHandle = UnavailableWakeHandle;
+    type WakeHandle = GlibWakeHandle;
 
     fn initialize() -> Result<(Self, Self::WakeHandle), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        if !NativeUiDispatcher::is_owner_thread() {
+            return Err(NativeUiError::WrongThread);
+        }
+        Ok((
+            Self {
+                owner: thread::current().id(),
+                x11: X11Backend::connect().ok(),
+            },
+            GlibWakeHandle,
+        ))
     }
 
     fn is_owner_thread(&self) -> bool {
-        false
+        self.owner == thread::current().id()
     }
 
     fn capabilities(&self) -> NativeSurfaceCapabilities {
-        NativeSurfaceCapabilities::default()
+        NativeSurfaceCapabilities {
+            x11: self.x11.is_some(),
+            ..NativeSurfaceCapabilities::default()
+        }
     }
 
     fn create_window(
         &mut self,
-        _: NativeWindowId,
-        _: &NativeWindowSpec<'_>,
+        id: NativeWindowId,
+        spec: &NativeWindowSpec<'_>,
     ) -> Result<Self::Window, NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        self.ensure_owner()?;
+        spec.validate()?;
+        match self.capabilities().select(spec.preferred_surface)? {
+            NativeSurfaceKind::X11 => self
+                .x11
+                .as_mut()
+                .ok_or(NativeUiError::DisplayUnavailable)?
+                .create_window(id, spec)
+                .map(LinuxNativeWindow::X11),
+            kind => Err(NativeUiError::SurfaceUnsupported(
+                crate::native_ui::NativeSurfacePreference::Require(kind),
+            )),
+        }
     }
 
-    fn poll_events(&mut self, _: impl FnMut(NativeWindowEvent)) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+    fn poll_events(
+        &mut self,
+        mut emit: impl FnMut(NativeWindowEvent),
+    ) -> Result<(), NativeUiError> {
+        self.ensure_owner()?;
+        if let Some(x11) = self.x11.as_mut() {
+            x11.poll_events(&mut emit)?;
+        }
+        Ok(())
     }
 
     fn pump(&mut self) -> Result<(), NativeUiError> {
-        Err(NativeUiError::PlatformBackendUnavailable("Linux"))
+        self.ensure_owner()?;
+        if let Some(x11) = self.x11.as_mut() {
+            x11.flush()?;
+        }
+        Ok(())
+    }
+}
+
+impl LinuxNativeUi {
+    fn ensure_owner(&self) -> Result<(), NativeUiError> {
+        if self.is_owner_thread() {
+            Ok(())
+        } else {
+            Err(NativeUiError::WrongThread)
+        }
     }
 }

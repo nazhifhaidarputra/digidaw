@@ -1,5 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
+    ffi::{c_int, c_uint, c_void},
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicU8, Ordering},
@@ -8,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use glib::ControlFlow;
+use glib::{ControlFlow, translate::FromGlib};
 
 use super::{NativeUiError, NativeUiWakeHandle};
 
@@ -178,7 +179,7 @@ fn drain_on_ui_owner() {
         while processed < MAX_UI_TASKS_PER_TICK {
             match receiver.try_recv() {
                 Ok(task) => {
-                    processed += 1;
+                    processed = processed.saturating_add(1);
                     task();
                 }
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
@@ -198,6 +199,100 @@ pub fn install_ui_interval(
         return Err(NativeUiError::WrongThread);
     }
     Ok(glib::timeout_add_local(interval, callback))
+}
+
+pub struct UiFdSource {
+    source_id: Option<glib::SourceId>,
+    active: Arc<AtomicBool>,
+}
+
+impl Drop for UiFdSource {
+    fn drop(&mut self) {
+        if self.active.swap(false, Ordering::AcqRel)
+            && let Some(source_id) = self.source_id.take()
+        {
+            source_id.remove();
+        }
+    }
+}
+
+pub fn install_ui_fd_source(
+    fd: c_int,
+    mut callback: impl FnMut() -> ControlFlow + 'static,
+) -> Result<UiFdSource, NativeUiError> {
+    if !NativeUiDispatcher::is_owner_thread() {
+        return Err(NativeUiError::WrongThread);
+    }
+    let active = Arc::new(AtomicBool::new(true));
+    let callback_active = active.clone();
+    let callback: Box<dyn FnMut() -> ControlFlow> = Box::new(move || {
+        let result = callback();
+        if result == ControlFlow::Break {
+            callback_active.store(false, Ordering::Release);
+        }
+        result
+    });
+    let callback = Box::new(callback);
+    let callback_ptr = Box::into_raw(callback);
+    // glib-rs does not expose g_unix_fd_add_full; this adapter retains the closure until GLib
+    // removes the source and keeps all invocation on the default-loop owner.
+    // SAFETY: callback_ptr remains owned by the GLib source and drop_fd_source reconstructs the
+    // exact double-box allocation when GLib removes it.
+    let source_id = unsafe {
+        g_unix_fd_add_full(
+            0,
+            fd,
+            G_IO_IN | G_IO_ERR | G_IO_HUP,
+            Some(run_fd_source),
+            callback_ptr.cast(),
+            Some(drop_fd_source),
+        )
+    };
+    if source_id == 0 {
+        // SAFETY: GLib did not create a source, so ownership of callback_ptr was not transferred.
+        drop(unsafe { Box::from_raw(callback_ptr) });
+        return Err(NativeUiError::RuntimeInitializationFailed(
+            "failed to register a GLib Unix FD source".into(),
+        ));
+    }
+    Ok(UiFdSource {
+        // SAFETY: the zero source identifier was rejected above.
+        source_id: Some(unsafe { glib::SourceId::from_glib(source_id) }),
+        active,
+    })
+}
+
+const G_IO_IN: c_uint = 1;
+const G_IO_ERR: c_uint = 8;
+const G_IO_HUP: c_uint = 16;
+
+type GlibUnixFdCallback = unsafe extern "C" fn(c_int, c_uint, *mut c_void) -> c_int;
+type GlibDestroyNotify = unsafe extern "C" fn(*mut c_void);
+
+unsafe extern "C" {
+    fn g_unix_fd_add_full(
+        priority: c_int,
+        fd: c_int,
+        condition: c_uint,
+        function: Option<GlibUnixFdCallback>,
+        user_data: *mut c_void,
+        notify: Option<GlibDestroyNotify>,
+    ) -> c_uint;
+}
+
+unsafe extern "C" fn run_fd_source(_: c_int, _: c_uint, user_data: *mut c_void) -> c_int {
+    // SAFETY: install_ui_fd_source passes a pointer to this exact double-boxed callback type and
+    // GLib serializes this callback with its destroy notification.
+    let callback = unsafe { &mut *user_data.cast::<Box<dyn FnMut() -> ControlFlow>>() };
+    match callback() {
+        ControlFlow::Continue => 1,
+        ControlFlow::Break => 0,
+    }
+}
+
+unsafe extern "C" fn drop_fd_source(user_data: *mut c_void) {
+    // SAFETY: this is the unique pointer transferred to GLib by install_ui_fd_source.
+    drop(unsafe { Box::from_raw(user_data.cast::<Box<dyn FnMut() -> ControlFlow>>()) });
 }
 
 #[cfg(test)]
