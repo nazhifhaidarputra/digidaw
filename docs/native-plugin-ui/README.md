@@ -5,7 +5,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 
 ## Current status
 
-- Active phase: 02 — editor binding policy
+- Active phase: 03 — platform stubs
 - Overall status: in progress
 - Target branch: `feat/vst3`
 - Commit author: `the_great_anoa <nazhifhaidarputra@gmail.com>`
@@ -14,7 +14,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 ## Phase index
 
 1. [Shared contracts](phase-01-shared-contracts.md) — complete
-2. [Editor binding policy](phase-02-editor-binding.md)
+2. [Editor binding policy](phase-02-editor-binding.md) — complete
 3. [Platform stubs](phase-03-platform-stubs.md)
 4. [GLib owner runtime](phase-04-glib-runtime.md)
 5. [Linux X11/XWayland](phase-05-linux-x11.md)

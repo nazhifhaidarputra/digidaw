@@ -275,4 +275,9 @@ pub enum NativeUiError {
     NativeOperationFailed(String),
     #[error("native window identifier space is exhausted")]
     IdentifierExhausted,
+    #[error("invalid native editor lifecycle transition from {from:?} to {to:?}")]
+    InvalidLifecycleTransition {
+        from: super::NativeEditorLifecycle,
+        to: super::NativeEditorLifecycle,
+    },
 }
