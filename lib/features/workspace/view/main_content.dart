@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
@@ -37,6 +38,7 @@ class _MainContentState extends ConsumerState<MainContent>
     super.initState();
     _dawContext = ref.read(projectProvider.notifier).dawContext;
     _mixerTelemetryTicker = createTicker((_) {
+      if (ref.read(backendOperationGateProvider) != 0) return;
       ref.read(mixerStateProvider.notifier).pollTelemetry();
     });
     _workspaceSubscription = ref.listenManual(

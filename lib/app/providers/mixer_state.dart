@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
@@ -296,6 +297,10 @@ class MixerNotifier extends Notifier<MixerEditorState> {
     return ref.notifyErrorResult<T>(error);
   }
 
+  Future<T> _runBackendOperation<T>(Future<T> Function() operation) {
+    return ref.read(backendOperationGateProvider.notifier).run(operation);
+  }
+
   // ------------------------------------------------------------------
   // Private optimistic helpers
   // ------------------------------------------------------------------
@@ -491,63 +496,72 @@ extension MixerService on MixerNotifier {
     int channelId,
     int registryId,
   ) async {
-    final result = await AsyncValue.guard(() async {
-      if (channelId == -1) {
-        await mixer_api.addEffectToMasterBus(ctx: _ctx, registryId: registryId);
-        await syncMasterBus();
-      } else {
-        await mixer_api.addEffectToMixerChannelById(
-          ctx: _ctx,
-          trackId: channelId,
-          registryId: registryId,
-        );
-        await syncMixerChannel(channelId);
-      }
-    });
+    return _runBackendOperation(() async {
+      final result = await AsyncValue.guard(() async {
+        if (channelId == -1) {
+          await mixer_api.addEffectToMasterBus(
+            ctx: _ctx,
+            registryId: registryId,
+          );
+          await syncMasterBus();
+        } else {
+          await mixer_api.addEffectToMixerChannelById(
+            ctx: _ctx,
+            trackId: channelId,
+            registryId: registryId,
+          );
+          await syncMixerChannel(channelId);
+        }
+      });
 
-    if (result.hasError) {
-      AppLogger.error(
-        'MixerNotifier: failed to add effect to channel: ${result.error}',
-      );
-      return notifyErrorResult(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
+      if (result.hasError) {
+        AppLogger.error(
+          'MixerNotifier: failed to add effect to channel: ${result.error}',
+        );
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
   }
 
   /// Add an effect to a bus channel.
   Future<Result<void>> addEffectToBusChannel(int busId, int registryId) async {
-    final result = await AsyncValue.guard(() async {
-      await mixer_api.addEffectToBus(
-        ctx: _ctx,
-        busId: busId,
-        registryId: registryId,
-      );
-      await syncBuses();
-    });
+    return _runBackendOperation(() async {
+      final result = await AsyncValue.guard(() async {
+        await mixer_api.addEffectToBus(
+          ctx: _ctx,
+          busId: busId,
+          registryId: registryId,
+        );
+        await syncBuses();
+      });
 
-    if (result.hasError) {
-      AppLogger.error(
-        'MixerNotifier: failed to add effect to bus $busId: ${result.error}',
-      );
-      return notifyErrorResult(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
+      if (result.hasError) {
+        AppLogger.error(
+          'MixerNotifier: failed to add effect to bus $busId: ${result.error}',
+        );
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
   }
 
   /// Add an effect to the master bus.
   Future<Result<void>> addEffectToMasterBus(int registryId) async {
-    final result = await AsyncValue.guard(() async {
-      await mixer_api.addEffectToMasterBus(ctx: _ctx, registryId: registryId);
-      await syncMasterBus();
-    });
+    return _runBackendOperation(() async {
+      final result = await AsyncValue.guard(() async {
+        await mixer_api.addEffectToMasterBus(ctx: _ctx, registryId: registryId);
+        await syncMasterBus();
+      });
 
-    if (result.hasError) {
-      AppLogger.error(
-        'MixerNotifier: failed to add effect to master bus: ${result.error}',
-      );
-      return notifyErrorResult(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
+      if (result.hasError) {
+        AppLogger.error(
+          'MixerNotifier: failed to add effect to master bus: ${result.error}',
+        );
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
   }
 
   Future<Result<void>> moveEffectOrder({

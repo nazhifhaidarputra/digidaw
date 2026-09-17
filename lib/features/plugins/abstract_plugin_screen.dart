@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -91,7 +92,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
 
   /// The 60 FPS Heartbeat that synchronously fetches lock-free data from Rust
   void _pollTelemetrySync() {
-    if (isLoading) return;
+    if (isLoading || ref.read(backendOperationGateProvider) != 0) return;
 
     // Instantly reads the ArcSwap pointer across the FFI boundary
     final telemetry = plugin_api.getPluginSnapshotTelemetrySync(

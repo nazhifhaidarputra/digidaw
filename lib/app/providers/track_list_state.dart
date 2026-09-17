@@ -2,6 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
@@ -302,29 +303,36 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   Future<Result<void>> addMidiTrackWithGeneratorId(int id) async {
-    final result = await ref.guardApi(() async {
-      final newTrack = await track_api.addMidiTrackWithGeneratorId(
-        ctx: _ctx,
-        registryId: id,
-      );
-      _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
-      if (newTrack.generatorId != null) {
-        final generator = await plugin_api.getGenerator(
+    return ref.read(backendOperationGateProvider.notifier).run(() async {
+      final result = await ref.guardApi(() async {
+        final newTrack = await track_api.addMidiTrackWithGeneratorId(
           ctx: _ctx,
-          generatorId: newTrack.generatorId!,
+          registryId: id,
         );
-        _projectNotifierRead.upsertGenerator(newTrack.generatorId!, generator);
+        _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
+        if (newTrack.generatorId != null) {
+          final generator = await plugin_api.getGenerator(
+            ctx: _ctx,
+            generatorId: newTrack.generatorId!,
+          );
+          _projectNotifierRead.upsertGenerator(
+            newTrack.generatorId!,
+            generator,
+          );
+        }
+
+        await ref
+            .read(mixerStateProvider.notifier)
+            .syncMixerChannel(newTrack.id);
+        await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
+      });
+
+      if (result.hasError) {
+        AppLogger.error("Error adding MIDI track: ${result.error}");
+        return Result.error(Exception(result.error.toString()));
       }
-
-      await ref.read(mixerStateProvider.notifier).syncMixerChannel(newTrack.id);
-      await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
+      return Result.ok(null);
     });
-
-    if (result.hasError) {
-      AppLogger.error("Error adding MIDI track: ${result.error}");
-      return Result.error(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
   }
 
   Future<void> deleteTrack({required int trackId}) async {
