@@ -34,6 +34,10 @@ impl AudioEngine {
                 project.complete(HostedInstallStatus::Installed);
             }
 
+            AudioCommand::ReconfigureHostedPlugins(reconfiguration) => {
+                self.reconfigure_hosted_plugins(reconfiguration);
+            }
+
             AudioCommand::RemoveHostedPlugins(removal) => self.remove_hosted_plugins(removal),
             AudioCommand::InstallHostedPlugin(install) => self.install_hosted_plugin(install),
             AudioCommand::PlayOneShot(waveform) => {
@@ -1006,6 +1010,7 @@ impl AudioEngine {
 
                     let sr = sample_rate.unwrap_or(self.current_state.graph.sample_rate);
                     let buf_size = buffer_size.unwrap_or(self.current_state.graph.buffer_size);
+                    self.current_state.graph.sample_rate = sr;
                     self.current_state.graph.buffer_size = buf_size;
 
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);

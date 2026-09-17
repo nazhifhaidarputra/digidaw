@@ -253,6 +253,56 @@ fn channel_mode_midi_messages_clear_playing_keys() {
 }
 
 #[test]
+fn generator_remains_active_after_note_off_for_release_envelope() {
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        16,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let registry = PluginRegistry::new_with_defaults();
+    let registry_id = hash_str("synth_karbeatzer_v2");
+    let (factory, _) = registry
+        .create_plugin_by_id(registry_id)
+        .expect("test generator should be registered");
+    let generator_id = crate::shared::GeneratorId::from(1);
+    let track_id = crate::shared::TrackId::from(1);
+    engine.process_command(AudioCommand::AddGenerator {
+        generator_id,
+        track_id,
+        registry_id,
+        plugin_factory: factory,
+    });
+    let mut voice = crate::audio::engine::GeneratorVoice::new(generator_id, track_id, true);
+    voice
+        .midi_events
+        .push(karbeat_plugin_api::types::MidiEvent {
+            sample_offset: 0,
+            data: MidiMessage::NoteOff {
+                note_id: None,
+                channel: 0,
+                key: 60,
+            },
+        });
+    engine.voices.active_generators.push(voice);
+
+    engine.cleanup_finished_voices();
+
+    assert_eq!(engine.voices.active_generators.len(), 1);
+    assert!(engine.voices.active_generators[0].active);
+    assert!(engine.voices.active_generators[0].midi_events.is_empty());
+}
+
+#[test]
 fn browser_preview_stops_at_its_frame_limit() {
     let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(32);

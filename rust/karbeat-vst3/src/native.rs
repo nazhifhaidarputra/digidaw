@@ -581,6 +581,23 @@ pub fn duplicate_instance(instance: HostInstanceId) -> Result<PreparedNativeInst
     prepare_copy(instance, |_| {}, false)
 }
 
+/// Captures live state and prepares a suspended replacement for a realtime DSP configuration.
+pub fn prepare_reconfigured_instance(
+    instance: HostInstanceId,
+    sample_rate: u32,
+    max_block_size: usize,
+) -> Result<PreparedNativeInstance, HostError> {
+    prepare_copy(
+        instance,
+        move |config| {
+            config.sample_rate = f64::from(sample_rate);
+            config.max_block_size = config.max_block_size.max(max_block_size);
+            config.offline = false;
+        },
+        false,
+    )
+}
+
 /// Captures live state and creates an independent offline endpoint on the native UI owner.
 pub fn prepare_offline_instance(
     instance: HostInstanceId,

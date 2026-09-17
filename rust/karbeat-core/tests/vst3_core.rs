@@ -6,7 +6,7 @@
 )]
 
 use karbeat_core::{
-    api::{audio_api, external_plugin_api, project_api, track_api},
+    api::{audio_api, audio_settings_api, external_plugin_api, project_api, track_api},
     audio::engine::{AudioEngine, AudioEngineTelemetry},
     context::DawContext,
     message::TelemetryRegistry,
@@ -80,6 +80,20 @@ fn workflow(descriptor: PluginDescriptor) {
             audible.load(Ordering::Acquire),
             "Vital did not reach the core mixer"
         );
+        audio_api::play_preview_note(&mut ctx, first.id, 60, 0, false).unwrap();
+        let settings = audio_settings_api::set_dsp_config(&mut ctx, 96_000, 256).unwrap();
+        assert_eq!(settings.requested_dsp.sample_rate, 96_000);
+        audible.store(false, Ordering::Release);
+        audio_api::play_preview_note(&mut ctx, first.id, 64, 100, true).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !audible.load(Ordering::Acquire) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(
+            audible.load(Ordering::Acquire),
+            "Vital did not resume audio at the updated DSP sample rate"
+        );
+        audio_api::play_preview_note(&mut ctx, first.id, 64, 0, false).unwrap();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("vital.digidaw");
         project_api::save_project(&mut ctx, path.to_str().unwrap()).unwrap();

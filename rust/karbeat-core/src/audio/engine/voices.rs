@@ -16,7 +16,6 @@ pub struct GeneratorVoice {
     pub active: bool,
     pub playing_keys: Vec<u8>,
     pub playing_notes: SmallVec<[PlayingNote; 8]>,
-    pub tail_remaining: Option<u32>,
 }
 
 #[cfg(test)]
@@ -89,7 +88,6 @@ impl GeneratorVoice {
             active,
             playing_keys: Vec::new(),
             playing_notes: SmallVec::new(),
-            tail_remaining: None,
         }
     }
 

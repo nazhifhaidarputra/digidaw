@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/audio_dsp_preferences_service.dart';
 import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
@@ -17,6 +20,8 @@ class _FakeAudioSettingsService extends AudioSettingsService {
   int? appliedSampleRate;
   int? appliedBlockSize;
   Exception? applyError;
+  Completer<void>? applyStarted;
+  Completer<void>? releaseApply;
 
   @override
   Future<Result<IList<int>>> supportedSampleRates() async {
@@ -34,6 +39,8 @@ class _FakeAudioSettingsService extends AudioSettingsService {
     int sampleRate,
     int blockSize,
   ) async {
+    applyStarted?.complete();
+    await releaseApply?.future;
     final error = applyError;
     if (error != null) return Result.error(error);
     appliedSampleRate = sampleRate;
@@ -163,6 +170,31 @@ void main() {
     expect(result.isErr(), isTrue);
     expect(container.read(audioSettingsProvider).appliedSampleRate, 48000);
     expect(container.read(audioSettingsProvider).isApplying, isFalse);
+  });
+
+  test('DSP reconfiguration gates synchronous backend telemetry', () async {
+    final service = _FakeAudioSettingsService();
+    final preferences = _FakeDspPreferencesService();
+    final container = ProviderContainer(
+      overrides: [
+        audioSettingsServiceProvider.overrideWithValue(service),
+        audioDspPreferencesServiceProvider.overrideWithValue(preferences),
+      ],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(audioSettingsProvider.notifier);
+    await notifier.initialize(_MockDawContext());
+    notifier.setDraftSampleRate(96000);
+    service.applyStarted = Completer<void>();
+    service.releaseApply = Completer<void>();
+
+    final operation = notifier.applyDraft();
+    await service.applyStarted!.future;
+
+    expect(container.read(backendOperationGateProvider), 1);
+    service.releaseApply!.complete();
+    expect((await operation).isOk(), isTrue);
+    expect(container.read(backendOperationGateProvider), 0);
   });
 
   testWidgets('Audio page applies a supported DSP draft', (tester) async {

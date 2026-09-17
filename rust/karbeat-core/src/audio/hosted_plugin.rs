@@ -175,6 +175,88 @@ impl Drop for HostedPluginInstall {
     }
 }
 
+pub struct HostedPluginReplacement {
+    pub(crate) target: PluginTarget,
+    pub(crate) expected: karbeat_host::HostInstanceId,
+    pub(crate) config: ProcessingConfig,
+    pub(crate) endpoint: Option<PreparedProcessor>,
+    pub(crate) bypass: bool,
+}
+
+impl HostedPluginReplacement {
+    pub fn new(
+        target: PluginTarget,
+        expected: karbeat_host::HostInstanceId,
+        config: ProcessingConfig,
+        endpoint: PreparedProcessor,
+        bypass: bool,
+    ) -> Self {
+        Self {
+            target,
+            expected,
+            config,
+            endpoint: Some(endpoint),
+            bypass,
+        }
+    }
+}
+
+pub struct HostedPluginReconfiguration {
+    pub(crate) replacements: Box<[HostedPluginReplacement]>,
+    pub(crate) sample_rate: u32,
+    pub(crate) block_size: usize,
+    status: Arc<AtomicU8>,
+}
+
+impl HostedPluginReconfiguration {
+    pub fn new(
+        replacements: Vec<HostedPluginReplacement>,
+        sample_rate: u32,
+        block_size: usize,
+    ) -> (Self, HostedInstallReceipt) {
+        let status = Arc::new(AtomicU8::new(HostedInstallStatus::Pending as u8));
+        let receipt = HostedInstallReceipt {
+            status: status.clone(),
+            telemetry: None,
+        };
+        (
+            Self {
+                replacements: replacements.into_boxed_slice(),
+                sample_rate,
+                block_size,
+                status,
+            },
+            receipt,
+        )
+    }
+
+    pub(crate) fn begin(&self) -> bool {
+        self.status
+            .compare_exchange(
+                HostedInstallStatus::Pending as u8,
+                HostedInstallStatus::Applying as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    pub(crate) fn complete(&self, status: HostedInstallStatus) {
+        self.status.store(status as u8, Ordering::Release);
+    }
+}
+
+impl Drop for HostedPluginReconfiguration {
+    fn drop(&mut self) {
+        let _ = self.status.compare_exchange(
+            HostedInstallStatus::Pending as u8,
+            HostedInstallStatus::Cancelled as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum HostedRemovalStatus {

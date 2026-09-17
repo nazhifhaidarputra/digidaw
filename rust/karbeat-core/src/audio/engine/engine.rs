@@ -521,7 +521,7 @@ impl AudioEngine {
             }
         } else {
             self.render_voices_to_buffer(output_buffer, channels, false);
-            self.cleanup_finished_voices(frame_count);
+            self.cleanup_finished_voices();
         }
 
         // Always Render Previews (Metronome, Browser Preview)
@@ -551,14 +551,14 @@ impl AudioEngine {
         self.transport.song.playhead_samples += frame_count as u32;
         self.recalculate_beat_bar();
         self.emit_playback_position();
-        self.cleanup_finished_voices(frame_count);
+        self.cleanup_finished_voices();
     }
 
     fn advance_pattern_playhead(&mut self, frame_count: usize) {
         self.transport.pattern.playhead_samples += frame_count as u32;
         self.recalculate_pattern_beat_bar();
         self.emit_playback_position();
-        self.cleanup_finished_voices(frame_count);
+        self.cleanup_finished_voices();
     }
 
     /// Recalculates pattern beat/bar based on pattern_playhead_samples
@@ -593,7 +593,7 @@ impl AudioEngine {
                 // If not looping, stop playback normally
                 self.stop_playback();
                 self.render_voices_to_buffer(output_buffer, channels, false);
-                self.cleanup_finished_voices(frame_count);
+                self.cleanup_finished_voices();
             }
         } else {
             self.process_block_song_mode(frame_count, output_buffer, channels);
@@ -658,11 +658,7 @@ impl AudioEngine {
             self.transport.pattern.last_emitted_samples = 0;
 
             // This safely clears tracked keys to prevent hang on pattern loop
-            Self::stop_all_active_generators_impl(
-                &mut self.voices.active_generators,
-                &mut self.plugin_state,
-                self.config.sample_rate,
-            );
+            Self::stop_all_active_generators_impl(&mut self.voices.active_generators);
         }
 
         let start_time = self.transport.pattern.playhead_samples;
@@ -736,18 +732,10 @@ impl AudioEngine {
     }
 
     pub(super) fn stop_all_active_generators(&mut self) {
-        Self::stop_all_active_generators_impl(
-            &mut self.voices.active_generators,
-            &mut self.plugin_state,
-            self.config.sample_rate,
-        );
+        Self::stop_all_active_generators_impl(&mut self.voices.active_generators);
     }
 
-    pub(super) fn stop_all_active_generators_impl(
-        active_generators: &mut Vec<GeneratorVoice>,
-        plugin_state: &mut AudioPluginState,
-        sample_rate: u32,
-    ) {
+    pub(super) fn stop_all_active_generators_impl(active_generators: &mut Vec<GeneratorVoice>) {
         for voice in active_generators.iter_mut() {
             for note in &voice.playing_notes {
                 voice.midi_events.push(MidiEvent {
@@ -762,12 +750,6 @@ impl AudioEngine {
 
             voice.playing_keys.clear();
             voice.playing_notes.clear();
-
-            if let Some(gen_instance) = plugin_state.get_generator(voice.id) {
-                // clamp tail to save CPU because who the hell is gonna have more than 20 seconds of reverb tail?
-                let tail = gen_instance.plugin.tail_samples().min(20 * sample_rate);
-                voice.tail_remaining = Some(tail);
-            }
         }
     }
 
@@ -905,7 +887,7 @@ impl AudioEngine {
         }
     }
 
-    fn cleanup_finished_voices(&mut self, frame_count: usize) {
+    pub(super) fn cleanup_finished_voices(&mut self) {
         // Generators stay alive (persistent), just clear their MIDI events for the next frame
         for gen_voice in self.voices.active_generators.iter_mut() {
             // DYNAMICALLY UPDATE PLAYING KEYS based on what just happened in this audio block
@@ -918,44 +900,8 @@ impl AudioEngine {
             gen_voice.midi_events.clear();
             // gen_voice.automation_events.clear();
 
-            // SAFE TAIL HANDLING
-            if gen_voice.playing_notes.is_empty() {
-                // Initialize the tail tracker if normal playback just ended a note
-                if gen_voice.tail_remaining.is_none() {
-                    if let Some(gen_instance) = self.plugin_state.get_generator(gen_voice.id) {
-                        let tail = gen_instance
-                            .plugin
-                            .tail_samples()
-                            .min(20 * self.config.sample_rate);
-                        gen_voice.tail_remaining = Some(tail);
-                    }
-                }
-
-                // Decrement the tail
-                if let Some(tail) = gen_voice.tail_remaining {
-                    let new_tail = tail.saturating_sub(frame_count as u32);
-
-                    if new_tail == 0 {
-                        if let Some(gen_instance) =
-                            self.plugin_state.get_generator_mut(gen_voice.id)
-                        {
-                            gen_instance.plugin.reset();
-                        }
-
-                        // clear the tail and flag for culling
-                        gen_voice.tail_remaining = None;
-                        gen_voice.active = false;
-                    } else {
-                        gen_voice.tail_remaining = Some(new_tail);
-                    }
-                }
-            } else {
-                // If a new key is pressed, abort any lingering tail countdown
-                gen_voice.tail_remaining = None;
-            }
+            gen_voice.active = true;
         }
-
-        self.voices.active_generators.retain(|g| g.active);
 
         self.voices.active_oneshots.clear();
     }

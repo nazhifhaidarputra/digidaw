@@ -314,7 +314,9 @@ pub fn create_feedback_stream(
     std::thread::spawn(move || {
         loop {
             while let Ok(feedback) = consumer.pop() {
-                let Some(feedback) = project_state.lock().route(feedback) else { continue; };
+                let Some(feedback) = project_state.lock().route(feedback) else {
+                    continue;
+                };
                 let ui_feedback = UiAudioFeedback::from(feedback);
                 if sink.add(ui_feedback).is_err() {
                     log::info!("[Rust] AudioFeedback stream disconnected — stopping thread.");

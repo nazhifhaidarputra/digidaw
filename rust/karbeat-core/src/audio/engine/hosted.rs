@@ -2,13 +2,113 @@ use super::AudioEngine;
 use crate::{
     audio::{
         event::PluginTarget,
-        hosted_plugin::{HostedInstallStatus, HostedPluginInstall},
+        hosted_plugin::{HostedInstallStatus, HostedPluginInstall, HostedPluginReconfiguration},
         render_state::{AudioEffectInstance, AudioGeneratorInstance},
     },
     commands::EffectTarget,
 };
 
 impl AudioEngine {
+    pub(super) fn reconfigure_hosted_plugins(
+        &mut self,
+        mut transfer: karbeat_host::ControlTransfer<HostedPluginReconfiguration>,
+    ) {
+        let Some(reconfiguration) = transfer.get_mut() else {
+            return;
+        };
+        if !reconfiguration.begin() {
+            return;
+        }
+        let configuration_is_valid = reconfiguration.sample_rate > 0
+            && reconfiguration.block_size > 0
+            && reconfiguration.replacements.iter().all(|replacement| {
+                replacement.config.validate().is_ok()
+                    && replacement.config.sample_rate == f64::from(reconfiguration.sample_rate)
+                    && replacement.config.main_output_channels
+                        == usize::from(self.config.num_channels)
+                    && replacement.config.max_block_size >= reconfiguration.block_size.max(512)
+                    && !replacement.config.offline
+                    && replacement.endpoint.is_some()
+            });
+        if !configuration_is_valid {
+            reconfiguration.complete(HostedInstallStatus::InvalidConfiguration);
+            return;
+        }
+        let targets_are_current = reconfiguration.replacements.iter().all(|replacement| {
+            self.plugin_state
+                .plugin(&replacement.target)
+                .and_then(|plugin| {
+                    plugin
+                        .as_any()
+                        .downcast_ref::<karbeat_host::HostedProcessor>()
+                })
+                .is_some_and(|plugin| plugin.instance == replacement.expected)
+        });
+        if !targets_are_current {
+            reconfiguration.complete(HostedInstallStatus::MissingTarget);
+            return;
+        }
+
+        let mut prepared = Vec::with_capacity(reconfiguration.replacements.len());
+        for replacement in &mut reconfiguration.replacements {
+            let Some(endpoint) = replacement.endpoint.take() else {
+                for endpoint in prepared {
+                    karbeat_plugin_api::traits::AudioPlugin::retire(endpoint);
+                }
+                reconfiguration.complete(HostedInstallStatus::Cancelled);
+                return;
+            };
+            match endpoint.install() {
+                Ok(mut endpoint) => {
+                    endpoint.set_bypass(replacement.bypass);
+                    prepared.push(endpoint);
+                }
+                Err(_) => {
+                    for endpoint in prepared {
+                        karbeat_plugin_api::traits::AudioPlugin::retire(endpoint);
+                    }
+                    reconfiguration.complete(HostedInstallStatus::Cancelled);
+                    return;
+                }
+            }
+        }
+
+        self.process_command(crate::commands::AudioCommand::UpdateAudioConfig {
+            sample_rate: Some(reconfiguration.sample_rate),
+            buffer_size: Some(reconfiguration.block_size),
+        });
+
+        for (replacement, endpoint) in reconfiguration.replacements.iter().zip(prepared) {
+            let plugin = match replacement.target {
+                PluginTarget::Generator(id) => self
+                    .plugin_state
+                    .get_generator_mut(id)
+                    .map(|generator| std::mem::replace(&mut generator.plugin, endpoint)),
+                PluginTarget::TrackEffect(track, effect) => self
+                    .plugin_state
+                    .get_track_effects_mut(track.to_u32() as usize)
+                    .and_then(|chain| chain.iter_mut().find(|item| item.id == effect))
+                    .map(|item| std::mem::replace(&mut item.plugin, endpoint)),
+                PluginTarget::BusEffect(bus, effect) => self
+                    .plugin_state
+                    .get_bus_effects_mut(bus.to_u32() as usize)
+                    .and_then(|chain| chain.iter_mut().find(|item| item.id == effect))
+                    .map(|item| std::mem::replace(&mut item.plugin, endpoint)),
+                PluginTarget::MasterEffect(effect) => self
+                    .plugin_state
+                    .master_effects
+                    .iter_mut()
+                    .find(|item| item.id == effect)
+                    .map(|item| std::mem::replace(&mut item.plugin, endpoint)),
+            };
+            if let Some(plugin) = plugin {
+                plugin.retire();
+            }
+        }
+        self.recalculate_latencies();
+        reconfiguration.complete(HostedInstallStatus::Installed);
+    }
+
     pub(super) fn remove_hosted_plugins(
         &mut self,
         mut transfer: karbeat_host::ControlTransfer<
@@ -366,6 +466,123 @@ mod tests {
             endpoint,
         );
         (command, receipt, retirement)
+    }
+
+    #[test]
+    fn hosted_reconfiguration_swaps_endpoint_and_updates_engine_rate() {
+        let mut engine = engine();
+        let (install, receipt, mut old_retirement) = install(48_000.0);
+        process_install(&mut engine, install);
+        assert_eq!(receipt.status(), HostedInstallStatus::Installed);
+
+        let replacement = Box::new(HostedProcessor::new(
+            Box::new(DigidawDelay::build()),
+            HostInstanceId(2),
+        ));
+        let (endpoint, mut replacement_retirement) = replacement
+            .prepare_transfer()
+            .expect("replacement transfer");
+        let config = ProcessingConfig {
+            sample_rate: 96_000.0,
+            max_block_size: 65_536,
+            main_input_channels: 2,
+            main_output_channels: 2,
+            sidechain_channels: 0,
+            offline: false,
+        };
+        let target = PluginTarget::MasterEffect(EffectId::from(11));
+        let replacement = crate::audio::hosted_plugin::HostedPluginReplacement::new(
+            target,
+            HostInstanceId(1),
+            config,
+            endpoint,
+            false,
+        );
+        let (reconfiguration, reconfiguration_receipt) =
+            crate::audio::hosted_plugin::HostedPluginReconfiguration::new(
+                vec![replacement],
+                96_000,
+                256,
+            );
+        let (command, mut control_retirement) = karbeat_host::ControlTransfer::new(reconfiguration);
+
+        engine.process_command(AudioCommand::ReconfigureHostedPlugins(command));
+
+        assert!(control_retirement.collect());
+        assert_eq!(
+            reconfiguration_receipt.status(),
+            HostedInstallStatus::Installed
+        );
+        assert_eq!(engine.config.sample_rate, 96_000);
+        assert_eq!(engine.current_state.graph.sample_rate, 96_000);
+        assert_eq!(engine.current_state.graph.buffer_size, 256);
+        let active = engine
+            .plugin_state
+            .plugin(&target)
+            .and_then(|plugin| plugin.as_any().downcast_ref::<HostedProcessor>())
+            .expect("replacement should be installed");
+        assert_eq!(active.instance, HostInstanceId(2));
+        assert!(old_retirement.take().is_some());
+        assert!(replacement_retirement.take().is_none());
+        drop(engine);
+        assert!(replacement_retirement.take().is_some());
+    }
+
+    #[test]
+    fn stale_hosted_reconfiguration_preserves_endpoint_and_engine_rate() {
+        let mut engine = engine();
+        let (install, receipt, mut old_retirement) = install(48_000.0);
+        process_install(&mut engine, install);
+        assert_eq!(receipt.status(), HostedInstallStatus::Installed);
+
+        let replacement = Box::new(HostedProcessor::new(
+            Box::new(DigidawDelay::build()),
+            HostInstanceId(2),
+        ));
+        let (endpoint, mut replacement_retirement) = replacement
+            .prepare_transfer()
+            .expect("replacement transfer");
+        let config = ProcessingConfig {
+            sample_rate: 96_000.0,
+            max_block_size: 65_536,
+            main_input_channels: 2,
+            main_output_channels: 2,
+            sidechain_channels: 0,
+            offline: false,
+        };
+        let target = PluginTarget::MasterEffect(EffectId::from(11));
+        let replacement = crate::audio::hosted_plugin::HostedPluginReplacement::new(
+            target,
+            HostInstanceId(99),
+            config,
+            endpoint,
+            false,
+        );
+        let (reconfiguration, reconfiguration_receipt) =
+            crate::audio::hosted_plugin::HostedPluginReconfiguration::new(
+                vec![replacement],
+                96_000,
+                256,
+            );
+        let (command, mut control_retirement) = karbeat_host::ControlTransfer::new(reconfiguration);
+
+        engine.process_command(AudioCommand::ReconfigureHostedPlugins(command));
+
+        assert!(control_retirement.collect());
+        assert_eq!(
+            reconfiguration_receipt.status(),
+            HostedInstallStatus::MissingTarget
+        );
+        assert_eq!(engine.config.sample_rate, 48_000);
+        let active = engine
+            .plugin_state
+            .plugin(&target)
+            .and_then(|plugin| plugin.as_any().downcast_ref::<HostedProcessor>())
+            .expect("original endpoint should remain installed");
+        assert_eq!(active.instance, HostInstanceId(1));
+        assert!(replacement_retirement.take().is_some());
+        drop(engine);
+        assert!(old_retirement.take().is_some());
     }
 
     #[test]

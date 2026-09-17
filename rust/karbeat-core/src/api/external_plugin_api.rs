@@ -7,7 +7,10 @@ use std::time::{Duration, Instant};
 use crate::{
     audio::{
         event::PluginTarget,
-        hosted_plugin::{HostedInstallStatus, HostedPluginInstall, HostedTrackGraph},
+        hosted_plugin::{
+            HostedInstallStatus, HostedPluginInstall, HostedPluginReconfiguration,
+            HostedPluginReplacement, HostedTrackGraph,
+        },
     },
     commands::{AudioCommand, EffectTarget},
     context::DawContext,
@@ -269,6 +272,42 @@ pub(crate) fn plugin_instance(ctx: &DawContext, target: PluginTarget) -> Option<
             .effects
             .get(effect)
             .map(|entry| &entry.instance),
+    }
+}
+
+fn plugin_instance_mut(ctx: &mut DawContext, target: PluginTarget) -> Option<&mut PluginInstance> {
+    match target {
+        PluginTarget::Generator(id) => {
+            match &mut ctx.app_state.generator_pool.get_mut(id)?.instance_type {
+                GeneratorInstanceType::Plugin(plugin) => Some(plugin),
+                _ => None,
+            }
+        }
+        PluginTarget::TrackEffect(track, effect) => ctx
+            .app_state
+            .mixer
+            .channels
+            .get_mut(track)?
+            .channel
+            .effects
+            .get_mut(effect)
+            .map(|entry| &mut entry.instance),
+        PluginTarget::BusEffect(bus, effect) => ctx
+            .app_state
+            .mixer
+            .buses
+            .get_mut(bus)?
+            .channel
+            .effects
+            .get_mut(effect)
+            .map(|entry| &mut entry.instance),
+        PluginTarget::MasterEffect(effect) => ctx
+            .app_state
+            .mixer
+            .master_bus
+            .effects
+            .get_mut(effect)
+            .map(|entry| &mut entry.instance),
     }
 }
 
@@ -561,6 +600,128 @@ pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
         false,
     )?;
     ctx.external_plugin_failures.remove(&target);
+    Ok(())
+}
+
+pub(crate) fn reconfigure_for_audio_config(
+    ctx: &mut DawContext,
+    sample_rate: u32,
+    block_size: usize,
+) -> anyhow::Result<()> {
+    let mut targets = Vec::new();
+    for (id, generator) in &ctx.app_state.generator_pool {
+        if matches!(
+            &generator.instance_type,
+            GeneratorInstanceType::Plugin(plugin) if plugin.external.is_some()
+        ) {
+            targets.push(PluginTarget::Generator(id));
+        }
+    }
+    for (track, channel) in &ctx.app_state.mixer.channels {
+        targets.extend(channel.channel.effects.iter().filter_map(|effect| {
+            effect
+                .instance
+                .external
+                .as_ref()
+                .map(|_| PluginTarget::TrackEffect(track, effect.id))
+        }));
+    }
+    for (bus, channel) in &ctx.app_state.mixer.buses {
+        targets.extend(channel.channel.effects.iter().filter_map(|effect| {
+            effect
+                .instance
+                .external
+                .as_ref()
+                .map(|_| PluginTarget::BusEffect(bus, effect.id))
+        }));
+    }
+    targets.extend(
+        ctx.app_state
+            .mixer
+            .master_bus
+            .effects
+            .iter()
+            .filter_map(|effect| {
+                effect
+                    .instance
+                    .external
+                    .as_ref()
+                    .map(|_| PluginTarget::MasterEffect(effect.id))
+            }),
+    );
+    targets.retain(|target| !ctx.external_plugin_failures.contains_key(target));
+    if targets.is_empty() {
+        return Ok(());
+    }
+
+    let mut replacements = Vec::with_capacity(targets.len());
+    let mut prepared_instances = Vec::with_capacity(targets.len());
+    let mut captured_states = Vec::with_capacity(targets.len());
+    for target in targets {
+        let plugin = plugin_instance(ctx, target).context("External plugin target disappeared")?;
+        let bypass = plugin.bypass;
+        let kind = plugin
+            .external
+            .as_ref()
+            .context("External plug-in metadata disappeared")?
+            .descriptor
+            .kind;
+        let current = super::project_api::hosted_instance(ctx, target)?;
+        let prepared = karbeat_vst3::native::prepare_reconfigured_instance(
+            current,
+            sample_rate,
+            block_size.max(512),
+        )?;
+        let config = ProcessingConfig {
+            sample_rate: f64::from(sample_rate),
+            max_block_size: 65_536_usize.max(block_size),
+            main_input_channels: if kind == PluginKind::Instrument { 0 } else { 2 },
+            main_output_channels: 2,
+            sidechain_channels: 0,
+            offline: false,
+        };
+        prepared_instances.push(prepared.instance);
+        captured_states.push((target, prepared.state.clone()));
+        replacements.push(HostedPluginReplacement::new(
+            target,
+            current,
+            config,
+            prepared.processor,
+            bypass,
+        ));
+    }
+
+    let (reconfiguration, receipt) =
+        HostedPluginReconfiguration::new(replacements, sample_rate, block_size);
+    let transfer = karbeat_vst3::native::call(move |owner| owner.prepare_control(reconfiguration))?;
+    ctx.send_audio_command(AudioCommand::ReconfigureHostedPlugins(transfer))?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match receipt.status() {
+            HostedInstallStatus::Installed => break,
+            HostedInstallStatus::Pending => {
+                if Instant::now() >= deadline && receipt.cancel() {
+                    anyhow::bail!(
+                        "Plug-in reconfiguration timed out before the engine accepted it"
+                    );
+                }
+            }
+            HostedInstallStatus::Applying => {}
+            status => anyhow::bail!("Audio engine rejected plug-in reconfiguration: {status:?}"),
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+
+    for instance in prepared_instances {
+        karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
+    }
+    for (target, state) in captured_states {
+        if let Some(external) =
+            plugin_instance_mut(ctx, target).and_then(|plugin| plugin.external.as_mut())
+        {
+            external.state = Some(state);
+        }
+    }
     Ok(())
 }
 

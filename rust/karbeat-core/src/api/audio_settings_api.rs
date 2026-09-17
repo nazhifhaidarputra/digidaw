@@ -39,6 +39,15 @@ pub fn set_dsp_config(
         "Unsupported DSP block size: {block_size}"
     );
 
+    let current_sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
+    if current_sample_rate != sample_rate {
+        super::external_plugin_api::reconfigure_for_audio_config(
+            ctx,
+            sample_rate,
+            block_size as usize,
+        )?;
+    }
+
     {
         let mut runtime = ctx.audio_runtime_settings.write();
         runtime.requested_dsp.sample_rate = sample_rate;

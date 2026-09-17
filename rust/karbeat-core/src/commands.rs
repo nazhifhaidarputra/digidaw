@@ -22,6 +22,7 @@ use crate::{
 
 pub enum AudioCommand {
     InstallHostedProject(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedProjectInstall>),
+    ReconfigureHostedPlugins(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginReconfiguration>),
     /// Publish an already prepared native endpoint; completion is acknowledged separately.
     RemoveHostedPlugins(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginRemoval>),
     InstallHostedPlugin(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginInstall>),

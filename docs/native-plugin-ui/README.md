@@ -5,8 +5,8 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 
 ## Current status
 
-- Active phase: none — implementation complete
-- Overall status: complete
+- Active phase: [12 — Hosted plug-in audio correctness](phase-12-audio-correctness.md)
+- Overall status: follow-up in progress
 - Target branch: `feat/vst3`
 - Commit author: `the_great_anoa <nazhifhaidarputra@gmail.com>`
 - Push policy: never push from this implementation task
@@ -24,6 +24,7 @@ This directory tracks the Rust-owned native plug-in UI migration. The design sou
 9. [Runner cleanup](phase-09-runner-cleanup.md) — complete
 10. [Cooperative VST3 work](phase-10-cooperative-vst3.md) — complete
 11. [Flutter/Vital acceptance](phase-11-flutter-vital.md) — complete
+12. [Hosted plug-in audio correctness](phase-12-audio-correctness.md) — in progress
 
 ## Tracker convention
 
