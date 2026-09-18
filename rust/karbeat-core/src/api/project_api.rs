@@ -51,11 +51,12 @@ mod save;
 pub(crate) use save::hosted_instance;
 
 pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()> {
+    let host_state_capture = ctx.host_state_capture.clone();
     save::save_project(
         ctx,
         Path::new(path_name),
         std::time::Duration::from_secs(2),
-        karbeat_vst3::native::capture_state,
+        move |identity, instance| host_state_capture.capture_state(identity, instance),
     )
 }
 

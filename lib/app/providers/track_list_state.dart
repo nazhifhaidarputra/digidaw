@@ -303,7 +303,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   Future<Result<void>> addMidiTrackWithGeneratorId(int id) async {
-    return ref.read(backendOperationGateProvider.notifier).run(() async {
+    return (() async {
       final result = await ref.guardApi(() async {
         final newTrack = await track_api.addMidiTrackWithGeneratorId(
           ctx: _ctx,
@@ -332,22 +332,28 @@ class TrackListNotifier extends Notifier<TrackListState> {
         return Result.error(Exception(result.error.toString()));
       }
       return Result.ok(null);
-    });
+    }).guardedByBackendOperationGate(
+      ref.read(backendOperationGateProvider.notifier),
+    )();
   }
 
-  Future<void> deleteTrack({required int trackId}) async {
-    final result = await ref.guardApi(() async {
-      await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
-      _projectNotifierRead.removeTrack(trackId);
+  Future<void> deleteTrack({required int trackId}) {
+    return (() async {
+      final result = await ref.guardApi(() async {
+        await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
+        _projectNotifierRead.removeTrack(trackId);
 
-      await ref.read(mixerStateProvider.notifier).syncMixerState();
-    });
+        await ref.read(mixerStateProvider.notifier).syncMixerState();
+      });
 
-    if (result.hasError) {
-      AppLogger.error(
-        'TrackListNotifier: failed to delete track: ${result.error}',
-      );
-    }
+      if (result.hasError) {
+        AppLogger.error(
+          'TrackListNotifier: failed to delete track: ${result.error}',
+        );
+      }
+    }).guardedByBackendOperationGate(
+      ref.read(backendOperationGateProvider.notifier),
+    )();
   }
   // ------------------------------------------------------------------
   // Clip CRUD

@@ -307,21 +307,25 @@ mod tests {
     }
 
     #[test]
-    fn hosted_state_is_captured_without_feedback_lock_and_round_trips() {
+    fn public_save_uses_host_capture_without_feedback_lock_and_round_trips() {
         for stream_active in [false, true] {
             let mut ctx = DawContext::new();
             let mut fresh = external(&mut ctx);
             fresh.component = vec![3, 4];
             let feedback_lock = ctx.feedback_consumer.clone();
+            let captured = fresh.clone();
+            ctx.host_state_capture = std::sync::Arc::new(
+                move |identity: &karbeat_host::PluginIdentity, id: HostInstanceId| {
+                    assert_eq!(identity, &captured.identity);
+                    assert_eq!(id, HostInstanceId(7));
+                    assert!(feedback_lock.try_lock().is_some());
+                    Ok(captured.clone())
+                },
+            );
             let responder = respond_with_stream(&mut ctx, false, stream_active);
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("saved.karbeat");
-            save_project(&mut ctx, &path, Duration::from_secs(2), |id| {
-                assert_eq!(id, HostInstanceId(7));
-                assert!(feedback_lock.try_lock().is_some());
-                Ok(fresh.clone())
-            })
-            .unwrap();
+            super::super::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
             responder.join().unwrap();
             let loaded =
                 crate::core::file_manager::project_loader::load_daw_project(&path, 48_000).unwrap();
@@ -346,7 +350,7 @@ mod tests {
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("previous.karbeat");
             std::fs::write(&path, b"previous project").unwrap();
-            let result = save_project(&mut ctx, &path, Duration::from_millis(100), |_| {
+            let result = save_project(&mut ctx, &path, Duration::from_millis(100), |_, _| {
                 Err(HostError::Busy)
             });
             assert!(result.is_err());
@@ -381,7 +385,7 @@ mod tests {
         let path = directory.path().join("previous.karbeat");
         std::fs::write(&path, b"previous project").unwrap();
         assert!(
-            save_project(&mut ctx, &path, Duration::ZERO, |_| panic!(
+            save_project(&mut ctx, &path, Duration::ZERO, |_, _| panic!(
                 "must not dispatch native work"
             ))
             .is_err()
@@ -396,7 +400,7 @@ mod tests {
         let stored = external(&mut ctx);
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("stored.karbeat");
-        save_project(&mut ctx, &path, Duration::ZERO, |_| {
+        save_project(&mut ctx, &path, Duration::ZERO, |_, _| {
             panic!("no live instance to capture")
         })
         .unwrap();
@@ -418,7 +422,10 @@ pub(super) fn save_project(
     ctx: &mut DawContext,
     path: &Path,
     timeout: Duration,
-    mut capture_native: impl FnMut(HostInstanceId) -> Result<PluginState, HostError>,
+    mut capture_host_state: impl FnMut(
+        &karbeat_host::PluginIdentity,
+        HostInstanceId,
+    ) -> Result<PluginState, HostError>,
 ) -> anyhow::Result<()> {
     let has_engine = ctx.command_sender.lock().is_some();
     let mut saved = ctx.app_state.clone();
@@ -432,8 +439,8 @@ pub(super) fn save_project(
                 .context("Project plugin disappeared during save")?;
             match (&mut plugin.external, captured.host) {
                 (Some(external), Some(host)) => {
-                    // collect releases the feedback lock before dispatching any native UI work.
-                    let state = capture_native(host)
+                    // collect releases the feedback lock before dispatching any host control work.
+                    let state = capture_host_state(&external.descriptor.identity, host)
                         .with_context(|| format!("Could not capture {}", plugin.name))?;
                     ensure!(
                         state.identity == external.descriptor.identity,

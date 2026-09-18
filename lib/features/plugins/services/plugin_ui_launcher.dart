@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -49,15 +50,44 @@ Future<void> openPluginInterface({
   required int instanceId,
   required String pluginName,
 }) async {
-  final service = ref.read(externalPluginServiceProvider);
-  final dawContext = ref.read(projectProvider.notifier).dawContext;
-  final descriptor = await service.descriptor(dawContext, target);
-  if (descriptor case Error<UiExternalPluginDescriptor?>(error: final error)) {
-    _notifyEditorFailure(ref, error);
-    return;
-  }
+  await (() async {
+    final service = ref.read(externalPluginServiceProvider);
+    final dawContext = ref.read(projectProvider.notifier).dawContext;
+    final descriptor = await service.descriptor(dawContext, target);
+    if (descriptor case Error<UiExternalPluginDescriptor?>(
+      error: final error,
+    )) {
+      _notifyEditorFailure(ref, error);
+      return;
+    }
 
-  if (descriptor.ok() == null) {
+    if (descriptor.ok() == null) {
+      if (!context.mounted) return;
+      ref
+          .read(pluginFlutterUiLauncherProvider)
+          .open(
+            context,
+            target: target,
+            registryId: registryId,
+            instanceId: instanceId,
+            pluginName: pluginName,
+          );
+      return;
+    }
+
+    final capabilities = await service.capabilities(dawContext, target);
+    if (capabilities case Error<UiExternalPluginCapabilities>(
+      error: final error,
+    )) {
+      _notifyEditorFailure(ref, error);
+      return;
+    }
+    if (capabilities.ok().editor) {
+      final opened = await service.openEditor(dawContext, target);
+      if (opened.isOk()) return;
+      _notifyEditorFailure(ref, opened.err());
+      if (!capabilities.ok().controller || !context.mounted) return;
+    }
     if (!context.mounted) return;
     ref
         .read(pluginFlutterUiLauncherProvider)
@@ -67,34 +97,11 @@ Future<void> openPluginInterface({
           registryId: registryId,
           instanceId: instanceId,
           pluginName: pluginName,
+          forceDynamic: true,
         );
-    return;
-  }
-
-  final capabilities = await service.capabilities(dawContext, target);
-  if (capabilities case Error<UiExternalPluginCapabilities>(
-    error: final error,
-  )) {
-    _notifyEditorFailure(ref, error);
-    return;
-  }
-  if (capabilities.ok().editor) {
-    final opened = await service.openEditor(dawContext, target);
-    if (opened.isOk()) return;
-    _notifyEditorFailure(ref, opened.err());
-    if (!capabilities.ok().controller || !context.mounted) return;
-  }
-  if (!context.mounted) return;
-  ref
-      .read(pluginFlutterUiLauncherProvider)
-      .open(
-        context,
-        target: target,
-        registryId: registryId,
-        instanceId: instanceId,
-        pluginName: pluginName,
-        forceDynamic: true,
-      );
+  }).guardedByBackendOperationGate(
+    ref.read(backendOperationGateProvider.notifier),
+  )();
 }
 
 void _notifyEditorFailure(WidgetRef ref, Exception error) {

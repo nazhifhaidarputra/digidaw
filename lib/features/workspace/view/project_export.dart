@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/export_project_state.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/constants/audio_format.dart';
@@ -94,23 +95,27 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     });
 
     try {
-      // Consume the progress stream using values straight from the provider state
-      final progressStream = exportProject(
-        ctx: ctx,
-        path: exportState.exportDirectory!,
-        soundfileName: _nameController.text,
-        format: exportState.selectedFormat,
-        bitDepth: exportState.selectedBitDepth,
-        sampleRate: exportState.selectedSampleRate,
-        tailHandling: exportState.tailHandling,
-      );
+      await (() async {
+        // Consume the progress stream using values straight from the provider state
+        final progressStream = exportProject(
+          ctx: ctx,
+          path: exportState.exportDirectory!,
+          soundfileName: _nameController.text,
+          format: exportState.selectedFormat,
+          bitDepth: exportState.selectedBitDepth,
+          sampleRate: exportState.selectedSampleRate,
+          tailHandling: exportState.tailHandling,
+        );
 
-      await for (final progress in progressStream) {
-        if (!mounted) break;
-        setState(() {
-          _exportProgress = progress;
-        });
-      }
+        await for (final progress in progressStream) {
+          if (!mounted) break;
+          setState(() {
+            _exportProgress = progress;
+          });
+        }
+      }).guardedByBackendOperationGate(
+        ref.read(backendOperationGateProvider.notifier),
+      )();
     } catch (e) {
       ref.read(notificationProvider.notifier).error(e, title: 'Export failed');
     } finally {

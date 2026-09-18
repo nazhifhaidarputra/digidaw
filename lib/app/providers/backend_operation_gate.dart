@@ -18,3 +18,14 @@ class BackendOperationGateNotifier extends Notifier<int> {
     }
   }
 }
+
+extension BackendOperationCallback<T> on Future<T> Function() {
+  /// Wraps this callback so synchronous backend polling stays paused until it
+  /// completes, including while other guarded operations are still running.
+  Future<T> Function() guardedByBackendOperationGate(
+    BackendOperationGateNotifier gate,
+  ) {
+    final operation = this;
+    return () => gate.run(operation);
+  }
+}

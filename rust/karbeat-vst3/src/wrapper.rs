@@ -126,7 +126,7 @@ impl Dsp {
         Ok(())
     }
 
-    pub fn flush(&mut self, exchange: &ParameterExchange) {
+    pub fn flush(&mut self, exchange: &ParameterExchange) -> Result<(), HostError> {
         self.events.clear();
         self.output_events.clear();
         self.changes.clear();
@@ -139,8 +139,13 @@ impl Dsp {
         let mut data = self.process_data(0, ptr::null_mut());
         // SAFETY: All parameter storage is preallocated and lives through this zero-sample call.
         let code = unsafe { self.processor.process(&raw mut data) };
-        if code != kResultOk {
-            exchange.process_error.store(code, Ordering::Release);
+        if code == kResultOk {
+            Ok(())
+        } else {
+            Err(HostError::PluginCall {
+                operation: "processor.flush",
+                code,
+            })
         }
     }
 
@@ -701,7 +706,7 @@ mod tests {
     use std::cell::Cell;
     use vst3::Steinberg::{
         Vst::{IEventListTrait, IParamValueQueueTrait, IParameterChangesTrait},
-        kNotImplemented,
+        kNotImplemented, kResultFalse,
     };
     use vst3::{Class, ComRef};
 
@@ -795,7 +800,7 @@ mod tests {
     }
 
     #[test]
-    fn zero_sample_state_flush_uses_no_audio_buses_and_delivers_pending_edits() {
+    fn zero_sample_state_flush_delivers_edits_without_consuming_audio_errors() {
         let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
         let config = ProcessingConfig {
             sample_rate: 48_000.0,
@@ -815,7 +820,7 @@ mod tests {
         );
         let exchange = ParameterExchange::new(&[(77, 0.0)]);
         exchange.parameter(77).unwrap().set(0.75, 0);
-        dsp.flush(&exchange);
+        dsp.flush(&exchange).unwrap();
         assert_eq!(
             processor.0.get(),
             Some(FlushRecord {
@@ -836,6 +841,12 @@ mod tests {
                 .pending
                 .load(Ordering::Acquire)
         );
+        exchange
+            .process_error
+            .store(kResultFalse, Ordering::Release);
+        exchange.parameter(77).unwrap().set(0.5, 0);
+        dsp.flush(&exchange).unwrap();
+        assert_eq!(exchange.process_error.load(Ordering::Acquire), kResultFalse);
     }
 
     fn render_notes(endpoint: &mut Vst3Processor, midi: &[karbeat_plugin_api::prelude::MidiEvent]) {

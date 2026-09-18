@@ -26,4 +26,22 @@ void main() {
       expect(container.read(backendOperationGateProvider), 0);
     },
   );
+
+  test('guarded callback activates the gate only while invoked', () async {
+    final container = ProviderContainer.test();
+    final gate = container.read(backendOperationGateProvider.notifier);
+    final operation = Completer<void>();
+    final guarded = (() => operation.future).guardedByBackendOperationGate(
+      gate,
+    );
+
+    expect(container.read(backendOperationGateProvider), 0);
+
+    final running = guarded();
+    expect(container.read(backendOperationGateProvider), 1);
+
+    operation.complete();
+    await running;
+    expect(container.read(backendOperationGateProvider), 0);
+  });
 }

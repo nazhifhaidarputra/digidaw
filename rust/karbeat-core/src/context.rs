@@ -6,6 +6,7 @@
 use std::sync::{Arc, Once, mpsc};
 
 use hashbrown::HashMap;
+use karbeat_host::HostStateCapture;
 use karbeat_plugin_api::traits::AudioPlugin;
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 use parking_lot::{Mutex, RwLock};
@@ -53,6 +54,9 @@ pub struct DawContext {
 
     pub plugin_catalog: crate::audio::plugin_catalog::PluginCatalog,
 
+    /// Format-independent control-side access to live hosted plug-in state.
+    pub host_state_capture: Arc<dyn HostStateCapture>,
+
     /// The live, thread-safe audio configuration.
     /// The UI writes to this, and the background stream monitor reads from it.
     pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
@@ -83,6 +87,7 @@ impl DawContext {
             position_consumer: Arc::new(Mutex::new(None)),
             plugin_registry,
             plugin_catalog,
+            host_state_capture: Arc::new(karbeat_vst3::native::NativeStateCapture),
             external_plugin_failures: HashMap::new(),
             active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
             audio_runtime_settings: Arc::new(RwLock::new(AudioRuntimeSettings::default())),

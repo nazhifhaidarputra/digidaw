@@ -6,12 +6,12 @@ use crate::{
 };
 use glib::ControlFlow;
 use karbeat_host::{
-    HostCapabilities, HostError, HostInstanceId, NativeEditorBinding, NativeEditorEvent,
-    NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform, NativeWindow, NativeWindowId,
-    NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginController,
-    PluginDescriptor, PluginEditorManager, PluginInstanceManager, PluginState, PreparedProcessor,
-    ProcessingConfig, StateOperation, StateResult, StateTransaction, StateTransactionControl,
-    SystemNativeUi,
+    HostCapabilities, HostError, HostInstanceId, HostStateCapture, NativeEditorBinding,
+    NativeEditorEvent, NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform, NativeWindow,
+    NativeWindowId, NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginController,
+    PluginDescriptor, PluginEditorManager, PluginFormat, PluginIdentity, PluginInstanceManager,
+    PluginState, PreparedProcessor, ProcessingConfig, StateOperation, StateResult,
+    StateTransaction, StateTransactionControl, SystemNativeUi,
 };
 use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{
@@ -553,6 +553,22 @@ static RUNTIME_READY: AtomicBool = AtomicBool::new(false);
 
 pub fn available() -> bool {
     RUNTIME_READY.load(Ordering::Acquire)
+}
+
+/// Control-side state capture capability for the VST3 native owner.
+pub struct NativeStateCapture;
+
+impl HostStateCapture for NativeStateCapture {
+    fn capture_state(
+        &self,
+        identity: &PluginIdentity,
+        instance: HostInstanceId,
+    ) -> Result<PluginState, HostError> {
+        if identity.format != PluginFormat::Vst3 {
+            return Err(HostError::Unsupported("VST3 state capture"));
+        }
+        capture_state(instance)
+    }
 }
 
 /// Captures fresh opaque state without holding an engine or project lock on the native UI thread.

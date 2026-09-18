@@ -480,9 +480,7 @@ impl Vst3Instance {
         if let Some(slot) = &self.slot {
             // SAFETY: Exclusive suspended DSP access; flush cached UI edits before querying state.
             let dsp = unsafe { &mut *slot.dsp.get() };
-            dsp.flush(&self.exchange);
-            let code = self.exchange.process_error.swap(0, Ordering::AcqRel);
-            check("processor.flush", code)?;
+            dsp.flush(&self.exchange)?;
         }
         Ok(())
     }

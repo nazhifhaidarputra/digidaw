@@ -298,7 +298,9 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   }
 
   Future<T> _runBackendOperation<T>(Future<T> Function() operation) {
-    return ref.read(backendOperationGateProvider.notifier).run(operation);
+    return operation.guardedByBackendOperationGate(
+      ref.read(backendOperationGateProvider.notifier),
+    )();
   }
 
   // ------------------------------------------------------------------
@@ -568,84 +570,88 @@ extension MixerService on MixerNotifier {
     required mixer_api.UiMixerChannelTarget target,
     required int effectId,
     required int newPosition,
-  }) async {
-    final originalMixer = _mixerState;
-    final originalEffects = originalMixer == null
-        ? null
-        : _effectsForTarget(originalMixer, target);
-    if (originalMixer == null || originalEffects == null) {
-      return notifyErrorResult(Exception("Mixer channel not found"));
-    }
+  }) {
+    return _runBackendOperation(() async {
+      final originalMixer = _mixerState;
+      final originalEffects = originalMixer == null
+          ? null
+          : _effectsForTarget(originalMixer, target);
+      if (originalMixer == null || originalEffects == null) {
+        return notifyErrorResult(Exception("Mixer channel not found"));
+      }
 
-    final oldPosition = originalEffects.indexWhere(
-      (effect) => effect.id == effectId,
-    );
-    if (oldPosition == -1) {
-      return notifyErrorResult(Exception("Effect not found"));
-    }
-
-    final clampedPosition = newPosition.clamp(0, originalEffects.length - 1);
-    if (oldPosition == clampedPosition) return Result.ok(null);
-    final reorderedEffects = List<mixer_api.UiEffectSummary>.from(
-      originalEffects,
-    );
-    final effect = reorderedEffects.removeAt(oldPosition);
-    reorderedEffects.insert(clampedPosition, effect);
-    _replaceTargetEffects(originalMixer, target, reorderedEffects);
-
-    final result = await AsyncValue.guard(
-      () => mixer_api.moveEffectOrder(
-        ctx: _ctx,
-        target: target,
-        effectInstanceId: effectId,
-        newPosition: clampedPosition,
-      ),
-    );
-    if (result.hasError) {
-      AppLogger.error(
-        "MixerNotifier: failed to reorder effect: ${result.error}",
+      final oldPosition = originalEffects.indexWhere(
+        (effect) => effect.id == effectId,
       );
-      _projectNotifier.updateMixer(originalMixer);
-      return notifyErrorResult(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
+      if (oldPosition == -1) {
+        return notifyErrorResult(Exception("Effect not found"));
+      }
+
+      final clampedPosition = newPosition.clamp(0, originalEffects.length - 1);
+      if (oldPosition == clampedPosition) return Result.ok(null);
+      final reorderedEffects = List<mixer_api.UiEffectSummary>.from(
+        originalEffects,
+      );
+      final effect = reorderedEffects.removeAt(oldPosition);
+      reorderedEffects.insert(clampedPosition, effect);
+      _replaceTargetEffects(originalMixer, target, reorderedEffects);
+
+      final result = await AsyncValue.guard(
+        () => mixer_api.moveEffectOrder(
+          ctx: _ctx,
+          target: target,
+          effectInstanceId: effectId,
+          newPosition: clampedPosition,
+        ),
+      );
+      if (result.hasError) {
+        AppLogger.error(
+          "MixerNotifier: failed to reorder effect: ${result.error}",
+        );
+        _projectNotifier.updateMixer(originalMixer);
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
   }
 
   Future<Result<void>> removeEffectFromTargetMixerChannel({
     required mixer_api.UiMixerChannelTarget target,
     required int effectId,
-  }) async {
-    final originalMixer = _mixerState;
-    final originalEffects = originalMixer == null
-        ? null
-        : _effectsForTarget(originalMixer, target);
-    if (originalMixer == null || originalEffects == null) {
-      return notifyErrorResult(Exception("Mixer channel not found"));
-    }
-    if (!originalEffects.any((effect) => effect.id == effectId)) {
-      return notifyErrorResult(Exception("Effect not found"));
-    }
+  }) {
+    return _runBackendOperation(() async {
+      final originalMixer = _mixerState;
+      final originalEffects = originalMixer == null
+          ? null
+          : _effectsForTarget(originalMixer, target);
+      if (originalMixer == null || originalEffects == null) {
+        return notifyErrorResult(Exception("Mixer channel not found"));
+      }
+      if (!originalEffects.any((effect) => effect.id == effectId)) {
+        return notifyErrorResult(Exception("Effect not found"));
+      }
 
-    _replaceTargetEffects(
-      originalMixer,
-      target,
-      originalEffects.where((effect) => effect.id != effectId).toList(),
-    );
-    final result = await AsyncValue.guard(
-      () => mixer_api.removeEffectFromTargetMixerChannel(
-        ctx: _ctx,
-        target: target,
-        effectInstanceId: effectId,
-      ),
-    );
-    if (result.hasError) {
-      AppLogger.error(
-        "MixerNotifier: failed to remove effect: ${result.error}",
+      _replaceTargetEffects(
+        originalMixer,
+        target,
+        originalEffects.where((effect) => effect.id != effectId).toList(),
       );
-      _projectNotifier.updateMixer(originalMixer);
-      return notifyErrorResult(Exception(result.error.toString()));
-    }
-    return Result.ok(null);
+      final result = await AsyncValue.guard(
+        () => mixer_api.removeEffectFromTargetMixerChannel(
+          ctx: _ctx,
+          target: target,
+          effectInstanceId: effectId,
+        ),
+      );
+      if (result.hasError) {
+        AppLogger.error(
+          "MixerNotifier: failed to remove effect: ${result.error}",
+        );
+        _projectNotifier.updateMixer(originalMixer);
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
   }
 
   // ------------------------------------------------------------------
@@ -678,38 +684,40 @@ extension MixerService on MixerNotifier {
     return Result.ok(null);
   }
 
-  Future<Result<Null>> removeBus({required int busId}) async {
-    final originalMixer = _mixerState;
-    if (originalMixer == null) {
-      return notifyErrorResult(Exception("Mixer state missing"));
-    }
+  Future<Result<Null>> removeBus({required int busId}) {
+    return _runBackendOperation(() async {
+      final originalMixer = _mixerState;
+      if (originalMixer == null) {
+        return notifyErrorResult(Exception("Mixer state missing"));
+      }
 
-    // 1. Optimistic Update (Remove bus AND cascading routes)
-    final newBuses = Map<int, mixer_api.UiBus>.from(originalMixer.buses)
-      ..remove(busId);
-    final targetNode = mixer_api.UiRoutingNode.bus(busId);
+      // 1. Optimistic Update (Remove bus AND cascading routes)
+      final newBuses = Map<int, mixer_api.UiBus>.from(originalMixer.buses)
+        ..remove(busId);
+      final targetNode = mixer_api.UiRoutingNode.bus(busId);
 
-    final newRouting = originalMixer.routing.where((conn) {
-      return conn.source != targetNode && conn.destination != targetNode;
-    }).toList();
+      final newRouting = originalMixer.routing.where((conn) {
+        return conn.source != targetNode && conn.destination != targetNode;
+      }).toList();
 
-    _projectNotifier.updateMixer(
-      originalMixer.copyWith(buses: newBuses, routing: newRouting),
-    );
+      _projectNotifier.updateMixer(
+        originalMixer.copyWith(buses: newBuses, routing: newRouting),
+      );
 
-    // 2. Fire FFI
-    final result = await AsyncValue.guard(() async {
-      await mixer_api.deleteBus(ctx: _ctx, busId: busId);
+      // 2. Fire FFI
+      final result = await AsyncValue.guard(() async {
+        await mixer_api.deleteBus(ctx: _ctx, busId: busId);
+      });
+
+      // 3. Rollback
+      if (result.hasError) {
+        AppLogger.error("Failed to remove bus: ${result.error}");
+        _projectNotifier.updateMixer(originalMixer);
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+
+      return Result.ok(null);
     });
-
-    // 3. Rollback
-    if (result.hasError) {
-      AppLogger.error("Failed to remove bus: ${result.error}");
-      _projectNotifier.updateMixer(originalMixer);
-      return notifyErrorResult(Exception(result.error.toString()));
-    }
-
-    return Result.ok(null);
   }
 
   /// Add or update a routing connection.

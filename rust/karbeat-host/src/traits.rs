@@ -13,6 +13,28 @@ pub trait PluginScanner {
     fn default_scan_paths(&self) -> Vec<PathBuf>;
 }
 
+/// Captures live plug-in state through the control owner for the active host backend.
+pub trait HostStateCapture: Send + Sync {
+    fn capture_state(
+        &self,
+        identity: &crate::PluginIdentity,
+        instance: HostInstanceId,
+    ) -> Result<PluginState, HostError>;
+}
+
+impl<F> HostStateCapture for F
+where
+    F: Fn(&crate::PluginIdentity, HostInstanceId) -> Result<PluginState, HostError> + Send + Sync,
+{
+    fn capture_state(
+        &self,
+        identity: &crate::PluginIdentity,
+        instance: HostInstanceId,
+    ) -> Result<PluginState, HostError> {
+        self(identity, instance)
+    }
+}
+
 /// All methods run on the native UI thread. Processing endpoints have exclusive DSP access.
 pub trait PluginInstanceManager {
     fn create(&mut self, descriptor: &PluginDescriptor) -> Result<HostInstanceId, HostError>;

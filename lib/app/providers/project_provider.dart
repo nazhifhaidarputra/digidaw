@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/core/services/serializer_service.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -74,6 +75,12 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
 
   DawContext get dawContext => _dawContext!;
 
+  Future<T> _runBackendOperation<T>(Future<T> Function() operation) {
+    return operation.guardedByBackendOperationGate(
+      ref.read(backendOperationGateProvider.notifier),
+    )();
+  }
+
   @override
   Future<ApplicationDataStore> build() async {
     // 1. Initialize a blank project from the Rust backend on boot
@@ -82,31 +89,37 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     return await _fetchFullState(uiState, null);
   }
 
-  Future<void> newBlankProject() async {
-    try {
-      state = const AsyncValue.loading();
-      final uiState = await serialization_api.newBlankProject(ctx: dawContext);
-      state = AsyncValue.data(await _fetchFullState(uiState, null));
-    } catch (error, stackTrace) {
-      ref.notifyError(error, stackTrace: stackTrace);
-      rethrow;
-    }
+  Future<void> newBlankProject() {
+    return _runBackendOperation(() async {
+      try {
+        state = const AsyncValue.loading();
+        final uiState = await serialization_api.newBlankProject(
+          ctx: dawContext,
+        );
+        state = AsyncValue.data(await _fetchFullState(uiState, null));
+      } catch (error, stackTrace) {
+        ref.notifyError(error, stackTrace: stackTrace);
+        rethrow;
+      }
+    });
   }
 
   /// Load a project from disk relying on the injected `SerializerService`.
-  Future<Result<void>> loadProject(String path) async {
-    final result = await AsyncValue.guard(() async {
-      final serializer = ref.read(serializerServiceProvider);
-      final uiState = await serializer.loadProject(
-        ctx: dawContext,
-        pathName: path,
-      );
-      return _fetchFullState(uiState, path);
+  Future<Result<void>> loadProject(String path) {
+    return _runBackendOperation(() async {
+      final result = await AsyncValue.guard(() async {
+        final serializer = ref.read(serializerServiceProvider);
+        final uiState = await serializer.loadProject(
+          ctx: dawContext,
+          pathName: path,
+        );
+        return _fetchFullState(uiState, path);
+      });
+      state = result;
+      return result.hasError
+          ? ref.notifyErrorResult(Exception(result.error.toString()))
+          : Result.ok(null);
     });
-    state = result;
-    return result.hasError
-        ? ref.notifyErrorResult(Exception(result.error.toString()))
-        : Result.ok(null);
   }
 
   void removeGenerator(int genId) {
@@ -159,30 +172,32 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   }
 
   /// Save the current project to disk relying on the injected `SerializerService`.
-  Future<Result<void>> saveProject(String path) async {
-    try {
-      final serializer = ref.read(serializerServiceProvider);
-      await serializer.saveProject(ctx: dawContext, pathName: path);
+  Future<Result<void>> saveProject(String path) {
+    return _runBackendOperation(() async {
+      try {
+        final serializer = ref.read(serializerServiceProvider);
+        await serializer.saveProject(ctx: dawContext, pathName: path);
 
-      // Softly update the current path immediately
-      if (state.hasValue) {
-        state = AsyncValue.data(
-          state.requireValue.copyWith(currentFilePath: path),
-        );
-      }
-
-      AppLogger.info("Project saved successfully to $path");
-      ref
-          .read(notificationProvider.notifier)
-          .info(
-            "Project successfully saved to $path",
-            title: "Project saved",
+        // Softly update the current path immediately
+        if (state.hasValue) {
+          state = AsyncValue.data(
+            state.requireValue.copyWith(currentFilePath: path),
           );
-      return Result.ok(null);
-    } catch (e) {
-      AppLogger.error("Failed to save project: $e");
-      return ref.notifyErrorResult(Exception(e.toString()));
-    }
+        }
+
+        AppLogger.info("Project saved successfully to $path");
+        ref
+            .read(notificationProvider.notifier)
+            .info(
+              "Project successfully saved to $path",
+              title: "Project saved",
+            );
+        return Result.ok(null);
+      } catch (e) {
+        AppLogger.error("Failed to save project: $e");
+        return ref.notifyErrorResult(Exception(e.toString()));
+      }
+    });
   }
 
   void updateAutomations({
@@ -355,29 +370,31 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   Future<Result<void>> _applyHistoryOperation(
     Future<UiApplicationState> Function() operation, {
     required String errorTitle,
-  }) async {
-    final currentPath = state.value?.currentFilePath;
-    final operationResult = await AsyncValue.guard(operation);
-    if (operationResult case AsyncError(:final error, :final stackTrace)) {
-      return ref.notifyErrorResult(
-        error,
-        title: errorTitle,
-        stackTrace: stackTrace,
-      );
-    }
+  }) {
+    return _runBackendOperation(() async {
+      final currentPath = state.value?.currentFilePath;
+      final operationResult = await AsyncValue.guard(operation);
+      if (operationResult case AsyncError(:final error, :final stackTrace)) {
+        return ref.notifyErrorResult(
+          error,
+          title: errorTitle,
+          stackTrace: stackTrace,
+        );
+      }
 
-    final refreshed = await AsyncValue.guard(
-      () => _fetchFullState(operationResult.requireValue, currentPath),
-    );
-    if (refreshed case AsyncError(:final error, :final stackTrace)) {
-      return ref.notifyErrorResult(
-        error,
-        title: '$errorTitle: project refresh failed',
-        stackTrace: stackTrace,
+      final refreshed = await AsyncValue.guard(
+        () => _fetchFullState(operationResult.requireValue, currentPath),
       );
-    }
-    state = refreshed;
-    return Result.ok(null);
+      if (refreshed case AsyncError(:final error, :final stackTrace)) {
+        return ref.notifyErrorResult(
+          error,
+          title: '$errorTitle: project refresh failed',
+          stackTrace: stackTrace,
+        );
+      }
+      state = refreshed;
+      return Result.ok(null);
+    });
   }
 
   /// insert or update if exists of generator
