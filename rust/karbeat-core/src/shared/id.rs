@@ -1,19 +1,33 @@
 use slotmap::{Key, KeyData, new_key_type};
 
 new_key_type! {
+    /// Generation-aware key for a project track.
     pub struct TrackId;
+    /// Generation-aware key for a clip in the project clip pool.
     pub struct ClipId;
+    /// Generation-aware key for an automation lane.
     pub struct AutomationId;
+    /// Lane-local key for an automation point.
     pub struct AutomationPointId;
+    /// Generation-aware key for an effect instance.
     pub struct EffectId;
+    /// Generation-aware key for an auxiliary mixer bus.
     pub struct BusId;
+    /// Generation-aware key for a MIDI pattern.
     pub struct PatternId;
+    /// Generation-aware key for an imported audio source.
     pub struct AudioSourceId;
+    /// Generation-aware key for a generator instance.
     pub struct GeneratorId;
+    /// Generation-aware key for a project source object.
     pub struct SourceId;
+    /// Pattern-local note key encoded through the shared key representation.
     pub struct NoteId;
+    /// Generation-aware key for a modulation source.
     pub struct ModulationId;
+    /// Generation-aware key for a modulation connection.
     pub struct ModulationLinkId;
+    /// Generation-aware key for a render-graph node.
     pub struct GraphNodeId;
 }
 

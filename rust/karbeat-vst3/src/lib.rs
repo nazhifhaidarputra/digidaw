@@ -29,6 +29,7 @@ mod context;
 mod editor;
 mod host;
 mod instance;
+/// VST3 bundle discovery, dynamic loading, factory enumeration, and class-ID conversion.
 pub mod module;
 pub mod native;
 mod run_loop;

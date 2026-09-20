@@ -6,13 +6,18 @@ use crate::audio::{
     event::PluginTarget,
 };
 
+/// Legacy direct response payload emitted by audio-engine command execution.
 pub enum AudioEngineResponse {
+    /// Structured response returned by a plugin-defined command.
     PluginCommandResponse {
+        /// Correlation identifier supplied with the request.
         request_id: u32,
+        /// Plugin-defined JSON response.
         response: serde_json::Value,
     },
 }
 
+/// Owned contiguous floating-point telemetry buffer transferred to consumers.
 pub type TelemetryBlob = Box<[f32]>;
 
 /// UI-thread-owned telemetry consumers.

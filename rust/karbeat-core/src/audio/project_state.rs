@@ -14,6 +14,10 @@ pub struct ProjectStateFeedback {
 }
 
 impl ProjectStateFeedback {
+    /// Registers the request IDs expected by one project-state capture.
+    ///
+    /// Only one capture may be active. The returned receiver clears that registration when dropped,
+    /// including after an early error or timeout.
     pub fn register(
         owner: &Arc<Mutex<Self>>,
         ids: impl Iterator<Item = u32>,
@@ -51,8 +55,10 @@ impl ProjectStateFeedback {
     }
 }
 
+/// Receives correlated state snapshots while owning the router's active-capture registration.
 pub struct ProjectStateReceiver {
     owner: Arc<Mutex<ProjectStateFeedback>>,
+    /// Blocking receiver used by the control worker collecting snapshot feedback.
     pub receiver: mpsc::Receiver<AudioFeedback>,
 }
 

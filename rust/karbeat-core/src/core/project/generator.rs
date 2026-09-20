@@ -7,18 +7,27 @@ use crate::{
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default)]
+/// Serializable sound source that can be assigned to a track.
 pub struct GeneratorInstance {
+    /// Stable project identity of the generator.
     pub id: GeneratorId,
+    /// Concrete generator implementation and its saved state.
     pub instance_type: GeneratorInstanceType,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// Supported project generator implementations.
 pub enum GeneratorInstanceType {
-    // A Synth (Internal or VST)
+    /// Built-in or externally hosted instrument plugin.
     Plugin(PluginInstance),
 
-    // A Sampler (Plays a file from AssetLibrary)
-    Sampler { asset_id: u32, root_note: u8 },
+    /// Sampler source backed by an asset-library entry.
+    Sampler {
+        /// Asset-library identifier of the sampled audio.
+        asset_id: u32,
+        /// MIDI note that plays the sample at its original pitch.
+        root_note: u8,
+    },
 }
 
 // Default implementation for GeneratorInstanceType
@@ -29,6 +38,7 @@ impl Default for GeneratorInstanceType {
 }
 
 impl ApplicationState {
+    /// Inserts a generator into the global pool and returns its assigned stable ID.
     pub fn add_generator(&mut self, instance_type: GeneratorInstanceType) -> GeneratorId {
         self.generator_pool
             .insert_with_key(|id| GeneratorInstance { id, instance_type })

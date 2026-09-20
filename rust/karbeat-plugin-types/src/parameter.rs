@@ -770,6 +770,16 @@ impl ParameterSmoother {
         self.current
     }
 
+    #[inline(always)]
+    pub fn current(&self) -> f64 {
+        self.current
+    }
+
+    #[inline(always)]
+    pub fn is_settled(&self) -> bool {
+        (self.target - self.current).abs() <= 1.0e-9
+    }
+
     /// Applies the smoothly changing parameter to a mono buffer in-place.
     #[inline(always)]
     pub fn apply(&mut self, buffer: &mut [f64]) {

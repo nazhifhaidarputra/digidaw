@@ -21,6 +21,10 @@ fn module_error(path: &Path, message: impl ToString) -> HostError {
     }
 }
 
+/// Returns the conventional per-user and system-wide VST3 locations for the current platform.
+///
+/// Paths are returned whether or not they currently exist. Environment-dependent user paths
+/// are omitted when the corresponding home or common-files variable is unavailable.
 pub fn default_scan_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if cfg!(target_os = "linux") {
@@ -99,6 +103,7 @@ fn binary_path(bundle: &Path) -> Result<PathBuf, HostError> {
 /// The factory and every live component retain this owner on the native UI thread.
 /// Explicit field teardown releases COM objects before calling the module exit function.
 pub struct Vst3Module {
+    /// Canonical path to the loaded VST3 bundle or Windows module file.
     pub path: PathBuf,
     factory: Option<ComPtr<IPluginFactory>>,
     exit: Option<unsafe extern "system" fn() -> bool>,
@@ -109,6 +114,17 @@ pub struct Vst3Module {
 }
 
 impl Vst3Module {
+    /// Loads and initializes a VST3 module and adopts its plugin factory.
+    ///
+    /// The platform entry point and `GetPluginFactory` are called before this returns. The
+    /// returned `Rc` is intentionally UI-thread-only and keeps the native library loaded until
+    /// all instances and factory references have been released.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the path cannot be canonicalized, the architecture-specific
+    /// executable is ambiguous or missing, a required symbol is absent, module initialization
+    /// fails, or the factory export returns null.
     pub fn load(path: &Path) -> Result<Rc<Self>, HostError> {
         let path = std::fs::canonicalize(path)?;
         let binary = binary_path(&path)?;
@@ -211,12 +227,26 @@ impl Vst3Module {
         Ok(Rc::new(module))
     }
 
+    /// Borrows the initialized factory retained by this module.
+    ///
+    /// # Errors
+    ///
+    /// Returns a module error if teardown has already removed the factory.
     pub fn factory(&self) -> Result<&ComPtr<IPluginFactory>, HostError> {
         self.factory
             .as_ref()
             .ok_or_else(|| module_error(&self.path, "factory is unavailable"))
     }
 
+    /// Enumerates audio-module classes exported by the factory as host descriptors.
+    ///
+    /// Non-audio classes and individual class-info queries that fail are skipped. Extended
+    /// factory metadata is used when available, with basic factory metadata as the vendor
+    /// fallback. The class count is rejected when it is negative or unreasonably large.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the factory is unavailable or reports an invalid class count.
     pub fn descriptors(&self) -> Result<Vec<PluginDescriptor>, HostError> {
         let factory = self.factory()?;
         // SAFETY: PFactoryInfo contains integer and fixed-array fields with valid zero representations.
@@ -301,6 +331,9 @@ fn c_string(chars: &[std::ffi::c_char]) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
+/// Encodes a VST3 class ID as 32 uppercase hexadecimal digits.
+///
+/// Windows GUID byte groups are reordered to match the textual VST3 class-ID convention.
 pub fn class_id_string(id: &TUID) -> String {
     let mut bytes = id.map(|b| b.to_ne_bytes()[0]);
     if cfg!(target_os = "windows") {
@@ -311,6 +344,13 @@ pub fn class_id_string(id: &TUID) -> String {
     bytes.iter().map(|b| format!("{b:02X}")).collect()
 }
 
+/// Decodes a 32-digit hexadecimal VST3 class ID into its native byte representation.
+///
+/// Windows GUID byte groups are converted back to the byte order expected by the VST3 ABI.
+///
+/// # Errors
+///
+/// Returns [`HostError::InvalidState`] when `text` is not exactly 32 ASCII hexadecimal digits.
 pub fn parse_class_id(text: &str) -> Result<TUID, HostError> {
     if text.len() != 32 || !text.is_ascii() {
         return Err(HostError::InvalidState(

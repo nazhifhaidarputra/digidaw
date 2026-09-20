@@ -21,6 +21,7 @@ pub struct DeviceRateBridge {
     channels: usize,
     output: Vec<f32>,
     output_len: usize,
+    maximum_output_samples: usize,
     indexing: Indexing,
 }
 
@@ -56,11 +57,17 @@ impl DeviceRateBridge {
             .map(|r| r.output_frames_max())
             .unwrap_or(maximum_input_frames);
 
+        let maximum_output_samples = max_output_frames * channels;
         Ok(Self {
             resampler,
             channels,
-            output: vec![0.0; max_output_frames * channels],
+            output: if input_rate == output_rate {
+                Vec::new()
+            } else {
+                vec![0.0; maximum_output_samples]
+            },
             output_len: 0,
+            maximum_output_samples,
             indexing: Indexing::new(),
         })
     }
@@ -69,17 +76,12 @@ impl DeviceRateBridge {
     /// construction, regardless of how many frames a given `process` call
     /// actually produces.
     pub fn maximum_output_samples(&self) -> usize {
-        self.output.len()
+        self.maximum_output_samples
     }
 
-    pub fn process<'a>(&'a mut self, input: &[f32]) -> &'a [f32] {
+    pub fn process<'a>(&'a mut self, input: &'a [f32]) -> &'a [f32] {
         let Some(resampler) = self.resampler.as_mut() else {
-            // Rates match: bit-exact passthrough, no interpolation error and
-            // no added latency.
-            let len = input.len().min(self.output.len());
-            self.output[..len].copy_from_slice(&input[..len]);
-            self.output_len = len;
-            return &self.output[..self.output_len];
+            return input;
         };
 
         let frames_needed = resampler.input_frames_next();

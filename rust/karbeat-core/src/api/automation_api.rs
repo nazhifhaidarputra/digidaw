@@ -22,6 +22,7 @@ where
     app.automation_pool.values().map(|a| mapper(a)).collect()
 }
 
+/// Creates an automation lane targeting a parameter on a track-owned mixer or plugin object.
 pub fn add_automation_lane_for_track(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -45,6 +46,7 @@ pub fn add_automation_lane_for_track(
     Ok(lane)
 }
 
+/// Inserts a fully specified automation lane and broadcasts it to the audio thread.
 pub fn add_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTarget,
@@ -71,6 +73,7 @@ pub fn add_automation_lane(
     Ok((lane, mod_link.clone()))
 }
 
+/// Creates an automation lane targeting a bus mixer or bus-effect parameter.
 pub fn add_automation_lane_for_bus(
     ctx: &mut DawContext,
     bus_id: BusId,
@@ -94,6 +97,7 @@ pub fn add_automation_lane_for_bus(
     Ok(lane)
 }
 
+/// Removes an automation lane from project state and the audio-thread graph.
 pub fn remove_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTarget,
@@ -127,6 +131,7 @@ pub fn remove_automation_lane(
     ))
 }
 
+/// Adds a point to a lane and publishes the rebuilt lane to the audio thread.
 pub fn add_new_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
@@ -142,6 +147,7 @@ pub fn add_new_automation_point(
     Ok((auto_lane, point_id))
 }
 
+/// Removes one point from a lane and republishes the lane snapshot.
 pub fn remove_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
@@ -154,6 +160,7 @@ pub fn remove_automation_point(
     Ok(lane)
 }
 
+/// Changes an automation point's position or value and republishes the lane snapshot.
 pub fn update_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
@@ -172,6 +179,7 @@ pub fn update_automation_point(
     Ok(new_index)
 }
 
+/// Returns cloned automation lanes whose targets belong to `track_id`.
 pub fn get_automation_lanes_for_track(
     ctx: &DawContext,
     track_id: TrackId,
@@ -180,6 +188,7 @@ pub fn get_automation_lanes_for_track(
     app.get_automation_lanes_for_track(track_id)
 }
 
+/// Returns cloned automation lanes whose targets belong to `bus_id`.
 pub fn get_automation_lanes_for_bus(
     ctx: &DawContext,
     bus_id: BusId,
@@ -188,6 +197,7 @@ pub fn get_automation_lanes_for_bus(
     app.get_automation_lanes_for_bus(bus_id)
 }
 
+/// Returns one automation lane by identifier, or `None` when it is absent.
 pub fn get_automation_lane<Id: Into<AutomationId>>(
     ctx: &DawContext,
     lane_id: Id,
@@ -202,6 +212,7 @@ pub fn get_automation_lane<Id: Into<AutomationId>>(
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 
 /// Get all modulations in the project
+/// Maps every modulation link whose source matches the supplied modulation identifier.
 pub fn get_all_linked_modulation_params<Id, T, F>(
     ctx: &DawContext,
     f: F,
@@ -217,6 +228,7 @@ where
         .collect()
 }
 
+/// Returns a modulation link by identifier without cloning unrelated project state.
 pub fn get_modulation_link_by_id<Id>(
     ctx: &DawContext,
     id: Id,
@@ -230,6 +242,7 @@ where
 }
 
 /// Add generic modulation source
+/// Inserts a modulation source into project state and queues its audio-thread counterpart.
 pub fn add_modulation_source(ctx: &mut DawContext, source: ModulationSource) -> ModulationId {
     let id = {
         let app = &mut ctx.app_state;
@@ -240,6 +253,7 @@ pub fn add_modulation_source(ctx: &mut DawContext, source: ModulationSource) -> 
     id
 }
 
+/// Maps all project modulation sources into a caller-selected collection.
 pub fn get_modulation_sources_map<Id, S, C>(ctx: &DawContext) -> C
 where
     Id: From<ModulationId>,
@@ -254,6 +268,7 @@ where
 }
 
 /// Get modulation source based on its modulation id
+/// Returns one borrowed modulation source by a caller-convertible identifier.
 pub fn get_modulation_source<'a, Id, Siuuuu>(
     ctx: &'a DawContext,
     modulation_id: Id,
@@ -271,6 +286,7 @@ where
 
 /// Remove the modulation source. This function also cascade delete all link
 /// with this source
+/// Removes a modulation source, its dependent links, and their audio-thread state.
 pub fn remove_modulation_source(ctx: &mut DawContext, mod_id: ModulationId) {
     {
         let app = &mut ctx.app_state;
@@ -279,6 +295,7 @@ pub fn remove_modulation_source(ctx: &mut DawContext, mod_id: ModulationId) {
     let _ = ctx.send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
 }
 
+/// Removes one modulation link from project and audio-thread state.
 pub fn remove_modulation_link(ctx: &mut DawContext, mod_link_id: ModulationLinkId) {
     {
         let app = &mut ctx.app_state;
@@ -289,6 +306,7 @@ pub fn remove_modulation_link(ctx: &mut DawContext, mod_link_id: ModulationLinkI
 }
 
 /// Link the target param to a modulation source
+/// Creates a modulation link from a source to an automatable target parameter.
 pub fn link_this_param_to_controller(
     ctx: &mut DawContext,
     source_id: ModulationId,

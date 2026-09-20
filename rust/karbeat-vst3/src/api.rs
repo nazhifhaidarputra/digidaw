@@ -12,22 +12,32 @@ use vst3::{
 };
 
 const MAX_STATE_BYTES: usize = 64 * 1024 * 1024;
+/// Maximum number of events retained by one [`EventList`].
 pub const EVENT_CAPACITY: usize = 2048;
+/// Maximum number of points retained by one [`ParamQueue`].
 pub const POINT_CAPACITY: usize = 64;
 
+/// In-memory VST3 stream used for bounded component and controller state exchange.
+///
+/// The stream owns its bytes, maintains a seek position, and exposes the VST3
+/// `IBStream` ABI through the implementation below. Reads may be partial at EOF;
+/// writes are rejected once the stream would exceed the crate's state limit.
 #[derive(Default)]
 pub struct MemoryStream {
+    /// Bytes currently stored in the stream.
     pub data: RefCell<Vec<u8>>,
     position: Cell<usize>,
 }
 
 impl MemoryStream {
+    /// Creates a stream positioned at byte zero with a copy of `bytes`.
     pub fn from_bytes(bytes: &[u8]) -> Self {
         Self {
             data: RefCell::new(bytes.to_vec()),
             position: Cell::new(0),
         }
     }
+    /// Rewinds the stream position to its beginning without changing its bytes.
     pub fn rewind(&self) {
         self.position.set(0);
     }
@@ -149,8 +159,13 @@ impl IBStreamTrait for MemoryStream {
     }
 }
 
+/// Bounded event collection implementing the VST3 `IEventList` interface.
+///
+/// Events are copied into host-owned storage. Pointer-bearing event variants
+/// are rejected because retaining their pointers would outlive the ABI call.
 pub struct EventList {
     events: RefCell<Vec<Event>>,
+    /// Set when an event was rejected because the fixed capacity was exhausted.
     pub overflow: Cell<bool>,
 }
 impl Default for EventList {
@@ -162,10 +177,12 @@ impl Default for EventList {
     }
 }
 impl EventList {
+    /// Removes all retained events and clears the overflow indicator.
     pub fn clear(&self) {
         self.events.borrow_mut().clear();
         self.overflow.set(false);
     }
+    /// Attempts to append an event, returning `false` on borrow contention or capacity overflow.
     pub fn push(&self, event: Event) -> bool {
         let Ok(mut events) = self.events.try_borrow_mut() else {
             return false;
@@ -218,9 +235,13 @@ impl IEventListTrait for EventList {
     }
 }
 
+/// Bounded, host-owned VST3 parameter point queue for one parameter identifier.
 pub struct ParamQueue {
+    /// VST3 parameter identifier represented by this queue.
     pub id: u32,
+    /// Sorted `(sample_offset, normalized_value)` points for the current block.
     pub points: RefCell<Vec<(i32, f64)>>,
+    /// Set when a new point was rejected because [`POINT_CAPACITY`] was reached.
     pub overflow: Cell<bool>,
 }
 impl Class for ParamQueue {
@@ -277,11 +298,17 @@ impl IParamValueQueueTrait for ParamQueue {
     }
 }
 
+/// Bounded collection of parameter queues exposed through VST3 `IParameterChanges`.
+///
+/// Queue identifiers are fixed when the collection is created. Unknown identifiers
+/// are rejected so the processor only observes parameters it advertised.
 pub struct ParameterChanges {
+    /// COM-wrapped queues for the accepted parameter identifiers.
     pub queues: Vec<ComWrapper<ParamQueue>>,
     active: RefCell<Vec<usize>>,
 }
 impl ParameterChanges {
+    /// Creates empty queues for the sorted, de-duplicated identifiers in `ids`.
     pub fn new(ids: &[u32]) -> Self {
         let mut ids = ids.to_vec();
         ids.sort_unstable();
@@ -301,6 +328,7 @@ impl ParameterChanges {
             active: RefCell::new(Vec::with_capacity(ids.len())),
         }
     }
+    /// Clears all points and overflow flags while retaining queue identifiers.
     pub fn clear(&self) {
         for &index in self.active.borrow().iter() {
             self.queues[index].points.borrow_mut().clear();
@@ -308,6 +336,7 @@ impl ParameterChanges {
         }
         self.active.borrow_mut().clear();
     }
+    /// Adds a point to the matching queue, returning `false` for invalid or unknown input.
     pub fn push(&self, id: u32, offset: i32, value: f64) -> bool {
         // SAFETY: id is readable and an optional output index is not requested.
         let queue = unsafe { self.addParameterData(&id, ptr::null_mut()) };
@@ -320,6 +349,9 @@ impl ParameterChanges {
         // SAFETY: Validated queue is owned for the entire block.
         (unsafe { queue.addPoint(offset, value, ptr::null_mut()) }) == kResultOk
     }
+    /// Calls `f` once for the latest point of every queue that has received a point.
+    ///
+    /// The callback runs while queue storage is borrowed and must not re-enter this collection.
     pub fn for_each_last(&self, mut f: impl FnMut(u32, f64)) {
         for &index in self.active.borrow().iter() {
             let queue = &self.queues[index];
@@ -393,6 +425,10 @@ pub unsafe fn create_instance<I: Interface>(
     unsafe { ComPtr::from_raw(object.cast::<I>()) }
 }
 
+/// Converts a fixed-width VST3 UTF-16 string buffer to a Rust `String`.
+///
+/// Conversion stops at the first NUL code unit and replaces malformed UTF-16
+/// sequences using Rust's lossy conversion rules.
 pub fn string128_to_string(value: &String128) -> String {
     let chars = value
         .iter()

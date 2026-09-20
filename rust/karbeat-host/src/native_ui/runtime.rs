@@ -30,6 +30,7 @@ thread_local! {
     static IS_UI_OWNER: Cell<bool> = const { Cell::new(false) };
 }
 
+/// GLib wake handle that coalesces scheduling of the bounded UI task drain.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlibWakeHandle;
 
@@ -40,20 +41,30 @@ impl NativeUiWakeHandle for GlibWakeHandle {
     }
 }
 
+/// Cross-thread dispatcher for closures that must execute on the GLib native UI owner.
+///
+/// Dispatch is bounded to 128 queued tasks and rejects calls made from the owner thread to avoid
+/// deadlocking a caller that then waits for its own closure.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NativeUiDispatcher;
 
 impl NativeUiDispatcher {
+    /// Ensures the process-wide bounded queue exists and schedules its first drain.
     pub fn initialize() -> Result<Self, NativeUiError> {
         ensure_queue()?;
         schedule_drain();
         Ok(Self)
     }
 
+    /// Returns whether the current thread has entered the GLib task drain.
     pub fn is_owner_thread() -> bool {
         IS_UI_OWNER.with(Cell::get)
     }
 
+    /// Enqueues a closure for native-UI execution without blocking the caller.
+    ///
+    /// Returns `QueueFull` rather than waiting when all queue slots are occupied. A queued closure
+    /// checks its cancellation state before executing and sends at most one result.
     pub fn dispatch<F, T>(&self, operation: F) -> Result<NativeUiRequest<T>, NativeUiError>
     where
         F: FnOnce() -> Result<T, NativeUiError> + Send + 'static,
@@ -91,12 +102,14 @@ impl NativeUiDispatcher {
     }
 }
 
+/// Completion and cooperative cancellation handle for one dispatched native-UI closure.
 pub struct NativeUiRequest<T> {
     status: Arc<AtomicU8>,
     response: Receiver<Result<T, NativeUiError>>,
 }
 
 impl<T> NativeUiRequest<T> {
+    /// Cancels a request only while it remains queued and reports whether cancellation won.
     pub fn cancel(&self) -> bool {
         self.status
             .compare_exchange(
@@ -108,6 +121,10 @@ impl<T> NativeUiRequest<T> {
             .is_ok()
     }
 
+    /// Waits off the UI owner for the request's result.
+    ///
+    /// A timeout cancels a still-pending request. If execution already started, this waits without
+    /// a second deadline so the result channel and closure ownership are not abandoned mid-call.
     pub fn wait(self, timeout: Duration) -> Result<T, NativeUiError> {
         if NativeUiDispatcher::is_owner_thread() {
             return Err(NativeUiError::WrongThread);
@@ -191,6 +208,9 @@ fn drain_on_ui_owner() {
     }
 }
 
+/// Installs a recurring GLib timeout callback on the native UI owner.
+///
+/// Returns [`NativeUiError::WrongThread`] when called before or outside the owner-thread drain.
 pub fn install_ui_interval(
     interval: Duration,
     callback: impl FnMut() -> ControlFlow + 'static,
@@ -201,6 +221,10 @@ pub fn install_ui_interval(
     Ok(glib::timeout_add_local(interval, callback))
 }
 
+/// RAII registration for a Unix file descriptor watched by the GLib UI loop.
+///
+/// Dropping the value removes an active source; a callback returning `Break` marks it inactive so
+/// its `SourceId` is not removed twice.
 pub struct UiFdSource {
     source_id: Option<glib::SourceId>,
     active: Arc<AtomicBool>,
@@ -216,6 +240,10 @@ impl Drop for UiFdSource {
     }
 }
 
+/// Registers `fd` for readable, error, and hang-up notifications on the GLib UI loop.
+///
+/// The callback and its allocation remain owned by GLib until the source is removed. Returning
+/// `ControlFlow::Break` stops future callbacks and transfers cleanup to GLib's destroy notifier.
 pub fn install_ui_fd_source(
     fd: c_int,
     mut callback: impl FnMut() -> ControlFlow + 'static,

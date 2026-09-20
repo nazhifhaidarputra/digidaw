@@ -265,6 +265,12 @@ pub struct SidechainCompressor {
     envelope_db: f64,       // Tracks the smoothed gain reduction
     delay_buffer: Vec<f64>, // Ring buffer for lookahead (stores main input)
     delay_index: usize,
+    delay_samples: usize,
+    cached_attack_ms: i32,
+    cached_release_ms: i32,
+    cached_delay_ms: i32,
+    attack_coefficient: f64,
+    release_coefficient: f64,
 }
 
 impl Default for SidechainCompressor {
@@ -277,17 +283,38 @@ impl SidechainCompressor {
     pub fn prepare(&mut self, sample_rate: f64) {
         self.sample_rate = sample_rate;
         self.envelope_db = 0.0;
-        self.update_delay_buffer();
+        self.cached_attack_ms = 0;
+        self.cached_release_ms = 0;
+        self.cached_delay_ms = -1;
+        self.delay_samples = 0;
+        self.delay_buffer
+            .resize((sample_rate * 0.1).ceil() as usize, 0.0);
+        self.refresh_configuration();
     }
 
-    /// Resizes the delay buffer gracefully if the user changes the delay time
     #[inline(always)]
-    fn update_delay_buffer(&mut self) {
-        let delay_samples =
-            (self.delay_ms.get() as f64 * 0.001 * self.sample_rate).max(0.0) as usize;
-
-        if self.delay_buffer.len() != delay_samples {
-            self.delay_buffer.resize(delay_samples, 0.0);
+    fn refresh_configuration(&mut self) {
+        let attack_ms = self.attack_ms.get().max(1);
+        if attack_ms != self.cached_attack_ms {
+            self.cached_attack_ms = attack_ms;
+            self.attack_coefficient =
+                (-1.0 / (f64::from(attack_ms) * 0.001 * self.sample_rate)).exp();
+        }
+        let release_ms = self.release_ms.get().max(1);
+        if release_ms != self.cached_release_ms {
+            self.cached_release_ms = release_ms;
+            self.release_coefficient =
+                (-1.0 / (f64::from(release_ms) * 0.001 * self.sample_rate)).exp();
+        }
+        let delay_ms = self.delay_ms.get().max(0);
+        if delay_ms != self.cached_delay_ms {
+            self.cached_delay_ms = delay_ms;
+            let delay_samples =
+                (f64::from(delay_ms) * 0.001 * self.sample_rate).max(0.0) as usize;
+            if delay_samples > self.delay_samples {
+                self.delay_buffer[self.delay_samples..delay_samples].fill(0.0);
+            }
+            self.delay_samples = delay_samples;
             if self.delay_index >= delay_samples {
                 self.delay_index = 0;
             }
@@ -299,14 +326,11 @@ impl SidechainCompressor {
         let main_f64 = main_input as f64;
         let sc_f64 = sidechain_input as f64;
 
-        // Ensure lookahead buffer matches current automated delay parameter
-        self.update_delay_buffer();
+        self.refresh_configuration();
 
         let threshold = self.threshold.get();
         let knee = self.knee.get();
         let ratio = self.ratio.get().max(1.0);
-        let attack_ms = self.attack_ms.get().max(1) as f64;
-        let release_ms = self.release_ms.get().max(1) as f64;
         let makeup_gain = self.makeup_gain_db.get();
         let wet_mix = self.wet_mix.get();
         let dry_mix = self.dry_mix.get();
@@ -335,26 +359,25 @@ impl SidechainCompressor {
         let gain_reduction_target_db = overshoot * (1.0 - 1.0 / ratio);
 
         // Envelope Smoothing (Ballistics)
-        let attack_coef = (-1.0 / (attack_ms * 0.001 * self.sample_rate)).exp();
-        let release_coef = (-1.0 / (release_ms * 0.001 * self.sample_rate)).exp();
-
         if gain_reduction_target_db > self.envelope_db {
             // Attack phase (compressing more)
             self.envelope_db =
-                attack_coef * self.envelope_db + (1.0 - attack_coef) * gain_reduction_target_db;
+                self.attack_coefficient * self.envelope_db
+                    + (1.0 - self.attack_coefficient) * gain_reduction_target_db;
         } else {
             // Release phase (compressing less)
             self.envelope_db =
-                release_coef * self.envelope_db + (1.0 - release_coef) * gain_reduction_target_db;
+                self.release_coefficient * self.envelope_db
+                    + (1.0 - self.release_coefficient) * gain_reduction_target_db;
         }
 
         // Lookahead Delay Line -> APPLIED TO MAIN INPUT
-        let delayed_main_sample = if self.delay_buffer.is_empty() {
+        let delayed_main_sample = if self.delay_samples == 0 {
             main_f64
         } else {
             let out = self.delay_buffer[self.delay_index];
             self.delay_buffer[self.delay_index] = main_f64;
-            self.delay_index = (self.delay_index + 1) % self.delay_buffer.len();
+            self.delay_index = (self.delay_index + 1) % self.delay_samples;
             out
         };
 

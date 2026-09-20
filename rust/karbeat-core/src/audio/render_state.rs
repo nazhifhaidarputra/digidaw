@@ -78,7 +78,6 @@ pub struct EffectPluginSnapshot {
 
 /// Audio thread's owned plugin instances - NO locks required for access
 /// This is managed via AudioCommand, NOT cloned from ApplicationState
-#[derive(Default)]
 pub struct AudioPluginState {
     /// Generator plugins stored in a compact arena.
     pub generators: Slab<AudioGeneratorInstance>,
@@ -95,9 +94,54 @@ pub struct AudioPluginState {
 
     /// Bus effect chains. Index = BusId as usize.
     pub bus_effects: Vec<Vec<AudioEffectInstance>>,
+
+    retirement: rtrb::Producer<Box<dyn AudioPlugin>>,
+}
+
+impl Default for AudioPluginState {
+    fn default() -> Self {
+        let (retirement, mut consumer) =
+            rtrb::RingBuffer::<Box<dyn AudioPlugin>>::new(1_024);
+        std::thread::spawn(move || {
+            loop {
+                match consumer.pop() {
+                    Ok(plugin) => plugin.retire(),
+                    Err(rtrb::PopError::Empty) if consumer.is_abandoned() => break,
+                    Err(rtrb::PopError::Empty) => {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                }
+            }
+        });
+        Self {
+            generators: Slab::new(),
+            generator_keys: HashMap::new(),
+            track_effects: Vec::new(),
+            master_effects: Vec::new(),
+            bus_effects: Vec::new(),
+            retirement,
+        }
+    }
 }
 
 impl AudioPluginState {
+    pub fn retire_plugin(&mut self, plugin: Box<dyn AudioPlugin>) {
+        Self::enqueue_retirement(&mut self.retirement, plugin);
+    }
+
+    fn enqueue_retirement(
+        retirement: &mut rtrb::Producer<Box<dyn AudioPlugin>>,
+        plugin: Box<dyn AudioPlugin>,
+    ) {
+        if plugin.as_any().is::<HostedProcessor>() {
+            plugin.retire();
+            return;
+        }
+        if let Err(rtrb::PushError::Full(plugin)) = retirement.push(plugin) {
+            std::mem::forget(plugin);
+        }
+    }
+
     pub fn plugin(&self, target: &crate::audio::event::PluginTarget) -> Option<&dyn AudioPlugin> {
         use crate::audio::event::PluginTarget;
         let effect = match target {
@@ -116,9 +160,8 @@ impl AudioPluginState {
     /// Insert a generator or replace the existing instance with the same ID.
     pub fn insert_generator(&mut self, instance: AudioGeneratorInstance) {
         if let Some(&key) = self.generator_keys.get(&instance.id) {
-            std::mem::replace(&mut self.generators[key], instance)
-                .plugin
-                .retire();
+            let previous = std::mem::replace(&mut self.generators[key], instance).plugin;
+            self.retire_plugin(previous);
             return;
         }
 
@@ -130,31 +173,34 @@ impl AudioPluginState {
     /// Remove a generator without shifting other arena entries.
     pub fn remove_generator(&mut self, id: GeneratorId) {
         if let Some(key) = self.generator_keys.remove(&id) {
-            self.generators.remove(key).plugin.retire();
+            let plugin = self.generators.remove(key).plugin;
+            self.retire_plugin(plugin);
         }
     }
 
     /// Remove every generator and its ID-to-arena-key mapping.
     pub fn clear_generators(&mut self) {
+        let retirement = &mut self.retirement;
         for generator in self.generators.drain() {
-            generator.plugin.retire();
+            Self::enqueue_retirement(retirement, generator.plugin);
         }
         self.generator_keys.clear();
     }
 
     /// Return hosted endpoints before replacing or dropping effect chains.
     pub fn clear_effects(&mut self) {
+        let retirement = &mut self.retirement;
         for chain in self
             .track_effects
             .iter_mut()
             .chain(self.bus_effects.iter_mut())
         {
             for effect in chain.drain(..) {
-                effect.plugin.retire();
+                Self::enqueue_retirement(retirement, effect.plugin);
             }
         }
         for effect in self.master_effects.drain(..) {
-            effect.plugin.retire();
+            Self::enqueue_retirement(retirement, effect.plugin);
         }
         self.track_effects.clear();
         self.bus_effects.clear();
@@ -215,15 +261,17 @@ impl AudioPluginState {
         if bus_id_index >= self.bus_effects.len() {
             self.bus_effects.resize_with(bus_id_index + 1, Vec::new);
         }
+        let retirement = &mut self.retirement;
         for effect in self.bus_effects[bus_id_index].drain(..) {
-            effect.plugin.retire();
+            Self::enqueue_retirement(retirement, effect.plugin);
         }
     }
 
     pub fn remove_bus(&mut self, bus_id_index: usize) {
+        let retirement = &mut self.retirement;
         if let Some(bus) = self.bus_effects.get_mut(bus_id_index) {
             for effect in bus.drain(..) {
-                effect.plugin.retire();
+                Self::enqueue_retirement(retirement, effect.plugin);
             }
         }
     }

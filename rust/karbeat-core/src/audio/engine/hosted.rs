@@ -102,7 +102,7 @@ impl AudioEngine {
                     .map(|item| std::mem::replace(&mut item.plugin, endpoint)),
             };
             if let Some(plugin) = plugin {
-                plugin.retire();
+                self.plugin_state.retire_plugin(plugin);
             }
         }
         self.recalculate_latencies();
@@ -369,11 +369,12 @@ impl AudioEngine {
             plugin,
         };
         if install.replace_missing {
-            if let Some(existing) = self
+            let retired = self
                 .get_effect_list_mut(&effect_target)
                 .and_then(|chain| chain.iter_mut().find(|item| item.id == effect_id))
-            {
-                std::mem::replace(existing, effect).plugin.retire();
+                .map(|existing| std::mem::replace(existing, effect).plugin);
+            if let Some(plugin) = retired {
+                self.plugin_state.retire_plugin(plugin);
             }
         } else {
             match effect_target {

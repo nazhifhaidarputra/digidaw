@@ -8,6 +8,11 @@ pub struct BypassDelay {
 }
 
 impl BypassDelay {
+    /// Allocates a per-channel dry delay line for the processor's reported latency.
+    ///
+    /// # Errors
+    ///
+    /// Rejects more than two channels, latency above 1,048,576 frames, or allocation failure.
     pub fn new(channels: usize, latency: usize) -> Result<Self, crate::HostError> {
         if channels > 2 || latency > 1_048_576 {
             return Err(crate::HostError::InvalidConfiguration);
@@ -28,6 +33,7 @@ impl BypassDelay {
         })
     }
 
+    /// Returns the fixed delay length in frames.
     pub fn latency(&self) -> usize {
         self.latency
     }

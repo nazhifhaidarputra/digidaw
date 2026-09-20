@@ -15,7 +15,7 @@ use std::{path::PathBuf, sync::Arc};
 /// Determines how source content responds to project tempo.
 /// Clip placement is tick-based in every mode.
 /// ======================================
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
 pub enum AudioSampleMode {
     /// Sample-based duration with no tempo stretching.
     #[default]

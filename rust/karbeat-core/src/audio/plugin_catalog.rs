@@ -6,8 +6,11 @@ use karbeat_plugins::registry::{PluginInfo, PluginRegistry};
 /// External discovery entry. The numeric ID is local to this catalog; projects persist identity.
 #[derive(Clone, Debug)]
 pub struct ExternalPluginEntry {
+    /// Process-local numeric ID used by API calls and project plugin instances.
     pub id: u32,
+    /// Scanner-provided identity, path, metadata, and plugin kind.
     pub descriptor: PluginDescriptor,
+    /// Whether the descriptor currently resolves to a usable installation.
     pub available: bool,
 }
 
@@ -20,6 +23,7 @@ pub struct PluginCatalog {
 }
 
 impl PluginCatalog {
+    /// Builds a catalog containing the registry's built-in plugins and reserves their IDs.
     pub fn new(registry: &PluginRegistry) -> Self {
         let built_in = registry.list_plugins_with_ids();
         Self {
@@ -54,10 +58,12 @@ impl PluginCatalog {
         }
     }
 
+    /// Looks up an external catalog entry by its process-local numeric ID.
     pub fn external(&self, id: u32) -> Option<&ExternalPluginEntry> {
         self.external.get(&id)
     }
 
+    /// Returns all external entries sorted by display name and then numeric ID.
     pub fn external_entries(&self) -> Vec<ExternalPluginEntry> {
         let mut entries: Vec<_> = self.external.values().cloned().collect();
         entries.sort_by(|a, b| {
@@ -69,6 +75,7 @@ impl PluginCatalog {
         entries
     }
 
+    /// Resolves a persisted format/native-ID identity to its current catalog entry.
     pub fn resolve(&self, identity: &PluginIdentity) -> Option<&ExternalPluginEntry> {
         self.identities
             .get(identity)
@@ -84,6 +91,7 @@ impl PluginCatalog {
         }
     }
 
+    /// Returns built-in and currently available external plugins sorted for display.
     pub fn list(&self) -> Vec<PluginInfo> {
         let mut plugins = self.built_in.clone();
         plugins.extend(

@@ -1,18 +1,21 @@
 use crate::HostInstanceId;
 use karbeat_plugin_api::prelude::*;
 
+/// Maximum number of native instances accepted by one host implementation.
 pub const MAX_HOSTED_INSTANCES: usize = 256;
 
 /// Format-independent owned DSP endpoint. Core retires this concrete envelope to the UI
 /// thread before destruction; its inner native processor is never cloned.
 pub struct HostedProcessor {
     inner: Box<dyn AudioPlugin + Send>,
+    /// Runtime handle used to correlate this endpoint with its native control owner.
     pub instance: HostInstanceId,
     bypass: bool,
     processing_status: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
     retirement: Option<rtrb::Producer<Box<HostedProcessor>>>,
 }
 impl HostedProcessor {
+    /// Wraps an exclusive native processor endpoint for format-independent engine use.
     pub fn new(inner: Box<dyn AudioPlugin + Send>, instance: HostInstanceId) -> Self {
         Self {
             inner,
@@ -23,6 +26,7 @@ impl HostedProcessor {
         }
     }
 
+    /// Returns the last bypass state sent through this wrapper.
     pub fn is_bypassed(&self) -> bool {
         self.bypass
     }
@@ -86,6 +90,9 @@ impl PreparedProcessor {
         })
     }
 
+    /// Consumes the transfer and returns its endpoint for installation in the audio graph.
+    ///
+    /// Returns [`HostError::InvalidTransition`] if the endpoint was already taken.
     pub fn install(mut self) -> Result<Box<dyn AudioPlugin>, crate::HostError> {
         self.processor
             .take()
@@ -112,6 +119,9 @@ impl ProcessorRetirement {
             .as_ref()
             .is_none_or(rtrb::Consumer::is_abandoned)
     }
+    /// Takes the returned endpoint when the audio side has retired it.
+    ///
+    /// The control owner must destroy the returned value on its native owner thread.
     pub fn take(&mut self) -> Option<Box<HostedProcessor>> {
         self.receiver
             .as_mut()

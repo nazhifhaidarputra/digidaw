@@ -4,6 +4,7 @@
 //! module are valid only while the corresponding [`NativeWindow`] remains alive.
 
 mod binding;
+/// Operating-system native-window implementations and the selected platform alias.
 pub mod platform;
 #[cfg(target_os = "linux")]
 mod runtime;

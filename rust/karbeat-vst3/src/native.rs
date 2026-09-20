@@ -30,7 +30,13 @@ const MIDI_MAPPING_QUERIES_PER_TICK: usize = 64;
 const MAX_PREPARE_JOBS: usize = 128;
 const _: () = assert!(MIDI_MAPPING_QUERIES_PER_TICK < MIDI_MAPPING_QUERY_COUNT);
 
+/// Native-UI-thread runtime that owns the VST3 host, editor windows, and pending lifecycle work.
+///
+/// Requests reach this owner through [`call`]. Its periodic pump advances bounded preparation
+/// and state transactions, retires returned processors, services native events, and coalesces
+/// parameter-state flushes without moving COM or window objects to worker threads.
 pub struct NativeHost {
+    /// VST3 backend whose COM objects share this runtime's native UI thread.
     pub host: Vst3PluginHost,
     native_ui: SystemNativeUi,
     window_ids: NativeWindowIdAllocator,
@@ -66,10 +72,15 @@ struct PendingPrepare {
 /// A suspended instance ready for acknowledged engine publication. The native owner retains
 /// teardown responsibility if publication fails or the transfer is abandoned.
 pub struct PreparedNativeInstance {
+    /// Runtime handle of the suspended native instance.
     pub instance: HostInstanceId,
+    /// Features reported by the prepared plugin.
     pub capabilities: HostCapabilities,
+    /// Parameter specifications discovered from the plugin controller.
     pub parameters: Vec<ParameterSpec>,
+    /// Fresh opaque component and controller state captured after preparation.
     pub state: PluginState,
+    /// Single-owner processor transfer reserved for publication to the audio engine.
     pub processor: PreparedProcessor,
 }
 
@@ -84,6 +95,10 @@ pub struct NativePrepareRequest {
     response: Receiver<Result<PreparedNativeInstance, HostError>>,
 }
 impl NativePrepareRequest {
+    /// Waits for cooperative preparation to finish off the native UI thread.
+    ///
+    /// A timeout does not abandon the in-flight native instance: once the first wait expires,
+    /// this method waits without a deadline so ownership and cleanup cannot be lost.
     pub fn wait(self, timeout: Duration) -> Result<PreparedNativeInstance, HostError> {
         if NativeUiDispatcher::is_owner_thread() {
             return Err(HostError::WrongThread);
@@ -99,10 +114,19 @@ impl NativePrepareRequest {
     }
 }
 impl NativeStateRequest {
+    /// Requests cancellation before the state transaction begins and reports whether it won.
+    ///
+    /// Cancellation is cooperative; the native owner still polls the transaction to complete
+    /// any required suspension cleanup.
     pub fn cancel(&self) -> bool {
         self.control.cancel()
     }
 
+    /// Waits for state capture, restore, or parameter flushing off the native UI thread.
+    ///
+    /// On timeout the request is cancelled if it has not started. If execution has begun, this
+    /// waits for the definitive result so suspension and resume sequencing remains owned by the
+    /// native runtime.
     pub fn wait(self, timeout: Duration) -> Result<StateResult, HostError> {
         if NativeUiDispatcher::is_owner_thread() {
             return Err(HostError::WrongThread);
@@ -143,6 +167,10 @@ impl NativeHost {
         Ok(transfer)
     }
 
+    /// Creates, prepares, optionally restores, snapshots, and transfers an instance synchronously.
+    ///
+    /// Any failure triggers instance cleanup; if cleanup also fails, both errors are preserved in
+    /// [`HostError::LifecycleCleanup`]. This method must run on the native owner.
     pub fn create_prepared(
         &mut self,
         descriptor: &PluginDescriptor,
@@ -158,6 +186,10 @@ impl NativeHost {
         result.map_err(|operation| self.cleanup_failed_creation(instance, operation))
     }
 
+    /// Queues cooperative instance preparation and returns a worker-side completion handle.
+    ///
+    /// MIDI controller mappings are resolved in bounded batches by the native pump. At most
+    /// `MAX_PREPARE_JOBS` jobs are retained; overload returns [`HostError::Busy`].
     pub fn request_prepared(
         &mut self,
         descriptor: PluginDescriptor,
@@ -218,6 +250,10 @@ impl NativeHost {
         }
     }
 
+    /// Starts one asynchronous state transaction for `id`.
+    ///
+    /// Concurrent requests for the same instance and requests beyond the bounded table capacity
+    /// return [`HostError::Busy`]. The returned handle controls cancellation and completion.
     pub fn request_state(
         &mut self,
         id: HostInstanceId,
@@ -257,6 +293,10 @@ impl NativeHost {
         );
         Ok(endpoint)
     }
+    /// Creates and attaches the plugin editor to a host-owned native window, or focuses it if open.
+    ///
+    /// Window creation remains hidden until attachment succeeds. Any attachment or presentation
+    /// failure closes the plugin view and tears down the partially created binding.
     pub fn open_editor(&mut self, id: HostInstanceId) -> Result<(), HostError> {
         if let Some(binding) = self.windows.get(&id) {
             binding.borrow_mut().request_focus()?;
@@ -338,6 +378,10 @@ impl NativeHost {
         self.editor_contexts.insert(id, context);
         Ok(())
     }
+    /// Detaches the plugin editor and then destroys its host-owned native window.
+    ///
+    /// If plugin detachment fails, the binding is restored to the open-window table so ownership
+    /// is not lost and the caller can retry.
     pub fn close_editor(&mut self, id: HostInstanceId) -> Result<(), HostError> {
         let Some(binding) = self.windows.remove(&id) else {
             return self.host.close_editor(id);
@@ -352,6 +396,9 @@ impl NativeHost {
         self.window_owners.remove(&window_id);
         Ok(())
     }
+    /// Closes the editor and destroys a native instance after pending state work has finished.
+    ///
+    /// Returns [`HostError::Busy`] while a state transaction still owns the instance.
     pub fn destroy(&mut self, id: HostInstanceId) -> Result<(), HostError> {
         if self.state_requests.contains_key(&id) {
             return Err(HostError::Busy);
@@ -362,6 +409,10 @@ impl NativeHost {
         self.parameter_flush_due.remove(&id);
         Ok(())
     }
+    /// Drains queued control/editor events and reports any bounded-queue overflow once.
+    ///
+    /// When the 4,096-event queue discarded an oldest event, a final `QueueOverflow` event is
+    /// appended for the affected instance and the overflow marker is cleared.
     pub fn take_events(&mut self) -> Vec<karbeat_host::HostEvent> {
         let mut events = std::mem::take(&mut self.events);
         if let Some(instance) = self.event_overflow.take() {
@@ -551,6 +602,10 @@ thread_local! {
 }
 static RUNTIME_READY: AtomicBool = AtomicBool::new(false);
 
+/// Reports whether the thread-local native runtime has completed lazy initialization.
+///
+/// This is an acquire load paired with the release store performed after the runtime and its
+/// periodic pump have been installed.
 pub fn available() -> bool {
     RUNTIME_READY.load(Ordering::Acquire)
 }
@@ -660,6 +715,10 @@ fn prepare_copy(
     Ok(prepared)
 }
 
+/// Restores opaque component/controller state through the native owner's state transaction.
+///
+/// The calling worker waits up to 30 seconds before requesting cooperative cancellation or
+/// waiting for an already-started transaction to complete.
 pub fn restore_state(instance: HostInstanceId, state: PluginState) -> Result<(), HostError> {
     let request =
         call(move |native| native.request_state(instance, StateOperation::Restore(state)))?;

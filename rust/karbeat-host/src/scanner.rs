@@ -14,19 +14,27 @@ use serde::{Deserialize, Serialize};
 
 use crate::{HostError, PluginDescriptor, PluginFormat, PluginIdentity};
 
+/// JSON request/response and cache schema version shared with the scanner helper.
 pub const SCANNER_PROTOCOL_VERSION: u32 = 1;
 const MAX_RESULT_BYTES: u64 = 16 * 1024 * 1024;
 
+/// Result file written by one isolated helper process after probing a module.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProbeResponse {
+    /// Scanner protocol version used to encode this response.
     pub version: u32,
+    /// Valid plugin classes discovered in the requested module.
     pub plugins: Vec<PluginDescriptor>,
+    /// Helper-side load or enumeration failure, if probing could not complete.
     pub error: Option<String>,
 }
 
+/// Roots and per-module timeout used by a discovery scan.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanSettings {
+    /// Directory trees searched recursively for `.vst3` modules.
     pub directories: Vec<PathBuf>,
+    /// Maximum seconds allowed for each isolated helper process.
     pub timeout_seconds: u64,
 }
 
@@ -39,17 +47,25 @@ impl Default for ScanSettings {
     }
 }
 
+/// Cached result for one canonical module path and filesystem fingerprint.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CachedModule {
+    /// Hash of canonical paths, sizes, and modification times in the module bundle.
     pub fingerprint: u64,
+    /// Last descriptors successfully returned for this module.
     pub plugins: Vec<PluginDescriptor>,
+    /// Most recent probe failure; quarantined modules are excluded from the catalog.
     pub quarantine: Option<String>,
 }
 
+/// Persisted discovery cache and duplicate-installation preference table.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanCache {
+    /// Cache schema version; incompatible files are discarded on load.
     pub version: u32,
+    /// Canonical module path to cached fingerprint and descriptors.
     pub modules: HashMap<PathBuf, CachedModule>,
+    /// Format/native-ID key to the selected installation path.
     pub preferred_locations: HashMap<String, PathBuf>,
 }
 
@@ -92,6 +108,7 @@ impl ScanCache {
         plugins
     }
 
+    /// Loads a cache, returning an empty cache for a missing file or incompatible version.
     pub fn load(path: &Path) -> Result<Self, HostError> {
         if !path.exists() {
             return Ok(Self::default());
@@ -104,6 +121,7 @@ impl ScanCache {
         Ok(cache)
     }
 
+    /// Atomically persists the cache through a synchronized temporary file in the same directory.
     pub fn save(&self, path: &Path) -> Result<(), HostError> {
         let parent = path
             .parent()
@@ -118,19 +136,29 @@ impl ScanCache {
     }
 }
 
+/// Progress snapshot emitted after each discovered module is handled.
 #[derive(Clone, Debug)]
 pub struct ScanProgress {
+    /// Number of module paths handled so far.
     pub completed: usize,
+    /// Total module paths found before probing began.
     pub total: usize,
+    /// Number of de-duplicated plugin classes currently accepted.
     pub discovered: usize,
+    /// Module path associated with this update.
     pub path: PathBuf,
+    /// Probe, fingerprint, or quarantine diagnostic for this module.
     pub error: Option<String>,
 }
 
+/// Aggregate result of a scan, including usable descriptors and per-module failures.
 #[derive(Clone, Debug, Default)]
 pub struct ScanResult {
+    /// De-duplicated plugin descriptors selected for the catalog.
     pub plugins: Vec<PluginDescriptor>,
+    /// Module paths that failed fingerprinting or are currently quarantined.
     pub failures: Vec<(PathBuf, String)>,
+    /// Whether cancellation stopped the scan before all modules were handled.
     pub cancelled: bool,
 }
 
@@ -155,6 +183,10 @@ pub fn scanner_executable() -> Result<PathBuf, HostError> {
     Ok(path)
 }
 
+/// Recursively discovers canonical `.vst3` modules beneath the supplied roots.
+///
+/// Directory entries are sorted for deterministic traversal, canonical paths prevent cycles and
+/// duplicates, missing roots are ignored, and cancellation stops traversal without an error.
 pub fn discover_modules(
     directories: &[PathBuf],
     cancelled: &AtomicBool,
@@ -196,6 +228,10 @@ pub fn discover_modules(
     Ok(modules)
 }
 
+/// Hashes a module's canonical paths, file sizes, and modification times recursively.
+///
+/// The fingerprint detects bundle changes without reading plugin binaries into memory. Directory
+/// traversal is sorted and canonical-path tracking prevents cycles.
 pub fn module_fingerprint(path: &Path) -> Result<u64, HostError> {
     fn visit(
         path: &Path,

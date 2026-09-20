@@ -14,14 +14,21 @@ use self::{
     x11::{X11Backend, X11Window},
 };
 
+/// Linux native UI owner that selects Wayland or X11 per editor window.
+///
+/// Both backends are initialized opportunistically; capabilities report whichever display
+/// connections succeeded, and every operation verifies the thread that created this owner.
 pub struct LinuxNativeUi {
     owner: ThreadId,
     x11: Option<X11Backend>,
     wayland: Option<WaylandBackend>,
 }
 
+/// Host-owned Linux editor window delegated to its selected display protocol.
 pub enum LinuxNativeWindow {
+    /// X11 window, also used for plugins that require XEmbed/XWayland parenting.
     X11(X11Window),
+    /// Native Wayland surface and toplevel.
     Wayland(WaylandWindow),
 }
 

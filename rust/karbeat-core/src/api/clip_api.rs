@@ -3,6 +3,7 @@ use crate::core::history::ProjectAction;
 use crate::core::project::clip::{Clip, ClipSourceType, ResizeEdge};
 use crate::shared::id::*;
 
+/// Resolves a clip through its track and maps the borrowed clip value.
 pub fn get_clip<T, F>(
     ctx: &DawContext,
     track_id: TrackId,
@@ -20,6 +21,7 @@ where
     Ok(mapper(&clip))
 }
 
+/// Creates a clip on a compatible track, records history, and updates the render graph.
 pub fn add_clip(
     ctx: &mut DawContext,
     source_id: Option<u32>,
@@ -50,6 +52,7 @@ pub fn add_clip(
 }
 
 #[inline(always)]
+/// Renames an existing clip and records the reversible project mutation.
 pub fn rename_clip(ctx: &mut DawContext, clip_id: ClipId, new_name: &str) -> anyhow::Result<()> {
     let app = &mut ctx.app_state;
 
@@ -60,6 +63,7 @@ pub fn rename_clip(ctx: &mut DawContext, clip_id: ClipId, new_name: &str) -> any
     Ok(())
 }
 
+/// Removes a clip from its track and project pool, recording enough state for undo.
 pub fn delete_clip(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -80,6 +84,7 @@ pub fn delete_clip(
     Ok(deleted_clip)
 }
 
+/// Moves a clip to a compatible track and start tick as one reversible operation.
 pub fn move_clip(
     ctx: &mut DawContext,
     source_track_id: TrackId,
@@ -114,6 +119,7 @@ pub fn move_clip(
     Ok(modified_clip)
 }
 
+/// Changes a clip boundary while preserving the clip type's source/pattern semantics.
 pub fn resize_clip(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -143,6 +149,7 @@ pub fn resize_clip(
     Ok(modified_clip)
 }
 
+/// Splits a clip at an interior project tick and returns the newly created right-hand clip.
 pub fn slice_clip(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -180,6 +187,7 @@ pub fn slice_clip(
     Ok((c1, c2))
 }
 
+/// Deletes selected clips in one history entry and returns the clips actually removed.
 pub fn batch_delete_clips(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -210,6 +218,7 @@ pub fn batch_delete_clips(
     Ok(())
 }
 
+/// Applies a common track/tick movement to selected clips as one reversible mutation.
 pub fn batch_move_clips(
     ctx: &mut DawContext,
     source_track_id: TrackId,
@@ -253,6 +262,7 @@ pub fn batch_move_clips(
     Ok(modified_clips)
 }
 
+/// Resizes selected clips as one reversible mutation and republishes the track graph once.
 pub fn batch_resize_clips(
     ctx: &mut DawContext,
     track_id: TrackId,

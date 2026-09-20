@@ -5,6 +5,7 @@ use crate::{
     core::project::{DawSource, GeneratorId, Pattern, PatternId},
 };
 
+/// Returns a cloned MIDI pattern or an error when the identifier is absent.
 pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<Pattern> {
     let pattern_ref = ctx
         .app_state
@@ -34,6 +35,7 @@ where
     Ok(patterns)
 }
 
+/// Renames a MIDI pattern, records history, and republishes the track graph.
 pub fn rename_pattern(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -63,6 +65,7 @@ pub fn rename_pattern(
     Ok(())
 }
 
+/// Toggles isolated preview playback of a pattern through a selected generator.
 pub fn play_pattern_preview(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -101,6 +104,7 @@ pub fn stop_pattern_preview_local(
     ])
 }
 
+/// Stops isolated pattern playback and returns transport to its normal mode.
 pub fn stop_pattern_preview(ctx: &mut DawContext) -> anyhow::Result<()> {
     // Send commands to stop playing and switch back to Song mode
     ctx.try_send_audio_command_chain(vec![

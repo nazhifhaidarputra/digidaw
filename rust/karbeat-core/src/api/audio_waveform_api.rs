@@ -25,6 +25,7 @@ where
     Ok(map)
 }
 
+/// Maps waveform data for one audio clip after resolving its source from the project pool.
 pub fn get_audio_waveform_for_clip(
     ctx: &DawContext,
     audio_source_id: &AudioSourceId,
@@ -37,6 +38,9 @@ pub fn get_audio_waveform_for_clip(
     Ok(audio_waveform.clone())
 }
 
+/// Collects mapped waveform data for audio clips belonging to one track.
+///
+/// Returns an error when the track is missing; non-audio or unresolved clips are omitted.
 pub fn get_audio_waveform_for_clip_only_in_specific_track<C, U, M>(
     ctx: &DawContext,
     track_id: &TrackId,
@@ -71,6 +75,7 @@ where
     Some(return_map)
 }
 
+/// Collects mapped waveform data for every resolvable audio clip across all tracks.
 pub fn get_audio_waveform_for_clip_all_available_in_tracks<C, U, M>(
     ctx: &DawContext,
     mapper: M,
@@ -105,6 +110,7 @@ where
     Ok(return_col)
 }
 
+/// Maps every imported audio source in the project into a caller-selected collection.
 pub fn get_audio_source_list<C, U, M>(ctx: &DawContext, mapper: M) -> anyhow::Result<C>
 where
     M: Fn(u32, &AudioWaveform) -> U,
@@ -119,6 +125,9 @@ where
         .collect())
 }
 
+/// Imports an audio file at the project's sample rate and stores it in the source pool.
+///
+/// The returned identifier can be referenced by audio clips and preview APIs.
 pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result<AudioSourceId> {
     let normalized_path = std::fs::canonicalize(file_path)
         .with_context(|| format!("Failed to resolve audio file path: {file_path}"))?;
@@ -154,6 +163,7 @@ pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result
     Ok(id)
 }
 
+/// Resolves a UI `u32` source key, validates it, and maps the corresponding waveform.
 pub fn get_audio_waveform<T, F>(ctx: &DawContext, source_id: u32, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&AudioWaveform) -> T,

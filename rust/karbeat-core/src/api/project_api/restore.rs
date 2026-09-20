@@ -5,7 +5,7 @@ use crate::{
         missing_plugin::MissingPlugin,
         render_state::AudioGraphState,
     },
-    commands::{AudioCommand, EffectTarget, MixerChannelSeed},
+    commands::{AudioCommand, EffectTarget, MixerChannelSeed, PreparedPluginTelemetry},
     context::DawContext,
     core::project::{
         ApplicationState, GeneratorInstanceType, mixer::MixerChannel, plugin::PluginInstance,
@@ -16,6 +16,7 @@ use hashbrown::HashMap;
 use indexmap::IndexMap;
 use karbeat_host::{PluginInstanceManager, PluginKind, ProcessingConfig};
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
+use karbeat_plugin_api::types::BusConfig;
 use std::time::{Duration, Instant};
 
 pub(super) fn plugins(app: &ApplicationState) -> Vec<(PluginTarget, &PluginInstance)> {
@@ -92,6 +93,8 @@ pub(super) fn hydration_command(
     app: &ApplicationState,
     registry: &PluginRegistry,
     missing: &HashMap<PluginTarget, String>,
+    sample_rate: u32,
+    block_size: usize,
 ) -> AudioCommand {
     let mut generators = IndexMap::new();
     let mut track_effects: IndexMap<_, IndexMap<_, _>> = IndexMap::new();
@@ -101,7 +104,22 @@ pub(super) fn hydration_command(
         let Some(factory) = factory(plugin, target, registry, missing) else {
             continue;
         };
-        let entry = (plugin.clone(), factory);
+        let mut prepared = factory();
+        if !plugin.plugin_state.is_empty() {
+            prepared.set_state(&plugin.plugin_state);
+        }
+        for spec in &plugin.parameter_specs {
+            prepared.set_parameter(spec.id, spec.value as f32);
+        }
+        prepared.prepare(sample_rate as f32, block_size.max(512));
+        let bus = BusConfig {
+            name: "Main".into(),
+            channel_count: 2,
+            is_optional: false,
+        };
+        prepared.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
+        let telemetry = PreparedPluginTelemetry::new(prepared.as_ref());
+        let entry = (plugin.registry_id, prepared, telemetry);
         match target {
             PluginTarget::Generator(id) => {
                 generators.insert(id, entry);
@@ -232,7 +250,13 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
     let mut commands = vec![
         AudioCommand::StopAndReset,
         AudioCommand::ReplaceFullGraph { graph },
-        hydration_command(&staged, &ctx.plugin_registry, &missing),
+        hydration_command(
+            &staged,
+            &ctx.plugin_registry,
+            &missing,
+            sample_rate,
+            ctx.audio_runtime_settings.read().requested_dsp.block_size as usize,
+        ),
     ];
     commands.extend(installs);
     for (track, channel) in &staged.mixer.channels {

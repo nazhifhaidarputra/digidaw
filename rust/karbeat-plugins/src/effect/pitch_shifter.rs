@@ -20,6 +20,7 @@ pub struct PitchShifter {
     channels: usize,
     sample_rate: f32,
     reported_latency_samples: u32,
+    latency_pitch_ratio: f32,
 }
 
 impl Default for PitchShifter {
@@ -49,6 +50,7 @@ impl AudioPlugin for PitchShifter {
         self.sample_rate = sample_rate;
         self.pitch_shift_engine.prepare(sample_rate, self.channels);
         self.reported_latency_samples = self.latency_samples();
+        self.latency_pitch_ratio = self.pitch_shift_engine.pitch_ratio.get();
     }
 
     fn set_io_layout(&mut self, inputs: &[BusConfig], _outputs: &[BusConfig]) {
@@ -76,6 +78,11 @@ impl AudioPlugin for PitchShifter {
     }
 
     fn has_latency_changed(&mut self) -> bool {
+        let pitch_ratio = self.pitch_shift_engine.pitch_ratio.get();
+        if pitch_ratio == self.latency_pitch_ratio {
+            return false;
+        }
+        self.latency_pitch_ratio = pitch_ratio;
         let current = self.latency_samples();
         let changed = current != self.reported_latency_samples;
         self.reported_latency_samples = current;

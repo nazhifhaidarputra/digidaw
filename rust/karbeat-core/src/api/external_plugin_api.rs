@@ -100,6 +100,10 @@ fn channel_mut<'a>(
     }
 }
 
+/// Prepares an external instrument, creates its MIDI track, and installs it on the audio thread.
+///
+/// Project state is staged and becomes visible only after the engine accepts the installation and
+/// the native instance resumes. Failure leaves the live project unchanged.
 pub fn add_instrument(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<AudioTrack> {
     let (prepared, config, plugin) = prepare(ctx, registry_id, PluginKind::Instrument)?;
     let mut staged = ctx.app_state.clone();
@@ -138,6 +142,10 @@ pub fn add_instrument(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<
     Ok(track)
 }
 
+/// Prepares and appends an external effect to the selected mixer channel.
+///
+/// The staged project mutation is committed only after the audio thread accepts the corresponding
+/// hosted processor and native activation succeeds.
 pub fn add_effect(
     ctx: &mut DawContext,
     target: EffectTarget,
@@ -311,6 +319,7 @@ fn plugin_instance_mut(ctx: &mut DawContext, target: PluginTarget) -> Option<&mu
     }
 }
 
+/// Returns a clone of the external descriptor for `target`, or `None` for missing/built-in plugins.
 pub fn descriptor(
     ctx: &DawContext,
     target: PluginTarget,
@@ -324,6 +333,7 @@ pub fn descriptor(
     )
 }
 
+/// Queries the live native instance's supported host capabilities.
 pub fn capabilities(
     ctx: &mut DawContext,
     target: PluginTarget,
@@ -334,6 +344,7 @@ pub fn capabilities(
     })?)
 }
 
+/// Opens an external plugin's native editor after assigning a project-derived window context label.
 pub fn open_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
     let id = super::project_api::hosted_instance(ctx, target)?;
     let context = match target {
@@ -370,6 +381,7 @@ pub fn open_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result
     })?)
 }
 
+/// Closes the native editor associated with the targeted external plugin instance.
 pub fn close_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
     let id = super::project_api::hosted_instance(ctx, target)?;
     Ok(karbeat_vst3::native::call(move |owner| {
@@ -377,6 +389,7 @@ pub fn close_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Resul
     })?)
 }
 
+/// Sets a normalized parameter value through the external plugin's main-thread controller.
 pub fn set_parameter(
     ctx: &mut DawContext,
     target: PluginTarget,
@@ -439,6 +452,9 @@ fn remove_prepared(
     Ok(())
 }
 
+/// Removes an external effect after the audio thread has retired its hosted processor.
+///
+/// The project copy is staged first and committed only after removal succeeds.
 pub fn remove_effect(
     ctx: &mut DawContext,
     target: EffectTarget,
@@ -479,6 +495,7 @@ pub(crate) fn track_targets(ctx: &DawContext, track: crate::shared::TrackId) -> 
     targets
 }
 
+/// Removes a track and all hosted plugins owned by it as one staged lifecycle operation.
 pub fn delete_track(
     ctx: &mut DawContext,
     track: crate::shared::TrackId,
@@ -490,6 +507,7 @@ pub fn delete_track(
     Ok(removed)
 }
 
+/// Formats a normalized parameter value using the external plugin controller's display rules.
 pub fn parameter_text(
     ctx: &mut DawContext,
     target: PluginTarget,
@@ -502,6 +520,7 @@ pub fn parameter_text(
     })?)
 }
 
+/// Parses plugin-specific display text into a normalized parameter value.
 pub fn parse_parameter(
     ctx: &mut DawContext,
     target: PluginTarget,
@@ -514,6 +533,10 @@ pub fn parse_parameter(
     })?)
 }
 
+/// Converts between a parameter's plain and normalized domains.
+///
+/// When `to_normalized` is true, `value` is interpreted as plain; otherwise it is interpreted as
+/// normalized.
 pub fn convert_parameter(
     ctx: &mut DawContext,
     target: PluginTarget,
@@ -531,10 +554,15 @@ pub fn convert_parameter(
     })?)
 }
 
+/// Returns the recorded hosting failure for an external plugin target, if one is awaiting recovery.
 pub fn failure(ctx: &DawContext, target: PluginTarget) -> Option<String> {
     ctx.external_plugin_failures.get(&target).cloned()
 }
 
+/// Recreates and reinstalls an external plugin previously marked as failed.
+///
+/// The saved state and bypass flag are restored, and the failure marker is removed only after the
+/// replacement has been accepted and activated.
 pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
     anyhow::ensure!(
         ctx.external_plugin_failures.contains_key(&target),
@@ -741,6 +769,7 @@ pub(crate) fn bus_targets(ctx: &DawContext, bus: crate::shared::BusId) -> Vec<Pl
         .unwrap_or_default()
 }
 
+/// Removes a mixer bus and retires every external effect hosted by that bus before committing state.
 pub fn delete_bus(ctx: &mut DawContext, bus: crate::shared::BusId) -> anyhow::Result<()> {
     let targets = bus_targets(ctx, bus);
     let mut staged = ctx.app_state.clone();

@@ -18,6 +18,9 @@ impl Default for ProcessingGate {
 }
 
 impl ProcessingGate {
+    /// Transitions a suspended processor to the ready state.
+    ///
+    /// Release ordering publishes UI-side preparation to the next successful audio entry.
     pub fn resume(&self) -> Result<(), HostError> {
         self.0
             .compare_exchange(SUSPENDED, READY, Ordering::Release, Ordering::Relaxed)
@@ -25,6 +28,10 @@ impl ProcessingGate {
             .map_err(|_| HostError::InvalidTransition)
     }
 
+    /// Requests suspension without waiting for an in-flight audio block.
+    ///
+    /// Returns [`HostError::Busy`] after marking an active block as suspending; the control owner
+    /// must retry on a later iteration. Success guarantees no audio guard owns the processor.
     pub fn suspend(&self) -> Result<(), HostError> {
         loop {
             match self.0.load(Ordering::Acquire) {
@@ -65,11 +72,13 @@ impl ProcessingGate {
             .map(|_| ProcessingGuard(self))
     }
 
+    /// Returns whether suspension has been acknowledged and control-side DSP access is exclusive.
     pub fn is_suspended(&self) -> bool {
         self.0.load(Ordering::Acquire) == SUSPENDED
     }
 }
 
+/// Audio-block ownership token that publishes readiness or suspension when dropped.
 pub struct ProcessingGuard<'a>(&'a ProcessingGate);
 
 impl Drop for ProcessingGuard<'_> {

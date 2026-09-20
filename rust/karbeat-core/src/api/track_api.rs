@@ -5,6 +5,7 @@ use crate::core::project::track::RemovedTrackType;
 use crate::shared::id::*;
 use karbeat_utils::color::Color;
 
+/// Looks up a track and maps it while borrowed from project state.
 pub fn get_track<T, F>(ctx: &DawContext, track_id: TrackId, mapper: F) -> Option<T>
 where
     F: Fn(&AudioTrack) -> T,
@@ -13,6 +14,7 @@ where
     Some(mapper(track))
 }
 
+/// Creates a MIDI track with an assigned generator identifier and updates the graph.
 pub fn add_midi_track_with_generator_id(
     ctx: &mut DawContext,
     registry_id: u32,
@@ -24,17 +26,20 @@ pub fn add_midi_track_with_generator_id(
         .app_state
         .add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
 
-    let _ = ctx.send_audio_command(AudioCommand::AddGenerator {
+    let (plugin, telemetry) = ctx.prepare_plugin_install(generator_plugin_factory);
+    let _ = ctx.send_audio_command(AudioCommand::InstallGenerator {
         generator_id: gen_id,
         track_id: audio_track.id,
         registry_id,
-        plugin_factory: generator_plugin_factory,
+        plugin,
+        telemetry: Some(telemetry),
     });
 
     ctx.broadcast_track_graph();
     Ok(audio_track)
 }
 
+/// Renames a track and records the previous name for undo.
 pub fn change_track_name(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -52,6 +57,7 @@ pub fn change_track_name(
     Ok(())
 }
 
+/// Changes a track color and records the previous color for undo.
 pub fn change_track_color(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -68,12 +74,14 @@ pub fn change_track_color(
     Ok(())
 }
 
+/// Creates an audio track, records its insertion, and publishes the updated track graph.
 pub fn add_new_audio_track(ctx: &mut DawContext) -> AudioTrack {
     let track = ctx.app_state.add_new_audio_track();
     ctx.broadcast_track_graph();
     track
 }
 
+/// Maps all tracks in project storage order into a caller-selected collection.
 pub fn get_tracks<C, U, M>(ctx: &DawContext, mapper: M) -> C
 where
     M: Fn(u32, &AudioTrack) -> U,
@@ -100,6 +108,7 @@ where
         .collect())
 }
 
+/// Removes a track and its dependent project/audio state, returning its track type.
 pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
     if super::external_plugin_api::track_targets(ctx, track_id)
         .iter()

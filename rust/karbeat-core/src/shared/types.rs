@@ -46,16 +46,19 @@ macro_rules! define_bounded_newtype {
         }
 
         impl $name {
+            /// Creates a value clamped to this type's inclusive bounds.
             $vis fn new(value: $ty) -> Self {
                 let mut instance = Self(value);
                 instance.set();
                 instance
             }
 
+            /// Returns the validated inner scalar.
             $vis fn get(&self) -> $ty {
                 self.0
             }
 
+            /// Clamps the current inner scalar back to this type's inclusive bounds.
             $vis fn set(&mut self) {
                 self.0 = self.0.clamp($min, $max);
             }
@@ -70,11 +73,13 @@ macro_rules! define_bounded_newtype {
 }
 
 define_bounded_newtype!(
+    /// Signed fraction clamped to the inclusive `[-1.0, 1.0]` range.
     #[derive(Clone, Debug, Copy, PartialEq, PartialOrd, Default)]
     pub struct FractionF32(f32), min: -1.0, max: 1.0
 );
 
 define_bounded_newtype!(
+    /// Unit ratio clamped to the inclusive `[0.0, 1.0]` range.
     #[derive(Clone, Debug, Copy, PartialEq, PartialOrd, Default)]
     pub struct RatioF32(f32), min: 0.0, max: 1.0
 );

@@ -5,6 +5,9 @@ pub struct ControlTransfer<T: Send> {
 }
 
 impl<T: Send> ControlTransfer<T> {
+    /// Creates a payload transfer and its control-thread retirement receiver.
+    ///
+    /// The one-slot queue reserves return capacity before the payload can enter DSP ownership.
     pub fn new(payload: T) -> (Self, ControlRetirement<T>) {
         let (sender, receiver) = rtrb::RingBuffer::new(1);
         (
@@ -19,6 +22,7 @@ impl<T: Send> ControlTransfer<T> {
         )
     }
 
+    /// Borrows the in-transit payload until this transfer is dropped and returns ownership.
     pub fn get_mut(&mut self) -> Option<&mut T> {
         self.payload.as_deref_mut()
     }
@@ -41,6 +45,10 @@ pub struct ControlRetirement<T: Send> {
 }
 
 impl<T: Send> ControlRetirement<T> {
+    /// Polls for the returned payload and destroys it on the control owner.
+    ///
+    /// Returns `true` only after the payload was collected and the producer was abandoned, so the
+    /// retirement record can be removed safely.
     pub fn collect(&mut self) -> bool {
         if let Some(receiver) = &mut self.receiver {
             if let Ok(payload) = receiver.pop() {

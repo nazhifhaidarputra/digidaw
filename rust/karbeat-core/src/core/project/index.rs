@@ -19,6 +19,7 @@ use crate::core::project::{automation::AutomationLane, mixer::MixerState};
 pub use crate::shared::*;
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
+/// Complete serializable project model plus non-persisted session state.
 pub struct ApplicationState {
     // Things store inside ApplicationState
     // - Project Metadata
@@ -28,27 +29,37 @@ pub struct ApplicationState {
     //
     // - File explorer to access resources
     // - Audio related stuff (device, source, playback etc)
+    /// Project title, authorship, format version, and descriptive metadata.
     pub metadata: ProjectMetadata,
+    /// Mixer channels, buses, effects, and routing graph.
     pub mixer: MixerState,
+    /// Persisted tempo and transport settings.
     pub transport: TransportState,
+    /// Imported audio waveforms keyed by stable source IDs.
     pub asset_library: AssetLibrary,
 
     // All musical data lives here. The timeline just references these.
+    /// Globally owned MIDI patterns referenced by clips.
     pub pattern_pool: SlotMap<PatternId, Pattern>,
 
     // Generator sources
+    /// Globally owned sound generators referenced by tracks.
     pub generator_pool: SlotMap<GeneratorId, GeneratorInstance>,
 
     // Tracks contain Clips, but Clips are just "Containers"
+    /// Arrangement tracks keyed by stable project IDs.
     pub tracks: SlotMap<TrackId, AudioTrack>,
 
     // Automation lanes pool (lives at the same level as tracks/patterns/generators)
+    /// Globally owned automation lanes.
     pub automation_pool: SlotMap<AutomationId, AutomationLane>,
 
     // The Generators (LFOs, Macro Knobs, Peak Controllers)
+    /// Globally owned modulation generators.
     pub modulation_sources: SlotMap<ModulationId, ModulationSource>,
 
     // The Cables (Connects a Source to a Target)
+    /// Ordered connections from modulation sources to automation targets.
     pub modulation_links: SlotMap<ModulationLinkId, ModulationLinkForOrderedLaneView>,
 
     /// Canonical clip storage. Tracks contain only ordered `ClipId` handles.
@@ -57,17 +68,19 @@ pub struct ApplicationState {
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
     #[serde(skip)]
+    /// Session audio configuration retained across blank-project resets and omitted from project files.
     pub audio_config: AudioHardwareConfig,
 
     #[serde(skip)]
+    /// Session clipboard omitted from project serialization.
     pub clipboard: ClipboardContent,
 }
 
+/// Reserved marker for future peak-controller project state.
 pub struct PeakControlMod {}
 
-// pub struct
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
+/// Content reference held by a timeline clip.
 pub enum DawSource {
     /// Points to an AudioWaveform
     Audio(AudioSourceId),
@@ -82,26 +95,42 @@ pub enum DawSource {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// User-editable and format-identifying project metadata.
 pub struct ProjectMetadata {
+    /// Project title; validation requires a nonblank value of at most 120 characters.
     pub name: String,
+    /// Author or artist, limited to 120 characters during validation.
     pub author: String,
     #[serde(default)]
+    /// Free-form project description, limited to 4,000 characters during validation.
     pub description: String,
     #[serde(default)]
+    /// Genre label, limited to 80 characters during validation.
     pub genre: String,
+    /// Project format/application version label, limited to 64 characters during validation.
     pub version: String,
+    /// UTC timestamp assigned when metadata is first created.
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
+/// Validation failure for user-editable project metadata.
 pub enum ProjectMetadataError {
+    /// The trimmed project title is empty.
     #[error("Project title cannot be empty")]
     EmptyTitle,
+    /// A Unicode character count exceeds its field-specific maximum.
     #[error("Project metadata field '{field}' exceeds {maximum} characters")]
-    FieldTooLong { field: &'static str, maximum: usize },
+    FieldTooLong {
+        /// Stable field label used in the error message.
+        field: &'static str,
+        /// Maximum accepted Unicode character count.
+        maximum: usize,
+    },
 }
 
 impl ProjectMetadata {
+    /// Trims every text field and enforces project metadata length constraints.
     pub fn normalize_and_validate(mut self) -> Result<Self, ProjectMetadataError> {
         self.name = self.name.trim().to_string();
         self.author = self.author.trim().to_string();
@@ -191,15 +220,24 @@ mod project_metadata_tests {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+/// One MIDI note event stored inside a pattern.
 pub struct Note {
+    /// Stable pattern-local note identity.
     pub id: NoteId,
+    /// Note-on position in 960-PPQN ticks.
     pub start_tick: u64,
+    /// Note length in ticks.
     pub duration: u64,
-    pub key: u8, // 21 - 127 MIDI key (Keep LB at A0)
+    /// MIDI key number; editing APIs conventionally constrain this to piano range 21–127.
+    pub key: u8,
+    /// MIDI note-on velocity.
     pub velocity: u8,
 
+    /// Playback probability used by note scheduling.
     pub probability: f32,
+    /// Signed timing offset applied during playback.
     pub micro_offset: i8,
+    /// Whether playback scheduling suppresses this note.
     pub mute: bool,
 }
 
@@ -236,17 +274,25 @@ impl Ord for Note {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+/// Project-owned imported audio sources.
 pub struct AssetLibrary {
+    /// Shared waveforms keyed by stable audio source ID.
     pub source_map: SlotMap<AudioSourceId, Arc<AudioWaveform>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Session-level audio endpoint and DSP configuration used by project operations.
 pub struct AudioHardwareConfig {
+    /// Selected input device display name.
     pub selected_input_device: String,
+    /// Selected output device display name.
     pub selected_output_device: String,
+    /// DSP sample rate in frames per second.
     pub sample_rate: u32,
+    /// DSP block size in frames.
     pub buffer_size: u32,
-    pub cpu_load: f32, // For UI monitoring
+    /// Most recently observed CPU load for UI monitoring.
+    pub cpu_load: f32,
 }
 
 impl Default for AudioHardwareConfig {

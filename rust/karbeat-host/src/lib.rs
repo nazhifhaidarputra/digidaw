@@ -72,4 +72,5 @@ pub use processor::*;
 pub use state::*;
 pub use traits::*;
 pub use types::*;
+/// Latency-compensated dry-signal processing used while a hosted processor is bypassed or suspended.
 pub mod bypass;

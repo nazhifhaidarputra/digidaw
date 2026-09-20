@@ -1,4 +1,4 @@
-use std::{num::NonZero, sync::mpsc};
+use std::sync::mpsc;
 
 use rtrb::{Consumer, Producer};
 

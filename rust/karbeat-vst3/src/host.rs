@@ -15,6 +15,11 @@ use vst3::{
     Steinberg::{FUnknown, IPluginFactory3, IPluginFactory3Trait, Vst::IEditControllerTrait},
 };
 
+/// UI-thread owner of loaded VST3 modules, instances, controllers, editors, and host services.
+///
+/// The host records its construction thread and rejects instance operations from any other
+/// thread. Only the exclusive [`HostedProcessor`] endpoint produced for an instance crosses to
+/// audio processing; COM lifecycle and editor work remain with this owner.
 pub struct Vst3PluginHost {
     owner: ThreadId,
     context: ComWrapper<Vst3HostContext>,
@@ -96,11 +101,20 @@ impl Vst3PluginHost {
         self.instance_mut(id)?
             .advance_prepare(job, max_mapping_queries)
     }
+    /// Dispatches pending VST3 run-loop timers and file-descriptor callbacks.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::WrongThread`] unless called from the host's owner thread.
     pub fn pump(&self) -> Result<(), HostError> {
         self.check_thread()?;
         self.context.run_loop.pump();
         Ok(())
     }
+    /// Installs the callback used when the plugin asks its host frame to resize the native window.
+    ///
+    /// The editor is created lazily if necessary. The callback's boolean result is returned to
+    /// the plugin as acceptance or rejection of the requested dimensions.
     pub fn set_editor_resize_handler(
         &mut self,
         id: HostInstanceId,
@@ -114,9 +128,20 @@ impl Vst3PluginHost {
             .set_resize_handler(handler);
         Ok(())
     }
+    /// Returns the discovery descriptor retained for `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a wrong-thread or unknown-instance error when the instance cannot be accessed.
     pub fn descriptor(&self, id: HostInstanceId) -> Result<&PluginDescriptor, HostError> {
         Ok(&self.instance(id)?.descriptor)
     }
+    /// Returns the processing configuration used to prepare `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::InvalidTransition`] before preparation has stored a configuration,
+    /// in addition to wrong-thread and unknown-instance errors.
     pub fn processing_config(&self, id: HostInstanceId) -> Result<&ProcessingConfig, HostError> {
         self.instance(id)?
             .config

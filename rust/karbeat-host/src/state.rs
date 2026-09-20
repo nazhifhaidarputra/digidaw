@@ -10,16 +10,24 @@ const EXECUTING: u8 = 1;
 const CANCELLED: u8 = 2;
 const COMPLETED: u8 = 3;
 
+/// Native state work executed only after audio processing is suspended.
 pub enum StateOperation {
+    /// Capture component and optional controller state.
     Capture,
+    /// Apply pending control-side parameter values without serializing state.
     FlushParameters,
+    /// Restore the supplied opaque plugin state.
     Restore(PluginState),
 }
 
 #[derive(Debug)]
+/// Successful completion value produced by a [`StateTransaction`].
 pub enum StateResult {
+    /// Freshly captured opaque state.
     Captured(PluginState),
+    /// Pending parameters were flushed while suspended.
     ParametersFlushed,
+    /// Supplied state was restored.
     Restored,
 }
 
@@ -27,9 +35,13 @@ pub enum StateResult {
 #[derive(Clone)]
 pub struct StateTransactionControl(Arc<AtomicU8>);
 impl StateTransactionControl {
+    /// Returns whether cancellation was accepted before native execution started.
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Acquire) == CANCELLED
     }
+    /// Atomically cancels a still-waiting transaction.
+    ///
+    /// Returns `false` once execution, cancellation, or completion has already won the race.
     pub fn cancel(&self) -> bool {
         self.0
             .compare_exchange(WAITING, CANCELLED, Ordering::AcqRel, Ordering::Acquire)
@@ -48,6 +60,7 @@ pub struct StateTransaction {
 }
 
 impl StateTransaction {
+    /// Creates a waiting transaction and a thread-safe cancellation handle for it.
     pub fn new(
         instance: HostInstanceId,
         operation: StateOperation,

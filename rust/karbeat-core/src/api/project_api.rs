@@ -10,6 +10,7 @@ use crate::core::project::ApplicationState;
 use crate::core::project::{
     ProjectMetadata, generator::GeneratorInstance, transport::TransportState,
 };
+/// Maps the current project's metadata without cloning unrelated project state.
 pub fn get_project_metadata<T, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&ProjectMetadata) -> T,
@@ -17,6 +18,7 @@ where
     Ok(mapper(&ctx.app_state.metadata))
 }
 
+/// Replaces project metadata, records history, and leaves audio-only state unchanged.
 pub fn update_project_metadata(
     ctx: &mut DawContext,
     metadata: ProjectMetadata,
@@ -26,6 +28,7 @@ pub fn update_project_metadata(
     Ok(metadata)
 }
 
+/// Maps the serialized project transport state.
 pub fn get_transport_state<T, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&TransportState) -> T,
@@ -33,6 +36,7 @@ where
     Ok(mapper(&ctx.app_state.transport))
 }
 
+/// Maps every project generator instance into a caller-selected collection.
 pub fn get_generator_list<C, U, M>(ctx: &DawContext, mapper: M) -> anyhow::Result<C>
 where
     M: Fn(u32, &GeneratorInstance) -> U,
@@ -50,6 +54,7 @@ mod restore;
 mod save;
 pub(crate) use save::hosted_instance;
 
+/// Synchronizes live engine values, captures hosted state, and atomically saves the project.
 pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()> {
     let host_state_capture = ctx.host_state_capture.clone();
     save::save_project(
@@ -60,6 +65,7 @@ pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()>
     )
 }
 
+/// Loads and migrates a project, restores runtime resources, hydrates the engine, and maps it.
 pub fn load_project<T, F>(ctx: &mut DawContext, path_name: &str, mapper: F) -> anyhow::Result<T>
 where
     F: FnOnce(&ApplicationState) -> T,
@@ -89,6 +95,7 @@ where
     Ok(mapper(&ctx.app_state))
 }
 
+/// Renders the current project through an offline engine snapshot and reports export progress.
 pub fn export_project<F>(
     ctx: &mut DawContext,
     output_path: &str,
@@ -106,6 +113,7 @@ where
 }
 
 /// Create a blank, new, default project.
+/// Replaces project state with a blank project and fully rehydrates audio-thread state.
 pub fn new_blank_project(ctx: &mut DawContext) -> anyhow::Result<ApplicationState> {
     let mut staged = ctx.app_state.clone();
     staged.new_blank_project();
@@ -122,6 +130,7 @@ pub fn new_blank_project(ctx: &mut DawContext) -> anyhow::Result<ApplicationStat
     Ok(ctx.app_state.clone())
 }
 
+/// Rebuilds and publishes plugins, mixer values, routing, transport, and graph state.
 pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     if restore::has_external(&ctx.app_state) {
         return restore::replace(ctx, ctx.app_state.clone());
@@ -129,10 +138,13 @@ pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
     if ctx.command_sender.lock().is_none() {
         return Ok(());
     }
+    let dsp = ctx.audio_runtime_settings.read().requested_dsp;
     let command = restore::hydration_command(
         &ctx.app_state,
         &ctx.plugin_registry,
         &ctx.external_plugin_failures,
+        dsp.sample_rate,
+        dsp.block_size as usize,
     );
     ctx.send_audio_command(command)
 }

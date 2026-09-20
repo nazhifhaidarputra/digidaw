@@ -4,8 +4,11 @@ use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Timeline edge manipulated by a clip resize operation.
 pub enum ResizeEdge {
+    /// Move the clip start while preserving its end according to resize rules.
     Left,
+    /// Move the clip end while preserving its start.
     Right,
 }
 
@@ -15,8 +18,11 @@ use crate::core::project::{ApplicationState, DawSource, track::TrackType};
 use crate::shared::id::{ClipId, TrackId};
 use crate::shared::{AudioSourceId, PatternId};
 
+/// Coarse clip-content category used when creating or validating clips.
 pub enum ClipSourceType {
+    /// Note data backed by a pattern.
     Midi,
+    /// Sample data backed by an imported waveform.
     Audio,
 }
 
@@ -30,20 +36,29 @@ pub enum ClipSourceType {
 pub enum ClipTimeUnit {
     /// Legacy audio clip format with every value in raw samples.
     Samples {
+        /// Timeline placement in samples.
         start_time: u64,
+        /// Visible clip duration in samples.
         loop_length: u64,
+        /// Offset into source content in samples.
         offset_start: u64,
     },
     /// Values in ticks (960 PPQN, BPM-dependent)
     Ticks {
+        /// Timeline placement in 960-PPQN ticks.
         start_time: u32,
+        /// Visible clip duration in ticks.
         loop_length: u32,
+        /// Offset into source content in ticks.
         offset_start: u32,
     },
     /// Audio placement in ticks with sample-based content dimensions.
     Audio {
+        /// Tempo-relative timeline placement in 960-PPQN ticks.
         start_tick: u64,
+        /// Visible audio duration in source samples.
         loop_length: u64,
+        /// Offset into source audio in samples.
         offset_start: u64,
     },
 }
@@ -141,10 +156,13 @@ impl ClipTimeUnit {
         samples_per_beat / 960.0
     }
 
+    /// Converts 960-PPQN ticks to samples, rounding to the nearest whole sample.
+    /// Non-positive tempo uses the same 120 BPM fallback as [`Self::samples_per_tick`].
     pub fn ticks_to_samples(ticks: u64, bpm: f32, sample_rate: u32) -> u64 {
         ((ticks as f64) * Self::samples_per_tick(bpm, sample_rate)).round() as u64
     }
 
+    /// Converts samples to 960-PPQN ticks, rounding to the nearest whole tick.
     pub fn samples_to_ticks(samples: u64, bpm: f32, sample_rate: u32) -> u64 {
         let samples_per_tick = Self::samples_per_tick(bpm, sample_rate);
         if samples_per_tick <= 0.0 {
@@ -257,6 +275,10 @@ impl ApplicationState {
         migrated
     }
 
+    /// Inserts or replaces a clip in the global pool and attaches it to a compatible track.
+    ///
+    /// An existing clip ID is replaced in place; otherwise a fresh ID is assigned. The track's clip
+    /// list is deduplicated before insertion and remains sorted by the track helper.
     pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) -> anyhow::Result<()> {
         let track = self
             .tracks
@@ -284,6 +306,7 @@ impl ApplicationState {
         Ok(())
     }
 
+    /// Renames a pooled clip after requiring a nonblank name of at most 50 bytes.
     pub fn rename_clip(&mut self, clip_id: ClipId, new_name: &str) -> anyhow::Result<()> {
         let Some(clip) = self.clips_pool.get_mut(clip_id) else {
             anyhow::bail!("Clip with id [{}] not found", clip_id)
@@ -297,6 +320,7 @@ impl ApplicationState {
         Ok(())
     }
 
+    /// Detaches a clip from a track and returns a clone while leaving the global pool entry intact.
     pub fn delete_clip_from_track(
         &mut self,
         track_id: TrackId,
@@ -1019,6 +1043,9 @@ impl ApplicationState {
         Ok(duplicated)
     }
 
+    /// Copies the requested clips that belong to one track into the project clipboard.
+    ///
+    /// Missing IDs are ignored. If none resolve, the clipboard is explicitly cleared.
     pub fn copy_clip_batch(
         &mut self,
         source_track_id: TrackId,
@@ -1045,6 +1072,10 @@ impl ApplicationState {
         Ok(())
     }
 
+    /// Clones clipboard clips into a target track while preserving their relative spacing.
+    ///
+    /// The earliest copied clip is aligned to `start_pos`; negative shifted positions clamp to zero.
+    /// Raw units are used, so callers must supply a position compatible with the copied clip units.
     pub fn paste_clip_batch(
         &mut self,
         target_track_id: TrackId,
@@ -1097,6 +1128,10 @@ impl ApplicationState {
         Ok(pasted_clips)
     }
 
+    /// Copies selected track clips to the clipboard and detaches them from that track.
+    ///
+    /// Returned clips remain present in the global clip pool; this operation only removes track
+    /// references. Copy errors are intentionally ignored by the current implementation.
     pub fn cut_clipboard_clip_batch(
         &mut self,
         source_track_id: TrackId,

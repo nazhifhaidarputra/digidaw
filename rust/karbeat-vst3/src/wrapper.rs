@@ -588,6 +588,12 @@ unsafe impl Send for ProcessorSlot {}
 // SAFETY: Shared access exposes only atomics; mutable DSP access is serialized by ProcessingGate.
 unsafe impl Sync for ProcessorSlot {}
 
+/// Exclusive real-time endpoint for one prepared VST3 instance.
+///
+/// Processing enters the shared [`ProcessingGate`] before touching `ProcessorSlot::dsp`; UI-side
+/// preparation, state, and teardown may access that DSP state only after suspension has been
+/// acknowledged. Dropping the endpoint publishes `endpoint_alive = false` but leaves native COM
+/// destruction to the UI owner that retains the slot.
 pub struct Vst3Processor {
     pub(crate) slot: Arc<ProcessorSlot>,
     pub(crate) exchange: Arc<ParameterExchange>,

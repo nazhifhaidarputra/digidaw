@@ -7,7 +7,6 @@ use std::sync::{Arc, Once, mpsc};
 
 use hashbrown::HashMap;
 use karbeat_host::HostStateCapture;
-use karbeat_plugin_api::traits::AudioPlugin;
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 use parking_lot::{Mutex, RwLock};
 use rtrb::{Consumer, Producer};
@@ -27,7 +26,12 @@ use crate::{
     shared::{AutomationId, ClipId, PatternId},
 };
 
+/// Application-owned coordination point for project state, history, audio queues, and telemetry.
+///
+/// UI/control code mutates `app_state` through the API modules and explicitly broadcasts matching
+/// commands so the audio thread's private render state stays synchronized.
 pub struct DawContext {
+    /// Serialized project model used as the control-side source of truth.
     pub app_state: ApplicationState,
     /// Undo/redo history manager
     pub history: HistoryManager,
@@ -52,6 +56,7 @@ pub struct DawContext {
     /// External discovery descriptors and UI IDs, separate from first-party factories.
     pub external_plugin_failures: HashMap<crate::audio::event::PluginTarget, String>,
 
+    /// Combined first-party and externally discovered plugin metadata.
     pub plugin_catalog: crate::audio::plugin_catalog::PluginCatalog,
 
     /// Format-independent control-side access to live hosted plug-in state.
@@ -61,8 +66,10 @@ pub struct DawContext {
     /// The UI writes to this, and the background stream monitor reads from it.
     pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
 
+    /// Requested and active stream/DSP settings shared with the backend supervisor.
     pub audio_runtime_settings: Arc<RwLock<AudioRuntimeSettings>>,
 
+    /// UI-thread telemetry consumers after the audio engine has initialized them.
     pub telemetry_registry: Option<TelemetryRegistry>,
 
     /// Receiver for per-plugin triple-buffer `Output` consumers sent from the audio thread.
@@ -74,6 +81,7 @@ pub struct DawContext {
 }
 
 impl DawContext {
+    /// Creates a context with a blank project, first-party registry, and disconnected audio queues.
     pub fn new() -> Self {
         let plugin_registry = PluginRegistry::new_with_defaults();
         let plugin_catalog = crate::audio::plugin_catalog::PluginCatalog::new(&plugin_registry);
@@ -96,6 +104,9 @@ impl DawContext {
         }
     }
 
+    /// Pushes one command into the bounded UI-to-audio queue.
+    ///
+    /// Returns an error when the stream is uninitialized or the queue has no free slot.
     pub fn send_audio_command(&mut self, command: AudioCommand) -> anyhow::Result<()> {
         if let Some(sender) = self.command_sender.lock().as_mut() {
             sender
@@ -108,6 +119,10 @@ impl DawContext {
         Ok(())
     }
 
+    /// Best-effort pushes a command sequence when an audio sender exists.
+    ///
+    /// Individual full-queue failures and an absent sender are intentionally ignored; this helper
+    /// preserves the existing non-atomic chained-notification behavior.
     pub fn try_send_audio_command_chain(
         &mut self,
         commands: Vec<AudioCommand>,
@@ -121,6 +136,7 @@ impl DawContext {
         Ok(())
     }
 
+    /// Returns the first-party factory registered for `registry_id`.
     pub fn get_plugin_factory(&self, registry_id: u32) -> Option<PluginFactory> {
         let registry = &self.plugin_registry;
         let Some((plugin, _)) = registry.create_plugin_by_id(registry_id) else {
@@ -128,6 +144,30 @@ impl DawContext {
         };
 
         Some(plugin)
+    }
+
+    /// Constructs and prepares a first-party plugin plus its preallocated telemetry channel.
+    ///
+    /// Preparation uses the requested DSP rate and block size and configures one stereo main bus
+    /// in each direction before the value can be transferred to the audio thread.
+    pub fn prepare_plugin_install(
+        &self,
+        factory: PluginFactory,
+    ) -> (
+        Box<dyn karbeat_plugin_api::traits::AudioPlugin>,
+        crate::commands::PreparedPluginTelemetry,
+    ) {
+        let config = self.audio_runtime_settings.read().requested_dsp;
+        let mut plugin = factory();
+        plugin.prepare(config.sample_rate as f32, config.block_size as usize);
+        let bus = karbeat_plugin_api::types::BusConfig {
+            name: "Main".into(),
+            channel_count: 2,
+            is_optional: false,
+        };
+        plugin.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
+        let telemetry = crate::commands::PreparedPluginTelemetry::new(plugin.as_ref());
+        (plugin, telemetry)
     }
 
     // ======================================
@@ -159,6 +199,7 @@ impl DawContext {
         (patterns, clips, tracks_vec)
     }
 
+    /// Rebuilds and best-effort publishes tracks, clips, and patterns to the audio thread.
     pub fn broadcast_track_graph(&mut self) {
         let (patterns, clips, tracks) = self.update_track_graph();
         let (tracks_len, patterns_len) = (tracks.len(), patterns.len());
@@ -174,11 +215,13 @@ impl DawContext {
         );
     }
 
+    /// Builds a complete render graph snapshot and best-effort replaces audio-thread graph state.
     pub fn broadcast_full_graph(&mut self) {
         let graph = AudioGraphState::from(&self.app_state);
         let _ = self.send_audio_command(AudioCommand::ReplaceFullGraph { graph });
     }
 
+    /// Converts one project automation lane into its audio-only form and publishes it.
     pub fn broadcast_automation_lane(&mut self, id: AutomationId, lane: &AutomationLane) {
         let lane_audio_graph = AudioAutomationLane {
             points: lane.points.clone(),
@@ -193,6 +236,7 @@ impl DawContext {
         });
     }
 
+    /// Records one reversible project action and clears redo state according to history rules.
     pub fn push_history(&mut self, action: ProjectAction) {
         self.history.push(action);
     }
@@ -207,6 +251,7 @@ impl DawContext {
         self.feedback_consumer.lock().take()
     }
 
+    /// Replaces the UI-owned telemetry registry after engine initialization or restart.
     pub fn update_telemetry_reg(&mut self, new_reg: TelemetryRegistry) {
         self.telemetry_registry = Some(new_reg);
     }
@@ -246,4 +291,5 @@ impl DawContext {
     }
 }
 
+/// Process-wide guard ensuring logger initialization is attempted at most once.
 pub static INIT_LOGGER: Once = Once::new();

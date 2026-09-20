@@ -45,7 +45,7 @@ pub trait PluginEditor {
 /// This trait is now fully aligned with VST3/CLAP capabilities,
 /// supporting non-interleaved audio, sample-accurate automation,
 /// parameter gestures, and rich transport context.
-pub trait AudioPlugin: Any {
+pub trait AudioPlugin: Any + Send {
     /// Release an owned endpoint. Hosted plugins return native resources to their control owner.
     fn retire(self: Box<Self>) {}
     // --- Metadata ---
