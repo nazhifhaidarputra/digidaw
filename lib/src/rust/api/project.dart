@@ -11,8 +11,8 @@ import 'pattern.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -106,9 +106,6 @@ Stream<double> exportProjectFlutter({
   tailHandling: tailHandling,
 );
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>
-abstract class AudioWaveform implements RustOpaqueInterface {}
-
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>>
 abstract class AudioWaveformUiForAudioProperties
     implements RustOpaqueInterface {
@@ -167,15 +164,6 @@ abstract class AudioWaveformUiForAudioProperties
   set trimEnd(int trimEnd);
 
   set trimStart(int trimStart);
-
-  static Future<AudioWaveformUiForAudioProperties> tryFromWithContext({
-    required DawContext ctx,
-    required AudioWaveform value,
-  }) => RustLib.instance.api
-      .crateApiProjectAudioWaveformUiForAudioPropertiesTryFromWithContext(
-        ctx: ctx,
-        value: value,
-      );
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>

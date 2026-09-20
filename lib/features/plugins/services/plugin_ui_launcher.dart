@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/backend_operation_gate.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -99,8 +99,8 @@ Future<void> openPluginInterface({
           pluginName: pluginName,
           forceDynamic: true,
         );
-  }).guardedByBackendOperationGate(
-    ref.read(backendOperationGateProvider.notifier),
+  }).suppressesTelemetryPolling(
+    ref.read(telemetryPollingSuppressionProvider.notifier),
   )();
 }
 

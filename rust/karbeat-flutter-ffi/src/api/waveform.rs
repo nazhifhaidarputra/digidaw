@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use karbeat_core::{
-    context::DawContext,
     core::{
         file_manager::audio_loader::AudioLoader,
         project::{DawSource, TrackType},
@@ -10,6 +9,7 @@ use karbeat_core::{
     shared::{AudioSourceId, TrackId},
     utils::get_waveform_buffer,
 };
+use crate::api::context::DawContext;
 
 pub use karbeat_core::core::project::AudioWaveform;
 use serde::Serialize;
@@ -26,6 +26,10 @@ use serde::Serialize;
 pub struct WaveformHandle(Arc<AudioWaveform>);
 
 impl WaveformHandle {
+    pub(crate) fn from_waveform(waveform: Arc<AudioWaveform>) -> Self {
+        Self(waveform)
+    }
+
     /// Returns the raw memory address of the f32 interleaved sample buffer.
     /// Returns 0 if the waveform has no loaded buffer (e.g. not yet mmap-ed).
     #[frb(sync)]
@@ -60,6 +64,7 @@ impl WaveformHandle {
 /// Returns None if the source does not exist in the asset library.
 #[frb(sync)]
 pub fn get_waveform_handle(ctx: &DawContext, source_id: u64) -> Option<WaveformHandle> {
+    let ctx = ctx.read();
     let wf = ctx
         .app_state
         .get_audio_source(&AudioSourceId::from_u64(source_id))?;
@@ -77,6 +82,7 @@ pub fn get_waveform_handles_for_track(
     ctx: &DawContext,
     track_id: u64,
 ) -> HashMap<u64, WaveformHandle> {
+    let ctx = ctx.read();
     let track = match ctx.app_state.tracks.get(TrackId::from_u64(track_id)) {
         Some(t) => t,
         None => return HashMap::new(),

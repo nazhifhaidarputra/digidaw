@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use flutter_rust_bridge::frb;
 use karbeat_core::{
     api::automation_api,
-    context::DawContext,
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
         EffectAutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
@@ -13,7 +12,7 @@ use karbeat_core::{
 };
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
-use crate::api::plugin::UiPluginTarget;
+use crate::api::{context::DawContext, plugin::UiPluginTarget};
 
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
@@ -397,6 +396,7 @@ pub fn get_automation_lanes_for_track(
     ctx: &DawContext,
     track_id: u64,
 ) -> Vec<(u64, u64, AutomationLaneDto)> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_automation_lanes_for_track(ctx, TrackId::from_u64(track_id))
         .into_iter()
         .map(|(mod_id, automation_id, lane)| {
@@ -412,6 +412,7 @@ pub fn get_automation_lanes_for_bus(
     ctx: &DawContext,
     bus_id: u64,
 ) -> Vec<(u64, u64, AutomationLaneDto)> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_automation_lanes_for_bus(ctx, BusId::from_u64(bus_id))
         .into_iter()
         .map(|(mod_id, automation_id, lane)| {
@@ -422,13 +423,14 @@ pub fn get_automation_lanes_for_bus(
 }
 
 pub fn add_automation_lane(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: AutomationTargetDto,
     label: &str,
     min: f64,
     max: f64,
     initial_value: f64,
 ) -> Result<(AutomationLaneDto, ModulationLinkDto), String> {
+    crate::api::context::project_ctx!(ctx);
     match automation_api::add_automation_lane(ctx, target.into(), label, min, max, initial_value) {
         Ok((lane, mod_link)) => {
             let lane_dto = AutomationLaneDto::from(&lane);
@@ -441,6 +443,7 @@ pub fn add_automation_lane(
 
 /// Fetch all automation lanes across all targets
 pub fn get_automations_lanes_all(ctx: &DawContext) -> HashMap<u64, AutomationLaneDto> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_automations_lanes_all(ctx, |lane| {
         (lane.id.to_u64(), AutomationLaneDto::from(lane))
     })
@@ -448,11 +451,12 @@ pub fn get_automations_lanes_all(ctx: &DawContext) -> HashMap<u64, AutomationLan
 
 /// Fetch a single automation lane
 pub fn get_automation_lane(ctx: &DawContext, lane_id: u64) -> Option<AutomationLaneDto> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_automation_lane(ctx, lane_id).map(|l| (&l).into())
 }
 
 pub fn add_automation_lane_for_track(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     track_id: u64,
     target: AutomationTargetDto,
     label: &str,
@@ -460,6 +464,7 @@ pub fn add_automation_lane_for_track(
     max: f64,
     initial_value: f64,
 ) -> Result<AutomationLaneDto, String> {
+    crate::api::context::project_ctx!(ctx);
     match automation_api::add_automation_lane_for_track(
         ctx,
         TrackId::from_u64(track_id),
@@ -478,7 +483,7 @@ pub fn add_automation_lane_for_track(
 }
 
 pub fn add_automation_lane_for_bus(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     bus_id: u64,
     target: AutomationTargetDto,
     label: &str,
@@ -486,6 +491,7 @@ pub fn add_automation_lane_for_bus(
     max: f64,
     initial_value: f64,
 ) -> Result<AutomationLaneDto, String> {
+    crate::api::context::project_ctx!(ctx);
     match automation_api::add_automation_lane_for_bus(
         ctx,
         BusId::from_u64(bus_id),
@@ -511,9 +517,10 @@ pub fn add_automation_lane_for_bus(
 ///
 /// * Tuple of (removed_automation_id, removed_modulation_source_ids, removed_modulation_link_ids)
 pub fn remove_automation_lane_for(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: AutomationTargetDto,
 ) -> Result<(u64, Vec<u64>, Vec<u64>), String> {
+    crate::api::context::project_ctx!(ctx);
     automation_api::remove_automation_lane(ctx, target.into())
         .map(|(automation_id, mod_ids, mod_link_ids)| {
             (
@@ -526,11 +533,12 @@ pub fn remove_automation_lane_for(
 }
 
 pub fn add_new_automation_point(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     automation_id: u64,
     time_ticks: u32,
     value: f64,
 ) -> Result<AutomationLaneDto, String> {
+    crate::api::context::project_ctx!(ctx);
     // we will warn if the value is not in normalized value
     if value > 1.0 || value < 0.0 {
         log::warn!("Value are not in correct range. it will be clamped");
@@ -542,17 +550,18 @@ pub fn add_new_automation_point(
 }
 
 pub fn remove_automation_point(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     automation_id: u64,
     id: u64,
 ) -> Result<AutomationLaneDto, String> {
+    crate::api::context::project_ctx!(ctx);
     automation_api::remove_automation_point(ctx, automation_id.into(), id)
         .map(|l| (&l).into())
         .map_err(|e| e.to_string())
 }
 
 pub fn update_automation_point(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     automation_id: u64,
     id: u64,
     time_ticks: Option<u32>,
@@ -560,6 +569,7 @@ pub fn update_automation_point(
     tension: Option<f64>,
     curve_type: Option<AutomationCurveTypeDto>,
 ) -> Result<usize, String> {
+    crate::api::context::project_ctx!(ctx);
     let some_value = value.map(|v| {
         if v > 1.0 || v < 0.0 {
             log::warn!("Value are not in correct range. it will be clamped");
@@ -594,35 +604,40 @@ pub fn update_automation_point(
 
 /// Get all modulations in the project
 pub fn get_all_linked_modulation_params(ctx: &DawContext) -> HashMap<u64, ModulationLinkDto> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_all_linked_modulation_params(ctx, |id, mod_link| {
         (id.to_u64(), mod_link.into())
     })
 }
 
 /// Add generic modulation source
-pub fn add_modulation_source(ctx: &mut DawContext, source: ModulationSourceDto) -> u64 {
+pub fn add_modulation_source(ctx: &DawContext, source: ModulationSourceDto) -> u64 {
+    crate::api::context::project_ctx!(ctx);
     automation_api::add_modulation_source(ctx, source.into()).to_u64()
 }
 
 /// Remove the modulation source. This function also cascade delete all link
 /// with this source
-pub fn remove_modulation_source(ctx: &mut DawContext, mod_id: u64) {
+pub fn remove_modulation_source(ctx: &DawContext, mod_id: u64) {
+    crate::api::context::project_ctx!(ctx);
     automation_api::remove_modulation_source(ctx, mod_id.into());
 }
 
 /// Remove modulation link based on queried modulation link id
-pub fn remove_modulation_link(ctx: &mut DawContext, mod_link_id: u64) {
+pub fn remove_modulation_link(ctx: &DawContext, mod_link_id: u64) {
+    crate::api::context::project_ctx!(ctx);
     automation_api::remove_modulation_link(ctx, mod_link_id.into());
 }
 
 /// Link the target param to a modulation source
 pub fn link_this_param_to_controller(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     source_id: u64,
     target: AutomationTargetDto,
     depth: f32,
     base_value: f32,
 ) -> Result<u64, String> {
+    crate::api::context::project_ctx!(ctx);
     automation_api::link_this_param_to_controller(
         ctx,
         source_id.into(),
@@ -635,13 +650,16 @@ pub fn link_this_param_to_controller(
 }
 
 pub fn get_modulation_link_by_id(ctx: &DawContext, link_id: u64) -> Option<ModulationLinkDto> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_modulation_link_by_id(ctx, link_id).map(|m| (&m).into())
 }
 
 pub fn get_all_modulation_sources(ctx: &DawContext) -> HashMap<u64, ModulationSourceDto> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_modulation_sources_map(ctx)
 }
 
 pub fn get_modulation_source(ctx: &DawContext, id: u64) -> Option<ModulationSourceDto> {
+    crate::api::context::read_ctx!(ctx);
     automation_api::get_modulation_source(ctx, id)
 }

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:karbeat/app/providers/backend_operation_gate.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/core/services/serializer_service.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -76,8 +76,8 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   DawContext get dawContext => _dawContext!;
 
   Future<T> _runBackendOperation<T>(Future<T> Function() operation) {
-    return operation.guardedByBackendOperationGate(
-      ref.read(backendOperationGateProvider.notifier),
+    return operation.suppressesTelemetryPolling(
+      ref.read(telemetryPollingSuppressionProvider.notifier),
     )();
   }
 
@@ -175,6 +175,26 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         ),
       );
     }
+  }
+
+  /// Imports an audio file while keeping FFI failures owned by this notifier.
+  Future<Result<int>> loadAudioSource(String filePath) {
+    return _runBackendOperation(() async {
+      try {
+        final sourceId = await addAudioSource(
+          ctx: dawContext,
+          filePath: filePath,
+        );
+        return Result.ok(sourceId);
+      } catch (error, stackTrace) {
+        AppLogger.error('Failed to load audio source: $error');
+        return ref.notifyErrorResult<int>(
+          error,
+          title: 'Could not load audio',
+          stackTrace: stackTrace,
+        );
+      }
+    });
   }
 
   /// Save the current project to disk relying on the injected `SerializerService`.

@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use crate::audio::exporter::{TailHandling, export_project as export_project_internal};
+use crate::audio::exporter::{
+    PendingAudioExport, TailHandling, begin_export, execute_export,
+    export_project as export_project_internal,
+};
 
 use crate::audio::writer::AudioExportConfig;
 use crate::commands::AudioCommand;
@@ -52,7 +55,51 @@ where
 
 mod restore;
 mod save;
-pub(crate) use save::hosted_instance;
+pub(crate) use save::{hosted_instance, hosted_instance_with_handles};
+pub use restore::{CompletedProjectRestore, PendingProjectRestore};
+pub use save::{CompletedProjectSave, PendingProjectSave};
+
+pub fn begin_save_project(ctx: &DawContext, path_name: &str) -> PendingProjectSave {
+    save::begin_save(ctx, Path::new(path_name))
+}
+
+pub fn execute_save_project(pending: PendingProjectSave) -> anyhow::Result<CompletedProjectSave> {
+    save::execute_save(pending, std::time::Duration::from_secs(2))
+}
+
+pub fn commit_save_project(ctx: &mut DawContext, completed: CompletedProjectSave) {
+    save::commit_save(ctx, completed);
+}
+
+pub fn load_project_file(path_name: &str, sample_rate: u32) -> anyhow::Result<ApplicationState> {
+    load_daw_project(Path::new(path_name), sample_rate)
+}
+
+pub fn begin_loaded_project_restore(
+    ctx: &DawContext,
+    mut loaded: ApplicationState,
+) -> anyhow::Result<PendingProjectRestore> {
+    loaded.audio_config = ctx.app_state.audio_config.clone();
+    loaded.clipboard = ctx.app_state.clipboard.clone();
+    restore::begin_replace(ctx, loaded)
+}
+
+pub fn begin_project_restore(
+    ctx: &DawContext,
+    staged: ApplicationState,
+) -> anyhow::Result<PendingProjectRestore> {
+    restore::begin_replace(ctx, staged)
+}
+
+pub fn execute_project_restore(
+    pending: PendingProjectRestore,
+) -> anyhow::Result<CompletedProjectRestore> {
+    restore::execute_replace(pending)
+}
+
+pub fn commit_project_restore(ctx: &mut DawContext, completed: CompletedProjectRestore) {
+    restore::commit_replace(ctx, completed);
+}
 
 /// Synchronizes live engine values, captures hosted state, and atomically saves the project.
 pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()> {
@@ -110,6 +157,30 @@ where
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     Ok(())
+}
+
+pub fn begin_project_export(ctx: &DawContext) -> PendingAudioExport {
+    begin_export(ctx)
+}
+
+pub fn execute_project_export<F>(
+    pending: PendingAudioExport,
+    output_path: &str,
+    config: AudioExportConfig,
+    tail_handling: TailHandling,
+    progress_callback: F,
+) -> anyhow::Result<()>
+where
+    F: FnMut(f32) -> bool + Send,
+{
+    execute_export(
+        pending,
+        output_path,
+        config,
+        tail_handling,
+        progress_callback,
+    )
+    .map_err(|error| anyhow::anyhow!(error.to_string()))
 }
 
 /// Create a blank, new, default project.

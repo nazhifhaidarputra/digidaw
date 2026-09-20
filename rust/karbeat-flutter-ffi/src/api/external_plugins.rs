@@ -4,11 +4,10 @@ use karbeat_core::{
         external_plugin_api,
         plugin_discovery_api::{self, PluginScanEvent},
     },
-    context::DawContext,
 };
 use karbeat_host::{PluginDescriptor, PluginFormat, PluginKind, scanner::ScanSettings};
 
-use crate::{api::plugin::UiPluginTarget, frb_generated::StreamSink};
+use crate::{api::{context::DawContext, plugin::UiPluginTarget}, frb_generated::StreamSink};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiExternalPluginFormat {
@@ -193,12 +192,14 @@ pub fn external_plugin_descriptor(
     ctx: &DawContext,
     target: UiPluginTarget,
 ) -> Option<UiExternalPluginDescriptor> {
+    crate::api::context::read_ctx!(ctx);
     external_plugin_api::descriptor(ctx, target.into()).map(Into::into)
 }
 
 pub fn refresh_external_plugin_catalog(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
 ) -> anyhow::Result<Vec<UiExternalPluginEntry>> {
+    crate::api::context::project_ctx!(ctx);
     Ok(plugin_discovery_api::refresh_catalog(ctx)?
         .into_iter()
         .map(|entry| UiExternalPluginEntry {
@@ -217,11 +218,25 @@ pub struct UiExternalPluginCapabilities {
     pub sidechain: bool,
 }
 
+fn resolve_hosted_target(
+    ctx: &DawContext,
+    target: UiPluginTarget,
+) -> anyhow::Result<karbeat_host::HostInstanceId> {
+    let lookup = {
+        let ctx = ctx.read();
+        external_plugin_api::prepare_hosted_target(&ctx, target.into())?
+    };
+    external_plugin_api::resolve_hosted_target(lookup)
+}
+
 pub fn external_plugin_capabilities(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: UiPluginTarget,
 ) -> anyhow::Result<UiExternalPluginCapabilities> {
-    let capabilities = external_plugin_api::capabilities(ctx, target.into())?;
+    let _operation = ctx
+        .try_runtime_operation()
+        .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
+    let capabilities = external_plugin_api::capabilities_for(resolve_hosted_target(ctx, target)?)?;
     Ok(UiExternalPluginCapabilities {
         controller: capabilities.controller,
         editor: capabilities.editor,
@@ -231,60 +246,104 @@ pub fn external_plugin_capabilities(
 
 /// Reopening an existing editor brings its native window to the foreground.
 pub fn open_external_plugin_editor(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: UiPluginTarget,
 ) -> anyhow::Result<()> {
-    external_plugin_api::open_editor(ctx, target.into())
+    let _operation = ctx
+        .try_runtime_operation()
+        .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
+    let core_target = target.into();
+    let (lookup, context) = {
+        let ctx = ctx.read();
+        (
+            external_plugin_api::prepare_hosted_target(&ctx, core_target)?,
+            external_plugin_api::editor_context(&ctx, core_target),
+        )
+    };
+    let instance = external_plugin_api::resolve_hosted_target(lookup)?;
+    external_plugin_api::open_editor_for(instance, context)
 }
 
 pub fn close_external_plugin_editor(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: UiPluginTarget,
 ) -> anyhow::Result<()> {
-    external_plugin_api::close_editor(ctx, target.into())
+    let _operation = ctx
+        .try_runtime_operation()
+        .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
+    external_plugin_api::close_editor_for(resolve_hosted_target(ctx, target)?)
 }
 
 pub fn set_external_plugin_parameter(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: UiPluginTarget,
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<()> {
-    external_plugin_api::set_parameter(ctx, target.into(), parameter, value)
+    let _operation = ctx
+        .try_runtime_operation()
+        .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
+    external_plugin_api::set_parameter_for(resolve_hosted_target(ctx, target)?, parameter, value)
 }
 
 pub fn external_plugin_parameter_text(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: UiPluginTarget,
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<String> {
-    external_plugin_api::parameter_text(ctx, target.into(), parameter, value)
+    let _operation = ctx
+        .try_runtime_operation()
+        .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
+    external_plugin_api::parameter_text_for(resolve_hosted_target(ctx, target)?, parameter, value)
 }
 
 pub fn parse_external_plugin_parameter(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: UiPluginTarget,
     parameter: u32,
     text: String,
 ) -> anyhow::Result<f64> {
-    external_plugin_api::parse_parameter(ctx, target.into(), parameter, text)
+    let _operation = ctx
+        .try_runtime_operation()
+        .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
+    external_plugin_api::parse_parameter_for(
+        resolve_hosted_target(ctx, target)?,
+        parameter,
+        text,
+    )
 }
 
 pub fn convert_external_plugin_parameter(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     target: UiPluginTarget,
     parameter: u32,
     value: f64,
     to_normalized: bool,
 ) -> anyhow::Result<f64> {
-    external_plugin_api::convert_parameter(ctx, target.into(), parameter, value, to_normalized)
+    let _operation = ctx
+        .try_runtime_operation()
+        .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
+    external_plugin_api::convert_parameter_for(
+        resolve_hosted_target(ctx, target)?,
+        parameter,
+        value,
+        to_normalized,
+    )
 }
 
 pub fn external_plugin_failure(ctx: &DawContext, target: UiPluginTarget) -> Option<String> {
+    crate::api::context::read_ctx!(ctx);
     external_plugin_api::failure(ctx, target.into())
 }
 
-pub fn retry_external_plugin(ctx: &mut DawContext, target: UiPluginTarget) -> anyhow::Result<()> {
-    external_plugin_api::retry(ctx, target.into())
+pub fn retry_external_plugin(ctx: &DawContext, target: UiPluginTarget) -> anyhow::Result<()> {
+    let operation = ctx.begin_project_operation();
+    let pending = {
+        let core = operation.read_core();
+        external_plugin_api::begin_retry(&core, target.into())?
+    };
+    let completed = external_plugin_api::execute_retry(pending)?;
+    external_plugin_api::commit_retry(&mut operation.write_core(), completed);
+    Ok(())
 }

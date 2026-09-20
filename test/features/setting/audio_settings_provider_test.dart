@@ -4,7 +4,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:karbeat/app/providers/backend_operation_gate.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/audio_dsp_preferences_service.dart';
 import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
@@ -191,10 +191,10 @@ void main() {
     final operation = notifier.applyDraft();
     await service.applyStarted!.future;
 
-    expect(container.read(backendOperationGateProvider), 1);
+    expect(container.read(telemetryPollingSuppressionProvider), 1);
     service.releaseApply!.complete();
     expect((await operation).isOk(), isTrue);
-    expect(container.read(backendOperationGateProvider), 0);
+    expect(container.read(telemetryPollingSuppressionProvider), 0);
   });
 
   testWidgets('Audio page applies a supported DSP draft', (tester) async {

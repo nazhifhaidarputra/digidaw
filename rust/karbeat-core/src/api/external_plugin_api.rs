@@ -13,7 +13,7 @@ use crate::{
         },
     },
     commands::{AudioCommand, EffectTarget},
-    context::DawContext,
+    context::{ControlHandles, DawContext},
     core::project::{
         ApplicationState, AudioTrack, GeneratorInstanceType, TrackType,
         mixer::{EffectInstance, MixerChannel},
@@ -21,62 +21,119 @@ use crate::{
     },
 };
 
-fn prepare(
+pub enum HostedTargetLookup {
+    Resolved(karbeat_host::HostInstanceId),
+    Query {
+        handles: ControlHandles,
+        target: PluginTarget,
+    },
+}
+
+pub fn prepare_hosted_target(
     ctx: &DawContext,
-    registry_id: u32,
-    kind: PluginKind,
-) -> anyhow::Result<(
-    karbeat_vst3::native::PreparedNativeInstance,
-    ProcessingConfig,
-    PluginInstance,
-)> {
+    target: PluginTarget,
+) -> anyhow::Result<HostedTargetLookup> {
     anyhow::ensure!(
-        ctx.command_sender
-            .lock()
-            .as_ref()
-            .is_some_and(|sender| sender.slots() >= 3),
-        "Audio engine has no lifecycle command capacity"
+        plugin_instance(ctx, target).is_some_and(|plugin| plugin.external.is_some()),
+        "Target is not an external plugin"
     );
     anyhow::ensure!(
-        ctx.telemetry_registry.is_some(),
-        "Audio telemetry is not initialized"
+        !ctx.external_plugin_failures.contains_key(&target),
+        "External plugin is unavailable; retry loading it first"
     );
-    let entry = ctx
-        .plugin_catalog
-        .external(registry_id)
-        .context("External plugin is not in the catalog")?;
-    anyhow::ensure!(
-        entry.available,
-        "External plugin is unavailable: {}",
-        entry.descriptor.name
-    );
-    anyhow::ensure!(
-        entry.descriptor.kind == kind,
-        "Plugin has an incompatible instrument/effect type"
-    );
-    let descriptor = entry.descriptor.clone();
-    let config = ProcessingConfig {
-        sample_rate: f64::from(ctx.audio_runtime_settings.read().requested_dsp.sample_rate),
-        max_block_size: 65_536,
-        main_input_channels: if kind == PluginKind::Instrument { 0 } else { 2 },
-        main_output_channels: 2,
-        sidechain_channels: 0,
-        offline: false,
-    };
-    let prepared =
-        karbeat_vst3::native::prepare_instance(descriptor.clone(), config.clone(), None)?;
-    let plugin = PluginInstance {
-        registry_id,
-        name: descriptor.name.clone(),
-        bypass: false,
-        parameter_specs: prepared.parameters.clone(),
-        plugin_state: Vec::new(),
-        external: Some(ExternalPluginInstance {
-            descriptor,
-            state: Some(prepared.state.clone()),
+    match ctx.hosted_targets.get(&target) {
+        Some(crate::context::HostedTargetState::Active(instance)) => {
+            Ok(HostedTargetLookup::Resolved(*instance))
+        }
+        Some(crate::context::HostedTargetState::Transitioning) => {
+            anyhow::bail!("External plugin lifecycle operation is in progress")
+        }
+        Some(crate::context::HostedTargetState::Failed(reason)) => {
+            anyhow::bail!("External plugin is unavailable: {reason}")
+        }
+        None => Ok(HostedTargetLookup::Query {
+            handles: ctx.control_handles(),
+            target,
         }),
-    };
-    Ok((prepared, config, plugin))
+    }
+}
+
+pub fn resolve_hosted_target(lookup: HostedTargetLookup) -> anyhow::Result<karbeat_host::HostInstanceId> {
+    match lookup {
+        HostedTargetLookup::Resolved(instance) => Ok(instance),
+        HostedTargetLookup::Query { handles, target } => {
+            super::project_api::hosted_instance_with_handles(&handles, target)
+        }
+    }
+}
+
+pub fn capabilities_for(
+    id: karbeat_host::HostInstanceId,
+) -> anyhow::Result<HostCapabilities> {
+    Ok(karbeat_vst3::native::call(move |owner| {
+        owner.host.capabilities(id)
+    })?)
+}
+
+pub fn open_editor_for(
+    id: karbeat_host::HostInstanceId,
+    context: String,
+) -> anyhow::Result<()> {
+    Ok(karbeat_vst3::native::call(move |owner| {
+        owner.set_editor_context(id, context)?;
+        owner.open_editor(id)
+    })?)
+}
+
+pub fn close_editor_for(id: karbeat_host::HostInstanceId) -> anyhow::Result<()> {
+    Ok(karbeat_vst3::native::call(move |owner| {
+        owner.close_editor(id)
+    })?)
+}
+
+pub fn set_parameter_for(
+    id: karbeat_host::HostInstanceId,
+    parameter: u32,
+    value: f64,
+) -> anyhow::Result<()> {
+    Ok(karbeat_vst3::native::call(move |owner| {
+        owner.host.set_parameter(id, parameter, value)
+    })?)
+}
+
+pub fn parameter_text_for(
+    id: karbeat_host::HostInstanceId,
+    parameter: u32,
+    value: f64,
+) -> anyhow::Result<String> {
+    Ok(karbeat_vst3::native::call(move |owner| {
+        owner.host.parameter_text(id, parameter, value)
+    })?)
+}
+
+pub fn parse_parameter_for(
+    id: karbeat_host::HostInstanceId,
+    parameter: u32,
+    text: String,
+) -> anyhow::Result<f64> {
+    Ok(karbeat_vst3::native::call(move |owner| {
+        owner.host.parse_parameter(id, parameter, &text)
+    })?)
+}
+
+pub fn convert_parameter_for(
+    id: karbeat_host::HostInstanceId,
+    parameter: u32,
+    value: f64,
+    to_normalized: bool,
+) -> anyhow::Result<f64> {
+    Ok(karbeat_vst3::native::call(move |owner| {
+        if to_normalized {
+            owner.host.plain_to_normalized(id, parameter, value)
+        } else {
+            owner.host.normalized_to_plain(id, parameter, value)
+        }
+    })?)
 }
 
 fn channel_mut<'a>(
@@ -100,46 +157,248 @@ fn channel_mut<'a>(
     }
 }
 
+pub enum InstalledPlugin {
+    Instrument(AudioTrack),
+    Effect(EffectInstance),
+}
+
+enum PendingInstallTarget {
+    Instrument,
+    Effect(EffectTarget),
+}
+
+pub struct PendingPluginInstall {
+    staged: ApplicationState,
+    registry_id: u32,
+    descriptor: karbeat_host::PluginDescriptor,
+    config: ProcessingConfig,
+    target: PendingInstallTarget,
+    handles: ControlHandles,
+}
+
+pub struct CompletedPluginInstall {
+    staged: ApplicationState,
+    target: PluginTarget,
+    telemetry: Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>>,
+    installed: InstalledPlugin,
+    instance: karbeat_host::HostInstanceId,
+}
+
+fn begin_install(
+    ctx: &DawContext,
+    registry_id: u32,
+    kind: PluginKind,
+    target: PendingInstallTarget,
+) -> anyhow::Result<PendingPluginInstall> {
+    anyhow::ensure!(
+        ctx.command_sender.lock().as_ref().is_some(),
+        "Audio engine is unavailable"
+    );
+    anyhow::ensure!(
+        ctx.telemetry_registry.is_some(),
+        "Audio telemetry is not initialized"
+    );
+    let entry = ctx
+        .plugin_catalog
+        .external(registry_id)
+        .context("External plugin is not in the catalog")?;
+    anyhow::ensure!(
+        entry.available,
+        "External plugin is unavailable: {}",
+        entry.descriptor.name
+    );
+    anyhow::ensure!(
+        entry.descriptor.kind == kind,
+        "Plugin has an incompatible instrument/effect type"
+    );
+    let config = ProcessingConfig {
+        sample_rate: f64::from(ctx.audio_runtime_settings.read().requested_dsp.sample_rate),
+        max_block_size: 65_536,
+        main_input_channels: if kind == PluginKind::Instrument { 0 } else { 2 },
+        main_output_channels: 2,
+        sidechain_channels: 0,
+        offline: false,
+    };
+    Ok(PendingPluginInstall {
+        staged: ctx.app_state.clone(),
+        registry_id,
+        descriptor: entry.descriptor.clone(),
+        config,
+        target,
+        handles: ctx.control_handles(),
+    })
+}
+
+pub fn begin_add_instrument(
+    ctx: &DawContext,
+    registry_id: u32,
+) -> anyhow::Result<PendingPluginInstall> {
+    begin_install(
+        ctx,
+        registry_id,
+        PluginKind::Instrument,
+        PendingInstallTarget::Instrument,
+    )
+}
+
+pub fn begin_add_effect(
+    ctx: &DawContext,
+    target: EffectTarget,
+    registry_id: u32,
+) -> anyhow::Result<PendingPluginInstall> {
+    begin_install(
+        ctx,
+        registry_id,
+        PluginKind::Effect,
+        PendingInstallTarget::Effect(target),
+    )
+}
+
+fn wait_for_install(
+    mut receipt: crate::audio::hosted_plugin::HostedInstallReceipt,
+) -> anyhow::Result<Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>>> {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match receipt.status() {
+            HostedInstallStatus::Installed => return Ok(receipt.take_telemetry()),
+            HostedInstallStatus::Pending => {
+                if Instant::now() >= deadline && receipt.cancel() {
+                    anyhow::bail!("Plugin installation timed out before the engine accepted it");
+                }
+            }
+            HostedInstallStatus::Applying => {}
+            status => anyhow::bail!("Audio engine rejected plugin installation: {status:?}"),
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+pub fn execute_install(
+    mut pending: PendingPluginInstall,
+) -> anyhow::Result<CompletedPluginInstall> {
+    let prepared = karbeat_vst3::native::prepare_instance(
+        pending.descriptor.clone(),
+        pending.config.clone(),
+        None,
+    )?;
+    let instance = prepared.instance;
+    let plugin = PluginInstance {
+        registry_id: pending.registry_id,
+        name: pending.descriptor.name.clone(),
+        bypass: false,
+        parameter_specs: prepared.parameters.clone(),
+        plugin_state: Vec::new(),
+        external: Some(ExternalPluginInstance {
+            descriptor: pending.descriptor,
+            state: Some(prepared.state.clone()),
+        }),
+    };
+
+    let (installed, install, receipt) = match pending.target {
+        PendingInstallTarget::Instrument => {
+            let track_id = pending.staged.add_new_audio_track().id;
+            let name = plugin.name.clone();
+            let generator_id = pending
+                .staged
+                .add_generator(GeneratorInstanceType::Plugin(plugin));
+            let generator = pending
+                .staged
+                .generator_pool
+                .get(generator_id)
+                .cloned()
+                .context("Prepared generator is unavailable")?;
+            let track = pending
+                .staged
+                .tracks
+                .get_mut(track_id)
+                .context("Prepared track is unavailable")?;
+            track.track_type = TrackType::Midi;
+            track.name = name;
+            track.generator = Some(generator);
+            let track = track.clone();
+            let (install, receipt) = HostedPluginInstall::new(
+                PluginTarget::Generator(generator_id),
+                Some(track_id),
+                pending.registry_id,
+                pending.config,
+                prepared.processor,
+            );
+            let graph = HostedTrackGraph::from(&pending.staged);
+            (
+                InstalledPlugin::Instrument(track),
+                install.with_track_graph(graph),
+                receipt,
+            )
+        }
+        PendingInstallTarget::Effect(effect_target) => {
+            let channel = channel_mut(&mut pending.staged, &effect_target)?;
+            let effect_id = channel.effects.insert(plugin);
+            let effect = channel
+                .effects
+                .get(effect_id)
+                .cloned()
+                .context("Prepared effect is unavailable")?;
+            let target = match effect_target {
+                EffectTarget::Track(id) => PluginTarget::TrackEffect(id, effect_id),
+                EffectTarget::Bus(id) => PluginTarget::BusEffect(id, effect_id),
+                EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
+            };
+            let (install, receipt) = HostedPluginInstall::new(
+                target,
+                None,
+                pending.registry_id,
+                pending.config,
+                prepared.processor,
+            );
+            (InstalledPlugin::Effect(effect), install, receipt)
+        }
+    };
+
+    karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
+    let target = install.target;
+    let command = karbeat_vst3::native::call(move |owner| owner.prepare_control(install))?;
+    {
+        let mut sender = pending.handles.command_sender.lock();
+        let sender = sender.as_mut().context("Audio engine is unavailable")?;
+        sender
+            .push(AudioCommand::InstallHostedPlugin(command))
+            .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
+    }
+    let telemetry = wait_for_install(receipt)?;
+    Ok(CompletedPluginInstall {
+        staged: pending.staged,
+        target,
+        telemetry,
+        installed,
+        instance,
+    })
+}
+
+pub fn commit_install(ctx: &mut DawContext, completed: CompletedPluginInstall) -> InstalledPlugin {
+    if let Some(output) = completed.telemetry
+        && let Some(registry) = &mut ctx.telemetry_registry
+    {
+        registry.insert_plugin_consumer(completed.target, output);
+    }
+    ctx.app_state = completed.staged;
+    ctx.hosted_targets.insert(
+        completed.target,
+        crate::context::HostedTargetState::Active(completed.instance),
+    );
+    completed.installed
+}
+
 /// Prepares an external instrument, creates its MIDI track, and installs it on the audio thread.
 ///
 /// Project state is staged and becomes visible only after the engine accepts the installation and
 /// the native instance resumes. Failure leaves the live project unchanged.
 pub fn add_instrument(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<AudioTrack> {
-    let (prepared, config, plugin) = prepare(ctx, registry_id, PluginKind::Instrument)?;
-    let mut staged = ctx.app_state.clone();
-    let track_id = staged.add_new_audio_track().id;
-    let name = plugin.name.clone();
-    let generator_id = staged.add_generator(GeneratorInstanceType::Plugin(plugin));
-    let generator = staged
-        .generator_pool
-        .get(generator_id)
-        .cloned()
-        .context("Prepared generator is unavailable")?;
-    let track = staged
-        .tracks
-        .get_mut(track_id)
-        .context("Prepared track is unavailable")?;
-    track.track_type = TrackType::Midi;
-    track.name = name;
-    track.generator = Some(generator);
-    let track = track.clone();
-    let install = HostedPluginInstall::new(
-        PluginTarget::Generator(generator_id),
-        Some(track_id),
-        registry_id,
-        config,
-        prepared.processor,
-    );
-    let graph = HostedTrackGraph::from(&staged);
-    publish(
-        ctx,
-        prepared.instance,
-        staged,
-        install.0.with_track_graph(graph),
-        install.1,
-        true,
-    )?;
-    Ok(track)
+    let pending = begin_add_instrument(ctx, registry_id)?;
+    let completed = execute_install(pending)?;
+    match commit_install(ctx, completed) {
+        InstalledPlugin::Instrument(track) => Ok(track),
+        InstalledPlugin::Effect(_) => anyhow::bail!("instrument transaction returned an effect"),
+    }
 }
 
 /// Prepares and appends an external effect to the selected mixer channel.
@@ -151,102 +410,187 @@ pub fn add_effect(
     target: EffectTarget,
     registry_id: u32,
 ) -> anyhow::Result<EffectInstance> {
-    let (prepared, config, plugin) = prepare(ctx, registry_id, PluginKind::Effect)?;
-    let mut staged = ctx.app_state.clone();
-    let channel = channel_mut(&mut staged, &target)?;
-    let effect_id = channel.effects.insert(plugin);
-    let effect = channel
-        .effects
-        .get(effect_id)
-        .cloned()
-        .context("Prepared effect is unavailable")?;
-    let plugin_target = match target {
-        EffectTarget::Track(id) => PluginTarget::TrackEffect(id, effect_id),
-        EffectTarget::Bus(id) => PluginTarget::BusEffect(id, effect_id),
-        EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
-    };
-    let (install, receipt) =
-        HostedPluginInstall::new(plugin_target, None, registry_id, config, prepared.processor);
-    publish(ctx, prepared.instance, staged, install, receipt, false)?;
-    Ok(effect)
+    let pending = begin_add_effect(ctx, target, registry_id)?;
+    let completed = execute_install(pending)?;
+    match commit_install(ctx, completed) {
+        InstalledPlugin::Effect(effect) => Ok(effect),
+        InstalledPlugin::Instrument(_) => anyhow::bail!("effect transaction returned an instrument"),
+    }
 }
 
-fn publish(
-    ctx: &mut DawContext,
-    instance: karbeat_host::HostInstanceId,
+pub enum RemovedProjectItem {
+    Effect,
+    Track(crate::core::project::track::RemovedTrackType),
+    Bus,
+}
+
+pub struct PendingPluginRemoval {
     staged: ApplicationState,
-    install: HostedPluginInstall,
-    mut receipt: crate::audio::hosted_plugin::HostedInstallReceipt,
+    targets: Vec<(PluginTarget, bool)>,
+    graph: Option<HostedTrackGraph>,
+    bus: Option<crate::shared::BusId>,
+    handles: ControlHandles,
+    removed: RemovedProjectItem,
+}
+
+pub struct CompletedPluginRemoval {
+    staged: ApplicationState,
+    targets: Vec<PluginTarget>,
+    removed: RemovedProjectItem,
+}
+
+fn begin_removal(
+    ctx: &DawContext,
+    staged: ApplicationState,
+    targets: Vec<PluginTarget>,
     changes_graph: bool,
-) -> anyhow::Result<()> {
-    let target = install.target;
-    let command = karbeat_vst3::native::call(move |owner| owner.prepare_control(install))?;
+    bus: Option<crate::shared::BusId>,
+    removed: RemovedProjectItem,
+) -> PendingPluginRemoval {
+    let targets = targets
+        .into_iter()
+        .map(|target| {
+            let active = descriptor(ctx, target).is_some()
+                && !ctx.external_plugin_failures.contains_key(&target);
+            (target, active)
+        })
+        .collect();
+    let graph = changes_graph.then(|| HostedTrackGraph::from(&staged));
+    PendingPluginRemoval {
+        staged,
+        targets,
+        graph,
+        bus,
+        handles: ctx.control_handles(),
+        removed,
+    }
+}
+
+pub fn begin_remove_effect(
+    ctx: &DawContext,
+    target: EffectTarget,
+    effect: crate::shared::EffectId,
+) -> anyhow::Result<PendingPluginRemoval> {
+    let mut staged = ctx.app_state.clone();
+    channel_mut(&mut staged, &target)?
+        .effects
+        .remove(effect)
+        .context("Effect is unavailable")?;
+    let target = match target {
+        EffectTarget::Track(track) => PluginTarget::TrackEffect(track, effect),
+        EffectTarget::Bus(bus) => PluginTarget::BusEffect(bus, effect),
+        EffectTarget::Master => PluginTarget::MasterEffect(effect),
+    };
+    Ok(begin_removal(
+        ctx,
+        staged,
+        vec![target],
+        false,
+        None,
+        RemovedProjectItem::Effect,
+    ))
+}
+
+pub fn begin_delete_track(
+    ctx: &DawContext,
+    track: crate::shared::TrackId,
+) -> anyhow::Result<PendingPluginRemoval> {
+    let targets = track_targets(ctx, track);
+    let mut staged = ctx.app_state.clone();
+    let removed = staged.remove_track(track)?;
+    Ok(begin_removal(
+        ctx,
+        staged,
+        targets,
+        true,
+        None,
+        RemovedProjectItem::Track(removed),
+    ))
+}
+
+pub fn begin_delete_bus(
+    ctx: &DawContext,
+    bus: crate::shared::BusId,
+) -> anyhow::Result<PendingPluginRemoval> {
+    let targets = bus_targets(ctx, bus);
+    let mut staged = ctx.app_state.clone();
+    staged.mixer.remove_bus(bus)?;
+    Ok(begin_removal(
+        ctx,
+        staged,
+        targets,
+        true,
+        Some(bus),
+        RemovedProjectItem::Bus,
+    ))
+}
+
+pub fn execute_removal(
+    pending: PendingPluginRemoval,
+) -> anyhow::Result<CompletedPluginRemoval> {
+    use crate::audio::hosted_plugin::{HostedPluginRemoval, HostedRemovalStatus};
+
+    let mut expected = Vec::with_capacity(pending.targets.len());
+    for (target, active) in &pending.targets {
+        let instance = if *active {
+            Some(super::project_api::hosted_instance_with_handles(
+                &pending.handles,
+                *target,
+            )?)
+        } else {
+            None
+        };
+        expected.push((*target, instance));
+    }
+    let targets = pending.targets.iter().map(|(target, _)| *target).collect();
+    let (removal, receipt) = HostedPluginRemoval::new(expected, pending.graph);
+    let transfer = karbeat_vst3::native::call(move |owner| {
+        owner.prepare_control(removal.with_bus(pending.bus))
+    })?;
     {
-        let mut sender = ctx.command_sender.lock();
-        let sender = sender.as_mut().context("Audio engine is unavailable")?;
-        anyhow::ensure!(
-            sender.slots() >= 3,
-            "Audio command queue has insufficient lifecycle capacity"
-        );
+        let mut sender = pending.handles.command_sender.lock();
         sender
-            .push(AudioCommand::InstallHostedPlugin(command))
+            .as_mut()
+            .context("Audio engine is unavailable")?
+            .push(AudioCommand::RemoveHostedPlugins(transfer))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match receipt.status() {
-            HostedInstallStatus::Installed => break,
-            HostedInstallStatus::Pending => {
+            HostedRemovalStatus::Removed => break,
+            HostedRemovalStatus::Pending => {
                 if Instant::now() >= deadline && receipt.cancel() {
-                    anyhow::bail!("Plugin installation timed out before the engine accepted it");
+                    anyhow::bail!("Plugin removal timed out before the engine accepted it");
                 }
             }
-            HostedInstallStatus::Applying => {}
-            status => anyhow::bail!("Audio engine rejected plugin installation: {status:?}"),
+            HostedRemovalStatus::Applying => {}
+            status => anyhow::bail!("Audio engine rejected plugin removal: {status:?}"),
         }
         std::thread::sleep(Duration::from_millis(2));
     }
-    if let Some(output) = receipt.take_telemetry() {
-        if let Some(registry) = &mut ctx.telemetry_registry {
-            registry.insert_plugin_consumer(target, output);
-        }
-    }
-    if let Err(error) = karbeat_vst3::native::call(move |owner| owner.host.resume(instance)) {
-        ctx.send_audio_command(remove_command(target))
-            .context("Could not retire plugin after failed activation")?;
-        if changes_graph {
-            let graph = HostedTrackGraph::from(&ctx.app_state);
-            ctx.send_audio_command(AudioCommand::UpdateTrackGraph {
-                tracks: graph.tracks,
-                clips: graph.clips,
-                patterns: graph.patterns,
-            })?;
-            ctx.send_audio_command(AudioCommand::UpdateRouting {
-                routing: graph.routing,
-            })?;
-        }
-        return Err(error.into());
-    }
-    ctx.app_state = staged;
-    Ok(())
+    Ok(CompletedPluginRemoval {
+        staged: pending.staged,
+        targets,
+        removed: pending.removed,
+    })
 }
 
-fn remove_command(target: PluginTarget) -> AudioCommand {
-    match target {
-        PluginTarget::Generator(generator_id) => AudioCommand::RemoveGenerator { generator_id },
-        PluginTarget::TrackEffect(id, effect_id) => AudioCommand::RemoveEffect {
-            target: EffectTarget::Track(id),
-            effect_id,
-        },
-        PluginTarget::BusEffect(id, effect_id) => AudioCommand::RemoveEffect {
-            target: EffectTarget::Bus(id),
-            effect_id,
-        },
-        PluginTarget::MasterEffect(effect_id) => AudioCommand::RemoveEffect {
-            target: EffectTarget::Master,
-            effect_id,
-        },
+pub fn commit_removal(
+    ctx: &mut DawContext,
+    completed: CompletedPluginRemoval,
+) -> RemovedProjectItem {
+    if let Some(registry) = &mut ctx.telemetry_registry {
+        for target in &completed.targets {
+            registry.remove_plugin_consumer(target);
+        }
     }
+    for target in completed.targets {
+        ctx.external_plugin_failures.remove(&target);
+        ctx.hosted_targets.remove(&target);
+    }
+    ctx.app_state = completed.staged;
+    completed.removed
 }
 
 pub(crate) fn plugin_instance(ctx: &DawContext, target: PluginTarget) -> Option<&PluginInstance> {
@@ -339,15 +683,11 @@ pub fn capabilities(
     target: PluginTarget,
 ) -> anyhow::Result<HostCapabilities> {
     let id = super::project_api::hosted_instance(ctx, target)?;
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.capabilities(id)
-    })?)
+    capabilities_for(id)
 }
 
-/// Opens an external plugin's native editor after assigning a project-derived window context label.
-pub fn open_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    let context = match target {
+pub fn editor_context(ctx: &DawContext, target: PluginTarget) -> String {
+    match target {
         PluginTarget::Generator(generator) => ctx
             .app_state
             .tracks
@@ -374,19 +714,19 @@ pub fn open_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result
             .map(|bus| bus.name.clone())
             .unwrap_or_else(|| "Bus".into()),
         PluginTarget::MasterEffect(_) => "Master".into(),
-    };
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.set_editor_context(id, context)?;
-        owner.open_editor(id)
-    })?)
+    }
+}
+
+/// Opens an external plugin's native editor after assigning a project-derived window context label.
+pub fn open_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
+    let id = super::project_api::hosted_instance(ctx, target)?;
+    open_editor_for(id, editor_context(ctx, target))
 }
 
 /// Closes the native editor associated with the targeted external plugin instance.
 pub fn close_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
     let id = super::project_api::hosted_instance(ctx, target)?;
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.close_editor(id)
-    })?)
+    close_editor_for(id)
 }
 
 /// Sets a normalized parameter value through the external plugin's main-thread controller.
@@ -397,59 +737,7 @@ pub fn set_parameter(
     value: f64,
 ) -> anyhow::Result<()> {
     let id = super::project_api::hosted_instance(ctx, target)?;
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.set_parameter(id, parameter, value)
-    })?)
-}
-
-fn remove_prepared(
-    ctx: &mut DawContext,
-    staged: ApplicationState,
-    targets: Vec<PluginTarget>,
-    changes_graph: bool,
-    bus: Option<crate::shared::BusId>,
-) -> anyhow::Result<()> {
-    use crate::audio::hosted_plugin::{HostedPluginRemoval, HostedRemovalStatus};
-    let mut expected = Vec::with_capacity(targets.len());
-    for target in &targets {
-        let instance = if descriptor(ctx, *target).is_some()
-            && !ctx.external_plugin_failures.contains_key(target)
-        {
-            Some(super::project_api::hosted_instance(ctx, *target)?)
-        } else {
-            None
-        };
-        expected.push((*target, instance));
-    }
-    let graph = changes_graph.then(|| HostedTrackGraph::from(&staged));
-    let (removal, receipt) = HostedPluginRemoval::new(expected, graph);
-    let transfer =
-        karbeat_vst3::native::call(move |owner| owner.prepare_control(removal.with_bus(bus)))?;
-    ctx.send_audio_command(AudioCommand::RemoveHostedPlugins(transfer))?;
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        match receipt.status() {
-            HostedRemovalStatus::Removed => break,
-            HostedRemovalStatus::Pending => {
-                if Instant::now() >= deadline && receipt.cancel() {
-                    anyhow::bail!("Plugin removal timed out before the engine accepted it");
-                }
-            }
-            HostedRemovalStatus::Applying => {}
-            status => anyhow::bail!("Audio engine rejected plugin removal: {status:?}"),
-        }
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    if let Some(registry) = &mut ctx.telemetry_registry {
-        for target in &targets {
-            registry.remove_plugin_consumer(target);
-        }
-    }
-    for target in targets {
-        ctx.external_plugin_failures.remove(&target);
-    }
-    ctx.app_state = staged;
-    Ok(())
+    set_parameter_for(id, parameter, value)
 }
 
 /// Removes an external effect after the audio thread has retired its hosted processor.
@@ -460,20 +748,13 @@ pub fn remove_effect(
     target: EffectTarget,
     effect: crate::shared::EffectId,
 ) -> anyhow::Result<()> {
-    let mut staged = ctx.app_state.clone();
-    channel_mut(&mut staged, &target)?
-        .effects
-        .remove(effect)
-        .context("Effect is unavailable")?;
-    let target = match target {
-        EffectTarget::Track(track) => PluginTarget::TrackEffect(track, effect),
-        EffectTarget::Bus(bus) => PluginTarget::BusEffect(bus, effect),
-        EffectTarget::Master => PluginTarget::MasterEffect(effect),
-    };
-    remove_prepared(ctx, staged, vec![target], false, None)
+    let pending = begin_remove_effect(ctx, target, effect)?;
+    let completed = execute_removal(pending)?;
+    let _ = commit_removal(ctx, completed);
+    Ok(())
 }
 
-pub(crate) fn track_targets(ctx: &DawContext, track: crate::shared::TrackId) -> Vec<PluginTarget> {
+pub fn track_targets(ctx: &DawContext, track: crate::shared::TrackId) -> Vec<PluginTarget> {
     let mut targets = Vec::new();
     if let Some(generator) = ctx
         .app_state
@@ -500,11 +781,14 @@ pub fn delete_track(
     ctx: &mut DawContext,
     track: crate::shared::TrackId,
 ) -> anyhow::Result<crate::core::project::track::RemovedTrackType> {
-    let targets = track_targets(ctx, track);
-    let mut staged = ctx.app_state.clone();
-    let removed = staged.remove_track(track)?;
-    remove_prepared(ctx, staged, targets, true, None)?;
-    Ok(removed)
+    let pending = begin_delete_track(ctx, track)?;
+    let completed = execute_removal(pending)?;
+    match commit_removal(ctx, completed) {
+        RemovedProjectItem::Track(removed) => Ok(removed),
+        RemovedProjectItem::Effect | RemovedProjectItem::Bus => {
+            anyhow::bail!("Track removal transaction returned an incompatible result")
+        }
+    }
 }
 
 /// Formats a normalized parameter value using the external plugin controller's display rules.
@@ -515,9 +799,7 @@ pub fn parameter_text(
     value: f64,
 ) -> anyhow::Result<String> {
     let id = super::project_api::hosted_instance(ctx, target)?;
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.parameter_text(id, parameter, value)
-    })?)
+    parameter_text_for(id, parameter, value)
 }
 
 /// Parses plugin-specific display text into a normalized parameter value.
@@ -528,9 +810,7 @@ pub fn parse_parameter(
     text: String,
 ) -> anyhow::Result<f64> {
     let id = super::project_api::hosted_instance(ctx, target)?;
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.parse_parameter(id, parameter, &text)
-    })?)
+    parse_parameter_for(id, parameter, text)
 }
 
 /// Converts between a parameter's plain and normalized domains.
@@ -545,13 +825,7 @@ pub fn convert_parameter(
     to_normalized: bool,
 ) -> anyhow::Result<f64> {
     let id = super::project_api::hosted_instance(ctx, target)?;
-    Ok(karbeat_vst3::native::call(move |owner| {
-        if to_normalized {
-            owner.host.plain_to_normalized(id, parameter, value)
-        } else {
-            owner.host.normalized_to_plain(id, parameter, value)
-        }
-    })?)
+    convert_parameter_for(id, parameter, value, to_normalized)
 }
 
 /// Returns the recorded hosting failure for an external plugin target, if one is awaiting recovery.
@@ -559,18 +833,32 @@ pub fn failure(ctx: &DawContext, target: PluginTarget) -> Option<String> {
     ctx.external_plugin_failures.get(&target).cloned()
 }
 
-/// Recreates and reinstalls an external plugin previously marked as failed.
-///
-/// The saved state and bypass flag are restored, and the failure marker is removed only after the
-/// replacement has been accepted and activated.
-pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
+pub struct PendingPluginRetry {
+    target: PluginTarget,
+    track: Option<crate::shared::TrackId>,
+    registry_id: u32,
+    bypass: bool,
+    descriptor: karbeat_host::PluginDescriptor,
+    config: ProcessingConfig,
+    state: Option<karbeat_host::PluginState>,
+    handles: ControlHandles,
+}
+
+pub struct CompletedPluginRetry {
+    target: PluginTarget,
+    instance: karbeat_host::HostInstanceId,
+    telemetry: Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>>,
+}
+
+pub fn begin_retry(
+    ctx: &DawContext,
+    target: PluginTarget,
+) -> anyhow::Result<PendingPluginRetry> {
     anyhow::ensure!(
         ctx.external_plugin_failures.contains_key(&target),
         "Plugin is not awaiting recovery"
     );
-    let plugin = plugin_instance(ctx, target)
-        .context("Plugin target is unavailable")?
-        .clone();
+    let plugin = plugin_instance(ctx, target).context("Plugin target is unavailable")?;
     let external = plugin.external.as_ref().context("Plugin is not external")?;
     let descriptor = ctx
         .plugin_catalog
@@ -592,9 +880,6 @@ pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
         sidechain_channels: 0,
         offline: false,
     };
-    let state = external.state.clone();
-    let prepared = karbeat_vst3::native::prepare_instance(descriptor, config.clone(), state)?;
-    let instance = prepared.instance;
     let track = if let PluginTarget::Generator(id) = target {
         Some(
             ctx.app_state
@@ -612,30 +897,131 @@ pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
     } else {
         None
     };
-    let (install, receipt) = HostedPluginInstall::new(
+    Ok(PendingPluginRetry {
         target,
         track,
-        plugin.registry_id,
+        registry_id: plugin.registry_id,
+        bypass: plugin.bypass,
+        descriptor,
         config,
+        state: external.state.clone(),
+        handles: ctx.control_handles(),
+    })
+}
+
+pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPluginRetry> {
+    let prepared = karbeat_vst3::native::prepare_instance(
+        pending.descriptor,
+        pending.config.clone(),
+        pending.state,
+    )?;
+    let instance = prepared.instance;
+    let (install, receipt) = HostedPluginInstall::new(
+        pending.target,
+        pending.track,
+        pending.registry_id,
+        pending.config,
         prepared.processor,
     );
-    publish(
-        ctx,
+    karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
+    let command = karbeat_vst3::native::call(move |owner| {
+        owner.prepare_control(install.replacing_missing().with_bypass(pending.bypass))
+    })?;
+    {
+        let mut sender = pending.handles.command_sender.lock();
+        sender
+            .as_mut()
+            .context("Audio engine is unavailable")?
+            .push(AudioCommand::InstallHostedPlugin(command))
+            .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
+    }
+    Ok(CompletedPluginRetry {
+        target: pending.target,
         instance,
-        ctx.app_state.clone(),
-        install.replacing_missing().with_bypass(plugin.bypass),
-        receipt,
-        false,
-    )?;
-    ctx.external_plugin_failures.remove(&target);
+        telemetry: wait_for_install(receipt)?,
+    })
+}
+
+pub fn commit_retry(ctx: &mut DawContext, completed: CompletedPluginRetry) {
+    if let Some(output) = completed.telemetry
+        && let Some(registry) = &mut ctx.telemetry_registry
+    {
+        registry.insert_plugin_consumer(completed.target, output);
+    }
+    ctx.external_plugin_failures.remove(&completed.target);
+    ctx.hosted_targets.insert(
+        completed.target,
+        crate::context::HostedTargetState::Active(completed.instance),
+    );
+}
+
+/// Recreates and reinstalls an external plugin previously marked as failed.
+///
+/// The saved state and bypass flag are restored, and the failure marker is removed only after the
+/// replacement has been accepted and activated.
+pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
+    let pending = begin_retry(ctx, target)?;
+    let completed = execute_retry(pending)?;
+    commit_retry(ctx, completed);
     Ok(())
 }
 
-pub(crate) fn reconfigure_for_audio_config(
-    ctx: &mut DawContext,
+struct PendingReconfigurationTarget {
+    target: PluginTarget,
+    kind: PluginKind,
+    bypass: bool,
+}
+
+pub struct PendingPluginReconfiguration {
+    targets: Vec<PendingReconfigurationTarget>,
     sample_rate: u32,
     block_size: usize,
-) -> anyhow::Result<()> {
+    handles: ControlHandles,
+}
+
+pub struct CompletedPluginReconfiguration {
+    states: Vec<(
+        PluginTarget,
+        karbeat_host::PluginState,
+        karbeat_host::HostInstanceId,
+    )>,
+}
+
+pub fn begin_reconfigure_for_audio_config(
+    ctx: &DawContext,
+    sample_rate: u32,
+    block_size: usize,
+) -> anyhow::Result<Option<PendingPluginReconfiguration>> {
+    let mut targets = Vec::new();
+    for target in all_external_targets(ctx) {
+        if ctx.external_plugin_failures.contains_key(&target) {
+            continue;
+        }
+        let plugin = plugin_instance(ctx, target).context("External plugin target disappeared")?;
+        let kind = plugin
+            .external
+            .as_ref()
+            .context("External plug-in metadata disappeared")?
+            .descriptor
+            .kind;
+        targets.push(PendingReconfigurationTarget {
+            target,
+            kind,
+            bypass: plugin.bypass,
+        });
+    }
+    if targets.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(PendingPluginReconfiguration {
+        targets,
+        sample_rate,
+        block_size,
+        handles: ctx.control_handles(),
+    }))
+}
+
+fn all_external_targets(ctx: &DawContext) -> Vec<PluginTarget> {
     let mut targets = Vec::new();
     for (id, generator) in &ctx.app_state.generator_pool {
         if matches!(
@@ -677,83 +1063,90 @@ pub(crate) fn reconfigure_for_audio_config(
                     .map(|_| PluginTarget::MasterEffect(effect.id))
             }),
     );
-    targets.retain(|target| !ctx.external_plugin_failures.contains_key(target));
-    if targets.is_empty() {
-        return Ok(());
-    }
+    targets
+}
 
-    let mut replacements = Vec::with_capacity(targets.len());
-    let mut prepared_instances = Vec::with_capacity(targets.len());
-    let mut captured_states = Vec::with_capacity(targets.len());
-    for target in targets {
-        let plugin = plugin_instance(ctx, target).context("External plugin target disappeared")?;
-        let bypass = plugin.bypass;
-        let kind = plugin
-            .external
-            .as_ref()
-            .context("External plug-in metadata disappeared")?
-            .descriptor
-            .kind;
-        let current = super::project_api::hosted_instance(ctx, target)?;
+pub fn execute_reconfiguration(
+    pending: PendingPluginReconfiguration,
+) -> anyhow::Result<CompletedPluginReconfiguration> {
+    let mut replacements = Vec::with_capacity(pending.targets.len());
+    let mut states = Vec::with_capacity(pending.targets.len());
+    for item in pending.targets {
+        let current = super::project_api::hosted_instance_with_handles(
+            &pending.handles,
+            item.target,
+        )?;
         let prepared = karbeat_vst3::native::prepare_reconfigured_instance(
             current,
-            sample_rate,
-            block_size.max(512),
+            pending.sample_rate,
+            pending.block_size.max(512),
         )?;
+        let instance = prepared.instance;
+        karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
         let config = ProcessingConfig {
-            sample_rate: f64::from(sample_rate),
-            max_block_size: 65_536_usize.max(block_size),
-            main_input_channels: if kind == PluginKind::Instrument { 0 } else { 2 },
+            sample_rate: f64::from(pending.sample_rate),
+            max_block_size: 65_536_usize.max(pending.block_size),
+            main_input_channels: if item.kind == PluginKind::Instrument { 0 } else { 2 },
             main_output_channels: 2,
             sidechain_channels: 0,
             offline: false,
         };
-        prepared_instances.push(prepared.instance);
-        captured_states.push((target, prepared.state.clone()));
+        states.push((item.target, prepared.state.clone(), instance));
         replacements.push(HostedPluginReplacement::new(
-            target,
+            item.target,
             current,
             config,
             prepared.processor,
-            bypass,
+            item.bypass,
         ));
     }
-
-    let (reconfiguration, receipt) =
-        HostedPluginReconfiguration::new(replacements, sample_rate, block_size);
+    let (reconfiguration, receipt) = HostedPluginReconfiguration::new(
+        replacements,
+        pending.sample_rate,
+        pending.block_size,
+    );
     let transfer = karbeat_vst3::native::call(move |owner| owner.prepare_control(reconfiguration))?;
-    ctx.send_audio_command(AudioCommand::ReconfigureHostedPlugins(transfer))?;
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        match receipt.status() {
-            HostedInstallStatus::Installed => break,
-            HostedInstallStatus::Pending => {
-                if Instant::now() >= deadline && receipt.cancel() {
-                    anyhow::bail!(
-                        "Plug-in reconfiguration timed out before the engine accepted it"
-                    );
-                }
-            }
-            HostedInstallStatus::Applying => {}
-            status => anyhow::bail!("Audio engine rejected plug-in reconfiguration: {status:?}"),
-        }
-        std::thread::sleep(Duration::from_millis(2));
+    {
+        let mut sender = pending.handles.command_sender.lock();
+        sender
+            .as_mut()
+            .context("Audio engine is unavailable")?
+            .push(AudioCommand::ReconfigureHostedPlugins(transfer))
+            .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
+    let _ = wait_for_install(receipt)?;
+    Ok(CompletedPluginReconfiguration { states })
+}
 
-    for instance in prepared_instances {
-        karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
-    }
-    for (target, state) in captured_states {
+pub fn commit_reconfiguration(
+    ctx: &mut DawContext,
+    completed: CompletedPluginReconfiguration,
+) {
+    for (target, state, instance) in completed.states {
         if let Some(external) =
             plugin_instance_mut(ctx, target).and_then(|plugin| plugin.external.as_mut())
         {
             external.state = Some(state);
         }
+        ctx.hosted_targets
+            .insert(target, crate::context::HostedTargetState::Active(instance));
     }
+}
+
+pub(crate) fn reconfigure_for_audio_config(
+    ctx: &mut DawContext,
+    sample_rate: u32,
+    block_size: usize,
+) -> anyhow::Result<()> {
+    let Some(pending) = begin_reconfigure_for_audio_config(ctx, sample_rate, block_size)? else {
+        return Ok(());
+    };
+    let completed = execute_reconfiguration(pending)?;
+    commit_reconfiguration(ctx, completed);
     Ok(())
 }
 
-pub(crate) fn bus_targets(ctx: &DawContext, bus: crate::shared::BusId) -> Vec<PluginTarget> {
+pub fn bus_targets(ctx: &DawContext, bus: crate::shared::BusId) -> Vec<PluginTarget> {
     ctx.app_state
         .mixer
         .buses
@@ -771,8 +1164,8 @@ pub(crate) fn bus_targets(ctx: &DawContext, bus: crate::shared::BusId) -> Vec<Pl
 
 /// Removes a mixer bus and retires every external effect hosted by that bus before committing state.
 pub fn delete_bus(ctx: &mut DawContext, bus: crate::shared::BusId) -> anyhow::Result<()> {
-    let targets = bus_targets(ctx, bus);
-    let mut staged = ctx.app_state.clone();
-    staged.mixer.remove_bus(bus)?;
-    remove_prepared(ctx, staged, targets, true, Some(bus))
+    let pending = begin_delete_bus(ctx, bus)?;
+    let completed = execute_removal(pending)?;
+    let _ = commit_removal(ctx, completed);
+    Ok(())
 }

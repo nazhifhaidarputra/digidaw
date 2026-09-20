@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/export_project_state.dart';
-import 'package:karbeat/app/providers/backend_operation_gate.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/constants/audio_format.dart';
@@ -113,8 +113,8 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
             _exportProgress = progress;
           });
         }
-      }).guardedByBackendOperationGate(
-        ref.read(backendOperationGateProvider.notifier),
+      }).suppressesTelemetryPolling(
+        ref.read(telemetryPollingSuppressionProvider.notifier),
       )();
     } catch (e) {
       ref.read(notificationProvider.notifier).error(e, title: 'Export failed');

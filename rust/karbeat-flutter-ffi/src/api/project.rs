@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
 use karbeat_core::audio::writer::{AudioExportConfig, BitDepth, WavAudioWriterConfig};
-pub use karbeat_core::context::DawContext;
+use karbeat_core::context::DawContext as CoreDawContext;
+use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
@@ -16,8 +17,16 @@ use karbeat_core::core::project::{
 };
 use serde::Serialize;
 
-use crate::api::waveform::{WaveformHandle, get_waveform_handle};
+use crate::api::waveform::WaveformHandle;
+use crate::api::context::DawSessionInner;
 use crate::frb_generated::StreamSink;
+
+/// Shared bridge handle whose inner guards control access to the core DAW state.
+#[frb(opaque)]
+#[derive(Clone)]
+pub struct DawContext {
+    pub(crate) inner: Arc<DawSessionInner>,
+}
 
 pub enum UiTrackType {
     Audio,
@@ -355,12 +364,19 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
 }
 
 impl AudioWaveformUiForAudioProperties {
-    pub fn try_from_with_context(ctx: &DawContext, value: &AudioWaveform) -> Result<Self, String> {
+    #[frb(ignore)]
+    pub fn try_from_with_context(
+        ctx: &CoreDawContext,
+        value: &AudioWaveform,
+    ) -> Result<Self, String> {
         let Some(id) = value.id else {
             return Err(String::from("This audio waveform does not have an ID"));
         };
-        let waveform_handle =
-            get_waveform_handle(ctx, id.to_u64()).ok_or("Cannot get this waveform handle")?;
+        let waveform = ctx
+            .app_state
+            .get_audio_source(&id)
+            .ok_or("Cannot get this waveform handle")?;
+        let waveform_handle = WaveformHandle::from_waveform(waveform.clone());
         Ok(Self {
             id: Some(id.to_u64()),
             buffer_handle: waveform_handle,
@@ -519,25 +535,26 @@ pub enum AudioExportConfigDTO {
 
 /// Get the current project metadata state from the backend
 pub fn get_project_metadata(ctx: &DawContext) -> Result<UiProjectMetadata, String> {
-    project_api::get_project_metadata(ctx, |m| UiProjectMetadata::from(m.clone()))
+    project_api::get_project_metadata(&ctx.read(), |m| UiProjectMetadata::from(m.clone()))
         .map_err(|e| e.to_string())
 }
 
 pub fn update_project_metadata(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     metadata: UiProjectMetadata,
 ) -> Result<UiProjectMetadata, String> {
+    let mut ctx = ctx.project_write();
     let created_at = ctx.app_state.metadata.created_at;
     let mut metadata = ProjectMetadata::from(metadata);
     metadata.created_at = created_at;
-    project_api::update_project_metadata(ctx, metadata)
+    project_api::update_project_metadata(&mut ctx, metadata)
         .map(UiProjectMetadata::from)
         .map_err(|error| error.to_string())
 }
 
 /// Get the transport state from the backend
 pub fn get_transport_state(ctx: &DawContext) -> Result<UiTransportState, String> {
-    project_api::get_transport_state(ctx, |t| UiTransportState::from(t.clone()))
+    project_api::get_transport_state(&ctx.read(), |t| UiTransportState::from(t.clone()))
         .map_err(|e| e.to_string())
 }
 
@@ -545,7 +562,7 @@ pub fn get_transport_state(ctx: &DawContext) -> Result<UiTransportState, String>
 pub fn get_audio_source_list(
     ctx: &DawContext,
 ) -> Option<HashMap<u64, AudioWaveformUiForSourceList>> {
-    audio_waveform_api::get_audio_source_list(ctx, |id, wf| {
+    audio_waveform_api::get_audio_source_list(&ctx.read(), |id, wf| {
         (id, AudioWaveformUiForSourceList::from(wf))
     })
     .ok()
@@ -553,7 +570,7 @@ pub fn get_audio_source_list(
 
 /// Get generator list used in the project
 pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u64, UiGeneratorInstance>, String> {
-    project_api::get_generator_list(ctx, |id, generator| {
+    project_api::get_generator_list(&ctx.read(), |id, generator| {
         (id, UiGeneratorInstance::from(generator))
     })
     .map_err(|e| e.to_string())
@@ -563,15 +580,16 @@ pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u64, UiGeneratorIn
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> Result<u64, String> {
-    let source_id =
-        audio_waveform_api::add_audio_source(ctx, file_path).map_err(|e| e.to_string())?;
+pub fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, String> {
+    let source_id = audio_waveform_api::add_audio_source(&mut ctx.project_write(), file_path)
+        .map_err(|e| e.to_string())?;
     Ok(source_id.to_u64())
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-pub fn add_new_audio_track(ctx: &mut DawContext) -> UiTrack {
-    let track = { track_api::add_new_audio_track(ctx) };
+pub fn add_new_audio_track(ctx: &DawContext) -> UiTrack {
+    let mut ctx = ctx.project_write();
+    let track = track_api::add_new_audio_track(&mut ctx);
     log::info!("[add_new_track] successfully added new track");
     UiTrack::from_track(&track, &ctx.app_state)
 }
@@ -580,7 +598,8 @@ pub fn add_new_audio_track(ctx: &mut DawContext) -> UiTrack {
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u64, UiTrack>, String> {
-    track_api::get_tracks_ordered(ctx, |id, track| {
+    let ctx = ctx.read();
+    track_api::get_tracks_ordered(&ctx, |id, track| {
         (id, UiTrack::from_track(track, &ctx.app_state))
     })
     .map_err(|e| e.to_string())
@@ -589,7 +608,7 @@ pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u64, UiTrack>, String> {
 /// Export project to flutter. also report progress via StreamSink
 #[frb]
 pub fn export_project_flutter(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     output_path: String,
     config: AudioExportConfigDTO,
     tail_handling: TailHandlingDTO,
@@ -619,8 +638,10 @@ pub fn export_project_flutter(
         }
     };
 
-    project_api::export_project(
-        ctx,
+    let operation = ctx.begin_project_operation();
+    let pending = project_api::begin_project_export(&operation.read_core());
+    project_api::execute_project_export(
+        pending,
         &output_path,
         core_config,
         tail_handling.into(),

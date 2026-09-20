@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::api::context::DawContext;
 use crate::api::plugins::opaque::ZeroCopyHandle;
 use crate::api::project::{AudioWaveformUiForAudioProperties, UiAudioHardwareConfig};
 use crate::frb_generated::StreamSink;
@@ -8,7 +9,6 @@ use flutter_rust_bridge::frb;
 use karbeat_core::api::audio_api;
 use karbeat_core::audio::event::{PluginTarget, TransportFeedback};
 use karbeat_core::commands::{AudioFeedback, EffectTarget, MixerChannelTarget};
-use karbeat_core::context::DawContext;
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
 
 // ============================================================================
@@ -303,8 +303,13 @@ pub fn create_feedback_stream(
     ctx: &DawContext,
     sink: StreamSink<UiAudioFeedback>,
 ) -> Result<(), String> {
-    let consumer_slot = Arc::clone(&ctx.feedback_consumer);
-    let project_state = Arc::clone(&ctx.project_state_feedback);
+    let (consumer_slot, project_state) = {
+        let ctx = ctx.read();
+        (
+            Arc::clone(&ctx.feedback_consumer),
+            Arc::clone(&ctx.project_state_feedback),
+        )
+    };
 
     let mut consumer = consumer_slot
         .lock()
@@ -339,7 +344,7 @@ pub fn create_position_stream(
     sink: StreamSink<UiTransportFeedback>,
     ctx: &DawContext,
 ) -> Result<(), String> {
-    let consumer_slot = Arc::clone(&ctx.position_consumer);
+    let consumer_slot = Arc::clone(&ctx.read().position_consumer);
 
     // Take the consumer out of the Mutex so we own it
     let mut consumer = consumer_slot
@@ -378,14 +383,17 @@ pub fn get_audio_properties(
     ctx: &DawContext,
     id: u64,
 ) -> Option<AudioWaveformUiForAudioProperties> {
-    audio_api::get_audio_source(ctx, AudioSourceId::from_u64(id), |waveform| {
-        AudioWaveformUiForAudioProperties::try_from_with_context(ctx, waveform).ok()
+    let ctx = ctx.read();
+    audio_api::get_audio_source(&ctx, AudioSourceId::from_u64(id), |waveform| {
+        AudioWaveformUiForAudioProperties::try_from_with_context(&ctx, waveform).ok()
     })?
 }
 
 /// ACTION: Play the sound via the Engine
-pub fn play_source_preview(ctx: &mut DawContext, id: u64) {
-    if let Err(e) = audio_api::play_source_preview(ctx, AudioSourceId::from_u64(id)) {
+pub fn play_source_preview(ctx: &DawContext, id: u64) {
+    if let Err(e) =
+        audio_api::play_source_preview(&mut ctx.runtime_write(), AudioSourceId::from_u64(id))
+    {
         log::warn!("Preview failed: {}", e);
     } else {
         log::info!("Preview command sent for ID: {}", id);
@@ -394,24 +402,25 @@ pub fn play_source_preview(ctx: &mut DawContext, id: u64) {
 
 /// Preview a browser sample without adding it to the project asset library.
 /// Playback is capped by the audio engine at 15 seconds.
-pub fn play_file_preview(ctx: &mut DawContext, file_path: &str) -> Result<(), String> {
-    audio_api::play_file_preview(ctx, file_path).map_err(|error| error.to_string())
+pub fn play_file_preview(ctx: &DawContext, file_path: &str) -> Result<(), String> {
+    audio_api::play_file_preview(&mut ctx.runtime_write(), file_path)
+        .map_err(|error| error.to_string())
 }
 
-pub fn stop_all_previews(ctx: &mut DawContext) {
-    audio_api::stop_all_previews(ctx);
+pub fn stop_all_previews(ctx: &DawContext) {
+    audio_api::stop_all_previews(&mut ctx.runtime_write());
     log::info!("Stopped all preview sounds");
 }
 
 pub fn get_audio_config(ctx: &DawContext) -> Result<UiAudioHardwareConfig, String> {
-    Ok(audio_api::get_audio_config(ctx, |config| {
+    Ok(audio_api::get_audio_config(&ctx.read(), |config| {
         UiAudioHardwareConfig::from(config)
     }))
 }
 
 /// play preview sound when drawing note or pressing the piano tile on the UI
 pub fn play_preview_note(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     track_id: u64,
     note_key: i32,
     velocity: i32,
@@ -426,7 +435,7 @@ pub fn play_preview_note(
     }
 
     audio_api::play_preview_note(
-        ctx,
+        &mut ctx.runtime_write(),
         TrackId::from_u64(track_id),
         note_key as u8,
         velocity as u8,
@@ -438,7 +447,7 @@ pub fn play_preview_note(
 /// Play preview sound directly on a generator (without requiring a track).
 /// Used in plugin editor screens to test synth sounds.
 pub fn play_preview_note_generator(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     generator_id: u64,
     note_key: i32,
     velocity: i32,
@@ -453,7 +462,7 @@ pub fn play_preview_note_generator(
     }
 
     audio_api::play_preview_note_generator(
-        ctx,
+        &mut ctx.runtime_write(),
         GeneratorId::from_u64(generator_id),
         note_key as u8,
         velocity as u8,
@@ -463,6 +472,6 @@ pub fn play_preview_note_generator(
 }
 
 #[frb(sync)]
-pub fn set_metronome_active(ctx: &mut DawContext, active: bool) {
-    audio_api::set_metronome_active(ctx, active);
+pub fn set_metronome_active(ctx: &DawContext, active: bool) {
+    audio_api::set_metronome_active(&mut ctx.runtime_write(), active);
 }

@@ -2,8 +2,11 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
@@ -15,13 +18,50 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 class SourceListScreen extends ConsumerWidget {
   const SourceListScreen({super.key});
 
-  Future<void> _pickFile(WidgetRef ref) async {
-    FilePickerResult? result = await FilePicker.pickFiles(type: FileType.audio);
+  Future<void> _pickFile(BuildContext context, WidgetRef ref) async {
+    final notifications = ref.read(notificationProvider.notifier);
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(type: FileType.audio);
+    } catch (error, stackTrace) {
+      AppLogger.error('Could not select an audio file: $error');
+      notifications.error(
+        error,
+        title: 'Could not select audio',
+        stackTrace: stackTrace,
+      );
+      return;
+    }
 
-    if (result != null && result.files.single.path != null) {
-      String path = result.files.single.path!;
-      final ctx = ref.read(projectProvider.notifier).dawContext;
-      await addAudioSource(ctx: ctx, filePath: path);
+    final path = result?.files.single.path;
+    if (path == null || !context.mounted) return;
+
+    final projectNotifier = ref.read(projectProvider.notifier);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final dialog = showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (_) =>
+          const PopScope(canPop: false, child: _AudioImportDialog()),
+    );
+
+    Result<int>? importResult;
+    try {
+      importResult = await projectNotifier.loadAudioSource(path);
+    } catch (error, stackTrace) {
+      AppLogger.error('Unexpected audio import failure: $error');
+      notifications.error(
+        error,
+        title: 'Could not load audio',
+        stackTrace: stackTrace,
+      );
+    } finally {
+      if (navigator.mounted && navigator.canPop()) navigator.pop();
+      await dialog;
+    }
+
+    if (context.mounted && importResult?.isOk() == true) {
       ref.invalidate(audioSourcesProvider);
     }
   }
@@ -89,7 +129,7 @@ class SourceListScreen extends ConsumerWidget {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickFile(ref),
+        onPressed: () => _pickFile(context, ref),
         child: const Icon(Icons.add),
       ),
       body: CustomScrollView(
@@ -323,6 +363,29 @@ class SourceListScreen extends ConsumerWidget {
           // Extra padding at bottom for FAB
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
+      ),
+    );
+  }
+}
+
+class _AudioImportDialog extends StatelessWidget {
+  const _AudioImportDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Card(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading audio...'),
+            ],
+          ),
+        ),
       ),
     );
   }

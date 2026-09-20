@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
@@ -269,9 +271,9 @@ class TrackHeader extends ConsumerWidget {
           title: "Delete Track",
           icon: Icons.delete,
           isDestructive: true,
-          onTap: () {
+          onTap: () async {
             AppLogger.info("Delete track requested for ID: ${track.id}");
-            ref
+            await ref
                 .read(trackListStateProvider.notifier)
                 .deleteTrack(trackId: trackId);
           },
@@ -360,7 +362,7 @@ class TrackHeader extends ConsumerWidget {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 Text(
-                                  "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
+                                  track.trackType.name.toUpperCase(),
                                   style: TextStyle(
                                     color: trackForeground.withValues(
                                       alpha: 0.8,
@@ -426,7 +428,7 @@ class TrackHeader extends ConsumerWidget {
 
 class HeaderResizeHandle extends StatefulWidget {
   const HeaderResizeHandle({
-    super.key, 
+    super.key,
     required this.onDelta,
     required this.onReset,
     this.hitExtent = 6.0,

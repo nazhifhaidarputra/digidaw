@@ -26,6 +26,19 @@ void main() {
     expect(project.generators.containsKey(10), isFalse);
     expect(project.generators.containsKey(20), isTrue);
   });
+
+  test('audio loading failures are returned instead of escaping', () async {
+    final container = ProviderContainer.test(
+      overrides: [projectProvider.overrideWith(_ProjectNotifier.new)],
+    );
+    await container.read(projectProvider.future);
+
+    final result = await container
+        .read(projectProvider.notifier)
+        .loadAudioSource('/missing/audio.wav');
+
+    expect(result.isErr(), isTrue);
+  });
 }
 
 ApplicationDataStore _projectData() {

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:karbeat/app/providers/backend_operation_gate.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
@@ -298,8 +298,8 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   }
 
   Future<T> _runBackendOperation<T>(Future<T> Function() operation) {
-    return operation.guardedByBackendOperationGate(
-      ref.read(backendOperationGateProvider.notifier),
+    return operation.suppressesTelemetryPolling(
+      ref.read(telemetryPollingSuppressionProvider.notifier),
     )();
   }
 

@@ -33,11 +33,44 @@ pub enum TailHandling {
     WrapRemainder,
 }
 
+pub struct PendingAudioExport {
+    app: crate::core::project::ApplicationState,
+    plugin_registry: PluginRegistry,
+    handles: crate::context::ControlHandles,
+}
+
+pub fn begin_export(ctx: &DawContext) -> PendingAudioExport {
+    PendingAudioExport {
+        app: ctx.app_state.clone(),
+        plugin_registry: ctx.plugin_registry.clone(),
+        handles: ctx.control_handles(),
+    }
+}
+
 /// Export project to a sound file based on provided writer
 /// Generic, UI-agnostic.
 /// `progress_callback` should return `true` to continue, or `false` to abort rendering.
 pub fn export_project<F>(
     ctx: &mut DawContext,
+    output_path: &str,
+    config: AudioExportConfig,
+    tail_handling: TailHandling,
+    progress_callback: F,
+) -> Result<(), AudioExportError>
+where
+    F: FnMut(f32) -> bool + Send,
+{
+    execute_export(
+        begin_export(ctx),
+        output_path,
+        config,
+        tail_handling,
+        progress_callback,
+    )
+}
+
+pub fn execute_export<F>(
+    pending: PendingAudioExport,
     output_path: &str,
     config: AudioExportConfig,
     tail_handling: TailHandling,
@@ -47,14 +80,19 @@ where
     F: FnMut(f32) -> bool + Send,
 {
     log::info!("Starting offline render to: {}", output_path);
-    let plugin_registry = ctx.plugin_registry.clone();
 
     let (snapshot_tx, snapshot_rx) = std::sync::mpsc::channel();
 
-    ctx.send_audio_command(AudioCommand::QueryAudioExportSnapshot {
-        response_tx: snapshot_tx,
-    })
-    .map_err(|_| AudioExportError::new("Engine", "Failed to query audio export snapshot"))?;
+    pending
+        .handles
+        .command_sender
+        .lock()
+        .as_mut()
+        .ok_or_else(|| AudioExportError::new("Engine", "Audio engine is unavailable"))?
+        .push(AudioCommand::QueryAudioExportSnapshot {
+            response_tx: snapshot_tx,
+        })
+        .map_err(|_| AudioExportError::new("Engine", "Failed to query audio export snapshot"))?;
 
     let snapshot = snapshot_rx
         .recv_timeout(std::time::Duration::from_secs(30))
@@ -64,8 +102,9 @@ where
                 format!("Failed to receive audio export snapshot: {e}"),
             )
         })?;
-    validate_external_plugins(&ctx.app_state, &snapshot)?;
+    validate_external_plugins(&pending.app, &snapshot)?;
     let output_path = output_path.to_owned();
+    let plugin_registry = pending.plugin_registry;
 
     std::thread::scope(|scope| {
         scope

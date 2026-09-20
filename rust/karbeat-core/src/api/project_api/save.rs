@@ -1,12 +1,13 @@
 use std::{
     collections::HashMap,
-    path::Path,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicU32, Ordering},
     time::{Duration, Instant},
 };
 
 use anyhow::{Context, bail, ensure};
-use karbeat_host::{HostError, HostInstanceId, PluginState};
+use karbeat_host::{HostError, HostInstanceId, HostStateCapture, PluginState};
+use karbeat_plugins::registry::PluginRegistry;
 
 use crate::{
     audio::event::PluginTarget,
@@ -109,7 +110,7 @@ struct CapturedPlugin {
 }
 
 fn collect(
-    ctx: &mut DawContext,
+    handles: &crate::context::ControlHandles,
     timeout: Duration,
     targets: Vec<PendingTarget>,
 ) -> anyhow::Result<(Vec<CapturedPlugin>, Vec<MixerChannelSnapshot>)> {
@@ -131,11 +132,11 @@ fn collect(
         commands.push(command);
     }
     let inbox = crate::audio::project_state::ProjectStateFeedback::register(
-        &ctx.project_state_feedback,
+        &handles.project_state_feedback,
         pending.keys().copied(),
     )?;
     {
-        let mut sender = ctx.command_sender.lock();
+        let mut sender = handles.command_sender.lock();
         let sender = sender.as_mut().context("Audio engine is unavailable")?;
         ensure!(
             sender.slots() >= commands.len(),
@@ -152,13 +153,13 @@ fn collect(
     let start = Instant::now();
     while !pending.is_empty() {
         {
-            let mut feedback = ctx.feedback_consumer.lock();
+            let mut feedback = handles.feedback_consumer.lock();
             if let Some(feedback) = feedback.as_mut() {
                 for _ in 0..1024 {
                     let Ok(response) = feedback.pop() else {
                         break;
                     };
-                    drop(ctx.project_state_feedback.lock().route(response));
+                    drop(handles.project_state_feedback.lock().route(response));
                 }
             }
         }
@@ -418,28 +419,63 @@ mod tests {
     }
 }
 
-pub(super) fn save_project(
-    ctx: &mut DawContext,
-    path: &Path,
+pub struct PendingProjectSave {
+    path: PathBuf,
+    saved: ApplicationState,
+    handles: crate::context::ControlHandles,
+    plugin_registry: PluginRegistry,
+    external_plugin_failures: hashbrown::HashMap<PluginTarget, String>,
+    host_state_capture: std::sync::Arc<dyn HostStateCapture>,
+    has_engine: bool,
+}
+
+pub struct CompletedProjectSave {
+    saved: ApplicationState,
+}
+
+pub(super) fn begin_save(ctx: &DawContext, path: &Path) -> PendingProjectSave {
+    PendingProjectSave {
+        path: path.to_owned(),
+        saved: ctx.app_state.clone(),
+        handles: ctx.control_handles(),
+        plugin_registry: ctx.plugin_registry.clone(),
+        external_plugin_failures: ctx.external_plugin_failures.clone(),
+        host_state_capture: ctx.host_state_capture.clone(),
+        has_engine: ctx.command_sender.lock().is_some(),
+    }
+}
+
+pub(super) fn execute_save(
+    pending: PendingProjectSave,
+    timeout: Duration,
+) -> anyhow::Result<CompletedProjectSave> {
+    let host_state_capture = pending.host_state_capture.clone();
+    execute_save_with(pending, timeout, move |identity, instance| {
+        host_state_capture.capture_state(identity, instance)
+    })
+}
+
+fn execute_save_with(
+    mut pending: PendingProjectSave,
     timeout: Duration,
     mut capture_host_state: impl FnMut(
         &karbeat_host::PluginIdentity,
         HostInstanceId,
     ) -> Result<PluginState, HostError>,
-) -> anyhow::Result<()> {
-    let has_engine = ctx.command_sender.lock().is_some();
-    let mut saved = ctx.app_state.clone();
-    if has_engine {
-        let requested = targets(&ctx.app_state).into_iter().filter(|target| {
-            !matches!(target, PendingTarget::Plugin(target) if ctx.external_plugin_failures.contains_key(target))
-        }).collect();
-        let (plugins, mixer) = collect(ctx, timeout, requested)?;
+) -> anyhow::Result<CompletedProjectSave> {
+    if pending.has_engine {
+        let requested = targets(&pending.saved)
+            .into_iter()
+            .filter(|target| {
+                !matches!(target, PendingTarget::Plugin(target) if pending.external_plugin_failures.contains_key(target))
+            })
+            .collect();
+        let (plugins, mixer) = collect(&pending.handles, timeout, requested)?;
         for captured in plugins {
-            let plugin = plugin_mut(&mut saved, captured.target)
+            let plugin = plugin_mut(&mut pending.saved, captured.target)
                 .context("Project plugin disappeared during save")?;
             match (&mut plugin.external, captured.host) {
                 (Some(external), Some(host)) => {
-                    // collect releases the feedback lock before dispatching any host control work.
                     let state = capture_host_state(&external.descriptor.identity, host)
                         .with_context(|| format!("Could not capture {}", plugin.name))?;
                     ensure!(
@@ -451,7 +487,7 @@ pub(super) fn save_project(
                 }
                 (None, None) => {
                     plugin.plugin_state = captured.state;
-                    if let Some(specs) = ctx
+                    if let Some(specs) = pending
                         .plugin_registry
                         .get_plugin_parameter_specs_by_id(plugin.registry_id)
                     {
@@ -467,7 +503,8 @@ pub(super) fn save_project(
         for snapshot in mixer {
             let channel = match snapshot.target {
                 MixerChannelTarget::Track(id) => {
-                    &mut saved
+                    &mut pending
+                        .saved
                         .mixer
                         .channels
                         .get_mut(id)
@@ -475,14 +512,15 @@ pub(super) fn save_project(
                         .channel
                 }
                 MixerChannelTarget::Bus(id) => {
-                    &mut saved
+                    &mut pending
+                        .saved
                         .mixer
                         .buses
                         .get_mut(id)
                         .context("Bus disappeared during save")?
                         .channel
                 }
-                MixerChannelTarget::Master => &mut saved.mixer.master_bus,
+                MixerChannelTarget::Master => &mut pending.saved.mixer.master_bus,
             };
             channel.volume.set_base(snapshot.volume);
             channel.pan.set_base(snapshot.pan);
@@ -491,8 +529,27 @@ pub(super) fn save_project(
             channel.inverted_phase = snapshot.inverted_phase;
         }
     }
-    save_daw_project(path, &saved)?;
-    ctx.app_state = saved;
+    save_daw_project(&pending.path, &pending.saved)?;
+    Ok(CompletedProjectSave {
+        saved: pending.saved,
+    })
+}
+
+pub(super) fn commit_save(ctx: &mut DawContext, completed: CompletedProjectSave) {
+    ctx.app_state = completed.saved;
+}
+
+pub(super) fn save_project(
+    ctx: &mut DawContext,
+    path: &Path,
+    timeout: Duration,
+    capture_host_state: impl FnMut(
+        &karbeat_host::PluginIdentity,
+        HostInstanceId,
+    ) -> Result<PluginState, HostError>,
+) -> anyhow::Result<()> {
+    let completed = execute_save_with(begin_save(ctx, path), timeout, capture_host_state)?;
+    commit_save(ctx, completed);
     Ok(())
 }
 
@@ -508,8 +565,15 @@ pub(crate) fn hosted_instance(
         !ctx.external_plugin_failures.contains_key(&target),
         "External plugin is unavailable; retry loading it first"
     );
+    hosted_instance_with_handles(&ctx.control_handles(), target)
+}
+
+pub(crate) fn hosted_instance_with_handles(
+    handles: &crate::context::ControlHandles,
+    target: PluginTarget,
+) -> anyhow::Result<HostInstanceId> {
     let (plugins, _) = collect(
-        ctx,
+        handles,
         Duration::from_secs(2),
         vec![PendingTarget::Plugin(target)],
     )?;

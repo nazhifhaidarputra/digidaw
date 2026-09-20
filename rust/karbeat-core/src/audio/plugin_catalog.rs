@@ -15,6 +15,7 @@ pub struct ExternalPluginEntry {
 }
 
 /// Combines discovery with reserved first-party IDs without creating native plugin instances.
+#[derive(Clone)]
 pub struct PluginCatalog {
     built_in: Vec<PluginInfo>,
     reserved: HashSet<u32>,

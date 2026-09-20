@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod audio_settings;
 pub mod automation;
+pub(crate) mod context;
 pub mod external_plugins;
 pub mod mixer;
 pub mod monitor;

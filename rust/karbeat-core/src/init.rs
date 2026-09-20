@@ -72,7 +72,7 @@ pub fn init_engine(ctx: &mut DawContext) {
     let (cmd_prod, cmd_cons) = RingBuffer::new(128);
 
     // Store Producer in context
-    ctx.command_sender = Mutex::new(Some(cmd_prod));
+    ctx.command_sender = Arc::new(Mutex::new(Some(cmd_prod)));
 
     match start_audio_stream(ctx, cmd_cons, device_conf) {
         Ok(_) => {

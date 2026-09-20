@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:karbeat/app/providers/backend_operation_gate.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/services/serializer_service.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -45,10 +45,10 @@ void main() {
     final project = container.read(projectProvider.notifier);
 
     final saving = project.saveProject('/tmp/project.dgdaw');
-    expect(container.read(backendOperationGateProvider), 1);
+    expect(container.read(telemetryPollingSuppressionProvider), 1);
 
     serializer.saveCompleter.complete();
     await saving;
-    expect(container.read(backendOperationGateProvider), 0);
+    expect(container.read(telemetryPollingSuppressionProvider), 0);
   });
 }

@@ -5,8 +5,8 @@ use karbeat_core::{
         ActualDeviceStreamConfig, AudioDeviceInfo, AudioRuntimeSettings, DeviceStreamStatus,
         OutputDeviceSelection, OutputHostSelection, RequestedDspConfig, RequestedOutputConfig,
     },
-    context::DawContext,
 };
+use crate::api::context::DawContext;
 
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
@@ -109,6 +109,7 @@ pub fn list_output_devices(host_name: Option<String>) -> Result<Vec<UiOutputDevi
 }
 
 pub fn get_audio_runtime_settings(ctx: &DawContext) -> UiAudioRuntimeSettings {
+    crate::api::context::read_ctx!(ctx);
     audio_settings_api::runtime_settings(ctx).into()
 }
 
@@ -121,19 +122,52 @@ pub fn set_output_selection(
     host_name: Option<String>,
     device_id: Option<String>,
 ) -> Result<UiAudioRuntimeSettings, String> {
+    crate::api::context::read_ctx!(ctx);
     audio_settings_api::select_output(ctx, host_name, device_id)
         .map(Into::into)
         .map_err(|error| error.to_string())
 }
 
 pub fn set_dsp_config(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     sample_rate: u32,
     block_size: u32,
 ) -> Result<UiAudioRuntimeSettings, String> {
-    audio_settings_api::set_dsp_config(ctx, sample_rate, block_size)
-        .map(Into::into)
-        .map_err(|error| error.to_string())
+    audio_settings_api::validate_dsp_config(sample_rate, block_size)
+        .map_err(|error| error.to_string())?;
+    let operation = ctx.begin_project_operation();
+    let current_sample_rate = operation
+        .read_core()
+        .audio_runtime_settings
+        .read()
+        .requested_dsp
+        .sample_rate;
+    if current_sample_rate != sample_rate {
+        let pending = {
+            let core = operation.read_core();
+            karbeat_core::api::external_plugin_api::begin_reconfigure_for_audio_config(
+                &core,
+                sample_rate,
+                block_size as usize,
+            )
+            .map_err(|error| error.to_string())?
+        };
+        if let Some(pending) = pending {
+            let completed =
+                karbeat_core::api::external_plugin_api::execute_reconfiguration(pending)
+                    .map_err(|error| error.to_string())?;
+            karbeat_core::api::external_plugin_api::commit_reconfiguration(
+                &mut operation.write_core(),
+                completed,
+            );
+        }
+    }
+    Ok(audio_settings_api::commit_dsp_config(
+        &mut operation.write_core(),
+        sample_rate,
+        block_size,
+    )
+    .into())
 }
 
 pub fn supported_dsp_sample_rates() -> Vec<u32> {

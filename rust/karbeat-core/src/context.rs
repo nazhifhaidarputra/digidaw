@@ -7,6 +7,7 @@ use std::sync::{Arc, Once, mpsc};
 
 use hashbrown::HashMap;
 use karbeat_host::HostStateCapture;
+use karbeat_host::HostInstanceId;
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 use parking_lot::{Mutex, RwLock};
 use rtrb::{Consumer, Producer};
@@ -37,7 +38,7 @@ pub struct DawContext {
     pub history: HistoryManager,
 
     /// Audio command queue producer (UI → Audio)
-    pub command_sender: Mutex<Option<Producer<AudioCommand>>>,
+    pub command_sender: Arc<Mutex<Option<Producer<AudioCommand>>>>,
 
     /// Parameter feedback consumer (Audio → UI)
     pub feedback_consumer: Arc<Mutex<Option<rtrb::Consumer<AudioFeedback>>>>,
@@ -55,6 +56,8 @@ pub struct DawContext {
 
     /// External discovery descriptors and UI IDs, separate from first-party factories.
     pub external_plugin_failures: HashMap<crate::audio::event::PluginTarget, String>,
+
+    pub hosted_targets: HashMap<crate::audio::event::PluginTarget, HostedTargetState>,
 
     /// Combined first-party and externally discovered plugin metadata.
     pub plugin_catalog: crate::audio::plugin_catalog::PluginCatalog,
@@ -80,6 +83,20 @@ pub struct DawContext {
     pub telemetry_reg_receiver: Option<Mutex<mpsc::Receiver<TelemetryRegistration>>>,
 }
 
+#[derive(Clone, Debug)]
+pub enum HostedTargetState {
+    Active(HostInstanceId),
+    Transitioning,
+    Failed(String),
+}
+
+#[derive(Clone)]
+pub struct ControlHandles {
+    pub command_sender: Arc<Mutex<Option<Producer<AudioCommand>>>>,
+    pub feedback_consumer: Arc<Mutex<Option<Consumer<AudioFeedback>>>>,
+    pub project_state_feedback: Arc<Mutex<crate::audio::project_state::ProjectStateFeedback>>,
+}
+
 impl DawContext {
     /// Creates a context with a blank project, first-party registry, and disconnected audio queues.
     pub fn new() -> Self {
@@ -88,7 +105,7 @@ impl DawContext {
         Self {
             app_state: ApplicationState::default(),
             history: HistoryManager::new(),
-            command_sender: Mutex::new(None),
+            command_sender: Arc::new(Mutex::new(None)),
             feedback_consumer: Arc::new(Mutex::new(None)),
             project_state_feedback: Arc::new(Mutex::new(Default::default())),
             stream_guard: None,
@@ -97,6 +114,7 @@ impl DawContext {
             plugin_catalog,
             host_state_capture: Arc::new(karbeat_vst3::native::NativeStateCapture),
             external_plugin_failures: HashMap::new(),
+            hosted_targets: HashMap::new(),
             active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
             audio_runtime_settings: Arc::new(RwLock::new(AudioRuntimeSettings::default())),
             telemetry_registry: None,
@@ -117,6 +135,14 @@ impl DawContext {
         };
 
         Ok(())
+    }
+
+    pub fn control_handles(&self) -> ControlHandles {
+        ControlHandles {
+            command_sender: Arc::clone(&self.command_sender),
+            feedback_consumer: Arc::clone(&self.feedback_consumer),
+            project_state_feedback: Arc::clone(&self.project_state_feedback),
+        }
     }
 
     /// Best-effort pushes a command sequence when an audio sender exists.

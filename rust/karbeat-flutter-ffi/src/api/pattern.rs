@@ -4,9 +4,9 @@ use flutter_rust_bridge::frb;
 use karbeat_core::shared::id::*;
 use karbeat_core::{
     api::{note_api, pattern_api},
-    context::DawContext,
     core::project::{GeneratorId, Note, NoteId, track::midi::Pattern},
 };
+use crate::api::context::DawContext;
 
 #[derive(Clone)]
 #[frb(dart_metadata=("freezed"))]
@@ -61,6 +61,7 @@ impl From<&Pattern> for UiPattern {
 }
 
 pub fn get_pattern(ctx: &DawContext, pattern_id: u64) -> Result<UiPattern, String> {
+    crate::api::context::read_ctx!(ctx);
     let pattern_id = PatternId::from_u64(pattern_id);
     let pattern = pattern_api::get_pattern(ctx, &pattern_id).map_err(|e| e.to_string())?;
     let pattern_ui = UiPattern::from(&pattern);
@@ -68,23 +69,26 @@ pub fn get_pattern(ctx: &DawContext, pattern_id: u64) -> Result<UiPattern, Strin
 }
 
 pub fn get_patterns(ctx: &DawContext) -> Result<HashMap<u64, UiPattern>, String> {
+    crate::api::context::read_ctx!(ctx);
     let patterns = pattern_api::get_patterns(ctx, |id, pattern| (id, UiPattern::from(pattern)))
         .map_err(|e| e.to_string())?;
     Ok(patterns)
 }
 
-pub fn rename_pattern(ctx: &mut DawContext, pattern_id: u64, new_name: &str) -> Result<(), String> {
+pub fn rename_pattern(ctx: &DawContext, pattern_id: u64, new_name: &str) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
     pattern_api::rename_pattern(ctx, PatternId::from_u64(pattern_id), new_name)
         .map_err(|error| error.to_string())
 }
 
 pub fn add_note(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     key: u32,
     start_tick: u64,
     duration: Option<u64>,
 ) -> Result<UiNote, String> {
+    crate::api::context::project_ctx!(ctx);
     let note = note_api::add_note(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -99,7 +103,8 @@ pub fn add_note(
     Ok(note_ui)
 }
 
-pub fn delete_note(ctx: &mut DawContext, pattern_id: u64, note_id: u32) -> Result<UiNote, String> {
+pub fn delete_note(ctx: &DawContext, pattern_id: u64, note_id: u32) -> Result<UiNote, String> {
+    crate::api::context::project_ctx!(ctx);
     let note = note_api::delete_note(ctx, PatternId::from_u64(pattern_id), NoteId::from(note_id))
         .map_err(|e| format!("{}", e))?;
 
@@ -109,11 +114,12 @@ pub fn delete_note(ctx: &mut DawContext, pattern_id: u64, note_id: u32) -> Resul
 }
 
 pub fn resize_note(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     note_id: u32,
     new_duration: u64,
 ) -> Result<UiNote, String> {
+    crate::api::context::project_ctx!(ctx);
     let note = note_api::resize_note(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -127,12 +133,13 @@ pub fn resize_note(
 }
 
 pub fn move_note(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     note_id: u32,
     new_start_tick: u64,
     new_key: u32,
 ) -> Result<UiNote, String> {
+    crate::api::context::project_ctx!(ctx);
     let note = note_api::move_note(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -147,7 +154,7 @@ pub fn move_note(
 }
 
 pub fn change_note_params(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     note_id: u32,
     velocity: Option<i64>,
@@ -155,6 +162,7 @@ pub fn change_note_params(
     micro_offset: Option<i64>,
     mute: Option<bool>,
 ) -> Result<UiNote, String> {
+    crate::api::context::project_ctx!(ctx);
     // validate inputs
     let velocity = velocity.and_then(|v| u8::try_from(v).ok());
     let micro_offset = micro_offset.and_then(|m| i8::try_from(m).ok());
@@ -185,10 +193,11 @@ pub fn change_note_params(
 /// * pattern_id: [u64], id of the pattern
 /// * new_notes: Vector of tuples that contains (key, start_tick, duration)
 pub fn add_notes_batch(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     notes: Vec<(u8, u64, Option<u64>)>,
 ) -> Result<Vec<UiNote>, String> {
+    crate::api::context::project_ctx!(ctx);
     let added_notes = note_api::add_notes_batch(ctx, PatternId::from_u64(pattern_id), notes)
         .map_err(|e| e.to_string())?
         .iter()
@@ -204,10 +213,11 @@ pub fn add_notes_batch(
 /// * pattern_id: [u64], id of the pattern
 /// * note_ids: Vector of notes ID to delete
 pub fn delete_notes_batch(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
     note_api::delete_notes_batch(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -222,10 +232,11 @@ pub fn delete_notes_batch(
 /// * pattern_id: [u64], id of the pattern
 /// * note_ids: Vector of notes updates (id, )
 pub fn move_notes_batch(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     updates: Vec<(u32, u64, u8)>,
 ) -> Result<Vec<UiNote>, String> {
+    crate::api::context::project_ctx!(ctx);
     let moved_notes = note_api::move_notes_batch(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -241,10 +252,11 @@ pub fn move_notes_batch(
 }
 
 pub fn resize_notes_batch(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     updates: Vec<(u32, u64)>,
 ) -> Result<Vec<UiNote>, String> {
+    crate::api::context::project_ctx!(ctx);
     let pattern_id_typed = PatternId::from_u64(pattern_id);
     let updates_proper = updates.into_iter().map(|u| (u.0.into(), u.1)).collect();
     let resized_notes = note_api::resize_notes_batch(ctx, pattern_id_typed, updates_proper)
@@ -258,10 +270,11 @@ pub fn resize_notes_batch(
 /// Play a pattern in isolation with a specific generator (looping automatically).
 /// This temporarily switches the engine to Pattern playback mode.
 pub fn play_pattern_preview(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     generator_id: u64,
 ) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
     let pattern_id = PatternId::from_u64(pattern_id);
     let generator_id = GeneratorId::from_u64(generator_id);
     pattern_api::play_pattern_preview(ctx, pattern_id, generator_id).map_err(|e| e.to_string())
@@ -269,10 +282,11 @@ pub fn play_pattern_preview(
 
 /// Stop pattern preview without changing song mode. used in stop button inside pattern playback
 pub fn stop_pattern_preview_local(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     pattern_id: u64,
     generator_id: u64,
 ) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
     pattern_api::stop_pattern_preview_local(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -282,6 +296,7 @@ pub fn stop_pattern_preview_local(
 }
 
 /// Stop pattern preview and return to Song mode.
-pub fn stop_pattern_preview(ctx: &mut DawContext) -> Result<(), String> {
+pub fn stop_pattern_preview(ctx: &DawContext) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
     pattern_api::stop_pattern_preview(ctx).map_err(|e| e.to_string())
 }

@@ -159,33 +159,76 @@ pub(super) fn hydration_command(
     }
 }
 
-pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow::Result<()> {
-    if ctx.command_sender.lock().is_none() {
-        ctx.external_plugin_failures = plugins(&staged)
-            .into_iter()
-            .filter(|(_, plugin)| plugin.external.is_some())
-            .map(|(target, _)| (target, "Audio engine is unavailable".into()))
-            .collect();
-        ctx.app_state = staged;
-        return Ok(());
+pub struct PendingProjectRestore {
+    staged: ApplicationState,
+    handles: crate::context::ControlHandles,
+    plugin_registry: PluginRegistry,
+    plugin_catalog: crate::audio::plugin_catalog::PluginCatalog,
+    sample_rate: u32,
+    block_size: usize,
+    has_engine: bool,
+}
+
+pub struct CompletedProjectRestore {
+    staged: ApplicationState,
+    missing: HashMap<PluginTarget, String>,
+    receipts: Vec<(
+        PluginTarget,
+        karbeat_host::HostInstanceId,
+        crate::audio::hosted_plugin::HostedInstallReceipt,
+    )>,
+}
+
+pub(super) fn begin_replace(
+    ctx: &DawContext,
+    staged: ApplicationState,
+) -> anyhow::Result<PendingProjectRestore> {
+    let has_engine = ctx.command_sender.lock().is_some();
+    if has_engine {
+        anyhow::ensure!(
+            ctx.telemetry_registry.is_some(),
+            "Audio telemetry is not initialized"
+        );
     }
-    anyhow::ensure!(
-        ctx.telemetry_registry.is_some(),
-        "Audio telemetry is not initialized"
-    );
     anyhow::ensure!(
         staged.audio_config.buffer_size <= 65_536,
         "Unsupported project processing block size"
     );
-    let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
+    let dsp = ctx.audio_runtime_settings.read().requested_dsp;
+    Ok(PendingProjectRestore {
+        staged,
+        handles: ctx.control_handles(),
+        plugin_registry: ctx.plugin_registry.clone(),
+        plugin_catalog: ctx.plugin_catalog.clone(),
+        sample_rate: dsp.sample_rate,
+        block_size: dsp.block_size as usize,
+        has_engine,
+    })
+}
+
+pub(super) fn execute_replace(
+    pending: PendingProjectRestore,
+) -> anyhow::Result<CompletedProjectRestore> {
+    if !pending.has_engine {
+        let missing = plugins(&pending.staged)
+            .into_iter()
+            .filter(|(_, plugin)| plugin.external.is_some())
+            .map(|(target, _)| (target, "Audio engine is unavailable".into()))
+            .collect();
+        return Ok(CompletedProjectRestore {
+            staged: pending.staged,
+            missing,
+            receipts: Vec::new(),
+        });
+    }
     let mut missing = HashMap::new();
     let mut installs = Vec::new();
     let mut receipts = Vec::new();
-    for (target, plugin) in plugins(&staged) {
+    for (target, plugin) in plugins(&pending.staged) {
         let Some(external) = &plugin.external else {
             continue;
         };
-        let descriptor = ctx
+        let descriptor = pending
             .plugin_catalog
             .resolve(&external.descriptor.identity)
             .filter(|entry| entry.available)
@@ -194,7 +237,7 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
                 |entry| entry.descriptor.clone(),
             );
         let config = ProcessingConfig {
-            sample_rate: f64::from(sample_rate),
+            sample_rate: f64::from(pending.sample_rate),
             max_block_size: 65_536,
             main_input_channels: if descriptor.kind == PluginKind::Instrument {
                 0
@@ -218,7 +261,8 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
         karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
         let track = if let PluginTarget::Generator(id) = target {
             Some(
-                staged
+                pending
+                    .staged
                     .tracks
                     .values()
                     .find(|track| {
@@ -243,23 +287,23 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
         let install = install.with_bypass(plugin.bypass);
         let command = karbeat_vst3::native::call(move |owner| owner.prepare_control(install))?;
         installs.push(AudioCommand::InstallHostedPlugin(command));
-        receipts.push((target, receipt));
+        receipts.push((target, instance, receipt));
     }
-    let mut graph = AudioGraphState::from(&staged);
-    graph.sample_rate = sample_rate;
+    let mut graph = AudioGraphState::from(&pending.staged);
+    graph.sample_rate = pending.sample_rate;
     let mut commands = vec![
         AudioCommand::StopAndReset,
         AudioCommand::ReplaceFullGraph { graph },
         hydration_command(
-            &staged,
-            &ctx.plugin_registry,
+            &pending.staged,
+            &pending.plugin_registry,
             &missing,
-            sample_rate,
-            ctx.audio_runtime_settings.read().requested_dsp.block_size as usize,
+            pending.sample_rate,
+            pending.block_size,
         ),
     ];
     commands.extend(installs);
-    for (track, channel) in &staged.mixer.channels {
+    for (track, channel) in &pending.staged.mixer.channels {
         commands.extend(channel.channel.effects.iter().enumerate().map(
             |(new_position, effect)| AudioCommand::MoveEffect {
                 target: EffectTarget::Track(track),
@@ -268,7 +312,7 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
             },
         ));
     }
-    for (bus, channel) in &staged.mixer.buses {
+    for (bus, channel) in &pending.staged.mixer.buses {
         commands.extend(channel.channel.effects.iter().enumerate().map(
             |(new_position, effect)| AudioCommand::MoveEffect {
                 target: EffectTarget::Bus(bus),
@@ -277,17 +321,24 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
             },
         ));
     }
-    commands.extend(staged.mixer.master_bus.effects.iter().enumerate().map(
+    commands.extend(pending.staged.mixer.master_bus.effects.iter().enumerate().map(
         |(new_position, effect)| AudioCommand::MoveEffect {
             target: EffectTarget::Master,
             effect_id: effect.id,
             new_position,
         },
     ));
-    commands.push(AudioCommand::SetBPM(staged.transport.bpm));
-    let (project, receipt) = HostedProjectInstall::new(commands, sample_rate);
+    commands.push(AudioCommand::SetBPM(pending.staged.transport.bpm));
+    let (project, receipt) = HostedProjectInstall::new(commands, pending.sample_rate);
     let command = karbeat_vst3::native::call(move |owner| owner.prepare_control(project))?;
-    ctx.send_audio_command(AudioCommand::InstallHostedProject(command))?;
+    pending
+        .handles
+        .command_sender
+        .lock()
+        .as_mut()
+        .context("Audio engine is unavailable")?
+        .push(AudioCommand::InstallHostedProject(command))
+        .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match receipt.status() {
@@ -302,20 +353,44 @@ pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow:
         }
         std::thread::sleep(Duration::from_millis(2));
     }
+    for (_, _, plugin_receipt) in &receipts {
+        anyhow::ensure!(
+            plugin_receipt.status() == HostedInstallStatus::Installed,
+            "Prepared external plugin was rejected: {:?}",
+            plugin_receipt.status()
+        );
+    }
+    Ok(CompletedProjectRestore {
+        staged: pending.staged,
+        missing,
+        receipts,
+    })
+}
+
+pub(super) fn commit_replace(ctx: &mut DawContext, completed: CompletedProjectRestore) {
     ctx.drain_telemetry_registrations();
-    if let Some(registry) = &mut ctx.telemetry_registry {
-        for (target, mut receipt) in receipts {
-            anyhow::ensure!(
-                receipt.status() == HostedInstallStatus::Installed,
-                "Prepared external plugin was rejected: {:?}",
-                receipt.status()
-            );
+    ctx.hosted_targets.clear();
+    for (target, instance, mut receipt) in completed.receipts {
+        if let Some(registry) = &mut ctx.telemetry_registry {
             if let Some(output) = receipt.take_telemetry() {
                 registry.insert_plugin_consumer(target, output);
             }
         }
+        ctx.hosted_targets
+            .insert(target, crate::context::HostedTargetState::Active(instance));
     }
-    ctx.external_plugin_failures = missing;
-    ctx.app_state = staged;
+    ctx.external_plugin_failures = completed.missing;
+    for (target, reason) in &ctx.external_plugin_failures {
+        ctx.hosted_targets.insert(
+            *target,
+            crate::context::HostedTargetState::Failed(reason.clone()),
+        );
+    }
+    ctx.app_state = completed.staged;
+}
+
+pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow::Result<()> {
+    let completed = execute_replace(begin_replace(ctx, staged)?)?;
+    commit_replace(ctx, completed);
     Ok(())
 }

@@ -81,7 +81,8 @@ slotmap = {version = "1.1.1", features=["serde"] }
 slab = {version = "0.4.12", features=["serde"]}
 
 [profile.dev]
-debug = true
+debug = 1
+incremental = false
 
 [profile.dev.package.rodio]
 opt-level = 3

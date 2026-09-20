@@ -2,7 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:karbeat/app/providers/backend_operation_gate.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
@@ -332,8 +332,8 @@ class TrackListNotifier extends Notifier<TrackListState> {
         return Result.error(Exception(result.error.toString()));
       }
       return Result.ok(null);
-    }).guardedByBackendOperationGate(
-      ref.read(backendOperationGateProvider.notifier),
+    }).suppressesTelemetryPolling(
+      ref.read(telemetryPollingSuppressionProvider.notifier),
     )();
   }
 
@@ -341,7 +341,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return (() async {
       final result = await ref.guardApi(() async {
         await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
-        _projectNotifierRead.removeTrack(trackId);
+      _projectNotifierRead.removeTrack(trackId);
 
         await ref.read(mixerStateProvider.notifier).syncMixerState();
       });
@@ -351,8 +351,8 @@ class TrackListNotifier extends Notifier<TrackListState> {
           'TrackListNotifier: failed to delete track: ${result.error}',
         );
       }
-    }).guardedByBackendOperationGate(
-      ref.read(backendOperationGateProvider.notifier),
+    }).suppressesTelemetryPolling(
+      ref.read(telemetryPollingSuppressionProvider.notifier),
     )();
   }
   // ------------------------------------------------------------------
@@ -417,8 +417,11 @@ class TrackListNotifier extends Notifier<TrackListState> {
       );
     }
 
+    final sourceResult = await _projectNotifierRead.loadAudioSource(filePath);
+    if (sourceResult.isErr()) return Result.error(sourceResult.err());
+
     final result = await AsyncValue.guard(() async {
-      final sourceId = await addAudioSource(ctx: _ctx, filePath: filePath);
+      final sourceId = sourceResult.ok();
       final newClip = await createClip(
         ctx: _ctx,
         sourceId: sourceId,

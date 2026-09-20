@@ -40,14 +40,7 @@ pub fn set_dsp_config(
     sample_rate: u32,
     block_size: u32,
 ) -> anyhow::Result<AudioRuntimeSettings> {
-    anyhow::ensure!(
-        SUPPORTED_DSP_SAMPLE_RATES.contains(&sample_rate),
-        "Unsupported DSP sample rate: {sample_rate}"
-    );
-    anyhow::ensure!(
-        SUPPORTED_DSP_BLOCK_SIZES.contains(&block_size),
-        "Unsupported DSP block size: {block_size}"
-    );
+    validate_dsp_config(sample_rate, block_size)?;
 
     let current_sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
     if current_sample_rate != sample_rate {
@@ -58,6 +51,26 @@ pub fn set_dsp_config(
         )?;
     }
 
+    Ok(commit_dsp_config(ctx, sample_rate, block_size))
+}
+
+pub fn validate_dsp_config(sample_rate: u32, block_size: u32) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        SUPPORTED_DSP_SAMPLE_RATES.contains(&sample_rate),
+        "Unsupported DSP sample rate: {sample_rate}"
+    );
+    anyhow::ensure!(
+        SUPPORTED_DSP_BLOCK_SIZES.contains(&block_size),
+        "Unsupported DSP block size: {block_size}"
+    );
+    Ok(())
+}
+
+pub fn commit_dsp_config(
+    ctx: &mut DawContext,
+    sample_rate: u32,
+    block_size: u32,
+) -> AudioRuntimeSettings {
     {
         let mut runtime = ctx.audio_runtime_settings.write();
         runtime.requested_dsp.sample_rate = sample_rate;
@@ -66,7 +79,7 @@ pub fn set_dsp_config(
     }
     ctx.app_state.audio_config.sample_rate = sample_rate;
     ctx.app_state.audio_config.buffer_size = block_size;
-    Ok(ctx.audio_runtime_settings.read().clone())
+    ctx.audio_runtime_settings.read().clone()
 }
 
 /// Selects a named or system-default output host and device for the next stream restart.
