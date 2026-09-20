@@ -87,27 +87,30 @@ impl IntoParamId for UiParamId {
 #[frb(dart_metadata=("freezed"))]
 pub enum UiPluginTarget {
     /// A generator plugin identified by its GeneratorId
-    Generator(u32),
+    Generator(u64),
     /// A track effect identified by (TrackId, EffectId)
-    TrackEffect { track_id: u32, effect_id: u32 },
+    TrackEffect { track_id: u64, effect_id: u64 },
     /// A bus effect identified by (BusId, EffectId)
-    BusEffect { bus_id: u32, effect_id: u32 },
+    BusEffect { bus_id: u64, effect_id: u64 },
     /// An effect on the master bus
-    MasterEffect(u32),
+    MasterEffect(u64),
 }
 
 impl From<UiPluginTarget> for PluginTarget {
     fn from(val: UiPluginTarget) -> Self {
         match val {
-            UiPluginTarget::Generator(id) => PluginTarget::Generator(GeneratorId::from(id)),
+            UiPluginTarget::Generator(id) => PluginTarget::Generator(GeneratorId::from_u64(id)),
             UiPluginTarget::TrackEffect {
                 track_id,
                 effect_id,
-            } => PluginTarget::TrackEffect(TrackId::from(track_id), EffectId::from(effect_id)),
+            } => PluginTarget::TrackEffect(
+                TrackId::from_u64(track_id),
+                EffectId::from_u64(effect_id),
+            ),
             UiPluginTarget::BusEffect { bus_id, effect_id } => {
-                PluginTarget::BusEffect(BusId::from(bus_id), EffectId::from(effect_id))
+                PluginTarget::BusEffect(BusId::from_u64(bus_id), EffectId::from_u64(effect_id))
             }
-            UiPluginTarget::MasterEffect(id) => PluginTarget::MasterEffect(EffectId::from(id)),
+            UiPluginTarget::MasterEffect(id) => PluginTarget::MasterEffect(EffectId::from_u64(id)),
         }
     }
 }
@@ -115,16 +118,16 @@ impl From<UiPluginTarget> for PluginTarget {
 impl From<&PluginTarget> for UiPluginTarget {
     fn from(value: &PluginTarget) -> Self {
         match value {
-            PluginTarget::Generator(generator_id) => Self::Generator(generator_id.to_u32()),
+            PluginTarget::Generator(generator_id) => Self::Generator(generator_id.to_u64()),
             PluginTarget::TrackEffect(track_id, effect_id) => Self::TrackEffect {
-                track_id: track_id.to_u32(),
-                effect_id: effect_id.to_u32(),
+                track_id: track_id.to_u64(),
+                effect_id: effect_id.to_u64(),
             },
             PluginTarget::BusEffect(bus_id, effect_id) => Self::BusEffect {
-                bus_id: bus_id.to_u32(),
-                effect_id: effect_id.to_u32(),
+                bus_id: bus_id.to_u64(),
+                effect_id: effect_id.to_u64(),
             },
-            PluginTarget::MasterEffect(effect_id) => Self::MasterEffect(effect_id.to_u32()),
+            PluginTarget::MasterEffect(effect_id) => Self::MasterEffect(effect_id.to_u64()),
         }
     }
 }
@@ -213,8 +216,8 @@ pub fn get_available_plugins_with_ids(ctx: &DawContext) -> Vec<UiPluginInfo> {
 }
 
 /// Get a single generator state from the Generator Pool
-pub fn get_generator(ctx: &DawContext, generator_id: u32) -> Result<UiGeneratorInstance, String> {
-    let gen_id = GeneratorId::from(generator_id);
+pub fn get_generator(ctx: &DawContext, generator_id: u64) -> Result<UiGeneratorInstance, String> {
+    let gen_id = GeneratorId::from_u64(generator_id);
     let gen_instance = plugin_api::get_generator(ctx, &gen_id, |g| UiGeneratorInstance::from(g))
         .ok_or_else(|| format!("Generator {} not found", generator_id))?;
     Ok(gen_instance)
@@ -222,29 +225,29 @@ pub fn get_generator(ctx: &DawContext, generator_id: u32) -> Result<UiGeneratorI
 
 pub fn get_effect(
     ctx: &DawContext,
-    track_id: u32,
-    effect_id: u32,
+    track_id: u64,
+    effect_id: u64,
 ) -> Result<UiEffectInstance, String> {
-    let track_id = TrackId::from(track_id);
-    let effect_id = EffectId::from(effect_id);
+    let track_id = TrackId::from_u64(track_id);
+    let effect_id = EffectId::from_u64(effect_id);
     plugin_api::get_effect(ctx, &track_id, &effect_id, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Effect {} not found", effect_id))
 }
 
 pub fn get_effect_from_master(
     ctx: &DawContext,
-    effect_id: u32,
+    effect_id: u64,
 ) -> Result<UiEffectInstance, String> {
-    let effect_id_typed = EffectId::from(effect_id);
+    let effect_id_typed = EffectId::from_u64(effect_id);
     plugin_api::get_effect_from_master(ctx, &effect_id_typed, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Effect {} not found", effect_id))
 }
 
 pub fn get_effects_from_track(
     ctx: &DawContext,
-    track_id: u32,
+    track_id: u64,
 ) -> Result<Vec<UiEffectInstance>, String> {
-    let track_id = TrackId::from(track_id);
+    let track_id = TrackId::from_u64(track_id);
     plugin_api::get_effects_from_track(ctx, &track_id, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Track {} not found", track_id))
 }
@@ -398,4 +401,21 @@ pub fn set_plugin_telemetry_subs(
 ) -> Result<(), String> {
     plugin_api::set_plugin_telemetry_subs(ctx, target.into(), buffers, active)
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generator_lookup_preserves_reused_slot_generation() {
+        let mut ctx = DawContext::new();
+        let removed = ctx.app_state.add_generator(Default::default());
+        ctx.app_state.remove_generator(removed);
+        let replacement = ctx.app_state.add_generator(Default::default());
+
+        assert_eq!(removed.to_u32(), replacement.to_u32());
+        assert_ne!(removed.to_u64(), replacement.to_u64());
+        assert!(get_generator(&ctx, replacement.to_u64()).is_ok());
+    }
 }

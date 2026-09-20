@@ -61,10 +61,10 @@ pub fn redo(ctx: &mut DawContext) -> Result<UiApplicationState, String> {
 /// Copy selected pattern notes to the clipboard.
 pub fn copy_pattern_notes(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<UiClipboardContent, String> {
-    let pattern_id = PatternId::from(pattern_id);
+    let pattern_id = PatternId::from_u64(pattern_id);
     let note_ids: Vec<NoteId> = note_ids.into_iter().map(NoteId::from).collect();
 
     clipboard_api::copy_pattern_notes(ctx, pattern_id, note_ids, |clipboard| {
@@ -76,12 +76,12 @@ pub fn copy_pattern_notes(
 /// Cut pattern notes: copies them to clipboard then deletes with history.
 pub fn cut_pattern_notes(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<(), String> {
     clipboard_api::cut_notes(
         ctx,
-        pattern_id.into(),
+        PatternId::from_u64(pattern_id),
         note_ids.into_iter().map(|note_id| note_id.into()).collect(),
     )
     .map_err(|e| e.to_string())?;
@@ -91,13 +91,13 @@ pub fn cut_pattern_notes(
 /// Paste: Reads clipboard, creates new notes, creates Batch Add action
 pub fn paste_pattern_notes(
     ctx: &mut DawContext,
-    target_pattern_id: u32,
+    target_pattern_id: u64,
     playhead_tick: u64,
     target_key: Option<u8>,
 ) -> Result<Vec<UiNote>, String> {
     let notes = clipboard_api::paste_notes(
         ctx,
-        PatternId::from(target_pattern_id),
+        PatternId::from_u64(target_pattern_id),
         playhead_tick,
         target_key,
         |note| UiNote::from(note),
@@ -109,14 +109,14 @@ pub fn paste_pattern_notes(
 /// Delete notes in group. useful for range and group deletion
 pub fn delete_pattern_notes(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<(), String> {
     let note_ids_typed = note_ids
         .into_iter()
         .map(karbeat_core::core::project::NoteId::from)
         .collect();
-    note_api::delete_notes_batch(ctx, PatternId::from(pattern_id), note_ids_typed)
+    note_api::delete_notes_batch(ctx, PatternId::from_u64(pattern_id), note_ids_typed)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())
@@ -128,17 +128,17 @@ pub fn delete_pattern_notes(
 
 /// Copy selected clips to the clipboard.
 /// Each (track_id, clip_id) pair identifies a clip to copy.
-pub fn copy_clips(ctx: &mut DawContext, track_id: u32, clip_ids: Vec<u32>) {
-    let track_id = TrackId::from(track_id);
-    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+pub fn copy_clips(ctx: &mut DawContext, track_id: u64, clip_ids: Vec<u64>) {
+    let track_id = TrackId::from_u64(track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
 
     clipboard_api::copy_clips(ctx, track_id, &clip_ids)
 }
 
 /// Cut selected clips: copies them to clipboard then deletes with history.
-pub fn cut_clips(ctx: &mut DawContext, track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
-    let clip_ids_typed = clip_ids.into_iter().map(|c| c.into()).collect();
-    clipboard_api::cut_clips(ctx, track_id.into(), clip_ids_typed);
+pub fn cut_clips(ctx: &mut DawContext, track_id: u64, clip_ids: Vec<u64>) -> Result<(), String> {
+    let clip_ids_typed = clip_ids.into_iter().map(ClipId::from_u64).collect();
+    clipboard_api::cut_clips(ctx, TrackId::from_u64(track_id), clip_ids_typed);
 
     Ok(())
 }
@@ -147,7 +147,7 @@ pub fn cut_clips(ctx: &mut DawContext, track_id: u32, clip_ids: Vec<u32>) -> Res
 /// Clips are offset relative to the earliest clip's start time.
 pub fn paste_clips(
     ctx: &mut DawContext,
-    target_track_id: u32,
+    target_track_id: u64,
     paste_start_time: u32,
     track_type: UiTrackType,
 ) -> Result<Vec<UiClip>, String> {
@@ -169,16 +169,16 @@ pub fn paste_clips(
         },
     };
     let pasted_clips =
-        clipboard_api::paste_clips(ctx, TrackId::from(target_track_id), clip_time_unit)
+        clipboard_api::paste_clips(ctx, TrackId::from_u64(target_track_id), clip_time_unit)
             .map_err(|e| e.to_string())?;
 
     Ok(pasted_clips.iter().map(UiClip::from).collect())
 }
 
 /// Delete specified clips from a track with history support.
-pub fn delete_clips(ctx: &mut DawContext, track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
-    let clip_ids_typed = clip_ids.into_iter().map(ClipId::from).collect();
-    clip_api::batch_delete_clips(ctx, TrackId::from(track_id), clip_ids_typed)
+pub fn delete_clips(ctx: &mut DawContext, track_id: u64, clip_ids: Vec<u64>) -> Result<(), String> {
+    let clip_ids_typed = clip_ids.into_iter().map(ClipId::from_u64).collect();
+    clip_api::batch_delete_clips(ctx, TrackId::from_u64(track_id), clip_ids_typed)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())
@@ -187,16 +187,16 @@ pub fn delete_clips(ctx: &mut DawContext, track_id: u32, clip_ids: Vec<u32>) -> 
 /// Move a clip to a new timeline start tick, optionally changing tracks.
 pub fn move_clip(
     ctx: &mut DawContext,
-    old_track_id: u32,
-    new_track_id: u32,
-    clip_id: u32,
+    old_track_id: u64,
+    new_track_id: u64,
+    clip_id: u64,
     new_start_time: u64,
 ) -> Result<(), String> {
     clip_api::move_clip(
         ctx,
-        TrackId::from(old_track_id),
-        TrackId::from(new_track_id),
-        ClipId::from(clip_id),
+        TrackId::from_u64(old_track_id),
+        TrackId::from_u64(new_track_id),
+        ClipId::from_u64(clip_id),
         new_start_time,
     )
     .map_err(|e| format!("{}", e))?;
@@ -208,15 +208,15 @@ pub fn move_clip(
 /// Supports both left (slip edit) and right edge resizing with history support.
 pub fn resize_clip(
     ctx: &mut DawContext,
-    track_id: u32,
-    clip_id: u32,
+    track_id: u64,
+    clip_id: u64,
     edge: UiResizeEdge,
     new_time_val: u64,
 ) -> Result<(), String> {
     clip_api::resize_clip(
         ctx,
-        TrackId::from(track_id),
-        ClipId::from(clip_id),
+        TrackId::from_u64(track_id),
+        ClipId::from_u64(clip_id),
         edge.into(),
         new_time_val,
     )

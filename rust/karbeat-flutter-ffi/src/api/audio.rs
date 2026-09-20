@@ -72,13 +72,13 @@ pub enum UiAudioFeedback {
     // ── Generator parameter feedback ──────────────────────────────────────
     /// A single generator parameter changed (e.g., driven by automation).
     GeneratorParameterChanged {
-        generator_id: u32,
+        generator_id: u64,
         param_id: u32,
         value: f32,
     },
     /// Full parameter snapshot for a generator (response to `query_generator_parameters`).
     GeneratorParameterSnapshot {
-        generator_id: u32,
+        generator_id: u64,
         /// (param_id, value) pairs
         parameters: Vec<(u32, f32)>,
     },
@@ -87,17 +87,17 @@ pub enum UiAudioFeedback {
     /// A single effect parameter changed.
     EffectParameterChanged {
         /// `Some(id)` = track channel, `None` = master
-        target_track_id: Option<u32>,
-        target_bus_id: Option<u32>,
-        effect_id: u32,
+        target_track_id: Option<u64>,
+        target_bus_id: Option<u64>,
+        effect_id: u64,
         param_id: u32,
         value: f32,
     },
     /// Full parameter snapshot for an effect (response to `query_effect_parameters`).
     EffectParameterSnapshot {
-        target_track_id: Option<u32>,
-        target_bus_id: Option<u32>,
-        effect_id: u32,
+        target_track_id: Option<u64>,
+        target_bus_id: Option<u64>,
+        effect_id: u64,
         /// (param_id, value) pairs
         parameters: Vec<(u32, f32)>,
     },
@@ -106,9 +106,9 @@ pub enum UiAudioFeedback {
     /// Full DSP state snapshot for a mixer channel (response to `query_mixer_channel`).
     MixerChannelSnapshot {
         /// `Some(id)` = track channel
-        target_track_id: Option<u32>,
+        target_track_id: Option<u64>,
         /// `Some(id)` = bus channel
-        target_bus_id: Option<u32>,
+        target_bus_id: Option<u64>,
         /// `true` = master bus
         is_master: bool,
         volume: f32,
@@ -130,15 +130,15 @@ pub enum UiAudioFeedback {
     /// Raw state blob from a plugin instance (response to `QueryPluginState`).
     PluginStateSnapshot {
         /// `Some(id)` if the target is a generator
-        generator_id: Option<u32>,
+        generator_id: Option<u64>,
         /// Set if the target is a track effect
-        track_effect_track_id: Option<u32>,
-        track_effect_effect_id: Option<u32>,
+        track_effect_track_id: Option<u64>,
+        track_effect_effect_id: Option<u64>,
         /// Set if the target is a bus effect
-        bus_effect_bus_id: Option<u32>,
-        bus_effect_effect_id: Option<u32>,
+        bus_effect_bus_id: Option<u64>,
+        bus_effect_effect_id: Option<u64>,
         /// Set if the target is a master-bus effect
-        master_effect_id: Option<u32>,
+        master_effect_id: Option<u64>,
         /// Raw serialised state bytes
         state: Vec<u8>,
         request_id: u32,
@@ -153,10 +153,10 @@ pub enum UiAudioFeedback {
     },
 }
 
-fn map_effect_target(target: &EffectTarget) -> (Option<u32>, Option<u32>) {
+fn map_effect_target(target: &EffectTarget) -> (Option<u64>, Option<u64>) {
     match target {
-        EffectTarget::Track(id) => (Some(id.to_u32()), None),
-        EffectTarget::Bus(id) => (None, Some(id.to_u32())),
+        EffectTarget::Track(id) => (Some(id.to_u64()), None),
+        EffectTarget::Bus(id) => (None, Some(id.to_u64())),
         EffectTarget::Master => (None, None),
     }
 }
@@ -164,19 +164,19 @@ fn map_effect_target(target: &EffectTarget) -> (Option<u32>, Option<u32>) {
 fn map_plugin_target(
     target: &PluginTarget,
 ) -> (
-    Option<u32>,
-    Option<u32>,
-    Option<u32>,
-    Option<u32>,
-    Option<u32>,
-    Option<u32>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
+    Option<u64>,
 ) {
     match target {
-        PluginTarget::Generator(id) => (Some(id.to_u32()), None, None, None, None, None),
+        PluginTarget::Generator(id) => (Some(id.to_u64()), None, None, None, None, None),
         PluginTarget::TrackEffect(track_id, effect_id) => (
             None,
-            Some(track_id.to_u32()),
-            Some(effect_id.to_u32()),
+            Some(track_id.to_u64()),
+            Some(effect_id.to_u64()),
             None,
             None,
             None,
@@ -185,12 +185,12 @@ fn map_plugin_target(
             None,
             None,
             None,
-            Some(bus_id.to_u32()),
-            Some(effect_id.to_u32()),
+            Some(bus_id.to_u64()),
+            Some(effect_id.to_u64()),
             None,
         ),
         PluginTarget::MasterEffect(effect_id) => {
-            (None, None, None, None, None, Some(effect_id.to_u32()))
+            (None, None, None, None, None, Some(effect_id.to_u64()))
         }
     }
 }
@@ -199,12 +199,12 @@ impl From<AudioFeedback> for UiAudioFeedback {
     fn from(feedback: AudioFeedback) -> Self {
         match feedback {
             AudioFeedback::GeneratorParameterChanged(u) => Self::GeneratorParameterChanged {
-                generator_id: u.generator_id.to_u32(),
+                generator_id: u.generator_id.to_u64(),
                 param_id: u.param_id,
                 value: u.value,
             },
             AudioFeedback::GeneratorParameterSnapshot(s) => Self::GeneratorParameterSnapshot {
-                generator_id: s.generator_id.to_u32(),
+                generator_id: s.generator_id.to_u64(),
                 parameters: s.parameters,
             },
             AudioFeedback::EffectParameterChanged(u) => {
@@ -212,7 +212,7 @@ impl From<AudioFeedback> for UiAudioFeedback {
                 Self::EffectParameterChanged {
                     target_track_id: track_id,
                     target_bus_id: bus_id,
-                    effect_id: u.effect_id.to_u32(),
+                    effect_id: u.effect_id.to_u64(),
                     param_id: u.param_id,
                     value: u.value,
                 }
@@ -222,14 +222,14 @@ impl From<AudioFeedback> for UiAudioFeedback {
                 Self::EffectParameterSnapshot {
                     target_track_id: track_id,
                     target_bus_id: bus_id,
-                    effect_id: s.effect_id.to_u32(),
+                    effect_id: s.effect_id.to_u64(),
                     parameters: s.parameters,
                 }
             }
             AudioFeedback::MixerChannelSnapshot(s) => {
                 let (target_track_id, target_bus_id, is_master) = match &s.target {
-                    MixerChannelTarget::Track(id) => (Some(id.to_u32()), None, false),
-                    MixerChannelTarget::Bus(id) => (None, Some(id.to_u32()), false),
+                    MixerChannelTarget::Track(id) => (Some(id.to_u64()), None, false),
+                    MixerChannelTarget::Bus(id) => (None, Some(id.to_u64()), false),
                     MixerChannelTarget::Master => (None, None, true),
                 };
                 Self::MixerChannelSnapshot {
@@ -376,16 +376,16 @@ pub fn create_position_stream(
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(
     ctx: &DawContext,
-    id: u32,
+    id: u64,
 ) -> Option<AudioWaveformUiForAudioProperties> {
-    audio_api::get_audio_source(ctx, AudioSourceId::from(id), |waveform| {
+    audio_api::get_audio_source(ctx, AudioSourceId::from_u64(id), |waveform| {
         AudioWaveformUiForAudioProperties::try_from_with_context(ctx, waveform).ok()
     })?
 }
 
 /// ACTION: Play the sound via the Engine
-pub fn play_source_preview(ctx: &mut DawContext, id: u32) {
-    if let Err(e) = audio_api::play_source_preview(ctx, AudioSourceId::from(id)) {
+pub fn play_source_preview(ctx: &mut DawContext, id: u64) {
+    if let Err(e) = audio_api::play_source_preview(ctx, AudioSourceId::from_u64(id)) {
         log::warn!("Preview failed: {}", e);
     } else {
         log::info!("Preview command sent for ID: {}", id);
@@ -412,7 +412,7 @@ pub fn get_audio_config(ctx: &DawContext) -> Result<UiAudioHardwareConfig, Strin
 /// play preview sound when drawing note or pressing the piano tile on the UI
 pub fn play_preview_note(
     ctx: &mut DawContext,
-    track_id: u32,
+    track_id: u64,
     note_key: i32,
     velocity: i32,
     is_on: bool,
@@ -427,7 +427,7 @@ pub fn play_preview_note(
 
     audio_api::play_preview_note(
         ctx,
-        TrackId::from(track_id),
+        TrackId::from_u64(track_id),
         note_key as u8,
         velocity as u8,
         is_on,
@@ -439,7 +439,7 @@ pub fn play_preview_note(
 /// Used in plugin editor screens to test synth sounds.
 pub fn play_preview_note_generator(
     ctx: &mut DawContext,
-    generator_id: u32,
+    generator_id: u64,
     note_key: i32,
     velocity: i32,
     is_on: bool,
@@ -454,7 +454,7 @@ pub fn play_preview_note_generator(
 
     audio_api::play_preview_note_generator(
         ctx,
-        GeneratorId::from(generator_id),
+        GeneratorId::from_u64(generator_id),
         note_key as u8,
         velocity as u8,
         is_on,

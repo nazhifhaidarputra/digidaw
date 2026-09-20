@@ -10,8 +10,8 @@ mod tests {
     #[test]
     fn get_audio_waveform_clips_data_empty_state() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
-            audio_waveform_api::get_audio_waveform_clips_data(&ctx, |id, _w| id.to_u32())
+        let result: Vec<u64> =
+            audio_waveform_api::get_audio_waveform_clips_data(&ctx, |id, _w| id.to_u64())
                 .expect("Should succeed on empty state");
         assert!(result.is_empty());
     }
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn get_audio_waveform_for_clip_all_available_in_tracks_empty_state() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
+        let result: Vec<u64> =
             audio_waveform_api::get_audio_waveform_for_clip_all_available_in_tracks(
                 &ctx,
                 |id, _w| id,
@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn get_audio_source_list_empty() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
+        let result: Vec<u64> =
             audio_waveform_api::get_audio_source_list(&ctx, |id, _w| id).expect("Should succeed");
         assert!(result.is_empty());
     }

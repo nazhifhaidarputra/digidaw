@@ -30,7 +30,7 @@ use crate::api::plugins::opaque::*;
 use crate::api::project::*;
 use crate::api::waveform::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -1012,7 +1012,7 @@ fn wire__crate__api__project__AudioWaveformUiForAudioProperties_auto_accessor_se
                     AudioWaveformUiForAudioProperties,
                 >,
             >>::sse_decode(&mut deserializer);
-            let api_id = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_id = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let mut api_that_guard = None;
@@ -1965,7 +1965,7 @@ fn wire__crate__api__automation__add_automation_lane_for_bus_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_bus_id = <u32>::sse_decode(&mut deserializer);
+            let api_bus_id = <u64>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
             let api_label = <String>::sse_decode(&mut deserializer);
@@ -2029,7 +2029,7 @@ fn wire__crate__api__automation__add_automation_lane_for_track_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
             let api_label = <String>::sse_decode(&mut deserializer);
@@ -2093,7 +2093,7 @@ fn wire__crate__api__mixer__add_effect_to_bus_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_bus_id = <u32>::sse_decode(&mut deserializer);
+            let api_bus_id = <u64>::sse_decode(&mut deserializer);
             let api_registry_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -2201,7 +2201,7 @@ fn wire__crate__api__mixer__add_effect_to_mixer_channel_by_id_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_registry_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -2415,7 +2415,7 @@ fn wire__crate__api__automation__add_new_automation_point_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_automation_id = <u32>::sse_decode(&mut deserializer);
+            let api_automation_id = <u64>::sse_decode(&mut deserializer);
             let api_time_ticks = <u32>::sse_decode(&mut deserializer);
             let api_value = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -2472,7 +2472,7 @@ fn wire__crate__api__pattern__add_note_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_key = <u32>::sse_decode(&mut deserializer);
             let api_start_tick = <u64>::sse_decode(&mut deserializer);
             let api_duration = <Option<u64>>::sse_decode(&mut deserializer);
@@ -2531,7 +2531,7 @@ fn wire__crate__api__pattern__add_notes_batch_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_notes = <Vec<(u8, u64, Option<u64>)>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -2784,7 +2784,7 @@ fn wire__crate__api__pattern__change_note_params_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_velocity = <Option<i64>>::sse_decode(&mut deserializer);
             let api_probability = <Option<f32>>::sse_decode(&mut deserializer);
@@ -2847,7 +2847,7 @@ fn wire__crate__api__track__change_track_color_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_new_color = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -2902,7 +2902,7 @@ fn wire__crate__api__track__change_track_name_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_new_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3074,8 +3074,8 @@ fn wire__crate__api__session__copy_clips_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -3131,7 +3131,7 @@ fn wire__crate__api__session__copy_pattern_notes_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3236,9 +3236,9 @@ fn wire__crate__api__track__create_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_source_id = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_source_id = <Option<u64>>::sse_decode(&mut deserializer);
             let api_source_type = <crate::api::track::UiSourceType>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_start_time = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3432,8 +3432,8 @@ fn wire__crate__api__session__cut_clips_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3487,7 +3487,7 @@ fn wire__crate__api__session__cut_pattern_notes_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3576,7 +3576,7 @@ fn wire__crate__api__mixer__delete_bus_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_bus_id = <u32>::sse_decode(&mut deserializer);
+            let api_bus_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3626,8 +3626,8 @@ fn wire__crate__api__track__delete_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3681,8 +3681,8 @@ fn wire__crate__api__track__delete_clip_batch_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3736,8 +3736,8 @@ fn wire__crate__api__session__delete_clips_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -3791,7 +3791,7 @@ fn wire__crate__api__pattern__delete_note_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3846,7 +3846,7 @@ fn wire__crate__api__pattern__delete_notes_batch_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3901,7 +3901,7 @@ fn wire__crate__api__session__delete_pattern_notes_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_ids = <Vec<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3956,7 +3956,7 @@ fn wire__crate__api__track__delete_track_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -4007,8 +4007,8 @@ fn wire__crate__api__track__duplicate_clip_groups_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_group_start_times = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -4732,7 +4732,7 @@ fn wire__crate__api__audio__get_audio_properties_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_id = <u32>::sse_decode(&mut deserializer);
+            let api_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -4887,7 +4887,7 @@ fn wire__crate__api__automation__get_automation_lane_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_lane_id = <u32>::sse_decode(&mut deserializer);
+            let api_lane_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -4939,7 +4939,7 @@ fn wire__crate__api__automation__get_automation_lanes_for_bus_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_bus_id = <u32>::sse_decode(&mut deserializer);
+            let api_bus_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -4993,7 +4993,7 @@ fn wire__crate__api__automation__get_automation_lanes_for_track_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -5250,7 +5250,7 @@ fn wire__crate__api__mixer__get_bus_mixer_channel_specs_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_bus_id = <u32>::sse_decode(&mut deserializer);
+            let api_bus_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -5353,7 +5353,7 @@ fn wire__crate__api__mixer__get_channel_destinations_impl(
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
             let api_is_bus = <bool>::sse_decode(&mut deserializer);
-            let api_channel_id = <u32>::sse_decode(&mut deserializer);
+            let api_channel_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -5408,8 +5408,8 @@ fn wire__crate__api__track__get_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -5511,8 +5511,8 @@ fn wire__crate__api__plugin__get_effect_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_effect_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_effect_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -5566,7 +5566,7 @@ fn wire__crate__api__plugin__get_effect_from_master_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_effect_id = <u32>::sse_decode(&mut deserializer);
+            let api_effect_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -5617,7 +5617,7 @@ fn wire__crate__api__plugin__get_effects_from_track_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -5668,7 +5668,7 @@ fn wire__crate__api__plugin__get_generator_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_generator_id = <u32>::sse_decode(&mut deserializer);
+            let api_generator_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -6018,7 +6018,7 @@ fn wire__crate__api__mixer__get_mixer_channel_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -6069,7 +6069,7 @@ fn wire__crate__api__mixer__get_mixer_channel_populated_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -6220,7 +6220,7 @@ fn wire__crate__api__automation__get_modulation_link_by_id_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_link_id = <u32>::sse_decode(&mut deserializer);
+            let api_link_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -6274,7 +6274,7 @@ fn wire__crate__api__automation__get_modulation_source_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_id = <u32>::sse_decode(&mut deserializer);
+            let api_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -6360,7 +6360,7 @@ fn wire__crate__api__pattern__get_pattern_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -6718,7 +6718,7 @@ fn wire__crate__api__track__get_track_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -6771,7 +6771,7 @@ fn wire__crate__api__mixer__get_track_mixer_channel_specs_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -6922,7 +6922,7 @@ fn wire__crate__api__waveform__get_waveform_handle_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_source_id = <u32>::sse_decode(&mut deserializer);
+            let api_source_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let mut api_ctx_guard = None;
@@ -6972,7 +6972,7 @@ fn wire__crate__api__waveform__get_waveform_handles_for_track_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let mut api_ctx_guard = None;
@@ -7088,7 +7088,7 @@ fn wire__crate__api__automation__link_this_param_to_controller_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_source_id = <u32>::sse_decode(&mut deserializer);
+            let api_source_id = <u64>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::automation::AutomationTargetDto>::sse_decode(&mut deserializer);
             let api_depth = <f32>::sse_decode(&mut deserializer);
@@ -7267,9 +7267,9 @@ fn wire__crate__api__session__move_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_old_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_new_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_old_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_new_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             let api_new_start_time = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -7326,10 +7326,10 @@ fn wire__crate__api__track__move_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_source_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_source_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             let api_new_start_time = <u64>::sse_decode(&mut deserializer);
-            let api_new_track_id = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_new_track_id = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -7385,10 +7385,10 @@ fn wire__crate__api__track__move_clip_batch_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_source_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
+            let api_source_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_delta_ticks = <i64>::sse_decode(&mut deserializer);
-            let api_new_track_id = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_new_track_id = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -7446,7 +7446,7 @@ fn wire__crate__api__mixer__move_effect_order_impl(
             >>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::mixer::UiMixerChannelTarget>::sse_decode(&mut deserializer);
-            let api_effect_instance_id = <u32>::sse_decode(&mut deserializer);
+            let api_effect_instance_id = <u64>::sse_decode(&mut deserializer);
             let api_new_position = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -7502,7 +7502,7 @@ fn wire__crate__api__pattern__move_note_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_new_start_tick = <u64>::sse_decode(&mut deserializer);
             let api_new_key = <u32>::sse_decode(&mut deserializer);
@@ -7561,7 +7561,7 @@ fn wire__crate__api__pattern__move_notes_batch_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_updates = <Vec<(u32, u64, u8)>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -7783,7 +7783,7 @@ fn wire__crate__api__session__paste_clips_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_target_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_target_track_id = <u64>::sse_decode(&mut deserializer);
             let api_paste_start_time = <u32>::sse_decode(&mut deserializer);
             let api_track_type = <crate::api::project::UiTrackType>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -7840,7 +7840,7 @@ fn wire__crate__api__session__paste_pattern_notes_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_target_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_target_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_playhead_tick = <u64>::sse_decode(&mut deserializer);
             let api_target_key = <Option<u8>>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -7948,8 +7948,8 @@ fn wire__crate__api__pattern__play_pattern_preview_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
-            let api_generator_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
+            let api_generator_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -8003,7 +8003,7 @@ fn wire__crate__api__audio__play_preview_note_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_note_key = <i32>::sse_decode(&mut deserializer);
             let api_velocity = <i32>::sse_decode(&mut deserializer);
             let api_is_on = <bool>::sse_decode(&mut deserializer);
@@ -8062,7 +8062,7 @@ fn wire__crate__api__audio__play_preview_note_generator_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_generator_id = <u32>::sse_decode(&mut deserializer);
+            let api_generator_id = <u64>::sse_decode(&mut deserializer);
             let api_note_key = <i32>::sse_decode(&mut deserializer);
             let api_velocity = <i32>::sse_decode(&mut deserializer);
             let api_is_on = <bool>::sse_decode(&mut deserializer);
@@ -8121,7 +8121,7 @@ fn wire__crate__api__audio__play_source_preview_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_id = <u32>::sse_decode(&mut deserializer);
+            let api_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -8446,7 +8446,7 @@ fn wire__crate__api__automation__remove_automation_point_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_automation_id = <u32>::sse_decode(&mut deserializer);
+            let api_automation_id = <u64>::sse_decode(&mut deserializer);
             let api_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -8501,7 +8501,7 @@ fn wire__crate__api__mixer__remove_effect_from_master_bus_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_effect_instance_id = <u32>::sse_decode(&mut deserializer);
+            let api_effect_instance_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -8554,8 +8554,8 @@ fn wire__crate__api__mixer__remove_effect_from_mixer_channel_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_effect_instance_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_effect_instance_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -8611,7 +8611,7 @@ fn wire__crate__api__mixer__remove_effect_from_target_mixer_channel_impl(
             >>::sse_decode(&mut deserializer);
             let api_target =
                 <crate::api::mixer::UiMixerChannelTarget>::sse_decode(&mut deserializer);
-            let api_effect_instance_id = <u32>::sse_decode(&mut deserializer);
+            let api_effect_instance_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -8665,7 +8665,7 @@ fn wire__crate__api__automation__remove_modulation_link_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_mod_link_id = <u32>::sse_decode(&mut deserializer);
+            let api_mod_link_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -8720,7 +8720,7 @@ fn wire__crate__api__automation__remove_modulation_source_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_mod_id = <u32>::sse_decode(&mut deserializer);
+            let api_mod_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -8832,7 +8832,7 @@ fn wire__crate__api__mixer__rename_bus_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_bus_id = <u32>::sse_decode(&mut deserializer);
+            let api_bus_id = <u64>::sse_decode(&mut deserializer);
             let api_new_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -8887,7 +8887,7 @@ fn wire__crate__api__track__rename_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             let api_new_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -8942,7 +8942,7 @@ fn wire__crate__api__pattern__rename_pattern_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_new_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -8997,8 +8997,8 @@ fn wire__crate__api__session__resize_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
             let api_new_time_val = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -9056,8 +9056,8 @@ fn wire__crate__api__track__resize_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
             let api_new_time_val = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -9115,8 +9115,8 @@ fn wire__crate__api__track__resize_clip_batch_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_ids = <Vec<u32>>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::UiResizeEdge>::sse_decode(&mut deserializer);
             let api_delta_ticks = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -9174,7 +9174,7 @@ fn wire__crate__api__pattern__resize_note_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_new_duration = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -9231,7 +9231,7 @@ fn wire__crate__api__pattern__resize_notes_batch_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
             let api_updates = <Vec<(u32, u64)>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -10289,8 +10289,8 @@ fn wire__crate__api__track__slice_clip_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_source_track_id = <u32>::sse_decode(&mut deserializer);
-            let api_clip_id = <u32>::sse_decode(&mut deserializer);
+            let api_source_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_clip_id = <u64>::sse_decode(&mut deserializer);
             let api_cut_point = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -10481,8 +10481,8 @@ fn wire__crate__api__pattern__stop_pattern_preview_local_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
-            let api_generator_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
+            let api_generator_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -10653,7 +10653,7 @@ fn wire__crate__api__transport__switch_pattern_generator_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_generator_id = <u32>::sse_decode(&mut deserializer);
+            let api_generator_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -10708,8 +10708,8 @@ fn wire__crate__api__transport__toggle_pattern_playback_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_pattern_id = <u32>::sse_decode(&mut deserializer);
-            let api_generator_id = <u32>::sse_decode(&mut deserializer);
+            let api_pattern_id = <u64>::sse_decode(&mut deserializer);
+            let api_generator_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -10944,11 +10944,11 @@ fn wire__crate__api__mixer__ui_mixer_state_new_with_param_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_channels =
-                <std::collections::HashMap<u32, crate::api::mixer::UiMixerChannel>>::sse_decode(
+                <std::collections::HashMap<u64, crate::api::mixer::UiMixerChannel>>::sse_decode(
                     &mut deserializer,
                 );
             let api_master_bus = <crate::api::mixer::UiMixerChannel>::sse_decode(&mut deserializer);
-            let api_buses = <std::collections::HashMap<u32, crate::api::mixer::UiBus>>::sse_decode(
+            let api_buses = <std::collections::HashMap<u64, crate::api::mixer::UiBus>>::sse_decode(
                 &mut deserializer,
             );
             let api_routing =
@@ -11141,7 +11141,7 @@ fn wire__crate__api__automation__update_automation_point_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_automation_id = <u32>::sse_decode(&mut deserializer);
+            let api_automation_id = <u64>::sse_decode(&mut deserializer);
             let api_id = <u64>::sse_decode(&mut deserializer);
             let api_time_ticks = <Option<u32>>::sse_decode(&mut deserializer);
             let api_value = <Option<f64>>::sse_decode(&mut deserializer);
@@ -11312,7 +11312,7 @@ fn wire__crate__api__track__update_track_order_impl(
             let api_ctx = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>,
             >>::sse_decode(&mut deserializer);
-            let api_track_id = <u32>::sse_decode(&mut deserializer);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_new_idx = <usize>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -11413,107 +11413,107 @@ impl SseDecode for ZeroCopyHandle {
     }
 }
 
-impl SseDecode for std::collections::HashMap<String, ZeroCopyHandle> {
+impl SseDecode for std::collections::HashMap<u64, WaveformHandle> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(String, ZeroCopyHandle)>>::sse_decode(deserializer);
-        return inner.into_iter().collect();
-    }
-}
-
-impl SseDecode for std::collections::HashMap<u32, WaveformHandle> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u32, WaveformHandle)>>::sse_decode(deserializer);
+        let mut inner = <Vec<(u64, WaveformHandle)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
 
 impl SseDecode
-    for std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>
+    for std::collections::HashMap<u64, crate::api::project::AudioWaveformUiForSourceList>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)>>::sse_decode(
+        let mut inner = <Vec<(u64, crate::api::project::AudioWaveformUiForSourceList)>>::sse_decode(
             deserializer,
         );
         return inner.into_iter().collect();
     }
 }
 
-impl SseDecode for std::collections::HashMap<u32, crate::api::automation::AutomationLaneDto> {
+impl SseDecode for std::collections::HashMap<u64, crate::api::automation::AutomationLaneDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner =
-            <Vec<(u32, crate::api::automation::AutomationLaneDto)>>::sse_decode(deserializer);
+            <Vec<(u64, crate::api::automation::AutomationLaneDto)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
 
-impl SseDecode for std::collections::HashMap<u32, crate::api::automation::ModulationLinkDto> {
+impl SseDecode for std::collections::HashMap<u64, crate::api::automation::ModulationLinkDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner =
-            <Vec<(u32, crate::api::automation::ModulationLinkDto)>>::sse_decode(deserializer);
+            <Vec<(u64, crate::api::automation::ModulationLinkDto)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
 
-impl SseDecode for std::collections::HashMap<u32, crate::api::automation::ModulationSourceDto> {
+impl SseDecode for std::collections::HashMap<u64, crate::api::automation::ModulationSourceDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner =
-            <Vec<(u32, crate::api::automation::ModulationSourceDto)>>::sse_decode(deserializer);
+            <Vec<(u64, crate::api::automation::ModulationSourceDto)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
 
-impl SseDecode for std::collections::HashMap<u32, crate::api::mixer::UiBus> {
+impl SseDecode for std::collections::HashMap<u64, crate::api::mixer::UiBus> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u32, crate::api::mixer::UiBus)>>::sse_decode(deserializer);
+        let mut inner = <Vec<(u64, crate::api::mixer::UiBus)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
 
-impl SseDecode for std::collections::HashMap<u32, crate::api::project::UiGeneratorInstance> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner =
-            <Vec<(u32, crate::api::project::UiGeneratorInstance)>>::sse_decode(deserializer);
-        return inner.into_iter().collect();
-    }
-}
-
-impl SseDecode for std::collections::HashMap<u32, crate::api::mixer::UiMixerChannel> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u32, crate::api::mixer::UiMixerChannel)>>::sse_decode(deserializer);
-        return inner.into_iter().collect();
-    }
-}
-
-impl SseDecode for std::collections::HashMap<u32, crate::api::mixer::UiMixerChannelSnapshot> {
+impl SseDecode for std::collections::HashMap<u64, crate::api::project::UiGeneratorInstance> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner =
-            <Vec<(u32, crate::api::mixer::UiMixerChannelSnapshot)>>::sse_decode(deserializer);
+            <Vec<(u64, crate::api::project::UiGeneratorInstance)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
 
-impl SseDecode for std::collections::HashMap<u32, crate::api::pattern::UiPattern> {
+impl SseDecode for std::collections::HashMap<u64, crate::api::mixer::UiMixerChannel> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u32, crate::api::pattern::UiPattern)>>::sse_decode(deserializer);
+        let mut inner = <Vec<(u64, crate::api::mixer::UiMixerChannel)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
 
-impl SseDecode for std::collections::HashMap<u32, crate::api::project::UiTrack> {
+impl SseDecode for std::collections::HashMap<u64, crate::api::mixer::UiMixerChannelSnapshot> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u32, crate::api::project::UiTrack)>>::sse_decode(deserializer);
+        let mut inner =
+            <Vec<(u64, crate::api::mixer::UiMixerChannelSnapshot)>>::sse_decode(deserializer);
+        return inner.into_iter().collect();
+    }
+}
+
+impl SseDecode for std::collections::HashMap<u64, crate::api::pattern::UiPattern> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <Vec<(u64, crate::api::pattern::UiPattern)>>::sse_decode(deserializer);
+        return inner.into_iter().collect();
+    }
+}
+
+impl SseDecode for std::collections::HashMap<u64, crate::api::project::UiTrack> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <Vec<(u64, crate::api::project::UiTrack)>>::sse_decode(deserializer);
+        return inner.into_iter().collect();
+    }
+}
+
+impl SseDecode for std::collections::HashMap<String, ZeroCopyHandle> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <Vec<(String, ZeroCopyHandle)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
@@ -11687,7 +11687,7 @@ impl SseDecode for crate::api::automation::AutomationCurveTypeDto {
 impl SseDecode for crate::api::automation::AutomationLaneDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_label = <String>::sse_decode(deserializer);
         let mut var_points =
             <Vec<crate::api::automation::AutomationPointDto>>::sse_decode(deserializer);
@@ -11732,7 +11732,7 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_generatorId = <u32>::sse_decode(deserializer);
+                let mut var_generatorId = <u64>::sse_decode(deserializer);
                 let mut var_paramId = <u32>::sse_decode(deserializer);
                 return crate::api::automation::AutomationTargetDto::Generator {
                     generator_id: var_generatorId,
@@ -11740,7 +11740,7 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
                 };
             }
             1 => {
-                let mut var_trackId = <u32>::sse_decode(deserializer);
+                let mut var_trackId = <u64>::sse_decode(deserializer);
                 let mut var_trackTarget =
                     <crate::api::automation::TrackAutomationTargetDto>::sse_decode(deserializer);
                 return crate::api::automation::AutomationTargetDto::Track {
@@ -11749,7 +11749,7 @@ impl SseDecode for crate::api::automation::AutomationTargetDto {
                 };
             }
             2 => {
-                let mut var_busId = <u32>::sse_decode(deserializer);
+                let mut var_busId = <u64>::sse_decode(deserializer);
                 let mut var_mixTarget =
                     <crate::api::automation::MixerChannelParamTargetDto>::sse_decode(deserializer);
                 return crate::api::automation::AutomationTargetDto::Bus {
@@ -11961,26 +11961,14 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for Vec<(String, ZeroCopyHandle)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(String, ZeroCopyHandle)>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)> {
+impl SseDecode for Vec<(u64, crate::api::project::AudioWaveformUiForSourceList)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(
-                <(u32, crate::api::project::AudioWaveformUiForSourceList)>::sse_decode(
+                <(u64, crate::api::project::AudioWaveformUiForSourceList)>::sse_decode(
                     deserializer,
                 ),
             );
@@ -11989,25 +11977,155 @@ impl SseDecode for Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)>
     }
 }
 
-impl SseDecode for Vec<(u32, WaveformHandle)> {
+impl SseDecode for Vec<(u64, WaveformHandle)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<(u32, WaveformHandle)>::sse_decode(deserializer));
+            ans_.push(<(u64, WaveformHandle)>::sse_decode(deserializer));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<(u32, crate::api::automation::AutomationLaneDto)> {
+impl SseDecode for Vec<(u64, crate::api::automation::AutomationLaneDto)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::automation::AutomationLaneDto)>::sse_decode(deserializer));
+            ans_.push(<(u64, crate::api::automation::AutomationLaneDto)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, u64, crate::api::automation::AutomationLaneDto)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(
+                <(u64, u64, crate::api::automation::AutomationLaneDto)>::sse_decode(deserializer),
+            );
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::automation::ModulationLinkDto)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(u64, crate::api::automation::ModulationLinkDto)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::automation::ModulationSourceDto)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(
+                <(u64, crate::api::automation::ModulationSourceDto)>::sse_decode(deserializer),
+            );
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::mixer::UiBus)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(u64, crate::api::mixer::UiBus)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::project::UiGeneratorInstance)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(u64, crate::api::project::UiGeneratorInstance)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::mixer::UiMixerChannel)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(u64, crate::api::mixer::UiMixerChannel)>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::mixer::UiMixerChannelSnapshot)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(u64, crate::api::mixer::UiMixerChannelSnapshot)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::pattern::UiPattern)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(u64, crate::api::pattern::UiPattern)>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(u64, crate::api::project::UiTrack)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(u64, crate::api::project::UiTrack)>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<(String, ZeroCopyHandle)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(String, ZeroCopyHandle)>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -12044,124 +12162,6 @@ impl SseDecode for Vec<(u32, f32)> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<(u32, f32)>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::automation::ModulationLinkDto)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::automation::ModulationLinkDto)>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::automation::ModulationSourceDto)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(
-                <(u32, crate::api::automation::ModulationSourceDto)>::sse_decode(deserializer),
-            );
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, u32, crate::api::automation::AutomationLaneDto)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(
-                <(u32, u32, crate::api::automation::AutomationLaneDto)>::sse_decode(deserializer),
-            );
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::mixer::UiBus)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::mixer::UiBus)>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::project::UiGeneratorInstance)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::project::UiGeneratorInstance)>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::mixer::UiMixerChannel)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::mixer::UiMixerChannel)>::sse_decode(
-                deserializer,
-            ));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::mixer::UiMixerChannelSnapshot)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::mixer::UiMixerChannelSnapshot)>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::pattern::UiPattern)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::pattern::UiPattern)>::sse_decode(
-                deserializer,
-            ));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<(u32, crate::api::project::UiTrack)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<(u32, crate::api::project::UiTrack)>::sse_decode(
-                deserializer,
-            ));
         }
         return ans_;
     }
@@ -12387,7 +12387,7 @@ impl SseDecode for crate::api::automation::MixerChannelParamTargetDto {
                 return crate::api::automation::MixerChannelParamTargetDto::Pan;
             }
             2 => {
-                let mut var_effectId = <u32>::sse_decode(deserializer);
+                let mut var_effectId = <u64>::sse_decode(deserializer);
                 let mut var_target =
                     <crate::api::automation::EffectAutomationTargetDto>::sse_decode(deserializer);
                 return crate::api::automation::MixerChannelParamTargetDto::Plugin {
@@ -12406,11 +12406,11 @@ impl SseDecode for crate::api::mixer::MixerTelemetrySnapshotDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_tracks = <std::collections::HashMap<
-            u32,
+            u64,
             crate::api::mixer::UiMixerChannelSnapshot,
         >>::sse_decode(deserializer);
         let mut var_buses = <std::collections::HashMap<
-            u32,
+            u64,
             crate::api::mixer::UiMixerChannelSnapshot,
         >>::sse_decode(deserializer);
         let mut var_master =
@@ -12426,8 +12426,8 @@ impl SseDecode for crate::api::mixer::MixerTelemetrySnapshotDto {
 impl SseDecode for crate::api::automation::ModulationLinkDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
-        let mut var_sourceId = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
+        let mut var_sourceId = <u64>::sse_decode(deserializer);
         let mut var_target =
             <crate::api::automation::AutomationTargetDto>::sse_decode(deserializer);
         let mut var_depth = <f32>::sse_decode(deserializer);
@@ -12456,7 +12456,7 @@ impl SseDecode for crate::api::automation::ModulationSourceDto {
                 };
             }
             1 => {
-                let mut var_laneId = <u32>::sse_decode(deserializer);
+                let mut var_laneId = <u64>::sse_decode(deserializer);
                 return crate::api::automation::ModulationSourceDto::Automation {
                     lane_id: var_laneId,
                 };
@@ -12511,13 +12511,13 @@ impl SseDecode for Option<u64> {
 }
 
 impl SseDecode
-    for Option<std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>>
+    for Option<std::collections::HashMap<u64, crate::api::project::AudioWaveformUiForSourceList>>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<std::collections::HashMap<
-                u32,
+                u64,
                 crate::api::project::AudioWaveformUiForSourceList,
             >>::sse_decode(deserializer));
         } else {
@@ -12825,8 +12825,8 @@ impl SseDecode for crate::api::transport::PlaybackModeDto {
                 return crate::api::transport::PlaybackModeDto::Song;
             }
             1 => {
-                let mut var_patternId = <u32>::sse_decode(deserializer);
-                let mut var_generatorId = <u32>::sse_decode(deserializer);
+                let mut var_patternId = <u64>::sse_decode(deserializer);
+                let mut var_generatorId = <u64>::sse_decode(deserializer);
                 return crate::api::transport::PlaybackModeDto::Pattern {
                     pattern_id: var_patternId,
                     generator_id: var_generatorId,
@@ -12866,39 +12866,132 @@ impl SseDecode
     }
 }
 
-impl SseDecode for (String, ZeroCopyHandle) {
+impl SseDecode for (u64, crate::api::project::AudioWaveformUiForSourceList) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <String>::sse_decode(deserializer);
-        let mut var_field1 = <ZeroCopyHandle>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, crate::api::project::AudioWaveformUiForSourceList) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
+        let mut var_field0 = <u64>::sse_decode(deserializer);
         let mut var_field1 =
             <crate::api::project::AudioWaveformUiForSourceList>::sse_decode(deserializer);
         return (var_field0, var_field1);
     }
 }
 
-impl SseDecode for (u32, WaveformHandle) {
+impl SseDecode for (u64, WaveformHandle) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
+        let mut var_field0 = <u64>::sse_decode(deserializer);
         let mut var_field1 = <WaveformHandle>::sse_decode(deserializer);
         return (var_field0, var_field1);
     }
 }
 
-impl SseDecode for (u32, crate::api::automation::AutomationLaneDto) {
+impl SseDecode for (u64, crate::api::automation::AutomationLaneDto) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
+        let mut var_field0 = <u64>::sse_decode(deserializer);
         let mut var_field1 = <crate::api::automation::AutomationLaneDto>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, u64, crate::api::automation::AutomationLaneDto) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <u64>::sse_decode(deserializer);
+        let mut var_field2 = <crate::api::automation::AutomationLaneDto>::sse_decode(deserializer);
+        return (var_field0, var_field1, var_field2);
+    }
+}
+
+impl SseDecode for (u64, Vec<u64>, Vec<u64>) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <Vec<u64>>::sse_decode(deserializer);
+        let mut var_field2 = <Vec<u64>>::sse_decode(deserializer);
+        return (var_field0, var_field1, var_field2);
+    }
+}
+
+impl SseDecode for (u64, crate::api::automation::ModulationLinkDto) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::automation::ModulationLinkDto>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, crate::api::automation::ModulationSourceDto) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 =
+            <crate::api::automation::ModulationSourceDto>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, crate::api::mixer::UiBus) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::mixer::UiBus>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, crate::api::project::UiGeneratorInstance) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::project::UiGeneratorInstance>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, crate::api::mixer::UiMixerChannel) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::mixer::UiMixerChannel>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, crate::api::mixer::UiMixerChannelSnapshot) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::mixer::UiMixerChannelSnapshot>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, crate::api::pattern::UiPattern) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::pattern::UiPattern>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u64, crate::api::project::UiTrack) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u64>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::project::UiTrack>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (String, ZeroCopyHandle) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <String>::sse_decode(deserializer);
+        let mut var_field1 = <ZeroCopyHandle>::sse_decode(deserializer);
         return (var_field0, var_field1);
     }
 }
@@ -12927,99 +13020,6 @@ impl SseDecode for (u32, f32) {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_field0 = <u32>::sse_decode(deserializer);
         let mut var_field1 = <f32>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, Vec<u32>, Vec<u32>) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <Vec<u32>>::sse_decode(deserializer);
-        let mut var_field2 = <Vec<u32>>::sse_decode(deserializer);
-        return (var_field0, var_field1, var_field2);
-    }
-}
-
-impl SseDecode for (u32, crate::api::automation::ModulationLinkDto) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::automation::ModulationLinkDto>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, crate::api::automation::ModulationSourceDto) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 =
-            <crate::api::automation::ModulationSourceDto>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, u32, crate::api::automation::AutomationLaneDto) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <u32>::sse_decode(deserializer);
-        let mut var_field2 = <crate::api::automation::AutomationLaneDto>::sse_decode(deserializer);
-        return (var_field0, var_field1, var_field2);
-    }
-}
-
-impl SseDecode for (u32, crate::api::mixer::UiBus) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::mixer::UiBus>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, crate::api::project::UiGeneratorInstance) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::project::UiGeneratorInstance>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, crate::api::mixer::UiMixerChannel) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::mixer::UiMixerChannel>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, crate::api::mixer::UiMixerChannelSnapshot) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::mixer::UiMixerChannelSnapshot>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, crate::api::pattern::UiPattern) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::pattern::UiPattern>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
-impl SseDecode for (u32, crate::api::project::UiTrack) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u32>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::project::UiTrack>::sse_decode(deserializer);
         return (var_field0, var_field1);
     }
 }
@@ -13143,20 +13143,20 @@ impl SseDecode for crate::api::project::UiApplicationState {
         let mut var_hardwareConfig =
             <crate::api::project::UiAudioHardwareConfig>::sse_decode(deserializer);
         let mut var_tracks =
-            <std::collections::HashMap<u32, crate::api::project::UiTrack>>::sse_decode(
+            <std::collections::HashMap<u64, crate::api::project::UiTrack>>::sse_decode(
                 deserializer,
             );
         let mut var_generators = <std::collections::HashMap<
-            u32,
+            u64,
             crate::api::project::UiGeneratorInstance,
         >>::sse_decode(deserializer);
         let mut var_patterns =
-            <std::collections::HashMap<u32, crate::api::pattern::UiPattern>>::sse_decode(
+            <std::collections::HashMap<u64, crate::api::pattern::UiPattern>>::sse_decode(
                 deserializer,
             );
         let mut var_mixer = <crate::api::mixer::UiMixerState>::sse_decode(deserializer);
         let mut var_audioSources = <std::collections::HashMap<
-            u32,
+            u64,
             crate::api::project::AudioWaveformUiForSourceList,
         >>::sse_decode(deserializer);
         return crate::api::project::UiApplicationState {
@@ -13178,7 +13178,7 @@ impl SseDecode for crate::api::audio::UiAudioFeedback {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_generatorId = <u32>::sse_decode(deserializer);
+                let mut var_generatorId = <u64>::sse_decode(deserializer);
                 let mut var_paramId = <u32>::sse_decode(deserializer);
                 let mut var_value = <f32>::sse_decode(deserializer);
                 return crate::api::audio::UiAudioFeedback::GeneratorParameterChanged {
@@ -13188,7 +13188,7 @@ impl SseDecode for crate::api::audio::UiAudioFeedback {
                 };
             }
             1 => {
-                let mut var_generatorId = <u32>::sse_decode(deserializer);
+                let mut var_generatorId = <u64>::sse_decode(deserializer);
                 let mut var_parameters = <Vec<(u32, f32)>>::sse_decode(deserializer);
                 return crate::api::audio::UiAudioFeedback::GeneratorParameterSnapshot {
                     generator_id: var_generatorId,
@@ -13196,9 +13196,9 @@ impl SseDecode for crate::api::audio::UiAudioFeedback {
                 };
             }
             2 => {
-                let mut var_targetTrackId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_targetBusId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_effectId = <u32>::sse_decode(deserializer);
+                let mut var_targetTrackId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_targetBusId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_effectId = <u64>::sse_decode(deserializer);
                 let mut var_paramId = <u32>::sse_decode(deserializer);
                 let mut var_value = <f32>::sse_decode(deserializer);
                 return crate::api::audio::UiAudioFeedback::EffectParameterChanged {
@@ -13210,9 +13210,9 @@ impl SseDecode for crate::api::audio::UiAudioFeedback {
                 };
             }
             3 => {
-                let mut var_targetTrackId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_targetBusId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_effectId = <u32>::sse_decode(deserializer);
+                let mut var_targetTrackId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_targetBusId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_effectId = <u64>::sse_decode(deserializer);
                 let mut var_parameters = <Vec<(u32, f32)>>::sse_decode(deserializer);
                 return crate::api::audio::UiAudioFeedback::EffectParameterSnapshot {
                     target_track_id: var_targetTrackId,
@@ -13222,8 +13222,8 @@ impl SseDecode for crate::api::audio::UiAudioFeedback {
                 };
             }
             4 => {
-                let mut var_targetTrackId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_targetBusId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_targetTrackId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_targetBusId = <Option<u64>>::sse_decode(deserializer);
                 let mut var_isMaster = <bool>::sse_decode(deserializer);
                 let mut var_volume = <f32>::sse_decode(deserializer);
                 let mut var_pan = <f32>::sse_decode(deserializer);
@@ -13250,12 +13250,12 @@ impl SseDecode for crate::api::audio::UiAudioFeedback {
                 };
             }
             6 => {
-                let mut var_generatorId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_trackEffectTrackId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_trackEffectEffectId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_busEffectBusId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_busEffectEffectId = <Option<u32>>::sse_decode(deserializer);
-                let mut var_masterEffectId = <Option<u32>>::sse_decode(deserializer);
+                let mut var_generatorId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_trackEffectTrackId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_trackEffectEffectId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_busEffectBusId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_busEffectEffectId = <Option<u64>>::sse_decode(deserializer);
+                let mut var_masterEffectId = <Option<u64>>::sse_decode(deserializer);
                 let mut var_state = <Vec<u8>>::sse_decode(deserializer);
                 let mut var_requestId = <u32>::sse_decode(deserializer);
                 return crate::api::audio::UiAudioFeedback::PluginStateSnapshot {
@@ -13339,7 +13339,7 @@ impl SseDecode for crate::api::audio_settings::UiAudioRuntimeSettings {
 impl SseDecode for crate::api::mixer::UiBus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_channel = <crate::api::mixer::UiMixerChannel>::sse_decode(deserializer);
         return crate::api::mixer::UiBus {
@@ -13354,7 +13354,7 @@ impl SseDecode for crate::api::project::UiClip {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_name = <String>::sse_decode(deserializer);
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_startTime = <u64>::sse_decode(deserializer);
         let mut var_source = <crate::api::project::UiClipSource>::sse_decode(deserializer);
         let mut var_offsetStart = <u64>::sse_decode(deserializer);
@@ -13378,13 +13378,13 @@ impl SseDecode for crate::api::project::UiClipSource {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_sourceId = <u32>::sse_decode(deserializer);
+                let mut var_sourceId = <u64>::sse_decode(deserializer);
                 return crate::api::project::UiClipSource::Audio {
                     source_id: var_sourceId,
                 };
             }
             1 => {
-                let mut var_patternId = <u32>::sse_decode(deserializer);
+                let mut var_patternId = <u64>::sse_decode(deserializer);
                 return crate::api::project::UiClipSource::Midi {
                     pattern_id: var_patternId,
                 };
@@ -13455,7 +13455,7 @@ impl SseDecode for crate::api::audio_settings::UiDeviceStreamStatus {
 impl SseDecode for crate::api::mixer::UiEffectInstance {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         return crate::api::mixer::UiEffectInstance {
             id: var_id,
@@ -13467,7 +13467,7 @@ impl SseDecode for crate::api::mixer::UiEffectInstance {
 impl SseDecode for crate::api::mixer::UiEffectSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_registryId = <u32>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         return crate::api::mixer::UiEffectSummary {
@@ -13547,7 +13547,7 @@ impl SseDecode for crate::api::external_plugins::UiExternalPluginFormat {
 impl SseDecode for crate::api::project::UiGeneratorInstance {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_instanceType =
             <crate::api::project::UiGeneratorInstanceType>::sse_decode(deserializer);
         return crate::api::project::UiGeneratorInstance {
@@ -13662,11 +13662,11 @@ impl SseDecode for crate::api::mixer::UiMixerChannelTarget {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_field0 = <u32>::sse_decode(deserializer);
+                let mut var_field0 = <u64>::sse_decode(deserializer);
                 return crate::api::mixer::UiMixerChannelTarget::Track(var_field0);
             }
             1 => {
-                let mut var_field0 = <u32>::sse_decode(deserializer);
+                let mut var_field0 = <u64>::sse_decode(deserializer);
                 return crate::api::mixer::UiMixerChannelTarget::Bus(var_field0);
             }
             2 => {
@@ -13683,12 +13683,12 @@ impl SseDecode for crate::api::mixer::UiMixerState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_channels =
-            <std::collections::HashMap<u32, crate::api::mixer::UiMixerChannel>>::sse_decode(
+            <std::collections::HashMap<u64, crate::api::mixer::UiMixerChannel>>::sse_decode(
                 deserializer,
             );
         let mut var_masterBus = <crate::api::mixer::UiMixerChannel>::sse_decode(deserializer);
         let mut var_buses =
-            <std::collections::HashMap<u32, crate::api::mixer::UiBus>>::sse_decode(deserializer);
+            <std::collections::HashMap<u64, crate::api::mixer::UiBus>>::sse_decode(deserializer);
         let mut var_routing =
             <Vec<crate::api::mixer::UiRoutingConnection>>::sse_decode(deserializer);
         return crate::api::mixer::UiMixerState {
@@ -13817,7 +13817,7 @@ impl SseDecode for crate::api::plugin::UiParameterType {
 impl SseDecode for crate::api::pattern::UiPattern {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_lengthTicks = <u64>::sse_decode(deserializer);
         let mut var_notes = <Vec<crate::api::pattern::UiNote>>::sse_decode(deserializer);
@@ -13970,27 +13970,27 @@ impl SseDecode for crate::api::plugin::UiPluginTarget {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_field0 = <u32>::sse_decode(deserializer);
+                let mut var_field0 = <u64>::sse_decode(deserializer);
                 return crate::api::plugin::UiPluginTarget::Generator(var_field0);
             }
             1 => {
-                let mut var_trackId = <u32>::sse_decode(deserializer);
-                let mut var_effectId = <u32>::sse_decode(deserializer);
+                let mut var_trackId = <u64>::sse_decode(deserializer);
+                let mut var_effectId = <u64>::sse_decode(deserializer);
                 return crate::api::plugin::UiPluginTarget::TrackEffect {
                     track_id: var_trackId,
                     effect_id: var_effectId,
                 };
             }
             2 => {
-                let mut var_busId = <u32>::sse_decode(deserializer);
-                let mut var_effectId = <u32>::sse_decode(deserializer);
+                let mut var_busId = <u64>::sse_decode(deserializer);
+                let mut var_effectId = <u64>::sse_decode(deserializer);
                 return crate::api::plugin::UiPluginTarget::BusEffect {
                     bus_id: var_busId,
                     effect_id: var_effectId,
                 };
             }
             3 => {
-                let mut var_field0 = <u32>::sse_decode(deserializer);
+                let mut var_field0 = <u64>::sse_decode(deserializer);
                 return crate::api::plugin::UiPluginTarget::MasterEffect(var_field0);
             }
             _ => {
@@ -14080,11 +14080,11 @@ impl SseDecode for crate::api::mixer::UiRoutingNode {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_field0 = <u32>::sse_decode(deserializer);
+                let mut var_field0 = <u64>::sse_decode(deserializer);
                 return crate::api::mixer::UiRoutingNode::Track(var_field0);
             }
             1 => {
-                let mut var_field0 = <u32>::sse_decode(deserializer);
+                let mut var_field0 = <u64>::sse_decode(deserializer);
                 return crate::api::mixer::UiRoutingNode::Bus(var_field0);
             }
             2 => {
@@ -14131,12 +14131,12 @@ impl SseDecode for crate::api::track::UiSourceType {
 impl SseDecode for crate::api::project::UiTrack {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u32>::sse_decode(deserializer);
+        let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_color = <String>::sse_decode(deserializer);
         let mut var_trackType = <crate::api::project::UiTrackType>::sse_decode(deserializer);
         let mut var_clips = <Vec<crate::api::project::UiClip>>::sse_decode(deserializer);
-        let mut var_generatorId = <Option<u32>>::sse_decode(deserializer);
+        let mut var_generatorId = <Option<u64>>::sse_decode(deserializer);
         let mut var_orderIdx = <usize>::sse_decode(deserializer);
         return crate::api::project::UiTrack {
             id: var_id,
@@ -17023,116 +17023,116 @@ impl SseEncode for ZeroCopyHandle {
     }
 }
 
-impl SseEncode for std::collections::HashMap<String, ZeroCopyHandle> {
+impl SseEncode for std::collections::HashMap<u64, WaveformHandle> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(String, ZeroCopyHandle)>>::sse_encode(self.into_iter().collect(), serializer);
-    }
-}
-
-impl SseEncode for std::collections::HashMap<u32, WaveformHandle> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, WaveformHandle)>>::sse_encode(self.into_iter().collect(), serializer);
+        <Vec<(u64, WaveformHandle)>>::sse_encode(self.into_iter().collect(), serializer);
     }
 }
 
 impl SseEncode
-    for std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>
+    for std::collections::HashMap<u64, crate::api::project::AudioWaveformUiForSourceList>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)>>::sse_encode(
+        <Vec<(u64, crate::api::project::AudioWaveformUiForSourceList)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::automation::AutomationLaneDto> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::automation::AutomationLaneDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::automation::AutomationLaneDto)>>::sse_encode(
+        <Vec<(u64, crate::api::automation::AutomationLaneDto)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::automation::ModulationLinkDto> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::automation::ModulationLinkDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::automation::ModulationLinkDto)>>::sse_encode(
+        <Vec<(u64, crate::api::automation::ModulationLinkDto)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::automation::ModulationSourceDto> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::automation::ModulationSourceDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::automation::ModulationSourceDto)>>::sse_encode(
+        <Vec<(u64, crate::api::automation::ModulationSourceDto)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::mixer::UiBus> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::mixer::UiBus> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::mixer::UiBus)>>::sse_encode(self.into_iter().collect(), serializer);
+        <Vec<(u64, crate::api::mixer::UiBus)>>::sse_encode(self.into_iter().collect(), serializer);
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::project::UiGeneratorInstance> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::project::UiGeneratorInstance> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::project::UiGeneratorInstance)>>::sse_encode(
+        <Vec<(u64, crate::api::project::UiGeneratorInstance)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::mixer::UiMixerChannel> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::mixer::UiMixerChannel> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::mixer::UiMixerChannel)>>::sse_encode(
+        <Vec<(u64, crate::api::mixer::UiMixerChannel)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::mixer::UiMixerChannelSnapshot> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::mixer::UiMixerChannelSnapshot> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::mixer::UiMixerChannelSnapshot)>>::sse_encode(
+        <Vec<(u64, crate::api::mixer::UiMixerChannelSnapshot)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::pattern::UiPattern> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::pattern::UiPattern> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::pattern::UiPattern)>>::sse_encode(
+        <Vec<(u64, crate::api::pattern::UiPattern)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
     }
 }
 
-impl SseEncode for std::collections::HashMap<u32, crate::api::project::UiTrack> {
+impl SseEncode for std::collections::HashMap<u64, crate::api::project::UiTrack> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::project::UiTrack)>>::sse_encode(
+        <Vec<(u64, crate::api::project::UiTrack)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
+    }
+}
+
+impl SseEncode for std::collections::HashMap<String, ZeroCopyHandle> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<(String, ZeroCopyHandle)>>::sse_encode(self.into_iter().collect(), serializer);
     }
 }
 
@@ -17300,7 +17300,7 @@ impl SseEncode for crate::api::automation::AutomationCurveTypeDto {
 impl SseEncode for crate::api::automation::AutomationLaneDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.label, serializer);
         <Vec<crate::api::automation::AutomationPointDto>>::sse_encode(self.points, serializer);
         <bool>::sse_encode(self.enabled, serializer);
@@ -17330,7 +17330,7 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
                 param_id,
             } => {
                 <i32>::sse_encode(0, serializer);
-                <u32>::sse_encode(generator_id, serializer);
+                <u64>::sse_encode(generator_id, serializer);
                 <u32>::sse_encode(param_id, serializer);
             }
             crate::api::automation::AutomationTargetDto::Track {
@@ -17338,7 +17338,7 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
                 track_target,
             } => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(track_id, serializer);
+                <u64>::sse_encode(track_id, serializer);
                 <crate::api::automation::TrackAutomationTargetDto>::sse_encode(
                     track_target,
                     serializer,
@@ -17346,7 +17346,7 @@ impl SseEncode for crate::api::automation::AutomationTargetDto {
             }
             crate::api::automation::AutomationTargetDto::Bus { bus_id, mix_target } => {
                 <i32>::sse_encode(2, serializer);
-                <u32>::sse_encode(bus_id, serializer);
+                <u64>::sse_encode(bus_id, serializer);
                 <crate::api::automation::MixerChannelParamTargetDto>::sse_encode(
                     mix_target, serializer,
                 );
@@ -17542,44 +17542,134 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for Vec<(String, ZeroCopyHandle)> {
+impl SseEncode for Vec<(u64, crate::api::project::AudioWaveformUiForSourceList)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <(String, ZeroCopyHandle)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::project::AudioWaveformUiForSourceList)>::sse_encode(
+            <(u64, crate::api::project::AudioWaveformUiForSourceList)>::sse_encode(
                 item, serializer,
             );
         }
     }
 }
 
-impl SseEncode for Vec<(u32, WaveformHandle)> {
+impl SseEncode for Vec<(u64, WaveformHandle)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <(u32, WaveformHandle)>::sse_encode(item, serializer);
+            <(u64, WaveformHandle)>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<(u32, crate::api::automation::AutomationLaneDto)> {
+impl SseEncode for Vec<(u64, crate::api::automation::AutomationLaneDto)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <(u32, crate::api::automation::AutomationLaneDto)>::sse_encode(item, serializer);
+            <(u64, crate::api::automation::AutomationLaneDto)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, u64, crate::api::automation::AutomationLaneDto)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, u64, crate::api::automation::AutomationLaneDto)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::automation::ModulationLinkDto)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::automation::ModulationLinkDto)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::automation::ModulationSourceDto)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::automation::ModulationSourceDto)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::mixer::UiBus)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::mixer::UiBus)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::project::UiGeneratorInstance)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::project::UiGeneratorInstance)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::mixer::UiMixerChannel)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::mixer::UiMixerChannel)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::mixer::UiMixerChannelSnapshot)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::mixer::UiMixerChannelSnapshot)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::pattern::UiPattern)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::pattern::UiPattern)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(u64, crate::api::project::UiTrack)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u64, crate::api::project::UiTrack)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<(String, ZeroCopyHandle)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(String, ZeroCopyHandle)>::sse_encode(item, serializer);
         }
     }
 }
@@ -17610,96 +17700,6 @@ impl SseEncode for Vec<(u32, f32)> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <(u32, f32)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::automation::ModulationLinkDto)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::automation::ModulationLinkDto)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::automation::ModulationSourceDto)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::automation::ModulationSourceDto)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, u32, crate::api::automation::AutomationLaneDto)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, u32, crate::api::automation::AutomationLaneDto)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::mixer::UiBus)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::mixer::UiBus)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::project::UiGeneratorInstance)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::project::UiGeneratorInstance)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::mixer::UiMixerChannel)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::mixer::UiMixerChannel)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::mixer::UiMixerChannelSnapshot)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::mixer::UiMixerChannelSnapshot)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::pattern::UiPattern)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::pattern::UiPattern)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<(u32, crate::api::project::UiTrack)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u32, crate::api::project::UiTrack)>::sse_encode(item, serializer);
         }
     }
 }
@@ -17878,7 +17878,7 @@ impl SseEncode for crate::api::automation::MixerChannelParamTargetDto {
             }
             crate::api::automation::MixerChannelParamTargetDto::Plugin { effect_id, target } => {
                 <i32>::sse_encode(2, serializer);
-                <u32>::sse_encode(effect_id, serializer);
+                <u64>::sse_encode(effect_id, serializer);
                 <crate::api::automation::EffectAutomationTargetDto>::sse_encode(target, serializer);
             }
             _ => {
@@ -17891,11 +17891,11 @@ impl SseEncode for crate::api::automation::MixerChannelParamTargetDto {
 impl SseEncode for crate::api::mixer::MixerTelemetrySnapshotDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <std::collections::HashMap<u32, crate::api::mixer::UiMixerChannelSnapshot>>::sse_encode(
+        <std::collections::HashMap<u64, crate::api::mixer::UiMixerChannelSnapshot>>::sse_encode(
             self.tracks,
             serializer,
         );
-        <std::collections::HashMap<u32, crate::api::mixer::UiMixerChannelSnapshot>>::sse_encode(
+        <std::collections::HashMap<u64, crate::api::mixer::UiMixerChannelSnapshot>>::sse_encode(
             self.buses, serializer,
         );
         <Option<crate::api::mixer::UiMixerChannelSnapshot>>::sse_encode(self.master, serializer);
@@ -17905,8 +17905,8 @@ impl SseEncode for crate::api::mixer::MixerTelemetrySnapshotDto {
 impl SseEncode for crate::api::automation::ModulationLinkDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
-        <u32>::sse_encode(self.source_id, serializer);
+        <u64>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.source_id, serializer);
         <crate::api::automation::AutomationTargetDto>::sse_encode(self.target, serializer);
         <f32>::sse_encode(self.depth, serializer);
         <f32>::sse_encode(self.base_value, serializer);
@@ -17924,7 +17924,7 @@ impl SseEncode for crate::api::automation::ModulationSourceDto {
             }
             crate::api::automation::ModulationSourceDto::Automation { lane_id } => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(lane_id, serializer);
+                <u64>::sse_encode(lane_id, serializer);
             }
             crate::api::automation::ModulationSourceDto::Lfo { rate_hz } => {
                 <i32>::sse_encode(2, serializer);
@@ -17967,13 +17967,13 @@ impl SseEncode for Option<u64> {
 }
 
 impl SseEncode
-    for Option<std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>>
+    for Option<std::collections::HashMap<u64, crate::api::project::AudioWaveformUiForSourceList>>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>>::sse_encode(value, serializer);
+            <std::collections::HashMap<u64, crate::api::project::AudioWaveformUiForSourceList>>::sse_encode(value, serializer);
         }
     }
 }
@@ -18226,8 +18226,8 @@ impl SseEncode for crate::api::transport::PlaybackModeDto {
                 generator_id,
             } => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(pattern_id, serializer);
-                <u32>::sse_encode(generator_id, serializer);
+                <u64>::sse_encode(pattern_id, serializer);
+                <u64>::sse_encode(generator_id, serializer);
             }
             _ => {
                 unimplemented!("");
@@ -18260,35 +18260,117 @@ impl SseEncode
     }
 }
 
+impl SseEncode for (u64, crate::api::project::AudioWaveformUiForSourceList) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::project::AudioWaveformUiForSourceList>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, WaveformHandle) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <WaveformHandle>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::automation::AutomationLaneDto) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::automation::AutomationLaneDto>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, u64, crate::api::automation::AutomationLaneDto) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <u64>::sse_encode(self.1, serializer);
+        <crate::api::automation::AutomationLaneDto>::sse_encode(self.2, serializer);
+    }
+}
+
+impl SseEncode for (u64, Vec<u64>, Vec<u64>) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <Vec<u64>>::sse_encode(self.1, serializer);
+        <Vec<u64>>::sse_encode(self.2, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::automation::ModulationLinkDto) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::automation::ModulationLinkDto>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::automation::ModulationSourceDto) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::automation::ModulationSourceDto>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::mixer::UiBus) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::mixer::UiBus>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::project::UiGeneratorInstance) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::project::UiGeneratorInstance>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::mixer::UiMixerChannel) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::mixer::UiMixerChannel>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::mixer::UiMixerChannelSnapshot) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::mixer::UiMixerChannelSnapshot>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::pattern::UiPattern) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::pattern::UiPattern>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u64, crate::api::project::UiTrack) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.0, serializer);
+        <crate::api::project::UiTrack>::sse_encode(self.1, serializer);
+    }
+}
+
 impl SseEncode for (String, ZeroCopyHandle) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.0, serializer);
         <ZeroCopyHandle>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::project::AudioWaveformUiForSourceList) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::project::AudioWaveformUiForSourceList>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, WaveformHandle) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <WaveformHandle>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::automation::AutomationLaneDto) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::automation::AutomationLaneDto>::sse_encode(self.1, serializer);
     }
 }
 
@@ -18314,88 +18396,6 @@ impl SseEncode for (u32, f32) {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.0, serializer);
         <f32>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, Vec<u32>, Vec<u32>) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <Vec<u32>>::sse_encode(self.1, serializer);
-        <Vec<u32>>::sse_encode(self.2, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::automation::ModulationLinkDto) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::automation::ModulationLinkDto>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::automation::ModulationSourceDto) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::automation::ModulationSourceDto>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, u32, crate::api::automation::AutomationLaneDto) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <u32>::sse_encode(self.1, serializer);
-        <crate::api::automation::AutomationLaneDto>::sse_encode(self.2, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::mixer::UiBus) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::mixer::UiBus>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::project::UiGeneratorInstance) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::project::UiGeneratorInstance>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::mixer::UiMixerChannel) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::mixer::UiMixerChannel>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::mixer::UiMixerChannelSnapshot) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::mixer::UiMixerChannelSnapshot>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::pattern::UiPattern) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::pattern::UiPattern>::sse_encode(self.1, serializer);
-    }
-}
-
-impl SseEncode for (u32, crate::api::project::UiTrack) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.0, serializer);
-        <crate::api::project::UiTrack>::sse_encode(self.1, serializer);
     }
 }
 
@@ -18509,20 +18509,20 @@ impl SseEncode for crate::api::project::UiApplicationState {
         <crate::api::project::UiProjectMetadata>::sse_encode(self.metadata, serializer);
         <crate::api::project::UiTransportState>::sse_encode(self.transport, serializer);
         <crate::api::project::UiAudioHardwareConfig>::sse_encode(self.hardware_config, serializer);
-        <std::collections::HashMap<u32, crate::api::project::UiTrack>>::sse_encode(
+        <std::collections::HashMap<u64, crate::api::project::UiTrack>>::sse_encode(
             self.tracks,
             serializer,
         );
-        <std::collections::HashMap<u32, crate::api::project::UiGeneratorInstance>>::sse_encode(
+        <std::collections::HashMap<u64, crate::api::project::UiGeneratorInstance>>::sse_encode(
             self.generators,
             serializer,
         );
-        <std::collections::HashMap<u32, crate::api::pattern::UiPattern>>::sse_encode(
+        <std::collections::HashMap<u64, crate::api::pattern::UiPattern>>::sse_encode(
             self.patterns,
             serializer,
         );
         <crate::api::mixer::UiMixerState>::sse_encode(self.mixer, serializer);
-        <std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>>::sse_encode(self.audio_sources, serializer);
+        <std::collections::HashMap<u64, crate::api::project::AudioWaveformUiForSourceList>>::sse_encode(self.audio_sources, serializer);
     }
 }
 
@@ -18536,7 +18536,7 @@ impl SseEncode for crate::api::audio::UiAudioFeedback {
                 value,
             } => {
                 <i32>::sse_encode(0, serializer);
-                <u32>::sse_encode(generator_id, serializer);
+                <u64>::sse_encode(generator_id, serializer);
                 <u32>::sse_encode(param_id, serializer);
                 <f32>::sse_encode(value, serializer);
             }
@@ -18545,7 +18545,7 @@ impl SseEncode for crate::api::audio::UiAudioFeedback {
                 parameters,
             } => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(generator_id, serializer);
+                <u64>::sse_encode(generator_id, serializer);
                 <Vec<(u32, f32)>>::sse_encode(parameters, serializer);
             }
             crate::api::audio::UiAudioFeedback::EffectParameterChanged {
@@ -18556,9 +18556,9 @@ impl SseEncode for crate::api::audio::UiAudioFeedback {
                 value,
             } => {
                 <i32>::sse_encode(2, serializer);
-                <Option<u32>>::sse_encode(target_track_id, serializer);
-                <Option<u32>>::sse_encode(target_bus_id, serializer);
-                <u32>::sse_encode(effect_id, serializer);
+                <Option<u64>>::sse_encode(target_track_id, serializer);
+                <Option<u64>>::sse_encode(target_bus_id, serializer);
+                <u64>::sse_encode(effect_id, serializer);
                 <u32>::sse_encode(param_id, serializer);
                 <f32>::sse_encode(value, serializer);
             }
@@ -18569,9 +18569,9 @@ impl SseEncode for crate::api::audio::UiAudioFeedback {
                 parameters,
             } => {
                 <i32>::sse_encode(3, serializer);
-                <Option<u32>>::sse_encode(target_track_id, serializer);
-                <Option<u32>>::sse_encode(target_bus_id, serializer);
-                <u32>::sse_encode(effect_id, serializer);
+                <Option<u64>>::sse_encode(target_track_id, serializer);
+                <Option<u64>>::sse_encode(target_bus_id, serializer);
+                <u64>::sse_encode(effect_id, serializer);
                 <Vec<(u32, f32)>>::sse_encode(parameters, serializer);
             }
             crate::api::audio::UiAudioFeedback::MixerChannelSnapshot {
@@ -18585,8 +18585,8 @@ impl SseEncode for crate::api::audio::UiAudioFeedback {
                 inverted_phase,
             } => {
                 <i32>::sse_encode(4, serializer);
-                <Option<u32>>::sse_encode(target_track_id, serializer);
-                <Option<u32>>::sse_encode(target_bus_id, serializer);
+                <Option<u64>>::sse_encode(target_track_id, serializer);
+                <Option<u64>>::sse_encode(target_bus_id, serializer);
                 <bool>::sse_encode(is_master, serializer);
                 <f32>::sse_encode(volume, serializer);
                 <f32>::sse_encode(pan, serializer);
@@ -18613,12 +18613,12 @@ impl SseEncode for crate::api::audio::UiAudioFeedback {
                 request_id,
             } => {
                 <i32>::sse_encode(6, serializer);
-                <Option<u32>>::sse_encode(generator_id, serializer);
-                <Option<u32>>::sse_encode(track_effect_track_id, serializer);
-                <Option<u32>>::sse_encode(track_effect_effect_id, serializer);
-                <Option<u32>>::sse_encode(bus_effect_bus_id, serializer);
-                <Option<u32>>::sse_encode(bus_effect_effect_id, serializer);
-                <Option<u32>>::sse_encode(master_effect_id, serializer);
+                <Option<u64>>::sse_encode(generator_id, serializer);
+                <Option<u64>>::sse_encode(track_effect_track_id, serializer);
+                <Option<u64>>::sse_encode(track_effect_effect_id, serializer);
+                <Option<u64>>::sse_encode(bus_effect_bus_id, serializer);
+                <Option<u64>>::sse_encode(bus_effect_effect_id, serializer);
+                <Option<u64>>::sse_encode(master_effect_id, serializer);
                 <Vec<u8>>::sse_encode(state, serializer);
                 <u32>::sse_encode(request_id, serializer);
             }
@@ -18678,7 +18678,7 @@ impl SseEncode for crate::api::audio_settings::UiAudioRuntimeSettings {
 impl SseEncode for crate::api::mixer::UiBus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.name, serializer);
         <crate::api::mixer::UiMixerChannel>::sse_encode(self.channel, serializer);
     }
@@ -18688,7 +18688,7 @@ impl SseEncode for crate::api::project::UiClip {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.name, serializer);
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <u64>::sse_encode(self.start_time, serializer);
         <crate::api::project::UiClipSource>::sse_encode(self.source, serializer);
         <u64>::sse_encode(self.offset_start, serializer);
@@ -18703,11 +18703,11 @@ impl SseEncode for crate::api::project::UiClipSource {
         match self {
             crate::api::project::UiClipSource::Audio { source_id } => {
                 <i32>::sse_encode(0, serializer);
-                <u32>::sse_encode(source_id, serializer);
+                <u64>::sse_encode(source_id, serializer);
             }
             crate::api::project::UiClipSource::Midi { pattern_id } => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(pattern_id, serializer);
+                <u64>::sse_encode(pattern_id, serializer);
             }
             crate::api::project::UiClipSource::None => {
                 <i32>::sse_encode(2, serializer);
@@ -18769,7 +18769,7 @@ impl SseEncode for crate::api::audio_settings::UiDeviceStreamStatus {
 impl SseEncode for crate::api::mixer::UiEffectInstance {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.name, serializer);
     }
 }
@@ -18777,7 +18777,7 @@ impl SseEncode for crate::api::mixer::UiEffectInstance {
 impl SseEncode for crate::api::mixer::UiEffectSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <u32>::sse_encode(self.registry_id, serializer);
         <String>::sse_encode(self.name, serializer);
     }
@@ -18838,7 +18838,7 @@ impl SseEncode for crate::api::external_plugins::UiExternalPluginFormat {
 impl SseEncode for crate::api::project::UiGeneratorInstance {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <crate::api::project::UiGeneratorInstanceType>::sse_encode(self.instance_type, serializer);
     }
 }
@@ -18928,11 +18928,11 @@ impl SseEncode for crate::api::mixer::UiMixerChannelTarget {
         match self {
             crate::api::mixer::UiMixerChannelTarget::Track(field0) => {
                 <i32>::sse_encode(0, serializer);
-                <u32>::sse_encode(field0, serializer);
+                <u64>::sse_encode(field0, serializer);
             }
             crate::api::mixer::UiMixerChannelTarget::Bus(field0) => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(field0, serializer);
+                <u64>::sse_encode(field0, serializer);
             }
             crate::api::mixer::UiMixerChannelTarget::Master => {
                 <i32>::sse_encode(2, serializer);
@@ -18947,12 +18947,12 @@ impl SseEncode for crate::api::mixer::UiMixerChannelTarget {
 impl SseEncode for crate::api::mixer::UiMixerState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <std::collections::HashMap<u32, crate::api::mixer::UiMixerChannel>>::sse_encode(
+        <std::collections::HashMap<u64, crate::api::mixer::UiMixerChannel>>::sse_encode(
             self.channels,
             serializer,
         );
         <crate::api::mixer::UiMixerChannel>::sse_encode(self.master_bus, serializer);
-        <std::collections::HashMap<u32, crate::api::mixer::UiBus>>::sse_encode(
+        <std::collections::HashMap<u64, crate::api::mixer::UiBus>>::sse_encode(
             self.buses, serializer,
         );
         <Vec<crate::api::mixer::UiRoutingConnection>>::sse_encode(self.routing, serializer);
@@ -19059,7 +19059,7 @@ impl SseEncode for crate::api::plugin::UiParameterType {
 impl SseEncode for crate::api::pattern::UiPattern {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.name, serializer);
         <u64>::sse_encode(self.length_ticks, serializer);
         <Vec<crate::api::pattern::UiNote>>::sse_encode(self.notes, serializer);
@@ -19170,24 +19170,24 @@ impl SseEncode for crate::api::plugin::UiPluginTarget {
         match self {
             crate::api::plugin::UiPluginTarget::Generator(field0) => {
                 <i32>::sse_encode(0, serializer);
-                <u32>::sse_encode(field0, serializer);
+                <u64>::sse_encode(field0, serializer);
             }
             crate::api::plugin::UiPluginTarget::TrackEffect {
                 track_id,
                 effect_id,
             } => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(track_id, serializer);
-                <u32>::sse_encode(effect_id, serializer);
+                <u64>::sse_encode(track_id, serializer);
+                <u64>::sse_encode(effect_id, serializer);
             }
             crate::api::plugin::UiPluginTarget::BusEffect { bus_id, effect_id } => {
                 <i32>::sse_encode(2, serializer);
-                <u32>::sse_encode(bus_id, serializer);
-                <u32>::sse_encode(effect_id, serializer);
+                <u64>::sse_encode(bus_id, serializer);
+                <u64>::sse_encode(effect_id, serializer);
             }
             crate::api::plugin::UiPluginTarget::MasterEffect(field0) => {
                 <i32>::sse_encode(3, serializer);
-                <u32>::sse_encode(field0, serializer);
+                <u64>::sse_encode(field0, serializer);
             }
             _ => {
                 unimplemented!("");
@@ -19256,11 +19256,11 @@ impl SseEncode for crate::api::mixer::UiRoutingNode {
         match self {
             crate::api::mixer::UiRoutingNode::Track(field0) => {
                 <i32>::sse_encode(0, serializer);
-                <u32>::sse_encode(field0, serializer);
+                <u64>::sse_encode(field0, serializer);
             }
             crate::api::mixer::UiRoutingNode::Bus(field0) => {
                 <i32>::sse_encode(1, serializer);
-                <u32>::sse_encode(field0, serializer);
+                <u64>::sse_encode(field0, serializer);
             }
             crate::api::mixer::UiRoutingNode::Master => {
                 <i32>::sse_encode(2, serializer);
@@ -19304,12 +19304,12 @@ impl SseEncode for crate::api::track::UiSourceType {
 impl SseEncode for crate::api::project::UiTrack {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.id, serializer);
+        <u64>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.color, serializer);
         <crate::api::project::UiTrackType>::sse_encode(self.track_type, serializer);
         <Vec<crate::api::project::UiClip>>::sse_encode(self.clips, serializer);
-        <Option<u32>>::sse_encode(self.generator_id, serializer);
+        <Option<u64>>::sse_encode(self.generator_id, serializer);
         <usize>::sse_encode(self.order_idx, serializer);
     }
 }
@@ -19398,7 +19398,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -19503,7 +19503,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

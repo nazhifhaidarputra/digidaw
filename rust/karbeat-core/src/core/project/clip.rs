@@ -634,7 +634,7 @@ impl ApplicationState {
     /// - `start_time`: Position on the timeline in ticks (from the UI).
     pub fn create_new_clip(
         &mut self,
-        source_id: Option<u32>,
+        source_id: Option<u64>,
         source_type: ClipSourceType,
         track_id: TrackId,
         start_time: u32,
@@ -646,7 +646,7 @@ impl ApplicationState {
             ClipSourceType::Audio => {
                 let source_id =
                     source_id.ok_or_else(|| anyhow::anyhow!("Audio clip needs source id"))?;
-                let source_id = AudioSourceId::from(source_id);
+                let source_id = AudioSourceId::from_u64(source_id);
                 // check the source
                 let audio_source = self
                     .asset_library
@@ -695,7 +695,7 @@ impl ApplicationState {
             ClipSourceType::Midi => {
                 // Use existing pattern if source_id provided, otherwise create new
                 let (pattern_id, timeline_length) = if let Some(id) = source_id {
-                    let pattern_id = PatternId::from(id);
+                    let pattern_id = PatternId::from_u64(id);
                     let pattern = self
                         .pattern_pool
                         .get(pattern_id)

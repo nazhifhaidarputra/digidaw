@@ -19,7 +19,7 @@ pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<P
 /// Fetches patterns, applies a mapper, and collects into ANY collection type `C`.
 pub fn get_patterns<C, Item, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<C>
 where
-    F: Fn(u32, &Pattern) -> Item, // The mapper takes the ID and the Pattern, and returns an Item
+    F: Fn(u64, &Pattern) -> Item, // The mapper takes the ID and the Pattern, and returns an Item
     C: FromIterator<Item>,        // The collection must be buildable from an iterator of Items
 {
     let patterns = ctx
@@ -28,7 +28,7 @@ where
         .iter()
         .map(|(id, pattern)| {
             // Let the closure handle exactly what the Item shape looks like
-            mapper(id.into(), pattern)
+            mapper(id.to_u64(), pattern)
         })
         .collect::<C>(); // Collect dynamically resolves to type C
 

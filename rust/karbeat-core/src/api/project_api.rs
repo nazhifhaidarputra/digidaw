@@ -39,14 +39,14 @@ where
 /// Maps every project generator instance into a caller-selected collection.
 pub fn get_generator_list<C, U, M>(ctx: &DawContext, mapper: M) -> anyhow::Result<C>
 where
-    M: Fn(u32, &GeneratorInstance) -> U,
+    M: Fn(u64, &GeneratorInstance) -> U,
     C: FromIterator<U>,
 {
     Ok(ctx
         .app_state
         .generator_pool
         .iter()
-        .map(|(id, generator)| mapper(id.to_u32(), generator))
+        .map(|(id, generator)| mapper(id.to_u64(), generator))
         .collect())
 }
 

@@ -161,12 +161,18 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     }
   }
 
-  /// Removes a track in O(1) time
+  /// Removes a track and its owned generator in O(1) time.
   void removeTrack(int trackId) {
     if (state.hasValue) {
       final current = state.requireValue;
+      final generatorId = current.tracks[trackId]?.generatorId;
       state = AsyncValue.data(
-        current.copyWith(tracks: current.tracks.remove(trackId)),
+        current.copyWith(
+          tracks: current.tracks.remove(trackId),
+          generators: generatorId == null
+              ? current.generators
+              : current.generators.remove(generatorId),
+        ),
       );
     }
   }

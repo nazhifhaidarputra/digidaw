@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn get_generator_list_empty_on_fresh_ctx() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
+        let result: Vec<u64> =
             project_api::get_generator_list(&ctx, |id, _g| id).expect("Should succeed");
         assert!(result.is_empty());
     }
@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn get_generator_list_has_generators_in_seeded_ctx() {
         let (ctx, _audio_id, _midi_id, _pat_id) = make_seeded_ctx();
-        let result: Vec<u32> =
+        let result: Vec<u64> =
             project_api::get_generator_list(&ctx, |id, _g| id).expect("Should succeed");
         assert!(
             !result.is_empty(),

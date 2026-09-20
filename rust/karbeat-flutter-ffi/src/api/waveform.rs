@@ -59,10 +59,10 @@ impl WaveformHandle {
 /// Get a WaveformHandle for a single audio source by its source ID.
 /// Returns None if the source does not exist in the asset library.
 #[frb(sync)]
-pub fn get_waveform_handle(ctx: &DawContext, source_id: u32) -> Option<WaveformHandle> {
+pub fn get_waveform_handle(ctx: &DawContext, source_id: u64) -> Option<WaveformHandle> {
     let wf = ctx
         .app_state
-        .get_audio_source(&AudioSourceId::from(source_id))?;
+        .get_audio_source(&AudioSourceId::from_u64(source_id))?;
     Some(WaveformHandle(wf.clone()))
 }
 
@@ -75,9 +75,9 @@ pub fn get_waveform_handle(ctx: &DawContext, source_id: u32) -> Option<WaveformH
 #[frb(sync)]
 pub fn get_waveform_handles_for_track(
     ctx: &DawContext,
-    track_id: u32,
-) -> HashMap<u32, WaveformHandle> {
-    let track = match ctx.app_state.tracks.get(TrackId::from(track_id)) {
+    track_id: u64,
+) -> HashMap<u64, WaveformHandle> {
+    let track = match ctx.app_state.tracks.get(TrackId::from_u64(track_id)) {
         Some(t) => t,
         None => return HashMap::new(),
     };
@@ -95,12 +95,12 @@ pub fn get_waveform_handles_for_track(
         };
         if let Some(DawSource::Audio(source_id)) = clip.source {
             // Skip duplicates — a source may appear in multiple clips
-            if map.contains_key(&source_id.to_u32()) {
+            if map.contains_key(&source_id.to_u64()) {
                 continue;
             }
 
             if let Some(wf) = ctx.app_state.get_audio_source(&source_id) {
-                map.insert(source_id.to_u32(), WaveformHandle(wf.clone()));
+                map.insert(source_id.to_u64(), WaveformHandle(wf.clone()));
             }
         }
     }

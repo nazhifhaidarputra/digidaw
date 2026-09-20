@@ -29,40 +29,40 @@ pub struct UiApplicationState {
     pub metadata: UiProjectMetadata,
     pub transport: UiTransportState,
     pub hardware_config: UiAudioHardwareConfig,
-    pub tracks: HashMap<u32, UiTrack>,
-    pub generators: HashMap<u32, UiGeneratorInstance>,
-    pub patterns: HashMap<u32, crate::api::pattern::UiPattern>,
+    pub tracks: HashMap<u64, UiTrack>,
+    pub generators: HashMap<u64, UiGeneratorInstance>,
+    pub patterns: HashMap<u64, crate::api::pattern::UiPattern>,
     pub mixer: crate::api::mixer::UiMixerState,
-    pub audio_sources: HashMap<u32, AudioWaveformUiForSourceList>,
+    pub audio_sources: HashMap<u64, AudioWaveformUiForSourceList>,
 }
 
 impl From<ApplicationState> for UiApplicationState {
     fn from(value: ApplicationState) -> Self {
-        let tracks: HashMap<u32, UiTrack> = value
+        let tracks: HashMap<u64, UiTrack> = value
             .tracks
             .iter()
-            .map(|(id, track)| (id.to_u32(), UiTrack::from_track(track, &value)))
+            .map(|(id, track)| (id.to_u64(), UiTrack::from_track(track, &value)))
             .collect();
 
-        let generators: HashMap<u32, UiGeneratorInstance> = value
+        let generators: HashMap<u64, UiGeneratorInstance> = value
             .generator_pool
             .iter()
-            .map(|(id, generator)| (id.to_u32(), UiGeneratorInstance::from(generator)))
+            .map(|(id, generator)| (id.to_u64(), UiGeneratorInstance::from(generator)))
             .collect();
 
-        let patterns: HashMap<u32, crate::api::pattern::UiPattern> = value
+        let patterns: HashMap<u64, crate::api::pattern::UiPattern> = value
             .pattern_pool
             .iter()
-            .map(|(id, pat)| (id.to_u32(), crate::api::pattern::UiPattern::from(pat)))
+            .map(|(id, pat)| (id.to_u64(), crate::api::pattern::UiPattern::from(pat)))
             .collect();
 
-        let audio_sources: HashMap<u32, AudioWaveformUiForSourceList> = value
+        let audio_sources: HashMap<u64, AudioWaveformUiForSourceList> = value
             .asset_library
             .source_map
             .iter()
             .map(|(id, source)| {
                 (
-                    id.to_u32(),
+                    id.to_u64(),
                     AudioWaveformUiForSourceList::from(source.as_ref()),
                 )
             })
@@ -103,12 +103,12 @@ impl From<TrackType> for UiTrackType {
 
 #[frb(dart_metadata=("freezed"))]
 pub struct UiTrack {
-    pub id: u32,
+    pub id: u64,
     pub name: String,
     pub color: String,
     pub track_type: UiTrackType,
     pub clips: Vec<UiClip>,
-    pub generator_id: Option<u32>,
+    pub generator_id: Option<u64>,
     pub order_idx: usize,
 }
 
@@ -213,9 +213,9 @@ impl UiTrack {
         let generator_id = value
             .generator
             .as_ref()
-            .map(|gen_instance| gen_instance.id.to_u32());
+            .map(|gen_instance| gen_instance.id.to_u64());
         Self {
-            id: value.id.to_u32(),
+            id: value.id.to_u64(),
             name: value.name.clone(),
             color: value.color.to_string(),
             track_type: value.track_type.clone().into(),
@@ -274,7 +274,7 @@ pub fn transport_state_new_with_param(bpm: f32, time_signature: (u8, u8)) -> UiT
 #[frb(dart_metadata=("freezed"))]
 pub struct UiClip {
     pub name: String,
-    pub id: u32,
+    pub id: u64,
     /// Timeline placement in ticks.
     pub start_time: u64,
     pub source: UiClipSource,
@@ -288,8 +288,8 @@ pub struct UiClip {
 
 #[derive(Clone)]
 pub enum UiClipSource {
-    Audio { source_id: u32 },
-    Midi { pattern_id: u32 },
+    Audio { source_id: u64 },
+    Midi { pattern_id: u64 },
     None, // represent clip with empty source, this is placeholder, as this will be removed when I already implement MIDI Pattern and automation
 }
 
@@ -298,16 +298,16 @@ impl From<&Clip> for UiClip {
         // Map source to either AudioWaveform, midi
         let source = match value.source.as_ref() {
             Some(DawSource::Audio(source_id)) => UiClipSource::Audio {
-                source_id: source_id.to_u32(),
+                source_id: source_id.to_u64(),
             },
             Some(DawSource::Midi(pattern_id)) => UiClipSource::Midi {
-                pattern_id: pattern_id.to_u32(),
+                pattern_id: pattern_id.to_u64(),
             },
             _ => UiClipSource::None,
         };
         Self {
             name: value.name.clone(),
-            id: value.id.to_u32(),
+            id: value.id.to_u64(),
             start_time: value.time.start_time_raw(),
             source,
             offset_start: value.time.offset_start_raw(),
@@ -328,7 +328,7 @@ pub struct AudioWaveformUiForSourceList {
 #[derive(Clone, Debug, Serialize)]
 #[frb(dart_metadata=("freezed"))]
 pub struct AudioWaveformUiForAudioProperties {
-    pub id: Option<u32>,
+    pub id: Option<u64>,
     pub buffer_handle: WaveformHandle,
     pub file_path: String,
     pub name: String,
@@ -360,9 +360,9 @@ impl AudioWaveformUiForAudioProperties {
             return Err(String::from("This audio waveform does not have an ID"));
         };
         let waveform_handle =
-            get_waveform_handle(ctx, id.to_u32()).ok_or("Cannot get this waveform handle")?;
+            get_waveform_handle(ctx, id.to_u64()).ok_or("Cannot get this waveform handle")?;
         Ok(Self {
-            id: Some(id.to_u32()),
+            id: Some(id.to_u64()),
             buffer_handle: waveform_handle,
             file_path: value.file_path.display().to_string(),
             name: value.name.clone(),
@@ -386,7 +386,7 @@ impl AudioWaveformUiForAudioProperties {
 
 #[frb(dart_metadata=("freezed"))]
 pub struct UiGeneratorInstance {
-    pub id: u32,
+    pub id: u64,
     pub instance_type: UiGeneratorInstanceType,
 }
 
@@ -436,7 +436,7 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
     fn from(generator_instance: &GeneratorInstance) -> Self {
         match &generator_instance.instance_type {
             GeneratorInstanceType::Plugin(plugin_instance) => Self {
-                id: generator_instance.id.to_u32(),
+                id: generator_instance.id.to_u64(),
                 instance_type: UiGeneratorInstanceType::Plugin(UiPluginInstance::from(
                     plugin_instance.to_owned(),
                 )),
@@ -445,7 +445,7 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
                 asset_id,
                 root_note,
             } => Self {
-                id: generator_instance.id.to_u32(),
+                id: generator_instance.id.to_u64(),
                 instance_type: UiGeneratorInstanceType::Sampler {
                     asset_id: *asset_id,
                     root_note: *root_note,
@@ -544,7 +544,7 @@ pub fn get_transport_state(ctx: &DawContext) -> Result<UiTransportState, String>
 /// Get all audio waveform source list from the backend
 pub fn get_audio_source_list(
     ctx: &DawContext,
-) -> Option<HashMap<u32, AudioWaveformUiForSourceList>> {
+) -> Option<HashMap<u64, AudioWaveformUiForSourceList>> {
     audio_waveform_api::get_audio_source_list(ctx, |id, wf| {
         (id, AudioWaveformUiForSourceList::from(wf))
     })
@@ -552,7 +552,7 @@ pub fn get_audio_source_list(
 }
 
 /// Get generator list used in the project
-pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u32, UiGeneratorInstance>, String> {
+pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u64, UiGeneratorInstance>, String> {
     project_api::get_generator_list(ctx, |id, generator| {
         (id, UiGeneratorInstance::from(generator))
     })
@@ -563,10 +563,10 @@ pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u32, UiGeneratorIn
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> Result<u32, String> {
+pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> Result<u64, String> {
     let source_id =
         audio_waveform_api::add_audio_source(ctx, file_path).map_err(|e| e.to_string())?;
-    Ok(source_id.to_u32())
+    Ok(source_id.to_u64())
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
@@ -579,7 +579,7 @@ pub fn add_new_audio_track(ctx: &mut DawContext) -> UiTrack {
 /// Get all tracks on the session/project.
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
-pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u32, UiTrack>, String> {
+pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u64, UiTrack>, String> {
     track_api::get_tracks_ordered(ctx, |id, track| {
         (id, UiTrack::from_track(track, &ctx.app_state))
     })

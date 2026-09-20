@@ -132,3 +132,42 @@ impl AutomationPointId {
         id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt::Debug;
+
+    fn assert_reused_slot_round_trip<K>()
+    where
+        K: Key + Copy + Debug + Eq + From<u64> + From<u32> + Into<u64> + Into<u32>,
+    {
+        let mut arena = slotmap::SlotMap::<K, ()>::with_key();
+        let removed = arena.insert(());
+        arena.remove(removed);
+        let replacement = arena.insert(());
+        let removed_index: u32 = removed.into();
+        let replacement_index: u32 = replacement.into();
+        let replacement_handle: u64 = replacement.into();
+
+        assert_eq!(removed_index, replacement_index);
+        assert_ne!(removed, replacement);
+        assert_eq!(K::from(replacement_handle), replacement);
+        assert_ne!(K::from(replacement_index), replacement);
+    }
+
+    #[test]
+    fn slot_map_ids_preserve_their_generation_in_u64_handles() {
+        assert_reused_slot_round_trip::<TrackId>();
+        assert_reused_slot_round_trip::<ClipId>();
+        assert_reused_slot_round_trip::<AutomationId>();
+        assert_reused_slot_round_trip::<EffectId>();
+        assert_reused_slot_round_trip::<BusId>();
+        assert_reused_slot_round_trip::<PatternId>();
+        assert_reused_slot_round_trip::<AudioSourceId>();
+        assert_reused_slot_round_trip::<GeneratorId>();
+        assert_reused_slot_round_trip::<ModulationId>();
+        assert_reused_slot_round_trip::<ModulationLinkId>();
+        assert_reused_slot_round_trip::<GraphNodeId>();
+    }
+}

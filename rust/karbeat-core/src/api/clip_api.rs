@@ -24,7 +24,7 @@ where
 /// Creates a clip on a compatible track, records history, and updates the render graph.
 pub fn add_clip(
     ctx: &mut DawContext,
-    source_id: Option<u32>,
+    source_id: Option<u64>,
     source_type: ClipSourceType,
     track_id: TrackId,
     start_time: u32,

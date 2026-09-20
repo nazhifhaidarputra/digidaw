@@ -11,7 +11,7 @@ use karbeat_core::{
 #[derive(Clone)]
 #[frb(dart_metadata=("freezed"))]
 pub struct UiPattern {
-    pub id: u32,
+    pub id: u64,
     pub name: String,
     pub length_ticks: u64,
 
@@ -52,7 +52,7 @@ impl From<&Pattern> for UiPattern {
         let ui_notes: Vec<UiNote> = value.notes.iter().map(UiNote::from).collect();
 
         Self {
-            id: value.id.into(), // Convert PatternId to u32
+            id: value.id.to_u64(),
             name: value.name.clone(),
             length_ticks: value.length_ticks,
             notes: ui_notes,
@@ -60,34 +60,34 @@ impl From<&Pattern> for UiPattern {
     }
 }
 
-pub fn get_pattern(ctx: &DawContext, pattern_id: u32) -> Result<UiPattern, String> {
-    let pattern_id = PatternId::from(pattern_id);
+pub fn get_pattern(ctx: &DawContext, pattern_id: u64) -> Result<UiPattern, String> {
+    let pattern_id = PatternId::from_u64(pattern_id);
     let pattern = pattern_api::get_pattern(ctx, &pattern_id).map_err(|e| e.to_string())?;
     let pattern_ui = UiPattern::from(&pattern);
     Ok(pattern_ui)
 }
 
-pub fn get_patterns(ctx: &DawContext) -> Result<HashMap<u32, UiPattern>, String> {
+pub fn get_patterns(ctx: &DawContext) -> Result<HashMap<u64, UiPattern>, String> {
     let patterns = pattern_api::get_patterns(ctx, |id, pattern| (id, UiPattern::from(pattern)))
         .map_err(|e| e.to_string())?;
     Ok(patterns)
 }
 
-pub fn rename_pattern(ctx: &mut DawContext, pattern_id: u32, new_name: &str) -> Result<(), String> {
-    pattern_api::rename_pattern(ctx, PatternId::from(pattern_id), new_name)
+pub fn rename_pattern(ctx: &mut DawContext, pattern_id: u64, new_name: &str) -> Result<(), String> {
+    pattern_api::rename_pattern(ctx, PatternId::from_u64(pattern_id), new_name)
         .map_err(|error| error.to_string())
 }
 
 pub fn add_note(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     key: u32,
     start_tick: u64,
     duration: Option<u64>,
 ) -> Result<UiNote, String> {
     let note = note_api::add_note(
         ctx,
-        PatternId::from(pattern_id),
+        PatternId::from_u64(pattern_id),
         key as u8,
         start_tick,
         duration,
@@ -99,8 +99,8 @@ pub fn add_note(
     Ok(note_ui)
 }
 
-pub fn delete_note(ctx: &mut DawContext, pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
-    let note = note_api::delete_note(ctx, PatternId::from(pattern_id), NoteId::from(note_id))
+pub fn delete_note(ctx: &mut DawContext, pattern_id: u64, note_id: u32) -> Result<UiNote, String> {
+    let note = note_api::delete_note(ctx, PatternId::from_u64(pattern_id), NoteId::from(note_id))
         .map_err(|e| format!("{}", e))?;
 
     let note_ui = UiNote::from(&note);
@@ -110,13 +110,13 @@ pub fn delete_note(ctx: &mut DawContext, pattern_id: u32, note_id: u32) -> Resul
 
 pub fn resize_note(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     note_id: u32,
     new_duration: u64,
 ) -> Result<UiNote, String> {
     let note = note_api::resize_note(
         ctx,
-        PatternId::from(pattern_id),
+        PatternId::from_u64(pattern_id),
         NoteId::from(note_id),
         new_duration,
     )
@@ -128,14 +128,14 @@ pub fn resize_note(
 
 pub fn move_note(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     note_id: u32,
     new_start_tick: u64,
     new_key: u32,
 ) -> Result<UiNote, String> {
     let note = note_api::move_note(
         ctx,
-        PatternId::from(pattern_id),
+        PatternId::from_u64(pattern_id),
         NoteId::from(note_id),
         new_start_tick,
         new_key as u8,
@@ -148,7 +148,7 @@ pub fn move_note(
 
 pub fn change_note_params(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     note_id: u32,
     velocity: Option<i64>,
     probability: Option<f32>,
@@ -161,7 +161,7 @@ pub fn change_note_params(
 
     let note = note_api::change_note_params(
         ctx,
-        PatternId::from(pattern_id),
+        PatternId::from_u64(pattern_id),
         NoteId::from(note_id),
         velocity,
         probability,
@@ -182,14 +182,14 @@ pub fn change_note_params(
 /// Add notes in batch
 ///
 /// ## Parameters
-/// * pattern_id: [u32], id of the pattern
+/// * pattern_id: [u64], id of the pattern
 /// * new_notes: Vector of tuples that contains (key, start_tick, duration)
 pub fn add_notes_batch(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     notes: Vec<(u8, u64, Option<u64>)>,
 ) -> Result<Vec<UiNote>, String> {
-    let added_notes = note_api::add_notes_batch(ctx, pattern_id.into(), notes)
+    let added_notes = note_api::add_notes_batch(ctx, PatternId::from_u64(pattern_id), notes)
         .map_err(|e| e.to_string())?
         .iter()
         .map(|n| n.into())
@@ -201,16 +201,16 @@ pub fn add_notes_batch(
 /// Delete notes in batch
 ///
 /// ## Parameters
-/// * pattern_id: [u32], id of the pattern
+/// * pattern_id: [u64], id of the pattern
 /// * note_ids: Vector of notes ID to delete
 pub fn delete_notes_batch(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<(), String> {
     note_api::delete_notes_batch(
         ctx,
-        pattern_id.into(),
+        PatternId::from_u64(pattern_id),
         note_ids.into_iter().map(NoteId::from).collect(),
     )
     .map_err(|e| e.to_string())
@@ -219,16 +219,16 @@ pub fn delete_notes_batch(
 /// Move notes in batch
 ///
 /// ## Parameters
-/// * pattern_id: [u32], id of the pattern
+/// * pattern_id: [u64], id of the pattern
 /// * note_ids: Vector of notes updates (id, )
 pub fn move_notes_batch(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     updates: Vec<(u32, u64, u8)>,
 ) -> Result<Vec<UiNote>, String> {
     let moved_notes = note_api::move_notes_batch(
         ctx,
-        pattern_id.into(),
+        PatternId::from_u64(pattern_id),
         updates
             .into_iter()
             .map(|u| (u.0.into(), u.1, u.2))
@@ -242,10 +242,10 @@ pub fn move_notes_batch(
 
 pub fn resize_notes_batch(
     ctx: &mut DawContext,
-    pattern_id: u32,
+    pattern_id: u64,
     updates: Vec<(u32, u64)>,
 ) -> Result<Vec<UiNote>, String> {
-    let pattern_id_typed: PatternId = pattern_id.into();
+    let pattern_id_typed = PatternId::from_u64(pattern_id);
     let updates_proper = updates.into_iter().map(|u| (u.0.into(), u.1)).collect();
     let resized_notes = note_api::resize_notes_batch(ctx, pattern_id_typed, updates_proper)
         .map_err(|e| e.to_string())?;
@@ -259,24 +259,24 @@ pub fn resize_notes_batch(
 /// This temporarily switches the engine to Pattern playback mode.
 pub fn play_pattern_preview(
     ctx: &mut DawContext,
-    pattern_id: u32,
-    generator_id: u32,
+    pattern_id: u64,
+    generator_id: u64,
 ) -> Result<(), String> {
-    let pattern_id = PatternId::from(pattern_id);
-    let generator_id = GeneratorId::from(generator_id);
+    let pattern_id = PatternId::from_u64(pattern_id);
+    let generator_id = GeneratorId::from_u64(generator_id);
     pattern_api::play_pattern_preview(ctx, pattern_id, generator_id).map_err(|e| e.to_string())
 }
 
 /// Stop pattern preview without changing song mode. used in stop button inside pattern playback
 pub fn stop_pattern_preview_local(
     ctx: &mut DawContext,
-    pattern_id: u32,
-    generator_id: u32,
+    pattern_id: u64,
+    generator_id: u64,
 ) -> Result<(), String> {
     pattern_api::stop_pattern_preview_local(
         ctx,
-        PatternId::from(pattern_id),
-        GeneratorId::from(generator_id),
+        PatternId::from_u64(pattern_id),
+        GeneratorId::from_u64(generator_id),
     )
     .map_err(|e| e.to_string())
 }

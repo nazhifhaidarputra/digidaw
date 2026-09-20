@@ -30,16 +30,16 @@ use karbeat_core::core::project::mixer::{
 #[frb]
 #[derive(Clone, Debug)]
 pub enum UiMixerChannelTarget {
-    Track(u32),
-    Bus(u32),
+    Track(u64),
+    Bus(u64),
     Master,
 }
 
 impl From<&UiMixerChannelTarget> for MixerChannelTarget {
     fn from(val: &UiMixerChannelTarget) -> Self {
         match val {
-            UiMixerChannelTarget::Track(id) => MixerChannelTarget::Track(TrackId::from(*id)),
-            UiMixerChannelTarget::Bus(id) => MixerChannelTarget::Bus(BusId::from(*id)),
+            UiMixerChannelTarget::Track(id) => MixerChannelTarget::Track(TrackId::from_u64(*id)),
+            UiMixerChannelTarget::Bus(id) => MixerChannelTarget::Bus(BusId::from_u64(*id)),
             UiMixerChannelTarget::Master => MixerChannelTarget::Master,
         }
     }
@@ -48,8 +48,8 @@ impl From<&UiMixerChannelTarget> for MixerChannelTarget {
 impl From<MixerChannelTarget> for UiMixerChannelTarget {
     fn from(value: MixerChannelTarget) -> Self {
         match value {
-            MixerChannelTarget::Track(track_id) => Self::Track(track_id.into()),
-            MixerChannelTarget::Bus(bus_id) => Self::Bus(bus_id.into()),
+            MixerChannelTarget::Track(track_id) => Self::Track(track_id.to_u64()),
+            MixerChannelTarget::Bus(bus_id) => Self::Bus(bus_id.to_u64()),
             MixerChannelTarget::Master => Self::Master,
         }
     }
@@ -60,7 +60,7 @@ impl From<MixerChannelTarget> for UiMixerChannelTarget {
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct UiMixerChannelSnapshot {
-    pub target: UiMixerChannelTarget, // u32::MAX for buses, u32::MAX - 1 for master
+    pub target: UiMixerChannelTarget,
     /// Post-effects, post-fader peak magnitude in linear amplitude.
     pub magnitude: f32,
     pub volume: f32,
@@ -87,8 +87,8 @@ impl From<MixerChannelSnapshot> for UiMixerChannelSnapshot {
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct MixerTelemetrySnapshotDto {
-    pub tracks: HashMap<u32, UiMixerChannelSnapshot>,
-    pub buses: HashMap<u32, UiMixerChannelSnapshot>,
+    pub tracks: HashMap<u64, UiMixerChannelSnapshot>,
+    pub buses: HashMap<u64, UiMixerChannelSnapshot>,
     pub master: Option<UiMixerChannelSnapshot>,
 }
 
@@ -98,12 +98,12 @@ impl From<MixerTelemetrySnapshot> for MixerTelemetrySnapshotDto {
             tracks: snapshot
                 .tracks
                 .iter()
-                .map(|(id, snap)| (id.to_u32(), snap.clone().into()))
+                .map(|(id, snap)| (id.to_u64(), snap.clone().into()))
                 .collect(),
             buses: snapshot
                 .buses
                 .iter()
-                .map(|(id, snap)| (id.to_u32(), snap.clone().into()))
+                .map(|(id, snap)| (id.to_u64(), snap.clone().into()))
                 .collect(),
             master: snapshot.master.map(|s| s.into()),
         }
@@ -123,7 +123,7 @@ pub struct UiMixerChannel {
 }
 
 pub struct UiEffectSummary {
-    pub id: u32,
+    pub id: u64,
     pub registry_id: u32,
     pub name: String,
 }
@@ -141,7 +141,7 @@ impl From<&MixerChannel> for UiMixerChannel {
                 .effects
                 .iter()
                 .map(|instance| UiEffectSummary {
-                    id: instance.id.to_u32(),
+                    id: instance.id.to_u64(),
                     registry_id: instance.instance.registry_id,
                     name: instance.instance.name.clone(),
                 })
@@ -153,7 +153,7 @@ impl From<&MixerChannel> for UiMixerChannel {
 /// UI representation of a mixer bus.
 #[frb(dart_metadata=("freezed"))]
 pub struct UiBus {
-    pub id: u32,
+    pub id: u64,
     pub name: String,
     pub channel: UiMixerChannel,
 }
@@ -161,7 +161,7 @@ pub struct UiBus {
 impl From<&BusMixerChannel> for UiBus {
     fn from(value: &BusMixerChannel) -> Self {
         Self {
-            id: value.id.to_u32(),
+            id: value.id.to_u64(),
             name: value.name.clone(),
             channel: (&value.channel).into(),
         }
@@ -203,8 +203,8 @@ impl From<UiRoutingConnection> for RoutingConnection {
 #[derive(Clone, Debug)]
 #[frb]
 pub enum UiRoutingNode {
-    Track(u32),
-    Bus(u32),
+    Track(u64),
+    Bus(u64),
     Master,
     PluginSidechain, // this actually useless because the UI does not need this
 }
@@ -222,8 +222,8 @@ pub struct UiSidechainSource {
 impl From<&RoutingNode> for UiRoutingNode {
     fn from(value: &RoutingNode) -> Self {
         match value {
-            RoutingNode::Track(id) => UiRoutingNode::Track(id.to_u32()),
-            RoutingNode::Bus(id) => UiRoutingNode::Bus(id.to_u32()),
+            RoutingNode::Track(id) => UiRoutingNode::Track(id.to_u64()),
+            RoutingNode::Bus(id) => UiRoutingNode::Bus(id.to_u64()),
             RoutingNode::Master => UiRoutingNode::Master,
             _ => Self::PluginSidechain,
         }
@@ -233,8 +233,8 @@ impl From<&RoutingNode> for UiRoutingNode {
 impl From<UiRoutingNode> for RoutingNode {
     fn from(value: UiRoutingNode) -> Self {
         match value {
-            UiRoutingNode::Track(id) => RoutingNode::Track(id.into()),
-            UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(id)),
+            UiRoutingNode::Track(id) => RoutingNode::Track(TrackId::from_u64(id)),
+            UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from_u64(id)),
             UiRoutingNode::Master => RoutingNode::Master,
             _ => RoutingNode::Master,
         }
@@ -244,9 +244,9 @@ impl From<UiRoutingNode> for RoutingNode {
 /// UI representation of the mixer state.
 #[frb(dart_metadata=("freezed"))]
 pub struct UiMixerState {
-    pub channels: HashMap<u32, UiMixerChannel>,
+    pub channels: HashMap<u64, UiMixerChannel>,
     pub master_bus: UiMixerChannel,
-    pub buses: HashMap<u32, UiBus>,
+    pub buses: HashMap<u64, UiBus>,
     pub routing: Vec<UiRoutingConnection>,
 }
 
@@ -256,13 +256,13 @@ impl From<&MixerState> for UiMixerState {
             channels: value
                 .channels
                 .iter()
-                .map(|(id, channel)| (id.to_u32(), UiMixerChannel::from(&channel.channel)))
+                .map(|(id, channel)| (id.to_u64(), UiMixerChannel::from(&channel.channel)))
                 .collect(),
             master_bus: (&value.master_bus).into(),
             buses: value
                 .buses
                 .iter()
-                .map(|(id, bus)| (id.to_u32(), bus.into()))
+                .map(|(id, bus)| (id.to_u64(), bus.into()))
                 .collect(),
             routing: value.routing.iter().map(|c| c.into()).collect(),
         }
@@ -271,14 +271,14 @@ impl From<&MixerState> for UiMixerState {
 
 #[frb(dart_metadata=("freezed"))]
 pub struct UiEffectInstance {
-    pub id: u32,
+    pub id: u64,
     pub name: String,
 }
 
 impl From<&EffectInstance> for UiEffectInstance {
     fn from(value: &EffectInstance) -> Self {
         Self {
-            id: value.id.to_u32(),
+            id: value.id.to_u64(),
             name: value.instance.name.clone(),
         }
     }
@@ -292,9 +292,9 @@ impl UiMixerState {
 
     #[frb(sync)]
     pub fn new_with_param(
-        channels: HashMap<u32, UiMixerChannel>,
+        channels: HashMap<u64, UiMixerChannel>,
         master_bus: UiMixerChannel,
-        buses: HashMap<u32, UiBus>,
+        buses: HashMap<u64, UiBus>,
         routing: Vec<UiRoutingConnection>,
     ) -> Self {
         Self {
@@ -424,8 +424,8 @@ pub fn get_mixer_state(ctx: &DawContext) -> UiMixerState {
 }
 
 /// **GETTER: Fetch a specific mixer channel**
-pub fn get_mixer_channel(ctx: &DawContext, track_id: u32) -> Result<UiMixerChannel, String> {
-    mixer_api::get_mixer_channel(ctx, TrackId::from(track_id), |mixer_channel| {
+pub fn get_mixer_channel(ctx: &DawContext, track_id: u64) -> Result<UiMixerChannel, String> {
+    mixer_api::get_mixer_channel(ctx, TrackId::from_u64(track_id), |mixer_channel| {
         UiMixerChannel::from(mixer_channel)
     })
     .map_err(|e| e.to_string())
@@ -433,11 +433,11 @@ pub fn get_mixer_channel(ctx: &DawContext, track_id: u32) -> Result<UiMixerChann
 
 pub fn get_mixer_channel_populated(
     ctx: &DawContext,
-    track_id: u32,
+    track_id: u64,
 ) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
     mixer_api::get_mixer_channel_populated(
         ctx,
-        TrackId::from(track_id),
+        TrackId::from_u64(track_id),
         |channel| UiMixerChannel::from(channel),
         |effect| UiEffectInstance::from(effect),
     )
@@ -454,8 +454,8 @@ pub fn get_master_bus_populated(ctx: &DawContext) -> Vec<UiEffectInstance> {
 }
 
 /// **GETTER: Fetch all buses**
-pub fn get_buses(ctx: &DawContext) -> HashMap<u32, UiBus> {
-    mixer_api::get_buses(ctx, |id, bus| (id.to_u32(), UiBus::from(bus)))
+pub fn get_buses(ctx: &DawContext) -> HashMap<u64, UiBus> {
+    mixer_api::get_buses(ctx, |id, bus| (id.to_u64(), UiBus::from(bus)))
 }
 
 /// **GETTER: Fetch the routing matrix**
@@ -466,16 +466,16 @@ pub fn get_routing_matrix(ctx: &DawContext) -> Vec<UiRoutingConnection> {
 /// Get track channel's parameter specs
 pub fn get_track_mixer_channel_specs(
     ctx: &DawContext,
-    track_id: u32,
+    track_id: u64,
 ) -> Option<Vec<ParameterSpecDTO>> {
-    mixer_api::get_track_mixer_channel_specs(ctx, &TrackId::from(track_id), |param_spec| {
+    mixer_api::get_track_mixer_channel_specs(ctx, &TrackId::from_u64(track_id), |param_spec| {
         ParameterSpecDTO::from(param_spec)
     })
 }
 
 /// Get bus channel's parameter specs
-pub fn get_bus_mixer_channel_specs(ctx: &DawContext, bus_id: u32) -> Option<Vec<ParameterSpecDTO>> {
-    mixer_api::get_bus_mixer_channel_specs(ctx, &BusId::from(bus_id), |param_spec| {
+pub fn get_bus_mixer_channel_specs(ctx: &DawContext, bus_id: u64) -> Option<Vec<ParameterSpecDTO>> {
+    mixer_api::get_bus_mixer_channel_specs(ctx, &BusId::from_u64(bus_id), |param_spec| {
         ParameterSpecDTO::from(param_spec)
     })
 }
@@ -492,10 +492,10 @@ pub fn get_master_channel_specs(ctx: &DawContext) -> Vec<ParameterSpecDTO> {
 /// Add an effect to a mixer channel by its registry ID (preferred method).
 pub fn add_effect_to_mixer_channel_by_id(
     ctx: &mut DawContext,
-    track_id: u32,
+    track_id: u64,
     registry_id: u32,
 ) -> Result<(), String> {
-    mixer_api::add_effect_to_mixer_channel_by_id(ctx, TrackId::from(track_id), registry_id)
+    mixer_api::add_effect_to_mixer_channel_by_id(ctx, TrackId::from_u64(track_id), registry_id)
         .map_err(|e| e.to_string())?;
     log::info!(
         "Added effect with registry ID {} to track {}",
@@ -507,13 +507,13 @@ pub fn add_effect_to_mixer_channel_by_id(
 
 pub fn remove_effect_from_mixer_channel(
     ctx: &mut DawContext,
-    track_id: u32,
-    effect_instance_id: u32,
+    track_id: u64,
+    effect_instance_id: u64,
 ) -> Result<(), String> {
     mixer_api::remove_effect_from_mixer_channel(
         ctx,
-        TrackId::from(track_id),
-        EffectId::from(effect_instance_id),
+        TrackId::from_u64(track_id),
+        EffectId::from_u64(effect_instance_id),
     )
     .map_err(|e| e.to_string())?;
     log::info!(
@@ -527,13 +527,13 @@ pub fn remove_effect_from_mixer_channel(
 pub fn move_effect_order(
     ctx: &mut DawContext,
     target: UiMixerChannelTarget,
-    effect_instance_id: u32,
+    effect_instance_id: u64,
     new_position: u32,
 ) -> Result<(), String> {
     mixer_api::move_effect_order(
         ctx,
         MixerChannelTarget::from(&target),
-        EffectId::from(effect_instance_id),
+        EffectId::from_u64(effect_instance_id),
         new_position as usize,
     )
     .map_err(|error| error.to_string())
@@ -542,12 +542,12 @@ pub fn move_effect_order(
 pub fn remove_effect_from_target_mixer_channel(
     ctx: &mut DawContext,
     target: UiMixerChannelTarget,
-    effect_instance_id: u32,
+    effect_instance_id: u64,
 ) -> Result<(), String> {
     mixer_api::remove_effect_from_target_mixer_channel(
         ctx,
         MixerChannelTarget::from(&target),
-        EffectId::from(effect_instance_id),
+        EffectId::from_u64(effect_instance_id),
     )
     .map_err(|error| error.to_string())
 }
@@ -563,9 +563,9 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> Resul
 
 pub fn remove_effect_from_master_bus(
     ctx: &mut DawContext,
-    effect_instance_id: u32,
+    effect_instance_id: u64,
 ) -> Result<(), String> {
-    mixer_api::remove_effect_from_master_bus(ctx, EffectId::from(effect_instance_id))
+    mixer_api::remove_effect_from_master_bus(ctx, EffectId::from_u64(effect_instance_id))
         .map_err(|e| e.to_string())?;
     log::info!(
         "Removed effect instance ID {} from master bus",
@@ -579,15 +579,15 @@ pub fn remove_effect_from_master_bus(
 // ======================================
 
 /// Create a new mixer bus and return its ID.
-pub fn create_bus(ctx: &mut DawContext, name: String) -> Result<u32, String> {
+pub fn create_bus(ctx: &mut DawContext, name: String) -> Result<u64, String> {
     // TODO: Refactor this to Core's API
     let bus_id = mixer_api::create_bus(ctx, name);
-    Ok(bus_id.into())
+    Ok(bus_id.to_u64())
 }
 
 /// Delete a mixer bus.
-pub fn delete_bus(ctx: &mut DawContext, bus_id: u32) -> Result<(), String> {
-    mixer_api::delete_bus(ctx, BusId::from(bus_id)).map_err(|e| e.to_string())
+pub fn delete_bus(ctx: &mut DawContext, bus_id: u64) -> Result<(), String> {
+    mixer_api::delete_bus(ctx, BusId::from_u64(bus_id)).map_err(|e| e.to_string())
 }
 
 // ======================================
@@ -597,10 +597,10 @@ pub fn delete_bus(ctx: &mut DawContext, bus_id: u32) -> Result<(), String> {
 /// Add an effect to a bus by its registry ID.
 pub fn add_effect_to_bus(
     ctx: &mut DawContext,
-    bus_id: u32,
+    bus_id: u64,
     registry_id: u32,
 ) -> Result<(), String> {
-    mixer_api::add_effect_to_bus(ctx, BusId::from(bus_id), registry_id)
+    mixer_api::add_effect_to_bus(ctx, BusId::from_u64(bus_id), registry_id)
         .map_err(|e| e.to_string())?;
     log::info!(
         "Added effect with registry ID {} to bus {}",
@@ -610,8 +610,8 @@ pub fn add_effect_to_bus(
     Ok(())
 }
 
-pub fn rename_bus(ctx: &mut DawContext, bus_id: u32, new_name: String) -> Result<(), String> {
-    mixer_api::rename_bus(ctx, BusId::from(bus_id), &new_name).map_err(|e| e.to_string())
+pub fn rename_bus(ctx: &mut DawContext, bus_id: u64, new_name: String) -> Result<(), String> {
+    mixer_api::rename_bus(ctx, BusId::from_u64(bus_id), &new_name).map_err(|e| e.to_string())
 }
 
 // ======================================
@@ -621,12 +621,12 @@ pub fn rename_bus(ctx: &mut DawContext, bus_id: u32, new_name: String) -> Result
 pub fn get_channel_destinations(
     ctx: &DawContext,
     is_bus: bool,
-    channel_id: u32,
+    channel_id: u64,
 ) -> Vec<UiRoutingConnection> {
     let source_node = if is_bus {
-        RoutingNode::Bus(BusId::from(channel_id))
+        RoutingNode::Bus(BusId::from_u64(channel_id))
     } else {
-        RoutingNode::Track(TrackId::from(channel_id))
+        RoutingNode::Track(TrackId::from_u64(channel_id))
     };
 
     mixer_api::get_destinations_of_mixer_channel(ctx, &source_node, |conn| UiRoutingConnection {
@@ -716,4 +716,22 @@ pub fn set_sidechain_source(
         send_level.map(|level| level as f32),
     )
     .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mixer_lookup_preserves_reused_track_generation() {
+        let mut ctx = DawContext::new();
+        let removed = ctx.app_state.add_new_audio_track().id;
+        ctx.app_state.remove_track(removed).expect("remove track");
+        let replacement = ctx.app_state.add_new_audio_track().id;
+
+        assert_eq!(removed.to_u32(), replacement.to_u32());
+        assert_ne!(removed.to_u64(), replacement.to_u64());
+        assert!(get_mixer_channel(&ctx, removed.to_u64()).is_err());
+        assert!(get_mixer_channel(&ctx, replacement.to_u64()).is_ok());
+    }
 }

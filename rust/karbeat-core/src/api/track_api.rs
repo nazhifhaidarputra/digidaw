@@ -84,27 +84,27 @@ pub fn add_new_audio_track(ctx: &mut DawContext) -> AudioTrack {
 /// Maps all tracks in project storage order into a caller-selected collection.
 pub fn get_tracks<C, U, M>(ctx: &DawContext, mapper: M) -> C
 where
-    M: Fn(u32, &AudioTrack) -> U,
+    M: Fn(u64, &AudioTrack) -> U,
     C: FromIterator<U>,
 {
     ctx.app_state
         .tracks
         .iter()
-        .map(|(id, track)| mapper(id.to_u32(), track))
+        .map(|(id, track)| mapper(id.to_u64(), track))
         .collect()
 }
 
 /// Get tracks ordered by index (For UI)
 pub fn get_tracks_ordered<C, U, M>(ctx: &DawContext, mapper: M) -> anyhow::Result<C>
 where
-    M: Fn(u32, &AudioTrack) -> U,
+    M: Fn(u64, &AudioTrack) -> U,
     C: FromIterator<U>,
 {
     Ok(ctx
         .app_state
         .get_track_ordered_by_index()
         .iter()
-        .map(|t| mapper(t.id.into(), t))
+        .map(|t| mapper(t.id.to_u64(), t))
         .collect())
 }
 

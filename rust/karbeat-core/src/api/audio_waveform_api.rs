@@ -81,7 +81,7 @@ pub fn get_audio_waveform_for_clip_all_available_in_tracks<C, U, M>(
     mapper: M,
 ) -> anyhow::Result<C>
 where
-    M: Fn(u32, &AudioWaveform) -> U,
+    M: Fn(u64, &AudioWaveform) -> U,
     C: FromIterator<U>,
 {
     let app = &ctx.app_state;
@@ -95,11 +95,11 @@ where
         .filter_map(|clip_id| {
             let clip = app.clips_pool.get(*clip_id)?;
             if let Some(DawSource::Audio(id)) = clip.source {
-                let id_u32 = id.to_u32();
-                if processed.insert(id_u32) {
+                let handle = id.to_u64();
+                if processed.insert(handle) {
                     // Prevents duplicate IDs natively
                     if let Some(audio_source) = app.get_audio_source(&id) {
-                        return Some(mapper(id_u32, audio_source.as_ref()));
+                        return Some(mapper(handle, audio_source.as_ref()));
                     }
                 }
             }
@@ -113,7 +113,7 @@ where
 /// Maps every imported audio source in the project into a caller-selected collection.
 pub fn get_audio_source_list<C, U, M>(ctx: &DawContext, mapper: M) -> anyhow::Result<C>
 where
-    M: Fn(u32, &AudioWaveform) -> U,
+    M: Fn(u64, &AudioWaveform) -> U,
     C: FromIterator<U>,
 {
     let app = &ctx.app_state;
@@ -121,7 +121,7 @@ where
         .asset_library
         .source_map
         .iter()
-        .map(|(id, wf)| mapper(id.to_u32(), wf.as_ref()))
+        .map(|(id, wf)| mapper(id.to_u64(), wf.as_ref()))
         .collect())
 }
 
@@ -151,7 +151,7 @@ pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result
     let result = ctx.app_state.load_audio(file_path, None, sample_rate);
     let id = match result {
         Ok(source_id) => {
-            log::info!("Successfully added audio source {}", source_id.to_u32());
+            log::info!("Successfully added audio source {}", source_id.to_u64());
             source_id
         }
         Err(e) => {
@@ -163,14 +163,14 @@ pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result
     Ok(id)
 }
 
-/// Resolves a UI `u32` source key, validates it, and maps the corresponding waveform.
-pub fn get_audio_waveform<T, F>(ctx: &DawContext, source_id: u32, mapper: F) -> anyhow::Result<T>
+/// Resolves an opaque source handle, validates it, and maps the corresponding waveform.
+pub fn get_audio_waveform<T, F>(ctx: &DawContext, source_id: u64, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&AudioWaveform) -> T,
 {
     let app = &ctx.app_state;
     let waveform = app
-        .get_audio_source(&AudioSourceId::from(source_id))
+        .get_audio_source(&AudioSourceId::from_u64(source_id))
         .ok_or_else(|| anyhow::anyhow!("Cannot find audio source"))?;
     Ok(mapper(waveform.as_ref()))
 }
