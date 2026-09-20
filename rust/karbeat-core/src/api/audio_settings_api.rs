@@ -6,25 +6,35 @@ use crate::{
     context::DawContext,
 };
 
+/// Enumerates output host names currently reported by the audio backend.
 pub fn available_output_hosts() -> Vec<String> {
     backend::get_available_hosts()
 }
 
+/// Enumerates output devices for a named host or the system-default host.
 pub fn available_output_devices(host_name: Option<&str>) -> anyhow::Result<Vec<AudioDeviceInfo>> {
     backend::get_output_devices(host_name)
 }
 
+/// Returns a consistent clone of the requested and active audio runtime settings.
 pub fn runtime_settings(ctx: &DawContext) -> AudioRuntimeSettings {
     ctx.audio_runtime_settings.read().clone()
 }
 
+/// Returns the cumulative number of output samples replaced with silence after ring underruns.
 pub fn output_underrun_samples() -> u64 {
     backend::output_underrun_samples()
 }
 
+/// DSP sample rates accepted by [`set_dsp_config`].
 pub const SUPPORTED_DSP_SAMPLE_RATES: [u32; 4] = [44_100, 48_000, 88_200, 96_000];
+/// Maximum DSP block sizes accepted by [`set_dsp_config`].
 pub const SUPPORTED_DSP_BLOCK_SIZES: [u32; 6] = [64, 128, 256, 512, 1_024, 2_048];
 
+/// Updates the requested DSP rate and block size after validating supported values.
+///
+/// Hosted plugins are prepared for a sample-rate change before settings are committed. Project
+/// configuration and runtime restart status are then updated together.
 pub fn set_dsp_config(
     ctx: &mut DawContext,
     sample_rate: u32,
@@ -39,6 +49,15 @@ pub fn set_dsp_config(
         "Unsupported DSP block size: {block_size}"
     );
 
+    let current_sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
+    if current_sample_rate != sample_rate {
+        super::external_plugin_api::reconfigure_for_audio_config(
+            ctx,
+            sample_rate,
+            block_size as usize,
+        )?;
+    }
+
     {
         let mut runtime = ctx.audio_runtime_settings.write();
         runtime.requested_dsp.sample_rate = sample_rate;
@@ -50,6 +69,10 @@ pub fn set_dsp_config(
     Ok(ctx.audio_runtime_settings.read().clone())
 }
 
+/// Selects a named or system-default output host and device for the next stream restart.
+///
+/// Named hosts and devices are validated before selection state is mutated. This records the
+/// request and marks the stream as starting; stream creation occurs in the backend supervisor.
 pub fn select_output(
     ctx: &DawContext,
     host_name: Option<String>,

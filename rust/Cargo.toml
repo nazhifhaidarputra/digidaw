@@ -22,6 +22,7 @@ karbeat-core = { path = "karbeat-core" }
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat_flutter_ffi = { path = "karbeat-flutter-ffi" }
 karbeat-host = { path = "karbeat-host" }
+karbeat-vst3 = { path = "karbeat-vst3" }
 karbeat-plugin-api = { path = "karbeat-plugin-api" }
 karbeat-plugins = { path = "karbeat-plugins" }
 karbeat-utils = { path = "karbeat-utils" }
@@ -71,14 +72,18 @@ pkg-config = "0.3.33"
 rubato = "4.0.0"
 dyn-clone = "1.0.20"
 raw-window-handle = "0.6.2"
+libloading = "0.8.9"
+glib = "0.22"
+x11rb = { version = "0.14", features = ["randr", "resource_manager"] }
+wayland-client = { version = "0.31", features = ["system"] }
+smithay-client-toolkit = { version = "0.21", default-features = false, features = ["system"] }
 slotmap = {version = "1.1.1", features=["serde"] }
 slab = {version = "0.4.12", features=["serde"]}
 
 [profile.dev]
-opt-level = 3
 debug = true
 
-[profile.dev.package."*"]
+[profile.dev.package.rodio]
 opt-level = 3
 
 [profile.release]

@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use karbeat_plugin_api::traits::AudioPlugin;
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 
 use serde::{Deserialize, Serialize};
@@ -19,14 +18,21 @@ use karbeat_utils::color::Color;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
+/// Serializable arrangement track and references to its globally owned clips and generator.
 pub struct AudioTrack {
+    /// Stable project track identity.
     pub id: TrackId,
+    /// Stable identity of this track in the routing graph.
     pub graph_node_id: GraphNodeId,
+    /// User-facing track name.
     pub name: String,
+    /// UI color assigned to the track.
     pub color: Color,
+    /// Content category accepted by this track.
     pub track_type: TrackType,
     /// Timeline order only; clip values live in `ApplicationState::clips_pool`.
     pub clips: Vec<ClipId>,
+    /// Optional sound generator used by MIDI clips on this track.
     pub generator: Option<GeneratorInstance>,
     /// ======================================
     /// Track Sorting Order
@@ -52,12 +58,17 @@ impl Default for AudioTrack {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// Content category and role of an arrangement track.
 pub enum TrackType {
+    /// Track containing imported audio clips.
     Audio,
+    /// Track containing MIDI pattern clips and normally a generator.
     Midi,
+    /// Track reserved for automation clip content.
     Automation,
 }
 
+/// Track category returned after a track is removed.
 pub type RemovedTrackType = TrackType;
 
 impl std::str::FromStr for TrackType {
@@ -74,6 +85,7 @@ impl std::str::FromStr for TrackType {
 }
 
 impl AudioTrack {
+    /// Creates an empty track with explicit identity, display properties, and content category.
     pub fn new(id: TrackId, name: &str, color: Color, track_type: TrackType) -> Self {
         Self {
             id,
@@ -95,10 +107,12 @@ impl AudioTrack {
         self.order_idx = new_idx;
     }
 
+    /// Borrows clip IDs in timeline order.
     pub fn clips(&self) -> &[ClipId] {
         &self.clips
     }
 
+    /// Clones this track's clips from the global pool, skipping stale IDs.
     pub fn clips_to_vec(&self, clips_pool: &SlotMap<ClipId, Clip>) -> Vec<Clip> {
         self.clips
             .iter()
@@ -106,10 +120,12 @@ impl AudioTrack {
             .collect()
     }
 
+    /// Borrows the track's content category.
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
 
+    /// Clones a pooled clip only when this track references its ID.
     pub fn get_clip(&self, clips_pool: &SlotMap<ClipId, Clip>, clip_id: &ClipId) -> Option<Clip> {
         self.clips
             .contains(clip_id)
@@ -117,6 +133,7 @@ impl AudioTrack {
             .flatten()
     }
 
+    /// Returns whether the clip source category exactly matches this track's category.
     pub fn accepts_clip(&self, clip: &Clip) -> bool {
         matches!(
             (&self.track_type, &clip.source),
@@ -248,6 +265,7 @@ impl ApplicationState {
         }
     }
 
+    /// Creates an audio track after the current final UI order and adds its mixer routing.
     pub fn add_new_audio_track(&mut self) -> AudioTrack {
         let track_order = self
             .tracks
@@ -388,6 +406,7 @@ impl ApplicationState {
     }
 
     // Get the track ordered by index
+    /// Returns cloned tracks sorted by their persisted UI order index.
     pub fn get_track_ordered_by_index(&self) -> Box<[AudioTrack]> {
         self.tracks
             .values()

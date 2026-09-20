@@ -6,9 +6,9 @@
 
 use crate::audio::engine::voices::VoiceState;
 use crate::audio::engine::{AudioBuffer, AudioEngine, AudioEngineTelemetry};
-use crate::audio::event::TransportFeedback;
+use crate::audio::event::{PluginTarget, TransportFeedback};
 use crate::audio::render_state::AudioGraphState;
-use crate::commands::{AudioCommand, AudioFeedback, TelemetryRegistration};
+use crate::commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration};
 use crate::core::project::automation::{
     AutomationLane, AutomationPoint, AutomationTarget, MixerChannelParamTarget,
     TrackAutomationTarget,
@@ -16,8 +16,11 @@ use crate::core::project::automation::{
 use crate::core::project::modulation::{ModulationLink, ModulationSource};
 use crate::core::project::track::AudioTrack;
 use crate::core::project::{ApplicationState, ModulationLinkForOrderedLaneView, TrackType};
+use karbeat_plugin_api::types::ProcessingMode;
 use karbeat_plugin_api::types::{MidiMessage, NoteExpressionType};
+use karbeat_plugins::registry::PluginRegistry;
 use karbeat_utils::color::Color;
+use karbeat_utils::hash::hash_str;
 use karbeat_utils::types::NormalizedF64;
 use rtrb::RingBuffer;
 use std::sync::mpsc;
@@ -107,21 +110,75 @@ fn export_snapshot_builds_fresh_offline_runtime() {
     engine.routing.track_tails.insert(track_id, 1_024);
     engine.mixer_state.master.mute = true;
 
+    let plugin_registry = PluginRegistry::new_with_defaults();
+    let registry_id = hash_str("synth_karbeatzer_v2");
+    let (plugin_factory, _) = plugin_registry
+        .create_plugin_by_id(registry_id)
+        .expect("test generator should be registered");
+    let generator_id = crate::shared::GeneratorId::from(1);
+    engine.process_command(AudioCommand::AddGenerator {
+        generator_id,
+        track_id,
+        registry_id,
+        plugin_factory,
+    });
+    let parameter_id = engine
+        .plugin_state
+        .get_generator(generator_id)
+        .expect("live generator should exist")
+        .plugin
+        .get_parameter_specs()[0]
+        .id;
+    engine.process_command(AudioCommand::SetParameter {
+        target: PluginTarget::Generator(generator_id),
+        param_id: parameter_id,
+        value: 0.37,
+    });
+
+    let effect_registry_id = hash_str("effect_delay");
+    let (effect_factory, _) = plugin_registry
+        .create_plugin_by_id(effect_registry_id)
+        .expect("test effect should be registered");
+    let track_effect_id = crate::shared::EffectId::from(1);
+    engine.process_command(AudioCommand::AddEffect {
+        target: EffectTarget::Track(track_id),
+        effect_id: track_effect_id,
+        registry_id: effect_registry_id,
+        effect_factory,
+    });
+    let bus_effect_id = crate::shared::EffectId::from(2);
+    engine.process_command(AudioCommand::AddEffect {
+        target: EffectTarget::Bus(bus_id),
+        effect_id: bus_effect_id,
+        registry_id: effect_registry_id,
+        effect_factory,
+    });
+    let master_effect_id = crate::shared::EffectId::from(3);
+    engine.process_command(AudioCommand::AddEffect {
+        target: EffectTarget::Master,
+        effect_id: master_effect_id,
+        registry_id: effect_registry_id,
+        effect_factory,
+    });
     let snapshot = engine.export_snapshot();
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
     let offline_engine = AudioEngine::from_export_snapshot(
         snapshot,
+        &plugin_registry,
+        2,
         command_consumer,
         position_producer,
         feedback_producer,
-    );
+    )
+    .expect("export snapshot should hydrate");
 
     assert_eq!(offline_engine.current_state.graph.tracks.len(), 1);
     assert_eq!(offline_engine.transport.bpm, 96.0);
     assert_eq!(offline_engine.transport.time_sig_numerator, 7);
     assert_eq!(offline_engine.transport.time_sig_denominator, 8);
+    assert_eq!(offline_engine.processing_mode, ProcessingMode::Offline);
     assert_eq!(offline_engine.transport.song.playhead_samples, 0);
     assert!(!offline_engine.transport.song.is_playing);
     assert!(offline_engine.workspace.mix_buffer.is_empty());
@@ -134,6 +191,24 @@ fn export_snapshot_builds_fresh_offline_runtime() {
     );
     assert!(offline_engine.routing.track_tails.is_empty());
     assert!(offline_engine.mixer_state.master.mute);
+    let offline_generator = offline_engine
+        .plugin_state
+        .get_generator(generator_id)
+        .expect("snapshot generator should be hydrated");
+    assert_eq!(offline_generator.registry_id, registry_id);
+    assert_eq!(offline_generator.plugin.get_parameter(parameter_id), 0.37);
+    assert_eq!(
+        offline_engine.plugin_state.track_effects[track_id.to_u32() as usize][0].id,
+        track_effect_id
+    );
+    assert_eq!(
+        offline_engine.plugin_state.bus_effects[bus_id.to_u32() as usize][0].id,
+        bus_effect_id
+    );
+    assert_eq!(
+        offline_engine.plugin_state.master_effects[0].id,
+        master_effect_id
+    );
 }
 
 #[test]
@@ -175,6 +250,56 @@ fn channel_mode_midi_messages_clear_playing_keys() {
         VoiceState::update_playing_keys(&mut playing_keys, &message);
         assert!(playing_keys.is_empty());
     }
+}
+
+#[test]
+fn generator_remains_active_after_note_off_for_release_envelope() {
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        16,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let registry = PluginRegistry::new_with_defaults();
+    let registry_id = hash_str("synth_karbeatzer_v2");
+    let (factory, _) = registry
+        .create_plugin_by_id(registry_id)
+        .expect("test generator should be registered");
+    let generator_id = crate::shared::GeneratorId::from(1);
+    let track_id = crate::shared::TrackId::from(1);
+    engine.process_command(AudioCommand::AddGenerator {
+        generator_id,
+        track_id,
+        registry_id,
+        plugin_factory: factory,
+    });
+    let mut voice = crate::audio::engine::GeneratorVoice::new(generator_id, track_id, true);
+    voice
+        .midi_events
+        .push(karbeat_plugin_api::types::MidiEvent {
+            sample_offset: 0,
+            data: MidiMessage::NoteOff {
+                note_id: None,
+                channel: 0,
+                key: 60,
+            },
+        });
+    engine.voices.active_generators.push(voice);
+
+    engine.cleanup_finished_voices();
+
+    assert_eq!(engine.voices.active_generators.len(), 1);
+    assert!(engine.voices.active_generators[0].active);
+    assert!(engine.voices.active_generators[0].midi_events.is_empty());
 }
 
 #[test]

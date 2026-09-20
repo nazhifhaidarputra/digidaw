@@ -12,11 +12,13 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/notification_overlay.dart';
 import 'package:karbeat/features/misc/error_init_screen.dart';
 import 'package:karbeat/features/misc/loading_screen.dart';
+import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/features/setting/services/log_provider.dart';
+import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/frb_generated.dart';
@@ -104,6 +106,10 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
       final dawContext = ref.read(projectProvider.notifier).dawContext;
       _dawContextLifetimeAnchor = dawContext;
+      await ref.read(pluginSettingsProvider.notifier).initialize();
+      if (!mounted) return;
+      await ref.read(audioPluginProvider.future);
+      if (!mounted) return;
       await ref.read(generalSettingsProvider.notifier).initialize(dawContext);
       if (!mounted) return;
       await ref

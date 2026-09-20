@@ -2,6 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
@@ -301,43 +302,58 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return createRes;
   }
 
-  Future<void> addMidiTrackWithGeneratorId(int id) async {
-    final result = await ref.guardApi(() async {
-      final newTrack = await track_api.addMidiTrackWithGeneratorId(
-        ctx: _ctx,
-        registryId: id,
-      );
-      _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
-      if (newTrack.generatorId != null) {
-        final generator = await plugin_api.getGenerator(
+  Future<Result<void>> addMidiTrackWithGeneratorId(int id) async {
+    return (() async {
+      final result = await ref.guardApi(() async {
+        final newTrack = await track_api.addMidiTrackWithGeneratorId(
           ctx: _ctx,
-          generatorId: newTrack.generatorId!,
+          registryId: id,
         );
-        _projectNotifierRead.upsertGenerator(newTrack.generatorId!, generator);
+        _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
+        if (newTrack.generatorId != null) {
+          final generator = await plugin_api.getGenerator(
+            ctx: _ctx,
+            generatorId: newTrack.generatorId!,
+          );
+          _projectNotifierRead.upsertGenerator(
+            newTrack.generatorId!,
+            generator,
+          );
+        }
+
+        await ref
+            .read(mixerStateProvider.notifier)
+            .syncMixerChannel(newTrack.id);
+        await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
+      });
+
+      if (result.hasError) {
+        AppLogger.error("Error adding MIDI track: ${result.error}");
+        return Result.error(Exception(result.error.toString()));
       }
-
-      await ref.read(mixerStateProvider.notifier).syncMixerChannel(newTrack.id);
-      await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
-    });
-
-    if (result.hasError) {
-      AppLogger.error("Error adding MIDI track: ${result.error}");
-    }
+      return Result.ok(null);
+    }).guardedByBackendOperationGate(
+      ref.read(backendOperationGateProvider.notifier),
+    )();
   }
 
-  Future<void> deleteTrack({required int trackId}) async {
-    final result = await ref.guardApi(() async {
-      await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
-      _projectNotifierRead.removeTrack(trackId);
+  Future<void> deleteTrack({required int trackId}) {
+    return (() async {
+      final result = await ref.guardApi(() async {
+        await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
+        _projectNotifierRead.removeTrack(trackId);
 
-      await ref.read(mixerStateProvider.notifier).syncMixerState();
-    });
+        await ref.read(mixerStateProvider.notifier).syncMixerState();
+      });
 
-    if (result.hasError) {
-      AppLogger.error(
-        'TrackListNotifier: failed to delete track: ${result.error}',
-      );
-    }
+      if (result.hasError) {
+        AppLogger.error(
+          'TrackListNotifier: failed to delete track: ${result.error}',
+        );
+      }
+    }).guardedByBackendOperationGate(
+      ref.read(backendOperationGateProvider.notifier),
+    )();
   }
   // ------------------------------------------------------------------
   // Clip CRUD

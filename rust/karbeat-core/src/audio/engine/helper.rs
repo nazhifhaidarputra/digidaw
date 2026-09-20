@@ -1,19 +1,17 @@
 use dasp::slice;
 use hashbrown::HashMap;
 use itertools::{Itertools, izip};
-use karbeat_plugin_api::{
-    traits::AudioPlugin,
-    types::{AudioBuffers, AudioBusBuffer, ProcessContext},
-};
+use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext};
 use karbeat_plugin_types::{Param, SmoothableParam};
 use karbeat_utils::math::hermite_interp;
 use rodio::math::db_to_linear;
 use wide::f32x16;
 
 use crate::{
+    audio::engine::runtime::consts::MAX_ENGINE_CHANNELS,
     commands::MixerChannelTarget,
     core::project::{
-        AutomationTarget, MixerChannelParamTarget, MixerChannelParams, PluginInstance,
+        AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
         RoutingConnection, RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
     },
     shared::{BusId, TrackId},
@@ -321,6 +319,23 @@ pub fn apply_volume_and_pan_simd(
     pan_param: &mut Param<f32>,
 ) {
     if channels == 2 {
+        if vol_param.smoother.is_settled() && pan_param.smoother.is_settled() {
+            let vol_db = vol_param.smoother.current();
+            let vol = if vol_db <= -100.0 {
+                0.0
+            } else {
+                db_to_linear(vol_db as f32)
+            };
+            let p = (pan_param.smoother.current() as f32 + 1.0) * 0.5;
+            let left_gain = (1.0 - p).sqrt() * vol;
+            let right_gain = p.sqrt() * vol;
+            for (left, right) in buffer.iter_mut().tuples::<(_, _)>() {
+                *left *= left_gain;
+                *right *= right_gain;
+            }
+            return;
+        }
+
         for (left, right) in buffer.iter_mut().tuples::<(_, _)>() {
             let vol_db = vol_param.next_smoothed();
             let pan = pan_param.next_smoothed();
@@ -354,7 +369,6 @@ pub fn apply_volume_and_pan_simd(
     }
 }
 
-#[inline(always)]
 pub fn process_plugin_wrapper(
     plugin: &mut dyn crate::core::project::plugin::AudioPlugin,
     interleaved_io: &mut [f32],
@@ -365,82 +379,147 @@ pub fn process_plugin_wrapper(
     channel_buffers_out: &mut [Vec<f32>],
     aux_channel_buffers: &mut [Vec<f32>],
 ) {
-    let frames = interleaved_io.len() / channels;
-
-    // Resize all necessary buffers upfront
-    channel_buffers_in
-        .iter_mut()
-        .take(channels)
-        .chain(channel_buffers_out.iter_mut().take(channels))
-        .for_each(|buffer| {
-            if buffer.len() < frames {
-                buffer.resize(frames, 0.0);
-            }
-        });
-    if aux_interleaved.is_some() {
-        aux_channel_buffers
-            .iter_mut()
-            .take(channels)
-            .for_each(|buffer| {
-                if buffer.len() < frames {
-                    buffer.resize(frames, 0.0);
-                }
-            });
-    }
-
-    // Deinterleave Main & Aux Buses
-    deinterleave_buffer(interleaved_io, channel_buffers_in, channels, frames);
-    if let Some(aux) = aux_interleaved {
-        deinterleave_buffer(aux, aux_channel_buffers, channels, frames);
-    }
-
-    // Setup Pointers for the Plugin API
-    let mut in_ptrs: Vec<&mut [f32]> = channel_buffers_in
-        .iter_mut()
-        .take(channels)
-        .map(|v| &mut v[..frames])
-        .collect();
-
-    let mut out_ptrs: Vec<&mut [f32]> = channel_buffers_out
-        .iter_mut()
-        .take(channels)
-        .map(|v| &mut v[..frames])
-        .collect();
-
-    let mut main_in = [AudioBusBuffer {
-        channel_data: &mut in_ptrs,
-        is_silent: false,
-    }];
-    let mut main_out = [AudioBusBuffer {
-        channel_data: &mut out_ptrs,
-        is_silent: false,
-    }];
-
-    let mut aux_in_bus = vec![];
-    let mut aux_in_ptrs: Vec<&mut [f32]>;
-    if aux_interleaved.is_some() {
-        aux_in_ptrs = aux_channel_buffers
-            .iter_mut()
-            .take(channels)
-            .map(|v| &mut v[..frames])
-            .collect();
-        aux_in_bus.push(AudioBusBuffer {
-            channel_data: &mut aux_in_ptrs,
-            is_silent: false,
-        });
-    }
-
-    let mut buffers = AudioBuffers {
-        main_inputs: &mut main_in,
-        main_outputs: &mut main_out,
-        aux_inputs: &mut aux_in_bus,
-        aux_outputs: &mut [],
+    let Some(frames) = prepare_planar_input(
+        interleaved_io,
+        channels,
+        channel_buffers_in,
+        channel_buffers_out,
+    ) else {
+        interleaved_io.fill(0.0);
+        return;
     };
 
-    // Execute Plugin DSP
-    plugin.process(&mut buffers, ctx);
+    if !process_plugin_planar(
+        plugin,
+        aux_interleaved,
+        channels,
+        frames,
+        ctx,
+        channel_buffers_in,
+        channel_buffers_out,
+        aux_channel_buffers,
+    ) {
+        interleaved_io.fill(0.0);
+        return;
+    }
+    finish_planar_output(interleaved_io, channel_buffers_in, channels, frames);
+}
 
-    interleave_buffer(interleaved_io, channel_buffers_out, channels, frames);
+pub fn prepare_planar_input(
+    interleaved: &[f32],
+    channels: usize,
+    channel_buffers_in: &mut [Vec<f32>],
+    channel_buffers_out: &[Vec<f32>],
+) -> Option<usize> {
+    if channels == 0
+        || channels > MAX_ENGINE_CHANNELS as usize
+        || !interleaved.len().is_multiple_of(channels)
+        || channel_buffers_in.len() < channels
+        || channel_buffers_out.len() < channels
+    {
+        return None;
+    }
+    let frames = interleaved.len() / channels;
+    if channel_buffers_in[..channels]
+        .iter()
+        .chain(&channel_buffers_out[..channels])
+        .any(|buffer| buffer.len() < frames)
+    {
+        return None;
+    }
+    deinterleave_buffer(interleaved, channel_buffers_in, channels, frames);
+    Some(frames)
+}
+
+#[allow(clippy::too_many_arguments, reason = "the render path passes preallocated channel storage explicitly")]
+pub fn process_plugin_planar(
+    plugin: &mut dyn crate::core::project::plugin::AudioPlugin,
+    aux_interleaved: Option<&[f32]>,
+    channels: usize,
+    frames: usize,
+    ctx: &ProcessContext,
+    channel_buffers_in: &mut [Vec<f32>],
+    channel_buffers_out: &mut [Vec<f32>],
+    aux_channel_buffers: &mut [Vec<f32>],
+) -> bool {
+    let has_aux = aux_interleaved.is_some();
+    if has_aux
+        && (aux_channel_buffers.len() < channels
+            || aux_channel_buffers[..channels]
+                .iter()
+                .any(|buffer| buffer.len() < frames))
+    {
+        return false;
+    }
+    if let Some(aux) = aux_interleaved {
+        if aux.len() < frames * channels {
+            for buffer in aux_channel_buffers.iter_mut().take(channels) {
+                buffer[..frames].fill(0.0);
+            }
+        } else {
+            deinterleave_buffer(aux, aux_channel_buffers, channels, frames);
+        }
+    }
+
+    {
+        let mut in_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+            std::array::from_fn(|_| &mut [][..]);
+        for (i, buffer) in channel_buffers_in.iter_mut().take(channels).enumerate() {
+            in_ptrs[i] = &mut buffer[..frames];
+        }
+
+        let mut out_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+            std::array::from_fn(|_| &mut [][..]);
+        for (i, buffer) in channel_buffers_out.iter_mut().take(channels).enumerate() {
+            out_ptrs[i] = &mut buffer[..frames];
+        }
+
+        let mut aux_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+            std::array::from_fn(|_| &mut [][..]);
+        for (i, buffer) in aux_channel_buffers.iter_mut().take(channels).enumerate() {
+            aux_ptrs[i] = &mut buffer[..frames];
+        }
+
+        let mut main_in = [AudioBusBuffer {
+            channel_data: &mut in_ptrs[..channels],
+            is_silent: false,
+        }];
+        let mut main_out = [AudioBusBuffer {
+            channel_data: &mut out_ptrs[..channels],
+            is_silent: false,
+        }];
+        let mut aux_in = [AudioBusBuffer {
+            channel_data: &mut aux_ptrs[..channels],
+            is_silent: false,
+        }];
+        let aux_len = has_aux as usize;
+
+        let mut buffers = AudioBuffers {
+            main_inputs: &mut main_in,
+            main_outputs: &mut main_out,
+            aux_inputs: &mut aux_in[..aux_len],
+            aux_outputs: &mut [],
+        };
+
+        plugin.process(&mut buffers, ctx);
+    }
+
+    for (input, output) in channel_buffers_in[..channels]
+        .iter_mut()
+        .zip(&mut channel_buffers_out[..channels])
+    {
+        std::mem::swap(input, output);
+    }
+    true
+}
+
+pub fn finish_planar_output(
+    interleaved: &mut [f32],
+    channel_buffers: &[Vec<f32>],
+    channels: usize,
+    frames: usize,
+) {
+    interleave_buffer(interleaved, channel_buffers, channels, frames);
 }
 
 #[inline]
@@ -472,17 +551,6 @@ fn deinterleave_buffer(
                 .step_by(channels)
                 .copied(),
         );
-    }
-}
-
-pub fn fill_plugin_with_param_state(plugin: &mut Box<dyn AudioPlugin>, instance: &PluginInstance) {
-    if !instance.plugin_state.is_empty() {
-        plugin.set_state(&instance.plugin_state);
-    }
-    {
-        for spec in &instance.parameter_specs {
-            plugin.set_parameter(spec.id, spec.value as f32);
-        }
     }
 }
 
@@ -609,7 +677,31 @@ pub fn resolve_target_mixer_param(
 
 #[cfg(test)]
 mod buffer_iteration_tests {
-    use super::{apply_phase_inversion_simd, deinterleave_buffer, interleave_buffer};
+    use super::{
+        apply_phase_inversion_simd, deinterleave_buffer, finish_planar_output, interleave_buffer,
+        prepare_planar_input, process_plugin_planar,
+    };
+    use crate::audio::missing_plugin::MissingPlugin;
+    use karbeat_plugin_api::types::{ProcessContext, ProcessingMode};
+
+    fn process_context() -> ProcessContext<'static> {
+        ProcessContext {
+            bpm: 120.0,
+            time_sig_numerator: 4,
+            time_sig_denominator: 4,
+            is_playing: true,
+            is_recording: false,
+            mode: ProcessingMode::Realtime,
+            project_time_seconds: 0.0,
+            project_time_samples: 0,
+            beat_position: 1.0,
+            bar_position: 1.0,
+            loop_start_beat: None,
+            loop_end_beat: None,
+            midi_events: &[],
+            param_changes: &[],
+        }
+    }
 
     #[test]
     fn stereo_deinterleave_round_trip_leaves_incomplete_frame_untouched() {
@@ -651,5 +743,37 @@ mod buffer_iteration_tests {
             buffer,
             (1..=19).map(|sample| -(sample as f32)).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn planar_effect_chain_converts_only_at_chain_boundaries() {
+        let input = [1.0, -1.0, 0.5, -0.5];
+        let mut output = input;
+        let mut channel_inputs = vec![vec![0.0; 2], vec![0.0; 2]];
+        let mut channel_outputs = vec![vec![0.0; 2], vec![0.0; 2]];
+        let mut aux = vec![vec![0.0; 2], vec![0.0; 2]];
+        let frames = prepare_planar_input(
+            &output,
+            2,
+            &mut channel_inputs,
+            &channel_outputs,
+        )
+        .expect("valid stereo buffers");
+        let mut first = MissingPlugin::effect();
+        let mut second = MissingPlugin::effect();
+        for plugin in [&mut first, &mut second] {
+            assert!(process_plugin_planar(
+                plugin.as_mut(),
+                None,
+                2,
+                frames,
+                &process_context(),
+                &mut channel_inputs,
+                &mut channel_outputs,
+                &mut aux,
+            ));
+        }
+        finish_planar_output(&mut output, &channel_inputs, 2, frames);
+        assert_eq!(output, input);
     }
 }

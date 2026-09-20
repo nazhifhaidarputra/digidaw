@@ -21,6 +21,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 /// Helper trait to allow the API to accept either raw u32 hashes or UI string paths.
 pub trait IntoParamId {
+    /// Resolves this value to the stable numeric parameter identifier used by the audio engine.
     fn into_id(self) -> u32;
 }
 
@@ -43,42 +44,48 @@ impl IntoParamId for String {
     }
 }
 
+/// Maps and collects catalog entries identified as instrument generators.
 pub fn get_available_generators<C, U, M>(ctx: &DawContext, mapper: M) -> C
 where
     M: Fn(&PluginInfo) -> U,
     C: FromIterator<U>,
 {
-    ctx.plugin_registry
-        .list_generators_with_ids()
+    ctx.plugin_catalog
+        .list()
         .iter()
+        .filter(|plugin| plugin.is_synth)
         .map(mapper)
         .collect()
 }
 
+/// Maps and collects catalog entries identified as audio effects.
 pub fn get_available_effects<C, U, M>(ctx: &DawContext, mapper: M) -> C
 where
     M: Fn(&PluginInfo) -> U,
     C: FromIterator<U>,
 {
-    ctx.plugin_registry
-        .list_effects_with_ids()
+    ctx.plugin_catalog
+        .list()
         .iter()
+        .filter(|plugin| !plugin.is_synth)
         .map(mapper)
         .collect()
 }
 
+/// Converts and collects every built-in plugin catalog entry.
 pub fn get_available_plugins<P, C>(ctx: &DawContext) -> C
 where
     P: From<PluginInfo>,
     C: FromIterator<P>,
 {
-    ctx.plugin_registry
-        .list_plugins_with_ids()
+    ctx.plugin_catalog
+        .list()
         .into_iter()
         .map(|p| P::from(p))
         .collect()
 }
 
+/// Maps a generator instance when `generator_id` exists in the project pool.
 pub fn get_generator<M, U>(ctx: &DawContext, generator_id: &GeneratorId, mapper: M) -> Option<U>
 where
     M: FnOnce(&GeneratorInstance) -> U,
@@ -87,6 +94,7 @@ where
     Some(mapper(generator))
 }
 
+/// Maps an effect from a track's mixer channel, returning `None` for either missing identifier.
 pub fn get_effect<M, U>(
     ctx: &DawContext,
     track_id: &TrackId,
@@ -109,6 +117,7 @@ where
     Some(mapper(effect))
 }
 
+/// Maps an effect in the master bus when the effect identifier exists.
 pub fn get_effect_from_master<M, U>(ctx: &DawContext, effect_id: &EffectId, mapper: M) -> Option<U>
 where
     M: FnOnce(&EffectInstance) -> U,
@@ -118,6 +127,7 @@ where
     Some(mapper(effect))
 }
 
+/// Maps and collects a track's ordered effect chain, or returns `None` if the track has no channel.
 pub fn get_effects_from_track<C, U, M>(ctx: &DawContext, track_id: &TrackId, mapper: M) -> Option<C>
 where
     M: Fn(&EffectInstance) -> U,
@@ -128,6 +138,7 @@ where
     Some(channel.channel.effects.iter().map(mapper).collect())
 }
 
+/// Maps and collects the master bus's ordered effect chain.
 pub fn get_master_effects<C, U, M>(ctx: &DawContext, mapper: M) -> C
 where
     M: Fn(&EffectInstance) -> U,
@@ -137,6 +148,10 @@ where
     channel.effects.iter().map(mapper).collect()
 }
 
+/// Returns mapped parameter specifications for a plugin generator.
+///
+/// External instances use their captured specifications; built-in instances use registry metadata.
+/// The value passed to `mapper` is the parameter's default value, not live telemetry.
 pub fn get_generator_parameter_specs<F, T>(
     ctx: &DawContext,
     generator_id: &GeneratorId,
@@ -145,6 +160,10 @@ pub fn get_generator_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
+    let target = PluginTarget::Generator(*generator_id);
+    if super::external_plugin_api::descriptor(ctx, target).is_some() {
+        return get_plugin_parameter_specs(ctx, &target, mapper).map_err(|error| error.to_string());
+    }
     let generator_arc = ctx
         .app_state
         .generator_pool
@@ -178,6 +197,10 @@ where
     }
 }
 
+/// Returns mapped parameter specifications for an effect on a track, bus, or master channel.
+///
+/// The value passed to `mapper` is each specification's default value. Missing channels, effects,
+/// or registry entries are reported as descriptive strings.
 pub fn get_effect_parameter_specs<F, T>(
     ctx: &DawContext,
     target: &EffectTarget,
@@ -187,6 +210,14 @@ pub fn get_effect_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
+    let plugin_target = match target {
+        EffectTarget::Track(id) => PluginTarget::TrackEffect(*id, *effect_id),
+        EffectTarget::Bus(id) => PluginTarget::BusEffect(*id, *effect_id),
+        EffectTarget::Master => PluginTarget::MasterEffect(*effect_id),
+    };
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return get_plugin_parameter_specs(ctx, &plugin_target, mapper).map_err(|error| error.to_string());
+    }
     let (plugin_name, plugin_registry_id) = match target {
         EffectTarget::Track(track_id) => {
             let channel = ctx
@@ -265,6 +296,13 @@ pub fn get_plugin_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
+    if let Some(plugin) = super::external_plugin_api::plugin_instance(ctx, *target).filter(|plugin| plugin.external.is_some()) {
+        return Ok(plugin.parameter_specs.iter().cloned().map(|spec| {
+            #[allow(clippy::as_conversions, reason = "normalized parameter defaults fit in the engine's f32 value range")]
+            let value = spec.default_value as f32;
+            mapper(spec, value)
+        }).collect());
+    }
     let (plugin_name, plugin_registry_id) = match target {
         PluginTarget::Generator(gen_id) => {
             let generator = ctx

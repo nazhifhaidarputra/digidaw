@@ -2,7 +2,7 @@ use std::{
     str::FromStr,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     audio::{
-        engine::{AudioEngine, AudioEngineTelemetry},
+        engine::{AudioEngine, AudioEngineTelemetry, record_dsp_load},
         event::TransportFeedback,
         rate_bridge::DeviceRateBridge,
     },
@@ -31,6 +31,7 @@ static OUTPUT_UNDERRUN_SAMPLES: AtomicU64 = AtomicU64::new(0);
 const OUTPUT_CHANNELS: usize = 2;
 type OutputFrame = [f32; OUTPUT_CHANNELS];
 
+/// Returns the cumulative number of device output samples replaced with silence after underruns.
 pub fn output_underrun_samples() -> u64 {
     OUTPUT_UNDERRUN_SAMPLES.load(Ordering::Relaxed)
 }
@@ -185,11 +186,13 @@ fn select_output_config(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Legacy user-selected device configuration, with absent values requesting backend defaults.
 pub struct AudioDeviceConfig {
     /// The string name of the CPAL host (e.g., "ASIO", "WASAPI", "CoreAudio")
     pub host_name: Option<String>,
     /// The specific device name chosen by the user
     pub device_name: Option<String>,
+    /// Backend-stable device identifier, when the selected backend exposes one.
     pub device_id: Option<String>,
     /// The user's desired sample rate (e.g., 44100, 48000, 96000)
     pub sample_rate: Option<u32>,
@@ -198,59 +201,103 @@ pub struct AudioDeviceConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Output device metadata exposed to the settings UI.
 pub struct AudioDeviceInfo {
+    /// Backend-specific stable identifier used to reopen the device.
     pub id: String,
+    /// Human-readable device name reported by CPAL.
     pub name: String,
+    /// Whether this is the selected host's current default output device.
     pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Policy used to select the CPAL host.
 pub enum OutputHostSelection {
+    /// Follow the platform's default host.
     SystemDefault,
+    /// Request the host with the contained CPAL name.
     Named(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Policy used to select an output device within a host.
 pub enum OutputDeviceSelection {
+    /// Follow the host's default output device.
     SystemDefault,
-    Specific { id: String, name: String },
+    /// Request a particular device, retaining its name for display and fallback matching.
+    Specific {
+        /// Backend-specific device identifier.
+        id: String,
+        /// Human-readable device name captured when selected.
+        name: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Persisted output endpoint selection requested by the user.
 pub struct RequestedOutputConfig {
+    /// Host selection policy.
     pub host: OutputHostSelection,
+    /// Device selection policy within the resolved host.
     pub device: OutputDeviceSelection,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+/// DSP timing requested for the engine independently of device-native timing.
 pub struct RequestedDspConfig {
+    /// Engine sample rate in frames per second.
     pub sample_rate: u32,
+    /// Number of frames rendered per engine block.
     pub block_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Current lifecycle state of the physical output stream.
 pub enum DeviceStreamStatus {
+    /// Initial device resolution or stream construction is in progress.
     Starting,
+    /// The stream is active and consuming rendered frames.
     Running,
-    Retrying { reason: String },
-    Unavailable { reason: String },
+    /// A recoverable failure triggered delayed stream recreation.
+    Retrying {
+        /// Diagnostic reason for the current retry cycle.
+        reason: String,
+    },
+    /// No usable stream could currently be established.
+    Unavailable {
+        /// Diagnostic reason the endpoint is unavailable.
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Concrete configuration negotiated for the active CPAL stream.
 pub struct ActualDeviceStreamConfig {
+    /// Name of the CPAL host backing the stream.
     pub host_name: String,
+    /// Backend-specific identifier of the opened device.
     pub device_id: String,
+    /// Display name of the opened device.
     pub device_name: String,
+    /// Device stream sample rate in frames per second.
     pub sample_rate: u32,
+    /// Callback buffer size in frames.
     pub callback_buffer_size: u32,
+    /// Number of interleaved output channels.
     pub channels: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Shared requested and observed state for the engine's output runtime.
 pub struct AudioRuntimeSettings {
+    /// User-selected host and device policy.
     pub requested_output: RequestedOutputConfig,
+    /// Sample rate and block size at which the engine should render.
     pub requested_dsp: RequestedDspConfig,
+    /// Negotiated device configuration while a stream is active.
     pub actual_stream: Option<ActualDeviceStreamConfig>,
+    /// Current stream startup or recovery state.
     pub stream_status: DeviceStreamStatus,
 }
 
@@ -654,10 +701,16 @@ pub fn start_audio_stream(
                 }
 
                 if producer.slots() >= maximum_device_frames {
+                    let render_started = Instant::now();
                     engine.process(&mut staging_buffer);
                     let queued =
                         push_output_frames(&mut producer, rate_bridge.process(&staging_buffer));
                     debug_assert!(queued, "rendered output must fit in the ring buffer");
+                    record_dsp_load(
+                        render_started.elapsed().as_secs_f32(),
+                        dsp_config.block_size as usize,
+                        dsp_config.sample_rate,
+                    );
                 } else {
                     std::thread::sleep(Duration::from_millis(1));
                 }

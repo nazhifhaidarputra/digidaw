@@ -70,7 +70,7 @@ Future<UiClip> moveClip({
 ///
 /// - source_track_id: Track where clip resides
 /// - clip_id: The cut clip id inside the track
-/// - cut_point_sample: Absolute sample point of cut location
+/// - cut_point: Absolute timeline tick of the cut location
 Future<List<UiClip>> sliceClip({
   required DawContext ctx,
   required int sourceTrackId,
@@ -136,8 +136,8 @@ Future<List<UiClip>> resizeClipBatch({
 );
 
 /// Atomically duplicate a selected clip group at predetermined start times.
-/// Start times use the clips' native unit: samples for audio and ticks for
-/// MIDI/automation. Unlike copy/paste, this never changes ClipboardContent.
+/// Start times use timeline ticks. Unlike copy/paste, this never changes
+/// ClipboardContent.
 Future<List<UiClip>> duplicateClipGroups({
   required DawContext ctx,
   required int trackId,

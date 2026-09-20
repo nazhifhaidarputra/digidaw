@@ -5,6 +5,7 @@ use crate::{
     core::project::{DawSource, GeneratorId, Pattern, PatternId},
 };
 
+/// Returns a cloned MIDI pattern or an error when the identifier is absent.
 pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<Pattern> {
     let pattern_ref = ctx
         .app_state
@@ -18,7 +19,7 @@ pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<P
 /// Fetches patterns, applies a mapper, and collects into ANY collection type `C`.
 pub fn get_patterns<C, Item, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<C>
 where
-    F: Fn(u32, &Pattern) -> Item, // The mapper takes the ID and the Pattern, and returns an Item
+    F: Fn(u64, &Pattern) -> Item, // The mapper takes the ID and the Pattern, and returns an Item
     C: FromIterator<Item>,        // The collection must be buildable from an iterator of Items
 {
     let patterns = ctx
@@ -27,13 +28,14 @@ where
         .iter()
         .map(|(id, pattern)| {
             // Let the closure handle exactly what the Item shape looks like
-            mapper(id.into(), pattern)
+            mapper(id.to_u64(), pattern)
         })
         .collect::<C>(); // Collect dynamically resolves to type C
 
     Ok(patterns)
 }
 
+/// Renames a MIDI pattern, records history, and republishes the track graph.
 pub fn rename_pattern(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -63,6 +65,7 @@ pub fn rename_pattern(
     Ok(())
 }
 
+/// Toggles isolated preview playback of a pattern through a selected generator.
 pub fn play_pattern_preview(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -101,6 +104,7 @@ pub fn stop_pattern_preview_local(
     ])
 }
 
+/// Stops isolated pattern playback and returns transport to its normal mode.
 pub fn stop_pattern_preview(ctx: &mut DawContext) -> anyhow::Result<()> {
     // Send commands to stop playing and switch back to Song mode
     ctx.try_send_audio_command_chain(vec![

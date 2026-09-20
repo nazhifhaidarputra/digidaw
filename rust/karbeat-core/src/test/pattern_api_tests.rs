@@ -30,7 +30,7 @@ mod tests {
     #[test]
     fn get_patterns_empty_pool_returns_empty() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
+        let result: Vec<u64> =
             pattern_api::get_patterns(&ctx, |id, _p| id).expect("Should succeed");
         assert!(result.is_empty());
     }
@@ -38,7 +38,7 @@ mod tests {
     #[test]
     fn get_patterns_maps_all_in_pool() {
         let (ctx, _audio_id, _midi_id, _pattern_id) = make_seeded_ctx();
-        let ids: Vec<u32> = pattern_api::get_patterns(&ctx, |id, _p| id).expect("Should succeed");
+        let ids: Vec<u64> = pattern_api::get_patterns(&ctx, |id, _p| id).expect("Should succeed");
         assert!(
             !ids.is_empty(),
             "Seeded context should have at least one pattern"

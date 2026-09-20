@@ -26,48 +26,75 @@ use crate::{
 /// generator, or effect slot).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AutomationTarget {
+    /// Parameter on a generator instance.
     Generator {
+        /// Generator owning the parameter.
         generator_id: GeneratorId,
+        /// Stable plugin parameter identifier.
         param_id: u32,
     },
+    /// Automatable property belonging to a track.
     Track {
+        /// Track owning the property.
         track_id: TrackId,
+        /// Property selected within the track.
         track_target: TrackAutomationTarget,
     },
 
+    /// Automatable property belonging to a mixer bus.
     Bus {
+        /// Bus owning the property.
         bus_id: BusId,
+        /// Mixer property selected within the bus.
         mix_target: MixerChannelParamTarget,
     },
 
+    /// Automatable property belonging to the project master path.
     Master(MasterAutomationTarget),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Selects an automatable subsystem within a track.
 pub enum TrackAutomationTarget {
+    /// Track mixer-channel parameter.
     MixerChannel(MixerChannelParamTarget),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Selects an automatable property of the project master path.
 pub enum MasterAutomationTarget {
+    /// Master mixer-channel parameter.
     MixerChannel(MixerChannelParamTarget),
+    /// Project tempo in beats per minute.
     TempoBpm,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Selects an automatable property within a mixer channel.
 pub enum MixerChannelParamTarget {
+    /// Channel fader gain.
     Volume,
+    /// Channel stereo pan.
     Pan,
+    /// Property on an effect inserted in the channel.
     Plugin {
+        /// Effect slot owning the property.
         effect_id: EffectId,
+        /// Property selected within that effect.
         target: EffectAutomationTarget,
     },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Selects an automatable control within an effect slot.
 pub enum EffectAutomationTarget {
-    Mix, // NOTE: This is unused for a moment. might use it later
-    PluginParam { param_id: u32 },
+    /// Wet/dry mix control reserved for effect-slot automation.
+    Mix,
+    /// Plugin-defined parameter.
+    PluginParam {
+        /// Stable plugin parameter identifier.
+        param_id: u32,
+    },
 }
 
 impl AutomationTarget {
@@ -104,6 +131,9 @@ impl AutomationTarget {
         }
     }
 
+    /// Resolves targets backed by plugin parameters to their owning plugin instance.
+    ///
+    /// Mixer volume, pan, tempo, and the reserved effect mix target return `None`.
     pub fn as_plugin_target(&self) -> Option<PluginTarget> {
         match self {
             AutomationTarget::Generator { generator_id, .. } => {
@@ -163,6 +193,7 @@ pub enum AutomationCurveType {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AutomationPoint {
+    /// Lane-local stable point identifier.
     pub id: AutomationPointId,
     /// Position in ticks (relative to project start)
     pub time_ticks: u32,
@@ -175,6 +206,7 @@ pub struct AutomationPoint {
 }
 
 impl AutomationPoint {
+    /// Creates a linear point at `time_ticks`; normalized values are already range-safe by type.
     pub fn new(time_ticks: u32, value: NormalizedF64) -> Self {
         Self {
             id: AutomationPointId::default(),
@@ -211,11 +243,13 @@ impl AutomationPoint {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AutomationLane {
+    /// Project-wide lane identifier.
     pub id: AutomationId,
     /// Human-readable label (e.g. "Volume", "Filter Cutoff")
     pub label: String,
     /// Automation points sorted by time. Points are self-contained in the lane.
     pub points: Vec<AutomationPoint>,
+    /// Monotonic lane-local counter used when assigning point identifiers.
     pub next_point_id: u32,
     /// Whether this lane is active
     pub enabled: bool,

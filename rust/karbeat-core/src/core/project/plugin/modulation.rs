@@ -13,52 +13,86 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Runtime-ready description of a modulation source already paired with its destination.
 pub enum ModulationEvent {
     /// Driven by the audio output of a specific plugin (e.g., Peak Controller)
     PeakController {
+        /// Plugin whose output amplitude drives the modulation.
         source: PluginTarget,
+        /// Parameter receiving the modulation.
         target: AutomationTarget,
+        /// Bipolar amount applied around the base value.
         depth: f32,
+        /// Center value before modulation is applied.
         base_value: f32,
     },
     /// Driven by a timeline automation lane
     Automation {
+        /// Timeline lane sampled by the engine.
         lane_id: AutomationId,
+        /// Parameter receiving lane values.
         target: AutomationTarget,
     },
     /// Driven by a mathematical oscillator (LFO)
     LFO {
+        /// Oscillator frequency in cycles per second.
         rate_hz: f32,
+        /// Bipolar oscillator amount around the base value.
         depth: f32,
+        /// Center value before oscillator modulation.
         base_value: f32,
+        /// Parameter receiving oscillator values.
         target: AutomationTarget,
     },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Persisted generator of modulation values, independent of any destination link.
 pub enum ModulationSource {
-    PeakController { source: PluginTarget },
-    Automation { lane_id: AutomationId },
-    LFO { rate_hz: f32 },
+    /// Envelope follower driven by a plugin's output.
+    PeakController {
+        /// Plugin providing the analyzed signal.
+        source: PluginTarget,
+    },
+    /// Values sampled from a project automation lane.
+    Automation {
+        /// Referenced automation lane.
+        lane_id: AutomationId,
+    },
+    /// Host-generated low-frequency oscillator.
+    LFO {
+        /// Oscillator frequency in cycles per second.
+        rate_hz: f32,
+    },
     // Future: Envelope, MacroKnob, StepSequencer, etc.
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Persisted connection from one modulation source to one automation target.
 pub struct ModulationLink {
+    /// Stable identity of this connection.
     pub id: ModulationLinkId,
-    pub source_id: ModulationId,  // Which LFO/Macro is driving this?
-    pub target: AutomationTarget, // What parameter is being turned?
-    pub depth: f32,               // How much is it turning? (-1.0 to 1.0)
-    pub base_value: f32,          // The center point of the parameter
+    /// Source producing modulation values.
+    pub source_id: ModulationId,
+    /// Parameter receiving modulation.
+    pub target: AutomationTarget,
+    /// Signed modulation amount, conventionally in the range -1.0 to 1.0.
+    pub depth: f32,
+    /// Center value around which modulation is applied.
+    pub base_value: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Modulation link paired with its ordering inside the target's UI group.
 pub struct ModulationLinkForOrderedLaneView {
+    /// Zero-based position among links displayed for the same target drawer.
     pub order_idx: usize,
+    /// Persisted routing properties.
     pub prop: ModulationLink,
 }
 
 impl ModulationEvent {
+    /// Returns the destination parameter shared by every event kind.
     pub fn target(&self) -> &AutomationTarget {
         match self {
             ModulationEvent::PeakController { target, .. } => target,
@@ -404,6 +438,7 @@ impl ApplicationState {
     // =========================================================================
     // AUTOMATION POINT MANAGEMENT
     // =========================================================================
+    /// Inserts a linear point into a lane and returns the updated lane plus its new numeric ID.
     pub fn add_automation_point(
         &mut self,
         lane_id: AutomationId,
@@ -422,6 +457,10 @@ impl ApplicationState {
         Ok((lane.clone(), point_id))
     }
 
+    /// Removes a point when present and returns the current lane snapshot.
+    ///
+    /// The current implementation reports an error only when the lane is absent; an unknown point
+    /// ID leaves the lane unchanged and still returns success.
     pub fn remove_automation_point(
         &mut self,
         lane_id: AutomationId,
@@ -439,6 +478,7 @@ impl ApplicationState {
         Ok(lane.clone())
     }
 
+    /// Applies supplied point fields, restores chronological ordering, and returns its new index.
     pub fn update_automation_point(
         &mut self,
         lane_id: AutomationId,

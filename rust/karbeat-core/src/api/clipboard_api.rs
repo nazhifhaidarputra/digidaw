@@ -7,6 +7,7 @@ use crate::{
     shared::{ClipId, NoteId, PatternId, TrackId},
 };
 
+/// Maps the current project clipboard without exposing mutable clipboard state.
 pub fn get_clipboard_contents<T, F>(ctx: &DawContext, mapper: F) -> T
 where
     F: FnOnce(&ClipboardContent) -> T,
@@ -15,6 +16,7 @@ where
     mapper(&app.clipboard)
 }
 
+/// Copies selected notes from a pattern into the project clipboard and maps the copied payload.
 pub fn copy_pattern_notes<T, F>(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -32,6 +34,7 @@ where
     Ok(mapper(&app.clipboard))
 }
 
+/// Pastes clipboard notes into a target pattern at the requested tick/key anchor.
 pub fn paste_notes<T, F>(
     ctx: &mut DawContext,
     target_pattern_id: PatternId,
@@ -69,6 +72,7 @@ where
     Ok(inserted_notes.iter().map(mapper).collect())
 }
 
+/// Copies selected notes to the clipboard and removes them in one reversible operation.
 pub fn cut_notes(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -104,6 +108,7 @@ pub fn cut_notes(
     Ok(())
 }
 
+/// Copies clips from one track into the project clipboard without changing the timeline.
 pub fn copy_clips(ctx: &mut DawContext, source_track_id: TrackId, clip_ids: &[ClipId]) {
     if clip_ids.is_empty() {
         return;
@@ -113,6 +118,7 @@ pub fn copy_clips(ctx: &mut DawContext, source_track_id: TrackId, clip_ids: &[Cl
     let _ = app.copy_clip_batch(source_track_id, clip_ids);
 }
 
+/// Copies clips into the clipboard, removes them from the source track, and updates history.
 pub fn cut_clips(ctx: &mut DawContext, source_track_id: TrackId, clip_ids: Vec<ClipId>) {
     if clip_ids.is_empty() {
         return;
@@ -144,6 +150,7 @@ pub fn cut_clips(ctx: &mut DawContext, source_track_id: TrackId, clip_ids: Vec<C
     ctx.broadcast_track_graph();
 }
 
+/// Pastes clipboard clips relative to a destination track and timeline anchor.
 pub fn paste_clips(
     ctx: &mut DawContext,
     target_track_id: TrackId,

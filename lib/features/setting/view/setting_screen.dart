@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/setting/models/setting_state.dart';
 import 'package:karbeat/features/setting/services/setting_provider.dart';
-import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
 import 'package:karbeat/features/setting/view/general_settings_page.dart';
 import 'package:karbeat/features/setting/view/host_devices_settings_page.dart';
 import 'package:karbeat/features/setting/view/appearance_settings_page.dart';
@@ -11,6 +10,7 @@ import 'package:karbeat/features/setting/view/info_settings_page.dart';
 import 'package:karbeat/features/setting/view/key_binding_settings_page.dart';
 import 'package:karbeat/features/setting/view/log_settings_page.dart';
 import 'package:karbeat/features/setting/view/project_settings_page.dart';
+import 'package:karbeat/features/setting/view/plugin_settings_page.dart';
 
 class SettingScreen extends ConsumerWidget {
   const SettingScreen({super.key});
@@ -145,6 +145,9 @@ class _SettingsPlaceholder extends ConsumerWidget {
     if (menu == SettingMenu.keyBinding) {
       return const KeyBindingSettingsPage();
     }
+    if (menu == SettingMenu.plugins) {
+      return const PluginSettingsPage();
+    }
 
     final colors = Theme.of(context).colorScheme;
     return SingleChildScrollView(
@@ -180,20 +183,11 @@ class _SettingsPlaceholder extends ConsumerWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        menu == SettingMenu.plugins
-                            ? Icons.block
-                            : Icons.construction,
-                        color: colors.onSurfaceVariant,
-                      ),
+                      Icon(Icons.construction, color: colors.onSurfaceVariant),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          menu == SettingMenu.plugins
-                              ? ref
-                                    .watch(pluginSettingsProvider)
-                                    .unavailableReason
-                              : 'This settings page will be implemented in a later phase.',
+                          'This settings page will be implemented in a later phase.',
                         ),
                       ),
                     ],

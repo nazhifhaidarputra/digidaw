@@ -2,7 +2,7 @@ use hashbrown::HashMap;
 
 use crate::{
     audio::render_state::{AudioGraphState, AudioPluginState},
-    core::project::{RoutingNode, SidechainRoute},
+    core::project::{RoutingConnection, RoutingNode, SidechainRoute},
     shared::{BusId, TrackId},
 };
 
@@ -45,6 +45,7 @@ impl DelayLine {
 #[derive(Default)]
 pub(super) struct RoutingState {
     pub cached_order: Vec<RoutingNode>,
+    pub outgoing_routes: HashMap<RoutingNode, Vec<RoutingConnection>>,
     pub track_tails: HashMap<TrackId, u32>,
     pub bus_tails: HashMap<BusId, u32>,
     pub master_tail: u32,
@@ -56,6 +57,16 @@ pub(super) struct RoutingState {
 }
 
 impl RoutingState {
+    pub fn set_routes(&mut self, routes: &[RoutingConnection]) {
+        self.outgoing_routes.clear();
+        for route in routes {
+            self.outgoing_routes
+                .entry(route.source)
+                .or_default()
+                .push(route.clone());
+        }
+    }
+
     pub fn recalculate_latencies(
         &mut self,
         graph: &AudioGraphState,

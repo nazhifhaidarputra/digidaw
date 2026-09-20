@@ -15,9 +15,13 @@ use anyhow::Context;
 use karbeat_plugin_types::ParameterSpec;
 
 #[derive(Clone, Debug)]
+/// A track or bus that can feed a plugin's sidechain input.
 pub struct SidechainSource {
+    /// Routing node that will become the send's source.
     pub source: RoutingNode,
+    /// User-facing track or bus name.
     pub name: String,
+    /// Existing send gain, or `None` when this source is available but not connected.
     pub send_level: Option<f32>,
 }
 
@@ -98,6 +102,9 @@ where
         .collect()
 }
 
+/// Maps a track mixer channel and separately maps its ordered effect instances.
+///
+/// Returns an error when the track has no mixer channel.
 pub fn get_mixer_channel_populated<C, MC, EI, MixChanF, EffInstF>(
     ctx: &DawContext,
     track_id: TrackId,
@@ -128,10 +135,12 @@ where
     Ok((mapped_channel, mapped_effects))
 }
 
+/// Borrows the master mixer channel from project state.
 pub fn get_master_bus(ctx: &DawContext) -> &MixerChannel {
     &ctx.app_state.mixer.master_bus
 }
 
+/// Maps and collects the master bus's ordered effects.
 pub fn get_master_bus_populated<C, T, F>(ctx: &DawContext, mapper: F) -> C
 where
     F: Fn(&EffectInstance) -> T,
@@ -211,18 +220,28 @@ pub fn set_mixer_channel_param(
 /// Ask the audio thread to emit a full MixerChannelSnapshot for the given
 /// channel. Poll the result with `poll_mixer_channel_feedback`.
 pub fn query_mixer_channel(ctx: &mut DawContext, target: MixerChannelTarget) {
-    let _ = ctx.send_audio_command(AudioCommand::QueryMixerChannel { target });
+    let _ = ctx.send_audio_command(AudioCommand::QueryMixerChannel {
+        target,
+        request_id: None,
+    });
 }
 
 // ======================================
 // Effect Chain (structural, still AppState-backed)
 // ======================================
 
+/// Appends a built-in or external effect to a track mixer channel.
+///
+/// Built-in effects are installed asynchronously after the project mutation. External effects use
+/// the transactional hosted-plugin lifecycle and propagate installation failures.
 pub fn add_effect_to_mixer_channel_by_id(
     ctx: &mut DawContext,
     track_id: TrackId,
     registry_id: u32,
 ) -> anyhow::Result<()> {
+    if ctx.plugin_catalog.external(registry_id).is_some() {
+        return super::external_plugin_api::add_effect(ctx, EffectTarget::Track(track_id), registry_id).map(|_| ());
+    }
     let app = &mut ctx.app_state;
     app.mixer
         .add_effect_descriptor_by_id(&mut ctx.plugin_registry, &track_id, registry_id)?;
@@ -235,10 +254,13 @@ pub fn add_effect_to_mixer_channel_by_id(
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
     if let Some(plugin) = ctx.get_plugin_factory(registry_id) {
-        let _ = ctx.send_audio_command(AudioCommand::AddEffect {
+        let (plugin, telemetry) = ctx.prepare_plugin_install(plugin);
+        let _ = ctx.send_audio_command(AudioCommand::InstallEffect {
             target: EffectTarget::Track(track_id),
             effect_id,
-            effect_factory: plugin,
+            registry_id,
+            plugin,
+            telemetry: Some(telemetry),
         });
     } else {
         log::warn!(
@@ -249,11 +271,21 @@ pub fn add_effect_to_mixer_channel_by_id(
     Ok(())
 }
 
+/// Removes an effect from a track, delegating external instances to their hosted lifecycle cleanup.
 pub fn remove_effect_from_mixer_channel(
     ctx: &mut DawContext,
     track_id: TrackId,
     effect_instance_id: EffectId,
 ) -> anyhow::Result<()> {
+    let plugin_target = PluginTarget::TrackEffect(track_id, effect_instance_id);
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return super::external_plugin_api::remove_effect(
+            ctx,
+            EffectTarget::Track(track_id),
+            effect_instance_id,
+        );
+    }
+
     ctx.app_state
         .mixer
         .remove_effect_by_id(&track_id, effect_instance_id)?;
@@ -264,7 +296,12 @@ pub fn remove_effect_from_mixer_channel(
     Ok(())
 }
 
+/// Appends an effect to the master bus and installs its processor on the audio thread.
 pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<()> {
+    if ctx.plugin_catalog.external(registry_id).is_some() {
+        return super::external_plugin_api::add_effect(ctx, EffectTarget::Master, registry_id)
+            .map(|_| ());
+    }
     let app = &mut ctx.app_state;
     app.mixer
         .add_effect_to_master_bus(&mut ctx.plugin_registry, registry_id)?;
@@ -277,10 +314,13 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
     if let Some(plugin) = ctx.get_plugin_factory(registry_id) {
-        let _ = ctx.send_audio_command(AudioCommand::AddEffect {
+        let (plugin, telemetry) = ctx.prepare_plugin_install(plugin);
+        let _ = ctx.send_audio_command(AudioCommand::InstallEffect {
             target: EffectTarget::Master,
             effect_id,
-            effect_factory: plugin,
+            registry_id,
+            plugin,
+            telemetry: Some(telemetry),
         });
     } else {
         log::warn!(
@@ -291,6 +331,7 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
     Ok(())
 }
 
+/// Moves an effect within a channel's ordered chain and publishes the new order to the audio thread.
 pub fn move_effect_order(
     ctx: &mut DawContext,
     mixer_channel_target: MixerChannelTarget,
@@ -310,11 +351,25 @@ pub fn move_effect_order(
     Ok(())
 }
 
+/// Removes an effect from a track, bus, or master channel and retires its audio processor.
 pub fn remove_effect_from_target_mixer_channel(
     ctx: &mut DawContext,
     mixer_channel_target: MixerChannelTarget,
     effect_instance_id: EffectId,
 ) -> anyhow::Result<()> {
+    let plugin_target = match &mixer_channel_target {
+        MixerChannelTarget::Track(id) => PluginTarget::TrackEffect(*id, effect_instance_id),
+        MixerChannelTarget::Bus(id) => PluginTarget::BusEffect(*id, effect_instance_id),
+        MixerChannelTarget::Master => PluginTarget::MasterEffect(effect_instance_id),
+    };
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return super::external_plugin_api::remove_effect(
+            ctx,
+            effect_target_from_mixer_target(&mixer_channel_target),
+            effect_instance_id,
+        );
+    }
+
     let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
     match mixer_channel_target {
         MixerChannelTarget::Track(track_id) => {
@@ -348,10 +403,20 @@ fn effect_target_from_mixer_target(target: &MixerChannelTarget) -> EffectTarget 
     }
 }
 
+/// Removes an effect from the master bus, including hosted-plugin cleanup when applicable.
 pub fn remove_effect_from_master_bus(
     ctx: &mut DawContext,
     effect_instance_id: EffectId,
 ) -> anyhow::Result<()> {
+    let plugin_target = PluginTarget::MasterEffect(effect_instance_id);
+    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+        return super::external_plugin_api::remove_effect(
+            ctx,
+            EffectTarget::Master,
+            effect_instance_id,
+        );
+    }
+
     ctx.app_state
         .mixer
         .remove_effect_from_master_bus(effect_instance_id)?;
@@ -362,23 +427,37 @@ pub fn remove_effect_from_master_bus(
     Ok(())
 }
 
+/// Creates a project bus and asynchronously mirrors it into the engine graph.
 pub fn create_bus(ctx: &mut DawContext, name: String) -> BusId {
     let bus_id = ctx.app_state.mixer.create_bus(name.clone());
     let _ = ctx.send_audio_command(AudioCommand::AddBus { bus_id, name });
     bus_id
 }
 
+/// Deletes a bus, using hosted lifecycle cleanup when it contains external effects.
 pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
+    if super::external_plugin_api::bus_targets(ctx, bus_id)
+        .iter()
+        .any(|target| super::external_plugin_api::descriptor(ctx, *target).is_some())
+    {
+        return super::external_plugin_api::delete_bus(ctx, bus_id);
+    }
+
     ctx.app_state.mixer.remove_bus(bus_id)?;
     let _ = ctx.send_audio_command(AudioCommand::RemoveBus { bus_id });
     Ok(())
 }
 
+/// Appends an effect to a bus and installs the corresponding audio processor.
 pub fn add_effect_to_bus(
     ctx: &mut DawContext,
     bus_id: BusId,
     registry_id: u32,
 ) -> anyhow::Result<()> {
+    if ctx.plugin_catalog.external(registry_id).is_some() {
+        return super::external_plugin_api::add_effect(ctx, EffectTarget::Bus(bus_id), registry_id)
+            .map(|_| ());
+    }
     let app = &mut ctx.app_state;
     app.mixer
         .add_effect_to_bus(&mut ctx.plugin_registry, bus_id, registry_id)?;
@@ -391,10 +470,13 @@ pub fn add_effect_to_bus(
         .ok_or_else(|| anyhow::anyhow!("Effect not found after insertion"))?;
 
     if let Some(plugin) = ctx.get_plugin_factory(registry_id) {
-        let _ = ctx.send_audio_command(AudioCommand::AddEffect {
+        let (plugin, telemetry) = ctx.prepare_plugin_install(plugin);
+        let _ = ctx.send_audio_command(AudioCommand::InstallEffect {
             target: EffectTarget::Bus(bus_id),
             effect_id,
-            effect_factory: plugin,
+            registry_id,
+            plugin,
+            telemetry: Some(telemetry),
         });
     } else {
         log::warn!(
@@ -405,10 +487,12 @@ pub fn add_effect_to_bus(
     Ok(())
 }
 
+/// Renames a bus in serialized project state.
 pub fn rename_bus(ctx: &mut DawContext, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
     ctx.app_state.mixer.rename_bus(bus_id, new_name)
 }
 
+/// Adds a validated routing connection and publishes the complete routing matrix to the engine.
 pub fn set_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
     let app = &mut ctx.app_state;
     app.mixer.add_routing(conn, &app.tracks)?;
@@ -417,6 +501,7 @@ pub fn set_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Res
     Ok(())
 }
 
+/// Removes the matching normal route or send and publishes the resulting routing matrix.
 pub fn remove_routing(
     ctx: &mut DawContext,
     source: RoutingNode,
@@ -430,6 +515,7 @@ pub fn remove_routing(
     Ok(())
 }
 
+/// Replaces a matching route's properties, or validates and inserts it when absent.
 pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
     let app = &mut ctx.app_state;
     let routing = app.mixer.update_routing(conn, &app.tracks)?;
@@ -441,6 +527,10 @@ pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::
 // ======= Mixer shared pointer API ======
 // ===========================================
 
+/// Reads the latest lock-free mixer telemetry snapshot.
+///
+/// Pending telemetry registrations are drained first. If telemetry is not initialized, an empty
+/// default snapshot is returned.
 pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot {
     // Drain any pending telemetry consumer registrations first, so plugin consumers
     // are up to date before anyone calls get_plugin_telemetry_sync.
@@ -456,6 +546,7 @@ pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot 
     }
 }
 
+/// Enables or disables mixer telemetry production on the audio thread.
 pub fn set_mixer_telemetry_subs(ctx: &mut DawContext, active: bool) -> anyhow::Result<()> {
     ctx.send_audio_command(AudioCommand::SetMixerTelemetrySubscription { active })
 }

@@ -26,6 +26,7 @@ macro_rules! register_plugins {
     };
 }
 
+#[derive(Clone)]
 pub struct RegisteredPlugin {
     name: String,
     factory: PluginFactory,
@@ -41,6 +42,7 @@ pub struct PluginInfo {
     pub is_synth: bool,
 }
 
+#[derive(Clone)]
 pub struct PluginRegistry {
     plugins: HashMap<u32, RegisteredPlugin>,
 }
@@ -59,7 +61,7 @@ impl PluginRegistry {
             ("synth_karbeatzer_v2", "Karbeatzer V2", KarbeatzerV2),
             ("synth_my_retro", "My Retro", MyRetro),
             ("effect_param_eq", "Parametric EQ", DigiParametricEQ),
-            ("effect_pitcher", "Pitcher", PitchShifter),
+            ("effect_pitch_shifter", "Pitch Shifter", PitchShifter),
             (
                 "effect_digidaw_sidechain_comp",
                 "DigiDAW Sidechain Compressor",

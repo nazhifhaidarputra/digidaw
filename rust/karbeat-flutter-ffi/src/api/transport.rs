@@ -7,7 +7,7 @@ use karbeat_core::{api::transport_api, audio::engine::PlaybackMode, context::Daw
 
 pub enum PlaybackModeDto {
     Song,
-    Pattern { pattern_id: u32, generator_id: u32 },
+    Pattern { pattern_id: u64, generator_id: u64 },
 }
 
 impl From<&PlaybackMode> for PlaybackModeDto {
@@ -18,8 +18,8 @@ impl From<&PlaybackMode> for PlaybackModeDto {
                 pattern_id,
                 generator_id,
             } => PlaybackModeDto::Pattern {
-                pattern_id: pattern_id.to_u32(),
-                generator_id: generator_id.to_u32(),
+                pattern_id: pattern_id.to_u64(),
+                generator_id: generator_id.to_u64(),
             },
         }
     }
@@ -71,7 +71,7 @@ pub fn stop_song_playback(ctx: &mut DawContext) -> Result<(), String> {
 }
 
 /// Toggle the pattern playback
-pub fn toggle_pattern_playback(ctx: &mut DawContext, pattern_id: u32, generator_id: u32) {
+pub fn toggle_pattern_playback(ctx: &mut DawContext, pattern_id: u64, generator_id: u64) {
     transport_api::toggle_pattern_playback(ctx, pattern_id.into(), generator_id.into());
 }
 
@@ -81,6 +81,6 @@ pub fn toggle_playback_with_mode(ctx: &mut DawContext, playback_mode: PlaybackMo
     transport_api::toggle_playing_with_playback(ctx, playback_mode.into());
 }
 
-pub fn switch_pattern_generator(ctx: &mut DawContext, generator_id: u32) {
+pub fn switch_pattern_generator(ctx: &mut DawContext, generator_id: u64) {
     transport_api::switch_pattern_generator(ctx, generator_id.into());
 }

@@ -3,6 +3,7 @@ mod buffer;
 mod command;
 mod engine;
 mod helper;
+mod hosted;
 mod macros;
 mod metronome;
 mod modulation;

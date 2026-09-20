@@ -1,5 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/backend_operation_gate.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/audio_settings_state.dart';
@@ -116,8 +117,12 @@ class AudioSettingsNotifier extends Notifier<AudioSettingsState> {
     }
     state = state.copyWith(isApplying: true);
     final applied = await ref
-        .read(audioSettingsServiceProvider)
-        .applyDspConfig(context, sampleRate, blockSize);
+        .read(backendOperationGateProvider.notifier)
+        .run(
+          () => ref
+              .read(audioSettingsServiceProvider)
+              .applyDspConfig(context, sampleRate, blockSize),
+        );
     if (applied case Error<UiAudioRuntimeSettings>(error: final error)) {
       state = state.copyWith(isApplying: false);
       return ref.notifyErrorResult(

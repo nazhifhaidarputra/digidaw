@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
-import 'package:karbeat/features/plugins/plugin_registry.dart';
-import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
-import 'package:karbeat/features/plugins/view/dynamic_plugin_screen.dart';
+import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -148,33 +146,16 @@ class SourceListScreen extends ConsumerWidget {
                 icon: Icons.piano,
                 color: colors.tertiary,
                 onTap: () async {
-                  Widget screen;
-
-                  if (!context.mounted) return;
-
-                  try {
-                    final availableGenerators = await ref
-                        .read(audioPluginProvider.notifier)
-                        .getAvailableGenerators();
-                    final registryId = availableGenerators
-                        .firstWhere((p) => p.id == genInstance?.registryId)
-                        .id;
-                    // final builder = SynthRegistry.getSynthBuilder(registryId);
-                    screen = PluginRegistryFlutter.getGeneratorScreen(
-                      registryId: registryId,
-                      instanceId: id,
-                    );
-                  } catch (_) {
-                    screen = DynamicPluginScreen(
-                      target: UiPluginTarget.generator(id),
-                      pluginName: name,
-                    );
-                  }
-
-                  if (!context.mounted) return;
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => screen));
+                  final registryId = genInstance?.registryId;
+                  if (registryId == null) return;
+                  await openPluginInterface(
+                    context: context,
+                    ref: ref,
+                    target: UiPluginTarget.generator(id),
+                    registryId: registryId,
+                    instanceId: id,
+                    pluginName: name,
+                  );
                 },
                 onPlace: null,
                 // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement

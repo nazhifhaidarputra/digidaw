@@ -1,0 +1,98 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/src/rust/api/automation.dart';
+import 'package:karbeat/src/rust/api/mixer.dart';
+import 'package:karbeat/src/rust/api/pattern.dart';
+import 'package:karbeat/src/rust/api/project.dart';
+
+class _ProjectNotifier extends ProjectNotifier {
+  @override
+  Future<ApplicationDataStore> build() async => _projectData();
+}
+
+void main() {
+  test('removing a MIDI track also removes its generator', () async {
+    final container = ProviderContainer.test(
+      overrides: [projectProvider.overrideWith(_ProjectNotifier.new)],
+    );
+    await container.read(projectProvider.future);
+
+    container.read(projectProvider.notifier).removeTrack(1);
+
+    final project = container.read(projectProvider).requireValue;
+    expect(project.tracks.containsKey(1), isFalse);
+    expect(project.generators.containsKey(10), isFalse);
+    expect(project.generators.containsKey(20), isTrue);
+  });
+}
+
+ApplicationDataStore _projectData() {
+  const master = UiMixerChannel(
+    volume: 1,
+    pan: 0,
+    mute: false,
+    solo: false,
+    invertedPhase: false,
+    effects: [],
+  );
+  return ApplicationDataStore(
+    metadata: const UiProjectMetadata(
+      name: '',
+      author: '',
+      description: '',
+      genre: '',
+      version: '',
+      createdAt: '',
+    ),
+    transport: const UiTransportState(bpm: 120, timeSignature: (4, 4)),
+    hardwareConfig: const UiAudioHardwareConfig(
+      selectedInputDevice: '',
+      selectedOutputDevice: '',
+      sampleRate: 48000,
+      bufferSize: 1024,
+      cpuLoad: 0,
+    ),
+    tracks: IMap({
+      1: const UiTrack(
+        id: 1,
+        name: 'MIDI',
+        color: '',
+        trackType: UiTrackType.midi,
+        clips: [],
+        generatorId: 10,
+        orderIdx: 0,
+      ),
+      2: const UiTrack(
+        id: 2,
+        name: 'Other MIDI',
+        color: '',
+        trackType: UiTrackType.midi,
+        clips: [],
+        generatorId: 20,
+        orderIdx: 1,
+      ),
+    }),
+    generators: IMap({
+      10: const UiGeneratorInstance(
+        id: 10,
+        instanceType: UiGeneratorInstanceType.sampler(assetId: 1, rootNote: 60),
+      ),
+      20: const UiGeneratorInstance(
+        id: 20,
+        instanceType: UiGeneratorInstanceType.sampler(assetId: 2, rootNote: 60),
+      ),
+    }),
+    patterns: const IMapConst<int, UiPattern>({}),
+    mixer: const UiMixerState.raw(
+      channels: {},
+      masterBus: master,
+      buses: {},
+      routing: [],
+    ),
+    modulationLinks: const IMapConst<int, ModulationLinkDto>({}),
+    automationPool: const IMapConst<int, AutomationLaneDto>({}),
+    modulationSources: const IMapConst<int, ModulationSourceDto>({}),
+  );
+}

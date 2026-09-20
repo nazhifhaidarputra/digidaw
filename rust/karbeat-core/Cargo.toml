@@ -11,6 +11,8 @@ karbeat-plugin-api.workspace = true
 karbeat-plugins.workspace = true
 karbeat-utils.workspace = true
 karbeat-plugin-types.workspace = true
+karbeat-host.workspace = true
+karbeat-vst3.workspace = true
 
 anyhow.workspace = true
 cpal.workspace = true
@@ -56,9 +58,16 @@ rubato.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 cpal = { workspace = true, features = ["jack"] }
 
+[dev-dependencies]
+glib.workspace = true
+
 [features]
 default = []
 asio = ["cpal/asio"]
 
 [lints]
 workspace = true
+
+[[test]]
+name = "vst3_core"
+harness = false

@@ -46,12 +46,16 @@ pub(super) struct ModulationState {
     pub active_links: Vec<ModulationLink>,
     pub suspended_targets: HashSet<AutomationTarget>,
     pub block_param_changes: HashMap<PluginTarget, Vec<ParamChange>>,
+    pub target_accumulators: HashMap<AutomationTarget, (Option<f32>, f32)>,
+    pub peak_updates: Vec<(ModulationId, f32)>,
 }
 
 impl ModulationState {
     pub fn for_export(&self) -> Self {
         let mut state = self.clone();
         state.block_param_changes.clear();
+        state.target_accumulators.clear();
+        state.peak_updates.clear();
         state
     }
 
@@ -65,6 +69,8 @@ impl ModulationState {
         self.active_links.clear();
         self.suspended_targets.clear();
         self.block_param_changes.clear();
+        self.target_accumulators.clear();
+        self.peak_updates.clear();
 
         for (&id, source) in &graph.modulation_sources {
             self.add_source(id, source);
@@ -86,9 +92,11 @@ impl ModulationState {
         sample_rate: u32,
         playhead_samples: u32,
         automation_lanes: &HashMap<AutomationId, AudioAutomationLane>,
-    ) -> HashMap<AutomationTarget, (Option<f32>, f32)> {
+        accumulators: &mut HashMap<AutomationTarget, (Option<f32>, f32)>,
+    ) {
+        accumulators.clear();
         if bpm <= 0.0 {
-            return HashMap::new();
+            return;
         }
 
         let sample_rate = sample_rate as f32;
@@ -111,25 +119,21 @@ impl ModulationState {
             }
         }
 
-        self.active_links.iter().fold(
-            HashMap::<AutomationTarget, (Option<f32>, f32)>::new(),
-            |mut accumulators, link| {
-                if let Some((source, output)) = self.active_sources.get(&link.source_id) {
-                    let entry = accumulators
-                        .entry(link.target.clone())
-                        .or_insert((None, 0.0));
-                    match source {
-                        LiveModulationSource::Automation { .. } => {
-                            if !self.suspended_targets.contains(&link.target) {
-                                entry.0 = Some(*output);
-                            }
+        for link in &self.active_links {
+            if let Some((source, output)) = self.active_sources.get(&link.source_id) {
+                let entry = accumulators
+                    .entry(link.target.clone())
+                    .or_insert((None, 0.0));
+                match source {
+                    LiveModulationSource::Automation { .. } => {
+                        if !self.suspended_targets.contains(&link.target) {
+                            entry.0 = Some(*output);
                         }
-                        _ => entry.1 += output * link.depth,
                     }
+                    _ => entry.1 += output * link.depth,
                 }
-                accumulators
-            },
-        )
+            }
+        }
     }
 
     pub fn base_value(&self, target: &AutomationTarget) -> f32 {

@@ -4,59 +4,101 @@ use crate::{
 };
 use thiserror::Error;
 
+/// Number of undoable actions retained by a new history manager.
 pub const DEFAULT_HISTORY_LIMIT: usize = 100;
+/// Largest history limit accepted to bound memory retained by action snapshots.
 pub const MAX_HISTORY_LIMIT: usize = 1000;
 
 #[derive(Debug, Error, PartialEq, Eq)]
+/// Invalid history-retention configuration.
 pub enum HistoryLimitError {
     #[error("History limit {requested} exceeds the maximum of {maximum}")]
-    TooLarge { requested: usize, maximum: usize },
+    TooLarge {
+        /// Limit supplied by the caller.
+        requested: usize,
+        /// Maximum limit supported by the manager.
+        maximum: usize,
+    },
 }
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
 pub enum ProjectAction {
+    /// Inserted one note into a pattern.
     AddNote {
+        /// Pattern changed by the action.
         pattern_id: PatternId,
+        /// Complete note needed to replay or reverse insertion.
         note: Note,
     },
+    /// Removed one note from a pattern.
     DeleteNote {
+        /// Pattern changed by the action.
         pattern_id: PatternId,
+        /// Complete removed note needed for restoration.
         note: Note,
     },
+    /// Changed a note's tick and pitch.
     MoveNote {
+        /// Pattern containing the note.
         pattern_id: PatternId,
+        /// Stable note identity.
         note_id: NoteId,
+        /// Tick restored by undo.
         old_tick: u64,
+        /// MIDI key restored by undo.
         old_key: u8,
+        /// Tick applied by redo.
         new_tick: u64,
+        /// MIDI key applied by redo.
         new_key: u8,
     },
+    /// Changed a note's duration.
     ResizeNote {
+        /// Pattern containing the note.
         pattern_id: PatternId,
+        /// Stable note identity.
         note_id: NoteId,
+        /// Duration restored by undo.
         old_duration: u64,
+        /// Duration applied by redo.
         new_duration: u64,
     },
+    /// Attached a clip to a track.
     AddClip {
+        /// Track receiving the clip.
         track_id: TrackId,
+        /// Complete clip snapshot.
         clip: Clip,
     },
+    /// Detached a clip from a track.
     DeleteClip {
+        /// Track that previously referenced the clip.
         track_id: TrackId,
-        clip: Clip, // Store full clip data to enable undo
+        /// Complete clip snapshot needed for undo.
+        clip: Clip,
     },
+    /// Moved a clip between tracks and/or timeline positions.
     MoveClip {
+        /// Source track for the forward action.
         old_track_id: TrackId,
+        /// Destination track for the forward action.
         new_track_id: TrackId,
+        /// Stable clip identity.
         clip_id: ClipId,
+        /// Raw start position restored by undo.
         old_start_time: u64,
+        /// Raw start position applied by redo.
         new_start_time: u64,
     },
+    /// Replaced a clip with resized state.
     ResizeClip {
+        /// Track containing the clip.
         track_id: TrackId,
-        old_clip: Clip, // Store full clip state before resize
-        new_clip: Clip, // Store full clip state after resize
+        /// Complete state restored by undo.
+        old_clip: Clip,
+        /// Complete state applied by redo.
+        new_clip: Clip,
     },
     /// Groups multiple actions into one Undo/Redo step (e.g. Paste)
     Batch(Vec<ProjectAction>),
@@ -65,13 +107,18 @@ pub enum ProjectAction {
 }
 
 #[derive(Clone, Default)]
+/// Bounded undo/redo stacks for reversible project actions.
 pub struct HistoryManager {
+    /// Actions available to undo, oldest first.
     pub undo_stack: Vec<ProjectAction>,
+    /// Undone actions available to redo, oldest first.
     pub redo_stack: Vec<ProjectAction>,
+    /// Maximum entries retained independently in each stack.
     pub max_history: usize,
 }
 
 impl HistoryManager {
+    /// Creates empty stacks with the default retention limit and preallocated capacity.
     pub fn new() -> Self {
         Self {
             undo_stack: Vec::with_capacity(DEFAULT_HISTORY_LIMIT),
@@ -80,6 +127,7 @@ impl HistoryManager {
         }
     }
 
+    /// Sets the retention limit and immediately discards the oldest excess entries.
     pub fn set_max_history(&mut self, limit: usize) -> Result<(), HistoryLimitError> {
         if limit > MAX_HISTORY_LIMIT {
             return Err(HistoryLimitError::TooLarge {
@@ -101,6 +149,7 @@ impl HistoryManager {
         }
     }
 
+    /// Records a new action, clears redo history, and enforces the retention limit.
     pub fn push(&mut self, action: ProjectAction) {
         self.undo_stack.push(action);
         self.redo_stack.clear();
@@ -108,6 +157,10 @@ impl HistoryManager {
         Self::trim_oldest(&mut self.undo_stack, self.max_history);
     }
 
+    /// Applies the inverse of the latest action and moves it to the redo stack.
+    ///
+    /// If inverse application fails, the action has already been popped and is not restored by the
+    /// current implementation.
     pub fn undo(&mut self, app: &mut ApplicationState) -> Result<(), String> {
         let action = self.undo_stack.pop().ok_or("Nothing to undo")?;
         self.apply_inverse(&action, app)?;
@@ -115,6 +168,10 @@ impl HistoryManager {
         Ok(())
     }
 
+    /// Reapplies the latest undone action and moves it back to the undo stack.
+    ///
+    /// If forward application fails, the action has already been popped and is not restored by the
+    /// current implementation.
     pub fn redo(&mut self, app: &mut ApplicationState) -> Result<(), String> {
         let action = self.redo_stack.pop().ok_or("Nothing to redo")?;
         self.apply_forward(&action, app)?;

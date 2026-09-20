@@ -310,8 +310,9 @@ impl AudioPlugin for KarbeatzerV2 {
         "Karbeatzer V2"
     }
 
-    fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
+    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
         self.sample_rate = sample_rate;
+        self.scratch_buffer.resize(max_buffer_size.max(1), 0.0);
         self.filter.prepare(self.channels as u8, sample_rate as u32);
         self.filter.calculate_coefficients();
     }
@@ -346,12 +347,12 @@ impl AudioPlugin for KarbeatzerV2 {
             return;
         }
 
-        // Resize internal interleaved buffer if necessary
-        let required_len = total_frames * self.channels;
-        if self.interleaved_buffer.len() < required_len {
-            self.interleaved_buffer.resize(required_len, 0.0);
+        if outputs.len() < self.channels || self.scratch_buffer.len() < total_frames {
+            return;
         }
-        self.interleaved_buffer[..required_len].fill(0.0);
+        for output in outputs.iter_mut().take(self.channels) {
+            output[..total_frames].fill(0.0);
+        }
 
         let current_drive = self.drive.get();
         let master_gain = self.gain.get();
@@ -359,10 +360,6 @@ impl AudioPlugin for KarbeatzerV2 {
 
         let mut current_frame = 0;
         let mut event_idx = 0;
-
-        if self.scratch_buffer.len() < total_frames {
-            self.scratch_buffer.resize(total_frames, 0.0);
-        }
 
         while current_frame < total_frames {
             let next_event_frame = if event_idx < midi_events.len() {
@@ -375,9 +372,6 @@ impl AudioPlugin for KarbeatzerV2 {
             let block_len = end_frame - current_frame;
 
             if block_len > 0 {
-                let out_slice = &mut self.interleaved_buffer
-                    [current_frame * self.channels..end_frame * self.channels];
-
                 let KarbeatzerV2 {
                     active_voices,
                     midi_channels,
@@ -406,7 +400,7 @@ impl AudioPlugin for KarbeatzerV2 {
                         scratch_slice,
                     );
 
-                    // Mix mono voice into interleaved stereo output buffer
+                    // Mix the mono voice into the plugin's planar outputs.
                     let (left_gain, right_gain) = voice.pan_gains(&channel);
                     for (i, &sample) in scratch_slice.iter().enumerate() {
                         for ch in 0..self.channels {
@@ -415,27 +409,38 @@ impl AudioPlugin for KarbeatzerV2 {
                                 1 => right_gain,
                                 _ => 1.0,
                             };
-                            out_slice[i * self.channels + ch] += sample * pan_gain;
+                            outputs[ch][current_frame + i] += sample * pan_gain;
                         }
                     }
                 }
 
                 // Apply global filter
-                for chunk in out_slice.chunks_exact_mut(self.channels) {
-                    self.filter.process_frame(chunk);
+                let mut frame = [0.0_f32; 8];
+                for frame_index in current_frame..end_frame {
+                    for ch in 0..self.channels {
+                        frame[ch] = outputs[ch][frame_index];
+                    }
+                    self.filter.process_frame(&mut frame[..self.channels]);
+                    for ch in 0..self.channels {
+                        outputs[ch][frame_index] = frame[ch];
+                    }
                 }
 
                 // Apply drive
                 if current_drive > 0.0 {
                     let drive_amt = 1.0 + current_drive * 4.0;
-                    for sample in out_slice.iter_mut() {
-                        *sample = (*sample * drive_amt).tanh();
+                    for output in outputs.iter_mut().take(self.channels) {
+                        for sample in &mut output[current_frame..end_frame] {
+                            *sample = (*sample * drive_amt).tanh();
+                        }
                     }
                 }
 
                 // Apply Master Gain
-                for sample in out_slice.iter_mut() {
-                    *sample *= master_gain;
+                for output in outputs.iter_mut().take(self.channels) {
+                    for sample in &mut output[current_frame..end_frame] {
+                        *sample *= master_gain;
+                    }
                 }
             }
 
@@ -451,12 +456,6 @@ impl AudioPlugin for KarbeatzerV2 {
         // Cleanup dead voices
         self.active_voices.retain(|v| v.is_active);
 
-        // 2. Finally, de-interleave the result into the provided AudioBuffers
-        for c in 0..self.channels {
-            for i in 0..total_frames {
-                outputs[c][i] = self.interleaved_buffer[i * self.channels + c];
-            }
-        }
     }
 
     fn category(&self) -> PluginCategory {

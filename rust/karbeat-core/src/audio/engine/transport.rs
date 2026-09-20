@@ -4,22 +4,35 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Selects which timeline advances during an engine render block.
 pub enum PlaybackMode {
+    /// Render the arranged song timeline.
     Song,
+    /// Render one pattern through a specific generator, independently of song playback.
     Pattern {
+        /// Pattern whose notes are scheduled.
         pattern_id: PatternId,
+        /// Generator receiving the pattern's MIDI events.
         generator_id: GeneratorId,
     },
 }
 
 #[derive(Debug, Clone)]
+/// Mutable audio-thread transport state for arranged song playback.
 pub struct SongPlaybackState {
+    /// Whether the song playhead advances.
     pub is_playing: bool,
+    /// Whether playback wraps at the project loop boundary.
     pub is_looping: bool,
+    /// Whether recording is active.
     pub is_recording: bool,
+    /// Current song playhead in samples.
     pub playhead_samples: u32,
+    /// Cached one-based beat index.
     pub current_beat: usize,
+    /// Cached one-based bar index.
     pub current_bar: usize,
+    /// Sample position at which transport feedback was last emitted.
     pub last_emitted_samples: u32,
 }
 
@@ -38,11 +51,17 @@ impl Default for SongPlaybackState {
 }
 
 #[derive(Debug, Clone)]
+/// Mutable audio-thread transport state for independent pattern audition.
 pub struct PatternPlaybackState {
+    /// Whether the pattern playhead advances.
     pub is_playing: bool,
+    /// Current pattern playhead in samples.
     pub playhead_samples: u32,
+    /// Cached one-based beat index.
     pub current_beat: usize,
+    /// Cached one-based bar index.
     pub current_bar: usize,
+    /// Sample position at which pattern feedback was last emitted.
     pub last_emitted_samples: u32,
 }
 

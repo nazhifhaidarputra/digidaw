@@ -45,12 +45,12 @@ impl From<UiResizeEdge> for ResizeEdge {
 
 pub fn create_clip(
     ctx: &mut DawContext,
-    source_id: Option<u32>,
+    source_id: Option<u64>,
     source_type: UiSourceType,
-    track_id: u32,
+    track_id: u64,
     start_time: u32,
 ) -> Result<UiClip, String> {
-    let track_id = TrackId::from(track_id);
+    let track_id = TrackId::from_u64(track_id);
     let core_source_type = match source_type {
         UiSourceType::Audio => karbeat_core::core::project::clip::ClipSourceType::Audio,
         UiSourceType::Midi => karbeat_core::core::project::clip::ClipSourceType::Midi,
@@ -63,9 +63,9 @@ pub fn create_clip(
     Ok(ui_clip)
 }
 
-pub fn delete_clip(ctx: &mut DawContext, track_id: u32, clip_id: u32) -> Result<(), String> {
-    let track_id = TrackId::from(track_id);
-    let clip_id = ClipId::from(clip_id);
+pub fn delete_clip(ctx: &mut DawContext, track_id: u64, clip_id: u64) -> Result<(), String> {
+    let track_id = TrackId::from_u64(track_id);
+    let clip_id = ClipId::from_u64(clip_id);
 
     clip_api::delete_clip(ctx, track_id, clip_id)
         .map_err(|e| format!("Failed to delete clip: {}", e))?;
@@ -75,13 +75,13 @@ pub fn delete_clip(ctx: &mut DawContext, track_id: u32, clip_id: u32) -> Result<
 
 pub fn resize_clip(
     ctx: &mut DawContext,
-    track_id: u32,
-    clip_id: u32,
+    track_id: u64,
+    clip_id: u64,
     edge: UiResizeEdge,
     new_time_val: u64,
 ) -> Result<UiClip, String> {
-    let track_id = TrackId::from(track_id);
-    let clip_id = ClipId::from(clip_id);
+    let track_id = TrackId::from_u64(track_id);
+    let clip_id = ClipId::from_u64(clip_id);
     let core_edge: ResizeEdge = edge.into();
 
     let res = clip_api::resize_clip(ctx, track_id, clip_id, core_edge, new_time_val)
@@ -92,14 +92,16 @@ pub fn resize_clip(
 
 pub fn move_clip(
     ctx: &mut DawContext,
-    source_track_id: u32,
-    clip_id: u32,
+    source_track_id: u64,
+    clip_id: u64,
     new_start_time: u64,
-    new_track_id: Option<u32>,
+    new_track_id: Option<u64>,
 ) -> Result<UiClip, String> {
-    let source_track_id = TrackId::from(source_track_id);
-    let clip_id = ClipId::from(clip_id);
-    let target_track_id = new_track_id.map(TrackId::from).unwrap_or(source_track_id);
+    let source_track_id = TrackId::from_u64(source_track_id);
+    let clip_id = ClipId::from_u64(clip_id);
+    let target_track_id = new_track_id
+        .map(TrackId::from_u64)
+        .unwrap_or(source_track_id);
 
     let res = clip_api::move_clip(
         ctx,
@@ -125,12 +127,12 @@ pub fn move_clip(
 /// - cut_point: Absolute timeline tick of the cut location
 pub fn slice_clip(
     ctx: &mut DawContext,
-    source_track_id: u32,
-    clip_id: u32,
+    source_track_id: u64,
+    clip_id: u64,
     cut_point: u64,
 ) -> Result<Vec<UiClip>, String> {
-    let source_track_id_typed = TrackId::from(source_track_id);
-    let clip_id_typed = ClipId::from(clip_id);
+    let source_track_id_typed = TrackId::from_u64(source_track_id);
+    let clip_id_typed = ClipId::from_u64(clip_id);
 
     let (c1, c2) = clip_api::slice_clip(ctx, source_track_id_typed, clip_id_typed, cut_point)
         .map_err(|e| format!("{}", e))?;
@@ -148,16 +150,19 @@ pub fn add_midi_track_with_generator_id(
     Ok(UiTrack::from_track(&res, &ctx.app_state))
 }
 
-pub fn get_clip(ctx: &DawContext, track_id: u32, clip_id: u32) -> Result<UiClip, String> {
-    clip_api::get_clip(ctx, TrackId::from(track_id), ClipId::from(clip_id), |c| {
-        UiClip::from(c)
-    })
+pub fn get_clip(ctx: &DawContext, track_id: u64, clip_id: u64) -> Result<UiClip, String> {
+    clip_api::get_clip(
+        ctx,
+        TrackId::from_u64(track_id),
+        ClipId::from_u64(clip_id),
+        |c| UiClip::from(c),
+    )
     .map_err(|e| e.to_string())
 }
 
 // Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
-pub fn get_track(ctx: &DawContext, track_id: u32) -> Option<UiTrack> {
-    track_api::get_track(ctx, TrackId::from(track_id), |t| {
+pub fn get_track(ctx: &DawContext, track_id: u64) -> Option<UiTrack> {
+    track_api::get_track(ctx, TrackId::from_u64(track_id), |t| {
         UiTrack::from_track(t, &ctx.app_state)
     })
 }
@@ -169,14 +174,16 @@ pub fn get_track(ctx: &DawContext, track_id: u32) -> Option<UiTrack> {
 /// move clips in batch
 pub fn move_clip_batch(
     ctx: &mut DawContext,
-    source_track_id: u32,
-    clip_ids: Vec<u32>,
+    source_track_id: u64,
+    clip_ids: Vec<u64>,
     delta_ticks: i64,
-    new_track_id: Option<u32>,
+    new_track_id: Option<u64>,
 ) -> Result<Vec<UiClip>, String> {
-    let source_track_id = TrackId::from(source_track_id);
-    let target_track_id = new_track_id.map(TrackId::from).unwrap_or(source_track_id);
-    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+    let source_track_id = TrackId::from_u64(source_track_id);
+    let target_track_id = new_track_id
+        .map(TrackId::from_u64)
+        .unwrap_or(source_track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
 
     let res =
         clip_api::batch_move_clips(ctx, source_track_id, target_track_id, clip_ids, delta_ticks)
@@ -188,13 +195,13 @@ pub fn move_clip_batch(
 /// Resize clips in batch by a delta amount
 pub fn resize_clip_batch(
     ctx: &mut DawContext,
-    track_id: u32,
-    clip_ids: Vec<u32>,
+    track_id: u64,
+    clip_ids: Vec<u64>,
     edge: UiResizeEdge,
     delta_ticks: i64,
 ) -> Result<Vec<UiClip>, String> {
-    let track_id = TrackId::from(track_id);
-    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+    let track_id = TrackId::from_u64(track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
     let core_edge: ResizeEdge = edge.into();
     let res = clip_api::batch_resize_clips(ctx, track_id, clip_ids, core_edge, delta_ticks)
         .map_err(|e| format!("{}", e))?;
@@ -207,12 +214,12 @@ pub fn resize_clip_batch(
 /// ClipboardContent.
 pub fn duplicate_clip_groups(
     ctx: &mut DawContext,
-    track_id: u32,
-    clip_ids: Vec<u32>,
+    track_id: u64,
+    clip_ids: Vec<u64>,
     group_start_times: Vec<u64>,
 ) -> Result<Vec<UiClip>, String> {
-    let track_id = TrackId::from(track_id);
-    let clip_ids = clip_ids.into_iter().map(ClipId::from).collect();
+    let track_id = TrackId::from_u64(track_id);
+    let clip_ids = clip_ids.into_iter().map(ClipId::from_u64).collect();
     let duplicated =
         clip_api::batch_duplicate_clip_groups(ctx, track_id, clip_ids, group_start_times)
             .map_err(|error| error.to_string())?;
@@ -223,11 +230,11 @@ pub fn duplicate_clip_groups(
 /// Delete clips in batch
 pub fn delete_clip_batch(
     ctx: &mut DawContext,
-    track_id: u32,
-    clip_ids: Vec<u32>,
+    track_id: u64,
+    clip_ids: Vec<u64>,
 ) -> Result<(), String> {
-    let track_id = TrackId::from(track_id);
-    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+    let track_id = TrackId::from_u64(track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
     clip_api::batch_delete_clips(ctx, track_id, clip_ids)
         .map_err(|e| format!("Failed to delete clips: {}", e))?;
 
@@ -236,10 +243,10 @@ pub fn delete_clip_batch(
 
 pub fn change_track_name(
     ctx: &mut DawContext,
-    track_id: u32,
+    track_id: u64,
     new_name: &str,
 ) -> Result<(), String> {
-    track_api::change_track_name(ctx, TrackId::from(track_id), new_name)
+    track_api::change_track_name(ctx, TrackId::from_u64(track_id), new_name)
         .map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -247,19 +254,19 @@ pub fn change_track_name(
 /// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
 pub fn change_track_color(
     ctx: &mut DawContext,
-    track_id: u32,
+    track_id: u64,
     new_color: &str,
 ) -> Result<(), String> {
-    track_api::change_track_color(ctx, TrackId::from(track_id), new_color)
+    track_api::change_track_color(ctx, TrackId::from_u64(track_id), new_color)
         .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Delete a track from the timeline. This function returns a string which will be
 /// "audio", "midi", or "automation"
-pub fn delete_track(ctx: &mut DawContext, track_id: u32) -> Result<String, String> {
+pub fn delete_track(ctx: &mut DawContext, track_id: u64) -> Result<String, String> {
     let removed_track_type =
-        track_api::delete_track(ctx, track_id.into()).map_err(|e| e.to_string())?;
+        track_api::delete_track(ctx, TrackId::from_u64(track_id)).map_err(|e| e.to_string())?;
     let type_string = match removed_track_type {
         karbeat_core::core::project::TrackType::Audio => "audio",
         karbeat_core::core::project::TrackType::Midi => "midi",
@@ -272,14 +279,15 @@ pub fn delete_track(ctx: &mut DawContext, track_id: u32) -> Result<String, Strin
 /// Update track order in the timeline
 pub fn update_track_order(
     ctx: &mut DawContext,
-    track_id: u32,
+    track_id: u64,
     new_idx: usize,
 ) -> Result<(), String> {
-    track_api::update_track_order(ctx, track_id.into(), new_idx).map_err(|e| e.to_string())
+    track_api::update_track_order(ctx, TrackId::from_u64(track_id), new_idx)
+        .map_err(|e| e.to_string())
 }
 
 /// Rename clip. Could result in error if [new_name]
 /// does not meet the required constraint or the clip not found
-pub fn rename_clip(ctx: &mut DawContext, clip_id: u32, new_name: &str) -> Result<(), String> {
-    clip_api::rename_clip(ctx, clip_id.into(), new_name).map_err(|e| e.to_string())
+pub fn rename_clip(ctx: &mut DawContext, clip_id: u64, new_name: &str) -> Result<(), String> {
+    clip_api::rename_clip(ctx, ClipId::from_u64(clip_id), new_name).map_err(|e| e.to_string())
 }

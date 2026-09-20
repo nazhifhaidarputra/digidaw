@@ -3,6 +3,7 @@ use crate::core::history::ProjectAction;
 use crate::core::project::{Note, NoteId};
 use crate::shared::id::*;
 
+/// Adds a note to a MIDI pattern, records history, and republishes the track graph.
 pub fn add_note(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -24,6 +25,7 @@ pub fn add_note(
     Ok(note)
 }
 
+/// Removes one note from a MIDI pattern and records the removed note for undo.
 pub fn delete_note(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -45,6 +47,7 @@ pub fn delete_note(
     Ok(note)
 }
 
+/// Changes a note's start tick and key while preserving its remaining parameters.
 pub fn move_note(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -71,6 +74,7 @@ pub fn move_note(
     Ok(note)
 }
 
+/// Changes a note's duration and records its previous duration for undo.
 pub fn resize_note(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -95,6 +99,7 @@ pub fn resize_note(
     Ok(note)
 }
 
+/// Updates optional velocity, release velocity, and mute values for one note.
 pub fn change_note_params(
     ctx: &mut DawContext,
     pattern_id: PatternId,
@@ -152,6 +157,7 @@ pub fn add_notes_batch(
     Ok(added_notes)
 }
 
+/// Removes selected notes from one pattern as a single history action.
 pub fn delete_notes_batch(
     ctx: &mut DawContext,
     pattern_id: PatternId,

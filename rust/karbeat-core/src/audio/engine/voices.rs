@@ -1,9 +1,11 @@
 use karbeat_plugin_api::types::{MidiEvent, MidiMessage};
+use memmap2::Mmap;
 use smallvec::SmallVec;
+use std::sync::Arc;
 
 use crate::{
     audio::{engine::helper::render_audio_waveform, render_state::AudioPluginState},
-    core::project::{AudioWaveform, Clip, GeneratorInstance, Note, Pattern},
+    core::project::{AudioWaveform, GeneratorInstance, Note, Pattern},
     shared::constants::f64::PPQ,
     shared::{GeneratorId, TrackId},
 };
@@ -16,7 +18,6 @@ pub struct GeneratorVoice {
     pub active: bool,
     pub playing_keys: Vec<u8>,
     pub playing_notes: SmallVec<[PlayingNote; 8]>,
-    pub tail_remaining: Option<u32>,
 }
 
 #[cfg(test)]
@@ -89,7 +90,6 @@ impl GeneratorVoice {
             active,
             playing_keys: Vec::new(),
             playing_notes: SmallVec::new(),
-            tail_remaining: None,
         }
     }
 
@@ -154,7 +154,14 @@ impl VoiceState {
 /// Scheduled audio clip playback state.
 pub struct AudioVoice {
     pub track_id: TrackId,
-    pub waveform: AudioWaveform,
+    pub source: Arc<Mmap>,
+    pub source_channels: usize,
+    pub source_sample_rate: u32,
+    pub sample_mode: crate::core::project::audio_waveform::AudioSampleMode,
+    pub original_bpm: f32,
+    pub is_looping: bool,
+    pub source_start_sample: usize,
+    pub source_end_sample: usize,
     /// Frame offset at which rendering starts in the current block.
     pub output_offset_samples: usize,
     /// Fractional source frame position.
@@ -311,16 +318,23 @@ impl VoiceState {
             .filter(|voice| voice.track_id == track_id)
         {
             did_render = true;
-            let source_channels = voice.waveform.channels as usize;
-            let Some(context) = voice.waveform.get_playback_context(bpm) else {
+            let raw_source: &[f32] = bytemuck::cast_slice(&voice.source[..]);
+            let Some(source) = raw_source.get(voice.source_start_sample..voice.source_end_sample)
+            else {
                 continue;
             };
 
-            let step =
-                voice.waveform.sample_rate as f64 / sample_rate as f64 * context.playback_rate;
-            let source = context.buffer;
-            let source_frames = (source.len() / source_channels) as f64;
-            let is_looping = voice.waveform.is_looping && source_frames > 0.0;
+            let playback_rate = match voice.sample_mode {
+                crate::core::project::audio_waveform::AudioSampleMode::Default => 1.0,
+                crate::core::project::audio_waveform::AudioSampleMode::Stretch
+                | crate::core::project::audio_waveform::AudioSampleMode::Resampled => {
+                    (bpm / voice.original_bpm.max(1.0)) as f64
+                }
+            };
+
+            let step = voice.source_sample_rate as f64 / sample_rate as f64 * playback_rate;
+            let source_frames = (source.len() / voice.source_channels) as f64;
+            let is_looping = voice.is_looping && source_frames > 0.0;
             let mut frames_to_process = buffer_frames.saturating_sub(voice.output_offset_samples);
 
             if !is_looping {
@@ -338,9 +352,9 @@ impl VoiceState {
             let start = voice.output_offset_samples * channels;
             let end = start + frames_to_process * channels;
             render_audio_waveform(
-                &context.mode,
+                &voice.sample_mode,
                 source,
-                source_channels,
+                voice.source_channels,
                 &mut output[start..end],
                 channels,
                 &mut voice.source_read_index,
@@ -428,28 +442,37 @@ impl VoiceState {
     pub fn prepare_audio_voice(
         &mut self,
         track_id: TrackId,
-        clip: &Clip,
+        clip_start: u32,
+        clip_loop_length: u32,
+        clip_offset: u32,
         waveform: &AudioWaveform,
         buffer_start: u32,
         buffer_end: u32,
         sample_rate: u32,
     ) {
-        let clip_start = clip.time.start_time_raw() as u32;
         let render_start = buffer_start.max(clip_start);
-        let render_end = buffer_end.min(clip_start + clip.time.loop_length_raw() as u32);
+        let render_end = buffer_end.min(clip_start + clip_loop_length);
         if render_end <= render_start {
             return;
         }
 
         let output_offset_samples = (render_start - buffer_start) as usize;
         let clip_elapsed_samples = render_start - clip_start;
-        let effective_position = clip_elapsed_samples + clip.time.offset_start_raw() as u32;
+        let effective_position = clip_elapsed_samples + clip_offset;
         let source_position =
             effective_position as f64 * waveform.sample_rate as f64 / sample_rate as f64;
         let Some(source) = waveform.get_playable_buffer() else {
             return;
         };
-        let source_frames = (source.len() / waveform.channels as usize) as f64;
+        let Some(mapped_source) = waveform.buffer.as_ref() else {
+            return;
+        };
+        let raw_source: &[f32] = bytemuck::cast_slice(&mapped_source[..]);
+        let source_start_sample = source.as_ptr() as usize - raw_source.as_ptr() as usize;
+        let source_start_sample = source_start_sample / std::mem::size_of::<f32>();
+        let source_end_sample = source_start_sample + source.len();
+        let source_channels = waveform.channels as usize;
+        let source_frames = (source.len() / source_channels) as f64;
         let source_read_index = if waveform.is_looping && source_frames > 0.0 {
             source_position % source_frames
         } else {
@@ -461,13 +484,20 @@ impl VoiceState {
 
         self.active_oneshots.push(AudioVoice {
             track_id,
-            waveform: waveform.clone(),
+            source: Arc::clone(mapped_source),
+            source_channels,
+            source_sample_rate: waveform.sample_rate,
+            sample_mode: waveform.sample_mode,
+            original_bpm: waveform.original_bpm,
+            is_looping: waveform.is_looping,
+            source_start_sample,
+            source_end_sample,
             output_offset_samples,
             source_read_index,
             start_boundary: 0.0,
             end_boundary: source_frames,
             clip_elapsed_samples,
-            clip_loop_length: clip.time.loop_length_raw() as u32,
+            clip_loop_length,
         });
     }
 
@@ -475,8 +505,10 @@ impl VoiceState {
         events: &mut SmallVec<[MidiEvent; 4]>,
         sample_rate: u32,
         tempo: f32,
-        clip: &Clip,
         pattern: &Pattern,
+        clip_start: u32,
+        clip_loop_length: u32,
+        clip_offset: u32,
         buffer_start: u32,
         buffer_end: u32,
     ) {
@@ -489,9 +521,7 @@ impl VoiceState {
             return;
         }
 
-        let clip_start = clip.time.start_time_raw() as u32;
-        let clip_end = clip_start + clip.time.loop_length_raw() as u32;
-        let clip_offset = clip.time.offset_start_raw() as u32;
+        let clip_end = clip_start + clip_loop_length;
 
         for note in &pattern.notes {
             let note_id = Self::note_event_id(pattern.id, note.id);
@@ -528,7 +558,6 @@ impl VoiceState {
                 });
             }
         }
-        events.sort_by_key(|event| event.sample_offset);
     }
 
     pub fn schedule_pattern_notes(

@@ -17,7 +17,12 @@ use crate::core::{
 const KARBEAT_MAGIC_HEADER: &[u8; 8] = b"KARBEAT1";
 
 pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyhow::Result<()> {
-    let mut file = File::create(save_path)?;
+    let parent = save_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    let file = temporary.as_file_mut();
     file.write_all(KARBEAT_MAGIC_HEADER)?;
     let metadata_toml = toml::to_string(&app_state.metadata)?;
 
@@ -74,7 +79,8 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
     zip.start_file("project.msgpack", deflated_options)?;
     zip.write_all(&project_msgpack)?;
 
-    zip.finish()?;
+    zip.finish()?.sync_all()?;
+    temporary.persist(save_path).map_err(|error| error.error)?;
     Ok(())
 }
 
@@ -227,6 +233,18 @@ mod test {
     use tempfile::tempdir;
 
     const SAMPLE_RATE: u32 = 48000;
+
+    #[test]
+    fn failed_replacement_cleans_temporary_archive_and_preserves_destination() {
+        let dir = tempdir().unwrap();
+        let destination = dir.path().join("existing.karbeat");
+        std::fs::create_dir(&destination).unwrap();
+        let previous = destination.join("previous");
+        std::fs::write(&previous, b"keep").unwrap();
+        assert!(save_daw_project(&destination, &ApplicationState::default()).is_err());
+        assert_eq!(std::fs::read(previous).unwrap(), b"keep");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
 
     #[test]
     fn it_should_be_able_to_save_project() {
