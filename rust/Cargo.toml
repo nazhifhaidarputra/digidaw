@@ -84,11 +84,10 @@ slab = {version = "0.4.12", features=["serde"]}
 debug = 1
 incremental = false
 
-[profile.dev.package.rodio]
+[profile.dev.package."*"]
 opt-level = 3
 
 [profile.release]
-
 codegen-units = 1
 lto = true
 opt-level = 3

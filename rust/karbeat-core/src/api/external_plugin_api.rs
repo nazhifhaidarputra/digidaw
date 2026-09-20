@@ -21,6 +21,25 @@ use crate::{
     },
 };
 
+// This is note for the developer for future plan purpose
+// DO NOT REMOVE IT!!!!!!
+// TODO: Refactor all call which directly call karbeat-vst, instead of calling it, use pattern matching
+// for the external plugin kind. then we call each handler function through polymorphism
+//
+// Stub example
+// match plugin.kind {
+//  Vst3 => karbeat_vst3::prelude::call(callback)
+//  Lv2 => karbeat_lv2::prelude::call(callback)
+// Clap => karbeat_clap::prelude::call(callback)
+//}
+//
+// or
+// 
+// karbeat_safe_plugin_bindings::some_plugin_actions()
+// 
+// Requires a safe bindings which every plugins hosted needs to implement
+// and comply
+
 pub enum HostedTargetLookup {
     Resolved(karbeat_host::HostInstanceId),
     Query {
