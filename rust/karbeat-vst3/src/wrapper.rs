@@ -4,7 +4,7 @@ use crate::{
     api::{EventList, ParameterChanges},
     context::ParameterExchange,
 };
-use karbeat_host::{HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate};
+use karbeat_host_api::{HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate};
 use karbeat_plugin_api::prelude::{
     AudioBuffers, AudioPlugin, BusConfig, MidiMessage, NoteExpressionType, ParameterSpec,
     ProcessContext,
@@ -602,7 +602,7 @@ pub struct Vst3Processor {
     pub(crate) bypass: bool,
     pub(crate) reset_pending: bool,
     pub(crate) latency_seen: u32,
-    pub(crate) bypass_delay: karbeat_host::bypass::BypassDelay,
+    pub(crate) bypass_delay: karbeat_host_api::bypass::BypassDelay,
 }
 impl Drop for Vst3Processor {
     fn drop(&mut self) {
@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn bypass_suspension_and_reset_release_old_notes_without_discarding_new_notes() {
-        use karbeat_host::{PluginFormat, PluginIdentity, PluginKind};
+        use karbeat_host_api::{PluginFormat, PluginIdentity, PluginKind};
         use karbeat_plugin_api::prelude::MidiEvent;
         for scenario in 0..3 {
             let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
@@ -937,7 +937,7 @@ mod tests {
                 bypass: false,
                 reset_pending: false,
                 latency_seen: 0,
-                bypass_delay: karbeat_host::bypass::BypassDelay::new(1, 0).unwrap(),
+                bypass_delay: karbeat_host_api::bypass::BypassDelay::new(1, 0).unwrap(),
             };
             let note_on = |key, note_id| MidiEvent {
                 sample_offset: 7,

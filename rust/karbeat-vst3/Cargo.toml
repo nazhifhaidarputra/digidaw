@@ -9,7 +9,7 @@ license = "GPL 3.0"
 [dependencies]
 vst3 = "0.3.0"
 karbeat-plugin-api.workspace = true
-karbeat-host.workspace = true
+karbeat-host-api.workspace = true
 libloading.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -17,6 +17,8 @@ log.workspace = true
 glib.workspace = true
 raw-window-handle.workspace = true
 rtrb.workspace = true
+futures-lite.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

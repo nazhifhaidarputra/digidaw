@@ -1,6 +1,10 @@
 use super::{
-    engine::{AudioEngine, RetiredGraphState}, helper::*, telemetry::PluginTelemetrySnapshot,
-    transport::PlaybackMode, types::*, voices::PreviewVoice,
+    engine::{AudioEngine, RetiredGraphState},
+    helper::*,
+    telemetry::PluginTelemetrySnapshot,
+    transport::PlaybackMode,
+    types::*,
+    voices::PreviewVoice,
 };
 use crate::{
     audio::{
@@ -21,17 +25,23 @@ impl AudioEngine {
     pub fn process_command(&mut self, cmd: AudioCommand) {
         match cmd {
             AudioCommand::InstallHostedProject(mut transfer) => {
-                use crate::audio::hosted_plugin::HostedInstallStatus;
-                let Some(project) = transfer.get_mut() else { return; };
-                if !project.begin() { return; }
-                if self.config.sample_rate != project.sample_rate || self.config.num_channels != 2 || self.processing_mode != karbeat_plugin_api::types::ProcessingMode::Realtime {
-                    project.complete(HostedInstallStatus::InvalidConfiguration);
+                use crate::audio::hosted_plugin::HostedInstallResult;
+                let Some(project) = transfer.get_mut() else {
+                    return;
+                };
+                if self.config.sample_rate != project.sample_rate
+                    || self.config.num_channels != 2
+                    || self.processing_mode != karbeat_plugin_api::types::ProcessingMode::Realtime
+                {
+                    project.complete(HostedInstallResult::InvalidConfiguration);
                     return;
                 }
                 for command in &mut project.commands {
-                    if let Some(command) = command.take() { self.process_command(command); }
+                    if let Some(command) = command.take() {
+                        self.process_command(command);
+                    }
                 }
-                project.complete(HostedInstallStatus::Installed);
+                project.complete(HostedInstallResult::Installed);
             }
 
             AudioCommand::ReconfigureHostedPlugins(reconfiguration) => {
@@ -184,7 +194,6 @@ impl AudioEngine {
                 plugin,
                 telemetry,
             } => {
-
                 self.plugin_state.insert_generator(AudioGeneratorInstance {
                     id: generator_id,
                     track_id,
@@ -355,7 +364,6 @@ impl AudioEngine {
                 plugin: effect,
                 telemetry,
             } => {
-
                 let instance = AudioEffectInstance {
                     id: effect_id,
                     registry_id,
@@ -1144,11 +1152,14 @@ impl AudioEngine {
                         entry.insert(buf);
                     }
                 } else {
-                    if let Some(subscription) = self.telemetry
+                    if let Some(subscription) = self
+                        .telemetry
                         .active_telemetry_subscriptions
                         .remove(&target)
                     {
-                        self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
+                        self.retire_graph_state(RetiredGraphState::TelemetrySubscription(
+                            subscription,
+                        ));
                     }
                 }
             }

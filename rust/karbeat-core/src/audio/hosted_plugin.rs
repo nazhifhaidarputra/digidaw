@@ -1,27 +1,19 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicU8, Ordering},
-};
-
 use karbeat_host::{PreparedProcessor, ProcessingConfig};
 
 use crate::{audio::event::PluginTarget, shared::TrackId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
-pub enum HostedInstallStatus {
-    Pending,
-    Applying,
+pub enum HostedInstallResult {
     Installed,
-    Cancelled,
     InvalidConfiguration,
     MissingTarget,
     OccupiedTarget,
 }
 
-/// Acknowledgement remains outside the telemetry channel and never blocks processing.
+/// Control-side completion for one committed hosted installation.
 pub struct HostedInstallReceipt {
-    status: Arc<AtomicU8>,
+    result: rtrb::Consumer<HostedInstallResult>,
     telemetry: Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>>,
 }
 impl HostedInstallReceipt {
@@ -30,28 +22,17 @@ impl HostedInstallReceipt {
     ) -> Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>> {
         self.telemetry.take()
     }
-    pub fn status(&self) -> HostedInstallStatus {
-        match self.status.load(Ordering::Acquire) {
-            0 => HostedInstallStatus::Pending,
-            1 => HostedInstallStatus::Applying,
-            2 => HostedInstallStatus::Installed,
-            3 => HostedInstallStatus::Cancelled,
-            4 => HostedInstallStatus::InvalidConfiguration,
-            5 => HostedInstallStatus::MissingTarget,
-            _ => HostedInstallStatus::OccupiedTarget,
+    /// Awaits the single terminal result published through the lock-free audio feedback path.
+    pub async fn wait(&mut self) -> Result<HostedInstallResult, karbeat_host::HostError> {
+        loop {
+            match self.result.pop() {
+                Ok(result) => return Ok(result),
+                Err(rtrb::PopError::Empty) if self.result.is_abandoned() => {
+                    return Err(karbeat_host::HostError::RuntimeUnavailable);
+                }
+                Err(rtrb::PopError::Empty) => futures_lite::future::yield_now().await,
+            }
         }
-    }
-
-    /// A successful cancellation guarantees the engine will not install this endpoint.
-    pub fn cancel(&self) -> bool {
-        self.status
-            .compare_exchange(
-                HostedInstallStatus::Pending as u8,
-                HostedInstallStatus::Cancelled as u8,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
     }
 }
 
@@ -66,7 +47,7 @@ pub struct HostedPluginInstall {
         Option<triple_buffer::Input<crate::audio::engine::PluginTelemetrySnapshot>>,
     pub(crate) bypass: bool,
     pub(crate) replace_missing: bool,
-    status: Arc<AtomicU8>,
+    result: Option<rtrb::Producer<HostedInstallResult>>,
 }
 impl HostedPluginInstall {
     /// Construct on a control worker after native preparation and retirement reservation.
@@ -77,14 +58,14 @@ impl HostedPluginInstall {
         config: ProcessingConfig,
         endpoint: PreparedProcessor,
     ) -> (Self, HostedInstallReceipt) {
-        let status = Arc::new(AtomicU8::new(HostedInstallStatus::Pending as u8));
+        let (result_tx, result) = rtrb::RingBuffer::new(1);
         let (input, output) =
             triple_buffer::triple_buffer(&crate::audio::engine::PluginTelemetrySnapshot {
                 parameters: endpoint.parameter_values(),
                 ..Default::default()
             });
         let receipt = HostedInstallReceipt {
-            status: status.clone(),
+            result,
             telemetry: Some(output),
         };
         (
@@ -98,7 +79,7 @@ impl HostedPluginInstall {
                 replace_missing: false,
                 graph: None,
                 telemetry: Some(input),
-                status,
+                result: Some(result_tx),
             },
             receipt,
         )
@@ -119,19 +100,11 @@ impl HostedPluginInstall {
         self
     }
 
-    pub(crate) fn begin(&self) -> bool {
-        self.status
-            .compare_exchange(
-                HostedInstallStatus::Pending as u8,
-                HostedInstallStatus::Applying as u8,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
-    }
-
-    pub(crate) fn complete(&self, status: HostedInstallStatus) {
-        self.status.store(status as u8, Ordering::Release);
+    pub(crate) fn complete(&mut self, result: HostedInstallResult) {
+        if let Some(mut sender) = self.result.take() {
+            let published = sender.push(result);
+            debug_assert!(published.is_ok());
+        }
     }
 }
 
@@ -164,17 +137,6 @@ impl From<&crate::core::project::ApplicationState> for HostedTrackGraph {
         }
     }
 }
-impl Drop for HostedPluginInstall {
-    fn drop(&mut self) {
-        let _ = self.status.compare_exchange(
-            HostedInstallStatus::Pending as u8,
-            HostedInstallStatus::Cancelled as u8,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        );
-    }
-}
-
 pub struct HostedPluginReplacement {
     pub(crate) target: PluginTarget,
     pub(crate) expected: karbeat_host::HostInstanceId,
@@ -205,7 +167,7 @@ pub struct HostedPluginReconfiguration {
     pub(crate) replacements: Box<[HostedPluginReplacement]>,
     pub(crate) sample_rate: u32,
     pub(crate) block_size: usize,
-    status: Arc<AtomicU8>,
+    result: Option<rtrb::Producer<HostedInstallResult>>,
 }
 
 impl HostedPluginReconfiguration {
@@ -214,9 +176,9 @@ impl HostedPluginReconfiguration {
         sample_rate: u32,
         block_size: usize,
     ) -> (Self, HostedInstallReceipt) {
-        let status = Arc::new(AtomicU8::new(HostedInstallStatus::Pending as u8));
+        let (result_tx, result) = rtrb::RingBuffer::new(1);
         let receipt = HostedInstallReceipt {
-            status: status.clone(),
+            result,
             telemetry: None,
         };
         (
@@ -224,65 +186,40 @@ impl HostedPluginReconfiguration {
                 replacements: replacements.into_boxed_slice(),
                 sample_rate,
                 block_size,
-                status,
+                result: Some(result_tx),
             },
             receipt,
         )
     }
 
-    pub(crate) fn begin(&self) -> bool {
-        self.status
-            .compare_exchange(
-                HostedInstallStatus::Pending as u8,
-                HostedInstallStatus::Applying as u8,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
-    }
-
-    pub(crate) fn complete(&self, status: HostedInstallStatus) {
-        self.status.store(status as u8, Ordering::Release);
-    }
-}
-
-impl Drop for HostedPluginReconfiguration {
-    fn drop(&mut self) {
-        let _ = self.status.compare_exchange(
-            HostedInstallStatus::Pending as u8,
-            HostedInstallStatus::Cancelled as u8,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        );
+    pub(crate) fn complete(&mut self, result: HostedInstallResult) {
+        if let Some(mut sender) = self.result.take() {
+            let published = sender.push(result);
+            debug_assert!(published.is_ok());
+        }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
-pub enum HostedRemovalStatus {
-    Pending,
-    Applying,
+pub enum HostedRemovalResult {
     Removed,
-    Cancelled,
     StaleTarget,
 }
 
-pub struct HostedRemovalReceipt(Arc<AtomicU8>);
+pub struct HostedRemovalReceipt(rtrb::Consumer<HostedRemovalResult>);
 impl HostedRemovalReceipt {
-    pub fn status(&self) -> HostedRemovalStatus {
-        match self.0.load(Ordering::Acquire) {
-            0 => HostedRemovalStatus::Pending,
-            1 => HostedRemovalStatus::Applying,
-            2 => HostedRemovalStatus::Removed,
-            3 => HostedRemovalStatus::Cancelled,
-            _ => HostedRemovalStatus::StaleTarget,
+    /// Awaits the single terminal removal result from the audio engine.
+    pub async fn wait(&mut self) -> Result<HostedRemovalResult, karbeat_host::HostError> {
+        loop {
+            match self.0.pop() {
+                Ok(result) => return Ok(result),
+                Err(rtrb::PopError::Empty) if self.0.is_abandoned() => {
+                    return Err(karbeat_host::HostError::RuntimeUnavailable);
+                }
+                Err(rtrb::PopError::Empty) => futures_lite::future::yield_now().await,
+            }
         }
-    }
-
-    pub fn cancel(&self) -> bool {
-        self.0
-            .compare_exchange(0, 3, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
     }
 }
 
@@ -292,15 +229,15 @@ pub struct HostedPluginRemoval {
     pub(crate) targets: Box<[(PluginTarget, Option<karbeat_host::HostInstanceId>)]>,
     pub(crate) graph: Option<HostedTrackGraph>,
     pub(crate) telemetry: Vec<triple_buffer::Input<crate::audio::engine::PluginTelemetrySnapshot>>,
-    status: Arc<AtomicU8>,
+    result: Option<rtrb::Producer<HostedRemovalResult>>,
 }
 impl HostedPluginRemoval {
     pub fn new(
         targets: Vec<(PluginTarget, Option<karbeat_host::HostInstanceId>)>,
         graph: Option<HostedTrackGraph>,
     ) -> (Self, HostedRemovalReceipt) {
-        let status = Arc::new(AtomicU8::new(0));
-        let receipt = HostedRemovalReceipt(status.clone());
+        let (result_tx, result) = rtrb::RingBuffer::new(1);
+        let receipt = HostedRemovalReceipt(result);
         let telemetry = Vec::with_capacity(targets.len());
         (
             Self {
@@ -308,7 +245,7 @@ impl HostedPluginRemoval {
                 targets: targets.into_boxed_slice(),
                 graph,
                 telemetry,
-                status,
+                result: Some(result_tx),
             },
             receipt,
         )
@@ -319,21 +256,11 @@ impl HostedPluginRemoval {
         self
     }
 
-    pub(crate) fn begin(&self) -> bool {
-        self.status
-            .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    }
-
-    pub(crate) fn complete(&self, status: HostedRemovalStatus) {
-        self.status.store(status as u8, Ordering::Release);
-    }
-}
-impl Drop for HostedPluginRemoval {
-    fn drop(&mut self) {
-        let _ = self
-            .status
-            .compare_exchange(0, 3, Ordering::AcqRel, Ordering::Acquire);
+    pub(crate) fn complete(&mut self, result: HostedRemovalResult) {
+        if let Some(mut sender) = self.result.take() {
+            let published = sender.push(result);
+            debug_assert!(published.is_ok());
+        }
     }
 }
 
@@ -341,40 +268,31 @@ impl Drop for HostedPluginRemoval {
 pub struct HostedProjectInstall {
     pub(crate) commands: Vec<Option<crate::commands::AudioCommand>>,
     pub(crate) sample_rate: u32,
-    status: Arc<AtomicU8>,
+    result: Option<rtrb::Producer<HostedInstallResult>>,
 }
 impl HostedProjectInstall {
     pub fn new(
         commands: Vec<crate::commands::AudioCommand>,
         sample_rate: u32,
     ) -> (Self, HostedInstallReceipt) {
-        let status = Arc::new(AtomicU8::new(0));
+        let (result_tx, result) = rtrb::RingBuffer::new(1);
         let receipt = HostedInstallReceipt {
-            status: status.clone(),
+            result,
             telemetry: None,
         };
         (
             Self {
                 commands: commands.into_iter().map(Some).collect(),
                 sample_rate,
-                status,
+                result: Some(result_tx),
             },
             receipt,
         )
     }
-    pub(crate) fn begin(&self) -> bool {
-        self.status
-            .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    }
-    pub(crate) fn complete(&self, status: HostedInstallStatus) {
-        self.status.store(status as u8, Ordering::Release);
-    }
-}
-impl Drop for HostedProjectInstall {
-    fn drop(&mut self) {
-        let _ = self
-            .status
-            .compare_exchange(0, 3, Ordering::AcqRel, Ordering::Acquire);
+    pub(crate) fn complete(&mut self, result: HostedInstallResult) {
+        if let Some(mut sender) = self.result.take() {
+            let published = sender.push(result);
+            debug_assert!(published.is_ok());
+        }
     }
 }

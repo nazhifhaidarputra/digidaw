@@ -7,7 +7,7 @@ use crate::{
     module::{self, Vst3Module},
     wrapper::Vst3Processor,
 };
-use karbeat_host::*;
+use karbeat_host_api::*;
 use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, sync::atomic::Ordering, thread::ThreadId};
 use vst3::{
@@ -260,7 +260,7 @@ impl PluginInstanceManager for Vst3PluginHost {
         if instance.endpoint_taken {
             return Err(HostError::InvalidTransition);
         }
-        let bypass_delay = karbeat_host::bypass::BypassDelay::new(
+        let bypass_delay = karbeat_host_api::bypass::BypassDelay::new(
             2,
             usize::try_from(slot.latency.load(Ordering::Acquire))
                 .map_err(|_| HostError::InvalidConfiguration)?,

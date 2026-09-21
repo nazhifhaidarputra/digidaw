@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use karbeat_host::{HostError, PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
+use karbeat_host_api::{HostError, PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
 use libloading::Library;
 use vst3::{
     ComPtr,

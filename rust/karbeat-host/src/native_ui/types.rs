@@ -353,9 +353,6 @@ pub enum NativeUiError {
     /// Bounded cross-thread native UI request queue has no free slot.
     #[error("native UI request queue is full")]
     QueueFull,
-    /// Queued native UI request was cancelled before its closure started.
-    #[error("native UI request was cancelled before execution")]
-    RequestCancelled,
     /// Native UI request or result channel disconnected.
     #[error("native UI request channel disconnected")]
     RequestDisconnected,

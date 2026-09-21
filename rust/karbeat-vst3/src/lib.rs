@@ -27,6 +27,7 @@
 pub mod api;
 mod context;
 mod editor;
+mod executor;
 mod host;
 mod instance;
 /// VST3 bundle discovery, dynamic loading, factory enumeration, and class-ID conversion.
@@ -35,5 +36,6 @@ pub mod native;
 mod run_loop;
 mod wrapper;
 
+pub use executor::Vst3Executor;
 pub use host::Vst3PluginHost;
 pub use wrapper::Vst3Processor;

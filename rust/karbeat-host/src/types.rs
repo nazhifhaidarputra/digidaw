@@ -11,8 +11,6 @@ pub enum PluginFormat {
     Lv2,
     /// CLAP plugin.
     Clap,
-    /// Apple Audio Unit plugin.
-    Au,
 }
 
 /// Format-native identity, independent of installation location and UI registry IDs.
@@ -55,6 +53,17 @@ pub struct PluginDescriptor {
 /// IDs are never reused during a host's lifetime.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct HostInstanceId(pub u64);
+
+/// Runtime instance handle paired with the ABI executor that owns it.
+///
+/// The handle is never serialized; projects persist [`PluginIdentity`] instead.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct ExternalPluginInstanceHandle {
+    /// External plugin ABI used to route control operations.
+    pub format: PluginFormat,
+    /// Executor-local runtime identifier.
+    pub id: HostInstanceId,
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 /// Optional facilities exposed by a created plugin instance.
@@ -176,8 +185,8 @@ pub enum HostError {
     /// Instance cannot transition yet, commonly because an audio block still owns DSP access.
     #[error("plugin instance is busy; wait for audio suspension acknowledgement")]
     Busy,
-    /// A waiting state request was cancelled before its native operation began.
-    #[error("plugin state request was cancelled before execution")]
+    /// An isolated discovery scan was cancelled before it completed.
+    #[error("plugin discovery was cancelled")]
     Cancelled,
     /// Restoring the prior running state failed after a state operation or suspension failure.
     #[error("could not resume plugin processing: {resume}; state operation error: {operation:?}")]
@@ -232,6 +241,12 @@ pub enum HostError {
     /// Cross-thread native-owner dispatch failed.
     #[error("native plugin dispatch: {0}")]
     NativeDispatch(String),
+    /// The bounded control request queue has no available capacity.
+    #[error("external plugin host request queue is full")]
+    QueueFull,
+    /// The asynchronous host service is shutting down or unavailable.
+    #[error("external plugin host runtime is unavailable")]
+    RuntimeUnavailable,
     /// Native editor windowing or UI dispatch failed.
     #[error(transparent)]
     NativeUi(#[from] crate::native_ui::NativeUiError),

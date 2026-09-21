@@ -1,6 +1,6 @@
 use std::{fs::File, path::PathBuf, process::ExitCode};
 
-use karbeat_host::scanner::{ProbeResponse, SCANNER_PROTOCOL_VERSION};
+use karbeat_host_api::scanner::{ProbeResponse, SCANNER_PROTOCOL_VERSION};
 use karbeat_vst3::module::Vst3Module;
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {

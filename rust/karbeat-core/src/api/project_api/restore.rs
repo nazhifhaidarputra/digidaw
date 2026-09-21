@@ -1,7 +1,7 @@
 use crate::{
     audio::{
         event::PluginTarget,
-        hosted_plugin::{HostedInstallStatus, HostedPluginInstall, HostedProjectInstall},
+        hosted_plugin::{HostedInstallResult, HostedPluginInstall, HostedProjectInstall},
         missing_plugin::MissingPlugin,
         render_state::AudioGraphState,
     },
@@ -14,10 +14,9 @@ use crate::{
 use anyhow::Context;
 use hashbrown::HashMap;
 use indexmap::IndexMap;
-use karbeat_host::{PluginInstanceManager, PluginKind, ProcessingConfig};
-use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
+use karbeat_host::{PluginKind, ProcessingConfig};
 use karbeat_plugin_api::types::BusConfig;
-use std::time::{Duration, Instant};
+use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 
 pub(super) fn plugins(app: &ApplicationState) -> Vec<(PluginTarget, &PluginInstance)> {
     let mut plugins = Vec::new();
@@ -174,7 +173,7 @@ pub struct CompletedProjectRestore {
     missing: HashMap<PluginTarget, String>,
     receipts: Vec<(
         PluginTarget,
-        karbeat_host::HostInstanceId,
+        karbeat_host::ExternalPluginInstanceHandle,
         crate::audio::hosted_plugin::HostedInstallReceipt,
     )>,
 }
@@ -224,6 +223,7 @@ pub(super) fn execute_replace(
     let mut missing = HashMap::new();
     let mut installs = Vec::new();
     let mut receipts = Vec::new();
+    let mut control_retirements: Vec<Box<dyn FnMut() -> bool>> = Vec::new();
     for (target, plugin) in plugins(&pending.staged) {
         let Some(external) = &plugin.external else {
             continue;
@@ -249,7 +249,13 @@ pub(super) fn execute_replace(
             offline: false,
         };
         let state = external.state.clone();
-        let prepared = karbeat_vst3::native::prepare_instance(descriptor, config.clone(), state);
+        let prepared = futures_lite::future::block_on(pending.handles.external_plugins.prepare(
+            karbeat_host::PrepareRequest {
+                descriptor,
+                config: config.clone(),
+                state,
+            },
+        ));
         let prepared = match prepared {
             Ok(prepared) => prepared,
             Err(error) => {
@@ -258,7 +264,7 @@ pub(super) fn execute_replace(
             }
         };
         let instance = prepared.instance;
-        karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
+        futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
         let track = if let PluginTarget::Generator(id) = target {
             Some(
                 pending
@@ -285,8 +291,9 @@ pub(super) fn execute_replace(
             prepared.processor,
         );
         let install = install.with_bypass(plugin.bypass);
-        let command = karbeat_vst3::native::call(move |owner| owner.prepare_control(install))?;
+        let (command, mut retirement) = karbeat_host::ControlTransfer::new(install);
         installs.push(AudioCommand::InstallHostedPlugin(command));
+        control_retirements.push(Box::new(move || retirement.collect()));
         receipts.push((target, instance, receipt));
     }
     let mut graph = AudioGraphState::from(&pending.staged);
@@ -321,16 +328,23 @@ pub(super) fn execute_replace(
             },
         ));
     }
-    commands.extend(pending.staged.mixer.master_bus.effects.iter().enumerate().map(
-        |(new_position, effect)| AudioCommand::MoveEffect {
-            target: EffectTarget::Master,
-            effect_id: effect.id,
-            new_position,
-        },
-    ));
+    commands.extend(
+        pending
+            .staged
+            .mixer
+            .master_bus
+            .effects
+            .iter()
+            .enumerate()
+            .map(|(new_position, effect)| AudioCommand::MoveEffect {
+                target: EffectTarget::Master,
+                effect_id: effect.id,
+                new_position,
+            }),
+    );
     commands.push(AudioCommand::SetBPM(pending.staged.transport.bpm));
-    let (project, receipt) = HostedProjectInstall::new(commands, pending.sample_rate);
-    let command = karbeat_vst3::native::call(move |owner| owner.prepare_control(project))?;
+    let (project, mut receipt) = HostedProjectInstall::new(commands, pending.sample_rate);
+    let (command, mut project_retirement) = karbeat_host::ControlTransfer::new(project);
     pending
         .handles
         .command_sender
@@ -339,26 +353,24 @@ pub(super) fn execute_replace(
         .context("Audio engine is unavailable")?
         .push(AudioCommand::InstallHostedProject(command))
         .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        match receipt.status() {
-            HostedInstallStatus::Installed => break,
-            HostedInstallStatus::Pending => {
-                if Instant::now() >= deadline && receipt.cancel() {
-                    anyhow::bail!("Project replacement timed out before the engine accepted it");
-                }
-            }
-            HostedInstallStatus::Applying => {}
-            status => anyhow::bail!("Audio engine rejected project replacement: {status:?}"),
-        }
-        std::thread::sleep(Duration::from_millis(2));
+    match futures_lite::future::block_on(receipt.wait())? {
+        HostedInstallResult::Installed => {}
+        result => anyhow::bail!("Audio engine rejected project replacement: {result:?}"),
     }
-    for (_, _, plugin_receipt) in &receipts {
+    for (_, _, plugin_receipt) in &mut receipts {
+        let result = futures_lite::future::block_on(plugin_receipt.wait())?;
         anyhow::ensure!(
-            plugin_receipt.status() == HostedInstallStatus::Installed,
-            "Prepared external plugin was rejected: {:?}",
-            plugin_receipt.status()
+            result == HostedInstallResult::Installed,
+            "Prepared external plugin was rejected: {result:?}"
         );
+    }
+    if !project_retirement.collect() {
+        log::warn!("Hosted project control transfer was not returned after acknowledgement");
+    }
+    for retirement in &mut control_retirements {
+        if !retirement() {
+            log::warn!("Hosted project plugin transfer was not returned after acknowledgement");
+        }
     }
     Ok(CompletedProjectRestore {
         staged: pending.staged,

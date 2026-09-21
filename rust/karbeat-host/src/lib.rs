@@ -24,8 +24,8 @@
 //! returns [`HostError::Busy`] until that call releases its guard. An acquire acknowledgement
 //! makes the finished block visible to the UI owner; release on resume publishes preparation
 //! to the next block. Only the UI owner resumes or accesses suspended DSP internals.
-//! [`StateTransaction`] preserves running intent and must be polled through completion,
-//! including cancellation cleanup. Native state calls and reconfiguration never run in DSP.
+//! Control-side async operations preserve running intent while they await suspension. Native state
+//! calls and reconfiguration never run in DSP.
 //!
 //! Transfer the exclusive [`HostedProcessor`] through [`PreparedProcessor`], keeping its
 //! [`ProcessorRetirement`] on the UI owner. Publish with an acknowledged engine command and
@@ -57,19 +57,19 @@
 //! ```
 
 mod control;
+mod executor;
 mod lifecycle;
 pub mod native_ui;
 mod processor;
 pub mod scanner;
-mod state;
 mod traits;
 mod types;
 
 pub use control::*;
+pub use executor::*;
 pub use lifecycle::*;
 pub use native_ui::*;
 pub use processor::*;
-pub use state::*;
 pub use traits::*;
 pub use types::*;
 /// Latency-compensated dry-signal processing used while a hosted processor is bypassed or suspended.

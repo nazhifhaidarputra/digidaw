@@ -37,6 +37,7 @@ pub struct PendingAudioExport {
     app: crate::core::project::ApplicationState,
     plugin_registry: PluginRegistry,
     handles: crate::context::ControlHandles,
+    hosted_formats: hashbrown::HashMap<karbeat_host::HostInstanceId, karbeat_host::PluginFormat>,
 }
 
 pub fn begin_export(ctx: &DawContext) -> PendingAudioExport {
@@ -44,6 +45,17 @@ pub fn begin_export(ctx: &DawContext) -> PendingAudioExport {
         app: ctx.app_state.clone(),
         plugin_registry: ctx.plugin_registry.clone(),
         handles: ctx.control_handles(),
+        hosted_formats: ctx
+            .hosted_targets
+            .values()
+            .filter_map(|state| match state {
+                crate::context::HostedTargetState::Active(instance) => {
+                    Some((instance.id, instance.format))
+                }
+                crate::context::HostedTargetState::Transitioning
+                | crate::context::HostedTargetState::Failed(_) => None,
+            })
+            .collect(),
     }
 }
 
@@ -105,6 +117,8 @@ where
     validate_external_plugins(&pending.app, &snapshot)?;
     let output_path = output_path.to_owned();
     let plugin_registry = pending.plugin_registry;
+    let external_plugins = pending.handles.external_plugins;
+    let hosted_formats = pending.hosted_formats;
 
     std::thread::scope(|scope| {
         scope
@@ -115,6 +129,8 @@ where
                     config,
                     tail_handling,
                     plugin_registry,
+                    external_plugins,
+                    hosted_formats,
                     &mut progress_callback,
                 )
             })
@@ -182,6 +198,8 @@ fn render_snapshot<F>(
     config: AudioExportConfig,
     tail_handling: TailHandling,
     plugin_registry: PluginRegistry,
+    external_plugins: karbeat_host::HostClient,
+    hosted_formats: hashbrown::HashMap<karbeat_host::HostInstanceId, karbeat_host::PluginFormat>,
     progress_callback: &mut F,
 ) -> Result<(), AudioExportError>
 where
@@ -192,12 +210,21 @@ where
     let block_size = 4096;
     snapshot
         .prepare_hosted(|instance| {
-            karbeat_vst3::native::prepare_offline_instance(
-                instance,
-                sample_rate,
-                block_size,
-                channels,
-            )
+            let format = hosted_formats
+                .get(&instance)
+                .copied()
+                .ok_or(karbeat_host::HostError::UnknownInstance(instance))?;
+            futures_lite::future::block_on(external_plugins.prepare_offline(
+                karbeat_host::OfflinePrepareRequest {
+                    instance: karbeat_host::ExternalPluginInstanceHandle {
+                        format,
+                        id: instance,
+                    },
+                    sample_rate,
+                    max_block_size: block_size,
+                    output_channels: channels,
+                },
+            ))
             .map(|prepared| prepared.processor)
         })
         .map_err(|error| AudioExportError::new("HostedPlugin", error.to_string()))?;
@@ -477,6 +504,8 @@ mod tests {
             config,
             TailHandling::CutRemainder,
             PluginRegistry::new_with_defaults(),
+            karbeat_host::HostClient::unavailable(),
+            hashbrown::HashMap::new(),
             &mut |_| true,
         );
         assert_eq!(result.unwrap_err().error_source, "HostedPlugin");

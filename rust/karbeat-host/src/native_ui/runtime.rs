@@ -3,30 +3,29 @@ use std::{
     ffi::{c_int, c_uint, c_void},
     sync::{
         Arc, Mutex, OnceLock,
-        atomic::{AtomicBool, AtomicU8, Ordering},
-        mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError},
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
 
+use async_executor::LocalExecutor;
 use glib::{ControlFlow, translate::FromGlib};
+use tokio::sync::{mpsc, oneshot};
 
 use super::{NativeUiError, NativeUiWakeHandle};
 
 const REQUEST_QUEUE_CAPACITY: usize = 128;
 const MAX_UI_TASKS_PER_TICK: usize = 4;
-const REQUEST_PENDING: u8 = 0;
-const REQUEST_STARTED: u8 = 1;
-const REQUEST_CANCELLED: u8 = 2;
 
-type UiTask = Box<dyn FnOnce() + Send>;
+type UiTask = Box<dyn FnOnce(&LocalExecutor<'static>) + Send>;
 
-static TASK_SENDER: OnceLock<SyncSender<UiTask>> = OnceLock::new();
-static TASK_RECEIVER: OnceLock<Mutex<Option<Receiver<UiTask>>>> = OnceLock::new();
+static TASK_SENDER: OnceLock<mpsc::Sender<UiTask>> = OnceLock::new();
+static TASK_RECEIVER: OnceLock<Mutex<Option<mpsc::Receiver<UiTask>>>> = OnceLock::new();
 static DRAIN_SCHEDULED: AtomicBool = AtomicBool::new(false);
 
 thread_local! {
-    static UI_RECEIVER: RefCell<Option<Receiver<UiTask>>> = const { RefCell::new(None) };
+    static UI_RECEIVER: RefCell<Option<mpsc::Receiver<UiTask>>> = const { RefCell::new(None) };
+    static UI_EXECUTOR: LocalExecutor<'static> = LocalExecutor::new();
     static IS_UI_OWNER: Cell<bool> = const { Cell::new(false) };
 }
 
@@ -61,101 +60,60 @@ impl NativeUiDispatcher {
         IS_UI_OWNER.with(Cell::get)
     }
 
-    /// Enqueues a closure for native-UI execution without blocking the caller.
-    ///
-    /// Returns `QueueFull` rather than waiting when all queue slots are occupied. A queued closure
-    /// checks its cancellation state before executing and sends at most one result.
-    pub fn dispatch<F, T>(&self, operation: F) -> Result<NativeUiRequest<T>, NativeUiError>
+    /// Enqueues a closure and asynchronously receives its native-owner result.
+    pub async fn dispatch<F, T>(&self, operation: F) -> Result<T, NativeUiError>
     where
         F: FnOnce() -> Result<T, NativeUiError> + Send + 'static,
+        T: Send + 'static,
+    {
+        self.dispatch_async(move || async move { operation() })
+            .await
+    }
+
+    /// Enqueues one non-`Send` future factory for execution on the native owner.
+    ///
+    /// Queue saturation is reported immediately. Dropping the returned future closes its one-shot
+    /// receiver; queued optional work observes that closure before starting.
+    pub async fn dispatch_async<F, Fut, T>(&self, operation: F) -> Result<T, NativeUiError>
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, NativeUiError>> + 'static,
         T: Send + 'static,
     {
         if Self::is_owner_thread() {
             return Err(NativeUiError::WrongThread);
         }
         let sender = ensure_queue()?;
-        let status = Arc::new(AtomicU8::new(REQUEST_PENDING));
-        let task_status = status.clone();
-        let (reply, response) = mpsc::sync_channel(1);
-        let task = Box::new(move || {
-            if task_status
-                .compare_exchange(
-                    REQUEST_PENDING,
-                    REQUEST_STARTED,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-                .is_err()
-            {
+        let (reply, response) = oneshot::channel();
+        let task: UiTask = Box::new(move |executor| {
+            if reply.is_closed() {
                 return;
             }
-            drop(reply.try_send(operation()));
+            executor
+                .spawn(async move {
+                    let result = operation().await;
+                    drop(reply.send(result));
+                })
+                .detach();
         });
         match sender.try_send(task) {
             Ok(()) => GlibWakeHandle.wake()?,
-            Err(TrySendError::Full(_)) => return Err(NativeUiError::QueueFull),
-            Err(TrySendError::Disconnected(_)) => {
+            Err(mpsc::error::TrySendError::Full(_)) => return Err(NativeUiError::QueueFull),
+            Err(mpsc::error::TrySendError::Closed(_)) => {
                 return Err(NativeUiError::RuntimeUnavailable);
             }
         }
-        Ok(NativeUiRequest { status, response })
+        response
+            .await
+            .map_err(|_| NativeUiError::RequestDisconnected)?
     }
 }
 
-/// Completion and cooperative cancellation handle for one dispatched native-UI closure.
-pub struct NativeUiRequest<T> {
-    status: Arc<AtomicU8>,
-    response: Receiver<Result<T, NativeUiError>>,
-}
-
-impl<T> NativeUiRequest<T> {
-    /// Cancels a request only while it remains queued and reports whether cancellation won.
-    pub fn cancel(&self) -> bool {
-        self.status
-            .compare_exchange(
-                REQUEST_PENDING,
-                REQUEST_CANCELLED,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
-    }
-
-    /// Waits off the UI owner for the request's result.
-    ///
-    /// A timeout cancels a still-pending request. If execution already started, this waits without
-    /// a second deadline so the result channel and closure ownership are not abandoned mid-call.
-    pub fn wait(self, timeout: Duration) -> Result<T, NativeUiError> {
-        if NativeUiDispatcher::is_owner_thread() {
-            return Err(NativeUiError::WrongThread);
-        }
-        match self.response.recv_timeout(timeout) {
-            Ok(result) => result,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if self.cancel() || self.status.load(Ordering::Acquire) == REQUEST_CANCELLED {
-                    Err(NativeUiError::RequestCancelled)
-                } else {
-                    self.response
-                        .recv()
-                        .map_err(|_| NativeUiError::RequestDisconnected)?
-                }
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(NativeUiError::RequestDisconnected),
-        }
-    }
-}
-
-impl<T> Drop for NativeUiRequest<T> {
-    fn drop(&mut self) {
-        self.cancel();
-    }
-}
-
-fn ensure_queue() -> Result<&'static SyncSender<UiTask>, NativeUiError> {
+fn ensure_queue() -> Result<&'static mpsc::Sender<UiTask>, NativeUiError> {
     if let Some(sender) = TASK_SENDER.get() {
         return Ok(sender);
     }
-    let (sender, receiver) = mpsc::sync_channel(REQUEST_QUEUE_CAPACITY);
+    let (sender, receiver) = mpsc::channel(REQUEST_QUEUE_CAPACITY);
     TASK_RECEIVER
         .set(Mutex::new(Some(receiver)))
         .map_err(|_| NativeUiError::RuntimeInitializationFailed("receiver already set".into()))?;
@@ -187,7 +145,7 @@ fn drain_on_ui_owner() {
             *local.borrow_mut() = Some(receiver);
         }
     });
-    let mut processed = 0;
+    let mut processed = 0_usize;
     UI_RECEIVER.with(|local| {
         let mut local = local.borrow_mut();
         let Some(receiver) = local.as_mut() else {
@@ -197,13 +155,21 @@ fn drain_on_ui_owner() {
             match receiver.try_recv() {
                 Ok(task) => {
                     processed = processed.saturating_add(1);
-                    task();
+                    UI_EXECUTOR.with(|executor| task(executor));
                 }
-                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+                Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected) => {
+                    break;
+                }
             }
         }
     });
-    if processed == MAX_UI_TASKS_PER_TICK {
+    let mut ticked = 0_usize;
+    UI_EXECUTOR.with(|executor| {
+        while ticked < MAX_UI_TASKS_PER_TICK && executor.try_tick() {
+            ticked = ticked.saturating_add(1);
+        }
+    });
+    if processed == MAX_UI_TASKS_PER_TICK || ticked == MAX_UI_TASKS_PER_TICK {
         schedule_drain();
     }
 }
@@ -219,6 +185,19 @@ pub fn install_ui_interval(
         return Err(NativeUiError::WrongThread);
     }
     Ok(glib::timeout_add_local(interval, callback))
+}
+
+/// Spawns one non-`Send` future on the native owner's local executor.
+///
+/// This is only valid while handling native-owner work. The future is cooperatively polled with a
+/// bounded budget by the platform event-loop adapter.
+pub fn spawn_ui_local(future: impl Future<Output = ()> + 'static) -> Result<(), NativeUiError> {
+    if !NativeUiDispatcher::is_owner_thread() {
+        return Err(NativeUiError::WrongThread);
+    }
+    UI_EXECUTOR.with(|executor| executor.spawn(future).detach());
+    schedule_drain();
+    Ok(())
 }
 
 /// RAII registration for a Unix file descriptor watched by the GLib UI loop.
@@ -350,20 +329,15 @@ mod tests {
         let dispatcher = NativeUiDispatcher::initialize().unwrap();
         let calls = Arc::new(AtomicUsize::new(0));
         let task_calls = calls.clone();
-        let request = dispatcher
-            .dispatch(move || {
-                task_calls.fetch_add(1, Ordering::Relaxed);
-                Ok(())
-            })
-            .unwrap();
-        assert!(matches!(
-            request.wait(Duration::ZERO),
-            Err(NativeUiError::RequestCancelled)
-        ));
+        let request = dispatcher.dispatch(move || {
+            task_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        });
+        drop(request);
         iterate_until(NativeUiDispatcher::is_owner_thread);
         assert_eq!(calls.load(Ordering::Relaxed), 0);
 
-        let (ready, queued) = mpsc::sync_channel(1);
+        let (ready, queued) = std::sync::mpsc::sync_channel(1);
         let batch_calls = Arc::new(AtomicUsize::new(0));
         let worker_calls = batch_calls.clone();
         let worker = std::thread::spawn(move || {
@@ -371,18 +345,20 @@ mod tests {
             let mut requests = Vec::new();
             for _ in 0..9 {
                 let calls = worker_calls.clone();
-                requests.push(
-                    dispatcher
-                        .dispatch(move || {
-                            calls.fetch_add(1, Ordering::Relaxed);
-                            Ok(())
-                        })
-                        .unwrap(),
+                requests.push(Box::pin(dispatcher.dispatch(move || {
+                    calls.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                })));
+            }
+            for request in &mut requests {
+                assert!(
+                    futures_lite::future::block_on(futures_lite::future::poll_once(request))
+                        .is_none()
                 );
             }
             ready.send(()).unwrap();
             for request in requests {
-                request.wait(Duration::from_secs(2)).unwrap();
+                futures_lite::future::block_on(request).unwrap();
             }
         });
         queued.recv().unwrap();

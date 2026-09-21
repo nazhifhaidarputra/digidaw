@@ -1,13 +1,14 @@
 use flutter_rust_bridge::frb;
-use karbeat_core::{
-    api::{
-        external_plugin_api,
-        plugin_discovery_api::{self, PluginScanEvent},
-    },
+use karbeat_core::api::{
+    external_plugin_api,
+    plugin_discovery_api::{self, PluginScanEvent},
 };
 use karbeat_host::{PluginDescriptor, PluginFormat, PluginKind, scanner::ScanSettings};
 
-use crate::{api::{context::DawContext, plugin::UiPluginTarget}, frb_generated::StreamSink};
+use crate::{
+    api::{context::DawContext, plugin::UiPluginTarget},
+    frb_generated::StreamSink,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiExternalPluginFormat {
@@ -23,7 +24,6 @@ impl From<PluginFormat> for UiExternalPluginFormat {
             PluginFormat::Vst3 => Self::Vst3,
             PluginFormat::Lv2 => Self::Lv2,
             PluginFormat::Clap => Self::Clap,
-            PluginFormat::Au => Self::Au,
         }
     }
 }
@@ -221,7 +221,7 @@ pub struct UiExternalPluginCapabilities {
 fn resolve_hosted_target(
     ctx: &DawContext,
     target: UiPluginTarget,
-) -> anyhow::Result<karbeat_host::HostInstanceId> {
+) -> anyhow::Result<external_plugin_api::HostedTargetAccess> {
     let lookup = {
         let ctx = ctx.read();
         external_plugin_api::prepare_hosted_target(&ctx, target.into())?
@@ -245,10 +245,7 @@ pub fn external_plugin_capabilities(
 }
 
 /// Reopening an existing editor brings its native window to the foreground.
-pub fn open_external_plugin_editor(
-    ctx: &DawContext,
-    target: UiPluginTarget,
-) -> anyhow::Result<()> {
+pub fn open_external_plugin_editor(ctx: &DawContext, target: UiPluginTarget) -> anyhow::Result<()> {
     let _operation = ctx
         .try_runtime_operation()
         .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
@@ -307,11 +304,7 @@ pub fn parse_external_plugin_parameter(
     let _operation = ctx
         .try_runtime_operation()
         .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
-    external_plugin_api::parse_parameter_for(
-        resolve_hosted_target(ctx, target)?,
-        parameter,
-        text,
-    )
+    external_plugin_api::parse_parameter_for(resolve_hosted_target(ctx, target)?, parameter, text)
 }
 
 pub fn convert_external_plugin_parameter(

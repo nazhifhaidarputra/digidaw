@@ -1,5 +1,5 @@
 [package]
-name = "karbeat-host"
+name = "karbeat-host-api"
 version.workspace = true
 edition.workspace = true
 license = "Apache-2.0 OR MIT"
@@ -15,6 +15,9 @@ serde.workspace = true
 thiserror.workspace = true
 rtrb.workspace = true
 tempfile.workspace = true
+async-executor.workspace = true
+futures-lite.workspace = true
+tokio.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 glib.workspace = true
