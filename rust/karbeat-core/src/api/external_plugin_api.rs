@@ -1,14 +1,15 @@
 use anyhow::Context;
 use karbeat_host::{
-    HostCapabilities, PluginController, PluginInstanceManager, PluginKind, ProcessingConfig,
+    ConvertParameterRequest, ExternalPluginInstanceHandle, HostCapabilities, HostClient,
+    OpenEditorRequest, ParameterTextRequest, ParseParameterRequest, PluginKind, PrepareRequest,
+    ProcessingConfig, ReconfigureRequest, SetParameterRequest,
 };
-use std::time::{Duration, Instant};
 
 use crate::{
     audio::{
         event::PluginTarget,
         hosted_plugin::{
-            HostedInstallStatus, HostedPluginInstall, HostedPluginReconfiguration,
+            HostedInstallResult, HostedPluginInstall, HostedPluginReconfiguration,
             HostedPluginReplacement, HostedTrackGraph,
         },
     },
@@ -21,31 +22,21 @@ use crate::{
     },
 };
 
-// This is note for the developer for future plan purpose
-// DO NOT REMOVE IT!!!!!!
-// TODO: Refactor all call which directly call karbeat-vst, instead of calling it, use pattern matching
-// for the external plugin kind. then we call each handler function through polymorphism
-//
-// Stub example
-// match plugin.kind {
-//  Vst3 => karbeat_vst3::prelude::call(callback)
-//  Lv2 => karbeat_lv2::prelude::call(callback)
-// Clap => karbeat_clap::prelude::call(callback)
-//}
-//
-// or
-// 
-// karbeat_safe_plugin_bindings::some_plugin_actions()
-// 
-// Requires a safe bindings which every plugins hosted needs to implement
-// and comply
-
 pub enum HostedTargetLookup {
-    Resolved(karbeat_host::HostInstanceId),
+    Resolved {
+        client: HostClient,
+        instance: ExternalPluginInstanceHandle,
+    },
     Query {
         handles: ControlHandles,
         target: PluginTarget,
+        format: karbeat_host::PluginFormat,
     },
+}
+
+pub struct HostedTargetAccess {
+    pub client: HostClient,
+    pub instance: ExternalPluginInstanceHandle,
 }
 
 pub fn prepare_hosted_target(
@@ -62,7 +53,10 @@ pub fn prepare_hosted_target(
     );
     match ctx.hosted_targets.get(&target) {
         Some(crate::context::HostedTargetState::Active(instance)) => {
-            Ok(HostedTargetLookup::Resolved(*instance))
+            Ok(HostedTargetLookup::Resolved {
+                client: ctx.external_plugins.clone(),
+                instance: *instance,
+            })
         }
         Some(crate::context::HostedTargetState::Transitioning) => {
             anyhow::bail!("External plugin lifecycle operation is in progress")
@@ -73,86 +67,110 @@ pub fn prepare_hosted_target(
         None => Ok(HostedTargetLookup::Query {
             handles: ctx.control_handles(),
             target,
+            format: plugin_instance(ctx, target)
+                .and_then(|plugin| plugin.external.as_ref())
+                .map(|external| external.descriptor.identity.format)
+                .context("External plugin format is unavailable")?,
         }),
     }
 }
 
-pub fn resolve_hosted_target(lookup: HostedTargetLookup) -> anyhow::Result<karbeat_host::HostInstanceId> {
+pub fn resolve_hosted_target(lookup: HostedTargetLookup) -> anyhow::Result<HostedTargetAccess> {
     match lookup {
-        HostedTargetLookup::Resolved(instance) => Ok(instance),
-        HostedTargetLookup::Query { handles, target } => {
-            super::project_api::hosted_instance_with_handles(&handles, target)
+        HostedTargetLookup::Resolved { client, instance } => {
+            Ok(HostedTargetAccess { client, instance })
         }
+        HostedTargetLookup::Query {
+            handles,
+            target,
+            format,
+        } => Ok(HostedTargetAccess {
+            instance: ExternalPluginInstanceHandle {
+                format,
+                id: super::project_api::hosted_instance_with_handles(&handles, target)?,
+            },
+            client: handles.external_plugins,
+        }),
     }
 }
 
-pub fn capabilities_for(
-    id: karbeat_host::HostInstanceId,
-) -> anyhow::Result<HostCapabilities> {
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.capabilities(id)
-    })?)
+pub fn capabilities_for(access: HostedTargetAccess) -> anyhow::Result<HostCapabilities> {
+    Ok(futures_lite::future::block_on(
+        access.client.capabilities(access.instance),
+    )?)
 }
 
-pub fn open_editor_for(
-    id: karbeat_host::HostInstanceId,
-    context: String,
-) -> anyhow::Result<()> {
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.set_editor_context(id, context)?;
-        owner.open_editor(id)
-    })?)
+pub fn open_editor_for(access: HostedTargetAccess, context: String) -> anyhow::Result<()> {
+    Ok(futures_lite::future::block_on(access.client.open_editor(
+        OpenEditorRequest {
+            instance: access.instance,
+            context,
+        },
+    ))?)
 }
 
-pub fn close_editor_for(id: karbeat_host::HostInstanceId) -> anyhow::Result<()> {
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.close_editor(id)
-    })?)
+pub fn close_editor_for(access: HostedTargetAccess) -> anyhow::Result<()> {
+    Ok(futures_lite::future::block_on(
+        access.client.close_editor(access.instance),
+    )?)
 }
 
 pub fn set_parameter_for(
-    id: karbeat_host::HostInstanceId,
+    access: HostedTargetAccess,
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<()> {
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.set_parameter(id, parameter, value)
-    })?)
+    Ok(futures_lite::future::block_on(
+        access.client.set_parameter(SetParameterRequest {
+            instance: access.instance,
+            parameter,
+            value,
+        }),
+    )?)
 }
 
 pub fn parameter_text_for(
-    id: karbeat_host::HostInstanceId,
+    access: HostedTargetAccess,
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<String> {
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.parameter_text(id, parameter, value)
-    })?)
+    Ok(futures_lite::future::block_on(
+        access.client.parameter_text(ParameterTextRequest {
+            instance: access.instance,
+            parameter,
+            value,
+        }),
+    )?)
 }
 
 pub fn parse_parameter_for(
-    id: karbeat_host::HostInstanceId,
+    access: HostedTargetAccess,
     parameter: u32,
     text: String,
 ) -> anyhow::Result<f64> {
-    Ok(karbeat_vst3::native::call(move |owner| {
-        owner.host.parse_parameter(id, parameter, &text)
-    })?)
+    Ok(futures_lite::future::block_on(
+        access.client.parse_parameter(ParseParameterRequest {
+            instance: access.instance,
+            parameter,
+            text,
+        }),
+    )?)
 }
 
 pub fn convert_parameter_for(
-    id: karbeat_host::HostInstanceId,
+    access: HostedTargetAccess,
     parameter: u32,
     value: f64,
     to_normalized: bool,
 ) -> anyhow::Result<f64> {
-    Ok(karbeat_vst3::native::call(move |owner| {
-        if to_normalized {
-            owner.host.plain_to_normalized(id, parameter, value)
-        } else {
-            owner.host.normalized_to_plain(id, parameter, value)
-        }
-    })?)
+    Ok(futures_lite::future::block_on(
+        access.client.convert_parameter(ConvertParameterRequest {
+            instance: access.instance,
+            parameter,
+            value,
+            to_normalized,
+        }),
+    )?)
 }
 
 fn channel_mut<'a>(
@@ -200,7 +218,7 @@ pub struct CompletedPluginInstall {
     target: PluginTarget,
     telemetry: Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>>,
     installed: InstalledPlugin,
-    instance: karbeat_host::HostInstanceId,
+    instance: ExternalPluginInstanceHandle,
 }
 
 fn begin_install(
@@ -276,30 +294,21 @@ pub fn begin_add_effect(
 fn wait_for_install(
     mut receipt: crate::audio::hosted_plugin::HostedInstallReceipt,
 ) -> anyhow::Result<Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>>> {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        match receipt.status() {
-            HostedInstallStatus::Installed => return Ok(receipt.take_telemetry()),
-            HostedInstallStatus::Pending => {
-                if Instant::now() >= deadline && receipt.cancel() {
-                    anyhow::bail!("Plugin installation timed out before the engine accepted it");
-                }
-            }
-            HostedInstallStatus::Applying => {}
-            status => anyhow::bail!("Audio engine rejected plugin installation: {status:?}"),
-        }
-        std::thread::sleep(Duration::from_millis(2));
+    match futures_lite::future::block_on(receipt.wait())? {
+        HostedInstallResult::Installed => Ok(receipt.take_telemetry()),
+        result => anyhow::bail!("Audio engine rejected plugin installation: {result:?}"),
     }
 }
 
 pub fn execute_install(
     mut pending: PendingPluginInstall,
 ) -> anyhow::Result<CompletedPluginInstall> {
-    let prepared = karbeat_vst3::native::prepare_instance(
-        pending.descriptor.clone(),
-        pending.config.clone(),
-        None,
-    )?;
+    let prepared =
+        futures_lite::future::block_on(pending.handles.external_plugins.prepare(PrepareRequest {
+            descriptor: pending.descriptor.clone(),
+            config: pending.config.clone(),
+            state: None,
+        }))?;
     let instance = prepared.instance;
     let plugin = PluginInstance {
         registry_id: pending.registry_id,
@@ -373,9 +382,9 @@ pub fn execute_install(
         }
     };
 
-    karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
+    futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
     let target = install.target;
-    let command = karbeat_vst3::native::call(move |owner| owner.prepare_control(install))?;
+    let (command, mut control_retirement) = karbeat_host::ControlTransfer::new(install);
     {
         let mut sender = pending.handles.command_sender.lock();
         let sender = sender.as_mut().context("Audio engine is unavailable")?;
@@ -384,6 +393,9 @@ pub fn execute_install(
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
     let telemetry = wait_for_install(receipt)?;
+    if !control_retirement.collect() {
+        log::warn!("Hosted install control transfer was not returned after acknowledgement");
+    }
     Ok(CompletedPluginInstall {
         staged: pending.staged,
         target,
@@ -433,7 +445,9 @@ pub fn add_effect(
     let completed = execute_install(pending)?;
     match commit_install(ctx, completed) {
         InstalledPlugin::Effect(effect) => Ok(effect),
-        InstalledPlugin::Instrument(_) => anyhow::bail!("effect transaction returned an instrument"),
+        InstalledPlugin::Instrument(_) => {
+            anyhow::bail!("effect transaction returned an instrument")
+        }
     }
 }
 
@@ -544,10 +558,8 @@ pub fn begin_delete_bus(
     ))
 }
 
-pub fn execute_removal(
-    pending: PendingPluginRemoval,
-) -> anyhow::Result<CompletedPluginRemoval> {
-    use crate::audio::hosted_plugin::{HostedPluginRemoval, HostedRemovalStatus};
+pub fn execute_removal(pending: PendingPluginRemoval) -> anyhow::Result<CompletedPluginRemoval> {
+    use crate::audio::hosted_plugin::{HostedPluginRemoval, HostedRemovalResult};
 
     let mut expected = Vec::with_capacity(pending.targets.len());
     for (target, active) in &pending.targets {
@@ -562,10 +574,9 @@ pub fn execute_removal(
         expected.push((*target, instance));
     }
     let targets = pending.targets.iter().map(|(target, _)| *target).collect();
-    let (removal, receipt) = HostedPluginRemoval::new(expected, pending.graph);
-    let transfer = karbeat_vst3::native::call(move |owner| {
-        owner.prepare_control(removal.with_bus(pending.bus))
-    })?;
+    let (removal, mut receipt) = HostedPluginRemoval::new(expected, pending.graph);
+    let (transfer, mut control_retirement) =
+        karbeat_host::ControlTransfer::new(removal.with_bus(pending.bus));
     {
         let mut sender = pending.handles.command_sender.lock();
         sender
@@ -574,19 +585,12 @@ pub fn execute_removal(
             .push(AudioCommand::RemoveHostedPlugins(transfer))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        match receipt.status() {
-            HostedRemovalStatus::Removed => break,
-            HostedRemovalStatus::Pending => {
-                if Instant::now() >= deadline && receipt.cancel() {
-                    anyhow::bail!("Plugin removal timed out before the engine accepted it");
-                }
-            }
-            HostedRemovalStatus::Applying => {}
-            status => anyhow::bail!("Audio engine rejected plugin removal: {status:?}"),
-        }
-        std::thread::sleep(Duration::from_millis(2));
+    match futures_lite::future::block_on(receipt.wait())? {
+        HostedRemovalResult::Removed => {}
+        result => anyhow::bail!("Audio engine rejected plugin removal: {result:?}"),
+    }
+    if !control_retirement.collect() {
+        log::warn!("Hosted removal control transfer was not returned after acknowledgement");
     }
     Ok(CompletedPluginRemoval {
         staged: pending.staged,
@@ -701,8 +705,7 @@ pub fn capabilities(
     ctx: &mut DawContext,
     target: PluginTarget,
 ) -> anyhow::Result<HostCapabilities> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    capabilities_for(id)
+    capabilities_for(resolve_hosted_target(prepare_hosted_target(ctx, target)?)?)
 }
 
 pub fn editor_context(ctx: &DawContext, target: PluginTarget) -> String {
@@ -738,14 +741,15 @@ pub fn editor_context(ctx: &DawContext, target: PluginTarget) -> String {
 
 /// Opens an external plugin's native editor after assigning a project-derived window context label.
 pub fn open_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    open_editor_for(id, editor_context(ctx, target))
+    open_editor_for(
+        resolve_hosted_target(prepare_hosted_target(ctx, target)?)?,
+        editor_context(ctx, target),
+    )
 }
 
 /// Closes the native editor associated with the targeted external plugin instance.
 pub fn close_editor(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    close_editor_for(id)
+    close_editor_for(resolve_hosted_target(prepare_hosted_target(ctx, target)?)?)
 }
 
 /// Sets a normalized parameter value through the external plugin's main-thread controller.
@@ -755,8 +759,11 @@ pub fn set_parameter(
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<()> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    set_parameter_for(id, parameter, value)
+    set_parameter_for(
+        resolve_hosted_target(prepare_hosted_target(ctx, target)?)?,
+        parameter,
+        value,
+    )
 }
 
 /// Removes an external effect after the audio thread has retired its hosted processor.
@@ -817,8 +824,11 @@ pub fn parameter_text(
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<String> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    parameter_text_for(id, parameter, value)
+    parameter_text_for(
+        resolve_hosted_target(prepare_hosted_target(ctx, target)?)?,
+        parameter,
+        value,
+    )
 }
 
 /// Parses plugin-specific display text into a normalized parameter value.
@@ -828,8 +838,11 @@ pub fn parse_parameter(
     parameter: u32,
     text: String,
 ) -> anyhow::Result<f64> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    parse_parameter_for(id, parameter, text)
+    parse_parameter_for(
+        resolve_hosted_target(prepare_hosted_target(ctx, target)?)?,
+        parameter,
+        text,
+    )
 }
 
 /// Converts between a parameter's plain and normalized domains.
@@ -843,8 +856,12 @@ pub fn convert_parameter(
     value: f64,
     to_normalized: bool,
 ) -> anyhow::Result<f64> {
-    let id = super::project_api::hosted_instance(ctx, target)?;
-    convert_parameter_for(id, parameter, value, to_normalized)
+    convert_parameter_for(
+        resolve_hosted_target(prepare_hosted_target(ctx, target)?)?,
+        parameter,
+        value,
+        to_normalized,
+    )
 }
 
 /// Returns the recorded hosting failure for an external plugin target, if one is awaiting recovery.
@@ -865,14 +882,11 @@ pub struct PendingPluginRetry {
 
 pub struct CompletedPluginRetry {
     target: PluginTarget,
-    instance: karbeat_host::HostInstanceId,
+    instance: ExternalPluginInstanceHandle,
     telemetry: Option<triple_buffer::Output<crate::audio::engine::PluginTelemetrySnapshot>>,
 }
 
-pub fn begin_retry(
-    ctx: &DawContext,
-    target: PluginTarget,
-) -> anyhow::Result<PendingPluginRetry> {
+pub fn begin_retry(ctx: &DawContext, target: PluginTarget) -> anyhow::Result<PendingPluginRetry> {
     anyhow::ensure!(
         ctx.external_plugin_failures.contains_key(&target),
         "Plugin is not awaiting recovery"
@@ -929,11 +943,12 @@ pub fn begin_retry(
 }
 
 pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPluginRetry> {
-    let prepared = karbeat_vst3::native::prepare_instance(
-        pending.descriptor,
-        pending.config.clone(),
-        pending.state,
-    )?;
+    let prepared =
+        futures_lite::future::block_on(pending.handles.external_plugins.prepare(PrepareRequest {
+            descriptor: pending.descriptor,
+            config: pending.config.clone(),
+            state: pending.state,
+        }))?;
     let instance = prepared.instance;
     let (install, receipt) = HostedPluginInstall::new(
         pending.target,
@@ -942,10 +957,9 @@ pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPlu
         pending.config,
         prepared.processor,
     );
-    karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
-    let command = karbeat_vst3::native::call(move |owner| {
-        owner.prepare_control(install.replacing_missing().with_bypass(pending.bypass))
-    })?;
+    futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
+    let (command, mut control_retirement) =
+        karbeat_host::ControlTransfer::new(install.replacing_missing().with_bypass(pending.bypass));
     {
         let mut sender = pending.handles.command_sender.lock();
         sender
@@ -954,10 +968,14 @@ pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPlu
             .push(AudioCommand::InstallHostedPlugin(command))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
+    let telemetry = wait_for_install(receipt)?;
+    if !control_retirement.collect() {
+        log::warn!("Hosted retry control transfer was not returned after acknowledgement");
+    }
     Ok(CompletedPluginRetry {
         target: pending.target,
         instance,
-        telemetry: wait_for_install(receipt)?,
+        telemetry,
     })
 }
 
@@ -988,6 +1006,7 @@ pub fn retry(ctx: &mut DawContext, target: PluginTarget) -> anyhow::Result<()> {
 struct PendingReconfigurationTarget {
     target: PluginTarget,
     kind: PluginKind,
+    format: karbeat_host::PluginFormat,
     bypass: bool,
 }
 
@@ -1002,7 +1021,7 @@ pub struct CompletedPluginReconfiguration {
     states: Vec<(
         PluginTarget,
         karbeat_host::PluginState,
-        karbeat_host::HostInstanceId,
+        ExternalPluginInstanceHandle,
     )>,
 }
 
@@ -1026,6 +1045,13 @@ pub fn begin_reconfigure_for_audio_config(
         targets.push(PendingReconfigurationTarget {
             target,
             kind,
+            format: plugin
+                .external
+                .as_ref()
+                .context("External plug-in metadata disappeared")?
+                .descriptor
+                .identity
+                .format,
             bypass: plugin.bypass,
         });
     }
@@ -1091,21 +1117,30 @@ pub fn execute_reconfiguration(
     let mut replacements = Vec::with_capacity(pending.targets.len());
     let mut states = Vec::with_capacity(pending.targets.len());
     for item in pending.targets {
-        let current = super::project_api::hosted_instance_with_handles(
-            &pending.handles,
-            item.target,
-        )?;
-        let prepared = karbeat_vst3::native::prepare_reconfigured_instance(
-            current,
-            pending.sample_rate,
-            pending.block_size.max(512),
-        )?;
+        let current =
+            super::project_api::hosted_instance_with_handles(&pending.handles, item.target)?;
+        let current_handle = ExternalPluginInstanceHandle {
+            format: item.format,
+            id: current,
+        };
+        let prepared =
+            futures_lite::future::block_on(pending.handles.external_plugins.reconfigure(
+                ReconfigureRequest {
+                    instance: current_handle,
+                    sample_rate: pending.sample_rate,
+                    max_block_size: pending.block_size.max(512),
+                },
+            ))?;
         let instance = prepared.instance;
-        karbeat_vst3::native::call(move |owner| owner.host.resume(instance))?;
+        futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
         let config = ProcessingConfig {
             sample_rate: f64::from(pending.sample_rate),
             max_block_size: 65_536_usize.max(pending.block_size),
-            main_input_channels: if item.kind == PluginKind::Instrument { 0 } else { 2 },
+            main_input_channels: if item.kind == PluginKind::Instrument {
+                0
+            } else {
+                2
+            },
             main_output_channels: 2,
             sidechain_channels: 0,
             offline: false,
@@ -1119,12 +1154,9 @@ pub fn execute_reconfiguration(
             item.bypass,
         ));
     }
-    let (reconfiguration, receipt) = HostedPluginReconfiguration::new(
-        replacements,
-        pending.sample_rate,
-        pending.block_size,
-    );
-    let transfer = karbeat_vst3::native::call(move |owner| owner.prepare_control(reconfiguration))?;
+    let (reconfiguration, receipt) =
+        HostedPluginReconfiguration::new(replacements, pending.sample_rate, pending.block_size);
+    let (transfer, mut control_retirement) = karbeat_host::ControlTransfer::new(reconfiguration);
     {
         let mut sender = pending.handles.command_sender.lock();
         sender
@@ -1134,13 +1166,15 @@ pub fn execute_reconfiguration(
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
     let _ = wait_for_install(receipt)?;
+    if !control_retirement.collect() {
+        log::warn!(
+            "Hosted reconfiguration control transfer was not returned after acknowledgement"
+        );
+    }
     Ok(CompletedPluginReconfiguration { states })
 }
 
-pub fn commit_reconfiguration(
-    ctx: &mut DawContext,
-    completed: CompletedPluginReconfiguration,
-) {
+pub fn commit_reconfiguration(ctx: &mut DawContext, completed: CompletedPluginReconfiguration) {
     for (target, state, instance) in completed.states {
         if let Some(external) =
             plugin_instance_mut(ctx, target).and_then(|plugin| plugin.external.as_mut())

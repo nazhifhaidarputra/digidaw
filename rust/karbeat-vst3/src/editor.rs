@@ -2,7 +2,7 @@
 #![allow(non_snake_case, reason = "VST3 interface method names are ABI-defined")]
 
 use crate::{instance::check, run_loop::RunLoop};
-use karbeat_host::{HostError, NativeParentHandle, NativeSurfaceKind};
+use karbeat_host_api::{HostError, NativeParentHandle, NativeSurfaceKind};
 use raw_window_handle::RawWindowHandle;
 use std::{
     cell::{Cell, RefCell},

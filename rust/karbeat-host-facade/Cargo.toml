@@ -1,0 +1,15 @@
+[package]
+name = "karbeat-host"
+version.workspace = true
+edition.workspace = true
+license = "Apache-2.0 OR MIT"
+description = "Format-independent asynchronous external plugin host facade"
+
+[dependencies]
+karbeat-host-api.workspace = true
+async-executor.workspace = true
+futures-lite.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

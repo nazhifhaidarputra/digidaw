@@ -553,21 +553,6 @@ pub(super) fn save_project(
     Ok(())
 }
 
-pub(crate) fn hosted_instance(
-    ctx: &mut DawContext,
-    target: PluginTarget,
-) -> anyhow::Result<HostInstanceId> {
-    ensure!(
-        plugin_mut(&mut ctx.app_state, target).is_some_and(|plugin| plugin.external.is_some()),
-        "Target is not an external plugin"
-    );
-    ensure!(
-        !ctx.external_plugin_failures.contains_key(&target),
-        "External plugin is unavailable; retry loading it first"
-    );
-    hosted_instance_with_handles(&ctx.control_handles(), target)
-}
-
 pub(crate) fn hosted_instance_with_handles(
     handles: &crate::context::ControlHandles,
     target: PluginTarget,

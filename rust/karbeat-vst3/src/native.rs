@@ -1,33 +1,25 @@
 //! Native UI-loop gateway. Only message payloads and exclusive audio endpoints cross threads.
 
-use crate::{
-    Vst3PluginHost,
-    instance::{MIDI_MAPPING_QUERY_COUNT, Vst3PrepareJob},
-};
+use crate::{Vst3PluginHost, instance::MIDI_MAPPING_QUERY_COUNT};
 use glib::ControlFlow;
-use karbeat_host::{
-    HostCapabilities, HostError, HostInstanceId, HostStateCapture, NativeEditorBinding,
-    NativeEditorEvent, NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform, NativeWindow,
-    NativeWindowId, NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginController,
-    PluginDescriptor, PluginEditorManager, PluginFormat, PluginIdentity, PluginInstanceManager,
-    PluginState, PreparedProcessor, ProcessingConfig, StateOperation, StateResult,
-    StateTransaction, StateTransactionControl, SystemNativeUi,
+use karbeat_host_api::{
+    HostCapabilities, HostError, HostInstanceId, NativeEditorBinding, NativeEditorEvent,
+    NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform, NativeWindow, NativeWindowId,
+    NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginController,
+    PluginDescriptor, PluginEditorManager, PluginInstanceManager, PluginState, PreparedProcessor,
+    ProcessingConfig, SystemNativeUi,
 };
 use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{
     cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet},
     rc::Rc,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::{self, Receiver, SyncSender},
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
 
 type NativeBinding = NativeEditorBinding<<SystemNativeUi as NativeUiPlatform>::Window>;
 const MIDI_MAPPING_QUERIES_PER_TICK: usize = 64;
-const MAX_PREPARE_JOBS: usize = 128;
 const _: () = assert!(MIDI_MAPPING_QUERIES_PER_TICK < MIDI_MAPPING_QUERY_COUNT);
 
 /// Native-UI-thread runtime that owns the VST3 host, editor windows, and pending lifecycle work.
@@ -43,30 +35,18 @@ pub struct NativeHost {
     windows: HashMap<HostInstanceId, Rc<RefCell<NativeBinding>>>,
     window_owners: HashMap<NativeWindowId, HostInstanceId>,
     editor_contexts: HashMap<HostInstanceId, String>,
-    events: Vec<karbeat_host::HostEvent>,
+    events: Vec<karbeat_host_api::HostEvent>,
     event_overflow: Option<HostInstanceId>,
     parameter_flush_due: HashMap<HostInstanceId, std::time::Instant>,
     retirements: HashMap<HostInstanceId, NativeRetirement>,
-    state_requests: HashMap<HostInstanceId, PendingState>,
-    prepare_jobs: VecDeque<PendingPrepare>,
+    state_operations: HashSet<HostInstanceId>,
+    parameter_flush_active: HashSet<HostInstanceId>,
     control_retirements: Vec<Box<dyn FnMut() -> bool>>,
 }
 
 struct NativeRetirement {
-    queue: karbeat_host::ProcessorRetirement,
+    queue: karbeat_host_api::ProcessorRetirement,
     returned: bool,
-}
-
-struct PendingState {
-    transaction: StateTransaction,
-    reply: Option<SyncSender<Result<StateResult, HostError>>>,
-}
-
-struct PendingPrepare {
-    instance: HostInstanceId,
-    state: Option<PluginState>,
-    job: Vst3PrepareJob,
-    reply: SyncSender<Result<PreparedNativeInstance, HostError>>,
 }
 
 /// A suspended instance ready for acknowledged engine publication. The native owner retains
@@ -84,84 +64,16 @@ pub struct PreparedNativeInstance {
     pub processor: PreparedProcessor,
 }
 
-/// A control-worker state request. Cancellation never destroys native resources on its caller.
-pub struct NativeStateRequest {
-    control: StateTransactionControl,
-    response: Receiver<Result<StateResult, HostError>>,
-}
-
-/// Completion for a cooperative production preparation job.
-pub struct NativePrepareRequest {
-    response: Receiver<Result<PreparedNativeInstance, HostError>>,
-}
-impl NativePrepareRequest {
-    /// Waits for cooperative preparation to finish off the native UI thread.
-    ///
-    /// A timeout does not abandon the in-flight native instance: once the first wait expires,
-    /// this method waits without a deadline so ownership and cleanup cannot be lost.
-    pub fn wait(self, timeout: Duration) -> Result<PreparedNativeInstance, HostError> {
-        if NativeUiDispatcher::is_owner_thread() {
-            return Err(HostError::WrongThread);
-        }
-        match self.response.recv_timeout(timeout) {
-            Ok(result) => result,
-            Err(mpsc::RecvTimeoutError::Timeout) => self
-                .response
-                .recv()
-                .map_err(|error| HostError::NativeDispatch(error.to_string()))?,
-            Err(error) => Err(HostError::NativeDispatch(error.to_string())),
-        }
-    }
-}
-impl NativeStateRequest {
-    /// Requests cancellation before the state transaction begins and reports whether it won.
-    ///
-    /// Cancellation is cooperative; the native owner still polls the transaction to complete
-    /// any required suspension cleanup.
-    pub fn cancel(&self) -> bool {
-        self.control.cancel()
-    }
-
-    /// Waits for state capture, restore, or parameter flushing off the native UI thread.
-    ///
-    /// On timeout the request is cancelled if it has not started. If execution has begun, this
-    /// waits for the definitive result so suspension and resume sequencing remains owned by the
-    /// native runtime.
-    pub fn wait(self, timeout: Duration) -> Result<StateResult, HostError> {
-        if NativeUiDispatcher::is_owner_thread() {
-            return Err(HostError::WrongThread);
-        }
-        match self.response.recv_timeout(timeout) {
-            Ok(result) => result,
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if self.control.cancel() || self.control.is_cancelled() {
-                    Err(HostError::NativeDispatch("state request timed out before execution; suspension cleanup remains scheduled".into()))
-                } else {
-                    self.response
-                        .recv()
-                        .map_err(|error| HostError::NativeDispatch(error.to_string()))?
-                }
-            }
-            Err(error) => Err(HostError::NativeDispatch(error.to_string())),
-        }
-    }
-}
-impl Drop for NativeStateRequest {
-    fn drop(&mut self) {
-        self.control.cancel();
-    }
-}
-
 impl NativeHost {
     /// Reserves return capacity before a control command can enter the DSP queue.
     pub fn prepare_control<T: Send + 'static>(
         &mut self,
         payload: T,
-    ) -> Result<karbeat_host::ControlTransfer<T>, HostError> {
+    ) -> Result<karbeat_host_api::ControlTransfer<T>, HostError> {
         if self.control_retirements.len() >= 128 {
             return Err(HostError::Busy);
         }
-        let (transfer, mut retirement) = karbeat_host::ControlTransfer::new(payload);
+        let (transfer, mut retirement) = karbeat_host_api::ControlTransfer::new(payload);
         self.control_retirements
             .push(Box::new(move || retirement.collect()));
         Ok(transfer)
@@ -184,35 +96,6 @@ impl NativeHost {
             self.finish_prepared(instance, state)
         })();
         result.map_err(|operation| self.cleanup_failed_creation(instance, operation))
-    }
-
-    /// Queues cooperative instance preparation and returns a worker-side completion handle.
-    ///
-    /// MIDI controller mappings are resolved in bounded batches by the native pump. At most
-    /// `MAX_PREPARE_JOBS` jobs are retained; overload returns [`HostError::Busy`].
-    pub fn request_prepared(
-        &mut self,
-        descriptor: PluginDescriptor,
-        config: ProcessingConfig,
-        state: Option<PluginState>,
-    ) -> Result<NativePrepareRequest, HostError> {
-        config.validate()?;
-        if self.prepare_jobs.len() >= MAX_PREPARE_JOBS {
-            return Err(HostError::Busy);
-        }
-        let instance = self.host.create(&descriptor)?;
-        let job = match self.host.begin_prepare(instance, &config) {
-            Ok(job) => job,
-            Err(operation) => return Err(self.cleanup_failed_creation(instance, operation)),
-        };
-        let (reply, response) = mpsc::sync_channel(1);
-        self.prepare_jobs.push_back(PendingPrepare {
-            instance,
-            state,
-            job,
-            reply,
-        });
-        Ok(NativePrepareRequest { response })
     }
 
     fn finish_prepared(
@@ -250,35 +133,11 @@ impl NativeHost {
         }
     }
 
-    /// Starts one asynchronous state transaction for `id`.
-    ///
-    /// Concurrent requests for the same instance and requests beyond the bounded table capacity
-    /// return [`HostError::Busy`]. The returned handle controls cancellation and completion.
-    pub fn request_state(
-        &mut self,
-        id: HostInstanceId,
-        operation: StateOperation,
-    ) -> Result<NativeStateRequest, HostError> {
-        if self.state_requests.len() >= 128 || self.state_requests.contains_key(&id) {
-            return Err(HostError::Busy);
-        }
-        self.host.is_processing(id)?;
-        let (transaction, control) = StateTransaction::new(id, operation);
-        let (reply, response) = mpsc::sync_channel(1);
-        self.state_requests.insert(
-            id,
-            PendingState {
-                transaction,
-                reply: Some(reply),
-            },
-        );
-        Ok(NativeStateRequest { control, response })
-    }
     /// Prepare an exclusive endpoint for engine publication with reserved return capacity.
     pub fn take_processor(
         &mut self,
         id: HostInstanceId,
-    ) -> Result<karbeat_host::PreparedProcessor, HostError> {
+    ) -> Result<karbeat_host_api::PreparedProcessor, HostError> {
         if self.retirements.contains_key(&id) {
             return Err(HostError::InvalidTransition);
         }
@@ -396,11 +255,9 @@ impl NativeHost {
         self.window_owners.remove(&window_id);
         Ok(())
     }
-    /// Closes the editor and destroys a native instance after pending state work has finished.
-    ///
-    /// Returns [`HostError::Busy`] while a state transaction still owns the instance.
+    /// Closes the editor and destroys a native instance after state work has finished.
     pub fn destroy(&mut self, id: HostInstanceId) -> Result<(), HostError> {
-        if self.state_requests.contains_key(&id) {
+        if self.state_operations.contains(&id) {
             return Err(HostError::Busy);
         }
         self.close_editor(id)?;
@@ -413,47 +270,31 @@ impl NativeHost {
     ///
     /// When the 4,096-event queue discarded an oldest event, a final `QueueOverflow` event is
     /// appended for the affected instance and the overflow marker is cleared.
-    pub fn take_events(&mut self) -> Vec<karbeat_host::HostEvent> {
+    pub fn take_events(&mut self) -> Vec<karbeat_host_api::HostEvent> {
         let mut events = std::mem::take(&mut self.events);
         if let Some(instance) = self.event_overflow.take() {
-            events.push(karbeat_host::HostEvent::QueueOverflow { instance });
+            events.push(karbeat_host_api::HostEvent::QueueOverflow { instance });
         }
         events
     }
 
-    fn push_event(&mut self, event: karbeat_host::HostEvent) {
+    fn push_event(&mut self, event: karbeat_host_api::HostEvent) {
         if self.events.len() == 4096 {
             let dropped = self.events.remove(0);
             self.event_overflow = Some(match dropped {
-                karbeat_host::HostEvent::BeginEdit { instance, .. }
-                | karbeat_host::HostEvent::EndEdit { instance, .. }
-                | karbeat_host::HostEvent::ParameterChanged { instance, .. }
-                | karbeat_host::HostEvent::RestartRequested { instance, .. }
-                | karbeat_host::HostEvent::EditorClosed { instance }
-                | karbeat_host::HostEvent::QueueOverflow { instance } => instance,
+                karbeat_host_api::HostEvent::BeginEdit { instance, .. }
+                | karbeat_host_api::HostEvent::EndEdit { instance, .. }
+                | karbeat_host_api::HostEvent::ParameterChanged { instance, .. }
+                | karbeat_host_api::HostEvent::RestartRequested { instance, .. }
+                | karbeat_host_api::HostEvent::EditorClosed { instance }
+                | karbeat_host_api::HostEvent::QueueOverflow { instance } => instance,
             });
         }
         self.events.push(event);
     }
     fn pump(&mut self) {
-        self.pump_prepare_job();
         self.control_retirements
             .retain_mut(|retirement| !retirement());
-        let mut completed = Vec::new();
-        for (&id, request) in &mut self.state_requests {
-            if let Some(result) = request.transaction.poll(&mut self.host) {
-                completed.push((id, result));
-            }
-        }
-        for (id, result) in completed {
-            if let Some(request) = self.state_requests.remove(&id) {
-                if let Some(reply) = request.reply {
-                    drop(reply.try_send(result));
-                } else if let Err(error) = result {
-                    log::error!("VST3 idle parameter flush: {error}");
-                }
-            }
-        }
         let mut retired = Vec::new();
         for (&id, retirement) in &mut self.retirements {
             if let Some(endpoint) = retirement.queue.take() {
@@ -530,14 +371,14 @@ impl NativeHost {
             if let Err(error) = self.close_editor(id) {
                 log::warn!("VST3 editor close: {error}");
             }
-            self.push_event(karbeat_host::HostEvent::EditorClosed { instance: id });
+            self.push_event(karbeat_host_api::HostEvent::EditorClosed { instance: id });
         }
         if let Err(error) = self.native_ui.pump() {
             log::error!("native editor flush: {error}");
         }
         let now = std::time::Instant::now();
         for event in self.host.drain_events() {
-            if let karbeat_host::HostEvent::ParameterChanged { instance, .. } = &event {
+            if let karbeat_host_api::HostEvent::ParameterChanged { instance, .. } = &event {
                 self.parameter_flush_due
                     .insert(*instance, now + Duration::from_millis(50));
             }
@@ -546,46 +387,33 @@ impl NativeHost {
         let due: Vec<_> = self
             .parameter_flush_due
             .iter()
-            .filter(|(id, deadline)| **deadline <= now && !self.state_requests.contains_key(id))
+            .filter(|(id, deadline)| {
+                **deadline <= now
+                    && !self.state_operations.contains(id)
+                    && !self.parameter_flush_active.contains(id)
+            })
             .map(|(&id, _)| id)
             .collect();
         for id in due {
-            if self.state_requests.len() >= 128 {
-                break;
-            }
             self.parameter_flush_due.remove(&id);
             if self.host.has_pending_parameters(id).unwrap_or(false) {
-                let (transaction, _) = StateTransaction::new(id, StateOperation::FlushParameters);
-                self.state_requests.insert(
-                    id,
-                    PendingState {
-                        transaction,
-                        reply: None,
-                    },
-                );
+                self.parameter_flush_active.insert(id);
+                if let Err(error) = karbeat_host_api::spawn_ui_local(async move {
+                    if let Err(error) =
+                        run_state_operation(id, StateOperation::FlushParameters).await
+                    {
+                        log::error!("VST3 idle parameter flush: {error}");
+                    }
+                    drop(with_native_host(|owner| {
+                        owner.parameter_flush_active.remove(&id);
+                        Ok(())
+                    }));
+                }) {
+                    self.parameter_flush_active.remove(&id);
+                    log::error!("VST3 idle parameter scheduling: {error}");
+                }
             }
         }
-    }
-
-    fn pump_prepare_job(&mut self) {
-        let Some(mut pending) = self.prepare_jobs.pop_front() else {
-            return;
-        };
-        let result = match self.host.advance_prepare(
-            pending.instance,
-            &mut pending.job,
-            MIDI_MAPPING_QUERIES_PER_TICK,
-        ) {
-            Ok(false) => {
-                self.prepare_jobs.push_back(pending);
-                return;
-            }
-            Ok(true) => self.finish_prepared(pending.instance, pending.state.as_ref()),
-            Err(error) => Err(error),
-        };
-        let result =
-            result.map_err(|operation| self.cleanup_failed_creation(pending.instance, operation));
-        drop(pending.reply.try_send(result));
     }
 }
 impl Drop for NativeHost {
@@ -610,50 +438,51 @@ pub fn available() -> bool {
     RUNTIME_READY.load(Ordering::Acquire)
 }
 
-/// Control-side state capture capability for the VST3 native owner.
-pub struct NativeStateCapture;
+enum StateOperation {
+    Capture,
+    Restore(PluginState),
+    FlushParameters,
+}
 
-impl HostStateCapture for NativeStateCapture {
-    fn capture_state(
-        &self,
-        identity: &PluginIdentity,
-        instance: HostInstanceId,
-    ) -> Result<PluginState, HostError> {
-        if identity.format != PluginFormat::Vst3 {
-            return Err(HostError::Unsupported("VST3 state capture"));
-        }
-        capture_state(instance)
-    }
+enum StateResult {
+    Captured(PluginState),
+    Restored,
+    ParametersFlushed,
 }
 
 /// Captures fresh opaque state without holding an engine or project lock on the native UI thread.
-pub fn capture_state(instance: HostInstanceId) -> Result<PluginState, HostError> {
-    let request = call(move |native| native.request_state(instance, StateOperation::Capture))?;
-    match request.wait(Duration::from_secs(30))? {
+pub async fn capture_state(instance: HostInstanceId) -> Result<PluginState, HostError> {
+    match dispatch_state_operation(instance, StateOperation::Capture).await? {
         StateResult::Captured(state) => Ok(state),
         StateResult::Restored | StateResult::ParametersFlushed => Err(HostError::InvalidTransition),
     }
 }
 
 /// Prepares a production instance cooperatively while its caller waits off the UI owner.
-pub fn prepare_instance(
+pub async fn prepare_instance(
     descriptor: PluginDescriptor,
     config: ProcessingConfig,
     state: Option<PluginState>,
 ) -> Result<PreparedNativeInstance, HostError> {
-    let request = call(move |owner| owner.request_prepared(descriptor, config, state))?;
-    request.wait(Duration::from_secs(30))
+    let dispatcher = NativeUiDispatcher::initialize()?;
+    dispatcher
+        .dispatch_async(
+            move || async move { Ok(prepare_on_owner(descriptor, config, state).await) },
+        )
+        .await?
 }
 
 /// Captures fresh state and prepares an independent duplicate with the source configuration.
 /// The duplicate stays suspended until its caller publishes and resumes it. Dropping the
 /// returned transfer schedules destruction on the native UI owner.
-pub fn duplicate_instance(instance: HostInstanceId) -> Result<PreparedNativeInstance, HostError> {
-    prepare_copy(instance, |_| {}, false)
+pub async fn duplicate_instance(
+    instance: HostInstanceId,
+) -> Result<PreparedNativeInstance, HostError> {
+    prepare_copy(instance, |_| {}, false).await
 }
 
 /// Captures live state and prepares a suspended replacement for a realtime DSP configuration.
-pub fn prepare_reconfigured_instance(
+pub async fn prepare_reconfigured_instance(
     instance: HostInstanceId,
     sample_rate: u32,
     max_block_size: usize,
@@ -667,10 +496,11 @@ pub fn prepare_reconfigured_instance(
         },
         false,
     )
+    .await
 }
 
 /// Captures live state and creates an independent offline endpoint on the native UI owner.
-pub fn prepare_offline_instance(
+pub async fn prepare_offline_instance(
     instance: HostInstanceId,
     sample_rate: u32,
     max_block_size: usize,
@@ -692,25 +522,27 @@ pub fn prepare_offline_instance(
         },
         true,
     )
+    .await
 }
 
-fn prepare_copy(
+async fn prepare_copy(
     instance: HostInstanceId,
     configure: impl FnOnce(&mut ProcessingConfig) + Send + 'static,
     start: bool,
 ) -> Result<PreparedNativeInstance, HostError> {
-    let state = capture_state(instance)?;
+    let state = capture_state(instance).await?;
     let (descriptor, mut config) = call(move |owner| {
         Ok((
             owner.host.descriptor(instance)?.clone(),
             owner.host.processing_config(instance)?.clone(),
         ))
-    })?;
+    })
+    .await?;
     configure(&mut config);
-    let prepared = prepare_instance(descriptor, config, Some(state))?;
+    let prepared = prepare_instance(descriptor, config, Some(state)).await?;
     if start {
         let prepared_id = prepared.instance;
-        call(move |owner| owner.host.resume(prepared_id))?;
+        call(move |owner| owner.host.resume(prepared_id)).await?;
     }
     Ok(prepared)
 }
@@ -719,10 +551,8 @@ fn prepare_copy(
 ///
 /// The calling worker waits up to 30 seconds before requesting cooperative cancellation or
 /// waiting for an already-started transaction to complete.
-pub fn restore_state(instance: HostInstanceId, state: PluginState) -> Result<(), HostError> {
-    let request =
-        call(move |native| native.request_state(instance, StateOperation::Restore(state)))?;
-    match request.wait(Duration::from_secs(30))? {
+pub async fn restore_state(instance: HostInstanceId, state: PluginState) -> Result<(), HostError> {
+    match dispatch_state_operation(instance, StateOperation::Restore(state)).await? {
         StateResult::Restored => Ok(()),
         StateResult::Captured(_) | StateResult::ParametersFlushed => {
             Err(HostError::InvalidTransition)
@@ -732,15 +562,119 @@ pub fn restore_state(instance: HostInstanceId, state: PluginState) -> Result<(),
 
 /// Called by API/control workers, never the audio or native UI thread.
 /// A bounded request queue rejects overload instead of silently dropping lifecycle commands.
-pub fn call<T: Send + 'static>(
+pub async fn call<T: Send + 'static>(
     action: impl FnOnce(&mut NativeHost) -> Result<T, HostError> + Send + 'static,
 ) -> Result<T, HostError> {
     if NativeUiDispatcher::is_owner_thread() {
         return Err(HostError::WrongThread);
     }
     let dispatcher = NativeUiDispatcher::initialize()?;
-    let request = dispatcher.dispatch(move || Ok(with_native_host(action)))?;
-    request.wait(Duration::from_secs(30))?
+    dispatcher
+        .dispatch(move || Ok(with_native_host(action)))
+        .await?
+}
+
+async fn dispatch_state_operation(
+    instance: HostInstanceId,
+    operation: StateOperation,
+) -> Result<StateResult, HostError> {
+    let dispatcher = NativeUiDispatcher::initialize()?;
+    dispatcher
+        .dispatch_async(move || async move { Ok(run_state_operation(instance, operation).await) })
+        .await?
+}
+
+async fn run_state_operation(
+    instance: HostInstanceId,
+    operation: StateOperation,
+) -> Result<StateResult, HostError> {
+    let was_running = with_native_host(|owner| {
+        if !owner.state_operations.insert(instance) {
+            return Err(HostError::Busy);
+        }
+        match owner.host.is_processing(instance) {
+            Ok(running) => Ok(running),
+            Err(error) => {
+                owner.state_operations.remove(&instance);
+                Err(error)
+            }
+        }
+    })?;
+
+    let result = loop {
+        match with_native_host(|owner| owner.host.suspend(instance)) {
+            Err(HostError::Busy) => futures_lite::future::yield_now().await,
+            Err(error) => break Err(error),
+            Ok(()) => {
+                break with_native_host(|owner| match operation {
+                    StateOperation::Capture => {
+                        owner.host.save_state(instance).map(StateResult::Captured)
+                    }
+                    StateOperation::Restore(ref state) => owner
+                        .host
+                        .restore_state(instance, state)
+                        .map(|()| StateResult::Restored),
+                    StateOperation::FlushParameters => owner
+                        .host
+                        .flush_parameters(instance)
+                        .map(|()| StateResult::ParametersFlushed),
+                });
+            }
+        }
+    };
+
+    let result = if was_running {
+        match with_native_host(|owner| owner.host.resume(instance)) {
+            Ok(()) => result,
+            Err(resume) => Err(HostError::StateResume {
+                operation: result.err().map(Box::new),
+                resume: Box::new(resume),
+            }),
+        }
+    } else {
+        result
+    };
+    drop(with_native_host(|owner| {
+        owner.state_operations.remove(&instance);
+        Ok(())
+    }));
+    result
+}
+
+async fn prepare_on_owner(
+    descriptor: PluginDescriptor,
+    config: ProcessingConfig,
+    state: Option<PluginState>,
+) -> Result<PreparedNativeInstance, HostError> {
+    let (instance, mut job) = with_native_host(|owner| {
+        config.validate()?;
+        let instance = owner.host.create(&descriptor)?;
+        match owner.host.begin_prepare(instance, &config) {
+            Ok(job) => Ok((instance, job)),
+            Err(operation) => Err(owner.cleanup_failed_creation(instance, operation)),
+        }
+    })?;
+    loop {
+        match with_native_host(|owner| {
+            owner
+                .host
+                .advance_prepare(instance, &mut job, MIDI_MAPPING_QUERIES_PER_TICK)
+        }) {
+            Ok(false) => futures_lite::future::yield_now().await,
+            Ok(true) => break,
+            Err(operation) => {
+                let cleanup = with_native_host(|owner| {
+                    Ok(owner.cleanup_failed_creation(instance, operation))
+                })?;
+                return Err(cleanup);
+            }
+        }
+    }
+    with_native_host(|owner| {
+        owner
+            .finish_prepared(instance, state.as_ref())
+            .map_err(|operation| owner.cleanup_failed_creation(instance, operation))
+    })
 }
 
 fn with_native_host<T>(
@@ -763,11 +697,11 @@ fn with_native_host<T>(
                 event_overflow: None,
                 parameter_flush_due: HashMap::new(),
                 retirements: HashMap::new(),
-                state_requests: HashMap::new(),
-                prepare_jobs: VecDeque::new(),
+                state_operations: HashSet::new(),
+                parameter_flush_active: HashSet::new(),
                 control_retirements: Vec::new(),
             });
-            karbeat_host::install_ui_interval(Duration::from_millis(8), pump_runtime)?;
+            karbeat_host_api::install_ui_interval(Duration::from_millis(8), pump_runtime)?;
             RUNTIME_READY.store(true, Ordering::Release);
         }
         action(runtime.as_mut().ok_or(HostError::WrongThread)?)

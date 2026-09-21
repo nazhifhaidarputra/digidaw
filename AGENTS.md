@@ -34,7 +34,10 @@ These instructions apply to the whole repository unless a more specific `AGENTS.
 - `rust/karbeat-dsp/`: DSP primitives. Keep this generic and reusable.
 - `rust/karbeat-flutter-ffi/`: Flutter-facing DTOs and bridge functions.
 - `rust/karbeat-plugins/`: first-party plugin implementations and manifest export.
-- `rust/karbeat-plugin-api/`, `rust/karbeat-plugin-types/`, `rust/karbeat-macros/`, `rust/karbeat-host/`, `rust/karbeat-utils/`: plugin ecosystem and shared support crates.
+- `rust/karbeat-host/`: low-level external-plugin contracts, published internally as `karbeat-host-api`.
+- `rust/karbeat-host-facade/`: format-independent async host client, service, and static executor router, published as `karbeat-host`.
+- `rust/karbeat-vst3/`, `rust/karbeat-clap/`, `rust/karbeat-lv2/`: format executor implementations; unfinished formats keep concrete unsupported stubs.
+- `rust/karbeat-plugin-api/`, `rust/karbeat-plugin-types/`, `rust/karbeat-macros/`, `rust/karbeat-utils/`: plugin ecosystem and shared support crates.
 
 ## Generated Code
 
@@ -99,6 +102,7 @@ The real-time audio path has stricter rules than ordinary Rust.
 - Pre-allocate and resize buffers from setup, graph replacement, or command handling paths outside the real-time callback.
 - Communicate graph and state changes through the existing command/feedback channels.
 - Keep telemetry lock-free. Use the existing triple-buffer pattern for visual data such as meters and plugin snapshots.
+- Tokio channels, one-shots, and watches belong only on plugin control/native-owner paths. Audio-command acknowledgements and endpoint retirement must use bounded `rtrb` transfers.
 - Separate high-frequency telemetry from critical events such as save/load, graph replacement, and project mutations.
 - For plugin DSP, implement `prepare`, `reset`, `process`, latency reporting, and IO layout changes in the style of existing plugins.
 - If adding latency or routing behavior, update plugin delay compensation and tests where behavior can affect rendered timing.

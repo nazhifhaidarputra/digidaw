@@ -117,7 +117,7 @@ pub trait PluginController {
     fn flush_parameters(&mut self, _instance: HostInstanceId) -> Result<(), HostError> {
         Err(HostError::Unsupported("parameter flushing"))
     }
-    /// Leaves the instance suspended. Use a StateTransaction to preserve its prior running state.
+    /// Leaves the instance suspended. The executor restores prior running intent after state work.
     fn save_state(&mut self, instance: HostInstanceId) -> Result<PluginState, HostError>;
     /// Restores opaque state while the instance remains suspended.
     fn restore_state(

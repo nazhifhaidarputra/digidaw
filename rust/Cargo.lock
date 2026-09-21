@@ -200,6 +200,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-executor"
+version = "1.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c96bf972d85afc50bf5ab8fe2d54d1586b4e0b46c97c50a0c9e71e2f7bcd812a"
+dependencies = [
+ "async-task",
+ "concurrent-queue",
+ "fastrand",
+ "futures-lite",
+ "pin-project-lite",
+ "slab",
+]
+
+[[package]]
+name = "async-task"
+version = "4.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
+
+[[package]]
 name = "atomic"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -489,6 +509,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "concurrent-queue"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "console_error_panic_hook"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -544,7 +573,7 @@ dependencies = [
  "jni 0.21.1",
  "js-sys",
  "libc",
- "mach2 0.5.0",
+ "mach2",
  "ndk",
  "ndk-context",
  "num-derive",
@@ -1178,6 +1207,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cecba35d7ad927e23624b22ad55235f2239cfa44fd10428eecbeba6d6a717718"
 
 [[package]]
+name = "futures-lite"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f78e10609fe0e0b3f4157ffab1876319b5b0db102a2c60dc4626306dc46b44ad"
+dependencies = [
+ "fastrand",
+ "futures-core",
+ "futures-io",
+ "parking",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "futures-macro"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1684,20 +1726,21 @@ dependencies = [
 [[package]]
 name = "karbeat-clap"
 version = "0.4.0"
+dependencies = [
+ "karbeat-host-api",
+]
 
 [[package]]
 name = "karbeat-core"
 version = "0.4.0"
 dependencies = [
  "anyhow",
- "arc-swap",
  "bytemuck",
  "chrono",
  "cpal",
  "dasp",
  "derive_builder",
- "fastrand",
- "flutter_rust_bridge",
+ "futures-lite",
  "glib",
  "hashbrown 0.17.1",
  "hound",
@@ -1712,12 +1755,9 @@ dependencies = [
  "karbeat-vst3",
  "log",
  "memmap2",
- "minimp3",
  "mp3lame-encoder",
- "once_cell",
  "parking_lot",
  "rayon",
- "realfft",
  "rmp-serde",
  "rodio",
  "rtrb",
@@ -1727,13 +1767,11 @@ dependencies = [
  "slab",
  "slotmap",
  "smallvec",
- "strum",
  "sysinfo",
  "tempfile",
  "thiserror 2.0.18",
  "toml",
  "triple_buffer",
- "uuid",
  "wide",
  "zip",
 ]
@@ -1766,6 +1804,18 @@ dependencies = [
 name = "karbeat-host"
 version = "0.4.0"
 dependencies = [
+ "async-executor",
+ "futures-lite",
+ "karbeat-host-api",
+ "tokio",
+]
+
+[[package]]
+name = "karbeat-host-api"
+version = "0.4.0"
+dependencies = [
+ "async-executor",
+ "futures-lite",
  "glib",
  "hashbrown 0.17.1",
  "karbeat-plugin-api",
@@ -1777,8 +1827,16 @@ dependencies = [
  "smithay-client-toolkit",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
  "wayland-client",
  "x11rb",
+]
+
+[[package]]
+name = "karbeat-lv2"
+version = "0.4.0"
+dependencies = [
+ "karbeat-host-api",
 ]
 
 [[package]]
@@ -1867,8 +1925,9 @@ dependencies = [
 name = "karbeat-vst3"
 version = "0.4.0"
 dependencies = [
+ "futures-lite",
  "glib",
- "karbeat-host",
+ "karbeat-host-api",
  "karbeat-plugin-api",
  "libloading 0.8.9",
  "log",
@@ -1877,6 +1936,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "vst3",
 ]
 
@@ -1891,8 +1951,10 @@ dependencies = [
  "env_logger",
  "flutter_rust_bridge",
  "jni 0.22.4",
+ "karbeat-clap",
  "karbeat-core",
  "karbeat-host",
+ "karbeat-lv2",
  "karbeat-plugin-api",
  "karbeat-plugins",
  "karbeat-utils",
@@ -1991,15 +2053,6 @@ dependencies = [
 
 [[package]]
 name = "mach2"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d640282b302c0bb0a2a8e0233ead9035e3bed871f0b7e81fe4a1ec829765db44"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "mach2"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a1b95cd5421ec55b445b5ae102f5ea0e768de1f82bd3001e11f426c269c3aea"
@@ -2048,26 +2101,6 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
-name = "minimp3"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82acfc4ecae15a73fc88d4f5f6ba6e2eece7ed980f1a63fccd1ae374c2a0b7c5"
-dependencies = [
- "minimp3-sys",
- "slice-ring-buffer",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "minimp3-sys"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa16a1fbac806d94e230e0a6b9b5a137d051897a188944cf07645da4b73a9fae"
-dependencies = [
- "cc",
-]
 
 [[package]]
 name = "miniz_oxide"
@@ -2385,6 +2418,12 @@ dependencies = [
  "dashmap",
  "log",
 ]
+
+[[package]]
+name = "parking"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
 
 [[package]]
 name = "parking_lot"
@@ -2958,17 +2997,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "slice-ring-buffer"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84ae312bda09b2368f79f985fdb4df4a0b5cbc75546b511303972d195f8c27d6"
-dependencies = [
- "libc",
- "mach2 0.4.3",
- "winapi",
-]
-
-[[package]]
 name = "slotmap"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3027,27 +3055,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "strum"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
-dependencies = [
- "strum_macros",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "symphonia"
@@ -3513,18 +3520,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "uuid"
-version = "1.23.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "144d6b123cef80b301b8f72a9e2ca4370ddec21950d0a103dd22c437006d2db7"
-dependencies = [
- "getrandom 0.4.2",
- "js-sys",
- "serde_core",
- "wasm-bindgen",
-]
 
 [[package]]
 name = "vcpkg"

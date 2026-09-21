@@ -6,7 +6,9 @@ use crate::{
     module::{Vst3Module, parse_class_id},
     wrapper::{Dsp, ProcessorSlot},
 };
-use karbeat_host::{HostError, PluginDescriptor, PluginState, ProcessingConfig, ProcessingGate};
+use karbeat_host_api::{
+    HostError, PluginDescriptor, PluginState, ProcessingConfig, ProcessingGate,
+};
 use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{
     cell::UnsafeCell,

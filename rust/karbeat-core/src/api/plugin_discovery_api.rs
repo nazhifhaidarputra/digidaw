@@ -7,8 +7,8 @@ use std::{
 };
 
 use karbeat_host::{
-    HostError, PluginDescriptor,
-    scanner::{self, ScanCache, ScanProgress, ScanResult, ScanSettings},
+    HostError, PluginDescriptor, ScanRequest,
+    scanner::{ScanCache, ScanProgress, ScanResult, ScanSettings},
 };
 use parking_lot::Mutex;
 
@@ -65,7 +65,9 @@ fn cache_path() -> Result<PathBuf, HostError> {
 
 /// Returns the platform's conventional VST3 search directories.
 pub fn default_scan_paths() -> Vec<PathBuf> {
-    karbeat_vst3::module::default_scan_paths()
+    karbeat_host::HostClient::global()
+        .and_then(|client| futures_lite::future::block_on(client.default_scan_paths_all()))
+        .unwrap_or_default()
 }
 
 /// Loads the persisted scan settings, or returns defaults when no settings file exists.
@@ -123,9 +125,9 @@ pub fn update_scan_settings(settings: ScanSettings) -> Result<ScanSettings, Host
 
 /// Starts isolated discovery without retaining the project context or blocking native UI dispatch.
 pub fn start_scan(
-    mut settings: ScanSettings,
+    settings: ScanSettings,
     retry: bool,
-    mut notify: impl FnMut(PluginScanEvent) -> bool + Send + 'static,
+    notify: impl FnMut(PluginScanEvent) -> bool + Send + 'static,
 ) -> Result<u64, HostError> {
     if !(1..=300).contains(&settings.timeout_seconds) {
         return Err(HostError::InvalidConfiguration);
@@ -143,42 +145,42 @@ pub fn start_scan(
     };
     *active = Some(session.clone());
     drop(active);
+    let client = karbeat_host::HostClient::global()
+        .unwrap_or_else(|_| karbeat_host::HostClient::unavailable());
     let guard = ScanGuard(id);
     std::thread::Builder::new()
         .name("plugin-discovery".into())
         .spawn(move || {
             let guard = guard;
-            if !notify(PluginScanEvent::Started { id }) {
+            let notify = Arc::new(Mutex::new(notify));
+            if !(notify.lock())(PluginScanEvent::Started { id }) {
                 return;
             }
             let result = (|| {
-                settings = update_scan_settings(settings)?;
-                settings.directories.extend(default_scan_paths());
-                let path = cache_path()?;
-                let mut cache = ScanCache::load(&path)?;
-                let helper = scanner::scanner_executable()?;
-                let result = scanner::scan(
-                    &helper,
-                    &settings,
-                    &mut cache,
-                    retry,
-                    &session.cancelled,
-                    &mut |progress| {
-                        if !notify(PluginScanEvent::Progress(progress)) {
-                            session.cancelled.store(true, Ordering::Release);
+                let settings = update_scan_settings(settings)?;
+                let progress_notify = notify.clone();
+                let progress_cancelled = session.cancelled.clone();
+                let request = ScanRequest {
+                    directories: settings.directories,
+                    timeout_seconds: settings.timeout_seconds,
+                    retry_quarantined: retry,
+                    cancelled: session.cancelled.clone(),
+                    cache_path: Some(cache_path()?),
+                    progress: Some(Arc::new(move |progress| {
+                        if !(progress_notify.lock())(PluginScanEvent::Progress(progress)) {
+                            progress_cancelled.store(true, Ordering::Release);
                         }
-                    },
-                )?;
-                cache.save(&path)?;
-                Ok::<_, HostError>(result)
+                    })),
+                };
+                futures_lite::future::block_on(client.scan_all(request))
             })();
             drop(guard);
             match result {
                 Ok(result) => {
-                    notify(PluginScanEvent::Finished(result));
+                    (notify.lock())(PluginScanEvent::Finished(result));
                 }
                 Err(error) => {
-                    notify(PluginScanEvent::Failed(error.to_string()));
+                    (notify.lock())(PluginScanEvent::Failed(error.to_string()));
                 }
             }
         })?;

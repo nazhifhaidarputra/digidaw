@@ -1,4 +1,4 @@
-use karbeat_host::{
+use karbeat_host_api::{
     HostInstanceId, NativeEditorBinding, NativeEditorEvent, NativeSurfaceKind, NativeUiPlatform,
     NativeWindow, NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginEditorManager,
     SystemNativeUi,

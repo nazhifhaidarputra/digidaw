@@ -55,8 +55,8 @@ where
 
 mod restore;
 mod save;
-pub(crate) use save::{hosted_instance, hosted_instance_with_handles};
 pub use restore::{CompletedProjectRestore, PendingProjectRestore};
+pub(crate) use save::hosted_instance_with_handles;
 pub use save::{CompletedProjectSave, PendingProjectSave};
 
 pub fn begin_save_project(ctx: &DawContext, path_name: &str) -> PendingProjectSave {

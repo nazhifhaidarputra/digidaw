@@ -6,8 +6,7 @@
 use std::sync::{Arc, Once, mpsc};
 
 use hashbrown::HashMap;
-use karbeat_host::HostStateCapture;
-use karbeat_host::HostInstanceId;
+use karbeat_host::{ExternalPluginInstanceHandle, HostClient, HostStateCapture};
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 use parking_lot::{Mutex, RwLock};
 use rtrb::{Consumer, Producer};
@@ -65,6 +64,9 @@ pub struct DawContext {
     /// Format-independent control-side access to live hosted plug-in state.
     pub host_state_capture: Arc<dyn HostStateCapture>,
 
+    /// Format-independent asynchronous external plugin control client.
+    pub external_plugins: HostClient,
+
     /// The live, thread-safe audio configuration.
     /// The UI writes to this, and the background stream monitor reads from it.
     pub active_audio_config: Arc<RwLock<AudioDeviceConfig>>,
@@ -85,7 +87,7 @@ pub struct DawContext {
 
 #[derive(Clone, Debug)]
 pub enum HostedTargetState {
-    Active(HostInstanceId),
+    Active(ExternalPluginInstanceHandle),
     Transitioning,
     Failed(String),
 }
@@ -95,11 +97,17 @@ pub struct ControlHandles {
     pub command_sender: Arc<Mutex<Option<Producer<AudioCommand>>>>,
     pub feedback_consumer: Arc<Mutex<Option<Consumer<AudioFeedback>>>>,
     pub project_state_feedback: Arc<Mutex<crate::audio::project_state::ProjectStateFeedback>>,
+    pub external_plugins: HostClient,
 }
 
 impl DawContext {
     /// Creates a context with a blank project, first-party registry, and disconnected audio queues.
     pub fn new() -> Self {
+        Self::with_external_plugins(HostClient::unavailable())
+    }
+
+    /// Creates a context with an injected format-independent external plugin host.
+    pub fn with_external_plugins(external_plugins: HostClient) -> Self {
         let plugin_registry = PluginRegistry::new_with_defaults();
         let plugin_catalog = crate::audio::plugin_catalog::PluginCatalog::new(&plugin_registry);
         Self {
@@ -112,7 +120,8 @@ impl DawContext {
             position_consumer: Arc::new(Mutex::new(None)),
             plugin_registry,
             plugin_catalog,
-            host_state_capture: Arc::new(karbeat_vst3::native::NativeStateCapture),
+            host_state_capture: Arc::new(external_plugins.clone()),
+            external_plugins,
             external_plugin_failures: HashMap::new(),
             hosted_targets: HashMap::new(),
             active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
@@ -142,6 +151,7 @@ impl DawContext {
             command_sender: Arc::clone(&self.command_sender),
             feedback_consumer: Arc::clone(&self.feedback_consumer),
             project_state_feedback: Arc::clone(&self.project_state_feedback),
+            external_plugins: self.external_plugins.clone(),
         }
     }
 

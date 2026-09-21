@@ -6,10 +6,7 @@
     reason = "integration test setup failures should fail the test"
 )]
 
-use karbeat_host::{
-    HostError, PluginController, PluginInstanceManager, ProcessingConfig, StateOperation,
-    StateResult, StateTransaction,
-};
+use karbeat_host_api::{HostError, PluginController, PluginInstanceManager, ProcessingConfig};
 use karbeat_plugin_api::prelude::AudioPlugin;
 use karbeat_plugin_api::types::{
     AudioBuffers, AudioBusBuffer, MidiEvent, MidiMessage, ProcessContext, ProcessingMode,
@@ -180,27 +177,23 @@ fn main() {
     if std::env::var_os("VITAL_TEST_EDITOR").is_some() {
         x11_editor::exercise_editor(&mut host, first);
     }
-    let (mut capture, _) = StateTransaction::new(first, StateOperation::Capture);
-    let StateResult::Captured(state) = capture.poll(&mut host).unwrap().unwrap() else {
-        panic!("capture must return native state");
-    };
+    host.suspend(first).unwrap();
+    let state = host.save_state(first).unwrap();
+    host.resume(first).unwrap();
     assert!(host.is_processing(first).unwrap());
     assert!(!state.component.is_empty());
-    let (mut restore, _) = StateTransaction::new(second, StateOperation::Restore(state.clone()));
-    assert!(matches!(
-        restore.poll(&mut host),
-        Some(Ok(StateResult::Restored))
-    ));
+    host.restore_state(second, &state).unwrap();
     assert!(!host.is_processing(second).unwrap());
     let restored = host.save_state(second).unwrap();
     assert!(!restored.component.is_empty());
     let mut invalid = state;
     invalid.version = u32::MAX;
-    let (mut restore, _) = StateTransaction::new(first, StateOperation::Restore(invalid));
+    host.suspend(first).unwrap();
     assert!(matches!(
-        restore.poll(&mut host),
-        Some(Err(HostError::InvalidState(_)))
+        host.restore_state(first, &invalid),
+        Err(HostError::InvalidState(_))
     ));
+    host.resume(first).unwrap();
     assert!(host.is_processing(first).unwrap());
     let parameter = host
         .parameters(first)
