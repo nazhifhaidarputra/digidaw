@@ -44,45 +44,47 @@ class ContextMenuWrapper extends StatelessWidget {
               ? Text(title!, style: TextStyle(color: colors.onSurface))
               : null,
           contentPadding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              if (header != null) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 8.0,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (header != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24.0,
+                      vertical: 8.0,
+                    ),
+                    child: header!,
                   ),
-                  child: header!,
-                ),
-                Divider(color: colors.outlineVariant, height: 16),
+                  Divider(color: colors.outlineVariant, height: 16),
+                ],
+
+                ...actions.map((action) {
+                  final color =
+                      action.color ??
+                      (action.isDestructive ? colors.error : colors.onSurface);
+
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 24.0,
+                    ),
+                    leading: action.icon != null
+                        ? Icon(action.icon, color: color, size: 20)
+                        : null,
+                    title: Text(
+                      action.title,
+                      style: TextStyle(color: color, fontSize: 14),
+                    ),
+                    hoverColor: colors.onSurface.withValues(alpha: 0.08),
+                    onTap: () {
+                      Navigator.of(dialogContext).pop();
+                      action.onTap();
+                    },
+                  );
+                }),
               ],
-
-              // Actions list
-              ...actions.map((action) {
-                final color =
-                    action.color ??
-                    (action.isDestructive ? colors.error : colors.onSurface);
-
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  leading: action.icon != null
-                      ? Icon(action.icon, color: color, size: 20)
-                      : null,
-                  title: Text(
-                    action.title,
-                    style: TextStyle(color: color, fontSize: 14),
-                  ),
-                  hoverColor: colors.onSurface.withValues(alpha: 0.08),
-                  onTap: () {
-                    Navigator.of(dialogContext).pop();
-                    action.onTap();
-                  },
-                );
-              }),
-            ],
+            ),
           ),
         );
       },

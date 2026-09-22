@@ -12,7 +12,9 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/math.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
+import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/track/view/generator_automation_parameter_dialog.dart';
+import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 /// Track identity, controls, metering, and track-level context actions.
@@ -126,8 +128,8 @@ class TrackHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    // Only rebuilds this specific header if the track's name/color/type changes
-    final track = ref.watch(projectProvider).value?.tracks[trackId];
+    final project = ref.watch(projectProvider).value;
+    final track = project?.tracks[trackId];
     final magnitude = ref.watch(
       mixerStateProvider.select(
         (state) => state.trackMagnitudes[trackId] ?? 0.0,
@@ -138,6 +140,13 @@ class TrackHeader extends ConsumerWidget {
 
     final trackColor = track.color.fromRGBorRGBAtoColor();
     final trackForeground = _getContrastColor(trackColor);
+    final generatorId = track.generatorId;
+    final generatorPlugin = switch (generatorId == null
+        ? null
+        : project?.generators[generatorId]?.instanceType) {
+      UiGeneratorInstanceType_Plugin(:final field0) => field0,
+      _ => null,
+    };
 
     return ContextMenuWrapper(
       title: track.name,
@@ -178,6 +187,23 @@ class TrackHeader extends ConsumerWidget {
         ],
       ),
       actions: [
+        if (track.trackType == UiTrackType.midi &&
+            generatorId != null &&
+            generatorPlugin != null)
+          DawContextAction(
+            title: "Go to plugin screen",
+            icon: Icons.open_in_new,
+            onTap: () async {
+              await openPluginInterface(
+                context: context,
+                ref: ref,
+                target: UiPluginTarget.generator(generatorId),
+                registryId: generatorPlugin.registryId,
+                instanceId: generatorId,
+                pluginName: generatorPlugin.name,
+              );
+            },
+          ),
         if (track.generatorId != null)
           DawContextAction(
             title: "Add automation on...",
