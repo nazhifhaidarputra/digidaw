@@ -1063,6 +1063,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                                 step: #step,
                                 value_type: karbeat_plugin_types::ParamType::#val_type_ident,
                                 choices: #choices_tokens,
+                                automatable: true,
                             }
                         });
                     }

@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
+/// Compact header for an automation lane in a channel drawer.
 class AutomationLaneHeader extends StatelessWidget {
   final AutomationLaneDto lane;
   final double itemHeight;
   final Color trackColor;
+
+  /// Toggles whether the lane contributes automation during playback.
+  final VoidCallback onToggleEnabled;
 
   const AutomationLaneHeader({
     super.key,
     required this.lane,
     required this.itemHeight,
     required this.trackColor,
+    required this.onToggleEnabled,
   });
 
   @override
@@ -76,9 +81,7 @@ class AutomationLaneHeader extends StatelessWidget {
               color: lane.enabled ? colors.primary : colors.outline,
               size: 16,
             ),
-            onPressed: () {
-              // TODO: Dispatch toggle enabled to backend
-            },
+            onPressed: onToggleEnabled,
           ),
         ],
       ),

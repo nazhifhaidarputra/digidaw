@@ -9,6 +9,7 @@ import 'package:karbeat/features/track/view/grid_painter.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'automation_curve_painter.dart';
 
+/// Interactive timeline surface for one automation lane.
 class AutomationLaneSlot extends ConsumerStatefulWidget {
   final AutomationLaneDto lane;
   final double height;
@@ -104,12 +105,6 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final pointId = _findPointIdAt(event.localPosition);
 
     if (isRightClick) {
-      if (pointId != null) {
-        // DELETE POINT
-        ref
-            .read(automationProvider.notifier)
-            .removePoint(widget.lane.id, pointId);
-      }
       return;
     }
 

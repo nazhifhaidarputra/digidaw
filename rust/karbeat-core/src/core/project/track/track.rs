@@ -385,6 +385,7 @@ impl ApplicationState {
 
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
+            self.remove_modulations_for_generator(gen_id);
             self.generator_pool.remove(gen_id);
             deleted_track_type = RemovedTrackType::Midi;
         }

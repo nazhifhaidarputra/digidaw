@@ -147,7 +147,7 @@ impl ApplicationState {
         let order_idx = self
             .modulation_links
             .values()
-            .filter(|l| l.prop.target == target)
+            .filter(|l| l.prop.target.belongs_to_same_drawer_as(&target))
             .count();
 
         let link_id =
@@ -330,8 +330,26 @@ impl ApplicationState {
             }
         }
 
+        self.normalize_link_orders_for_target(&target);
+
         // Map the found lane_id with the collected HashSets, otherwise return None
         main_lane_id.map(|id| (id, removed_sources, removed_links))
+    }
+
+    fn normalize_link_orders_for_target(&mut self, target: &AutomationTarget) {
+        let mut sibling_links: Vec<_> = self
+            .modulation_links
+            .values()
+            .filter(|link| link.prop.target.belongs_to_same_drawer_as(target))
+            .map(|link| (link.order_idx, link.prop.id))
+            .collect();
+        sibling_links.sort_by_key(|(order_idx, _)| *order_idx);
+
+        for (order_idx, (_, link_id)) in sibling_links.into_iter().enumerate() {
+            if let Some(link) = self.modulation_links.get_mut(link_id) {
+                link.order_idx = order_idx;
+            }
+        }
     }
 
     /// Completely remove all Modulation Links and orphaned Automation Lanes for a Track.
@@ -353,6 +371,31 @@ impl ApplicationState {
 
         // Clean up the pure data lanes so we don't leak memory
         for lane_id in orphaned_lanes {
+            self.automation_pool.remove(lane_id);
+        }
+    }
+
+    /// Removes modulation links, automation sources, and lanes owned by a generator.
+    pub fn remove_modulations_for_generator(&mut self, generator_id: crate::shared::GeneratorId) {
+        let mut automation_sources = Vec::new();
+        let mut automation_lanes = Vec::new();
+
+        self.modulation_links.retain(|_, link| {
+            let references = link.prop.target.references_generator(generator_id);
+            if references
+                && let Some(ModulationSource::Automation { lane_id }) =
+                    self.modulation_sources.get(link.prop.source_id)
+            {
+                automation_sources.push(link.prop.source_id);
+                automation_lanes.push(*lane_id);
+            }
+            !references
+        });
+
+        for source_id in automation_sources {
+            self.modulation_sources.remove(source_id);
+        }
+        for lane_id in automation_lanes {
             self.automation_pool.remove(lane_id);
         }
     }
@@ -478,6 +521,20 @@ impl ApplicationState {
         Ok(lane.clone())
     }
 
+    /// Sets whether a lane contributes automation and returns its updated snapshot.
+    pub fn set_automation_lane_enabled(
+        &mut self,
+        lane_id: AutomationId,
+        enabled: bool,
+    ) -> anyhow::Result<AutomationLane> {
+        let lane = self
+            .automation_pool
+            .get_mut(lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+        lane.enabled = enabled;
+        Ok(lane.clone())
+    }
+
     /// Applies supplied point fields, restores chronological ordering, and returns its new index.
     pub fn update_automation_point(
         &mut self,
@@ -555,7 +612,10 @@ impl ApplicationState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::project::MasterAutomationTarget;
+    use crate::core::project::{
+        AudioTrack, GeneratorInstanceType, MasterAutomationTarget, TrackType,
+    };
+    use crate::shared::GeneratorId;
 
     #[test]
     fn new_automation_lane_starts_with_the_initial_value_at_project_start() {
@@ -576,5 +636,87 @@ mod tests {
                 assert!((point.value.get() - 0.5).abs() < f64::EPSILON);
             }
         }
+    }
+
+    #[test]
+    fn generator_lanes_share_sequential_drawer_order() {
+        let mut app = ApplicationState::default();
+        let generator_id = GeneratorId::from_u64(1);
+        let targets = [10, 20, 30].map(|param_id| AutomationTarget::Generator {
+            generator_id,
+            param_id,
+        });
+
+        let mut links = Vec::new();
+        for target in targets.clone() {
+            let result = app.add_automation_lane(target, "Parameter", 0.0, 1.0, 0.5);
+            assert!(result.is_ok());
+            if let Ok((_, link_id)) = result {
+                links.push(link_id);
+            }
+        }
+
+        let orders: Vec<_> = links
+            .iter()
+            .map(|link_id| app.modulation_links[*link_id].order_idx)
+            .collect();
+        assert_eq!(orders, vec![0, 1, 2]);
+
+        assert!(app.remove_automation_lane(targets[1].clone()).is_some());
+        let mut remaining_orders: Vec<_> = app
+            .modulation_links
+            .values()
+            .map(|link| link.order_idx)
+            .collect();
+        remaining_orders.sort_unstable();
+        assert_eq!(remaining_orders, vec![0, 1]);
+    }
+
+    #[test]
+    fn disabling_lane_preserves_its_points_source_and_link() {
+        let mut app = ApplicationState::default();
+        let target = AutomationTarget::Master(MasterAutomationTarget::TempoBpm);
+        let result = app.add_automation_lane(target, "Tempo", 40.0, 240.0, 120.0);
+        assert!(result.is_ok());
+        let Ok((lane, link_id)) = result else {
+            return;
+        };
+        let source_id = app.modulation_links[link_id].prop.source_id;
+
+        let updated = app.set_automation_lane_enabled(lane.id, false);
+        assert!(updated.is_ok());
+        if let Ok(updated) = updated {
+            assert!(!updated.enabled);
+            assert_eq!(updated.points, lane.points);
+        }
+        assert!(app.modulation_links.contains_key(link_id));
+        assert!(app.modulation_sources.contains_key(source_id));
+    }
+
+    #[test]
+    fn deleting_generator_track_removes_automation_data() {
+        let mut app = ApplicationState::default();
+        let generator_id = app.add_generator(GeneratorInstanceType::default());
+        let generator = app.generator_pool[generator_id].clone();
+        let track_id = app.tracks.insert_with_key(|id| AudioTrack {
+            id,
+            track_type: TrackType::Midi,
+            generator: Some(generator),
+            ..Default::default()
+        });
+        let target = AutomationTarget::Generator {
+            generator_id,
+            param_id: 10,
+        };
+        let result = app.add_automation_lane(target, "Cutoff", 0.0, 1.0, 0.5);
+        assert!(result.is_ok());
+
+        let removal = app.remove_track(track_id);
+
+        assert!(removal.is_ok());
+        assert!(!app.generator_pool.contains_key(generator_id));
+        assert!(app.modulation_links.is_empty());
+        assert!(app.modulation_sources.is_empty());
+        assert!(app.automation_pool.is_empty());
     }
 }

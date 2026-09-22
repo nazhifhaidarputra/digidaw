@@ -131,6 +131,19 @@ pub fn remove_automation_lane(
     ))
 }
 
+/// Updates whether an automation lane is linked into playback and republishes it.
+pub fn set_automation_lane_enabled(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    enabled: bool,
+) -> anyhow::Result<AutomationLane> {
+    let lane = ctx
+        .app_state
+        .set_automation_lane_enabled(automation_id, enabled)?;
+    ctx.broadcast_automation_lane(automation_id, &lane);
+    Ok(lane)
+}
+
 /// Adds a point to a lane and publishes the rebuilt lane to the audio thread.
 pub fn add_new_automation_point(
     ctx: &mut DawContext,

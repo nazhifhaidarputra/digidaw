@@ -55,6 +55,10 @@ pub enum ParameterValueType {
     Choice,
 }
 
+fn parameter_automatable_default() -> bool {
+    true
+}
+
 /// Generic description of a parameter spec for UI generation
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ParameterSpec {
@@ -69,6 +73,9 @@ pub struct ParameterSpec {
     pub step: f64, // 0.0 for continuous
     pub value_type: ParameterValueType,
     pub choices: Vec<String>, // Labels for Choice type (index = value)
+    /// Whether hosts may create automation lanes for this parameter.
+    #[serde(default = "parameter_automatable_default")]
+    pub automatable: bool,
 }
 
 impl ParameterSpec {
@@ -95,6 +102,7 @@ impl ParameterSpec {
             step,
             value_type: ParameterValueType::Float,
             choices: Vec::new(),
+            automatable: true,
         }
     }
 
@@ -112,6 +120,7 @@ impl ParameterSpec {
             step: 1.0,
             value_type: ParameterValueType::Bool,
             choices: Vec::new(),
+            automatable: true,
         }
     }
 
@@ -136,6 +145,35 @@ impl ParameterSpec {
             step: 1.0,
             value_type: ParameterValueType::Choice,
             choices,
+            automatable: true,
+        }
+    }
+}
+
+#[cfg(test)]
+mod parameter_spec_tests {
+    use super::*;
+
+    #[test]
+    fn missing_automatable_field_defaults_to_true() {
+        let json = r#"{
+            "id": 1,
+            "path": "filter/cutoff",
+            "name": "Cutoff",
+            "group": "Filter",
+            "value": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.5,
+            "step": 0.0,
+            "value_type": "Float",
+            "choices": []
+        }"#;
+
+        let result = serde_json::from_str::<ParameterSpec>(json);
+        assert!(result.is_ok());
+        if let Ok(spec) = result {
+            assert!(spec.automatable);
         }
     }
 }
@@ -475,6 +513,7 @@ impl<T: ParamType> Param<T> {
                 }
                 _ => vec![],
             },
+            automatable: true,
         }
     }
 

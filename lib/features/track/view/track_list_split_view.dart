@@ -514,10 +514,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 ),
               if (isExpanded)
                 ...lanes.map(
-                  (entry) => AutomationLaneHeader(
-                    lane: entry.$3,
-                    itemHeight: 60,
-                    trackColor: trackColor,
+                  (entry) => AutomationLaneContextMenu(
+                    entry: entry,
+                    child: AutomationLaneHeader(
+                      lane: entry.lane,
+                      itemHeight: 60,
+                      trackColor: trackColor,
+                      onToggleEnabled: () => ref
+                          .read(automationProvider.notifier)
+                          .handleSetAutomationLaneEnabled(
+                            laneId: entry.laneId,
+                            enabled: !entry.lane.enabled,
+                          ),
+                    ),
                   ),
                 ),
             ],
@@ -636,10 +645,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ...lanes.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 4.0),
-                  child: AutomationLaneHeader(
-                    lane: entry.$3,
-                    itemHeight: 60,
-                    trackColor: trackColor,
+                  child: AutomationLaneContextMenu(
+                    entry: entry,
+                    child: AutomationLaneHeader(
+                      lane: entry.lane,
+                      itemHeight: 60,
+                      trackColor: trackColor,
+                      onToggleEnabled: () => ref
+                          .read(automationProvider.notifier)
+                          .handleSetAutomationLaneEnabled(
+                            laneId: entry.laneId,
+                            enabled: !entry.lane.enabled,
+                          ),
+                    ),
                   ),
                 ),
               ),
@@ -1070,12 +1088,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     ),
                   if (isExpanded)
                     ...lanes.map(
-                      (entry) => AutomationLaneSlot(
-                        lane: entry.$3,
-                        height: 60,
-                        horizontalScrollController: _trackContentController,
-                        trackColor: trackColor,
-                        sampleRate: sr,
+                      (entry) => AutomationLaneContextMenu(
+                        entry: entry,
+                        child: AutomationLaneSlot(
+                          lane: entry.lane,
+                          height: 60,
+                          horizontalScrollController: _trackContentController,
+                          trackColor: trackColor,
+                          sampleRate: sr,
+                        ),
                       ),
                     ),
                 ],
@@ -1116,12 +1137,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ...lanes.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 4.0),
-                  child: AutomationLaneSlot(
-                    lane: entry.$3,
-                    height: 60,
-                    horizontalScrollController: _trackContentController,
-                    trackColor: trackColor,
-                    sampleRate: sr,
+                  child: AutomationLaneContextMenu(
+                    entry: entry,
+                    child: AutomationLaneSlot(
+                      lane: entry.lane,
+                      height: 60,
+                      horizontalScrollController: _trackContentController,
+                      trackColor: trackColor,
+                      sampleRate: sr,
+                    ),
                   ),
                 ),
               ),
@@ -1262,10 +1286,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       ...lanes.map(
                         (entry) => Padding(
                           padding: const EdgeInsets.only(top: 4.0),
-                          child: AutomationLaneHeader(
-                            lane: entry.$3,
-                            itemHeight: 60,
-                            trackColor: trackColor,
+                          child: AutomationLaneContextMenu(
+                            entry: entry,
+                            child: AutomationLaneHeader(
+                              lane: entry.lane,
+                              itemHeight: 60,
+                              trackColor: trackColor,
+                              onToggleEnabled: () => ref
+                                  .read(automationProvider.notifier)
+                                  .handleSetAutomationLaneEnabled(
+                                    laneId: entry.laneId,
+                                    enabled: !entry.lane.enabled,
+                                  ),
+                            ),
                           ),
                         ),
                       ),
@@ -1324,12 +1357,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       ...lanes.map(
                         (entry) => Padding(
                           padding: const EdgeInsets.only(top: 4.0),
-                          child: AutomationLaneSlot(
-                            lane: entry.$3,
-                            height: 60,
-                            horizontalScrollController: _trackContentController,
-                            trackColor: trackColor,
-                            sampleRate: sr,
+                          child: AutomationLaneContextMenu(
+                            entry: entry,
+                            child: AutomationLaneSlot(
+                              lane: entry.lane,
+                              height: 60,
+                              horizontalScrollController:
+                                  _trackContentController,
+                              trackColor: trackColor,
+                              sampleRate: sr,
+                            ),
                           ),
                         ),
                       ),

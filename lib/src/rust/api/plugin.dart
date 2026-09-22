@@ -78,6 +78,15 @@ Future<List<UiPluginParameter>> getPluginParameterSpecs({
   target: target,
 );
 
+/// Get automatable parameter specifications for any plugin type.
+Future<List<UiPluginParameter>> getAutomatablePluginParameterSpecs({
+  required DawContext ctx,
+  required UiPluginTarget target,
+}) => RustLib.instance.api.crateApiPluginGetAutomatablePluginParameterSpecs(
+  ctx: ctx,
+  target: target,
+);
+
 /// Set a parameter on ANY plugin type (Generator or Effect)
 Future<void> setPluginParameter({
   required DawContext ctx,

@@ -292,6 +292,32 @@ pub fn get_plugin_parameter_specs(
     .map_err(|e| e.to_string())
 }
 
+/// Get automatable parameter specifications for any plugin type.
+pub fn get_automatable_plugin_parameter_specs(
+    ctx: &DawContext,
+    target: UiPluginTarget,
+) -> Result<Vec<UiPluginParameter>, String> {
+    crate::api::context::read_ctx!(ctx);
+    let plugin_target = target.into();
+
+    plugin_api::get_automatable_plugin_parameter_specs(ctx, &plugin_target, |p, value| {
+        UiPluginParameter {
+            id: p.id,
+            path: p.path,
+            name: p.name,
+            group: p.group,
+            value,
+            min: p.min as f32,
+            max: p.max as f32,
+            default_value: p.default_value as f32,
+            step: p.step as f32,
+            param_type: UiParameterType::from(p.value_type),
+            choices: p.choices,
+        }
+    })
+    .map_err(|e| e.to_string())
+}
+
 /// Set a parameter on ANY plugin type (Generator or Effect)
 pub fn set_plugin_parameter(
     ctx: &DawContext,

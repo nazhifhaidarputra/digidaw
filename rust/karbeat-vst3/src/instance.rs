@@ -216,6 +216,8 @@ impl Vst3Instance {
                 },
             );
             spec.path = format!("vst3/{}", info.id);
+            spec.automatable =
+                info.flags & ParameterInfo_::ParameterFlags_::kCanAutomate as i32 != 0;
             specs.push(spec);
         }
         specs.sort_by_key(|p| p.id);

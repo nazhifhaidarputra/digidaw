@@ -12,8 +12,10 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/math.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
+import 'package:karbeat/features/track/view/generator_automation_parameter_dialog.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
+/// Track identity, controls, metering, and track-level context actions.
 class TrackHeader extends ConsumerWidget {
   final int trackId;
   final double itemHeight;
@@ -176,6 +178,17 @@ class TrackHeader extends ConsumerWidget {
         ],
       ),
       actions: [
+        if (track.generatorId != null)
+          DawContextAction(
+            title: "Add automation on...",
+            icon: Icons.timeline,
+            onTap: () => showGeneratorAutomationParameterDialog(
+              context: context,
+              trackId: track.id,
+              trackName: track.name,
+              generatorId: track.generatorId!,
+            ),
+          ),
         DawContextAction(
           title: "Rename",
           icon: Icons.edit,

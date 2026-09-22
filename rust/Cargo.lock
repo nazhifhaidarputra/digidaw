@@ -1878,6 +1878,7 @@ dependencies = [
  "karbeat-utils",
  "num-traits",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

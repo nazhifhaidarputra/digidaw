@@ -106,6 +106,14 @@ impl AutomationTarget {
         }
     }
 
+    /// Returns true if this target references the given generator ID.
+    pub fn references_generator(&self, id: GeneratorId) -> bool {
+        match self {
+            AutomationTarget::Generator { generator_id, .. } => *generator_id == id,
+            _ => false,
+        }
+    }
+
     /// Checks if this automation target references a specific Bus.
     pub fn references_bus(&self, target_bus_id: BusId) -> bool {
         match self {

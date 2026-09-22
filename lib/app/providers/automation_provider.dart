@@ -6,6 +6,7 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/project.dart';
 
 part 'automation_provider.freezed.dart';
@@ -27,11 +28,26 @@ abstract class AutomationDataState with _$AutomationDataState {
   }) = _AutomationDataState;
 }
 
-typedef ChannelAutomationEntry = (
+typedef ChannelAutomationEntry = ({
   int laneId,
   int linkId,
+  AutomationTargetDto target,
   AutomationLaneDto lane,
-);
+});
+
+/// A generator parameter paired with its current automation availability.
+final class GeneratorAutomationCandidate {
+  /// The unified parameter metadata exposed by the generator plugin.
+  final plugin_api.UiPluginParameter parameter;
+
+  /// Whether an automation source already controls this exact parameter.
+  final bool alreadyAutomated;
+
+  const GeneratorAutomationCandidate({
+    required this.parameter,
+    required this.alreadyAutomated,
+  });
+}
 
 class AutomationNotifier extends Notifier<AutomationDataState> {
   DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
@@ -60,6 +76,15 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     } else {
       state = state.copyWith(collapsedTrackAutomations: collapsed.add(trackId));
     }
+  }
+
+  /// Expands a track automation drawer without collapsing an open drawer.
+  void ensureTrackAutomationExpanded(int trackId) {
+    final collapsed = state.collapsedTrackAutomations;
+    if (!collapsed.contains(trackId)) return;
+    state = state.copyWith(
+      collapsedTrackAutomations: collapsed.remove(trackId),
+    );
   }
 
   void toggleBusAutomationExpanded(int busId) {
@@ -151,6 +176,52 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
       }
       return AsyncError(e, s);
     }
+  }
+
+  /// Creates automation for one generator parameter through the generic path.
+  Future<AsyncValue<void>> handleAddGeneratorParameterAutomation({
+    required int generatorId,
+    required plugin_api.UiPluginParameter parameter,
+  }) {
+    return handleAddAutomationForTarget(
+      target: AutomationTargetDto.generator(
+        generatorId: generatorId,
+        paramId: parameter.id,
+      ),
+      label: parameter.name,
+      min: parameter.min,
+      max: parameter.max,
+      initialValue: parameter.value.clamp(parameter.min, parameter.max),
+    );
+  }
+
+  /// Enables or disables a lane while retaining its source, link, and points.
+  Future<void> handleSetAutomationLaneEnabled({
+    required int laneId,
+    required bool enabled,
+  }) async {
+    final projectData = ref.read(projectProvider).value;
+    if (projectData == null) {
+      ref.notifyError('Project state is missing');
+      return;
+    }
+
+    final result = await ref.guardApi(
+      () => setAutomationLaneEnabled(
+        ctx: _ctx,
+        automationId: laneId,
+        enabled: enabled,
+      ),
+    );
+    if (!result.hasValue) return;
+
+    final latestProjectData = ref.read(projectProvider).value;
+    if (latestProjectData == null) return;
+    ref
+        .read(projectProvider.notifier)
+        .updateAutomations(
+          pool: latestProjectData.automationPool.add(laneId, result.value!),
+        );
   }
 
   Future<void> handleRemoveAutomationForTarget({
@@ -439,7 +510,12 @@ final busAutomationProvider =
             final lane = projectData.automationPool[laneId];
 
             if (lane != null) {
-              lanes.add((laneId, link.id, lane));
+              lanes.add((
+                laneId: laneId,
+                linkId: link.id,
+                target: target,
+                lane: lane,
+              ));
             }
           }
         }
@@ -447,8 +523,8 @@ final busAutomationProvider =
 
       // Sort visually based on the UI order index
       lanes.sort((a, b) {
-        final linkA = projectData.modulationLinks[a.$2]!;
-        final linkB = projectData.modulationLinks[b.$2]!;
+        final linkA = projectData.modulationLinks[a.linkId]!;
+        final linkB = projectData.modulationLinks[b.linkId]!;
         return linkA.orderIdx.compareTo(linkB.orderIdx);
       });
 
@@ -484,7 +560,12 @@ final trackAutomationProvider =
                   final lane = projectData.automationPool[laneId];
 
                   if (lane != null) {
-                    lanes.add((laneId, link.id, lane));
+                    lanes.add((
+                      laneId: laneId,
+                      linkId: link.id,
+                      target: target,
+                      lane: lane,
+                    ));
                   }
                 }
               }
@@ -498,7 +579,12 @@ final trackAutomationProvider =
                 final lane = projectData.automationPool[laneId];
 
                 if (lane != null) {
-                  lanes.add((laneId, link.id, lane));
+                  lanes.add((
+                    laneId: laneId,
+                    linkId: link.id,
+                    target: target,
+                    lane: lane,
+                  ));
                 }
               }
             }
@@ -510,8 +596,8 @@ final trackAutomationProvider =
 
       // Sort visually based on the UI order index
       lanes.sort((a, b) {
-        final linkA = projectData.modulationLinks[a.$2]!;
-        final linkB = projectData.modulationLinks[b.$2]!;
+        final linkA = projectData.modulationLinks[a.linkId]!;
+        final linkB = projectData.modulationLinks[b.linkId]!;
         return linkA.orderIdx.compareTo(linkB.orderIdx);
       });
 
@@ -539,7 +625,12 @@ final allBusesAutomationProvider =
             final lane = projectData.automationPool[laneId];
 
             if (lane != null) {
-              map.putIfAbsent(busId, () => []).add((laneId, link.id, lane));
+              map.putIfAbsent(busId, () => []).add((
+                laneId: laneId,
+                linkId: link.id,
+                target: target,
+                lane: lane,
+              ));
             }
           }
         }
@@ -547,8 +638,8 @@ final allBusesAutomationProvider =
 
       for (final busLanes in map.values) {
         busLanes.sort((a, b) {
-          final linkA = projectData.modulationLinks[a.$2]!;
-          final linkB = projectData.modulationLinks[b.$2]!;
+          final linkA = projectData.modulationLinks[a.linkId]!;
+          final linkB = projectData.modulationLinks[b.linkId]!;
           return linkA.orderIdx.compareTo(linkB.orderIdx);
         });
       }
@@ -573,20 +664,79 @@ final masterAutomationProvider = Provider<List<ChannelAutomationEntry>>((ref) {
         final lane = projectData.automationPool[laneId];
 
         if (lane != null) {
-          lanes.add((laneId, link.id, lane));
+          lanes.add((
+            laneId: laneId,
+            linkId: link.id,
+            target: target,
+            lane: lane,
+          ));
         }
       }
     }
   }
 
   lanes.sort((a, b) {
-    final linkA = projectData.modulationLinks[a.$2]!;
-    final linkB = projectData.modulationLinks[b.$2]!;
+    final linkA = projectData.modulationLinks[a.linkId]!;
+    final linkB = projectData.modulationLinks[b.linkId]!;
     return linkA.orderIdx.compareTo(linkB.orderIdx);
   });
 
   return lanes;
 });
+
+/// Loads generator parameters and marks those with an existing automation lane.
+final generatorAutomationCandidatesProvider = FutureProvider.autoDispose
+    .family<List<GeneratorAutomationCandidate>, int>((ref, generatorId) async {
+      final projectData = ref.watch(projectProvider).value;
+      if (projectData == null) {
+        throw StateError('Project state is missing');
+      }
+
+      final ctx = ref.read(projectProvider.notifier).dawContext;
+      final parameters = await plugin_api.getAutomatablePluginParameterSpecs(
+        ctx: ctx,
+        target: plugin_api.UiPluginTarget.generator(generatorId),
+      );
+      final automatedParameterIds = <int>{};
+
+      for (final link in projectData.modulationLinks.values) {
+        final target = link.target;
+        if (target is! AutomationTargetDto_Generator ||
+            target.generatorId != generatorId) {
+          continue;
+        }
+        if (projectData.modulationSources[link.sourceId]
+            is ModulationSourceDto_Automation) {
+          automatedParameterIds.add(target.paramId);
+        }
+      }
+
+      final candidates = parameters
+          .map(
+            (parameter) => GeneratorAutomationCandidate(
+              parameter: parameter,
+              alreadyAutomated: automatedParameterIds.contains(parameter.id),
+            ),
+          )
+          .toList();
+      String groupName(plugin_api.UiPluginParameter parameter) {
+        final group = parameter.group.trim();
+        return group.isEmpty ? 'Other' : group;
+      }
+
+      candidates.sort((a, b) {
+        final groupComparison = groupName(
+          a.parameter,
+        ).toLowerCase().compareTo(groupName(b.parameter).toLowerCase());
+        if (groupComparison != 0) return groupComparison;
+        final nameComparison = a.parameter.name.toLowerCase().compareTo(
+          b.parameter.name.toLowerCase(),
+        );
+        if (nameComparison != 0) return nameComparison;
+        return a.parameter.id.compareTo(b.parameter.id);
+      });
+      return candidates;
+    });
 
 final automationProvider =
     NotifierProvider<AutomationNotifier, AutomationDataState>(

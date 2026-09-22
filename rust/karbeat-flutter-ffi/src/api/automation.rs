@@ -532,6 +532,18 @@ pub fn remove_automation_lane_for(
         .map_err(|e| e.to_string())
 }
 
+/// Sets whether a lane controls its target while preserving its data and link.
+pub fn set_automation_lane_enabled(
+    ctx: &DawContext,
+    automation_id: u64,
+    enabled: bool,
+) -> Result<AutomationLaneDto, String> {
+    crate::api::context::project_ctx!(ctx);
+    automation_api::set_automation_lane_enabled(ctx, automation_id.into(), enabled)
+        .map(|lane| (&lane).into())
+        .map_err(|e| e.to_string())
+}
+
 pub fn add_new_automation_point(
     ctx: &DawContext,
     automation_id: u64,

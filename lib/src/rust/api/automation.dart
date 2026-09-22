@@ -113,6 +113,17 @@ Future<(int, List<int>, List<int>)> removeAutomationLaneFor({
   target: target,
 );
 
+/// Sets whether a lane controls its target while preserving its data and link.
+Future<AutomationLaneDto> setAutomationLaneEnabled({
+  required DawContext ctx,
+  required int automationId,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiAutomationSetAutomationLaneEnabled(
+  ctx: ctx,
+  automationId: automationId,
+  enabled: enabled,
+);
+
 Future<AutomationLaneDto> addNewAutomationPoint({
   required DawContext ctx,
   required int automationId,

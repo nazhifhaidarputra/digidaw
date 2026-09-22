@@ -382,6 +382,23 @@ where
     Ok(result)
 }
 
+/// Returns only plugin parameters that explicitly support automation.
+pub fn get_automatable_plugin_parameter_specs<F, T>(
+    ctx: &DawContext,
+    target: &PluginTarget,
+    mapper: F,
+) -> anyhow::Result<Vec<T>>
+where
+    F: Fn(ParameterSpec, f32) -> T,
+{
+    let specs = get_plugin_parameter_specs(ctx, target, |spec, value| (spec, value))?;
+    Ok(specs
+        .into_iter()
+        .filter(|(spec, _)| spec.automatable)
+        .map(|(spec, value)| mapper(spec, value))
+        .collect())
+}
+
 // ============================================================================
 // UNIFIED PARAMETER MUTATIONS
 // ============================================================================
