@@ -84,24 +84,28 @@ pub(super) enum RetiredGraphState {
 
 fn graph_retirement_queue() -> Producer<RetiredGraphState> {
     let (producer, mut consumer) = rtrb::RingBuffer::new(128);
-    std::thread::spawn(move || loop {
-        match consumer.pop() {
-            Ok(retired) => match retired {
-                RetiredGraphState::Full(graph) => drop(graph),
-                RetiredGraphState::Tracks {
-                    tracks,
-                    clips,
-                    patterns,
-                } => drop((tracks, clips, patterns)),
-                RetiredGraphState::Routing(routes) => drop(routes),
-                RetiredGraphState::Automation(lane) => drop(lane),
-                RetiredGraphState::AudioBuffer(buffer) => drop(buffer),
-                RetiredGraphState::TelemetryProducer(producer) => drop(producer),
-                RetiredGraphState::TelemetrySubscription(subscription) => drop(subscription),
-            },
-            Err(rtrb::PopError::Empty) if consumer.is_abandoned() => break,
-            Err(rtrb::PopError::Empty) => {
-                std::thread::sleep(std::time::Duration::from_millis(10));
+    std::thread::spawn(move || {
+        loop {
+            // Checked before pop: once abandoned no push can follow, so empty is final.
+            let abandoned = consumer.is_abandoned();
+            match consumer.pop() {
+                Ok(retired) => match retired {
+                    RetiredGraphState::Full(graph) => drop(graph),
+                    RetiredGraphState::Tracks {
+                        tracks,
+                        clips,
+                        patterns,
+                    } => drop((tracks, clips, patterns)),
+                    RetiredGraphState::Routing(routes) => drop(routes),
+                    RetiredGraphState::Automation(lane) => drop(lane),
+                    RetiredGraphState::AudioBuffer(buffer) => drop(buffer),
+                    RetiredGraphState::TelemetryProducer(producer) => drop(producer),
+                    RetiredGraphState::TelemetrySubscription(subscription) => drop(subscription),
+                },
+                Err(rtrb::PopError::Empty) if abandoned => break,
+                Err(rtrb::PopError::Empty) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
             }
         }
     });

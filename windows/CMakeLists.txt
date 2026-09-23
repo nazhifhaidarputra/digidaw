@@ -57,7 +57,7 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
-include("../rust/karbeat-host/scanner.cmake")
+include("../rust/karbeat-host-api/scanner.cmake")
 digidaw_add_plugin_scanner("${CMAKE_CURRENT_SOURCE_DIR}/../rust")
 
 

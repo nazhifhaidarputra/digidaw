@@ -19,6 +19,67 @@ class DawContextAction {
   });
 }
 
+/// Shows the DAW styled context menu dialog. Resolves when the menu closes.
+Future<void> showDawContextMenu({
+  required BuildContext context,
+  required List<DawContextAction> actions,
+  String? title,
+  Widget? header,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      final colors = Theme.of(dialogContext).colorScheme;
+      return AlertDialog(
+        title: title != null
+            ? Text(title, style: TextStyle(color: colors.onSurface))
+            : null,
+        contentPadding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (header != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 8.0,
+                  ),
+                  child: header,
+                ),
+                Divider(color: colors.outlineVariant, height: 16),
+              ],
+
+              ...actions.map((action) {
+                final color =
+                    action.color ??
+                    (action.isDestructive ? colors.error : colors.onSurface);
+
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  leading: action.icon != null
+                      ? Icon(action.icon, color: color, size: 20)
+                      : null,
+                  title: Text(
+                    action.title,
+                    style: TextStyle(color: color, fontSize: 14),
+                  ),
+                  hoverColor: colors.onSurface.withValues(alpha: 0.08),
+                  onTap: () {
+                    Navigator.of(dialogContext).pop();
+                    action.onTap();
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 /// A wrapper for a interactable widget that will display Context Menu
 class ContextMenuWrapper extends StatelessWidget {
   final Widget child;
@@ -35,59 +96,11 @@ class ContextMenuWrapper extends StatelessWidget {
   });
 
   void _showContextMenu(BuildContext context) {
-    showDialog(
+    showDawContextMenu(
       context: context,
-      builder: (BuildContext dialogContext) {
-        final colors = Theme.of(dialogContext).colorScheme;
-        return AlertDialog(
-          title: title != null
-              ? Text(title!, style: TextStyle(color: colors.onSurface))
-              : null,
-          contentPadding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (header != null) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24.0,
-                      vertical: 8.0,
-                    ),
-                    child: header!,
-                  ),
-                  Divider(color: colors.outlineVariant, height: 16),
-                ],
-
-                ...actions.map((action) {
-                  final color =
-                      action.color ??
-                      (action.isDestructive ? colors.error : colors.onSurface);
-
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 24.0,
-                    ),
-                    leading: action.icon != null
-                        ? Icon(action.icon, color: color, size: 20)
-                        : null,
-                    title: Text(
-                      action.title,
-                      style: TextStyle(color: color, fontSize: 14),
-                    ),
-                    hoverColor: colors.onSurface.withValues(alpha: 0.08),
-                    onTap: () {
-                      Navigator.of(dialogContext).pop();
-                      action.onTap();
-                    },
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
+      actions: actions,
+      title: title,
+      header: header,
     );
   }
 

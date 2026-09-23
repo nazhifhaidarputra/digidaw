@@ -456,11 +456,15 @@ fn test_automation_lane_applied_to_mixer_volume() {
     let mut output_buffer = vec![0.0; 512 * 2];
     engine.process(&mut output_buffer);
 
-    //  Check if MixerChannel Volume was updated to 0.75
+    // The normalized automation value is mapped into the channel's -100 dB to +6 dB range.
     let ch = engine
         .mixer_state
         .track_channels
         .get(&track_id)
         .expect("Track channel not found");
-    assert_eq!(ch.volume.get(), 0.75, "Volume should be automated to 0.75");
+    assert_eq!(
+        ch.volume.get(),
+        -20.5,
+        "Volume should be automated to -20.5 dB"
+    );
 }

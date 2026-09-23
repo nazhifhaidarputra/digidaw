@@ -1822,6 +1822,7 @@ dependencies = [
  "karbeat-plugin-api",
  "log",
  "raw-window-handle",
+ "rayon",
  "rtrb",
  "serde",
  "serde_json",

@@ -28,7 +28,12 @@ impl HostedInstallReceipt {
             match self.result.pop() {
                 Ok(result) => return Ok(result),
                 Err(rtrb::PopError::Empty) if self.result.is_abandoned() => {
-                    return Err(karbeat_host::HostError::RuntimeUnavailable);
+                    // The engine pushes then drops the producer, which can land between the
+                    // failed pop and the abandonment check, so drain once more before failing.
+                    return self
+                        .result
+                        .pop()
+                        .map_err(|_| karbeat_host::HostError::RuntimeUnavailable);
                 }
                 Err(rtrb::PopError::Empty) => futures_lite::future::yield_now().await,
             }
@@ -215,7 +220,12 @@ impl HostedRemovalReceipt {
             match self.0.pop() {
                 Ok(result) => return Ok(result),
                 Err(rtrb::PopError::Empty) if self.0.is_abandoned() => {
-                    return Err(karbeat_host::HostError::RuntimeUnavailable);
+                    // This has the same behavior as wait on install, so
+                    // we also do the same thing
+                    return self
+                        .0
+                        .pop()
+                        .map_err(|_| karbeat_host::HostError::RuntimeUnavailable);
                 }
                 Err(rtrb::PopError::Empty) => futures_lite::future::yield_now().await,
             }
@@ -293,6 +303,59 @@ impl HostedProjectInstall {
         if let Some(mut sender) = self.result.take() {
             let published = sender.push(result);
             debug_assert!(published.is_ok());
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_receipt_returns_result_published_before_producer_drop() {
+        let (mut producer, result) = rtrb::RingBuffer::new(1);
+        let mut receipt = HostedInstallReceipt {
+            result,
+            telemetry: None,
+        };
+        producer.push(HostedInstallResult::Installed).unwrap();
+        drop(producer);
+
+        let outcome = futures_lite::future::block_on(receipt.wait());
+        assert!(matches!(outcome, Ok(HostedInstallResult::Installed)));
+    }
+
+    #[test]
+    fn install_receipt_reports_unavailable_when_dropped_without_result() {
+        let (producer, result) = rtrb::RingBuffer::<HostedInstallResult>::new(1);
+        let mut receipt = HostedInstallReceipt {
+            result,
+            telemetry: None,
+        };
+        drop(producer);
+
+        let outcome = futures_lite::future::block_on(receipt.wait());
+        assert!(matches!(
+            outcome,
+            Err(karbeat_host::HostError::RuntimeUnavailable)
+        ));
+    }
+
+    #[test]
+    fn install_receipt_never_loses_a_result_racing_producer_drop() {
+        for _ in 0..2_000 {
+            let (mut producer, result) = rtrb::RingBuffer::new(1);
+            let mut receipt = HostedInstallReceipt {
+                result,
+                telemetry: None,
+            };
+            let engine = std::thread::spawn(move || {
+                producer.push(HostedInstallResult::Installed).unwrap();
+            });
+            let outcome = futures_lite::future::block_on(receipt.wait());
+            engine.join().unwrap();
+            assert!(matches!(outcome, Ok(HostedInstallResult::Installed)));
         }
     }
 }

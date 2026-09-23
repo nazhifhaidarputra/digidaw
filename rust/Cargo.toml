@@ -4,7 +4,7 @@ members = [
     "karbeat-core",
     "karbeat-dsp",
     "karbeat-host",
-    "karbeat-host-facade",
+    "karbeat-host-api",
     "karbeat-flutter-ffi",
     "karbeat-plugins",
     "karbeat-plugin-api",
@@ -22,8 +22,8 @@ license = "GPL 3.0"
 karbeat-core = { path = "karbeat-core" }
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat_flutter_ffi = { path = "karbeat-flutter-ffi" }
-karbeat-host = { path = "karbeat-host-facade" }
-karbeat-host-api = { path = "karbeat-host" }
+karbeat-host = { path = "karbeat-host" }
+karbeat-host-api = { path = "karbeat-host-api" }
 karbeat-vst3 = { path = "karbeat-vst3" }
 karbeat-clap = { path = "karbeat-clap" }
 karbeat-lv2 = { path = "karbeat-lv2" }
@@ -58,6 +58,7 @@ uuid = { version = "1.22.0", features = ["v4", "serde"] }
 memmap2 = "0.9.11"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
+rayon = "1.12.0"
 zip = "8.5"
 toml = "1.1.4"
 chrono = { version = "0.4.44", features = ["serde"] }

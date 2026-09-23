@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/features/track/models/automation_lane_editor.dart';
+import 'package:karbeat/features/track/services/automation_editor_service.dart';
+import 'package:karbeat/features/track/view/automation_point_context_menu.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'automation_curve_painter.dart';
@@ -30,11 +33,14 @@ class AutomationLaneSlot extends ConsumerStatefulWidget {
   ConsumerState<AutomationLaneSlot> createState() => _AutomationLaneSlotState();
 }
 
+typedef AutomationPointId = int;
+
 class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   // Optimistic UI state
   IList<AutomationPointDto>? _localPoints;
   int? _draggedPointId;
-  int? _hoveredPointId;
+  IMap<AutomationPointId, AutomationPointHitbox> _pointHitboxes =
+      const IMapConst({});
 
   @override
   void didUpdateWidget(covariant AutomationLaneSlot oldWidget) {
@@ -77,23 +83,43 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     return ((ticks / ticksPerGrid).round() * ticksPerGrid).toInt();
   }
 
-  /// Returns the ID of the point if the user clicked within ~15 pixels of it
+  /// Returns the ID of the nearest point whose hit area contains [localPos]
   int? _findPointIdAt(Offset localPos) {
-    final points = _localPoints ?? widget.lane.points;
-    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    AutomationPointHitbox? nearest;
+    var nearestDistance = double.infinity;
 
-    const hitBoxPixels = 15.0;
-
-    for (final p in points) {
-      final px = p.timeTicks / zoomLevel;
-      final py = widget.height - (p.value * widget.height);
-
-      final distance = (Offset(px, py) - localPos).distance;
-      if (distance <= hitBoxPixels) {
-        return p.id;
+    for (final hitbox in _pointHitboxes.values) {
+      if (!hitbox.rect.contains(localPos)) continue;
+      final distance = (hitbox.center - localPos).distanceSquared;
+      if (distance < nearestDistance) {
+        nearest = hitbox;
+        nearestDistance = distance;
       }
     }
-    return null;
+    return nearest?.pointId;
+  }
+
+  IMap<int, AutomationPointHitbox> _buildHitboxes({
+    required Iterable<AutomationPointDto> points,
+    required double zoom,
+    required double height,
+  }) {
+    const hitRadius = 10.0;
+
+    return IMap.fromEntries(
+      points.map((point) {
+        final center = Offset(
+          point.timeTicks / zoom,
+          height - point.value.clamp(0.0, 1.0) * height,
+        );
+
+        return MapEntry(point.id, (
+          pointId: point.id,
+          center: center,
+          rect: Rect.fromCircle(center: center, radius: hitRadius),
+        ));
+      }),
+    );
   }
 
   // =========================================================================
@@ -185,6 +211,50 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     }
   }
 
+  /// Opens the point actions menu. Any drag started by the same pointer is
+  /// discarded so a long press does not also commit a move.
+  void _openPointContextMenu(int pointId) {
+    final point = widget.lane.points.where((p) => p.id == pointId).firstOrNull;
+
+    if (_draggedPointId != null) {
+      setState(() {
+        _draggedPointId = null;
+        _localPoints = null;
+      });
+    }
+
+    if (point == null) return;
+
+    showAutomationPointContextMenu(
+      context: context,
+      ref: ref,
+      lane: widget.lane,
+      point: point,
+    );
+  }
+
+  Widget _buildPointHitArea(AutomationPointHitbox hitbox) {
+    final editor = ref.read(automationEditorProvider.notifier);
+    final laneId = widget.lane.id;
+
+    return Positioned.fromRect(
+      key: ValueKey(hitbox.pointId),
+      rect: hitbox.rect,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        onEnter: (_) =>
+            editor.hoverPoint(laneId: laneId, pointId: hitbox.pointId),
+        onExit: (_) =>
+            editor.clearHoveredPoint(laneId: laneId, pointId: hitbox.pointId),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onSecondaryTapUp: (_) => _openPointContextMenu(hitbox.pointId),
+          onLongPressStart: (_) => _openPointContextMenu(hitbox.pointId),
+        ),
+      ),
+    );
+  }
+
   void _onPointerCancel() {
     setState(() {
       _draggedPointId = null;
@@ -193,9 +263,9 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   /// Build Tooltip for edited automation point
-  Widget _buildTooltip() {
+  Widget _buildTooltip(int? hoveredPointId) {
     // Determine if we should show the tooltip based on dragging or hovering
-    final targetId = _draggedPointId ?? _hoveredPointId;
+    final targetId = _draggedPointId ?? hoveredPointId;
     if (targetId == null) {
       return const Positioned.fill(child: SizedBox.shrink());
     }
@@ -258,9 +328,27 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final tempo = transportState?.state?.bpm ?? 120.0;
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
+    final laneId = widget.lane.id;
+    final hoveredPointId = ref.watch(
+      automationEditorProvider.select(
+        (s) => s.hoveredLaneId == laneId ? s.hoveredPointId : null,
+      ),
+    );
+    final contextPointId = ref.watch(
+      automationEditorProvider.select(
+        (s) => s.contextLaneId == laneId ? s.contextPointId : null,
+      ),
+    );
+
     final displayLane = _localPoints != null
         ? widget.lane.copyWith(points: _localPoints!.toList())
         : widget.lane;
+
+    _pointHitboxes = _buildHitboxes(
+      points: displayLane.points,
+      zoom: zoomLevel,
+      height: widget.height,
+    );
 
     return Container(
       height: widget.height,
@@ -321,13 +409,19 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                       trackColor: widget.trackColor,
                       disabledColor: colors.outline,
                       pointColor: colors.onSurface,
+                      highlightedPointId:
+                          _draggedPointId ?? contextPointId ?? hoveredPointId,
                     ),
                   ),
                 ),
               ),
 
-              // 3. Tooltip
-              _buildTooltip(),
+              // 3. Point hit areas for hover and secondary click actions
+              for (final hitbox in _pointHitboxes.values)
+                if (hitbox.pointId >= 0) _buildPointHitArea(hitbox),
+
+              // 4. Tooltip
+              _buildTooltip(hoveredPointId),
             ],
           ),
         ),

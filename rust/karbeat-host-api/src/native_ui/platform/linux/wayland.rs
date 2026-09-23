@@ -8,7 +8,6 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use glib::ControlFlow;
 use raw_window_handle::{
     RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
 };
@@ -35,9 +34,9 @@ use wayland_client::{
 };
 
 use crate::native_ui::{
-    NativeParentHandle, NativeSurfaceKind, NativeUiError, NativeWindow, NativeWindowConstraints,
-    NativeWindowEvent, NativeWindowId, NativeWindowMetrics, NativeWindowSize, NativeWindowSpec,
-    UiFdSource, install_ui_fd_source,
+    NativeParentHandle, NativeSurfaceKind, NativeUiControlFlow, NativeUiError, NativeWindow,
+    NativeWindowConstraints, NativeWindowEvent, NativeWindowId, NativeWindowMetrics,
+    NativeWindowSize, NativeWindowSpec, UiFdSource, install_ui_fd_source,
 };
 
 struct WaylandWindowState {
@@ -109,13 +108,13 @@ impl WaylandBackend {
         let fd = shared.connection.backend().poll_fd().as_raw_fd();
         let fd_source = install_ui_fd_source(fd, move || {
             let Some(shared) = weak.upgrade() else {
-                return ControlFlow::Break;
+                return NativeUiControlFlow::Break;
             };
             match shared.read_and_dispatch() {
-                Ok(()) => ControlFlow::Continue,
+                Ok(()) => NativeUiControlFlow::Continue,
                 Err(error) => {
                     *shared.pending_error.borrow_mut() = Some(error.to_string());
-                    ControlFlow::Break
+                    NativeUiControlFlow::Break
                 }
             }
         })?;

@@ -34,8 +34,8 @@ These instructions apply to the whole repository unless a more specific `AGENTS.
 - `rust/karbeat-dsp/`: DSP primitives. Keep this generic and reusable.
 - `rust/karbeat-flutter-ffi/`: Flutter-facing DTOs and bridge functions.
 - `rust/karbeat-plugins/`: first-party plugin implementations and manifest export.
-- `rust/karbeat-host/`: low-level external-plugin contracts, published internally as `karbeat-host-api`.
-- `rust/karbeat-host-facade/`: format-independent async host client, service, and static executor router, published as `karbeat-host`.
+- `rust/karbeat-host-api/`: low-level external-plugin contracts, published internally as `karbeat-host-api`.
+- `rust/karbeat-host/`: format-independent async host client, service, and static executor router, published as `karbeat-host`.
 - `rust/karbeat-vst3/`, `rust/karbeat-clap/`, `rust/karbeat-lv2/`: format executor implementations; unfinished formats keep concrete unsupported stubs.
 - `rust/karbeat-plugin-api/`, `rust/karbeat-plugin-types/`, `rust/karbeat-macros/`, `rust/karbeat-utils/`: plugin ecosystem and shared support crates.
 

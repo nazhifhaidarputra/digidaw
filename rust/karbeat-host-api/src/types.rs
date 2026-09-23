@@ -50,6 +50,7 @@ pub struct PluginDescriptor {
     pub kind: PluginKind,
 }
 
+/// Runtime-generated host external plugin instance ID handle.
 /// IDs are never reused during a host's lifetime.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct HostInstanceId(pub u64);

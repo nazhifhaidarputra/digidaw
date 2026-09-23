@@ -110,15 +110,15 @@ mod tests {
     }
 
     #[test]
-    fn play_preview_note_generator_always_ok() {
+    fn play_preview_note_generator_without_audio_stream_returns_err() {
         let mut ctx = make_ctx();
-        // Generator ID directly (no lookup)
         use crate::shared::id::GeneratorId;
         let gen_id = GeneratorId::from(1);
         let result = audio_api::play_preview_note_generator(&mut ctx, gen_id, 60, 100, true);
+        assert!(result.is_err(), "An unavailable audio queue should fail");
         assert!(
-            result.is_ok(),
-            "Direct generator path should always succeed"
+            result.unwrap_err().to_string().contains("not initialized"),
+            "The error should identify the unavailable audio stream"
         );
     }
 }

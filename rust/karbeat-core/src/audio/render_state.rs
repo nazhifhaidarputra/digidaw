@@ -104,9 +104,11 @@ impl Default for AudioPluginState {
             rtrb::RingBuffer::<Box<dyn AudioPlugin>>::new(1_024);
         std::thread::spawn(move || {
             loop {
+                // Checked before pop: once abandoned no push can follow, so empty is final.
+                let abandoned = consumer.is_abandoned();
                 match consumer.pop() {
                     Ok(plugin) => plugin.retire(),
-                    Err(rtrb::PopError::Empty) if consumer.is_abandoned() => break,
+                    Err(rtrb::PopError::Empty) if abandoned => break,
                     Err(rtrb::PopError::Empty) => {
                         std::thread::sleep(std::time::Duration::from_millis(10));
                     }
@@ -526,5 +528,80 @@ impl From<&ApplicationState> for AudioRenderState {
         Self {
             graph: AudioGraphState::from(app),
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use karbeat_plugin_api::{
+        prelude::ParameterSpec,
+        traits::{AudioPlugin, HashMap},
+        types::{AudioBuffers, BusConfig, PluginCategory, ProcessContext},
+    };
+
+    use super::AudioPluginState;
+
+    struct CountingPlugin(Arc<AtomicUsize>);
+
+    impl AudioPlugin for CountingPlugin {
+        fn retire(self: Box<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+        fn name(&self) -> &str {
+            "Counting plugin"
+        }
+        fn category(&self) -> PluginCategory {
+            PluginCategory::Effect
+        }
+        fn prepare(&mut self, _: f32, _: usize) {}
+        fn reset(&mut self) {}
+        fn set_io_layout(&mut self, _: &[BusConfig], _: &[BusConfig]) {}
+        fn process(&mut self, _: &mut AudioBuffers, _: &ProcessContext) {}
+        fn set_parameter(&mut self, _: u32, _: f32) {}
+        fn get_parameter(&self, _: u32) -> f32 {
+            0.0
+        }
+        fn apply_automation(&mut self, _: u32, _: f32) {}
+        fn clear_automation(&mut self, _: u32) {}
+        fn default_parameters(&self) -> HashMap<u32, f32> {
+            HashMap::new()
+        }
+        fn static_parameter_specs() -> Vec<ParameterSpec> {
+            Vec::new()
+        }
+        fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
+            Vec::new()
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    fn plugins_queued_before_state_drop_are_all_retired() {
+        const ROUNDS: usize = 25;
+        const PER_ROUND: usize = 16;
+        let retired = Arc::new(AtomicUsize::new(0));
+
+        for _ in 0..ROUNDS {
+            let mut state = AudioPluginState::default();
+            for _ in 0..PER_ROUND {
+                state.retire_plugin(Box::new(CountingPlugin(Arc::clone(&retired))));
+            }
+            drop(state);
+        }
+
+        let expected = ROUNDS * PER_ROUND;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while retired.load(Ordering::SeqCst) < expected && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(retired.load(Ordering::SeqCst), expected);
     }
 }

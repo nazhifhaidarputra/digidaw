@@ -9,6 +9,7 @@ class AutomationCurvePainter extends CustomPainter {
   final Color trackColor;
   final Color disabledColor;
   final Color pointColor;
+  final int? highlightedPointId;
 
   AutomationCurvePainter({
     required this.lane,
@@ -17,6 +18,7 @@ class AutomationCurvePainter extends CustomPainter {
     required this.trackColor,
     required this.disabledColor,
     required this.pointColor,
+    this.highlightedPointId,
   }) : super(repaint: scrollController);
 
   @override
@@ -140,6 +142,15 @@ class AutomationCurvePainter extends CustomPainter {
       final pos = getPixelCoords(p);
       // Only draw points that are visibly on screen (plus a small buffer)
       if (pos.dx >= minVisibleX && pos.dx <= maxVisibleX) {
+        if (p.id == highlightedPointId) {
+          canvas.drawCircle(
+            pos,
+            8.0,
+            Paint()
+              ..color = trackColor.withValues(alpha: 0.35)
+              ..style = PaintingStyle.fill,
+          );
+        }
         canvas.drawCircle(pos, 4.0, pointPaint);
         canvas.drawCircle(
           pos,
@@ -156,6 +167,7 @@ class AutomationCurvePainter extends CustomPainter {
         oldDelegate.lane != lane ||
         oldDelegate.disabledColor != disabledColor ||
         oldDelegate.pointColor != pointColor ||
+        oldDelegate.highlightedPointId != highlightedPointId ||
         oldDelegate.scrollController != scrollController;
   }
 }

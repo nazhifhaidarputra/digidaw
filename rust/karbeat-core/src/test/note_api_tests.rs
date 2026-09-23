@@ -39,11 +39,11 @@ mod tests {
     }
 
     #[test]
-    fn add_note_zero_duration() {
+    fn add_note_zero_duration_returns_err() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
-        // Zero duration: implementation should accept it (no validation in API)
         let result = note_api::add_note(&mut ctx, pattern_id, 60, 20000, Some(0));
-        assert!(result.is_ok(), "Zero duration note should be accepted");
+        assert!(result.is_err(), "Zero-duration notes should be rejected");
+        assert!(result.unwrap_err().to_string().contains("duration"));
     }
 
     #[test]
@@ -110,12 +110,12 @@ mod tests {
     }
 
     #[test]
-    fn resize_note_to_zero_duration() {
+    fn resize_note_to_zero_duration_returns_err() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
         let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
-        // Zero duration: no validation in API layer, just passes through
         let result = note_api::resize_note(&mut ctx, pattern_id, note_id, 0);
-        assert!(result.is_ok(), "Zero resize should be accepted");
+        assert!(result.is_err(), "Zero-duration notes should be rejected");
+        assert!(result.unwrap_err().to_string().contains("duration"));
     }
 
     #[test]

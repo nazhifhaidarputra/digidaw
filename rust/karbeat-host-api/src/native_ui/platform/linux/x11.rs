@@ -6,7 +6,6 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use glib::ControlFlow;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle, XcbDisplayHandle, XcbWindowHandle};
 use x11rb::{
     CURRENT_TIME,
@@ -26,9 +25,9 @@ use x11rb::{
 };
 
 use crate::native_ui::{
-    NativeParentHandle, NativeSurfaceKind, NativeUiError, NativeWindow, NativeWindowConstraints,
-    NativeWindowEvent, NativeWindowId, NativeWindowMetrics, NativeWindowSize, NativeWindowSpec,
-    UiFdSource, install_ui_fd_source,
+    NativeParentHandle, NativeSurfaceKind, NativeUiControlFlow, NativeUiError, NativeWindow,
+    NativeWindowConstraints, NativeWindowEvent, NativeWindowId, NativeWindowMetrics,
+    NativeWindowSize, NativeWindowSpec, UiFdSource, install_ui_fd_source,
 };
 
 struct X11Atoms {
@@ -110,13 +109,13 @@ impl X11Backend {
         let fd = shared.connection.stream().as_raw_fd();
         let fd_source = install_ui_fd_source(fd, move || {
             let Some(shared) = weak.upgrade() else {
-                return ControlFlow::Break;
+                return NativeUiControlFlow::Break;
             };
             match shared.drain_connection() {
-                Ok(()) => ControlFlow::Continue,
+                Ok(()) => NativeUiControlFlow::Continue,
                 Err(error) => {
                     *shared.pending_error.borrow_mut() = Some(error.to_string());
-                    ControlFlow::Break
+                    NativeUiControlFlow::Break
                 }
             }
         })?;
