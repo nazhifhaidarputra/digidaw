@@ -550,7 +550,7 @@ fn transport_context(context: &ProcessContext, sample_rate: f64) -> Vst::Process
     }
     // SAFETY: This ABI record contains only integer/float/plain-record fields.
     let mut result: Vst::ProcessContext = unsafe { std::mem::zeroed() };
-    result.state = flags;
+    result.state = u32::try_from(flags).unwrap_or_default();
     result.sampleRate = sample_rate;
     result.projectTimeSamples = i64::try_from(context.project_time_samples).unwrap_or(i64::MAX);
     result.projectTimeMusic = context.beat_position;

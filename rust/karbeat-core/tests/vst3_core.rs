@@ -238,6 +238,8 @@ fn main() {
     {
         return;
     }
+    #[cfg(target_os = "windows")]
+    karbeat_host_api::initialize_windows_main_thread().unwrap();
     let path = std::env::var_os("VITAL_VST3_PATH")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "/usr/lib/vst3/Vital.vst3".into());
@@ -248,15 +250,29 @@ fn main() {
         .into_iter()
         .find(|plugin| plugin.name == "Vital")
         .unwrap();
-    let worker = std::thread::spawn(move || workflow(descriptor));
+    let worker = std::thread::spawn(move || {
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| workflow(descriptor)));
+        #[cfg(target_os = "windows")]
+        karbeat_host_api::request_windows_main_loop_shutdown().unwrap();
+        if let Err(error) = result {
+            std::panic::resume_unwind(error);
+        }
+    });
+    #[cfg(target_os = "linux")]
     let context = glib::MainContext::default();
+    #[cfg(target_os = "linux")]
     let deadline = Instant::now() + Duration::from_secs(90);
+    #[cfg(target_os = "linux")]
     while !worker.is_finished() {
         assert!(Instant::now() < deadline, "Core workflow timed out");
         context.iteration(false);
         std::thread::sleep(Duration::from_millis(1));
     }
+    #[cfg(target_os = "windows")]
+    assert_eq!(karbeat_host_api::run_windows_main_loop().unwrap(), 0);
     worker.join().unwrap();
+    #[cfg(target_os = "linux")]
     for _ in 0..5 {
         context.iteration(false);
     }

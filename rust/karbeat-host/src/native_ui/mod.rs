@@ -6,14 +6,12 @@
 mod binding;
 /// Operating-system native-window implementations and the selected platform alias.
 pub mod platform;
-#[cfg(target_os = "linux")]
 mod runtime;
 mod traits;
 mod types;
 
 pub use binding::*;
 pub use platform::SystemNativeUi;
-#[cfg(target_os = "linux")]
 pub use runtime::*;
 pub use traits::*;
 pub use types::*;

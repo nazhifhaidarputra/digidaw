@@ -4,6 +4,8 @@ use karbeat_host_api::scanner::{ProbeResponse, SCANNER_PROTOCOL_VERSION};
 use karbeat_vst3::module::Vst3Module;
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "windows")]
+    let _com = karbeat_host_api::WindowsStaGuard::initialize()?;
     let mut arguments = std::env::args_os().skip(1);
     if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--module")) {
         return Err("expected --module".into());

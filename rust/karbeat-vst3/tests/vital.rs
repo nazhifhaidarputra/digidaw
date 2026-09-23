@@ -62,6 +62,8 @@ fn main() {
     {
         return;
     }
+    #[cfg(target_os = "windows")]
+    karbeat_host_api::initialize_windows_main_thread().unwrap();
     let path = std::env::var_os("VITAL_VST3_PATH")
         .map_or_else(|| PathBuf::from("/usr/lib/vst3/Vital.vst3"), PathBuf::from);
     let descriptor = Vst3Module::load(&path)

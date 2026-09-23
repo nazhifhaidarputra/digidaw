@@ -5,6 +5,10 @@
 #include "flutter_window.h"
 #include "utils.h"
 
+extern "C" int digidaw_initialize_windows_main_thread();
+extern "C" int digidaw_run_windows_main_loop();
+extern "C" void digidaw_shutdown_windows_main_thread();
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
@@ -13,9 +17,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
-  // Initialize COM, so that it is available for use in the library and/or
-  // plugins.
-  ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  if (digidaw_initialize_windows_main_thread() != 0) {
+    return EXIT_FAILURE;
+  }
 
   flutter::DartProject project(L"data");
 
@@ -28,16 +32,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"Karbeat \u2014 Untitled", origin, size)) {
-      return EXIT_FAILURE;
+    digidaw_shutdown_windows_main_thread();
+    return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
 
-  ::MSG msg;
-  while (::GetMessage(&msg, nullptr, 0, 0)) {
-    ::TranslateMessage(&msg);
-    ::DispatchMessage(&msg);
-  }
-
-  ::CoUninitialize();
-  return EXIT_SUCCESS;
+  return digidaw_run_windows_main_loop();
 }

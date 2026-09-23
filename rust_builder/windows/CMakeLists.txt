@@ -11,6 +11,13 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 include("../cargokit/cmake/cargokit.cmake")
 apply_cargokit(${PROJECT_NAME} ../../../../../../rust/karbeat-flutter-ffi  karbeat_flutter_ffi "")
 
+# The Windows runner calls the Rust-owned process message loop synchronously.
+# Link the Cargokit import library in addition to bundling the DLL for Dart FFI.
+if(TARGET ${BINARY_NAME})
+  add_dependencies(${BINARY_NAME} "${PROJECT_NAME}_cargokit")
+  target_link_libraries(${BINARY_NAME} PRIVATE "${${PROJECT_NAME}_cargokit_lib}.lib")
+endif()
+
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
 # external build triggered from this build file.

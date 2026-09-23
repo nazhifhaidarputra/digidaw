@@ -114,8 +114,13 @@ impl Default for Vst3HostContext {
         }
     }
 }
+#[cfg(target_os = "linux")]
 impl Class for Vst3HostContext {
     type Interfaces = (IHostApplication, Linux::IRunLoop);
+}
+#[cfg(not(target_os = "linux"))]
+impl Class for Vst3HostContext {
+    type Interfaces = (IHostApplication,);
 }
 impl IHostApplicationTrait for Vst3HostContext {
     unsafe fn getName(&self, name: *mut String128) -> tresult {
@@ -372,4 +377,5 @@ impl IMessageTrait for HostMessage {
     }
 }
 
+#[cfg(target_os = "linux")]
 crate::run_loop::delegate_run_loop!(Vst3HostContext);

@@ -1748,6 +1748,7 @@ dependencies = [
  "itertools 0.14.0",
  "karbeat-dsp",
  "karbeat-host",
+ "karbeat-host-api",
  "karbeat-plugin-api",
  "karbeat-plugin-types",
  "karbeat-plugins",
@@ -1829,6 +1830,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "wayland-client",
+ "windows-sys 0.61.2",
  "x11rb",
 ]
 
@@ -1955,6 +1957,7 @@ dependencies = [
  "karbeat-clap",
  "karbeat-core",
  "karbeat-host",
+ "karbeat-host-api",
  "karbeat-lv2",
  "karbeat-plugin-api",
  "karbeat-plugins",

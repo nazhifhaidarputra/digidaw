@@ -1,13 +1,12 @@
 //! Native UI-loop gateway. Only message payloads and exclusive audio endpoints cross threads.
 
 use crate::{Vst3PluginHost, instance::MIDI_MAPPING_QUERY_COUNT};
-use glib::ControlFlow;
 use karbeat_host_api::{
     HostCapabilities, HostError, HostInstanceId, NativeEditorBinding, NativeEditorEvent,
-    NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform, NativeWindow, NativeWindowId,
-    NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginController,
-    PluginDescriptor, PluginEditorManager, PluginInstanceManager, PluginState, PreparedProcessor,
-    ProcessingConfig, SystemNativeUi,
+    NativeSurfacePreference, NativeUiControlFlow, NativeUiDispatcher, NativeUiPlatform,
+    NativeWindow, NativeWindowId, NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec,
+    PluginController, PluginDescriptor, PluginEditorManager, PluginInstanceManager, PluginState,
+    PreparedProcessor, ProcessingConfig, SystemNativeUi,
 };
 use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{
@@ -167,7 +166,7 @@ impl NativeHost {
         if matches!(preferred_surface, NativeSurfacePreference::Require(kind) if !self.native_ui.capabilities().supports(kind))
         {
             return Err(HostError::Unsupported(
-                "VST3 native editor requires X11/XWayland on Linux",
+                "VST3 native editor requires an unavailable platform surface",
             ));
         }
         let title = self.editor_title(id, self.editor_contexts.get(&id).map(String::as_str))?;
@@ -708,15 +707,15 @@ fn with_native_host<T>(
     })
 }
 
-fn pump_runtime() -> ControlFlow {
+fn pump_runtime() -> NativeUiControlFlow {
     RUNTIME.with(|runtime| {
         let Ok(mut runtime) = runtime.try_borrow_mut() else {
-            return ControlFlow::Continue;
+            return NativeUiControlFlow::Continue;
         };
         let Some(host) = runtime.as_mut() else {
-            return ControlFlow::Break;
+            return NativeUiControlFlow::Break;
         };
         host.pump();
-        ControlFlow::Continue
+        NativeUiControlFlow::Continue
     })
 }

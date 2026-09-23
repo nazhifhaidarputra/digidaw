@@ -29,6 +29,8 @@ use crate::{
 
 static OUTPUT_UNDERRUN_SAMPLES: AtomicU64 = AtomicU64::new(0);
 const OUTPUT_CHANNELS: usize = 2;
+const OUTPUT_CHANNELS_U16: u16 = 2;
+const OUTPUT_CHANNELS_U64: u64 = 2;
 type OutputFrame = [f32; OUTPUT_CHANNELS];
 
 /// Returns the cumulative number of device output samples replaced with silence after underruns.
@@ -46,20 +48,26 @@ fn sanitize_output_sample(sample: f32) -> f32 {
 }
 
 #[inline]
-fn write_output_data<T>(data: &mut [T], consumer: &mut Consumer<OutputFrame>)
-where
+fn write_output_data<T>(
+    data: &mut [T],
+    device_channels: usize,
+    consumer: &mut Consumer<OutputFrame>,
+) where
     T: SizedSample + FromSample<f32>,
 {
-    let mut output_frames = data.chunks_exact_mut(OUTPUT_CHANNELS);
+    debug_assert!(device_channels >= OUTPUT_CHANNELS);
+    let mut output_frames = data.chunks_exact_mut(device_channels);
     for output_frame in &mut output_frames {
         let engine_frame = consumer.pop().unwrap_or_else(|_| {
-            OUTPUT_UNDERRUN_SAMPLES.fetch_add(OUTPUT_CHANNELS as u64, Ordering::Relaxed);
+            OUTPUT_UNDERRUN_SAMPLES.fetch_add(OUTPUT_CHANNELS_U64, Ordering::Relaxed);
             [0.0; OUTPUT_CHANNELS]
         });
 
-        for (output, sample) in output_frame.iter_mut().zip(engine_frame) {
-            *output = T::from_sample(sanitize_output_sample(sample));
+        for output in output_frame.iter_mut() {
+            *output = T::from_sample(0.0);
         }
+        output_frame[0] = T::from_sample(sanitize_output_sample(engine_frame[0]));
+        output_frame[1] = T::from_sample(sanitize_output_sample(engine_frame[1]));
     }
 
     // A valid stereo CPAL callback is frame-aligned. Keep any malformed tail
@@ -105,11 +113,12 @@ macro_rules! run_stream {
         $err_fn:expr
     ) => {{
         let mut consumer = $consumer;
+        let device_channels = usize::from($config.channels);
 
         $device.build_output_stream(
             &$config,
             move |data: &mut [$sample_type], _: &OutputCallbackInfo| {
-                write_output_data(data, &mut consumer);
+                write_output_data(data, device_channels, &mut consumer);
             },
             $err_fn,
             None,
@@ -158,13 +167,22 @@ fn select_output_config(
     target_sample_rate: u32,
     native_sample_rate: u32,
 ) -> Option<(cpal::SupportedStreamConfig, bool)> {
-    let stereo_configs = configs
+    let supported_configs = configs
         .into_iter()
-        .filter(|config| config.channels() == OUTPUT_CHANNELS as u16)
+        .filter(|config| usize::from(config.channels()) >= OUTPUT_CHANNELS)
         .filter(|config| output_sample_format_priority(config.sample_format()) > 0)
         .collect::<Vec<_>>();
 
-    if let Some(config) = stereo_configs
+    let preferred_channels = supported_configs
+        .iter()
+        .map(cpal::SupportedStreamConfigRange::channels)
+        .min_by_key(|channels| (*channels != OUTPUT_CHANNELS_U16, *channels))?;
+    let preferred_configs = supported_configs
+        .iter()
+        .filter(|config| config.channels() == preferred_channels)
+        .collect::<Vec<_>>();
+
+    if let Some(config) = preferred_configs
         .iter()
         .filter(|config| {
             config.min_sample_rate() <= target_sample_rate
@@ -175,13 +193,13 @@ fn select_output_config(
         return Some((config.with_sample_rate(target_sample_rate), false));
     }
 
-    stereo_configs
+    preferred_configs
         .iter()
         .max_by_key(|config| output_sample_format_priority(config.sample_format()))
         .map(|config| {
             let sample_rate =
                 native_sample_rate.clamp(config.min_sample_rate(), config.max_sample_rate());
-            (config.with_sample_rate(sample_rate), true)
+            ((*config).clone().with_sample_rate(sample_rate), true)
         })
 }
 
@@ -447,19 +465,33 @@ fn get_device_and_config(
                 false
             })
             .ok_or_else(|| anyhow!("Requested device '{}' not found", dev_id))?
-    } else {
-        // If no device is saved, aggressively prefer FlexASIO over ASIO4ALL
-        let mut devices = host.output_devices()?;
-
-        devices
-            .find(|d| {
-                let res = d.id();
-                match res {
-                    Ok(name) => name.to_string().contains("FlexASIO"),
-                    Err(_) => false,
+    } else if host.id().name() == "ASIO" {
+        if let Some(default) = host.default_output_device() {
+            default
+        } else {
+            let mut first = None;
+            let mut flex_asio = None;
+            for device in host.output_devices()? {
+                let is_flex_asio = device
+                    .description()
+                    .is_ok_and(|description| description.to_string().contains("FlexASIO"))
+                    || device
+                        .id()
+                        .is_ok_and(|id| id.to_string().contains("FlexASIO"));
+                if is_flex_asio {
+                    flex_asio = Some(device);
+                    break;
                 }
-            })
-            .or_else(|| host.default_output_device())
+                if first.is_none() {
+                    first = Some(device);
+                }
+            }
+            flex_asio
+                .or(first)
+                .context("no ASIO output device available")?
+        }
+    } else {
+        host.default_output_device()
             .context("no audio output device available")?
     };
 
@@ -477,7 +509,7 @@ fn get_device_and_config(
 
     let (supported_config, used_fallback_rate) =
         select_output_config(supported_configs, target_sample_rate, native_sample_rate)
-            .context("device does not support stereo (2 channels) output")?;
+            .context("device does not support output with at least 2 channels")?;
 
     if used_fallback_rate {
         log::warn!("Requested sample rate unsupported by device, falling back");
@@ -606,7 +638,6 @@ pub fn start_audio_stream(
         Attach {
             dsp_config: RequestedDspConfig,
             device_sample_rate: u32,
-            channels: usize,
             ready_tx: std::sync::mpsc::SyncSender<Result<Consumer<OutputFrame>, String>>,
         },
         Detach,
@@ -621,7 +652,7 @@ pub fn start_audio_stream(
             pos_producer,
             feedback_producer,
             initial_dsp_config.sample_rate,
-            channels as u16,
+            OUTPUT_CHANNELS_U16,
             initial_bpm,
             initial_dsp_config.block_size as usize,
             engine_telemetry,
@@ -633,14 +664,13 @@ pub fn start_audio_stream(
                 Ok(DspControl::Attach {
                     dsp_config,
                     device_sample_rate,
-                    channels,
                     ready_tx,
-                }) => (dsp_config, device_sample_rate, channels, ready_tx),
+                }) => (dsp_config, device_sample_rate, ready_tx),
                 Ok(DspControl::Detach) => continue,
                 Err(_) => break,
             };
 
-            let (dsp_config, device_sample_rate, channels, ready_tx) = attach;
+            let (dsp_config, device_sample_rate, ready_tx) = attach;
 
             engine.process_command(AudioCommand::UpdateAudioConfig {
                 sample_rate: Some(dsp_config.sample_rate),
@@ -650,7 +680,7 @@ pub fn start_audio_stream(
             let mut rate_bridge = match DeviceRateBridge::new(
                 dsp_config.sample_rate,
                 device_sample_rate,
-                channels,
+                OUTPUT_CHANNELS,
                 dsp_config.block_size as usize,
             ) {
                 Ok(bridge) => bridge,
@@ -666,7 +696,7 @@ pub fn start_audio_stream(
             let (mut producer, consumer) =
                 RingBuffer::<OutputFrame>::new(ring_buffer_capacity);
             let mut staging_buffer =
-                vec![0.0; dsp_config.block_size as usize * channels];
+                vec![0.0; dsp_config.block_size as usize * OUTPUT_CHANNELS];
 
             // Build the latency cushion before the CPAL stream is started.
             let prefill_blocks =
@@ -751,7 +781,6 @@ pub fn start_audio_stream(
                 };
 
             let device_sample_rate = config.sample_rate;
-            let channels = config.channels as usize;
             let device_buffer_size = match config.buffer_size {
                 cpal::BufferSize::Fixed(size) => size as usize,
                 cpal::BufferSize::Default => {
@@ -784,7 +813,6 @@ pub fn start_audio_stream(
                 .send(DspControl::Attach {
                     dsp_config: current_dsp_config,
                     device_sample_rate,
-                    channels,
                     ready_tx,
                 })
                 .is_err()
@@ -1077,7 +1105,7 @@ mod tests {
         producer.push([f32::NAN, 2.0]).unwrap();
 
         let mut output = [42.0_f32; 2];
-        write_output_data(&mut output, &mut consumer);
+        write_output_data(&mut output, 2, &mut consumer);
 
         assert_eq!(output, [0.0, 1.0]);
     }
@@ -1088,7 +1116,7 @@ mod tests {
         producer.push([1.0e-6, -1.0e-6]).unwrap();
 
         let mut output = [0.0_f32; 2];
-        write_output_data(&mut output, &mut consumer);
+        write_output_data(&mut output, 2, &mut consumer);
 
         assert_eq!(output, [1.0e-6, -1.0e-6]);
     }
@@ -1096,9 +1124,9 @@ mod tests {
     #[test]
     fn stream_config_prefers_f32_over_enumeration_order() {
         let configs = [
-            supported_config(SampleFormat::U8, 44_100, 96_000),
-            supported_config(SampleFormat::I16, 44_100, 96_000),
-            supported_config(SampleFormat::F32, 44_100, 96_000),
+            supported_config(2, SampleFormat::U8, 44_100, 96_000),
+            supported_config(2, SampleFormat::I16, 44_100, 96_000),
+            supported_config(2, SampleFormat::F32, 44_100, 96_000),
         ];
 
         let (selected, used_fallback_rate) = select_output_config(configs, 48_000, 48_000).unwrap();
@@ -1111,8 +1139,8 @@ mod tests {
     #[test]
     fn stream_config_keeps_high_precision_when_rate_falls_back() {
         let configs = [
-            supported_config(SampleFormat::I16, 44_100, 96_000),
-            supported_config(SampleFormat::F32, 44_100, 96_000),
+            supported_config(2, SampleFormat::I16, 44_100, 96_000),
+            supported_config(2, SampleFormat::F32, 44_100, 96_000),
         ];
 
         let (selected, used_fallback_rate) =
@@ -1124,12 +1152,13 @@ mod tests {
     }
 
     fn supported_config(
+        channels: u16,
         sample_format: SampleFormat,
         min_sample_rate: u32,
         max_sample_rate: u32,
     ) -> SupportedStreamConfigRange {
         SupportedStreamConfigRange::new(
-            2,
+            channels,
             min_sample_rate,
             max_sample_rate,
             SupportedBufferSize::Unknown,
@@ -1144,12 +1173,41 @@ mod tests {
         producer.push([0.5, -0.5]).unwrap();
 
         let mut malformed_output = [1.0_f32; 1];
-        write_output_data(&mut malformed_output, &mut consumer);
+        write_output_data(&mut malformed_output, 2, &mut consumer);
         assert_eq!(malformed_output, [0.0]);
 
         let mut aligned_output = [0.0_f32; 4];
-        write_output_data(&mut aligned_output, &mut consumer);
+        write_output_data(&mut aligned_output, 2, &mut consumer);
         assert_eq!(aligned_output, [0.25, -0.25, 0.5, -0.5]);
+    }
+
+    #[test]
+    fn stream_config_prefers_stereo_then_smallest_multichannel_layout() {
+        let configs = [
+            supported_config(8, SampleFormat::F32, 44_100, 96_000),
+            supported_config(4, SampleFormat::F32, 44_100, 96_000),
+            supported_config(2, SampleFormat::I16, 44_100, 96_000),
+        ];
+        let (selected, _) = select_output_config(configs, 48_000, 48_000).unwrap();
+        assert_eq!(selected.channels(), 2);
+
+        let multichannel = [
+            supported_config(8, SampleFormat::F32, 44_100, 96_000),
+            supported_config(4, SampleFormat::I16, 44_100, 96_000),
+        ];
+        let (selected, _) = select_output_config(multichannel, 48_000, 48_000).unwrap();
+        assert_eq!(selected.channels(), 4);
+    }
+
+    #[test]
+    fn device_adapter_writes_stereo_to_first_two_channels_and_silences_the_rest() {
+        let (mut producer, mut consumer) = RingBuffer::new(1);
+        producer.push([0.25, -0.5]).unwrap();
+
+        let mut output = [1.0_f32; 6];
+        write_output_data(&mut output, 6, &mut consumer);
+
+        assert_eq!(output, [0.25, -0.5, 0.0, 0.0, 0.0, 0.0]);
     }
 
     #[test]

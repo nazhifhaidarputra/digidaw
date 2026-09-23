@@ -20,13 +20,19 @@ use vst3::{
 
 type ResizeHandler = Rc<dyn Fn(u32, u32) -> bool>;
 struct PlugFrame {
+    #[cfg(target_os = "linux")]
     run_loop: Rc<RunLoop>,
     view: Cell<*mut IPlugView>,
     resize: RefCell<Option<ResizeHandler>>,
     requested_size: Cell<Option<(u32, u32)>>,
 }
+#[cfg(target_os = "linux")]
 impl Class for PlugFrame {
     type Interfaces = (IPlugFrame, Linux::IRunLoop);
+}
+#[cfg(not(target_os = "linux"))]
+impl Class for PlugFrame {
+    type Interfaces = (IPlugFrame,);
 }
 impl IPlugFrameTrait for PlugFrame {
     unsafe fn resizeView(&self, view: *mut IPlugView, rect: *mut ViewRect) -> tresult {
@@ -53,6 +59,7 @@ impl IPlugFrameTrait for PlugFrame {
         unsafe { view.onSize(rect) }
     }
 }
+#[cfg(target_os = "linux")]
 crate::run_loop::delegate_run_loop!(PlugFrame);
 
 pub(crate) struct Vst3Editor {
@@ -74,11 +81,14 @@ impl Vst3Editor {
     }
     fn from_view(view: ComPtr<IPlugView>, run_loop: Rc<RunLoop>) -> Result<Self, HostError> {
         let frame = ComWrapper::new(PlugFrame {
+            #[cfg(target_os = "linux")]
             run_loop,
             view: Cell::new(view.as_ptr()),
             resize: RefCell::new(None),
             requested_size: Cell::new(None),
         });
+        #[cfg(not(target_os = "linux"))]
+        drop(run_loop);
         let pointer = frame
             .as_com_ref::<IPlugFrame>()
             .ok_or(HostError::Unsupported("editor frame"))?;
@@ -149,7 +159,7 @@ impl Vst3Editor {
                 }
                 _ => {
                     return Err(HostError::Unsupported(
-                        "VST3 editor requires an X11/XCB parent on Linux",
+                        "VST3 editor does not support the supplied native parent surface",
                     ));
                 }
             };

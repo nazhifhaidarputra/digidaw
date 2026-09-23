@@ -17,9 +17,21 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(target_os = "windows")]
+struct ShutdownWindowsLoopOnDrop;
+
+#[cfg(target_os = "windows")]
+impl Drop for ShutdownWindowsLoopOnDrop {
+    fn drop(&mut self) {
+        drop(karbeat_host_api::request_windows_main_loop_shutdown());
+    }
+}
+
 pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingConfig) {
     assert!(!native::available());
     let worker = std::thread::spawn(move || {
+        #[cfg(target_os = "windows")]
+        let _shutdown = ShutdownWindowsLoopOnDrop;
         let initial_descriptor = descriptor.clone();
         let initial_config = config.clone();
         let prepared = run(native::prepare_instance(
@@ -253,13 +265,18 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
             }
         }
     });
+    #[cfg(target_os = "linux")]
     let context = glib::MainContext::default();
+    #[cfg(target_os = "linux")]
     let deadline = Instant::now() + Duration::from_secs(60);
+    #[cfg(target_os = "linux")]
     while !worker.is_finished() {
         assert!(Instant::now() < deadline, "native state gateway timed out");
         context.iteration(false);
         std::thread::sleep(Duration::from_millis(1));
     }
+    #[cfg(target_os = "windows")]
+    assert_eq!(karbeat_host_api::run_windows_main_loop().unwrap(), 0);
     worker.join().unwrap();
     assert!(native::available());
     assert!(matches!(

@@ -42,3 +42,38 @@ pub fn init_logger() {
         );
     });
 }
+
+/// Initializes the Rust-owned Windows main STA state before Flutter window creation.
+#[cfg(target_os = "windows")]
+#[unsafe(no_mangle)]
+pub extern "C" fn digidaw_initialize_windows_main_thread() -> i32 {
+    match karbeat_host_api::initialize_windows_main_thread() {
+        Ok(()) => 0,
+        Err(error) => {
+            log::error!("failed to initialize the Windows main STA thread: {error}");
+            1
+        }
+    }
+}
+
+/// Pumps all process Win32 messages on the Rust-owned main STA thread until shutdown.
+#[cfg(target_os = "windows")]
+#[unsafe(no_mangle)]
+pub extern "C" fn digidaw_run_windows_main_loop() -> i32 {
+    match karbeat_host_api::run_windows_main_loop() {
+        Ok(exit_code) => exit_code,
+        Err(error) => {
+            log::error!("Windows main loop failed: {error}");
+            1
+        }
+    }
+}
+
+/// Releases Rust-owned Windows main-thread state if Flutter bootstrap fails before loop entry.
+#[cfg(target_os = "windows")]
+#[unsafe(no_mangle)]
+pub extern "C" fn digidaw_shutdown_windows_main_thread() {
+    if let Err(error) = karbeat_host_api::shutdown_windows_main_thread() {
+        log::error!("failed to shut down Windows main-thread state: {error}");
+    }
+}

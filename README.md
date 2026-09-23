@@ -38,8 +38,8 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Action history (Undo/Redo). Currently the system exists, but not all action has HistoryEntry
 - [ ] Time-stretched audio waveform processing
 - [x] Audio host selector (ASIO, JACK, or AudioCore)
-- [x] Automation for generator 
-- [ ] Automation for global parameters (BPM, Master pan, Master Gain)
+- [x] Automation for generator
+- [ ] Automation for global BPM parameters
 - [ ] Wavetable Synthesizer
 - [ ] Sample-based Synthesizer (for Real instrument)
 - [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Sidechain Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
@@ -50,7 +50,7 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Third-party supports for native audio plugin (In form of Asset Workshop)
 - [x] Settings/configuration for user
 - [x] Logging for end-user
-- [ ] VST3 Host support (WIP)
+- [x] VST3 Host support (Done for Linux and Windows)
 - [ ] AU Host support
 - [ ] CLAP Host support
 - [ ] LV2 Host support

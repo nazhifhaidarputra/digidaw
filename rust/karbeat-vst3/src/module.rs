@@ -1,8 +1,10 @@
 use std::{
-    ffi::c_void,
     path::{Path, PathBuf},
     rc::Rc,
 };
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::ffi::c_void;
 
 use karbeat_host_api::{HostError, PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
 use libloading::Library;
@@ -432,5 +434,30 @@ mod tests {
         assert_eq!(class_id_string(&parse_class_id(text).unwrap()), text);
         assert!(parse_class_id("bad").is_err());
         assert!(parse_class_id("GG112233445566778899AABBCCDDEEFF").is_err());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_bundle_and_direct_module_paths_resolve_without_guessing_other_architectures() {
+        let temporary = tempfile::tempdir().unwrap();
+        let direct = temporary.path().join("Direct.vst3");
+        std::fs::write(&direct, []).unwrap();
+        assert_eq!(binary_path(&direct).unwrap(), direct);
+
+        let bundle = temporary.path().join("Bundle.vst3");
+        let architecture = if std::env::consts::ARCH == "aarch64" {
+            "arm64"
+        } else {
+            std::env::consts::ARCH
+        };
+        let binary_directory = bundle.join("Contents").join(format!("{architecture}-win"));
+        std::fs::create_dir_all(&binary_directory).unwrap();
+        let binary = binary_directory.join("Bundle.vst3");
+        std::fs::write(&binary, []).unwrap();
+        assert_eq!(binary_path(&bundle).unwrap(), binary);
+
+        let wrong_architecture = temporary.path().join("WrongArchitecture.vst3");
+        std::fs::create_dir_all(wrong_architecture.join("Contents/x86-win")).unwrap();
+        assert!(binary_path(&wrong_architecture).is_err());
     }
 }
