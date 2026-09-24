@@ -908,15 +908,20 @@ mod tests {
 
     #[test]
     fn mixer_lookup_preserves_reused_track_generation() {
-        let mut core = karbeat_core::context::DawContext::new();
-        let removed = core.app_state.add_new_audio_track().id;
-        core.app_state.remove_track(removed).expect("remove track");
-        let replacement = core.app_state.add_new_audio_track().id;
-        let ctx = DawContext::new(core);
+        crate::sync::check_random(
+            || {
+                let mut core = karbeat_core::context::DawContext::new();
+                let removed = core.app_state.add_new_audio_track().id;
+                core.app_state.remove_track(removed).expect("remove track");
+                let replacement = core.app_state.add_new_audio_track().id;
+                let ctx = DawContext::new(core);
 
-        assert_eq!(removed.to_u32(), replacement.to_u32());
-        assert_ne!(removed.to_u64(), replacement.to_u64());
-        assert!(get_mixer_channel(&ctx, removed.to_u64()).is_err());
-        assert!(get_mixer_channel(&ctx, replacement.to_u64()).is_ok());
+                assert_eq!(removed.to_u32(), replacement.to_u32());
+                assert_ne!(removed.to_u64(), replacement.to_u64());
+                assert!(get_mixer_channel(&ctx, removed.to_u64()).is_err());
+                assert!(get_mixer_channel(&ctx, replacement.to_u64()).is_ok());
+            },
+            1,
+        );
     }
 }

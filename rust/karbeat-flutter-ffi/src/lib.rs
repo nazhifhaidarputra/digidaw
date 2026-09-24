@@ -23,6 +23,7 @@ pub mod api;
 )]
 mod frb_generated;
 mod log_bridge;
+mod sync;
 
 /// Installs the process logger: stdout through `env_logger`, plus a
 /// non-blocking queue forwarding the same records to the Flutter log viewer.

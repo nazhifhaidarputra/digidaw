@@ -37,5 +37,8 @@ windows-sys = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[dev-dependencies]
+shuttle.workspace = true
+
 [lints]
 workspace = true

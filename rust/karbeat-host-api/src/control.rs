@@ -82,35 +82,43 @@ impl<T: Send> Drop for ControlRetirement<T> {
 )]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
+    use shuttle::{
+        sync::{Arc, Mutex},
+        thread,
+    };
 
-    struct Payload(Arc<Mutex<Option<std::thread::ThreadId>>>);
+    struct Payload(Arc<Mutex<Option<thread::ThreadId>>>);
     impl Drop for Payload {
         fn drop(&mut self) {
-            *self.0.lock().unwrap() = Some(std::thread::current().id());
+            *self.0.lock().unwrap() = Some(thread::current().id());
         }
     }
 
     #[test]
     fn applied_and_cancelled_payloads_drop_on_the_control_owner() {
         for apply in [false, true] {
-            let destroyed = Arc::new(Mutex::new(None));
-            let (mut transfer, mut retirement) = ControlTransfer::new(Payload(destroyed.clone()));
-            std::thread::spawn(move || {
-                if apply {
-                    assert!(transfer.get_mut().is_some());
-                }
-                drop(transfer);
-            })
-            .join()
-            .unwrap();
-            assert!(destroyed.lock().unwrap().is_none());
-            assert!(retirement.collect());
-            assert_eq!(
-                *destroyed.lock().unwrap(),
-                Some(std::thread::current().id())
+            shuttle::check_pct(
+                move || {
+                    let destroyed = Arc::new(Mutex::new(None));
+                    let (mut transfer, mut retirement) =
+                        ControlTransfer::new(Payload(destroyed.clone()));
+                    let audio = thread::spawn(move || {
+                        if apply {
+                            assert!(transfer.get_mut().is_some());
+                        }
+                        drop(transfer);
+                    });
+                    while !retirement.collect() {
+                        assert!(destroyed.lock().unwrap().is_none());
+                        thread::yield_now();
+                    }
+                    audio.join().unwrap();
+                    assert_eq!(*destroyed.lock().unwrap(), Some(thread::current().id()));
+                    assert!(!retirement.collect());
+                },
+                1_000,
+                3,
             );
-            assert!(!retirement.collect());
         }
     }
 }

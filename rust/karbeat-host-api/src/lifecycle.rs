@@ -1,3 +1,6 @@
+#[cfg(test)]
+use shuttle::sync::atomic::{AtomicU8, Ordering};
+#[cfg(not(test))]
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::HostError;
@@ -101,21 +104,65 @@ impl Drop for ProcessingGuard<'_> {
 )]
 mod tests {
     use super::*;
+    use shuttle::{
+        sync::{Arc, atomic::AtomicBool},
+        thread,
+    };
 
     #[test]
     fn suspension_acknowledges_the_last_processing_block() {
-        let gate = ProcessingGate::default();
-        assert!(gate.enter().is_none());
-        gate.resume().unwrap();
-        let block = gate.enter().unwrap();
-        assert!(gate.enter().is_none());
-        assert!(matches!(gate.suspend(), Err(HostError::Busy)));
-        assert!(gate.resume().is_err());
-        drop(block);
-        assert!(gate.is_suspended());
-        assert!(gate.enter().is_none());
-        gate.suspend().unwrap();
-        gate.resume().unwrap();
-        assert!(gate.resume().is_err());
+        shuttle::check_dfs(
+            || {
+                let gate = ProcessingGate::default();
+                assert!(gate.enter().is_none());
+                gate.resume().unwrap();
+                let block = gate.enter().unwrap();
+                assert!(gate.enter().is_none());
+                assert!(matches!(gate.suspend(), Err(HostError::Busy)));
+                assert!(gate.resume().is_err());
+                drop(block);
+                assert!(gate.is_suspended());
+                assert!(gate.enter().is_none());
+                gate.suspend().unwrap();
+                gate.resume().unwrap();
+                assert!(gate.resume().is_err());
+            },
+            None,
+        );
+    }
+
+    #[test]
+    fn successful_suspension_excludes_every_audio_block() {
+        shuttle::check_pct(
+            || {
+                let gate = Arc::new(ProcessingGate::default());
+                let in_block = Arc::new(AtomicBool::new(false));
+                gate.resume().unwrap();
+                let audio = {
+                    let gate = gate.clone();
+                    let in_block = in_block.clone();
+                    thread::spawn(move || {
+                        for _ in 0..3 {
+                            if let Some(block) = gate.enter() {
+                                assert!(!in_block.swap(true, Ordering::SeqCst));
+                                thread::yield_now();
+                                in_block.store(false, Ordering::SeqCst);
+                                drop(block);
+                            }
+                        }
+                    })
+                };
+                while gate.suspend().is_err() {
+                    thread::yield_now();
+                }
+                assert!(gate.is_suspended());
+                assert!(!in_block.load(Ordering::SeqCst));
+                assert!(gate.enter().is_none());
+                audio.join().unwrap();
+                assert!(gate.is_suspended());
+            },
+            1_000,
+            3,
+        );
     }
 }

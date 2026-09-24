@@ -12,15 +12,13 @@
 
 use std::cell::Cell;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, OnceLock};
-use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use parking_lot::Mutex;
-
 use crate::api::logging::{RustLogEntryDto, RustLogLevel};
+use crate::sync::atomic::{AtomicU64, Ordering};
+use crate::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use crate::sync::{Mutex, thread, thread_local};
 
 const QUEUE_CAPACITY: usize = 4096;
 const BACKLOG_CAPACITY: usize = 2048;
@@ -96,7 +94,7 @@ impl LogBridge {
     /// Queues `record` without blocking; records are dropped (and counted)
     /// when the queue is full.
     pub(crate) fn push(&self, record: &log::Record<'_>) {
-        if FORWARDING.get() {
+        if FORWARDING.with(Cell::get) {
             return;
         }
         let entry = RustLogEntryDto {
@@ -174,7 +172,7 @@ fn drain(
     shared: &Mutex<SinkState>,
     max_batch_len: usize,
 ) {
-    FORWARDING.set(true);
+    FORWARDING.with(|forwarding| forwarding.set(true));
     while let Ok(first) = receiver.recv() {
         let mut batch = Vec::with_capacity(max_batch_len);
         batch.push(first);
@@ -193,9 +191,9 @@ fn drain(
 }
 
 fn forwarding<T>(operation: impl FnOnce() -> T) -> T {
-    let previous = FORWARDING.replace(true);
+    let previous = FORWARDING.with(|forwarding| forwarding.replace(true));
     let result = operation();
-    FORWARDING.set(previous);
+    FORWARDING.with(|forwarding| forwarding.set(previous));
     result
 }
 
@@ -260,14 +258,12 @@ impl log::Log for KarbeatLogger {
     reason = "log bridge tests fail immediately when the drain thread cannot start"
 )]
 mod tests {
-    use std::sync::mpsc::RecvTimeoutError;
-    use std::time::Duration;
-
     use super::*;
+    use crate::sync::{atomic::AtomicBool, check_random};
 
     struct ChannelSink {
         batches: mpsc::Sender<Vec<RustLogEntryDto>>,
-        open: Arc<std::sync::atomic::AtomicBool>,
+        open: Arc<AtomicBool>,
     }
 
     impl LogBatchSink for ChannelSink {
@@ -279,10 +275,10 @@ mod tests {
     fn sink() -> (
         Box<dyn LogBatchSink>,
         mpsc::Receiver<Vec<RustLogEntryDto>>,
-        Arc<std::sync::atomic::AtomicBool>,
+        Arc<AtomicBool>,
     ) {
         let (sender, receiver) = mpsc::channel();
-        let open = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let open = Arc::new(AtomicBool::new(true));
         let sink = ChannelSink {
             batches: sender,
             open: Arc::clone(&open),
@@ -300,108 +296,130 @@ mod tests {
         );
     }
 
-    fn messages(receiver: &mpsc::Receiver<Vec<RustLogEntryDto>>) -> Vec<String> {
-        let mut messages = Vec::new();
-        loop {
-            match receiver.recv_timeout(Duration::from_millis(200)) {
-                Ok(batch) => messages.extend(batch.into_iter().map(|entry| entry.message)),
-                Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => {
-                    return messages;
-                }
-            }
-        }
+    /// Drops the bridge so the drain thread flushes its queue and releases the sink, then
+    /// returns every message the sink received.
+    fn close_and_collect(
+        bridge: LogBridge,
+        receiver: &mpsc::Receiver<Vec<RustLogEntryDto>>,
+    ) -> Vec<String> {
+        drop(bridge);
+        receiver
+            .iter()
+            .flatten()
+            .map(|entry| entry.message)
+            .collect()
     }
 
-    fn wait_for_backlog(bridge: &LogBridge, len: usize) {
-        for _ in 0..200 {
-            if bridge.shared.lock().backlog.len() >= len {
-                return;
-            }
-            thread::sleep(Duration::from_millis(5));
+    fn wait_until(bridge: &LogBridge, condition: impl Fn(&SinkState) -> bool) {
+        while !condition(&bridge.shared.lock()) {
+            thread::yield_now();
         }
     }
 
     #[test]
     fn backlog_is_flushed_in_order_when_a_sink_attaches() {
-        let bridge = LogBridge::start(16, 16, 4).unwrap();
-        log(&bridge, log::Level::Info, "first");
-        log(&bridge, log::Level::Warn, "second");
-        wait_for_backlog(&bridge, 2);
+        check_random(
+            || {
+                let bridge = LogBridge::start(16, 16, 4).unwrap();
+                log(&bridge, log::Level::Info, "first");
+                log(&bridge, log::Level::Warn, "second");
+                wait_until(&bridge, |state| state.backlog.len() >= 2);
 
-        let (sink, receiver, _open) = sink();
-        bridge.attach(sink);
-        log(&bridge, log::Level::Error, "third");
+                let (sink, receiver, _open) = sink();
+                bridge.attach(sink);
+                log(&bridge, log::Level::Error, "third");
 
-        assert_eq!(messages(&receiver), ["first", "second", "third"]);
+                assert_eq!(
+                    close_and_collect(bridge, &receiver),
+                    ["first", "second", "third"]
+                );
+            },
+            200,
+        );
     }
 
     #[test]
     fn closed_sink_is_detached_and_records_return_to_backlog() {
-        let bridge = LogBridge::start(16, 16, 4).unwrap();
-        let (first_sink, _first_receiver, first_open) = sink();
-        bridge.attach(first_sink);
-        first_open.store(false, Ordering::SeqCst);
-        log(&bridge, log::Level::Info, "kept");
-        wait_for_backlog(&bridge, 1);
+        check_random(
+            || {
+                let bridge = LogBridge::start(16, 16, 4).unwrap();
+                let (first_sink, _first_receiver, first_open) = sink();
+                bridge.attach(first_sink);
+                first_open.store(false, Ordering::SeqCst);
+                log(&bridge, log::Level::Info, "kept");
+                wait_until(&bridge, |state| state.backlog.len() >= 1);
 
-        let (second_sink, second_receiver, _open) = sink();
-        bridge.attach(second_sink);
+                let (second_sink, second_receiver, _open) = sink();
+                bridge.attach(second_sink);
 
-        assert_eq!(messages(&second_receiver), ["kept"]);
+                assert_eq!(close_and_collect(bridge, &second_receiver), ["kept"]);
+            },
+            200,
+        );
     }
 
     #[test]
     fn backlog_overflow_evicts_oldest_and_reports_drop() {
-        let bridge = LogBridge::start(16, 2, 1).unwrap();
-        log(&bridge, log::Level::Info, "a");
-        log(&bridge, log::Level::Info, "b");
-        log(&bridge, log::Level::Info, "c");
-        for _ in 0..200 {
-            if bridge.shared.lock().overflowed == 1 {
-                break;
-            }
-            thread::sleep(Duration::from_millis(5));
-        }
+        check_random(
+            || {
+                let bridge = LogBridge::start(16, 2, 1).unwrap();
+                log(&bridge, log::Level::Info, "a");
+                log(&bridge, log::Level::Info, "b");
+                log(&bridge, log::Level::Info, "c");
+                wait_until(&bridge, |state| state.overflowed == 1);
 
-        let (sink, receiver, _open) = sink();
-        bridge.attach(sink);
-        let delivered = messages(&receiver);
+                let (sink, receiver, _open) = sink();
+                bridge.attach(sink);
+                let delivered = close_and_collect(bridge, &receiver);
 
-        assert_eq!(delivered.len(), 3);
-        assert!(delivered[0].starts_with("1 Rust log entries were dropped"));
-        assert_eq!(delivered[1..], ["b", "c"]);
+                assert_eq!(delivered.len(), 3);
+                assert!(delivered[0].starts_with("1 Rust log entries were dropped"));
+                assert_eq!(delivered[1..], ["b", "c"]);
+            },
+            200,
+        );
     }
 
     #[test]
     fn records_logged_while_forwarding_are_ignored() {
-        let bridge = LogBridge::start(16, 16, 4).unwrap();
-        forwarding(|| log(&bridge, log::Level::Info, "re-entrant"));
-        log(&bridge, log::Level::Info, "normal");
-        wait_for_backlog(&bridge, 1);
+        check_random(
+            || {
+                let bridge = LogBridge::start(16, 16, 4).unwrap();
+                forwarding(|| log(&bridge, log::Level::Info, "re-entrant"));
+                log(&bridge, log::Level::Info, "normal");
+                wait_until(&bridge, |state| state.backlog.len() >= 1);
 
-        let (sink, receiver, _open) = sink();
-        bridge.attach(sink);
+                let (sink, receiver, _open) = sink();
+                bridge.attach(sink);
 
-        assert_eq!(messages(&receiver), ["normal"]);
+                assert_eq!(close_and_collect(bridge, &receiver), ["normal"]);
+            },
+            200,
+        );
     }
 
     #[test]
     fn full_queue_never_blocks_the_caller() {
-        // The receiver is never drained, so only the first record fits.
-        let (sender, _receiver) = mpsc::sync_channel(1);
-        let bridge = LogBridge {
-            sender,
-            dropped: Arc::new(AtomicU64::new(0)),
-            shared: Arc::new(Mutex::new(SinkState {
-                sink: None,
-                backlog: VecDeque::new(),
-                backlog_capacity: 1,
-                overflowed: 0,
-            })),
-        };
-        for _ in 0..8 {
-            log(&bridge, log::Level::Info, "lost");
-        }
-        assert_eq!(bridge.dropped.load(Ordering::Relaxed), 7);
+        check_random(
+            || {
+                // The receiver is never drained, so only the first record fits.
+                let (sender, _receiver) = mpsc::sync_channel(1);
+                let bridge = LogBridge {
+                    sender,
+                    dropped: Arc::new(AtomicU64::new(0)),
+                    shared: Arc::new(Mutex::new(SinkState {
+                        sink: None,
+                        backlog: VecDeque::new(),
+                        backlog_capacity: 1,
+                        overflowed: 0,
+                    })),
+                };
+                for _ in 0..8 {
+                    log(&bridge, log::Level::Info, "lost");
+                }
+                assert_eq!(bridge.dropped.load(Ordering::Relaxed), 7);
+            },
+            1,
+        );
     }
 }

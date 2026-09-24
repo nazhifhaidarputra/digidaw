@@ -249,12 +249,15 @@ impl AudioPlugin for HostedProcessor {
 )]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
+    use shuttle::{
+        sync::{Arc, Mutex},
+        thread,
+    };
 
-    struct Probe(Arc<Mutex<Option<std::thread::ThreadId>>>);
+    struct Probe(Arc<Mutex<Option<thread::ThreadId>>>);
     impl Drop for Probe {
         fn drop(&mut self) {
-            *self.0.lock().unwrap() = Some(std::thread::current().id());
+            *self.0.lock().unwrap() = Some(thread::current().id());
         }
     }
     impl AudioPlugin for Probe {
@@ -290,28 +293,36 @@ mod tests {
 
     #[test]
     fn retiring_a_trait_object_returns_all_payload_destruction_to_the_control_owner() {
-        let destroyed_on = Arc::new(Mutex::new(None));
-        let mut endpoint = Box::new(HostedProcessor::new(
-            Box::new(Probe(destroyed_on.clone())),
-            HostInstanceId(1),
-        ));
-        let mut retirement = endpoint.enable_retirement().unwrap();
-        assert!(endpoint.enable_retirement().is_err());
-        assert!(retirement.take().is_none());
-        std::thread::spawn(move || {
-            let endpoint: Box<dyn AudioPlugin> = endpoint;
-            endpoint.retire();
-        })
-        .join()
-        .unwrap();
-        assert!(destroyed_on.lock().unwrap().is_none());
-        let endpoint = retirement.take().unwrap();
-        assert_eq!(endpoint.instance, HostInstanceId(1));
-        drop(endpoint);
-        assert_eq!(
-            *destroyed_on.lock().unwrap(),
-            Some(std::thread::current().id())
+        shuttle::check_pct(
+            || {
+                let destroyed_on = Arc::new(Mutex::new(None));
+                let mut endpoint = Box::new(HostedProcessor::new(
+                    Box::new(Probe(destroyed_on.clone())),
+                    HostInstanceId(1),
+                ));
+                let mut retirement = endpoint.enable_retirement().unwrap();
+                assert!(endpoint.enable_retirement().is_err());
+                assert!(retirement.take().is_none());
+                let audio = thread::spawn(move || {
+                    let endpoint: Box<dyn AudioPlugin> = endpoint;
+                    endpoint.retire();
+                });
+                let endpoint = loop {
+                    if let Some(endpoint) = retirement.take() {
+                        break endpoint;
+                    }
+                    assert!(destroyed_on.lock().unwrap().is_none());
+                    thread::yield_now();
+                };
+                audio.join().unwrap();
+                assert!(destroyed_on.lock().unwrap().is_none());
+                assert_eq!(endpoint.instance, HostInstanceId(1));
+                drop(endpoint);
+                assert_eq!(*destroyed_on.lock().unwrap(), Some(thread::current().id()));
+                assert!(retirement.take().is_none());
+            },
+            1_000,
+            3,
         );
-        assert!(retirement.take().is_none());
     }
 }

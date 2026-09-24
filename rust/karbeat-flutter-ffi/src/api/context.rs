@@ -3,8 +3,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use karbeat_core::context::DawContext as CoreDawContext;
-use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub(crate) use crate::api::project::DawContext;
 
@@ -117,9 +117,8 @@ pub(crate) use runtime_ctx;
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::DawContext;
+    use crate::sync::{check_random, mpsc, thread};
 
     fn project_name(ctx: &karbeat_core::context::DawContext) -> &str {
         &ctx.app_state.metadata.name
@@ -131,37 +130,48 @@ mod tests {
 
     #[test]
     fn guards_deref_to_the_core_context() {
-        let session = DawContext::new(karbeat_core::context::DawContext::new());
-        let read = session.read();
-        assert_eq!(project_name(&read), "Untitled");
-        drop(read);
+        check_random(
+            || {
+                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let read = session.read();
+                assert_eq!(project_name(&read), "Untitled");
+                drop(read);
 
-        let mut write = session.project_write();
-        set_project_name(&mut write, "Guarded");
-        drop(write);
+                let mut write = session.project_write();
+                set_project_name(&mut write, "Guarded");
+                drop(write);
 
-        assert_eq!(session.read().app_state.metadata.name, "Guarded");
+                assert_eq!(session.read().app_state.metadata.name, "Guarded");
+            },
+            1,
+        );
     }
 
     #[test]
     fn project_operation_does_not_hold_the_core_lock() {
-        let session = DawContext::new(karbeat_core::context::DawContext::new());
-        let operation = session.begin_project_operation();
-        assert!(session.try_runtime_operation().is_none());
+        check_random(
+            || {
+                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let operation = session.begin_project_operation();
+                assert!(session.try_runtime_operation().is_none());
 
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let writer_session = session.clone();
-        let writer = std::thread::spawn(move || {
-            let _guard = writer_session.project_write();
-            sender.send(()).expect("test receiver is available");
-        });
+                let (sender, receiver) = mpsc::channel();
+                let writer_session = session.clone();
+                let writer = thread::spawn(move || {
+                    let _guard = writer_session.project_write();
+                    sender.send(()).expect("test receiver is available");
+                });
 
-        assert_eq!(session.read().app_state.tracks.len(), 0);
-        assert!(receiver.recv_timeout(Duration::from_millis(25)).is_err());
-        drop(operation);
-        receiver
-            .recv_timeout(Duration::from_secs(1))
-            .expect("project mutation should continue after the transaction");
-        writer.join().expect("writer thread should complete");
+                assert_eq!(session.read().app_state.tracks.len(), 0);
+                thread::yield_now();
+                assert!(receiver.try_recv().is_err());
+                drop(operation);
+                receiver
+                    .recv()
+                    .expect("project mutation should continue after the transaction");
+                writer.join().expect("writer thread should complete");
+            },
+            100,
+        );
     }
 }

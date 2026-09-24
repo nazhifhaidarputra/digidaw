@@ -52,6 +52,7 @@ cpal = { workspace = true, features = ["jack"] }
 
 [dev-dependencies]
 karbeat-vst3.workspace = true
+shuttle.workspace = true
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 glib.workspace = true

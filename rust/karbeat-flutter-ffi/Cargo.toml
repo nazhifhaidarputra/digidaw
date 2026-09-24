@@ -44,5 +44,8 @@ karbeat-host-api.workspace = true
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 karbeat-core.workspace = true
 
+[dev-dependencies]
+shuttle.workspace = true
+
 [lints]
 workspace = true

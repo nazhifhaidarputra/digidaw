@@ -452,14 +452,19 @@ mod tests {
 
     #[test]
     fn generator_lookup_preserves_reused_slot_generation() {
-        let mut core = karbeat_core::context::DawContext::new();
-        let removed = core.app_state.add_generator(Default::default());
-        core.app_state.remove_generator(removed);
-        let replacement = core.app_state.add_generator(Default::default());
-        let ctx = DawContext::new(core);
+        crate::sync::check_random(
+            || {
+                let mut core = karbeat_core::context::DawContext::new();
+                let removed = core.app_state.add_generator(Default::default());
+                core.app_state.remove_generator(removed);
+                let replacement = core.app_state.add_generator(Default::default());
+                let ctx = DawContext::new(core);
 
-        assert_eq!(removed.to_u32(), replacement.to_u32());
-        assert_ne!(removed.to_u64(), replacement.to_u64());
-        assert!(get_generator(&ctx, replacement.to_u64()).is_ok());
+                assert_eq!(removed.to_u32(), replacement.to_u32());
+                assert_ne!(removed.to_u64(), replacement.to_u64());
+                assert!(get_generator(&ctx, replacement.to_u64()).is_ok());
+            },
+            1,
+        );
     }
 }

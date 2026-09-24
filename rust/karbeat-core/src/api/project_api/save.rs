@@ -8,6 +8,10 @@ use std::{
 use anyhow::{Context, bail, ensure};
 use karbeat_host::{HostError, HostInstanceId, HostStateCapture, PluginState};
 use karbeat_plugins::registry::PluginRegistry;
+#[cfg(test)]
+use shuttle::thread::sleep;
+#[cfg(not(test))]
+use std::thread::sleep;
 
 use crate::{
     audio::event::PluginTarget,
@@ -199,7 +203,7 @@ fn collect(
             "Timed out capturing fresh project state ({} responses missing)",
             pending.len()
         );
-        std::thread::sleep(Duration::from_millis(2));
+        sleep(Duration::from_millis(2));
     }
     Ok((plugins, mixer))
 }
@@ -244,7 +248,15 @@ mod tests {
         state
     }
 
-    fn respond(ctx: &mut DawContext, stale_only: bool) -> std::thread::JoinHandle<()> {
+    /// Serializing and loading a project needs more stack than a default Shuttle task provides.
+    fn check_random(test: impl Fn() + Send + Sync + 'static, iterations: usize) {
+        let mut config = shuttle::Config::new();
+        config.stack_size = 1 << 21;
+        shuttle::Runner::new(shuttle::scheduler::RandomScheduler::new(iterations), config)
+            .run(test);
+    }
+
+    fn respond(ctx: &mut DawContext, stale_only: bool) -> shuttle::thread::JoinHandle<()> {
         respond_with_stream(ctx, stale_only, false)
     }
 
@@ -252,7 +264,7 @@ mod tests {
         ctx: &mut DawContext,
         stale_only: bool,
         stream_active: bool,
-    ) -> std::thread::JoinHandle<()> {
+    ) -> shuttle::thread::JoinHandle<()> {
         let (sender, mut commands) = rtrb::RingBuffer::new(16);
         let (mut feedback, consumer) = rtrb::RingBuffer::new(16);
         *ctx.command_sender.lock() = Some(sender);
@@ -263,15 +275,13 @@ mod tests {
             None
         };
         let router = ctx.project_state_feedback.clone();
-        std::thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(5);
+        shuttle::thread::spawn(move || {
             for _ in 0..2 {
                 let command = loop {
                     if let Ok(command) = commands.pop() {
                         break command;
                     }
-                    assert!(Instant::now() < deadline);
-                    std::thread::yield_now();
+                    shuttle::thread::yield_now();
                 };
                 let response = match command {
                     AudioCommand::QueryPluginState { target, request_id } => {
@@ -310,66 +320,78 @@ mod tests {
     #[test]
     fn public_save_uses_host_capture_without_feedback_lock_and_round_trips() {
         for stream_active in [false, true] {
-            let mut ctx = DawContext::new();
-            let mut fresh = external(&mut ctx);
-            fresh.component = vec![3, 4];
-            let feedback_lock = ctx.feedback_consumer.clone();
-            let captured = fresh.clone();
-            ctx.host_state_capture = std::sync::Arc::new(
-                move |identity: &karbeat_host::PluginIdentity, id: HostInstanceId| {
-                    assert_eq!(identity, &captured.identity);
-                    assert_eq!(id, HostInstanceId(7));
-                    assert!(feedback_lock.try_lock().is_some());
-                    Ok(captured.clone())
+            check_random(
+                move || {
+                    let mut ctx = DawContext::new();
+                    let mut fresh = external(&mut ctx);
+                    fresh.component = vec![3, 4];
+                    let feedback_lock = ctx.feedback_consumer.clone();
+                    let captured = fresh.clone();
+                    ctx.host_state_capture = std::sync::Arc::new(
+                        move |identity: &karbeat_host::PluginIdentity, id: HostInstanceId| {
+                            assert_eq!(identity, &captured.identity);
+                            assert_eq!(id, HostInstanceId(7));
+                            assert!(feedback_lock.try_lock().is_some());
+                            Ok(captured.clone())
+                        },
+                    );
+                    let responder = respond_with_stream(&mut ctx, false, stream_active);
+                    let directory = tempfile::tempdir().unwrap();
+                    let path = directory.path().join("saved.karbeat");
+                    super::super::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
+                    responder.join().unwrap();
+                    let loaded =
+                        crate::core::file_manager::project_loader::load_daw_project(&path, 48_000)
+                            .unwrap();
+                    let generator = loaded.generator_pool.values().next().unwrap();
+                    let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {
+                        panic!("expected plugin");
+                    };
+                    assert_eq!(
+                        plugin.external.as_ref().unwrap().state.as_ref(),
+                        Some(&fresh)
+                    );
+                    assert_eq!(loaded.mixer.master_bus.volume.get_base(), 0.25);
                 },
+                100,
             );
-            let responder = respond_with_stream(&mut ctx, false, stream_active);
-            let directory = tempfile::tempdir().unwrap();
-            let path = directory.path().join("saved.karbeat");
-            super::super::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
-            responder.join().unwrap();
-            let loaded =
-                crate::core::file_manager::project_loader::load_daw_project(&path, 48_000).unwrap();
-            let generator = loaded.generator_pool.values().next().unwrap();
-            let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {
-                panic!("expected plugin");
-            };
-            assert_eq!(
-                plugin.external.as_ref().unwrap().state.as_ref(),
-                Some(&fresh)
-            );
-            assert_eq!(loaded.mixer.master_bus.volume.get_base(), 0.25);
         }
     }
 
     #[test]
     fn stale_duplicate_responses_and_native_errors_preserve_previous_project() {
         for stale_only in [false, true] {
-            let mut ctx = DawContext::new();
-            let before = external(&mut ctx);
-            let responder = respond(&mut ctx, stale_only);
-            let directory = tempfile::tempdir().unwrap();
-            let path = directory.path().join("previous.karbeat");
-            std::fs::write(&path, b"previous project").unwrap();
-            let result = save_project(&mut ctx, &path, Duration::from_millis(100), |_, _| {
-                Err(HostError::Busy)
-            });
-            assert!(result.is_err());
-            responder.join().unwrap();
-            assert_eq!(std::fs::read(&path).unwrap(), b"previous project");
-            let GeneratorInstanceType::Plugin(plugin) = &ctx
-                .app_state
-                .generator_pool
-                .values()
-                .next()
-                .unwrap()
-                .instance_type
-            else {
-                panic!("expected plugin");
-            };
-            assert_eq!(
-                plugin.external.as_ref().unwrap().state.as_ref(),
-                Some(&before)
+            check_random(
+                move || {
+                    let mut ctx = DawContext::new();
+                    let before = external(&mut ctx);
+                    let responder = respond(&mut ctx, stale_only);
+                    let directory = tempfile::tempdir().unwrap();
+                    let path = directory.path().join("previous.karbeat");
+                    std::fs::write(&path, b"previous project").unwrap();
+                    let result =
+                        save_project(&mut ctx, &path, Duration::from_millis(100), |_, _| {
+                            Err(HostError::Busy)
+                        });
+                    assert!(result.is_err());
+                    responder.join().unwrap();
+                    assert_eq!(std::fs::read(&path).unwrap(), b"previous project");
+                    let GeneratorInstanceType::Plugin(plugin) = &ctx
+                        .app_state
+                        .generator_pool
+                        .values()
+                        .next()
+                        .unwrap()
+                        .instance_type
+                    else {
+                        panic!("expected plugin");
+                    };
+                    assert_eq!(
+                        plugin.external.as_ref().unwrap().state.as_ref(),
+                        Some(&before)
+                    );
+                },
+                20,
             );
         }
     }

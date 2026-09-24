@@ -344,18 +344,42 @@ mod tests {
 
     #[test]
     fn install_receipt_never_loses_a_result_racing_producer_drop() {
-        for _ in 0..2_000 {
-            let (mut producer, result) = rtrb::RingBuffer::new(1);
-            let mut receipt = HostedInstallReceipt {
-                result,
-                telemetry: None,
-            };
-            let engine = std::thread::spawn(move || {
-                producer.push(HostedInstallResult::Installed).unwrap();
-            });
-            let outcome = futures_lite::future::block_on(receipt.wait());
-            engine.join().unwrap();
-            assert!(matches!(outcome, Ok(HostedInstallResult::Installed)));
-        }
+        shuttle::check_random(
+            || {
+                let (mut producer, result) = rtrb::RingBuffer::new(1);
+                let mut receipt = HostedInstallReceipt {
+                    result,
+                    telemetry: None,
+                };
+                let engine = shuttle::thread::spawn(move || {
+                    producer.push(HostedInstallResult::Installed).unwrap();
+                    shuttle::thread::yield_now();
+                    drop(producer);
+                });
+                let outcome = shuttle::future::block_on(receipt.wait());
+                engine.join().unwrap();
+                assert!(matches!(outcome, Ok(HostedInstallResult::Installed)));
+            },
+            1_000,
+        );
+    }
+
+    #[test]
+    fn removal_receipt_never_loses_a_result_racing_producer_drop() {
+        shuttle::check_random(
+            || {
+                let (mut producer, result) = rtrb::RingBuffer::new(1);
+                let mut receipt = HostedRemovalReceipt(result);
+                let engine = shuttle::thread::spawn(move || {
+                    producer.push(HostedRemovalResult::Removed).unwrap();
+                    shuttle::thread::yield_now();
+                    drop(producer);
+                });
+                let outcome = shuttle::future::block_on(receipt.wait());
+                engine.join().unwrap();
+                assert!(matches!(outcome, Ok(HostedRemovalResult::Removed)));
+            },
+            1_000,
+        );
     }
 }
