@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/floating_midi_keyboard_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
@@ -111,8 +112,8 @@ class MainScreen extends ConsumerWidget {
             CallbackAction<ToggleVirtualMidiKeyboardIntent>(
               onInvoke: (_) {
                 ref
-                .read(workspaceStateProvider.notifier)
-                .toggleFloatingMidiKeyboard();
+                    .read(workspaceStateProvider.notifier)
+                    .toggleFloatingMidiKeyboard();
                 return null;
               },
             ),
@@ -186,9 +187,15 @@ class MainScreen extends ConsumerWidget {
         allowedExtensions: const ['karbeat', 'dgdaw'],
       );
     }
-    if (path != null) {
-      await ref.read(projectProvider.notifier).saveProject(path);
-    }
+    if (path == null) return;
+    final savePath = path;
+    final project = ref.read(projectProvider.notifier);
+    await ref
+        .read(blockingTaskProvider.notifier)
+        .run(
+          label: 'Saving project...',
+          task: () => project.saveProject(savePath),
+        );
   }
 
   Future<void> _runHistoryAction(WidgetRef ref, {required bool undo}) async {

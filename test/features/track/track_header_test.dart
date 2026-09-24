@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/core/widgets/channel_toggle_button.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/setting/services/external_plugin_service.dart';
 import 'package:karbeat/features/track/view/track_header.dart';
@@ -144,14 +145,61 @@ void main() {
     expect(service.openedTarget, const UiPluginTarget.generator(7));
     expect(launcher.openCount, 0);
   });
+
+  testWidgets('mute and solo buttons reflect the track mixer channel', (
+    tester,
+  ) async {
+    await _pumpTrackHeader(
+      tester,
+      service: _ExternalPluginService(isExternal: false),
+      launcher: _FlutterPluginLauncher(),
+      channel: const UiMixerChannel(
+        volume: 1,
+        pan: 0,
+        mute: true,
+        solo: false,
+        invertedPhase: false,
+        effects: [],
+      ),
+    );
+
+    expect(find.byIcon(Icons.mic_off), findsNothing);
+    expect(find.byIcon(Icons.volume_up), findsNothing);
+    final mute = tester.widget<ChannelToggleButton>(
+      find.widgetWithText(ChannelToggleButton, 'M'),
+    );
+    final solo = tester.widget<ChannelToggleButton>(
+      find.widgetWithText(ChannelToggleButton, 'S'),
+    );
+    expect(mute.isActive, isTrue);
+    expect(solo.isActive, isFalse);
+  });
+
+  testWidgets('shrinking a track leaves only its title', (tester) async {
+    await _pumpTrackHeader(
+      tester,
+      service: _ExternalPluginService(isExternal: false),
+      launcher: _FlutterPluginLauncher(),
+    );
+    expect(find.text('MIDI'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Shrink lane'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MIDI Track'), findsOneWidget);
+    expect(find.text('MIDI'), findsNothing);
+    expect(find.byType(ChannelToggleButton), findsNothing);
+    expect(find.byTooltip('Expand lane'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpTrackHeader(
   WidgetTester tester, {
   required ExternalPluginService service,
   required PluginFlutterUiLauncher launcher,
+  UiMixerChannel? channel,
 }) async {
-  final project = _projectData();
+  final project = _projectData(channel: channel);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -177,7 +225,7 @@ Future<void> _pumpTrackHeader(
   await tester.pumpAndSettle();
 }
 
-ApplicationDataStore _projectData() {
+ApplicationDataStore _projectData({UiMixerChannel? channel}) {
   const master = UiMixerChannel(
     volume: 1,
     pan: 0,
@@ -223,8 +271,8 @@ ApplicationDataStore _projectData() {
       ),
     }),
     patterns: const IMapConst<int, UiPattern>({}),
-    mixer: const UiMixerState.raw(
-      channels: {},
+    mixer: UiMixerState.raw(
+      channels: {1: ?channel},
       masterBus: master,
       buses: {},
       routing: [],

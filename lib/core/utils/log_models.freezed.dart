@@ -14,7 +14,8 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppLogEntry {
 
- int get sequence; DateTime get timestamp; AppLogLevel get level; String get message; String? get errorSummary;
+ int get sequence; DateTime get timestamp; AppLogLevel get level; String get message; AppLogSource get source;/// Rust `log` target (module path); `null` for Flutter entries.
+ String? get target; String? get errorSummary;
 /// Create a copy of AppLogEntry
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +26,16 @@ $AppLogEntryCopyWith<AppLogEntry> get copyWith => _$AppLogEntryCopyWithImpl<AppL
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppLogEntry&&(identical(other.sequence, sequence) || other.sequence == sequence)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.level, level) || other.level == level)&&(identical(other.message, message) || other.message == message)&&(identical(other.errorSummary, errorSummary) || other.errorSummary == errorSummary));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppLogEntry&&(identical(other.sequence, sequence) || other.sequence == sequence)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.level, level) || other.level == level)&&(identical(other.message, message) || other.message == message)&&(identical(other.source, source) || other.source == source)&&(identical(other.target, target) || other.target == target)&&(identical(other.errorSummary, errorSummary) || other.errorSummary == errorSummary));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,sequence,timestamp,level,message,errorSummary);
+int get hashCode => Object.hash(runtimeType,sequence,timestamp,level,message,source,target,errorSummary);
 
 @override
 String toString() {
-  return 'AppLogEntry(sequence: $sequence, timestamp: $timestamp, level: $level, message: $message, errorSummary: $errorSummary)';
+  return 'AppLogEntry(sequence: $sequence, timestamp: $timestamp, level: $level, message: $message, source: $source, target: $target, errorSummary: $errorSummary)';
 }
 
 
@@ -45,7 +46,7 @@ abstract mixin class $AppLogEntryCopyWith<$Res>  {
   factory $AppLogEntryCopyWith(AppLogEntry value, $Res Function(AppLogEntry) _then) = _$AppLogEntryCopyWithImpl;
 @useResult
 $Res call({
- int sequence, DateTime timestamp, AppLogLevel level, String message, String? errorSummary
+ int sequence, DateTime timestamp, AppLogLevel level, String message, AppLogSource source, String? target, String? errorSummary
 });
 
 
@@ -62,13 +63,15 @@ class _$AppLogEntryCopyWithImpl<$Res>
 
 /// Create a copy of AppLogEntry
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sequence = null,Object? timestamp = null,Object? level = null,Object? message = null,Object? errorSummary = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sequence = null,Object? timestamp = null,Object? level = null,Object? message = null,Object? source = null,Object? target = freezed,Object? errorSummary = freezed,}) {
   return _then(_self.copyWith(
 sequence: null == sequence ? _self.sequence : sequence // ignore: cast_nullable_to_non_nullable
 as int,timestamp: null == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
 as DateTime,level: null == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
 as AppLogLevel,message: null == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
-as String,errorSummary: freezed == errorSummary ? _self.errorSummary : errorSummary // ignore: cast_nullable_to_non_nullable
+as String,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as AppLogSource,target: freezed == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
+as String?,errorSummary: freezed == errorSummary ? _self.errorSummary : errorSummary // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -154,10 +157,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int sequence,  DateTime timestamp,  AppLogLevel level,  String message,  String? errorSummary)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int sequence,  DateTime timestamp,  AppLogLevel level,  String message,  AppLogSource source,  String? target,  String? errorSummary)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppLogEntry() when $default != null:
-return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.errorSummary);case _:
+return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.source,_that.target,_that.errorSummary);case _:
   return orElse();
 
 }
@@ -175,10 +178,10 @@ return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.e
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int sequence,  DateTime timestamp,  AppLogLevel level,  String message,  String? errorSummary)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int sequence,  DateTime timestamp,  AppLogLevel level,  String message,  AppLogSource source,  String? target,  String? errorSummary)  $default,) {final _that = this;
 switch (_that) {
 case _AppLogEntry():
-return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.errorSummary);case _:
+return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.source,_that.target,_that.errorSummary);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -195,10 +198,10 @@ return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.e
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int sequence,  DateTime timestamp,  AppLogLevel level,  String message,  String? errorSummary)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int sequence,  DateTime timestamp,  AppLogLevel level,  String message,  AppLogSource source,  String? target,  String? errorSummary)?  $default,) {final _that = this;
 switch (_that) {
 case _AppLogEntry() when $default != null:
-return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.errorSummary);case _:
+return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.source,_that.target,_that.errorSummary);case _:
   return null;
 
 }
@@ -210,13 +213,16 @@ return $default(_that.sequence,_that.timestamp,_that.level,_that.message,_that.e
 
 
 class _AppLogEntry implements AppLogEntry {
-  const _AppLogEntry({required this.sequence, required this.timestamp, required this.level, required this.message, this.errorSummary});
+  const _AppLogEntry({required this.sequence, required this.timestamp, required this.level, required this.message, this.source = AppLogSource.flutter, this.target, this.errorSummary});
   
 
 @override final  int sequence;
 @override final  DateTime timestamp;
 @override final  AppLogLevel level;
 @override final  String message;
+@override@JsonKey() final  AppLogSource source;
+/// Rust `log` target (module path); `null` for Flutter entries.
+@override final  String? target;
 @override final  String? errorSummary;
 
 /// Create a copy of AppLogEntry
@@ -229,16 +235,16 @@ _$AppLogEntryCopyWith<_AppLogEntry> get copyWith => __$AppLogEntryCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppLogEntry&&(identical(other.sequence, sequence) || other.sequence == sequence)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.level, level) || other.level == level)&&(identical(other.message, message) || other.message == message)&&(identical(other.errorSummary, errorSummary) || other.errorSummary == errorSummary));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppLogEntry&&(identical(other.sequence, sequence) || other.sequence == sequence)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.level, level) || other.level == level)&&(identical(other.message, message) || other.message == message)&&(identical(other.source, source) || other.source == source)&&(identical(other.target, target) || other.target == target)&&(identical(other.errorSummary, errorSummary) || other.errorSummary == errorSummary));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,sequence,timestamp,level,message,errorSummary);
+int get hashCode => Object.hash(runtimeType,sequence,timestamp,level,message,source,target,errorSummary);
 
 @override
 String toString() {
-  return 'AppLogEntry(sequence: $sequence, timestamp: $timestamp, level: $level, message: $message, errorSummary: $errorSummary)';
+  return 'AppLogEntry(sequence: $sequence, timestamp: $timestamp, level: $level, message: $message, source: $source, target: $target, errorSummary: $errorSummary)';
 }
 
 
@@ -249,7 +255,7 @@ abstract mixin class _$AppLogEntryCopyWith<$Res> implements $AppLogEntryCopyWith
   factory _$AppLogEntryCopyWith(_AppLogEntry value, $Res Function(_AppLogEntry) _then) = __$AppLogEntryCopyWithImpl;
 @override @useResult
 $Res call({
- int sequence, DateTime timestamp, AppLogLevel level, String message, String? errorSummary
+ int sequence, DateTime timestamp, AppLogLevel level, String message, AppLogSource source, String? target, String? errorSummary
 });
 
 
@@ -266,13 +272,15 @@ class __$AppLogEntryCopyWithImpl<$Res>
 
 /// Create a copy of AppLogEntry
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sequence = null,Object? timestamp = null,Object? level = null,Object? message = null,Object? errorSummary = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sequence = null,Object? timestamp = null,Object? level = null,Object? message = null,Object? source = null,Object? target = freezed,Object? errorSummary = freezed,}) {
   return _then(_AppLogEntry(
 sequence: null == sequence ? _self.sequence : sequence // ignore: cast_nullable_to_non_nullable
 as int,timestamp: null == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
 as DateTime,level: null == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
 as AppLogLevel,message: null == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
-as String,errorSummary: freezed == errorSummary ? _self.errorSummary : errorSummary // ignore: cast_nullable_to_non_nullable
+as String,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as AppLogSource,target: freezed == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
+as String?,errorSummary: freezed == errorSummary ? _self.errorSummary : errorSummary // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

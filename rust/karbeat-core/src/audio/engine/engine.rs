@@ -456,6 +456,7 @@ impl AudioEngine {
                     id: effect.id,
                     registry_id: effect.registry_id,
                     plugin,
+                    bypass: effect.bypass,
                 })
             })
             .collect()
@@ -588,8 +589,8 @@ impl AudioEngine {
         if self.telemetry.advance(frame_count, self.config.sample_rate) {
             self.emit_all_mixer_snapshots();
             self.emit_plugin_telemetry();
-        }
 
+        }
     }
 
     fn advance_song_playhead(&mut self, frame_count: usize) {
@@ -1421,6 +1422,9 @@ impl AudioEngine {
                         };
                         let mut chain_valid = frames.is_some() || effects.is_empty();
                         for effect in effects.iter_mut() {
+                            if effect.bypass {
+                                continue;
+                            }
                             let sidechain_id = SidechainRoute::BusEffect(*bus_id, effect.id);
                             let aux = self
                                 .workspace
@@ -1633,6 +1637,9 @@ impl AudioEngine {
                 prepare_planar_input(buffer, channels, channel_buffers_in, channel_buffers_out)
             };
             for effect in effects.iter_mut() {
+                if effect.bypass {
+                    continue;
+                }
                 let sidechain_id = SidechainRoute::TrackEffect(track_id, effect.id);
                 let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
@@ -1706,6 +1713,9 @@ impl AudioEngine {
             prepare_planar_input(buffer, channels, channel_buffers_in, channel_buffers_out)
         };
         for effect in master_effects.iter_mut() {
+            if effect.bypass {
+                continue;
+            }
             let sidechain_id = SidechainRoute::MasterEffect(effect.id);
             let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
 
@@ -1945,6 +1955,37 @@ impl AudioEngine {
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency
         );
+    }
+
+    /// Drops modulation links that target `plugin`, together with the automation sources and
+    /// lanes that drove them. Real-time safe: links and sources hold no heap data, and removed
+    /// lanes are retired off the audio thread.
+    pub(super) fn remove_plugin_modulations(&mut self, plugin: PluginTarget) {
+        let mut index = 0;
+        while let Some(link) = self.modulation.active_links.get(index) {
+            if link.target.as_plugin_target() != Some(plugin) {
+                index = index.saturating_add(1);
+                continue;
+            }
+            let link = self.modulation.active_links.remove(index);
+            self.modulation.suspended_targets.remove(&link.target);
+            self.current_state.graph.modulation_links.remove(&link.id);
+
+            let lane_id = match self.modulation.active_sources.get(&link.source_id) {
+                Some((LiveModulationSource::Automation { lane_id }, _)) => Some(*lane_id),
+                _ => None,
+            };
+            if let Some(lane_id) = lane_id {
+                self.modulation.active_sources.remove(&link.source_id);
+                self.current_state
+                    .graph
+                    .modulation_sources
+                    .remove(&link.source_id);
+                if let Some(lane) = self.current_state.graph.automation_lanes.remove(&lane_id) {
+                    self.retire_graph_state(RetiredGraphState::Automation(lane));
+                }
+            }
+        }
     }
 
     pub(super) fn evaluate_pre_block_modulations(&mut self, buffer_size: usize) {

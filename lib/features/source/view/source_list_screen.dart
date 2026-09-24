@@ -2,11 +2,11 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
-import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
@@ -37,31 +37,14 @@ class SourceListScreen extends ConsumerWidget {
     if (path == null || !context.mounted) return;
 
     final projectNotifier = ref.read(projectProvider.notifier);
-    final navigator = Navigator.of(context, rootNavigator: true);
-    final dialog = showDialog<void>(
-      context: context,
-      useRootNavigator: true,
-      barrierDismissible: false,
-      builder: (_) =>
-          const PopScope(canPop: false, child: _AudioImportDialog()),
-    );
+    final importResult = await ref
+        .read(blockingTaskProvider.notifier)
+        .run(
+          label: 'Loading audio...',
+          task: () => projectNotifier.loadAudioSource(path),
+        );
 
-    Result<int>? importResult;
-    try {
-      importResult = await projectNotifier.loadAudioSource(path);
-    } catch (error, stackTrace) {
-      AppLogger.error('Unexpected audio import failure: $error');
-      notifications.error(
-        error,
-        title: 'Could not load audio',
-        stackTrace: stackTrace,
-      );
-    } finally {
-      if (navigator.mounted && navigator.canPop()) navigator.pop();
-      await dialog;
-    }
-
-    if (context.mounted && importResult?.isOk() == true) {
+    if (context.mounted && importResult.isOk()) {
       ref.invalidate(audioSourcesProvider);
     }
   }
@@ -363,29 +346,6 @@ class SourceListScreen extends ConsumerWidget {
           // Extra padding at bottom for FAB
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
-      ),
-    );
-  }
-}
-
-class _AudioImportDialog extends StatelessWidget {
-  const _AudioImportDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Card(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Loading audio...'),
-            ],
-          ),
-        ),
       ),
     );
   }

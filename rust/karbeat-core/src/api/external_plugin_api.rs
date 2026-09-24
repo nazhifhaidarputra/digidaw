@@ -452,7 +452,8 @@ pub fn add_effect(
 }
 
 pub enum RemovedProjectItem {
-    Effect,
+    /// Automation that was removed with the effect in the same staged project.
+    Effect(crate::core::project::RemovedModulations),
     Track(crate::core::project::track::RemovedTrackType),
     Bus,
 }
@@ -514,13 +515,16 @@ pub fn begin_remove_effect(
         EffectTarget::Bus(bus) => PluginTarget::BusEffect(bus, effect),
         EffectTarget::Master => PluginTarget::MasterEffect(effect),
     };
+    // Staged with the effect removal and committed together; the engine's `RemoveEffect`
+    // drops the same modulations in the removal callback.
+    let removed = staged.remove_modulations_for_plugin(target);
     Ok(begin_removal(
         ctx,
         staged,
         vec![target],
         false,
         None,
-        RemovedProjectItem::Effect,
+        RemovedProjectItem::Effect(removed),
     ))
 }
 
@@ -773,11 +777,22 @@ pub fn remove_effect(
     ctx: &mut DawContext,
     target: EffectTarget,
     effect: crate::shared::EffectId,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<crate::core::project::RemovedModulations> {
     let pending = begin_remove_effect(ctx, target, effect)?;
     let completed = execute_removal(pending)?;
-    let _ = commit_removal(ctx, completed);
-    Ok(())
+    effect_removal_result(commit_removal(ctx, completed))
+}
+
+/// Extracts the removed automation from a committed effect removal.
+pub fn effect_removal_result(
+    removed: RemovedProjectItem,
+) -> anyhow::Result<crate::core::project::RemovedModulations> {
+    match removed {
+        RemovedProjectItem::Effect(modulations) => Ok(modulations),
+        RemovedProjectItem::Track(_) | RemovedProjectItem::Bus => {
+            anyhow::bail!("Effect removal transaction returned an incompatible result")
+        }
+    }
 }
 
 pub fn track_targets(ctx: &DawContext, track: crate::shared::TrackId) -> Vec<PluginTarget> {
@@ -811,7 +826,7 @@ pub fn delete_track(
     let completed = execute_removal(pending)?;
     match commit_removal(ctx, completed) {
         RemovedProjectItem::Track(removed) => Ok(removed),
-        RemovedProjectItem::Effect | RemovedProjectItem::Bus => {
+        RemovedProjectItem::Effect(_) | RemovedProjectItem::Bus => {
             anyhow::bail!("Track removal transaction returned an incompatible result")
         }
     }

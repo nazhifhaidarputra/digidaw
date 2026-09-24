@@ -1,7 +1,7 @@
+use crate::api::context::DawContext;
 use crate::api::project::{UiApplicationState, UiTrackType};
 use crate::api::track::UiResizeEdge;
 use crate::api::{pattern::UiNote, project::UiClip};
-use crate::api::context::DawContext;
 use karbeat_core::api::{self, clip_api, clipboard_api, note_api};
 use karbeat_core::core::project::clip::ClipTimeUnit;
 use karbeat_core::core::project::clipboard::ClipboardContent;

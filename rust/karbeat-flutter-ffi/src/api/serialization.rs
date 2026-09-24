@@ -1,5 +1,5 @@
-use crate::api::project::UiApplicationState;
 use crate::api::context::DawContext;
+use crate::api::project::UiApplicationState;
 use karbeat_core::api::project_api;
 
 /// Save the currrent project to path_name
@@ -29,8 +29,8 @@ pub fn load_project(
         .map_err(|error| error.to_string())?;
     let pending = project_api::begin_loaded_project_restore(&operation.read_core(), loaded)
         .map_err(|error| error.to_string())?;
-    let completed = project_api::execute_project_restore(pending)
-        .map_err(|error| error.to_string())?;
+    let completed =
+        project_api::execute_project_restore(pending).map_err(|error| error.to_string())?;
     let ui_state = {
         let mut core = operation.write_core();
         project_api::commit_project_restore(&mut core, completed);

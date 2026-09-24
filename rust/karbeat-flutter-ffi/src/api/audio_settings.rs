@@ -1,3 +1,4 @@
+use crate::api::context::DawContext;
 use flutter_rust_bridge::frb;
 use karbeat_core::{
     api::audio_settings_api,
@@ -6,7 +7,6 @@ use karbeat_core::{
         OutputDeviceSelection, OutputHostSelection, RequestedDspConfig, RequestedOutputConfig,
     },
 };
-use crate::api::context::DawContext;
 
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
@@ -162,12 +162,10 @@ pub fn set_dsp_config(
             );
         }
     }
-    Ok(audio_settings_api::commit_dsp_config(
-        &mut operation.write_core(),
-        sample_rate,
-        block_size,
+    Ok(
+        audio_settings_api::commit_dsp_config(&mut operation.write_core(), sample_rate, block_size)
+            .into(),
     )
-    .into())
 }
 
 pub fn supported_dsp_sample_rates() -> Vec<u32> {

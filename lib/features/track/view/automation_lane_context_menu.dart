@@ -48,9 +48,19 @@ class AutomationLaneContextMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final enabled = entry.lane.enabled;
+    final collapsed = ref.watch(
+      automationLaneLayoutProvider(entry.laneId).select((l) => l.collapsed),
+    );
     return ContextMenuWrapper(
       title: 'Automation: ${entry.lane.label}',
       actions: [
+        DawContextAction(
+          title: collapsed ? 'Expand lane' : 'Shrink lane',
+          icon: collapsed ? Icons.unfold_more : Icons.unfold_less,
+          onTap: () => ref
+              .read(automationProvider.notifier)
+              .toggleAutomationLaneCollapsed(laneId: entry.laneId),
+        ),
         DawContextAction(
           title: enabled ? 'Unlink automation' : 'Relink automation',
           icon: enabled ? Icons.link_off : Icons.link,

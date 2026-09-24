@@ -242,6 +242,34 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     }
   }
 
+  /// Publishes a confirmed effect removal: the new [mixer] and the automation
+  /// Rust removed with it land in one state emission, so listeners never see
+  /// the effect gone while its lanes remain, or the reverse.
+  void commitEffectRemoval({
+    required mixer_api.UiMixerState mixer,
+    required RemovedAutomationDto removedAutomation,
+  }) {
+    if (!state.hasValue) return;
+    final data = state.requireValue;
+    final laneIds = removedAutomation.automationLaneIds.toSet();
+    final sourceIds = removedAutomation.modulationSourceIds.toSet();
+    final linkIds = removedAutomation.modulationLinkIds.toSet();
+    state = AsyncValue.data(
+      data.copyWith(
+        mixer: mixer,
+        automationPool: data.automationPool.removeWhere(
+          (id, _) => laneIds.contains(id),
+        ),
+        modulationSources: data.modulationSources.removeWhere(
+          (id, _) => sourceIds.contains(id),
+        ),
+        modulationLinks: data.modulationLinks.removeWhere(
+          (id, _) => linkIds.contains(id),
+        ),
+      ),
+    );
+  }
+
   void updateMixer(mixer_api.UiMixerState newMixer) {
     if (!state.hasValue) return;
     state = AsyncValue.data(state.requireValue.copyWith(mixer: newMixer));

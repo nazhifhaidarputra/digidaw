@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::api::context::DawContext;
 use flutter_rust_bridge::frb;
 use karbeat_core::{
     core::{
@@ -9,7 +10,6 @@ use karbeat_core::{
     shared::{AudioSourceId, TrackId},
     utils::get_waveform_buffer,
 };
-use crate::api::context::DawContext;
 
 pub use karbeat_core::core::project::AudioWaveform;
 use serde::Serialize;

@@ -48,6 +48,10 @@ abstract class TrackListState with _$TrackListState {
 
     /// Per-track pixel heights for the arranger rows, keyed by track ID.
     @Default(IMapConst<int, int>({})) IMap<int, int> trackIdHeightMap,
+
+    /// Tracks shrunk to a title-only row. Their stored height is kept so
+    /// expanding restores it.
+    @Default(ISetConst<int>({})) ISet<int> collapsedTrackIds,
   }) = _TrackListState;
 }
 
@@ -83,6 +87,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
   static const int minTrackHeight = 48;
   static const int maxTrackHeight = 400;
 
+  /// Height of a shrunk track or automation lane: title row only.
+  static const double collapsedLaneHeight = 24;
+
   /// Sets (upserts) the pixel height of [trackId].
   void changeHeight({required int trackId, required int newHeight}) {
     final clamped = newHeight.clamp(minTrackHeight, maxTrackHeight).toInt();
@@ -98,6 +105,16 @@ class TrackListNotifier extends Notifier<TrackListState> {
     if (state.trackIdHeightMap.get(trackId) == null) return;
     final builder = state.trackIdHeightMap.unlock..remove(trackId);
     state = state.copyWith(trackIdHeightMap: builder.lock);
+  }
+
+  /// Shrinks a track to its title row, or expands it back to its height.
+  void toggleTrackCollapsed({required int trackId}) {
+    final collapsed = state.collapsedTrackIds;
+    state = state.copyWith(
+      collapsedTrackIds: collapsed.contains(trackId)
+          ? collapsed.remove(trackId)
+          : collapsed.add(trackId),
+    );
   }
 
   // ==================================================================
@@ -341,7 +358,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return (() async {
       final result = await ref.guardApi(() async {
         await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
-      _projectNotifierRead.removeTrack(trackId);
+        _projectNotifierRead.removeTrack(trackId);
 
         await ref.read(mixerStateProvider.notifier).syncMixerState();
       });

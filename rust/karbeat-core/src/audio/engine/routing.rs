@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
 
 use crate::{
-    audio::render_state::{AudioGraphState, AudioPluginState},
+    audio::render_state::{AudioEffectInstance, AudioGraphState, AudioPluginState},
     core::project::{RoutingConnection, RoutingNode, SidechainRoute},
     shared::{BusId, TrackId},
 };
@@ -85,7 +85,7 @@ impl RoutingState {
             if let Some(effects) = plugin_state.get_track_effects(track.id.to_u32() as usize) {
                 latency += effects
                     .iter()
-                    .map(|effect| effect.plugin.latency_samples())
+                    .map(AudioEffectInstance::active_latency_samples)
                     .sum::<u32>();
             }
             internal_latency.insert(RoutingNode::Track(track.id), latency);
@@ -97,7 +97,7 @@ impl RoutingState {
                 .map(|effects| {
                     effects
                         .iter()
-                        .map(|effect| effect.plugin.latency_samples())
+                        .map(AudioEffectInstance::active_latency_samples)
                         .sum()
                 })
                 .unwrap_or(0);
@@ -107,7 +107,7 @@ impl RoutingState {
         let master_latency = plugin_state
             .master_effects
             .iter()
-            .map(|effect| effect.plugin.latency_samples())
+            .map(AudioEffectInstance::active_latency_samples)
             .sum();
         internal_latency.insert(RoutingNode::Master, master_latency);
 

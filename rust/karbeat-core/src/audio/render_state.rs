@@ -1,6 +1,6 @@
 use crate::core::project::{
     ApplicationState, AssetLibrary, Clip, GeneratorId, TrackId,
-    automation::{AutomationCurveType, AutomationPoint},
+    automation::{AutomationPoint, interpolate_points},
     mixer::RoutingConnection,
     plugin::AudioPlugin,
     track::{AudioTrack, midi::Pattern},
@@ -31,6 +31,20 @@ pub struct AudioEffectInstance {
     /// Stable plugin type identifier used to create another instance.
     pub registry_id: u32,
     pub plugin: Box<dyn AudioPlugin>,
+    /// Bypassed effects pass audio through untouched and report no latency.
+    pub bypass: bool,
+}
+
+impl AudioEffectInstance {
+    /// Latency this slot adds to its chain; bypassed slots add none.
+    #[inline]
+    pub fn active_latency_samples(&self) -> u32 {
+        if self.bypass {
+            0
+        } else {
+            self.plugin.latency_samples()
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -74,6 +88,8 @@ pub struct EffectPluginSnapshot {
     pub serialized_state: Vec<u8>,
     pub host_instance: Option<karbeat_host::HostInstanceId>,
     pub host_bypass: bool,
+    /// Engine-level bypass applied to the effect slot during offline rendering.
+    pub bypass: bool,
 }
 
 /// Audio thread's owned plugin instances - NO locks required for access
@@ -332,6 +348,7 @@ impl From<&AudioEffectInstance> for EffectPluginSnapshot {
             },
             host_instance,
             host_bypass: hosted.is_some_and(HostedProcessor::is_bypassed),
+            bypass: value.bypass,
         }
     }
 }
@@ -391,56 +408,10 @@ impl AudioAutomationLane {
     /// Returns `default_value` (normalized) if disabled or no points.
     #[inline]
     pub fn value_at_ticks(&self, time_ticks: u32) -> f64 {
-        if !self.enabled || self.points.is_empty() {
+        if !self.enabled {
             return *self.default_value;
         }
-        *interpolate_points(&self.points, time_ticks)
-    }
-}
-
-/// Interpolate sorted automation points at the given time in ticks.
-/// Returns a normalized value (0.0–1.0).
-#[inline]
-fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> NormalizedF64 {
-    // Before first point
-    if time_ticks <= points[0].time_ticks {
-        return points[0].value;
-    }
-
-    // After last point
-    let last = &points[points.len() - 1];
-    if time_ticks >= last.time_ticks {
-        return last.value;
-    }
-
-    // Binary search for the surrounding pair
-    let idx = points
-        .binary_search_by(|p| p.time_ticks.cmp(&time_ticks))
-        .unwrap_or_else(|i| i);
-
-    if idx == 0 {
-        return points[0].value;
-    }
-
-    let p1 = &points[idx - 1];
-    let p2 = &points[idx];
-    let duration = p2.time_ticks.saturating_sub(p1.time_ticks);
-    if duration == 0 {
-        return p1.value;
-    }
-
-    let t = ((time_ticks - p1.time_ticks) as f64) / (duration as f64);
-
-    match p1.curve_type {
-        AutomationCurveType::Linear => {
-            NormalizedF64::new(p1.value.get() + (p2.value.get() - p1.value.get()) * t)
-        }
-        AutomationCurveType::Exponential => {
-            let v1 = p1.value.max(0.0001);
-            let v2 = p2.value.max(0.0001);
-            NormalizedF64::new(v1 * (v2 / v1).powf(t))
-        }
-        AutomationCurveType::Step => p1.value,
+        interpolate_points(&self.points, time_ticks).map_or(*self.default_value, |value| *value)
     }
 }
 

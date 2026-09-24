@@ -6,12 +6,16 @@ class AudioTrackSlot extends ConsumerStatefulWidget {
   final ScrollController horizontalScrollController;
   final int sampleRate;
 
+  /// Shrunk tracks render clips as solid blocks showing only their titles.
+  final bool collapsed;
+
   const AudioTrackSlot({
     super.key,
     required this.trackId,
     required this.height,
     required this.horizontalScrollController,
     required this.sampleRate,
+    this.collapsed = false,
   });
 
   @override
@@ -523,6 +527,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                   color: track.color.fromRGBorRGBAtoColor(),
                   zoomLevel: zoomLevel,
                   height: widget.height,
+                  compact: widget.collapsed,
                   selectedTool: selectedTool,
                   isSelected: isSelected,
                   selectedClipIds: selectedClipIds,
@@ -567,6 +572,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                           scrollController: widget.horizontalScrollController,
                           clipLeftOffset: previewLeft,
                           waveformMap: waveformMap,
+                          compact: widget.collapsed,
                         ),
                       ),
                     ),

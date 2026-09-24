@@ -16,13 +16,13 @@ final logPreferencesServiceProvider = Provider<LogPreferencesService>((ref) {
 });
 
 class LogNotifier extends Notifier<AppLogState> {
-  StreamSubscription<AppLogEntry>? _subscription;
+  StreamSubscription<void>? _subscription;
   bool _initializationStarted = false;
 
   @override
   AppLogState build() {
     final repository = ref.read(appLogRepositoryProvider);
-    _subscription = repository.entriesAdded.listen((entry) {
+    _subscription = repository.changes.listen((_) {
       state = state.copyWith(entries: repository.snapshot);
     });
     ref.onDispose(() => _subscription?.cancel());

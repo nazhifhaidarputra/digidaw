@@ -105,6 +105,25 @@ class AutomationEditorNotifier extends Notifier<AutomationLaneEditorState> {
         );
   }
 
+  /// Sets the tension of the segment that starts at the given point.
+  Future<void> setPointTension({
+    required int laneId,
+    required int pointId,
+    required double tension,
+  }) async {
+    final point = _findPoint(laneId: laneId, pointId: pointId);
+    final clamped = tension.clamp(-1.0, 1.0);
+    if (point == null || point.tension == clamped) return;
+
+    await ref
+        .read(automationProvider.notifier)
+        .updatePoint(
+          automationLaneId: laneId,
+          pointId: pointId,
+          tension: clamped,
+        );
+  }
+
   AutomationPointDto? _findPoint({required int laneId, required int pointId}) {
     final lane = ref.read(projectProvider).value?.automationPool[laneId];
     return lane?.points.where((p) => p.id == pointId).firstOrNull;

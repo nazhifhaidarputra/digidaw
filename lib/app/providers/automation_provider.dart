@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -25,6 +26,12 @@ abstract class AutomationDataState with _$AutomationDataState {
 
     /// Optional: Tracks the currently selected/highlighted automation lane in the UI
     int? selectedAutomationLaneId,
+
+    /// Per-lane pixel heights, keyed by automation lane ID.
+    @Default(IMapConst<int, int>({})) IMap<int, int> automationLaneHeights,
+
+    /// Automation lanes shrunk to a title-only row.
+    @Default(ISetConst<int>({})) ISet<int> collapsedAutomationLaneIds,
   }) = _AutomationDataState;
 }
 
@@ -35,18 +42,48 @@ typedef ChannelAutomationEntry = ({
   AutomationLaneDto lane,
 });
 
-/// A generator parameter paired with its current automation availability.
-final class GeneratorAutomationCandidate {
-  /// The unified parameter metadata exposed by the generator plugin.
+/// A plugin parameter paired with its current automation availability.
+final class PluginAutomationCandidate {
+  /// The unified parameter metadata exposed by the plugin.
   final plugin_api.UiPluginParameter parameter;
 
   /// Whether an automation source already controls this exact parameter.
   final bool alreadyAutomated;
 
-  const GeneratorAutomationCandidate({
+  const PluginAutomationCandidate({
     required this.parameter,
     required this.alreadyAutomated,
   });
+}
+
+/// Maps a plugin parameter to the automation target the engine applies it to.
+AutomationTargetDto automationTargetForPluginParameter(
+  plugin_api.UiPluginTarget target,
+  int paramId,
+) {
+  MixerChannelParamTargetDto effectParam(int effectId) =>
+      MixerChannelParamTargetDto.plugin(
+        effectId: effectId,
+        target: EffectAutomationTargetDto.pluginParam(paramId: paramId),
+      );
+
+  return switch (target) {
+    plugin_api.UiPluginTarget_Generator(:final field0) =>
+      AutomationTargetDto.generator(generatorId: field0, paramId: paramId),
+    plugin_api.UiPluginTarget_TrackEffect(:final trackId, :final effectId) =>
+      AutomationTargetDto.track(
+        trackId: trackId,
+        trackTarget: TrackAutomationTargetDto.mixerChannel(
+          effectParam(effectId),
+        ),
+      ),
+    plugin_api.UiPluginTarget_BusEffect(:final busId, :final effectId) =>
+      AutomationTargetDto.bus(busId: busId, mixTarget: effectParam(effectId)),
+    plugin_api.UiPluginTarget_MasterEffect(:final field0) =>
+      AutomationTargetDto.master(
+        MasterAutomationTargetDto.mixerChannel(effectParam(field0)),
+      ),
+  };
 }
 
 class AutomationNotifier extends Notifier<AutomationDataState> {
@@ -98,6 +135,53 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
 
   void selectAutomationLane(int? laneId) {
     state = state.copyWith(selectedAutomationLaneId: laneId);
+  }
+
+  static const int defaultLaneHeight = 60;
+  static const int minLaneHeight = 36;
+  static const int maxLaneHeight = 300;
+
+  /// Sets (upserts) the pixel height of an automation lane.
+  void changeAutomationLaneHeight({
+    required int laneId,
+    required int newHeight,
+  }) {
+    final clamped = newHeight.clamp(minLaneHeight, maxLaneHeight).toInt();
+    if (state.automationLaneHeights.get(laneId) == clamped) return;
+    state = state.copyWith(
+      automationLaneHeights: state.automationLaneHeights.add(laneId, clamped),
+    );
+  }
+
+  /// Removes the override so the lane falls back to the default height.
+  void resetAutomationLaneHeight({required int laneId}) {
+    if (state.automationLaneHeights.get(laneId) == null) return;
+    state = state.copyWith(
+      automationLaneHeights: state.automationLaneHeights.remove(laneId),
+    );
+  }
+
+  /// Shrinks an automation lane to its title row, or expands it back.
+  void toggleAutomationLaneCollapsed({required int laneId}) {
+    final collapsed = state.collapsedAutomationLaneIds;
+    state = state.copyWith(
+      collapsedAutomationLaneIds: collapsed.contains(laneId)
+          ? collapsed.remove(laneId)
+          : collapsed.add(laneId),
+    );
+  }
+
+  /// Expands a bus automation drawer without collapsing an open drawer.
+  void ensureBusAutomationExpanded(int busId) {
+    final collapsed = state.collapsedBusAutomations;
+    if (!collapsed.contains(busId)) return;
+    state = state.copyWith(collapsedBusAutomations: collapsed.remove(busId));
+  }
+
+  /// Opens the master automation drawer without closing it.
+  void ensureMasterAutomationDrawerOpened() {
+    if (state.isMasterAutomationDrawerOpened) return;
+    state = state.copyWith(isMasterAutomationDrawerOpened: true);
   }
 
   // =========================================================================
@@ -178,21 +262,41 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     }
   }
 
-  /// Creates automation for one generator parameter through the generic path.
-  Future<AsyncValue<void>> handleAddGeneratorParameterAutomation({
-    required int generatorId,
+  /// Creates automation for one generator or effect parameter through the
+  /// generic path, then reveals the drawer that shows the new lane.
+  Future<AsyncValue<void>> handleAddPluginParameterAutomation({
+    required plugin_api.UiPluginTarget target,
     required plugin_api.UiPluginParameter parameter,
-  }) {
-    return handleAddAutomationForTarget(
-      target: AutomationTargetDto.generator(
-        generatorId: generatorId,
-        paramId: parameter.id,
-      ),
+  }) async {
+    final result = await handleAddAutomationForTarget(
+      target: automationTargetForPluginParameter(target, parameter.id),
       label: parameter.name,
       min: parameter.min,
       max: parameter.max,
       initialValue: parameter.value.clamp(parameter.min, parameter.max),
     );
+    if (result.hasValue) _revealDrawerFor(target);
+    return result;
+  }
+
+  void _revealDrawerFor(plugin_api.UiPluginTarget target) {
+    switch (target) {
+      case plugin_api.UiPluginTarget_Generator(:final field0):
+        final track = ref
+            .read(projectProvider)
+            .value
+            ?.tracks
+            .values
+            .where((track) => track.generatorId == field0)
+            .firstOrNull;
+        if (track != null) ensureTrackAutomationExpanded(track.id);
+      case plugin_api.UiPluginTarget_TrackEffect(:final trackId):
+        ensureTrackAutomationExpanded(trackId);
+      case plugin_api.UiPluginTarget_BusEffect(:final busId):
+        ensureBusAutomationExpanded(busId);
+      case plugin_api.UiPluginTarget_MasterEffect():
+        ensureMasterAutomationDrawerOpened();
+    }
   }
 
   /// Enables or disables a lane while retaining its source, link, and points.
@@ -481,6 +585,32 @@ final trackAutomationExpandedProvider = Provider.family<bool, int>((
   return !collapsed.contains(trackId);
 });
 
+/// Layout of one automation lane row: whether it is shrunk, and its height.
+typedef AutomationLaneLayout = ({bool collapsed, double height});
+
+/// Effective layout for an automation lane, shared by its header and slot so
+/// both sides of the arranger stay aligned.
+final automationLaneLayoutProvider = Provider.family<AutomationLaneLayout, int>(
+  (ref, laneId) {
+    final collapsed = ref.watch(
+      automationProvider.select(
+        (s) => s.collapsedAutomationLaneIds.contains(laneId),
+      ),
+    );
+    if (collapsed) {
+      return (collapsed: true, height: TrackListNotifier.collapsedLaneHeight);
+    }
+    final height = ref.watch(
+      automationProvider.select(
+        (s) =>
+            s.automationLaneHeights.get(laneId) ??
+            AutomationNotifier.defaultLaneHeight,
+      ),
+    );
+    return (collapsed: false, height: height.toDouble());
+  },
+);
+
 /// Tracks whether a bus's automation accordion is expanded.
 /// Defaults to true unless explicitly collapsed in the AutomationDataState.
 final busAutomationExpandedProvider = Provider.family<bool, int>((ref, busId) {
@@ -684,9 +814,13 @@ final masterAutomationProvider = Provider<List<ChannelAutomationEntry>>((ref) {
   return lanes;
 });
 
-/// Loads generator parameters and marks those with an existing automation lane.
-final generatorAutomationCandidatesProvider = FutureProvider.autoDispose
-    .family<List<GeneratorAutomationCandidate>, int>((ref, generatorId) async {
+/// Loads a plugin's automatable parameters and marks those that already have
+/// an automation lane.
+final pluginAutomationCandidatesProvider = FutureProvider.autoDispose
+    .family<List<PluginAutomationCandidate>, plugin_api.UiPluginTarget>((
+      ref,
+      target,
+    ) async {
       final projectData = ref.watch(projectProvider).value;
       if (projectData == null) {
         throw StateError('Project state is missing');
@@ -695,27 +829,22 @@ final generatorAutomationCandidatesProvider = FutureProvider.autoDispose
       final ctx = ref.read(projectProvider.notifier).dawContext;
       final parameters = await plugin_api.getAutomatablePluginParameterSpecs(
         ctx: ctx,
-        target: plugin_api.UiPluginTarget.generator(generatorId),
+        target: target,
       );
-      final automatedParameterIds = <int>{};
-
-      for (final link in projectData.modulationLinks.values) {
-        final target = link.target;
-        if (target is! AutomationTargetDto_Generator ||
-            target.generatorId != generatorId) {
-          continue;
-        }
-        if (projectData.modulationSources[link.sourceId]
-            is ModulationSourceDto_Automation) {
-          automatedParameterIds.add(target.paramId);
-        }
-      }
+      final automatedTargets = <AutomationTargetDto>{
+        for (final link in projectData.modulationLinks.values)
+          if (projectData.modulationSources[link.sourceId]
+              is ModulationSourceDto_Automation)
+            link.target,
+      };
 
       final candidates = parameters
           .map(
-            (parameter) => GeneratorAutomationCandidate(
+            (parameter) => PluginAutomationCandidate(
               parameter: parameter,
-              alreadyAutomated: automatedParameterIds.contains(parameter.id),
+              alreadyAutomated: automatedTargets.contains(
+                automationTargetForPluginParameter(target, parameter.id),
+              ),
             ),
           )
           .toList();

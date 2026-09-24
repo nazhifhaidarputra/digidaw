@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'plugin.dart';
@@ -106,7 +107,7 @@ Future<void> addEffectToMixerChannelById({
   registryId: registryId,
 );
 
-Future<void> removeEffectFromMixerChannel({
+Future<RemovedAutomationDto> removeEffectFromMixerChannel({
   required DawContext ctx,
   required int trackId,
   required int effectInstanceId,
@@ -128,7 +129,22 @@ Future<void> moveEffectOrder({
   newPosition: newPosition,
 );
 
-Future<void> removeEffectFromTargetMixerChannel({
+/// Enables or bypasses an effect slot in a track, bus, or master chain.
+Future<void> setEffectBypass({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required int effectInstanceId,
+  required bool bypass,
+}) => RustLib.instance.api.crateApiMixerSetEffectBypass(
+  ctx: ctx,
+  target: target,
+  effectInstanceId: effectInstanceId,
+  bypass: bypass,
+);
+
+/// Removes an effect and the automation lanes that drive it in one transaction, returning
+/// the removed automation IDs so the UI can prune the same entries.
+Future<RemovedAutomationDto> removeEffectFromTargetMixerChannel({
   required DawContext ctx,
   required UiMixerChannelTarget target,
   required int effectInstanceId,
@@ -146,7 +162,7 @@ Future<void> addEffectToMasterBus({
   registryId: registryId,
 );
 
-Future<void> removeEffectFromMasterBus({
+Future<RemovedAutomationDto> removeEffectFromMasterBus({
   required DawContext ctx,
   required int effectInstanceId,
 }) => RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(
@@ -310,14 +326,19 @@ class UiEffectSummary {
   final int registryId;
   final String name;
 
+  /// Whether the effect slot passes audio through untouched.
+  final bool bypass;
+
   const UiEffectSummary({
     required this.id,
     required this.registryId,
     required this.name,
+    required this.bypass,
   });
 
   @override
-  int get hashCode => id.hashCode ^ registryId.hashCode ^ name.hashCode;
+  int get hashCode =>
+      id.hashCode ^ registryId.hashCode ^ name.hashCode ^ bypass.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -326,7 +347,8 @@ class UiEffectSummary {
           runtimeType == other.runtimeType &&
           id == other.id &&
           registryId == other.registryId &&
-          name == other.name;
+          name == other.name &&
+          bypass == other.bypass;
 }
 
 /// UI representation of a mixer channel.

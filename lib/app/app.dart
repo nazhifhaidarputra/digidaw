@@ -8,7 +8,9 @@ import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/input/input.dart';
+import 'package:karbeat/core/services/rust_log_bridge.dart';
 import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/widgets/blocking_task_overlay.dart';
 import 'package:karbeat/core/widgets/notification_overlay.dart';
 import 'package:karbeat/features/misc/error_init_screen.dart';
 import 'package:karbeat/features/misc/loading_screen.dart';
@@ -97,6 +99,12 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
       ]);
 
       if (!mounted) return;
+      final rustLogs = ref.read(rustLogBridgeProvider).start();
+      if (rustLogs.isErr()) {
+        AppLogger.warn(
+          'Rust logs are unavailable in the log viewer: ${rustLogs.err()}',
+        );
+      }
 
       // ProjectNotifier creates DawContext before its first asynchronous FFI
       // call. Awaiting the provider makes that context fully usable before any
@@ -210,6 +218,10 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
   }
 
   Widget _notificationBuilder(BuildContext context, Widget? child) {
-    return NotificationOverlay(child: child ?? const SizedBox.shrink());
+    // Notifications stay above the blocking barrier so timeouts and failures
+    // remain visible while the UI is blocked.
+    return NotificationOverlay(
+      child: BlockingTaskOverlay(child: child ?? const SizedBox.shrink()),
+    );
   }
 }

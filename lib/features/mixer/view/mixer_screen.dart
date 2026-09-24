@@ -5,12 +5,14 @@ import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/widgets/channel_toggle_button.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
+import 'package:karbeat/features/track/view/plugin_automation_parameter_dialog.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' hide removeRouting;
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -636,13 +638,17 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               children: [
                 Icon(Icons.blur_on, color: colors.primary, size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  '$channelName Effects',
-                  style: TextStyle(
-                    color: colors.onSurface,
-                    fontWeight: FontWeight.bold,
-                    backgroundColor: Colors.transparent,
-                    fontSize: 14,
+                Expanded(
+                  child: Text(
+                    '$channelName Effects',
+                    style: TextStyle(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.bold,
+                      backgroundColor: Colors.transparent,
+                      fontSize: 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -679,79 +685,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       return Padding(
                         key: ValueKey(effect.id),
                         padding: const EdgeInsets.only(bottom: 8),
-                        child: Material(
-                          color: colors.surfaceContainer,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            side: BorderSide(color: colors.outlineVariant),
-                          ),
-                          child: ListTile(
-                            dense: true,
-                            title: Text(
-                              effect.name,
-                              style: TextStyle(color: colors.onSurface),
-                            ),
-                            subtitle: Text(
-                              'ID: ${effect.id}',
-                              style: TextStyle(color: colors.onSurfaceVariant),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Remove effect',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: () {
-                                    ref
-                                        .read(mixerStateProvider.notifier)
-                                        .removeEffectFromTargetMixerChannel(
-                                          target: channelTarget,
-                                          effectId: effect.id,
-                                        );
-                                  },
-                                  icon: Icon(
-                                    Icons.close,
-                                    color: colors.error,
-                                    size: 16,
-                                  ),
-                                ),
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8),
-                                    child: Icon(
-                                      Icons.drag_handle,
-                                      color: colors.onSurfaceVariant,
-                                      size: 18,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            onTap: () async {
-                              final target = isMaster
-                                  ? plugin_api.UiPluginTarget.masterEffect(
-                                      effect.id,
-                                    )
-                                  : _isSelectedBus
-                                  ? plugin_api.UiPluginTarget.busEffect(
-                                      busId: _selectedChannelId!,
-                                      effectId: effect.id,
-                                    )
-                                  : plugin_api.UiPluginTarget.trackEffect(
-                                      trackId: _selectedChannelId!,
-                                      effectId: effect.id,
-                                    );
-                              await openPluginInterface(
-                                context: context,
-                                ref: ref,
-                                target: target,
-                                registryId: effect.registryId,
-                                instanceId: effect.id,
-                                pluginName: effect.name,
-                              );
-                            },
-                          ),
+                        child: _EffectRackItem(
+                          effect: effect,
+                          index: index,
+                          channelTarget: channelTarget,
+                          pluginTarget: _effectPluginTarget(effect.id),
                         ),
                       );
                     },
@@ -775,6 +713,22 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Plugin target of an effect in the currently selected channel.
+  plugin_api.UiPluginTarget _effectPluginTarget(int effectId) {
+    final isMaster = _selectedChannelId == -1 && !_isSelectedBus;
+    if (isMaster) return plugin_api.UiPluginTarget.masterEffect(effectId);
+    if (_isSelectedBus) {
+      return plugin_api.UiPluginTarget.busEffect(
+        busId: _selectedChannelId!,
+        effectId: effectId,
+      );
+    }
+    return plugin_api.UiPluginTarget.trackEffect(
+      trackId: _selectedChannelId!,
+      effectId: effectId,
     );
   }
 
@@ -808,6 +762,155 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
             .read(mixerStateProvider.notifier)
             .addEffectToMixerChannel(channelId, plugin.registryId);
       },
+    );
+  }
+}
+
+// =========================================================
+// Effect Rack Item
+// =========================================================
+
+/// One effect slot in the rack: opens the plugin on tap, toggles bypass,
+/// and offers slot actions from its context menu.
+class _EffectRackItem extends ConsumerWidget {
+  final UiEffectSummary effect;
+  final int index;
+  final mixer_api.UiMixerChannelTarget channelTarget;
+  final plugin_api.UiPluginTarget pluginTarget;
+
+  const _EffectRackItem({
+    required this.effect,
+    required this.index,
+    required this.channelTarget,
+    required this.pluginTarget,
+  });
+
+  Future<void> _openPlugin(BuildContext context, WidgetRef ref) {
+    return openPluginInterface(
+      context: context,
+      ref: ref,
+      target: pluginTarget,
+      registryId: effect.registryId,
+      instanceId: effect.id,
+      pluginName: effect.name,
+    );
+  }
+
+  void _setBypass(WidgetRef ref, bool bypass) {
+    ref
+        .read(mixerStateProvider.notifier)
+        .setEffectBypass(
+          target: channelTarget,
+          effectId: effect.id,
+          bypass: bypass,
+        );
+  }
+
+  void _remove(WidgetRef ref) {
+    ref
+        .read(mixerStateProvider.notifier)
+        .removeEffectFromTargetMixerChannel(
+          target: channelTarget,
+          effectId: effect.id,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final enabled = !effect.bypass;
+
+    return ContextMenuWrapper(
+      title: effect.name,
+      actions: [
+        DawContextAction(
+          title: 'Open plugin',
+          icon: Icons.open_in_new,
+          onTap: () => _openPlugin(context, ref),
+        ),
+        DawContextAction(
+          title: 'Add automation on...',
+          icon: Icons.timeline,
+          onTap: () => showPluginAutomationParameterDialog(
+            context: context,
+            target: pluginTarget,
+            ownerName: effect.name,
+          ),
+        ),
+        DawContextAction(
+          title: enabled ? 'Bypass effect' : 'Enable effect',
+          icon: enabled ? Icons.power_off : Icons.power_settings_new,
+          onTap: () => _setBypass(ref, enabled),
+        ),
+        DawContextAction(
+          title: 'Remove effect',
+          icon: Icons.delete_outline,
+          isDestructive: true,
+          onTap: () => _remove(ref),
+        ),
+      ],
+      child: Material(
+        color: enabled
+            ? colors.surfaceContainer
+            : colors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: BorderSide(color: colors.outlineVariant),
+        ),
+        child: ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.only(left: 4, right: 4),
+          leading: IconButton(
+            tooltip: enabled ? 'Bypass effect' : 'Enable effect',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _setBypass(ref, enabled),
+            icon: Icon(
+              Icons.power_settings_new,
+              color: enabled ? colors.primary : colors.outline,
+              size: 16,
+            ),
+          ),
+          minLeadingWidth: 0,
+          horizontalTitleGap: 0,
+          title: Text(
+            effect.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: enabled ? colors.onSurface : colors.onSurfaceVariant,
+            ),
+          ),
+          subtitle: Text(
+            enabled ? 'ID: ${effect.id}' : 'Bypassed · ID: ${effect.id}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: colors.onSurfaceVariant),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Remove effect',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _remove(ref),
+                icon: Icon(Icons.close, color: colors.error, size: 16),
+              ),
+              ReorderableDragStartListener(
+                index: index,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.drag_handle,
+                    color: colors.onSurfaceVariant,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          onTap: () => _openPlugin(context, ref),
+        ),
+      ),
     );
   }
 }
@@ -1100,14 +1203,14 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _ToggleButton(
+                ChannelToggleButton(
                   label: 'M',
                   isActive: entry.channel.mute,
                   activeColor: colors.error,
                   onTap: widget.onMuteToggled,
                 ),
                 const SizedBox(width: 4),
-                _ToggleButton(
+                ChannelToggleButton(
                   label: 'S',
                   isActive: entry.channel.solo,
                   activeColor: colors.tertiary,
@@ -1342,55 +1445,6 @@ class _VolumeFader extends ConsumerWidget {
 // =========================================================
 // Small Toggle Button (Mute / Solo)
 // =========================================================
-
-class _ToggleButton extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final Color activeColor;
-  final VoidCallback onTap;
-
-  const _ToggleButton({
-    required this.label,
-    required this.isActive,
-    required this.activeColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final activeForeground =
-        ThemeData.estimateBrightnessForColor(activeColor) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 26,
-        height: 22,
-        decoration: BoxDecoration(
-          color: isActive
-              ? activeColor.withValues(alpha: 0.85)
-              : colors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: isActive ? activeColor : colors.outlineVariant,
-            width: 1,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isActive ? activeForeground : colors.onSurfaceVariant,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _RoutingPainter extends CustomPainter {
   final List<mixer_api.UiRoutingConnection> routing;

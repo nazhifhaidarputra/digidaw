@@ -10,7 +10,7 @@ import 'plugin.dart';
 import 'project.dart';
 part 'automation.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
@@ -337,6 +337,16 @@ sealed class ModulationSourceDto with _$ModulationSourceDto {
       ModulationSourceDto_Automation;
   const factory ModulationSourceDto.lfo({required double rateHz}) =
       ModulationSourceDto_Lfo;
+}
+
+/// Automation removed as part of another project operation, such as deleting an effect.
+@freezed
+sealed class RemovedAutomationDto with _$RemovedAutomationDto {
+  const factory RemovedAutomationDto({
+    required List<int> automationLaneIds,
+    required List<int> modulationSourceIds,
+    required List<int> modulationLinkIds,
+  }) = _RemovedAutomationDto;
 }
 
 @freezed

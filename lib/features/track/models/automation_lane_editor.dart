@@ -28,3 +28,12 @@ abstract class AutomationLaneEditorState with _$AutomationLaneEditorState {
 }
 
 typedef AutomationPointHitbox = ({int pointId, Rect rect, Offset center});
+
+/// Hit area of the tension handle drawn at a segment midpoint. [pointId] is
+/// the segment's first point, which owns the curve type and tension.
+typedef AutomationTensionHitbox = ({
+  int pointId,
+  int nextPointId,
+  Rect rect,
+  Offset center,
+});

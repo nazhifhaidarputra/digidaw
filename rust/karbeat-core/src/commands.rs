@@ -206,6 +206,15 @@ pub enum AudioCommand {
         /// Destination zero-based chain index, clamped or validated by the handler.
         new_position: usize,
     },
+    /// Enables or bypasses an effect slot without removing it from the chain.
+    SetEffectBypass {
+        /// Effect chain containing the instance.
+        target: EffectTarget,
+        /// Effect whose bypass state changes.
+        effect_id: EffectId,
+        /// `true` passes audio through the slot untouched.
+        bypass: bool,
+    },
 
     /// Request parameter feedback for a target effect (triggers EffectParameterSnapshot response)
     QueryEffectParameters {

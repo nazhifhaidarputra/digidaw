@@ -399,16 +399,111 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   /// Maps a Y offset (scroll offset included) to the index of the track
   /// occupying it, taking per-track heights into account.
   int _trackIndexAtY(double y) {
-    final heights = ref.read(trackListStateProvider).trackIdHeightMap;
+    final trackListState = ref.read(trackListStateProvider);
     final trackIds = _trackOrderController.value;
     if (trackIds.isEmpty) return 0;
     double top = 0;
     for (var i = 0; i < trackIds.length; i++) {
-      final h = (heights.get(trackIds[i]) ?? widget.itemHeight).toDouble();
+      final h = _trackHeightOf(trackListState, trackIds[i]);
       if (y < top + h) return i;
       top += h;
     }
     return trackIds.length - 1;
+  }
+
+  /// Effective arranger row height of a track, honoring shrunk tracks.
+  double _trackHeightOf(TrackListState state, int trackId) =>
+      state.collapsedTrackIds.contains(trackId)
+      ? TrackListNotifier.collapsedLaneHeight
+      : (state.trackIdHeightMap.get(trackId) ?? widget.itemHeight).toDouble();
+
+  /// Header side of one automation lane. Mirrors
+  /// [_buildAutomationLaneTimelineRow] so both sides share the same height.
+  Widget _buildAutomationLaneHeaderRow(
+    ChannelAutomationEntry entry,
+    Color trackColor,
+  ) {
+    return Consumer(
+      key: ValueKey(('automation-header', entry.laneId)),
+      builder: (context, ref, _) {
+        final layout = ref.watch(automationLaneLayoutProvider(entry.laneId));
+        final notifier = ref.read(automationProvider.notifier);
+        return Stack(
+          children: [
+            AutomationLaneContextMenu(
+              entry: entry,
+              child: AutomationLaneHeader(
+                lane: entry.lane,
+                itemHeight: layout.height,
+                trackColor: trackColor,
+                collapsed: layout.collapsed,
+                onToggleCollapsed: () => notifier.toggleAutomationLaneCollapsed(
+                  laneId: entry.laneId,
+                ),
+                onToggleEnabled: () => notifier.handleSetAutomationLaneEnabled(
+                  laneId: entry.laneId,
+                  enabled: !entry.lane.enabled,
+                ),
+              ),
+            ),
+            if (!layout.collapsed)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: HeaderResizeHandle(
+                  onDelta: (dy) => notifier.changeAutomationLaneHeight(
+                    laneId: entry.laneId,
+                    newHeight:
+                        (ref
+                                    .read(
+                                      automationLaneLayoutProvider(
+                                        entry.laneId,
+                                      ),
+                                    )
+                                    .height +
+                                dy)
+                            .round(),
+                  ),
+                  onReset: () =>
+                      notifier.resetAutomationLaneHeight(laneId: entry.laneId),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Timeline side of one automation lane; shrunk lanes show only a title.
+  Widget _buildAutomationLaneTimelineRow(
+    ChannelAutomationEntry entry,
+    Color trackColor,
+    int sampleRate,
+  ) {
+    return Consumer(
+      key: ValueKey(('automation-timeline', entry.laneId)),
+      builder: (context, ref, _) {
+        final layout = ref.watch(automationLaneLayoutProvider(entry.laneId));
+        return AutomationLaneContextMenu(
+          entry: entry,
+          child: layout.collapsed
+              ? AutomationLaneCollapsedSlot(
+                  lane: entry.lane,
+                  height: layout.height,
+                  horizontalScrollController: _trackContentController,
+                  trackColor: trackColor,
+                )
+              : AutomationLaneSlot(
+                  lane: entry.lane,
+                  height: layout.height,
+                  horizontalScrollController: _trackContentController,
+                  trackColor: trackColor,
+                  sampleRate: sampleRate,
+                ),
+        );
+      },
+    );
   }
 
   Widget _buildHeaderArea() {
@@ -476,9 +571,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           );
 
           final height = ref.watch(
+            trackListStateProvider.select((s) => _trackHeightOf(s, trackId)),
+          );
+          final isCollapsed = ref.watch(
             trackListStateProvider.select(
-              (s) => (s.trackIdHeightMap.get(trackId) ?? widget.itemHeight)
-                  .toDouble(),
+              (s) => s.collapsedTrackIds.contains(trackId),
             ),
           );
 
@@ -492,15 +589,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     onDragStarted: () => _startTrackDrag(trackId),
                     onDragEnded: _endTrackDrag,
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: HeaderResizeHandle(
-                      onDelta: (dy) => _onHeaderResize(trackId, dy),
-                      onReset: () => _onHeaderResizeReset(trackId),
+                  if (!isCollapsed)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: HeaderResizeHandle(
+                        onDelta: (dy) => _onHeaderResize(trackId, dy),
+                        onReset: () => _onHeaderResizeReset(trackId),
+                      ),
                     ),
-                  ),
                 ],
               ),
               if (lanes.isNotEmpty)
@@ -514,20 +612,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 ),
               if (isExpanded)
                 ...lanes.map(
-                  (entry) => AutomationLaneContextMenu(
-                    entry: entry,
-                    child: AutomationLaneHeader(
-                      lane: entry.lane,
-                      itemHeight: 60,
-                      trackColor: trackColor,
-                      onToggleEnabled: () => ref
-                          .read(automationProvider.notifier)
-                          .handleSetAutomationLaneEnabled(
-                            laneId: entry.laneId,
-                            enabled: !entry.lane.enabled,
-                          ),
-                    ),
-                  ),
+                  (entry) => _buildAutomationLaneHeaderRow(entry, trackColor),
                 ),
             ],
           );
@@ -645,20 +730,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ...lanes.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 4.0),
-                  child: AutomationLaneContextMenu(
-                    entry: entry,
-                    child: AutomationLaneHeader(
-                      lane: entry.lane,
-                      itemHeight: 60,
-                      trackColor: trackColor,
-                      onToggleEnabled: () => ref
-                          .read(automationProvider.notifier)
-                          .handleSetAutomationLaneEnabled(
-                            laneId: entry.laneId,
-                            enabled: !entry.lane.enabled,
-                          ),
-                    ),
-                  ),
+                  child: _buildAutomationLaneHeaderRow(entry, trackColor),
                 ),
               ),
           ],
@@ -1062,8 +1134,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
               final height = ref.watch(
                 trackListStateProvider.select(
-                  (s) => (s.trackIdHeightMap.get(trackId) ?? widget.itemHeight)
-                      .toDouble(),
+                  (s) => _trackHeightOf(s, trackId),
+                ),
+              );
+              final isCollapsed = ref.watch(
+                trackListStateProvider.select(
+                  (s) => s.collapsedTrackIds.contains(trackId),
                 ),
               );
 
@@ -1074,6 +1150,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   AudioTrackSlot(
                     trackId: trackId,
                     height: height,
+                    collapsed: isCollapsed,
                     horizontalScrollController: _trackContentController,
                     sampleRate: sr,
                   ),
@@ -1088,15 +1165,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     ),
                   if (isExpanded)
                     ...lanes.map(
-                      (entry) => AutomationLaneContextMenu(
-                        entry: entry,
-                        child: AutomationLaneSlot(
-                          lane: entry.lane,
-                          height: 60,
-                          horizontalScrollController: _trackContentController,
-                          trackColor: trackColor,
-                          sampleRate: sr,
-                        ),
+                      (entry) => _buildAutomationLaneTimelineRow(
+                        entry,
+                        trackColor,
+                        sr,
                       ),
                     ),
                 ],
@@ -1137,16 +1209,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ...lanes.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 4.0),
-                  child: AutomationLaneContextMenu(
-                    entry: entry,
-                    child: AutomationLaneSlot(
-                      lane: entry.lane,
-                      height: 60,
-                      horizontalScrollController: _trackContentController,
-                      trackColor: trackColor,
-                      sampleRate: sr,
-                    ),
-                  ),
+                  child: _buildAutomationLaneTimelineRow(entry, trackColor, sr),
                 ),
               ),
           ],
@@ -1286,19 +1349,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       ...lanes.map(
                         (entry) => Padding(
                           padding: const EdgeInsets.only(top: 4.0),
-                          child: AutomationLaneContextMenu(
-                            entry: entry,
-                            child: AutomationLaneHeader(
-                              lane: entry.lane,
-                              itemHeight: 60,
-                              trackColor: trackColor,
-                              onToggleEnabled: () => ref
-                                  .read(automationProvider.notifier)
-                                  .handleSetAutomationLaneEnabled(
-                                    laneId: entry.laneId,
-                                    enabled: !entry.lane.enabled,
-                                  ),
-                            ),
+                          child: _buildAutomationLaneHeaderRow(
+                            entry,
+                            trackColor,
                           ),
                         ),
                       ),
@@ -1357,16 +1410,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       ...lanes.map(
                         (entry) => Padding(
                           padding: const EdgeInsets.only(top: 4.0),
-                          child: AutomationLaneContextMenu(
-                            entry: entry,
-                            child: AutomationLaneSlot(
-                              lane: entry.lane,
-                              height: 60,
-                              horizontalScrollController:
-                                  _trackContentController,
-                              trackColor: trackColor,
-                              sampleRate: sr,
-                            ),
+                          child: _buildAutomationLaneTimelineRow(
+                            entry,
+                            trackColor,
+                            sr,
                           ),
                         ),
                       ),

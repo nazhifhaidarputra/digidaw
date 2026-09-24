@@ -10,6 +10,7 @@ import 'api/audio.dart';
 import 'api/audio_settings.dart';
 import 'api/automation.dart';
 import 'api/external_plugins.dart';
+import 'api/logging.dart';
 import 'api/mixer.dart';
 import 'api/monitor.dart';
 import 'api/pattern.dart';
@@ -202,6 +203,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw);
+
+  @protected
+  RustStreamSink<List<RustLogEntryDto>>
+  dco_decode_StreamSink_list_rust_log_entry_dto_Sse(dynamic raw);
 
   @protected
   RustStreamSink<PerformanceMetricsDTO>
@@ -524,6 +529,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<RustLogEntryDto> dco_decode_list_rust_log_entry_dto(dynamic raw);
+
+  @protected
   List<UiAudioHostInfo> dco_decode_list_ui_audio_host_info(dynamic raw);
 
   @protected
@@ -789,6 +797,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   (UiMixerChannel, List<UiEffectInstance>)
   dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw);
+
+  @protected
+  RemovedAutomationDto dco_decode_removed_automation_dto(dynamic raw);
+
+  @protected
+  RustLogEntryDto dco_decode_rust_log_entry_dto(dynamic raw);
+
+  @protected
+  RustLogLevel dco_decode_rust_log_level(dynamic raw);
 
   @protected
   TailHandlingDTO dco_decode_tail_handling_dto(dynamic raw);
@@ -1134,6 +1151,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<double> sse_decode_StreamSink_f_32_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<List<RustLogEntryDto>>
+  sse_decode_StreamSink_list_rust_log_entry_dto_Sse(
     SseDeserializer deserializer,
   );
 
@@ -1524,6 +1547,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<RustLogEntryDto> sse_decode_list_rust_log_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiAudioHostInfo> sse_decode_list_ui_audio_host_info(
     SseDeserializer deserializer,
   );
@@ -1847,6 +1875,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_record_ui_mixer_channel_list_ui_effect_instance(
     SseDeserializer deserializer,
   );
+
+  @protected
+  RemovedAutomationDto sse_decode_removed_automation_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustLogEntryDto sse_decode_rust_log_entry_dto(SseDeserializer deserializer);
+
+  @protected
+  RustLogLevel sse_decode_rust_log_level(SseDeserializer deserializer);
 
   @protected
   TailHandlingDTO sse_decode_tail_handling_dto(SseDeserializer deserializer);
@@ -2269,6 +2308,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_f_32_Sse(
     RustStreamSink<double> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_list_rust_log_entry_dto_Sse(
+    RustStreamSink<List<RustLogEntryDto>> self,
     SseSerializer serializer,
   );
 
@@ -2725,6 +2770,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_rust_log_entry_dto(
+    List<RustLogEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_audio_host_info(
     List<UiAudioHostInfo> self,
     SseSerializer serializer,
@@ -3101,6 +3152,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     (UiMixerChannel, List<UiEffectInstance>) self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_removed_automation_dto(
+    RemovedAutomationDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_log_entry_dto(
+    RustLogEntryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_log_level(RustLogLevel self, SseSerializer serializer);
 
   @protected
   void sse_encode_tail_handling_dto(

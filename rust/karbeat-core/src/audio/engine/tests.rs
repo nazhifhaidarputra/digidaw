@@ -10,8 +10,8 @@ use crate::audio::event::{PluginTarget, TransportFeedback};
 use crate::audio::render_state::AudioGraphState;
 use crate::commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration};
 use crate::core::project::automation::{
-    AutomationLane, AutomationPoint, AutomationTarget, MixerChannelParamTarget,
-    TrackAutomationTarget,
+    AutomationLane, AutomationPoint, AutomationTarget, EffectAutomationTarget,
+    MasterAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
 };
 use crate::core::project::modulation::{ModulationLink, ModulationSource};
 use crate::core::project::track::AudioTrack;
@@ -467,4 +467,159 @@ fn test_automation_lane_applied_to_mixer_volume() {
         -20.5,
         "Volume should be automated to -20.5 dB"
     );
+}
+
+#[test]
+fn effect_bypass_skips_latency_and_survives_export_snapshot() {
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&ApplicationState::default()),
+    });
+
+    let plugin_registry = PluginRegistry::new_with_defaults();
+    let effect_registry_id = hash_str("effect_delay");
+    let (effect_factory, _) = plugin_registry
+        .create_plugin_by_id(effect_registry_id)
+        .expect("test effect should be registered");
+    let effect_id = crate::shared::EffectId::from(1);
+    engine.process_command(AudioCommand::AddEffect {
+        target: EffectTarget::Master,
+        effect_id,
+        registry_id: effect_registry_id,
+        effect_factory,
+    });
+    assert!(!engine.plugin_state.master_effects[0].bypass);
+
+    engine.process_command(AudioCommand::SetEffectBypass {
+        target: EffectTarget::Master,
+        effect_id,
+        bypass: true,
+    });
+    let effect = &engine.plugin_state.master_effects[0];
+    assert!(effect.bypass);
+    assert_eq!(effect.active_latency_samples(), 0);
+
+    let mut block = vec![0.0; 512 * 2];
+    engine.process(&mut block);
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let offline_engine = AudioEngine::from_export_snapshot(
+        engine.export_snapshot(),
+        &plugin_registry,
+        2,
+        command_consumer,
+        position_producer,
+        feedback_producer,
+    )
+    .expect("export snapshot should hydrate");
+    assert!(offline_engine.plugin_state.master_effects[0].bypass);
+
+    engine.process_command(AudioCommand::SetEffectBypass {
+        target: EffectTarget::Master,
+        effect_id,
+        bypass: false,
+    });
+    assert!(!engine.plugin_state.master_effects[0].bypass);
+}
+
+#[test]
+fn removing_an_effect_drops_its_automation_in_the_same_command() {
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+
+    let effect_id = crate::shared::EffectId::from(1);
+    let effect_target = AutomationTarget::Master(MasterAutomationTarget::MixerChannel(
+        MixerChannelParamTarget::Plugin {
+            effect_id,
+            target: EffectAutomationTarget::PluginParam { param_id: 0 },
+        },
+    ));
+    let volume_target = AutomationTarget::Master(MasterAutomationTarget::MixerChannel(
+        MixerChannelParamTarget::Volume,
+    ));
+    let mut app_state = ApplicationState::default();
+    let (effect_lane, effect_link) = app_state
+        .add_automation_lane(effect_target, "Gain", 0.0, 1.0, 0.5)
+        .expect("effect lane should be created");
+    let (volume_lane, volume_link) = app_state
+        .add_automation_lane(volume_target, "Volume", 0.0, 1.0, 0.5)
+        .expect("volume lane should be created");
+    let effect_source = app_state.modulation_links[effect_link].prop.source_id;
+    let volume_source = app_state.modulation_links[volume_link].prop.source_id;
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine
+        .modulation
+        .replace_from_graph(&engine.current_state.graph);
+
+    let plugin_registry = PluginRegistry::new_with_defaults();
+    let effect_registry_id = hash_str("effect_delay");
+    let (effect_factory, _) = plugin_registry
+        .create_plugin_by_id(effect_registry_id)
+        .expect("test effect should be registered");
+    engine.process_command(AudioCommand::AddEffect {
+        target: EffectTarget::Master,
+        effect_id,
+        registry_id: effect_registry_id,
+        effect_factory,
+    });
+
+    engine.process_command(AudioCommand::RemoveEffect {
+        target: EffectTarget::Master,
+        effect_id,
+    });
+
+    let links: Vec<_> = engine
+        .modulation
+        .active_links
+        .iter()
+        .map(|l| l.id)
+        .collect();
+    assert_eq!(links, vec![volume_link]);
+    assert!(
+        !engine
+            .modulation
+            .active_sources
+            .contains_key(&effect_source)
+    );
+    assert!(
+        engine
+            .modulation
+            .active_sources
+            .contains_key(&volume_source)
+    );
+    let lanes = &engine.current_state.graph.automation_lanes;
+    assert!(!lanes.contains_key(&effect_lane.id));
+    assert!(lanes.contains_key(&volume_lane.id));
+    assert!(engine.plugin_state.master_effects.is_empty());
 }

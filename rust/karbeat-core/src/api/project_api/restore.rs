@@ -158,6 +158,27 @@ pub(super) fn hydration_command(
     }
 }
 
+/// Re-applies persisted effect bypass flags after the effect chains are hydrated.
+fn bypass_commands(app: &ApplicationState) -> Vec<AudioCommand> {
+    plugins(app)
+        .into_iter()
+        .filter(|(_, plugin)| plugin.bypass)
+        .filter_map(|(target, _)| {
+            let (target, effect_id) = match target {
+                PluginTarget::TrackEffect(track, effect) => (EffectTarget::Track(track), effect),
+                PluginTarget::BusEffect(bus, effect) => (EffectTarget::Bus(bus), effect),
+                PluginTarget::MasterEffect(effect) => (EffectTarget::Master, effect),
+                PluginTarget::Generator(_) => return None,
+            };
+            Some(AudioCommand::SetEffectBypass {
+                target,
+                effect_id,
+                bypass: true,
+            })
+        })
+        .collect()
+}
+
 pub struct PendingProjectRestore {
     staged: ApplicationState,
     handles: crate::context::ControlHandles,
@@ -342,6 +363,7 @@ pub(super) fn execute_replace(
                 new_position,
             }),
     );
+    commands.extend(bypass_commands(&pending.staged));
     commands.push(AudioCommand::SetBPM(pending.staged.transport.bpm));
     let (project, mut receipt) = HostedProjectInstall::new(commands, pending.sample_rate);
     let (command, mut project_retirement) = karbeat_host::ControlTransfer::new(project);

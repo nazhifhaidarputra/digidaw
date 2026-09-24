@@ -10,13 +10,32 @@ class DawContextAction {
   final bool isDestructive;
   final Color? color;
 
+  /// Secondary text, used by submenus to show the current selection.
+  final String? subtitle;
+
+  /// Nested choices shown in a collapsible dropdown drawer when not null.
+  final List<DawContextAction>? children;
+
   DawContextAction({
     required this.title,
     required this.onTap,
     this.icon,
     this.isDestructive = false,
     this.color,
-  });
+  }) : subtitle = null,
+       children = null;
+
+  /// A collapsible group whose [children] open in a dropdown drawer.
+  DawContextAction.submenu({
+    required this.title,
+    required List<DawContextAction> this.children,
+    this.icon,
+    this.subtitle,
+    this.color,
+  }) : onTap = _noop,
+       isDestructive = false;
+
+  static void _noop() {}
 }
 
 /// Shows the DAW styled context menu dialog. Resolves when the menu closes.
@@ -51,33 +70,88 @@ Future<void> showDawContextMenu({
                 Divider(color: colors.outlineVariant, height: 16),
               ],
 
-              ...actions.map((action) {
-                final color =
-                    action.color ??
-                    (action.isDestructive ? colors.error : colors.onSurface);
-
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  leading: action.icon != null
-                      ? Icon(action.icon, color: color, size: 20)
-                      : null,
-                  title: Text(
-                    action.title,
-                    style: TextStyle(color: color, fontSize: 14),
-                  ),
-                  hoverColor: colors.onSurface.withValues(alpha: 0.08),
-                  onTap: () {
-                    Navigator.of(dialogContext).pop();
-                    action.onTap();
-                  },
-                );
-              }),
+              ...actions.map(
+                (action) => _DawContextMenuEntry(
+                  action: action,
+                  dialogContext: dialogContext,
+                ),
+              ),
             ],
           ),
         ),
       );
     },
   );
+}
+
+/// One row of [showDawContextMenu]; submenus expand in place as a drawer.
+class _DawContextMenuEntry extends StatelessWidget {
+  final DawContextAction action;
+  final BuildContext dialogContext;
+  final double indent;
+
+  const _DawContextMenuEntry({
+    required this.action,
+    required this.dialogContext,
+    this.indent = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final color =
+        action.color ??
+        (action.isDestructive ? colors.error : colors.onSurface);
+    final padding = EdgeInsets.only(left: 24.0 + indent, right: 24.0);
+    final leading = action.icon != null
+        ? Icon(action.icon, color: color, size: 20)
+        : null;
+    final title = Text(
+      action.title,
+      style: TextStyle(color: color, fontSize: 14),
+    );
+    final subtitle = action.subtitle == null
+        ? null
+        : Text(
+            action.subtitle!,
+            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+          );
+
+    final children = action.children;
+    if (children != null) {
+      return ExpansionTile(
+        tilePadding: padding,
+        leading: leading,
+        title: title,
+        subtitle: subtitle,
+        iconColor: colors.onSurfaceVariant,
+        collapsedIconColor: colors.onSurfaceVariant,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        backgroundColor: colors.onSurface.withValues(alpha: 0.04),
+        children: [
+          for (final child in children)
+            _DawContextMenuEntry(
+              action: child,
+              dialogContext: dialogContext,
+              indent: indent + 16,
+            ),
+        ],
+      );
+    }
+
+    return ListTile(
+      contentPadding: padding,
+      leading: leading,
+      title: title,
+      subtitle: subtitle,
+      hoverColor: colors.onSurface.withValues(alpha: 0.08),
+      onTap: () {
+        Navigator.of(dialogContext).pop();
+        action.onTap();
+      },
+    );
+  }
 }
 
 /// A wrapper for a interactable widget that will display Context Menu

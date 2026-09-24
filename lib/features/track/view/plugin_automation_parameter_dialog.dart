@@ -3,49 +3,41 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
-/// Opens the generator parameter picker for a track.
-Future<void> showGeneratorAutomationParameterDialog({
+/// Opens the automatable parameter picker for a generator or effect plugin.
+Future<void> showPluginAutomationParameterDialog({
   required BuildContext context,
-  required int trackId,
-  required String trackName,
-  required int generatorId,
+  required plugin_api.UiPluginTarget target,
+  required String ownerName,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => GeneratorAutomationParameterDialog(
-      trackId: trackId,
-      trackName: trackName,
-      generatorId: generatorId,
-    ),
+    builder: (_) =>
+        PluginAutomationParameterDialog(target: target, ownerName: ownerName),
   );
 }
 
-/// Searchable picker for automatable parameters exposed by a generator plugin.
-class GeneratorAutomationParameterDialog extends ConsumerStatefulWidget {
-  /// Track whose automation drawer receives the new lane.
-  final int trackId;
+/// Searchable picker for automatable parameters exposed by a plugin.
+class PluginAutomationParameterDialog extends ConsumerStatefulWidget {
+  /// Generator or effect instance used for parameter discovery.
+  final plugin_api.UiPluginTarget target;
 
-  /// Track label displayed in the dialog title.
-  final String trackName;
+  /// Track or effect label displayed in the dialog title.
+  final String ownerName;
 
-  /// Runtime generator instance used for parameter discovery.
-  final int generatorId;
-
-  /// Creates a parameter picker for one track generator.
-  const GeneratorAutomationParameterDialog({
+  /// Creates a parameter picker for one plugin instance.
+  const PluginAutomationParameterDialog({
     super.key,
-    required this.trackId,
-    required this.trackName,
-    required this.generatorId,
+    required this.target,
+    required this.ownerName,
   });
 
   @override
-  ConsumerState<GeneratorAutomationParameterDialog> createState() =>
-      _GeneratorAutomationParameterDialogState();
+  ConsumerState<PluginAutomationParameterDialog> createState() =>
+      _PluginAutomationParameterDialogState();
 }
 
-class _GeneratorAutomationParameterDialogState
-    extends ConsumerState<GeneratorAutomationParameterDialog> {
+class _PluginAutomationParameterDialogState
+    extends ConsumerState<PluginAutomationParameterDialog> {
   String _query = '';
   int? _submittingParameterId;
 
@@ -65,7 +57,7 @@ class _GeneratorAutomationParameterDialogState
     return '$type · ${parameter.min} – ${parameter.max}';
   }
 
-  bool _matches(GeneratorAutomationCandidate candidate) {
+  bool _matches(PluginAutomationCandidate candidate) {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) return true;
     final parameter = candidate.parameter;
@@ -74,34 +66,31 @@ class _GeneratorAutomationParameterDialogState
         parameter.path.toLowerCase().contains(query);
   }
 
-  Future<void> _addAutomation(GeneratorAutomationCandidate candidate) async {
+  Future<void> _addAutomation(PluginAutomationCandidate candidate) async {
     if (_submittingParameterId != null || candidate.alreadyAutomated) return;
     setState(() => _submittingParameterId = candidate.parameter.id);
 
     final result = await ref
         .read(automationProvider.notifier)
-        .handleAddGeneratorParameterAutomation(
-          generatorId: widget.generatorId,
+        .handleAddPluginParameterAutomation(
+          target: widget.target,
           parameter: candidate.parameter,
         );
     if (!mounted) return;
 
     if (result.hasValue) {
-      ref
-          .read(automationProvider.notifier)
-          .ensureTrackAutomationExpanded(widget.trackId);
       Navigator.of(context).pop();
       return;
     }
 
-    ref.invalidate(generatorAutomationCandidatesProvider(widget.generatorId));
+    ref.invalidate(pluginAutomationCandidatesProvider(widget.target));
     setState(() => _submittingParameterId = null);
   }
 
-  Widget _buildCandidates(List<GeneratorAutomationCandidate> candidates) {
+  Widget _buildCandidates(List<PluginAutomationCandidate> candidates) {
     if (candidates.isEmpty) {
       return const Center(
-        child: Text('This generator has no automatable parameters.'),
+        child: Text('This plugin has no automatable parameters.'),
       );
     }
 
@@ -161,11 +150,15 @@ class _GeneratorAutomationParameterDialogState
   @override
   Widget build(BuildContext context) {
     final candidates = ref.watch(
-      generatorAutomationCandidatesProvider(widget.generatorId),
+      pluginAutomationCandidatesProvider(widget.target),
     );
 
     return AlertDialog(
-      title: Text('Add automation on ${widget.trackName}'),
+      title: Text(
+        'Add automation on ${widget.ownerName}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       content: SizedBox(
         width: 620,
         height: 540,
@@ -197,15 +190,13 @@ class _GeneratorAutomationParameterDialogState
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Could not load generator parameters.\n$error',
+                          'Could not load plugin parameters.\n$error',
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
                           onPressed: () => ref.invalidate(
-                            generatorAutomationCandidatesProvider(
-                              widget.generatorId,
-                            ),
+                            pluginAutomationCandidatesProvider(widget.target),
                           ),
                           icon: const Icon(Icons.refresh),
                           label: const Text('Retry'),

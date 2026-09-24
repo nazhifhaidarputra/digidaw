@@ -368,6 +368,7 @@ impl AudioEngine {
                     id: effect_id,
                     registry_id,
                     plugin: effect,
+                    bypass: false,
                 };
 
                 // Derive the PluginTarget for this effect.
@@ -439,6 +440,8 @@ impl AudioEngine {
                     EffectTarget::Bus(bus_id) => PluginTarget::BusEffect(*bus_id, effect_id),
                     EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
                 };
+                // Same command as the effect removal, so no block ever sees one without the other.
+                self.remove_plugin_modulations(plugin_target);
                 if let Some(producer) = self
                     .telemetry
                     .param_telemetry_producers
@@ -471,6 +474,30 @@ impl AudioEngine {
                 {
                     let effect = effects.remove(old_position);
                     effects.insert(new_position.min(effects.len()), effect);
+                }
+            }
+            AudioCommand::SetEffectBypass {
+                target,
+                effect_id,
+                bypass,
+            } => {
+                let changed = self
+                    .get_effect_list_mut(&target)
+                    .and_then(|effects| effects.iter_mut().find(|effect| effect.id == effect_id))
+                    .is_some_and(|effect| {
+                        if effect.bypass == bypass {
+                            return false;
+                        }
+                        effect.bypass = bypass;
+                        effect.plugin.set_bypass(bypass);
+                        if !bypass {
+                            // Drop tails captured before the bypass so re-enabling starts clean.
+                            effect.plugin.reset();
+                        }
+                        true
+                    });
+                if changed {
+                    self.recalculate_latencies();
                 }
             }
 
@@ -711,6 +738,7 @@ impl AudioEngine {
                                 id: effect_id,
                                 registry_id,
                                 plugin,
+                                bypass: false,
                             },
                         );
 
@@ -735,6 +763,7 @@ impl AudioEngine {
                                 id: effect_id,
                                 registry_id,
                                 plugin,
+                                bypass: false,
                             },
                         );
 
@@ -761,6 +790,7 @@ impl AudioEngine {
                         id: effect_id,
                         registry_id,
                         plugin,
+                        bypass: false,
                     });
 
                     let target = PluginTarget::MasterEffect(effect_id);

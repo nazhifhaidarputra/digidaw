@@ -4,10 +4,14 @@
 mod tests {
     use crate::api::mixer_api;
     use crate::audio::event::PluginTarget;
-    use crate::commands::MixerChannelTarget;
+    use crate::commands::{AudioCommand, MixerChannelTarget};
+    use crate::context::DawContext;
+    use crate::core::project::automation::{
+        AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
+    };
 
     use crate::core::project::mixer::{RoutingConnection, RoutingNode};
-    use crate::shared::id::{BusId, EffectId, TrackId};
+    use crate::shared::id::{AutomationId, BusId, EffectId, TrackId};
     use crate::test::helpers::{
         make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
     };
@@ -323,6 +327,124 @@ mod tests {
         .unwrap();
 
         assert!(ctx.app_state.mixer.buses[bus_id].channel.effects.is_empty());
+    }
+
+    fn effect_param_target(track_id: TrackId, effect_id: EffectId) -> AutomationTarget {
+        AutomationTarget::Track {
+            track_id,
+            track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Plugin {
+                effect_id,
+                target: EffectAutomationTarget::PluginParam { param_id: 0 },
+            }),
+        }
+    }
+
+    /// Seeds an audio track with one effect, one lane on that effect, and one volume lane.
+    fn seeded_effect_automation() -> (DawContext, TrackId, EffectId, AutomationId, AutomationId) {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, audio_id, param_eq_registry_id())
+            .unwrap();
+        let effect_id = ctx.app_state.mixer.channels[audio_id]
+            .channel
+            .effects
+            .last()
+            .unwrap()
+            .id;
+        let (effect_lane, _) = ctx
+            .app_state
+            .add_automation_lane(
+                effect_param_target(audio_id, effect_id),
+                "Gain",
+                0.0,
+                1.0,
+                0.5,
+            )
+            .unwrap();
+        let (volume_lane, _) = ctx
+            .app_state
+            .add_automation_lane(
+                AutomationTarget::Track {
+                    track_id: audio_id,
+                    track_target: TrackAutomationTarget::MixerChannel(
+                        MixerChannelParamTarget::Volume,
+                    ),
+                },
+                "Volume",
+                0.0,
+                1.0,
+                0.5,
+            )
+            .unwrap();
+        (ctx, audio_id, effect_id, effect_lane.id, volume_lane.id)
+    }
+
+    #[test]
+    fn removing_an_effect_removes_only_its_automation() {
+        let (mut ctx, audio_id, effect_id, effect_lane, volume_lane) = seeded_effect_automation();
+
+        let removed =
+            mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id).unwrap();
+
+        assert_eq!(removed.automation_lanes, vec![effect_lane]);
+        assert_eq!(removed.modulation_sources.len(), 1);
+        assert_eq!(removed.modulation_links.len(), 1);
+        let app = &ctx.app_state;
+        assert!(app.automation_pool.get(effect_lane).is_none());
+        assert!(
+            app.modulation_sources
+                .get(removed.modulation_sources[0])
+                .is_none()
+        );
+        assert!(
+            app.modulation_links
+                .get(removed.modulation_links[0])
+                .is_none()
+        );
+        assert!(app.automation_pool.get(volume_lane).is_some());
+        assert_eq!(app.modulation_links.len(), 1);
+        assert!(
+            app.modulation_links
+                .values()
+                .all(|link| link.order_idx == 0)
+        );
+    }
+
+    #[test]
+    fn rejected_effect_removal_leaves_effect_and_automation_intact() {
+        let (mut ctx, audio_id, effect_id, effect_lane, _) = seeded_effect_automation();
+        let (mut producer, _consumer) = rtrb::RingBuffer::<AudioCommand>::new(1);
+        producer.push(AudioCommand::SetBPM(120.0)).unwrap();
+        *ctx.command_sender.lock() = Some(producer);
+        let links_before = ctx.app_state.modulation_links.len();
+
+        let result = mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id);
+
+        assert!(result.is_err());
+        let app = &ctx.app_state;
+        assert!(
+            app.mixer.channels[audio_id]
+                .channel
+                .effects
+                .get(effect_id)
+                .is_some()
+        );
+        assert!(app.automation_pool.get(effect_lane).is_some());
+        assert_eq!(app.modulation_links.len(), links_before);
+    }
+
+    #[test]
+    fn effect_removal_reaches_the_engine_as_one_command() {
+        let (mut ctx, audio_id, effect_id, _, _) = seeded_effect_automation();
+        let (producer, mut consumer) = rtrb::RingBuffer::<AudioCommand>::new(8);
+        *ctx.command_sender.lock() = Some(producer);
+
+        mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id).unwrap();
+
+        assert!(matches!(
+            consumer.pop(),
+            Ok(AudioCommand::RemoveEffect { effect_id: removed, .. }) if removed == effect_id
+        ));
+        assert!(consumer.pop().is_err());
     }
 
     #[test]

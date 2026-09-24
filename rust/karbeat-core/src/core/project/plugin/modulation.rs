@@ -12,6 +12,17 @@ use crate::{
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
 
+/// Automation and modulation state removed together with a plugin instance.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RemovedModulations {
+    /// Automation lanes that only drove the removed plugin.
+    pub automation_lanes: Vec<AutomationId>,
+    /// Automation sources owned by those lanes.
+    pub modulation_sources: Vec<ModulationId>,
+    /// Every link whose target belonged to the removed plugin.
+    pub modulation_links: Vec<ModulationLinkId>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 /// Runtime-ready description of a modulation source already paired with its destination.
 pub enum ModulationEvent {
@@ -398,6 +409,38 @@ impl ApplicationState {
         for lane_id in automation_lanes {
             self.automation_pool.remove(lane_id);
         }
+    }
+
+    /// Removes every modulation link whose target belongs to `plugin`, plus the automation
+    /// sources and lanes that drove those links. Other source kinds (LFOs, peak controllers)
+    /// may drive several targets, so only their links are removed.
+    ///
+    /// Infallible, so callers can run it as the final commit step of a removal transaction.
+    pub fn remove_modulations_for_plugin(&mut self, plugin: PluginTarget) -> RemovedModulations {
+        let owned: Vec<_> = self
+            .modulation_links
+            .iter()
+            .filter(|(_, link)| link.prop.target.as_plugin_target() == Some(plugin))
+            .map(|(link_id, link)| (link_id, link.prop.source_id, link.prop.target.clone()))
+            .collect();
+
+        let mut removed = RemovedModulations::default();
+        for (link_id, source_id, target) in owned {
+            if self.modulation_links.remove(link_id).is_some() {
+                removed.modulation_links.push(link_id);
+            }
+            if let Some(&ModulationSource::Automation { lane_id }) =
+                self.modulation_sources.get(source_id)
+            {
+                self.modulation_sources.remove(source_id);
+                removed.modulation_sources.push(source_id);
+                if self.automation_pool.remove(lane_id).is_some() {
+                    removed.automation_lanes.push(lane_id);
+                }
+            }
+            self.normalize_link_orders_for_target(&target);
+        }
+        removed
     }
 
     /// Add an automation lane specifically validated for a Bus target.

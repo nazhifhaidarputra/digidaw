@@ -60,17 +60,34 @@ Future<void> showAutomationPointContextMenu({
           icon: Icons.content_paste,
           onTap: () => editor.pastePointValue(laneId: laneId, pointId: pointId),
         ),
-      for (final curveType in AutomationCurveTypeDto.values)
+      DawContextAction.submenu(
+        title: 'Curve type',
+        subtitle: _curveTypeLabel(point.curveType),
+        icon: _curveTypeIcon(point.curveType),
+        children: [
+          for (final curveType in AutomationCurveTypeDto.values)
+            DawContextAction(
+              title: _curveTypeLabel(curveType),
+              icon: point.curveType == curveType
+                  ? Icons.check
+                  : _curveTypeIcon(curveType),
+              color: point.curveType == curveType ? colors.primary : null,
+              onTap: () => editor.setPointCurveType(
+                laneId: laneId,
+                pointId: pointId,
+                curveType: curveType,
+              ),
+            ),
+        ],
+      ),
+      if (point.tension != 0 && point.curveType != AutomationCurveTypeDto.step)
         DawContextAction(
-          title: 'Curve: ${_curveTypeLabel(curveType)}',
-          icon: point.curveType == curveType
-              ? Icons.check
-              : _curveTypeIcon(curveType),
-          color: point.curveType == curveType ? colors.primary : null,
-          onTap: () => editor.setPointCurveType(
+          title: 'Reset tension',
+          icon: Icons.restart_alt,
+          onTap: () => editor.setPointTension(
             laneId: laneId,
             pointId: pointId,
-            curveType: curveType,
+            tension: 0,
           ),
         ),
       DawContextAction(

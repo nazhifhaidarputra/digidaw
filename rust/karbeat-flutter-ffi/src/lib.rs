@@ -22,7 +22,10 @@ pub mod api;
     reason = "Flutter Rust Bridge owns this generated module; lint fixes must be made in the generator"
 )]
 mod frb_generated;
+mod log_bridge;
 
+/// Installs the process logger: stdout through `env_logger`, plus a
+/// non-blocking queue forwarding the same records to the Flutter log viewer.
 pub fn init_logger() {
     // if release, use info, else use debug
     INIT_LOGGER.call_once(|| {
@@ -34,12 +37,19 @@ pub fn init_logger() {
             "info"
         };
 
-        drop(
-            env_logger::Builder::from_env(Env::default().default_filter_or(default_level))
-                .format_timestamp_millis()
-                .target(env_logger::Target::Stdout)
-                .try_init(),
-        );
+        let stdout = env_logger::Builder::from_env(Env::default().default_filter_or(default_level))
+            .format_timestamp_millis()
+            .target(env_logger::Target::Stdout)
+            .build();
+        let bridge = log_bridge::install();
+        let logger = log_bridge::KarbeatLogger::new(stdout, bridge.as_ref().ok().copied());
+        let max_level = logger.filter();
+        if log::set_boxed_logger(Box::new(logger)).is_ok() {
+            log::set_max_level(max_level);
+        }
+        if let Err(error) = bridge {
+            log::warn!("Rust log forwarding to Flutter is unavailable: {error}");
+        }
     });
 }
 

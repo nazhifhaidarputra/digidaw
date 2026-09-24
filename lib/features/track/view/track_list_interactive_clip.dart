@@ -12,6 +12,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final List<int> selectedClipIds;
   final ScrollController horizontalScrollController;
   final Map<int, WaveformHandle> waveformMap;
+  final bool compact;
 
   const _InteractiveClip({
     super.key,
@@ -26,6 +27,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
     required this.selectedClipIds,
     required this.horizontalScrollController,
     required this.waveformMap,
+    this.compact = false,
   });
 
   @override
@@ -249,6 +251,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       scrollController: widget.horizontalScrollController,
       clipLeftOffset: left,
       waveformMap: widget.waveformMap,
+      compact: widget.compact,
     );
 
     final gestureDetector = GestureDetector(

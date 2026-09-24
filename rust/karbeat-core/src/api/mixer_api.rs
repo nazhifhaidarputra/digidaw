@@ -3,7 +3,7 @@ use crate::{
     commands::{AudioCommand, EffectTarget, MixerChannelTarget},
     context::DawContext,
     core::project::{
-        SidechainRoute, TrackId,
+        RemovedModulations, SidechainRoute, TrackId,
         mixer::{
             BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
             RoutingConnection, RoutingNode,
@@ -271,29 +271,18 @@ pub fn add_effect_to_mixer_channel_by_id(
     Ok(())
 }
 
-/// Removes an effect from a track, delegating external instances to their hosted lifecycle cleanup.
+/// Removes an effect from a track together with its automation. See
+/// [`remove_effect_from_target_mixer_channel`].
 pub fn remove_effect_from_mixer_channel(
     ctx: &mut DawContext,
     track_id: TrackId,
     effect_instance_id: EffectId,
-) -> anyhow::Result<()> {
-    let plugin_target = PluginTarget::TrackEffect(track_id, effect_instance_id);
-    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
-        return super::external_plugin_api::remove_effect(
-            ctx,
-            EffectTarget::Track(track_id),
-            effect_instance_id,
-        );
-    }
-
-    ctx.app_state
-        .mixer
-        .remove_effect_by_id(&track_id, effect_instance_id)?;
-    let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
-        target: EffectTarget::Track(track_id),
-        effect_id: effect_instance_id,
-    });
-    Ok(())
+) -> anyhow::Result<RemovedModulations> {
+    remove_effect_from_target_mixer_channel(
+        ctx,
+        MixerChannelTarget::Track(track_id),
+        effect_instance_id,
+    )
 }
 
 /// Appends an effect to the master bus and installs its processor on the audio thread.
@@ -351,48 +340,92 @@ pub fn move_effect_order(
     Ok(())
 }
 
-/// Removes an effect from a track, bus, or master channel and retires its audio processor.
+/// Enables or bypasses an effect slot, persisting the flag and publishing it to the audio thread.
+pub fn set_effect_bypass(
+    ctx: &mut DawContext,
+    mixer_channel_target: MixerChannelTarget,
+    effect_id: EffectId,
+    bypass: bool,
+) -> anyhow::Result<()> {
+    let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
+    let exists = ctx
+        .app_state
+        .get_mixer_channel_from_target_mut(mixer_channel_target.clone())
+        .with_context(|| "Cannot find the target mixer channel")?
+        .effects
+        .get(effect_id)
+        .is_some();
+    anyhow::ensure!(exists, "Effect {effect_id:?} not found");
+
+    // Publish first so a rejected command leaves project state unchanged.
+    ctx.send_audio_command(AudioCommand::SetEffectBypass {
+        target: effect_target,
+        effect_id,
+        bypass,
+    })?;
+    if let Some(effect) = ctx
+        .app_state
+        .get_mixer_channel_from_target_mut(mixer_channel_target)
+        .and_then(|channel| channel.effects.get_mut(effect_id))
+    {
+        effect.instance.bypass = bypass;
+    }
+    Ok(())
+}
+
+/// Removes an effect and every automation lane that drives it as one transaction.
+///
+/// The mixer change is staged on a copy first, then a single `RemoveEffect` command removes the
+/// processor and its modulations on the audio thread in the same block. Project state is only
+/// committed once that command is accepted, so a failure at any step leaves both sides intact.
+/// Returns the removed automation so the UI can prune the same entries.
 pub fn remove_effect_from_target_mixer_channel(
     ctx: &mut DawContext,
     mixer_channel_target: MixerChannelTarget,
     effect_instance_id: EffectId,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<RemovedModulations> {
     let plugin_target = match &mixer_channel_target {
         MixerChannelTarget::Track(id) => PluginTarget::TrackEffect(*id, effect_instance_id),
         MixerChannelTarget::Bus(id) => PluginTarget::BusEffect(*id, effect_instance_id),
         MixerChannelTarget::Master => PluginTarget::MasterEffect(effect_instance_id),
     };
+    let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
     if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
-        return super::external_plugin_api::remove_effect(
-            ctx,
-            effect_target_from_mixer_target(&mixer_channel_target),
-            effect_instance_id,
-        );
+        return super::external_plugin_api::remove_effect(ctx, effect_target, effect_instance_id);
     }
 
-    let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
+    let mut staged_mixer = ctx.app_state.mixer.clone();
     match mixer_channel_target {
         MixerChannelTarget::Track(track_id) => {
-            ctx.app_state
-                .mixer
-                .remove_effect_by_id(&track_id, effect_instance_id)?;
+            staged_mixer.remove_effect_by_id(&track_id, effect_instance_id)?;
         }
         MixerChannelTarget::Bus(bus_id) => {
-            ctx.app_state
-                .mixer
-                .remove_effect_from_bus(bus_id, effect_instance_id)?;
+            staged_mixer.remove_effect_from_bus(bus_id, effect_instance_id)?;
         }
         MixerChannelTarget::Master => {
-            ctx.app_state
-                .mixer
-                .remove_effect_from_master_bus(effect_instance_id)?;
+            staged_mixer.remove_effect_from_master_bus(effect_instance_id)?;
         }
     }
-    let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
-        target: effect_target,
-        effect_id: effect_instance_id,
-    });
-    Ok(())
+
+    publish_to_engine(
+        ctx,
+        AudioCommand::RemoveEffect {
+            target: effect_target,
+            effect_id: effect_instance_id,
+        },
+    )?;
+
+    ctx.app_state.mixer = staged_mixer;
+    Ok(ctx.app_state.remove_modulations_for_plugin(plugin_target))
+}
+
+/// Sends `command` when an audio engine is running. Without one, project state is the only copy
+/// and there is nothing to keep in sync.
+fn publish_to_engine(ctx: &mut DawContext, command: AudioCommand) -> anyhow::Result<()> {
+    if ctx.command_sender.lock().is_none() {
+        return Ok(());
+    }
+    ctx.send_audio_command(command)
 }
 
 fn effect_target_from_mixer_target(target: &MixerChannelTarget) -> EffectTarget {
@@ -403,28 +436,13 @@ fn effect_target_from_mixer_target(target: &MixerChannelTarget) -> EffectTarget 
     }
 }
 
-/// Removes an effect from the master bus, including hosted-plugin cleanup when applicable.
+/// Removes an effect from the master bus together with its automation. See
+/// [`remove_effect_from_target_mixer_channel`].
 pub fn remove_effect_from_master_bus(
     ctx: &mut DawContext,
     effect_instance_id: EffectId,
-) -> anyhow::Result<()> {
-    let plugin_target = PluginTarget::MasterEffect(effect_instance_id);
-    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
-        return super::external_plugin_api::remove_effect(
-            ctx,
-            EffectTarget::Master,
-            effect_instance_id,
-        );
-    }
-
-    ctx.app_state
-        .mixer
-        .remove_effect_from_master_bus(effect_instance_id)?;
-    let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
-        target: EffectTarget::Master,
-        effect_id: effect_instance_id,
-    });
-    Ok(())
+) -> anyhow::Result<RemovedModulations> {
+    remove_effect_from_target_mixer_channel(ctx, MixerChannelTarget::Master, effect_instance_id)
 }
 
 /// Creates a project bus and asynchronously mirrors it into the engine graph.

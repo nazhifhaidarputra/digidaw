@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/features/track/models/automation_lane_editor.dart';
+import 'package:karbeat/features/track/services/automation_curve_evaluator.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'dart:math' as math;
 
+/// Draws an automation lane exactly as the audio engine evaluates it.
 class AutomationCurvePainter extends CustomPainter {
   final AutomationLaneDto lane;
   final double zoomLevel;
@@ -11,6 +14,12 @@ class AutomationCurvePainter extends CustomPainter {
   final Color pointColor;
   final int? highlightedPointId;
 
+  /// Tension handles to draw, keyed by the segment's first point.
+  final Iterable<AutomationTensionHitbox> tensionHandles;
+
+  /// Segment (first point ID) whose tension handle is hovered or dragged.
+  final int? highlightedTensionPointId;
+
   AutomationCurvePainter({
     required this.lane,
     required this.zoomLevel,
@@ -19,7 +28,12 @@ class AutomationCurvePainter extends CustomPainter {
     required this.disabledColor,
     required this.pointColor,
     this.highlightedPointId,
+    this.tensionHandles = const [],
+    this.highlightedTensionPointId,
   }) : super(repaint: scrollController);
+
+  /// Pixel distance between curve samples on shaped segments.
+  static const double _sampleSpacing = 3.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -36,8 +50,12 @@ class AutomationCurvePainter extends CustomPainter {
       }
     }
 
+    final minVisibleX = scrollX - 20;
+    final maxVisibleX = scrollX + viewportWidth + 20;
+    final curveColor = lane.enabled ? trackColor : disabledColor;
+
     final linePaint = Paint()
-      ..color = lane.enabled ? trackColor : disabledColor
+      ..color = curveColor
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
@@ -45,119 +63,126 @@ class AutomationCurvePainter extends CustomPainter {
       ..color = pointColor
       ..style = PaintingStyle.fill;
 
+    double yFor(double value) =>
+        size.height - value.clamp(0.0, 1.0) * size.height;
+    double xFor(num ticks) => ticks / zoomLevel;
+
     final path = Path();
 
-    // Default Y coordinate (0.0 - 1.0 clamped)
-    final defaultY =
-        size.height - (lane.defaultValue.clamp(0.0, 1.0) * size.height);
-
-    // Project start X (Tick 0)
-    final projectStartX = 0.0;
-
     if (lane.points.isEmpty) {
-      // If there are no points, draw a continuous plateau at the default value
-      path.moveTo(projectStartX, defaultY);
+      // The engine holds the lane default when there are no points.
+      final defaultY = yFor(lane.defaultValue);
+      path.moveTo(0, defaultY);
       path.lineTo(size.width, defaultY);
       canvas.drawPath(path, linePaint);
       return;
     }
 
-    // Sort points by time just in case, though backend should guarantee this
-    final points = List<AutomationPointDto>.from(lane.points)
-      ..sort((a, b) => a.timeTicks.compareTo(b.timeTicks));
+    // List order is authoritative: points sharing a tick keep the order the
+    // engine evaluates them in, so they must not be re-sorted here.
+    final points = lane.points;
 
-    // Calculate pixel coordinates for a point
-    Offset getPixelCoords(AutomationPointDto p) {
-      final x = (p.timeTicks / zoomLevel);
-      // Value is 0.0 - 1.0. Y=0 is the top of the canvas in Flutter.
-      final y = size.height - (p.value.clamp(0.0, 1.0) * size.height);
-      return Offset(x, y);
-    }
+    // 1. Hold the first value from the project start.
+    final first = points.first;
+    path.moveTo(0, yFor(first.value));
+    path.lineTo(xFor(first.timeTicks), yFor(first.value));
 
-    final firstPos = getPixelCoords(points.first);
+    // 2. Segments, drawn with the same interpolation as the engine.
+    for (var i = 0; i < points.length - 1; i++) {
+      final from = points[i];
+      final to = points[i + 1];
+      final x1 = xFor(from.timeTicks);
+      final x2 = xFor(to.timeTicks);
 
-    // 1. Plateau BEFORE the first point
-    path.moveTo(projectStartX, firstPos.dy);
-    path.lineTo(firstPos.dx, firstPos.dy);
-    // Vertical jump to the actual first point value
-    path.lineTo(firstPos.dx, firstPos.dy);
-
-    // 2. Draw interpolations BETWEEN points
-    for (int i = 0; i < points.length - 1; i++) {
-      final p1 = points[i];
-      final p2 = points[i + 1];
-
-      final pos1 = getPixelCoords(p1);
-      final pos2 = getPixelCoords(p2);
-
-      path.moveTo(pos1.dx, pos1.dy);
-
-      final curveType = p1.curveType;
-
-      switch (curveType) {
-        case AutomationCurveTypeDto.linear:
-          path.lineTo(pos2.dx, pos2.dy);
-        case AutomationCurveTypeDto.exponential:
-          // Exponential: Approximate the curve with multiple small segments
-          const int segments = 15;
-          final v1 = math.max(p1.value, 0.0001);
-          final v2 = math.max(p2.value, 0.0001);
-
-          for (int step = 1; step <= segments; step++) {
-            final t = step / segments;
-            final currentTick =
-                p1.timeTicks + (p2.timeTicks - p1.timeTicks) * t;
-            final currentValue = v1 * math.pow((v2 / v1), t);
-
-            final curX = currentTick / zoomLevel;
-            final curY =
-                size.height - (currentValue.clamp(0.0, 1.0) * size.height);
-            path.lineTo(curX, curY);
-          }
-        case AutomationCurveTypeDto.step:
-          // Step: Hold value until the next point, then jump
-          path.lineTo(pos2.dx, pos1.dy);
-          path.lineTo(pos2.dx, pos2.dy);
+      if (x2 < minVisibleX || x1 > maxVisibleX) {
+        path.moveTo(x2, yFor(to.value));
+        continue;
       }
+
+      path.moveTo(x1, yFor(from.value));
+      _addSegment(path, from, to, x1, x2, yFor);
     }
 
-    // 3. Plateau AFTER the last point
-    final lastPos = getPixelCoords(points.last);
+    // 3. Hold the last value to the end of the timeline.
+    final last = points.last;
+    final lastY = yFor(last.value);
+    path.moveTo(xFor(last.timeTicks), lastY);
+    path.lineTo(math.max(xFor(last.timeTicks), size.width), lastY);
 
-    // Ensure we are at the end of the last point's path
-    path.moveTo(lastPos.dx, lastPos.dy);
-    // Vertical jump down/up to the default value
-    path.lineTo(lastPos.dx, lastPos.dy);
-    // Extend the line infinitely to the right (or at least to screen edge)
-    path.lineTo(math.max(lastPos.dx, size.width), defaultY);
-
-    // Draw the final path
     canvas.drawPath(path, linePaint);
 
+    // Tension handles sit on the curve at each shaped segment's midpoint.
+    for (final handle in tensionHandles) {
+      final center = handle.center;
+      if (center.dx < minVisibleX || center.dx > maxVisibleX) continue;
+      final isHighlighted = handle.pointId == highlightedTensionPointId;
+      if (isHighlighted) {
+        canvas.drawCircle(
+          center,
+          7.0,
+          Paint()
+            ..color = curveColor.withValues(alpha: 0.3)
+            ..style = PaintingStyle.fill,
+        );
+      }
+      canvas.drawCircle(
+        center,
+        3.0,
+        Paint()
+          ..color = curveColor
+          ..strokeWidth = isHighlighted ? 2.0 : 1.25
+          ..style = PaintingStyle.stroke,
+      );
+    }
+
     // Draw the interactive points (with culling based on viewport)
-    final minVisibleX = scrollX - 20;
-    final maxVisibleX = scrollX + viewportWidth + 20;
+    final borderPaint = Paint()
+      ..color = curveColor
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
 
     for (final p in points) {
-      final pos = getPixelCoords(p);
-      // Only draw points that are visibly on screen (plus a small buffer)
-      if (pos.dx >= minVisibleX && pos.dx <= maxVisibleX) {
-        if (p.id == highlightedPointId) {
-          canvas.drawCircle(
-            pos,
-            8.0,
-            Paint()
-              ..color = trackColor.withValues(alpha: 0.35)
-              ..style = PaintingStyle.fill,
-          );
-        }
-        canvas.drawCircle(pos, 4.0, pointPaint);
+      final pos = Offset(xFor(p.timeTicks), yFor(p.value));
+      if (pos.dx < minVisibleX || pos.dx > maxVisibleX) continue;
+      if (p.id == highlightedPointId) {
         canvas.drawCircle(
           pos,
-          4.0,
-          linePaint..strokeWidth = 1.5,
-        ); // colored border
+          8.0,
+          Paint()
+            ..color = curveColor.withValues(alpha: 0.35)
+            ..style = PaintingStyle.fill,
+        );
       }
+      canvas.drawCircle(pos, 4.0, pointPaint);
+      canvas.drawCircle(pos, 4.0, borderPaint);
+    }
+  }
+
+  void _addSegment(
+    Path path,
+    AutomationPointDto from,
+    AutomationPointDto to,
+    double x1,
+    double x2,
+    double Function(double value) yFor,
+  ) {
+    final isStraightLine =
+        from.curveType == AutomationCurveTypeDto.linear && from.tension == 0;
+    if (from.curveType == AutomationCurveTypeDto.step) {
+      path.lineTo(x2, yFor(from.value));
+      path.lineTo(x2, yFor(to.value));
+      return;
+    }
+    if (isStraightLine || x2 - x1 <= _sampleSpacing) {
+      path.lineTo(x2, yFor(to.value));
+      return;
+    }
+
+    final steps = ((x2 - x1) / _sampleSpacing).ceil().clamp(2, 512);
+    for (var step = 1; step <= steps; step++) {
+      final t = step / steps;
+      final value = evaluateAutomationSegment(from, to.value, t);
+      path.lineTo(x1 + (x2 - x1) * t, yFor(value));
     }
   }
 
@@ -165,9 +190,12 @@ class AutomationCurvePainter extends CustomPainter {
   bool shouldRepaint(covariant AutomationCurvePainter oldDelegate) {
     return oldDelegate.zoomLevel != zoomLevel ||
         oldDelegate.lane != lane ||
+        oldDelegate.trackColor != trackColor ||
         oldDelegate.disabledColor != disabledColor ||
         oldDelegate.pointColor != pointColor ||
         oldDelegate.highlightedPointId != highlightedPointId ||
+        oldDelegate.highlightedTensionPointId != highlightedTensionPointId ||
+        oldDelegate.tensionHandles != tensionHandles ||
         oldDelegate.scrollController != scrollController;
   }
 }

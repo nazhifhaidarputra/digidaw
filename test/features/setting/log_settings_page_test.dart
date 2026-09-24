@@ -50,6 +50,33 @@ void main() {
     expect(find.text('captured while paused'), findsOneWidget);
   });
 
+  testWidgets('labels entries by source and filters by source', (tester) async {
+    final repository = AppLogRepository(maximumEntries: 50)
+      ..add(level: AppLogLevel.info, message: 'dart entry')
+      ..addAll([
+        (
+          source: AppLogSource.rust,
+          level: AppLogLevel.info,
+          message: 'rust entry',
+          timestamp: DateTime(2026),
+          target: 'karbeat_core::audio',
+        ),
+      ]);
+
+    await _pumpPage(tester, repository: repository);
+    expect(find.byKey(const ValueKey('log-source-flutter')), findsOneWidget);
+    expect(find.byKey(const ValueKey('log-source-rust')), findsOneWidget);
+    expect(find.textContaining('karbeat_core::audio'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('display-log-source')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rust').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('rust entry'), findsOneWidget);
+    expect(find.text('dart entry'), findsNothing);
+  });
+
   testWidgets('clear requires confirmation', (tester) async {
     final repository = AppLogRepository(maximumEntries: 50)
       ..add(level: AppLogLevel.info, message: 'clear me');

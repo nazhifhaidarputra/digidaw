@@ -17,8 +17,8 @@ use karbeat_core::core::project::{
 };
 use serde::Serialize;
 
-use crate::api::waveform::WaveformHandle;
 use crate::api::context::DawSessionInner;
+use crate::api::waveform::WaveformHandle;
 use crate::frb_generated::StreamSink;
 
 /// Shared bridge handle whose inner guards control access to the core DAW state.

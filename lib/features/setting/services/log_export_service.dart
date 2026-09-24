@@ -25,8 +25,11 @@ class LogExportService {
     return entries
         .map((entry) {
           final error = entry.errorSummary;
+          final target = entry.target;
           return '${entry.timestamp.toIso8601String()} '
-              '[${entry.level.name.toUpperCase()}] ${entry.message}'
+              '[${entry.source.label.toUpperCase()}] '
+              '[${entry.level.name.toUpperCase()}] '
+              '${target == null ? '' : '$target: '}${entry.message}'
               '${error == null ? '' : ' | $error'}';
         })
         .join('\n');

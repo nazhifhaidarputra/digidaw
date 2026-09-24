@@ -6,7 +6,8 @@ use karbeat_core::{
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
         EffectAutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
-        ModulationLinkForOrderedLaneView, ModulationSource, TrackAutomationTarget,
+        ModulationLinkForOrderedLaneView, ModulationSource, RemovedModulations,
+        TrackAutomationTarget,
     },
     shared::{BusId, EffectId, TrackId},
 };
@@ -34,6 +35,37 @@ pub struct AutomationPointDto {
     pub value: f64,
     pub curve_type: AutomationCurveTypeDto,
     pub tension: f64,
+}
+
+/// Automation removed as part of another project operation, such as deleting an effect.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct RemovedAutomationDto {
+    pub automation_lane_ids: Vec<u64>,
+    pub modulation_source_ids: Vec<u64>,
+    pub modulation_link_ids: Vec<u64>,
+}
+
+impl From<RemovedModulations> for RemovedAutomationDto {
+    fn from(removed: RemovedModulations) -> Self {
+        Self {
+            automation_lane_ids: removed
+                .automation_lanes
+                .into_iter()
+                .map(|id| id.to_u64())
+                .collect(),
+            modulation_source_ids: removed
+                .modulation_sources
+                .into_iter()
+                .map(|id| id.to_u64())
+                .collect(),
+            modulation_link_ids: removed
+                .modulation_links
+                .into_iter()
+                .map(|id| id.to_u64())
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

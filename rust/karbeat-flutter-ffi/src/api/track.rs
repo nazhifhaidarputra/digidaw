@@ -1,7 +1,7 @@
 // rust\src\api\track.rs
 
-use crate::api::project::{UiClip, UiTrack};
 use crate::api::context::DawContext;
+use crate::api::project::{UiClip, UiTrack};
 use karbeat_core::api::{clip_api, track_api};
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::shared::id::*;
@@ -278,11 +278,7 @@ pub fn delete_clip_batch(
     Ok(())
 }
 
-pub fn change_track_name(
-    ctx: &DawContext,
-    track_id: u64,
-    new_name: &str,
-) -> Result<(), String> {
+pub fn change_track_name(ctx: &DawContext, track_id: u64, new_name: &str) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     track_api::change_track_name(ctx, TrackId::from_u64(track_id), new_name)
         .map_err(|e| e.to_string())?;
@@ -290,11 +286,7 @@ pub fn change_track_name(
 }
 
 /// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
-pub fn change_track_color(
-    ctx: &DawContext,
-    track_id: u64,
-    new_color: &str,
-) -> Result<(), String> {
+pub fn change_track_color(ctx: &DawContext, track_id: u64, new_color: &str) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     track_api::change_track_color(ctx, TrackId::from_u64(track_id), new_color)
         .map_err(|e| e.to_string())?;
@@ -343,11 +335,7 @@ pub fn delete_track(ctx: &DawContext, track_id: u64) -> Result<String, String> {
 }
 
 /// Update track order in the timeline
-pub fn update_track_order(
-    ctx: &DawContext,
-    track_id: u64,
-    new_idx: usize,
-) -> Result<(), String> {
+pub fn update_track_order(ctx: &DawContext, track_id: u64, new_idx: usize) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     track_api::update_track_order(ctx, TrackId::from_u64(track_id), new_idx)
         .map_err(|e| e.to_string())

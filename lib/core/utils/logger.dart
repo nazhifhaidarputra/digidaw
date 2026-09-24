@@ -5,6 +5,15 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:karbeat/core/utils/log_models.dart';
 import 'package:logger/logger.dart';
 
+/// A log record emitted outside the Dart [AppLogger], such as a Rust record.
+typedef ExternalLogRecord = ({
+  AppLogSource source,
+  AppLogLevel level,
+  String message,
+  DateTime timestamp,
+  String? target,
+});
+
 class AppLogRepository {
   AppLogRepository({int maximumEntries = 250})
     : _maximumEntries = maximumEntries;
@@ -12,12 +21,14 @@ class AppLogRepository {
   static final AppLogRepository instance = AppLogRepository();
 
   final ListQueue<AppLogEntry> _entries = ListQueue<AppLogEntry>();
-  final StreamController<AppLogEntry> _controller =
-      StreamController<AppLogEntry>.broadcast(sync: true);
+  final StreamController<void> _controller = StreamController<void>.broadcast(
+    sync: true,
+  );
   int _maximumEntries;
   int _nextSequence = 0;
 
-  Stream<AppLogEntry> get entriesAdded => _controller.stream;
+  /// Emits once per [add] or [addAll] call, after the entries are retained.
+  Stream<void> get changes => _controller.stream;
   IList<AppLogEntry> get snapshot => _entries.toIList();
   int get maximumEntries => _maximumEntries;
 
@@ -30,17 +41,41 @@ class AppLogRepository {
     required AppLogLevel level,
     required String message,
     Object? error,
+    AppLogSource source = AppLogSource.flutter,
   }) {
-    final entry = AppLogEntry(
-      sequence: _nextSequence++,
-      timestamp: DateTime.now(),
-      level: level,
-      message: _sanitize(message, 2000),
-      errorSummary: error == null ? null : _sanitize(error.toString(), 500),
+    _entries.addLast(
+      AppLogEntry(
+        sequence: _nextSequence++,
+        timestamp: DateTime.now(),
+        level: level,
+        message: _sanitize(message, 2000),
+        source: source,
+        errorSummary: error == null ? null : _sanitize(error.toString(), 500),
+      ),
     );
-    _entries.addLast(entry);
     _trim();
-    _controller.add(entry);
+    _controller.add(null);
+  }
+
+  /// Retains a batch of external records with a single change notification.
+  void addAll(Iterable<ExternalLogRecord> records) {
+    var added = false;
+    for (final record in records) {
+      _entries.addLast(
+        AppLogEntry(
+          sequence: _nextSequence++,
+          timestamp: record.timestamp,
+          level: record.level,
+          message: _sanitize(record.message, 2000),
+          source: record.source,
+          target: record.target,
+        ),
+      );
+      added = true;
+    }
+    if (!added) return;
+    _trim();
+    _controller.add(null);
   }
 
   void clear() {
@@ -117,6 +152,16 @@ class AppLogger {
     if (!_accepts(AppLogLevel.fatal)) return;
     _capture(AppLogLevel.fatal, message, error: error);
     _logger.f(message, error: error, stackTrace: stackTrace);
+  }
+
+  /// Captures records from another runtime (e.g. Rust) into the log viewer.
+  ///
+  /// These records are not echoed to the console: their origin already
+  /// printed them.
+  static void captureExternal(Iterable<ExternalLogRecord> records) {
+    AppLogRepository.instance.addAll(
+      records.where((record) => _accepts(record.level)),
+    );
   }
 
   static bool _accepts(AppLogLevel level) => level.index >= _minimumLevel.index;

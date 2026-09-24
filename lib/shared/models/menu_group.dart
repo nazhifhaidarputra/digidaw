@@ -3,8 +3,10 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/view/setting_screen.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:window_manager/window_manager.dart';
@@ -67,19 +69,16 @@ class DawToolbarMenuGroupFactory {
     );
 
     if (path != null) {
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(child: CircularProgressIndicator()),
-        );
-      }
-
-      await ref.read(projectProvider.notifier).saveProject(path);
-      await _updateWindowTitle(path);
-
-      if (context.mounted) Navigator.of(context).pop();
+      final saved = await _saveProjectBlocking(ref, path);
+      if (saved.isOk()) await _updateWindowTitle(path);
     }
+  }
+
+  static Future<Result<void>> _saveProjectBlocking(WidgetRef ref, String path) {
+    final project = ref.read(projectProvider.notifier);
+    return ref
+        .read(blockingTaskProvider.notifier)
+        .run(label: 'Saving project...', task: () => project.saveProject(path));
   }
 
   static DawToolbarMenuGroup createProjectMenuGroup() => DawToolbarMenuGroup(
@@ -110,44 +109,13 @@ class DawToolbarMenuGroupFactory {
           final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['karbeat', 'dgdaw']);
           if (result != null && result.files.single.path != null) {
             final path = result.files.single.path!;
+            final project = ref.read(projectProvider.notifier);
 
-            // Put up the "Glass Pane" blocking all touch events
-            if (context.mounted) {
-              showDialog(
-                context: context,
-                barrierDismissible: false, // User cannot tap outside to dismiss
-                useRootNavigator: true, // Ensures it covers the entire app
-                builder: (context) => PopScope(
-                  canPop: false, // Prevents Android back-button from dismissing it
-                  child: const Center(
-                    child: Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [CircularProgressIndicator(), SizedBox(height: 16), Text("Loading Project...")],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            try {
-              // Await the Rust Shadow Load & Swap
-              await ref.read(projectProvider.notifier).loadProject(path);
-
-              await _updateWindowTitle(path);
-            } catch (e) {
-              debugPrint("Failed to load project: $e");
-              // Optional: Show error snackbar here
-            } finally {
-              // Tear down the "Glass Pane" SAFELY
-              if (context.mounted) {
-                Navigator.of(context, rootNavigator: true).pop();
-              }
-            }
+            // Await the Rust Shadow Load & Swap behind the global blocking overlay.
+            final loaded = await ref
+                .read(blockingTaskProvider.notifier)
+                .run(label: 'Loading project...', task: () => project.loadProject(path));
+            if (loaded.isOk()) await _updateWindowTitle(path);
           }
         },
       ),
@@ -160,16 +128,8 @@ class DawToolbarMenuGroupFactory {
             // If the project has never been saved, trigger Save As
             await _performSaveAs(context, ref);
           } else {
-            // Otherwise, save silently to the existing path
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => const Center(child: CircularProgressIndicator()),
-            );
-
-            await ref.read(projectProvider.notifier).saveProject(currentFilePath);
-
-            if (context.mounted) Navigator.of(context).pop();
+            // Otherwise, save to the existing path
+            await _saveProjectBlocking(ref, currentFilePath);
           }
         },
       ),

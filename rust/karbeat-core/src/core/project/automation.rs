@@ -291,14 +291,13 @@ impl AutomationLane {
         }
     }
 
-    /// Add a point to the lane (maintains sorted order by time).
+    /// Add a point to the lane, keeping time order. A point added on an occupied tick goes
+    /// after the points already there, so it starts a new segment instead of reshaping the
+    /// segment that ends on that tick.
     pub fn add_point(&mut self, mut point: AutomationPoint) -> AutomationPointId {
         point.id = AutomationPointId::next(&mut self.next_point_id);
         let id = point.id;
-        let idx = self
-            .points
-            .binary_search_by(|p| p.time_ticks.cmp(&point.time_ticks))
-            .unwrap_or_else(|i| i);
+        let idx = insertion_index_after(&self.points, point.time_ticks);
         self.points.insert(idx, point);
         id
     }
@@ -310,7 +309,11 @@ impl AutomationLane {
         Some(self.points.remove(index))
     }
 
-    /// Update a point at the given index.
+    /// Updates a point and returns its index afterwards.
+    ///
+    /// A point that stays on its tick keeps its position among points sharing that tick.
+    /// A point moved to another tick is placed after the points already there, like
+    /// [`Self::add_point`].
     pub fn update_point(
         &mut self,
         id: u64,
@@ -323,6 +326,7 @@ impl AutomationLane {
         let index = self.points.iter().position(|point| point.id == id)?;
 
         let mut point = self.points.remove(index);
+        let previous_time = point.time_ticks;
         if let Some(tt) = time_ticks {
             point.time_ticks = tt;
         }
@@ -336,12 +340,10 @@ impl AutomationLane {
             point.curve_type = ct;
         }
 
-        let new_index = match self
-            .points
-            .binary_search_by(|p| p.time_ticks.cmp(&point.time_ticks))
-        {
-            Ok(pos) => pos,
-            Err(pos) => pos,
+        let new_index = if point.time_ticks == previous_time {
+            index
+        } else {
+            insertion_index_after(&self.points, point.time_ticks)
         };
 
         self.points.insert(new_index, point);
@@ -352,67 +354,10 @@ impl AutomationLane {
     /// Get the interpolated normalized value (0.0–1.0) at a given time in ticks.
     /// Returns `None` if the lane is disabled or has no points.
     pub fn value_at(&self, time_ticks: u32) -> Option<NormalizedF64> {
-        if !self.enabled || self.points.is_empty() {
+        if !self.enabled {
             return None;
         }
-
-        // Before first point: return first point's value
-        if time_ticks <= self.points[0].time_ticks {
-            return Some(self.points[0].value);
-        }
-
-        // After last point: return last point's value
-        let last = self.points.last()?;
-        if time_ticks >= last.time_ticks {
-            return Some(last.value);
-        }
-
-        // Find surrounding points using binary search
-        let idx = self
-            .points
-            .binary_search_by(|p| p.time_ticks.cmp(&time_ticks))
-            .unwrap_or_else(|i| i);
-
-        // idx is where we'd insert, so points[idx-1] <= time < points[idx]
-        if idx == 0 {
-            return Some(self.points[0].value);
-        }
-
-        let p1 = &self.points[idx - 1];
-        let p2 = &self.points[idx];
-
-        // Calculate interpolation factor (0.0 to 1.0)
-        let duration = p2.time_ticks.saturating_sub(p1.time_ticks);
-        if duration == 0 {
-            return Some(p1.value);
-        }
-
-        let t = ((time_ticks - p1.time_ticks) as f64) / (duration as f64);
-        let tension = p1.tension.get();
-
-        // Interpolate based on curve type of the FIRST point
-        let value = match p1.curve_type {
-            AutomationCurveType::Linear => {
-                let t_shaped = apply_tension_to_t(t, tension);
-                lerp(t_shaped, p1.value.get(), p2.value.get())
-            }
-            AutomationCurveType::Exponential => {
-                let v1 = p1.value.get().max(1e-4);
-                let v2 = p2.value.get().max(1e-4);
-                let t_biased = apply_tension_to_t(t, -tension); // inverted: feels natural
-                v1 * (v2 / v1).powf(t_biased)
-            }
-            AutomationCurveType::Step => {
-                let jump_at = 0.5 + tension * 0.5; // maps [-1,1] → [0,1]
-                if t < jump_at {
-                    p1.value.get()
-                } else {
-                    p2.value.get()
-                }
-            }
-        };
-
-        Some(NormalizedF64::new(value))
+        interpolate_points(&self.points, time_ticks)
     }
 
     /// Convert a normalized value (0.0–1.0) to the actual parameter value.
@@ -439,7 +384,80 @@ impl AutomationLane {
     }
 }
 
-// Maps a linear t ∈ [0,1] through a tension-controlled cubic ease.
+/// Index after every point at or before `time_ticks` in a time-ordered slice.
+#[inline]
+fn insertion_index_after(points: &[AutomationPoint], time_ticks: u32) -> usize {
+    points.partition_point(|p| p.time_ticks <= time_ticks)
+}
+
+/// Evaluates time-ordered automation points at `time_ticks`.
+///
+/// This is the single interpolation contract shared by the project model, the
+/// audio thread, and the Flutter curve painter. Values before the first point
+/// hold the first value, values after the last point hold the last value.
+/// Points sharing a tick form a vertical jump: the segment arriving at that
+/// tick ends on the first of them, and from that tick on the last one applies.
+/// Returns `None` when `points` is empty. Allocation-free and real-time safe.
+#[inline]
+pub fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> Option<NormalizedF64> {
+    let first = points.first()?;
+    if time_ticks < first.time_ticks {
+        return Some(first.value);
+    }
+
+    // `p1` is the last point at or before the time, `p2` the first point after it.
+    let idx = insertion_index_after(points, time_ticks);
+    let p1 = idx
+        .checked_sub(1)
+        .and_then(|previous| points.get(previous))?;
+    let Some(p2) = points.get(idx) else {
+        return Some(p1.value);
+    };
+    let duration = p2.time_ticks.saturating_sub(p1.time_ticks);
+    if duration == 0 {
+        return Some(p1.value);
+    }
+
+    let elapsed = time_ticks.saturating_sub(p1.time_ticks);
+    let t = f64::from(elapsed) / f64::from(duration);
+    Some(NormalizedF64::new(interpolate_segment(p1, p2.value, t)))
+}
+
+/// Evaluates the segment starting at `from` and ending at `to_value`.
+///
+/// `t` is the normalized position inside the segment. The curve type and the
+/// tension of the segment's FIRST point select the shape:
+/// - Linear: tension bends the ramp (positive eases out, negative eases in).
+/// - Exponential: geometric ramp; tension is inverted so dragging feels natural.
+/// - Step: holds the first value until the next point, tension is ignored.
+#[inline]
+pub fn interpolate_segment(from: &AutomationPoint, to_value: NormalizedF64, t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    let tension = from.tension.get();
+    let v1 = from.value.get();
+    let v2 = to_value.get();
+
+    match from.curve_type {
+        AutomationCurveType::Linear => lerp(apply_tension_to_t(t, tension), v1, v2),
+        AutomationCurveType::Exponential => {
+            let v1 = v1.max(EXPONENTIAL_FLOOR);
+            let v2 = v2.max(EXPONENTIAL_FLOOR);
+            v1 * (v2 / v1).powf(apply_tension_to_t(t, -tension))
+        }
+        AutomationCurveType::Step => {
+            if t < 1.0 {
+                v1
+            } else {
+                v2
+            }
+        }
+    }
+}
+
+/// Smallest value used by exponential segments so the ratio stays finite.
+const EXPONENTIAL_FLOOR: f64 = 1e-4;
+
+/// Maps a linear t ∈ [0,1] through a tension-controlled ease.
 ///
 /// Uses a smoothstep-family blend:
 ///   tension = 0  → identity (t)
@@ -461,5 +479,144 @@ fn apply_tension_to_t(t: f64, tension: f64) -> f64 {
         // ease-out: blend toward √t
         let alpha = tension; // 0..1
         lerp(alpha, t, t.sqrt())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn point(
+        time_ticks: u32,
+        value: f64,
+        curve_type: AutomationCurveType,
+        tension: f64,
+    ) -> AutomationPoint {
+        AutomationPoint {
+            id: AutomationPointId::default(),
+            time_ticks,
+            value: NormalizedF64::new(value),
+            curve_type,
+            tension: BipolarF64::new(tension),
+        }
+    }
+
+    fn value_at(points: &[AutomationPoint], time_ticks: u32) -> f64 {
+        interpolate_points(points, time_ticks).map_or(f64::NAN, NormalizedF64::get)
+    }
+
+    #[test]
+    fn holds_first_and_last_values_outside_the_points() {
+        let points = [
+            point(100, 0.2, AutomationCurveType::Linear, 0.0),
+            point(200, 0.8, AutomationCurveType::Linear, 0.0),
+        ];
+        assert_eq!(value_at(&points, 0), 0.2);
+        assert_eq!(value_at(&points, 5_000), 0.8);
+        assert!(interpolate_points(&[], 10).is_none());
+    }
+
+    #[test]
+    fn linear_tension_bends_the_segment_midpoint() {
+        let flat = [
+            point(0, 0.0, AutomationCurveType::Linear, 0.0),
+            point(100, 1.0, AutomationCurveType::Linear, 0.0),
+        ];
+        let eased_out = [
+            point(0, 0.0, AutomationCurveType::Linear, 1.0),
+            point(100, 1.0, AutomationCurveType::Linear, 0.0),
+        ];
+        let eased_in = [
+            point(0, 0.0, AutomationCurveType::Linear, -1.0),
+            point(100, 1.0, AutomationCurveType::Linear, 0.0),
+        ];
+        assert!((value_at(&flat, 50) - 0.5).abs() < 1e-9);
+        assert!((value_at(&eased_out, 25) - 0.5).abs() < 1e-9);
+        assert!((value_at(&eased_in, 50) - 0.25).abs() < 1e-9);
+    }
+
+    #[test]
+    fn step_holds_until_the_next_point_regardless_of_tension() {
+        let points = [
+            point(0, 0.1, AutomationCurveType::Step, 0.9),
+            point(100, 0.9, AutomationCurveType::Linear, 0.0),
+        ];
+        assert_eq!(value_at(&points, 99), 0.1);
+        assert_eq!(value_at(&points, 100), 0.9);
+    }
+
+    /// C at tick 0 (100%), A at tick 100 (50%), D at tick 200 (100%), then B added at A's tick.
+    fn lane_with_point_added_on_occupied_tick() -> (AutomationLane, [AutomationPointId; 4]) {
+        let mut lane = AutomationLane::new(AutomationId::default(), "Gain", 0.0, 1.0, 0.5);
+        let c = lane.add_point(AutomationPoint::new(0, NormalizedF64::new(1.0)));
+        let a = lane.add_point(AutomationPoint::new(100, NormalizedF64::new(0.5)));
+        let d = lane.add_point(AutomationPoint::new(200, NormalizedF64::new(1.0)));
+        let b = lane.add_point(AutomationPoint::new(100, NormalizedF64::new(0.0)));
+        (lane, [c, a, b, d])
+    }
+
+    fn ids(lane: &AutomationLane) -> Vec<AutomationPointId> {
+        lane.points.iter().map(|p| p.id).collect()
+    }
+
+    #[test]
+    fn point_added_on_an_occupied_tick_starts_the_next_segment() {
+        let (lane, order) = lane_with_point_added_on_occupied_tick();
+        assert_eq!(ids(&lane), order);
+
+        // C -> A keeps ending on A, then the lane jumps to B and ramps B -> D.
+        assert!((value_at(&lane.points, 50) - 0.75).abs() < 1e-9);
+        assert_eq!(value_at(&lane.points, 100), 0.0);
+        assert!((value_at(&lane.points, 150) - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn editing_a_point_on_a_shared_tick_keeps_the_order() {
+        let (mut lane, order) = lane_with_point_added_on_occupied_tick();
+        let [_, a, b, _] = order;
+
+        for (point, value) in [(a, 0.9), (b, 0.3), (a, 0.1), (b, 0.8)] {
+            let index = lane.update_point(
+                point.to_u64(),
+                Some(100),
+                Some(NormalizedF64::new(value)),
+                Some(BipolarF64::new(0.4)),
+                None,
+            );
+            assert_eq!(
+                lane.points.get(index.unwrap_or(usize::MAX)).map(|p| p.id),
+                Some(point)
+            );
+            assert_eq!(ids(&lane), order);
+        }
+    }
+
+    #[test]
+    fn point_moved_onto_an_occupied_tick_goes_after_the_points_there() {
+        let (mut lane, [c, a, b, d]) = lane_with_point_added_on_occupied_tick();
+
+        lane.update_point(d.to_u64(), Some(100), None, None, None);
+
+        assert_eq!(ids(&lane), [c, a, b, d]);
+        lane.update_point(c.to_u64(), Some(100), None, None, None);
+        assert_eq!(ids(&lane), [a, b, d, c]);
+    }
+
+    #[test]
+    fn audio_lane_matches_project_lane_evaluation() {
+        let mut lane = AutomationLane::new(AutomationId::default(), "Cutoff", 0.0, 1.0, 0.5);
+        lane.add_point(AutomationPoint::with_curve(
+            0,
+            NormalizedF64::new(0.1),
+            AutomationCurveType::Exponential,
+        ));
+        lane.add_point(AutomationPoint::new(480, NormalizedF64::new(0.9)));
+        lane.points[0].tension = BipolarF64::new(0.4);
+        let audio_lane = crate::audio::render_state::AudioAutomationLane::from(lane.clone());
+
+        for tick in [0, 120, 240, 360, 480, 960] {
+            let expected = lane.value_at(tick).map_or(f64::NAN, NormalizedF64::get);
+            assert_eq!(audio_lane.value_at_ticks(tick), expected);
+        }
     }
 }

@@ -50,6 +50,7 @@ app.*.map.json
 .agents/
 opencode.json
 .zed
+.claude/
 
 # ENVs and Secrets
 .env

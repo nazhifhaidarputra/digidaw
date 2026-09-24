@@ -416,6 +416,15 @@ class MixerNotifier extends Notifier<MixerEditorState> {
     mixer_api.UiMixerChannelTarget target,
     List<mixer_api.UiEffectSummary> effects,
   ) {
+    _projectNotifier.updateMixer(_withTargetEffects(mixer, target, effects));
+  }
+
+  /// Returns [mixer] with the effect chain of [target] replaced by [effects].
+  mixer_api.UiMixerState _withTargetEffects(
+    mixer_api.UiMixerState mixer,
+    mixer_api.UiMixerChannelTarget target,
+    List<mixer_api.UiEffectSummary> effects,
+  ) {
     mixer_api.UiMixerChannel withEffects(mixer_api.UiMixerChannel channel) {
       return mixer_api.UiMixerChannel(
         volume: channel.volume,
@@ -427,7 +436,7 @@ class MixerNotifier extends Notifier<MixerEditorState> {
       );
     }
 
-    final updatedMixer = switch (target) {
+    return switch (target) {
       mixer_api.UiMixerChannelTarget_Track(:final field0) => mixer.copyWith(
         channels: Map<int, mixer_api.UiMixerChannel>.from(mixer.channels)
           ..[field0] = withEffects(mixer.channels[field0]!),
@@ -442,7 +451,6 @@ class MixerNotifier extends Notifier<MixerEditorState> {
         masterBus: withEffects(mixer.masterBus),
       ),
     };
-    _projectNotifier.updateMixer(updatedMixer);
   }
 }
 
@@ -615,6 +623,54 @@ extension MixerService on MixerNotifier {
     });
   }
 
+  /// Enables or bypasses an effect slot, rolling back if Rust rejects it.
+  Future<Result<void>> setEffectBypass({
+    required mixer_api.UiMixerChannelTarget target,
+    required int effectId,
+    required bool bypass,
+  }) {
+    return _runBackendOperation(() async {
+      final originalMixer = _mixerState;
+      final originalEffects = originalMixer == null
+          ? null
+          : _effectsForTarget(originalMixer, target);
+      if (originalMixer == null || originalEffects == null) {
+        return notifyErrorResult(Exception("Mixer channel not found"));
+      }
+      if (!originalEffects.any((effect) => effect.id == effectId)) {
+        return notifyErrorResult(Exception("Effect not found"));
+      }
+
+      _replaceTargetEffects(originalMixer, target, [
+        for (final effect in originalEffects)
+          effect.id == effectId
+              ? mixer_api.UiEffectSummary(
+                  id: effect.id,
+                  registryId: effect.registryId,
+                  name: effect.name,
+                  bypass: bypass,
+                )
+              : effect,
+      ]);
+      final result = await AsyncValue.guard(
+        () => mixer_api.setEffectBypass(
+          ctx: _ctx,
+          target: target,
+          effectInstanceId: effectId,
+          bypass: bypass,
+        ),
+      );
+      if (result.hasError) {
+        AppLogger.error(
+          "MixerNotifier: failed to set effect bypass: ${result.error}",
+        );
+        _projectNotifier.updateMixer(originalMixer);
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
+  }
+
   Future<Result<void>> removeEffectFromTargetMixerChannel({
     required mixer_api.UiMixerChannelTarget target,
     required int effectId,
@@ -631,11 +687,9 @@ extension MixerService on MixerNotifier {
         return notifyErrorResult(Exception("Effect not found"));
       }
 
-      _replaceTargetEffects(
-        originalMixer,
-        target,
-        originalEffects.where((effect) => effect.id != effectId).toList(),
-      );
+      // Rust removes the effect and its automation as one transaction, so
+      // the UI waits for that result and publishes both in a single update
+      // instead of guessing which lanes go away.
       final result = await AsyncValue.guard(
         () => mixer_api.removeEffectFromTargetMixerChannel(
           ctx: _ctx,
@@ -647,9 +701,19 @@ extension MixerService on MixerNotifier {
         AppLogger.error(
           "MixerNotifier: failed to remove effect: ${result.error}",
         );
-        _projectNotifier.updateMixer(originalMixer);
         return notifyErrorResult(Exception(result.error.toString()));
       }
+
+      final latestMixer = _mixerState ?? originalMixer;
+      final latestEffects = _effectsForTarget(latestMixer, target) ?? const [];
+      _projectNotifier.commitEffectRemoval(
+        mixer: _withTargetEffects(
+          latestMixer,
+          target,
+          latestEffects.where((effect) => effect.id != effectId).toList(),
+        ),
+        removedAutomation: result.requireValue,
+      );
       return Result.ok(null);
     });
   }

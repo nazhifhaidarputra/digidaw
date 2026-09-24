@@ -358,6 +358,7 @@ impl AudioEngine {
             id: effect_id,
             registry_id: install.registry_id,
             plugin,
+            bypass: install.bypass,
         };
         if install.replace_missing {
             let retired = self
@@ -873,6 +874,7 @@ mod tests {
                 id: EffectId::from(12),
                 registry_id: 124,
                 plugin: second.install().unwrap(),
+                bypass: false,
             });
         let mut snapshot = engine.export_snapshot();
         let mut retired = None;
@@ -910,6 +912,7 @@ mod tests {
                 id: EffectId::from(12),
                 registry_id: u32::MAX,
                 plugin: Box::new(DigidawDelay::build()),
+                bypass: false,
             });
         let mut snapshot = engine.export_snapshot();
         let mut retired = None;
@@ -951,6 +954,7 @@ mod tests {
                 id: EffectId::from(1),
                 registry_id: 123,
                 plugin: Box::new(endpoint),
+                bypass: false,
             });
         assert!(engine.validate_hosted_processing().is_ok());
         status.store(-1, Ordering::Release);

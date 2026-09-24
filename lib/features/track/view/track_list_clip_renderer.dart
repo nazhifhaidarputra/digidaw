@@ -12,6 +12,9 @@ class _ClipRenderer extends ConsumerWidget {
   final double clipLeftOffset;
   final Map<int, WaveformHandle> waveformMap;
 
+  /// Renders a solid block with only the clip title, for shrunk tracks.
+  final bool compact;
+
   const _ClipRenderer({
     required this.clip,
     required this.trackType,
@@ -23,11 +26,13 @@ class _ClipRenderer extends ConsumerWidget {
     required this.scrollController,
     required this.clipLeftOffset,
     required this.waveformMap,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
+    if (compact) return _buildCompact(colors);
     return Container(
       decoration: BoxDecoration(
         color: color.withAlpha(100),
@@ -65,6 +70,31 @@ class _ClipRenderer extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompact(ColorScheme colors) {
+    final foreground = color.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(3),
+        border: isSelected ? Border.all(color: colors.primary, width: 2) : null,
+      ),
+      child: Text(
+        clip.name,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

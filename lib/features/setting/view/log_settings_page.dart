@@ -20,6 +20,7 @@ class LogSettingsPage extends ConsumerStatefulWidget {
 class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
   final _searchController = TextEditingController();
   AppLogLevel _displayMinimum = AppLogLevel.trace;
+  AppLogSource? _displaySource;
   bool _displayPaused = false;
   IList<AppLogEntry> _pausedEntries = const IListConst<AppLogEntry>([]);
 
@@ -48,8 +49,10 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
         .where(
           (entry) =>
               entry.level.index >= _displayMinimum.index &&
+              (_displaySource == null || entry.source == _displaySource) &&
               (query.isEmpty ||
                   entry.message.toLowerCase().contains(query) ||
+                  (entry.target?.toLowerCase().contains(query) ?? false) ||
                   (entry.errorSummary?.toLowerCase().contains(query) ?? false)),
         )
         .toIList();
@@ -70,7 +73,8 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'This viewer contains Dart application logs. Rust audio-engine logs are not included.',
+                'This viewer contains Flutter application logs and Rust '
+                'audio-engine logs. Each entry is labelled with its source.',
               ),
               const SizedBox(height: 20),
               Wrap(
@@ -132,9 +136,12 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                 ],
               ),
               const SizedBox(height: 16),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
+                  SizedBox(
+                    width: 320,
                     child: TextField(
                       key: const ValueKey('log-search'),
                       controller: _searchController,
@@ -145,7 +152,6 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
                   SizedBox(
                     width: 190,
                     child: DropdownButtonFormField<AppLogLevel>(
@@ -161,6 +167,29 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                         if (level != null) {
                           setState(() => _displayMinimum = level);
                         }
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 160,
+                    child: DropdownButtonFormField<AppLogSource?>(
+                      isExpanded: true,
+                      key: const ValueKey('display-log-source'),
+                      initialValue: _displaySource,
+                      decoration: const InputDecoration(
+                        labelText: 'Source',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All')),
+                        for (final source in AppLogSource.values)
+                          DropdownMenuItem(
+                            value: source,
+                            child: Text(source.label),
+                          ),
+                      ],
+                      onChanged: (source) {
+                        setState(() => _displaySource = source);
                       },
                     ),
                   ),
@@ -313,12 +342,60 @@ class _LogEntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final target = entry.target;
     return ListTile(
       dense: true,
       leading: Text(entry.level.name.toUpperCase()),
-      title: SelectableText(entry.message),
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _LogSourceLabel(source: entry.source),
+          const SizedBox(width: 8),
+          Expanded(child: SelectableText(entry.message)),
+        ],
+      ),
       subtitle: Text(
-        '${entry.timestamp.toIso8601String()}${entry.errorSummary == null ? '' : '\n${entry.errorSummary}'}',
+        '${entry.timestamp.toIso8601String()}'
+        '${target == null ? '' : ' • $target'}'
+        '${entry.errorSummary == null ? '' : '\n${entry.errorSummary}'}',
+      ),
+    );
+  }
+}
+
+class _LogSourceLabel extends StatelessWidget {
+  const _LogSourceLabel({required this.source});
+
+  final AppLogSource source;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final (background, foreground) = switch (source) {
+      AppLogSource.flutter => (
+        colors.primaryContainer,
+        colors.onPrimaryContainer,
+      ),
+      AppLogSource.rust => (
+        colors.tertiaryContainer,
+        colors.onTertiaryContainer,
+      ),
+    };
+    return Container(
+      key: ValueKey('log-source-${source.name}'),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        source.label.toUpperCase(),
+        style: TextStyle(
+          color: foreground,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+        ),
       ),
     );
   }

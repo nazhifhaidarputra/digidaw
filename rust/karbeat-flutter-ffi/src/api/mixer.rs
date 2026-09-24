@@ -9,7 +9,7 @@ pub use karbeat_core::{
     plugin_types::{ParameterSpec, ParameterValueType},
 };
 
-use crate::api::{context::DawContext, plugin::UiPluginTarget};
+use crate::api::{automation::RemovedAutomationDto, context::DawContext, plugin::UiPluginTarget};
 use karbeat_core::api::mixer_api;
 use karbeat_core::commands::MixerChannelTarget;
 use karbeat_core::core::project::mixer::{
@@ -125,6 +125,8 @@ pub struct UiEffectSummary {
     pub id: u64,
     pub registry_id: u32,
     pub name: String,
+    /// Whether the effect slot passes audio through untouched.
+    pub bypass: bool,
 }
 
 impl From<&MixerChannel> for UiMixerChannel {
@@ -143,6 +145,7 @@ impl From<&MixerChannel> for UiMixerChannel {
                     id: instance.id.to_u64(),
                     registry_id: instance.instance.registry_id,
                     name: instance.instance.name.clone(),
+                    bypass: instance.instance.bypass,
                 })
                 .collect(),
         }
@@ -516,12 +519,8 @@ pub fn add_effect_to_mixer_channel_by_id(
     if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core::api::external_plugin_api::begin_add_effect(
-                &core,
-                target,
-                registry_id,
-            )
-            .map_err(|error| error.to_string())?
+            karbeat_core::api::external_plugin_api::begin_add_effect(&core, target, registry_id)
+                .map_err(|error| error.to_string())?
         };
         let completed = karbeat_core::api::external_plugin_api::execute_install(pending)
             .map_err(|error| error.to_string())?;
@@ -547,19 +546,18 @@ pub fn remove_effect_from_mixer_channel(
     ctx: &DawContext,
     track_id: u64,
     effect_instance_id: u64,
-) -> Result<(), String> {
-    remove_effect_from_target_mixer_channel(
+) -> Result<RemovedAutomationDto, String> {
+    let removed = remove_effect_from_target_mixer_channel(
         ctx,
         UiMixerChannelTarget::Track(track_id),
         effect_instance_id,
-    )
-    ?;
+    )?;
     log::info!(
         "Removed effect instance ID {} from track {}",
         effect_instance_id,
         track_id
     );
-    Ok(())
+    Ok(removed)
 }
 
 pub fn move_effect_order(
@@ -578,11 +576,30 @@ pub fn move_effect_order(
     .map_err(|error| error.to_string())
 }
 
+/// Enables or bypasses an effect slot in a track, bus, or master chain.
+pub fn set_effect_bypass(
+    ctx: &DawContext,
+    target: UiMixerChannelTarget,
+    effect_instance_id: u64,
+    bypass: bool,
+) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
+    mixer_api::set_effect_bypass(
+        ctx,
+        MixerChannelTarget::from(&target),
+        EffectId::from_u64(effect_instance_id),
+        bypass,
+    )
+    .map_err(|error| error.to_string())
+}
+
+/// Removes an effect and the automation lanes that drive it in one transaction, returning
+/// the removed automation IDs so the UI can prune the same entries.
 pub fn remove_effect_from_target_mixer_channel(
     ctx: &DawContext,
     target: UiMixerChannelTarget,
     effect_instance_id: u64,
-) -> Result<(), String> {
+) -> Result<RemovedAutomationDto, String> {
     let operation = ctx.begin_project_operation();
     let mixer_target = MixerChannelTarget::from(&target);
     let effect_target = match &mixer_target {
@@ -602,11 +619,9 @@ pub fn remove_effect_from_target_mixer_channel(
             karbeat_core::audio::event::PluginTarget::MasterEffect(effect_id)
         }
     };
-    let external = karbeat_core::api::external_plugin_api::descriptor(
-        &operation.read_core(),
-        plugin_target,
-    )
-    .is_some();
+    let external =
+        karbeat_core::api::external_plugin_api::descriptor(&operation.read_core(), plugin_target)
+            .is_some();
     if external {
         let pending = {
             let core = operation.read_core();
@@ -619,17 +634,20 @@ pub fn remove_effect_from_target_mixer_channel(
         };
         let completed = karbeat_core::api::external_plugin_api::execute_removal(pending)
             .map_err(|error| error.to_string())?;
-        karbeat_core::api::external_plugin_api::commit_removal(
+        let removed = karbeat_core::api::external_plugin_api::commit_removal(
             &mut operation.write_core(),
             completed,
         );
-        Ok(())
+        karbeat_core::api::external_plugin_api::effect_removal_result(removed)
+            .map(RemovedAutomationDto::from)
+            .map_err(|error| error.to_string())
     } else {
         mixer_api::remove_effect_from_target_mixer_channel(
             &mut operation.write_core(),
             mixer_target,
             effect_id,
         )
+        .map(RemovedAutomationDto::from)
         .map_err(|error| error.to_string())
     }
 }
@@ -671,8 +689,8 @@ pub fn add_effect_to_master_bus(ctx: &DawContext, registry_id: u32) -> Result<()
 pub fn remove_effect_from_master_bus(
     ctx: &DawContext,
     effect_instance_id: u64,
-) -> Result<(), String> {
-    remove_effect_from_target_mixer_channel(
+) -> Result<RemovedAutomationDto, String> {
+    let removed = remove_effect_from_target_mixer_channel(
         ctx,
         UiMixerChannelTarget::Master,
         effect_instance_id,
@@ -681,7 +699,7 @@ pub fn remove_effect_from_master_bus(
         "Removed effect instance ID {} from master bus",
         effect_instance_id
     );
-    Ok(())
+    Ok(removed)
 }
 
 // ======================================
@@ -731,11 +749,7 @@ pub fn delete_bus(ctx: &DawContext, bus_id: u64) -> Result<(), String> {
 // ======================================
 
 /// Add an effect to a bus by its registry ID.
-pub fn add_effect_to_bus(
-    ctx: &DawContext,
-    bus_id: u64,
-    registry_id: u32,
-) -> Result<(), String> {
+pub fn add_effect_to_bus(ctx: &DawContext, bus_id: u64, registry_id: u32) -> Result<(), String> {
     let operation = ctx.begin_project_operation();
     let bus = BusId::from_u64(bus_id);
     let external = operation
