@@ -49,18 +49,9 @@ pub enum PluginScanEvent {
 }
 
 fn cache_path() -> Result<PathBuf, HostError> {
-    let base = if cfg!(target_os = "windows") {
-        std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-    } else if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches"))
-    } else {
-        std::env::var_os("XDG_CACHE_HOME")
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
-    }
-    .ok_or_else(|| HostError::Scanner("user cache directory is unavailable".into()))?;
-    Ok(base.join("digidaw/plugins/vst3-v1.json"))
+    let base = crate::core::file_manager::app_cache_dir()
+        .ok_or_else(|| HostError::Scanner("user cache directory is unavailable".into()))?;
+    Ok(base.join("plugins/vst3-v1.json"))
 }
 
 /// Returns the platform's conventional VST3 search directories.

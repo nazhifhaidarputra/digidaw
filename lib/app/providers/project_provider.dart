@@ -65,6 +65,12 @@ abstract class ApplicationDataStore with _$ApplicationDataStore {
     required IMap<int, ModulationLinkDto> modulationLinks,
     required IMap<int, AutomationLaneDto> automationPool,
     required IMap<int, ModulationSourceDto> modulationSources,
+
+    /// Increments on every full backend fetch (boot, new, load, undo/redo).
+    ///
+    /// Backend-owned resources such as audio buffers can be replaced while the
+    /// UI data stays equal, so providers holding such resources watch this.
+    @Default(0) int fullStateRevision,
   }) = _ApplicationDataStore;
 }
 
@@ -72,6 +78,7 @@ abstract class ApplicationDataStore with _$ApplicationDataStore {
 /// It coordinates the initialization, saving, and loading of projects.
 class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   DawContext? _dawContext;
+  int _fullStateRevision = 0;
 
   DawContext get dawContext => _dawContext!;
 
@@ -522,6 +529,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
       modulationLinks: links.lock,
       automationPool: lanes.lock,
       modulationSources: sources.lock,
+      fullStateRevision: ++_fullStateRevision,
     );
   }
 }

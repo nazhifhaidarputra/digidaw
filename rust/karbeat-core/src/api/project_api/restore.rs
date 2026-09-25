@@ -1,7 +1,9 @@
 use crate::{
     audio::{
         event::PluginTarget,
-        hosted_plugin::{HostedInstallResult, HostedPluginInstall, HostedProjectInstall},
+        hosted_plugin::{
+            HostedInstallResult, HostedPluginInstall, HostedProjectInstall, retire_control_transfer,
+        },
         missing_plugin::MissingPlugin,
         render_state::AudioGraphState,
     },
@@ -244,7 +246,7 @@ pub(super) fn execute_replace(
     let mut missing = HashMap::new();
     let mut installs = Vec::new();
     let mut receipts = Vec::new();
-    let mut control_retirements: Vec<Box<dyn FnMut() -> bool>> = Vec::new();
+    let mut control_retirements = Vec::new();
     for (target, plugin) in plugins(&pending.staged) {
         let Some(external) = &plugin.external else {
             continue;
@@ -312,9 +314,9 @@ pub(super) fn execute_replace(
             prepared.processor,
         );
         let install = install.with_bypass(plugin.bypass);
-        let (command, mut retirement) = karbeat_host::ControlTransfer::new(install);
+        let (command, retirement) = karbeat_host::ControlTransfer::new(install);
         installs.push(AudioCommand::InstallHostedPlugin(command));
-        control_retirements.push(Box::new(move || retirement.collect()));
+        control_retirements.push(retirement);
         receipts.push((target, instance, receipt));
     }
     let mut graph = AudioGraphState::from(&pending.staged);
@@ -375,7 +377,13 @@ pub(super) fn execute_replace(
         .context("Audio engine is unavailable")?
         .push(AudioCommand::InstallHostedProject(command))
         .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
-    match futures_lite::future::block_on(receipt.wait())? {
+    let result = futures_lite::future::block_on(receipt.wait());
+    // The project payload owns any plugin transfers DSP did not process, so retire it first.
+    retire_control_transfer(&mut project_retirement, "Hosted project");
+    for retirement in &mut control_retirements {
+        retire_control_transfer(retirement, "Hosted project plugin");
+    }
+    match result? {
         HostedInstallResult::Installed => {}
         result => anyhow::bail!("Audio engine rejected project replacement: {result:?}"),
     }
@@ -385,14 +393,6 @@ pub(super) fn execute_replace(
             result == HostedInstallResult::Installed,
             "Prepared external plugin was rejected: {result:?}"
         );
-    }
-    if !project_retirement.collect() {
-        log::warn!("Hosted project control transfer was not returned after acknowledgement");
-    }
-    for retirement in &mut control_retirements {
-        if !retirement() {
-            log::warn!("Hosted project plugin transfer was not returned after acknowledgement");
-        }
     }
     Ok(CompletedProjectRestore {
         staged: pending.staged,
@@ -421,6 +421,8 @@ pub(super) fn commit_replace(ctx: &mut DawContext, completed: CompletedProjectRe
         );
     }
     ctx.app_state = completed.staged;
+    // The previous project, its engine graph, and its plugin instances are freed by now or shortly.
+    crate::heap::schedule_release_to_os();
 }
 
 pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow::Result<()> {

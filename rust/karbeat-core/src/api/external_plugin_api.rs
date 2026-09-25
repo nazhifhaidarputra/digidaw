@@ -10,7 +10,7 @@ use crate::{
         event::PluginTarget,
         hosted_plugin::{
             HostedInstallResult, HostedPluginInstall, HostedPluginReconfiguration,
-            HostedPluginReplacement, HostedTrackGraph,
+            HostedPluginReplacement, HostedTrackGraph, retire_control_transfer,
         },
     },
     commands::{AudioCommand, EffectTarget},
@@ -392,10 +392,9 @@ pub fn execute_install(
             .push(AudioCommand::InstallHostedPlugin(command))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
-    let telemetry = wait_for_install(receipt)?;
-    if !control_retirement.collect() {
-        log::warn!("Hosted install control transfer was not returned after acknowledgement");
-    }
+    let telemetry = wait_for_install(receipt);
+    retire_control_transfer(&mut control_retirement, "Hosted install");
+    let telemetry = telemetry?;
     Ok(CompletedPluginInstall {
         staged: pending.staged,
         target,
@@ -589,12 +588,11 @@ pub fn execute_removal(pending: PendingPluginRemoval) -> anyhow::Result<Complete
             .push(AudioCommand::RemoveHostedPlugins(transfer))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
-    match futures_lite::future::block_on(receipt.wait())? {
+    let result = futures_lite::future::block_on(receipt.wait());
+    retire_control_transfer(&mut control_retirement, "Hosted removal");
+    match result? {
         HostedRemovalResult::Removed => {}
         result => anyhow::bail!("Audio engine rejected plugin removal: {result:?}"),
-    }
-    if !control_retirement.collect() {
-        log::warn!("Hosted removal control transfer was not returned after acknowledgement");
     }
     Ok(CompletedPluginRemoval {
         staged: pending.staged,
@@ -617,6 +615,8 @@ pub fn commit_removal(
         ctx.hosted_targets.remove(&target);
     }
     ctx.app_state = completed.staged;
+    // Removed native plugin instances are torn down shortly after their endpoints retire.
+    crate::heap::schedule_release_to_os();
     completed.removed
 }
 
@@ -983,10 +983,9 @@ pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPlu
             .push(AudioCommand::InstallHostedPlugin(command))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
-    let telemetry = wait_for_install(receipt)?;
-    if !control_retirement.collect() {
-        log::warn!("Hosted retry control transfer was not returned after acknowledgement");
-    }
+    let telemetry = wait_for_install(receipt);
+    retire_control_transfer(&mut control_retirement, "Hosted retry");
+    let telemetry = telemetry?;
     Ok(CompletedPluginRetry {
         target: pending.target,
         instance,
@@ -1180,12 +1179,9 @@ pub fn execute_reconfiguration(
             .push(AudioCommand::ReconfigureHostedPlugins(transfer))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
-    let _ = wait_for_install(receipt)?;
-    if !control_retirement.collect() {
-        log::warn!(
-            "Hosted reconfiguration control transfer was not returned after acknowledgement"
-        );
-    }
+    let installed = wait_for_install(receipt);
+    retire_control_transfer(&mut control_retirement, "Hosted reconfiguration");
+    installed?;
     Ok(CompletedPluginReconfiguration { states })
 }
 

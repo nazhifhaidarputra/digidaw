@@ -462,7 +462,12 @@ impl From<&ApplicationState> for AudioGraphState {
                 .collect(),
             routing: app.mixer.routing.clone().into_boxed_slice(),
             bus_ids: app.mixer.buses.keys().collect(),
-            asset_library: app.asset_library.clone(),
+            // The engine only reads decoded buffers; leaving the session directory to the
+            // project state keeps its filesystem cleanup off engine threads.
+            asset_library: AssetLibrary {
+                source_map: app.asset_library.source_map.clone(),
+                session_dir: None,
+            },
             automation_lanes: app
                 .automation_pool
                 .clone()

@@ -1,6 +1,22 @@
-use karbeat_host::{PreparedProcessor, ProcessingConfig};
+use karbeat_host::{ControlRetirement, PreparedProcessor, ProcessingConfig};
 
 use crate::{audio::event::PluginTarget, shared::TrackId};
+
+/// Upper bound for DSP to release a control transfer after its receipt resolved.
+const CONTROL_RETIREMENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Destroys a control transfer's payload on this worker once its receipt has resolved.
+///
+/// Call after the receipt resolves, whatever its result. A retirement dropped before DSP releases
+/// the transfer must leak the payload, including any rejected processor endpoint.
+pub(crate) fn retire_control_transfer<T: Send>(
+    retirement: &mut ControlRetirement<T>,
+    operation: &str,
+) {
+    if !retirement.collect_within(CONTROL_RETIREMENT_TIMEOUT) {
+        log::warn!("{operation} control transfer was not returned after acknowledgement");
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]

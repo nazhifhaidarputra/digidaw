@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use zip::{CompressionMethod, ZipWriter, read::ZipArchive, write::SimpleFileOptions};
 
 use crate::core::{
-    file_manager::audio_loader::load_audio_file,
+    file_manager::{app_cache_dir, audio_loader::load_audio_file},
     project::{ApplicationState, AudioSourceId, ProjectMetadata},
 };
 
@@ -107,13 +107,10 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
     app_state.migrate_legacy_audio_clip_placement();
 
     let library = &mut app_state.asset_library;
-    // Create a persistent cache directory for this session, avoiding randomized file names
-    // We use into_path() to intentionally leak the directory so it persists during playback
-    let cache_dir = tempfile::Builder::new()
-        .prefix("karbeat_session_")
-        .tempdir()
-        .context("Failed to create temporary session cache directory")?
-        .keep();
+    // Extracted sources are re-read when the project is saved, so the directory lives as long
+    // as any project state that references it and is deleted with the last one.
+    let session_dir = extraction_session_dir()?;
+    let cache_dir = session_dir.path();
 
     // PHASE 1: Sequentially extract all audio files to disk (I/O Bound)
     // We collect the paths into a vector to process them concurrently later.
@@ -186,8 +183,30 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
             .with_context(|| format!("Audio source key {id} missing from project arena"))?;
         *entry = Arc::new(waveform);
     }
+    library.session_dir = Some(Arc::new(session_dir));
 
     Ok(app_state)
+}
+
+/// Creates the directory that holds one loaded project's extracted audio files.
+///
+/// It lives in the on-disk user cache because the system temporary directory is often
+/// RAM-backed tmpfs on Linux.
+fn extraction_session_dir() -> anyhow::Result<tempfile::TempDir> {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("session_");
+    if let Some(directory) = app_cache_dir().map(|cache| cache.join("sessions")) {
+        match std::fs::create_dir_all(&directory).and_then(|()| builder.tempdir_in(&directory)) {
+            Ok(session) => return Ok(session),
+            Err(error) => log::warn!(
+                "Project session cache unavailable in {}, using the temporary directory: {error}",
+                directory.display()
+            ),
+        }
+    }
+    builder
+        .tempdir()
+        .context("Failed to create temporary session cache directory")
 }
 
 pub fn peek_project_metadata(path: &Path) -> anyhow::Result<ProjectMetadata> {
@@ -233,6 +252,75 @@ mod test {
     use tempfile::tempdir;
 
     const SAMPLE_RATE: u32 = 48000;
+
+    #[allow(
+        clippy::arithmetic_side_effects,
+        reason = "the fixture's sizes and sample values are small constants"
+    )]
+    fn write_mono_wav(path: &Path) {
+        let samples: Vec<i16> = (0..4_800).map(|i| (i % 100 - 50) * 100).collect();
+        let data_len = u32::try_from(samples.len() * 2).unwrap();
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16_u32.to_le_bytes());
+        bytes.extend_from_slice(&1_u16.to_le_bytes());
+        bytes.extend_from_slice(&1_u16.to_le_bytes());
+        bytes.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
+        bytes.extend_from_slice(&(SAMPLE_RATE * 2).to_le_bytes());
+        bytes.extend_from_slice(&2_u16.to_le_bytes());
+        bytes.extend_from_slice(&16_u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        for sample in samples {
+            bytes.extend_from_slice(&sample.to_le_bytes());
+        }
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn extracted_audio_is_deleted_with_the_last_project_state() {
+        use crate::audio::render_state::AudioGraphState;
+        use crate::core::file_manager::audio_loader::AudioLoader;
+
+        let dir = tempdir().unwrap();
+        let wav = dir.path().join("tone.wav");
+        write_mono_wav(&wav);
+        let mut state = ApplicationState::default();
+        state
+            .load_audio(wav.to_str().unwrap(), None, SAMPLE_RATE)
+            .unwrap();
+        let project = dir.path().join("with_audio.karbeat");
+        save_daw_project(&project, &state).unwrap();
+
+        let loaded = load_daw_project(&project, SAMPLE_RATE).unwrap();
+        let session = loaded
+            .asset_library
+            .session_dir
+            .as_ref()
+            .expect("embedded audio is extracted into a session directory")
+            .path()
+            .to_path_buf();
+        let extracted = loaded.asset_library.source_map.values().next().unwrap();
+        assert!(extracted.file_path.starts_with(&session));
+        assert!(extracted.file_path.is_file());
+        assert!(
+            AudioGraphState::from(&loaded)
+                .asset_library
+                .session_dir
+                .is_none()
+        );
+
+        let clone = loaded.clone();
+        drop(loaded);
+        assert!(
+            session.is_dir(),
+            "a remaining project state still needs the files"
+        );
+        drop(clone);
+        assert!(!session.exists());
+    }
 
     #[test]
     fn failed_replacement_cleans_temporary_archive_and_preserves_destination() {

@@ -62,6 +62,22 @@ impl<T: Send> ControlRetirement<T> {
         }
         false
     }
+
+    /// Polls [`Self::collect`] until the payload is destroyed or `timeout` elapses.
+    ///
+    /// DSP publishes a command's result before it drops the transfer, so a single `collect()`
+    /// right after the acknowledgement usually races that release. Blocks the calling control
+    /// worker; never call it from the audio thread.
+    pub fn collect_within(&mut self, timeout: std::time::Duration) -> bool {
+        let started = std::time::Instant::now();
+        while !self.collect() {
+            if started.elapsed() >= timeout {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_micros(100));
+        }
+        true
+    }
 }
 
 impl<T: Send> Drop for ControlRetirement<T> {
@@ -120,5 +136,16 @@ mod tests {
                 3,
             );
         }
+    }
+
+    #[test]
+    fn collect_within_waits_for_a_release_after_acknowledgement() {
+        let (transfer, mut retirement) = ControlTransfer::new(Box::new([0.0_f32; 64]));
+        let dsp = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            drop(transfer);
+        });
+        assert!(retirement.collect_within(std::time::Duration::from_secs(5)));
+        dsp.join().unwrap();
     }
 }

@@ -278,6 +278,10 @@ impl Ord for Note {
 pub struct AssetLibrary {
     /// Shared waveforms keyed by stable audio source ID.
     pub source_map: SlotMap<AudioSourceId, Arc<AudioWaveform>>,
+    /// Directory holding the loaded project's extracted audio files; deleted when the last
+    /// project state that references those files is dropped.
+    #[serde(skip)]
+    pub session_dir: Option<Arc<tempfile::TempDir>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

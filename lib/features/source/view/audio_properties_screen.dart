@@ -7,7 +7,6 @@ import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/track/view/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/src/rust/api/waveform.dart';
 
 class AudioPropertiesScreen extends ConsumerWidget {
   final int sourceId;
@@ -37,7 +36,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
 
         data: (props) {
           final handle = props.id != null
-              ? getWaveformHandle(ctx: ctx, sourceId: props.id!)
+              ? ref.watch(audioWaveformHandleProvider(props.id!))
               : null;
           return Column(
             children: [

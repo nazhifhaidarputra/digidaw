@@ -33,6 +33,8 @@ pub mod context;
 )]
 /// Persisted project domain, file management, and undo/redo history.
 pub mod core;
+/// Returns heap memory freed by large project swaps to the operating system.
+pub mod heap;
 #[allow(
     clippy::as_conversions,
     clippy::let_underscore_must_use,

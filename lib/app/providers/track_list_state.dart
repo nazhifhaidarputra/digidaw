@@ -1241,9 +1241,27 @@ class TrackListNotifier extends Notifier<TrackListState> {
 final trackListStateProvider =
     NotifierProvider<TrackListNotifier, TrackListState>(TrackListNotifier.new);
 
-final trackWaveformProvider =
-    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
-      ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
+/// Each handle keeps its whole decoded audio buffer alive in Rust, so stale
+/// handles must be released: entries dispose with their last listener and
+/// refresh when a full backend fetch may have replaced the buffers.
+final trackWaveformProvider = Provider.autoDispose
+    .family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+      ref.watch(
+        projectProvider.select(
+          (s) => (s.value?.tracks[arg.trackId], s.value?.fullStateRevision),
+        ),
+      );
       final ctx = ref.read(projectProvider.notifier).dawContext;
-      return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
+      final handles = getWaveformHandlesForTrack(
+        ctx: ctx,
+        trackId: arg.trackId,
+      );
+      // Unmounted widget closures (e.g. kept by stale semantics) can outlive
+      // this state, so release the buffers now instead of waiting for GC.
+      ref.onDispose(() {
+        for (final handle in handles.values) {
+          handle.dispose();
+        }
+      });
+      return handles;
     });
