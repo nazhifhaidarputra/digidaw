@@ -243,7 +243,12 @@ pub fn add_effect_to_mixer_channel_by_id(
     registry_id: u32,
 ) -> anyhow::Result<()> {
     if ctx.plugin_catalog.external(registry_id).is_some() {
-        return super::external_plugin_api::add_effect(ctx, EffectTarget::Track(track_id), registry_id).map(|_| ());
+        return super::external_plugin_api::add_effect(
+            ctx,
+            EffectTarget::Track(track_id),
+            registry_id,
+        )
+        .map(|_| ());
     }
     let app = &mut ctx.app_state;
     app.mixer

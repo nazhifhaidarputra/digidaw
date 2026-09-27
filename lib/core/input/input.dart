@@ -2,6 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/input/intents/piano_roll/piano_roll_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/intent.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/input/shortcut_preferences_service.dart';
@@ -12,7 +13,7 @@ final shortcutPreferencesServiceProvider = Provider<ShortcutPreferencesService>(
 );
 
 final shortcutCatalogProvider = Provider<IList<DawShortcut>>(
-  (ref) => workspaceShortcuts,
+  (ref) => workspaceShortcuts.addAll(pianoRollShortcuts),
 );
 
 class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {

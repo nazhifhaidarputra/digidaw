@@ -880,3 +880,295 @@ fn unlinked_track_does_not_reach_master() {
     assert!(render_tone_track(true) > 1.0);
     assert_eq!(render_tone_track(false), 0.0);
 }
+
+#[test]
+fn pattern_transport_pauses_seeks_and_loops_a_region() {
+    use crate::core::project::track::midi::Pattern;
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(64);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app_state = ApplicationState::default();
+    let track_id = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Synth", Color::new_from_rgb(0, 0, 0), TrackType::Midi)
+    });
+    let pattern_id = app_state.pattern_pool.insert_with_key(|id| Pattern {
+        id,
+        length_ticks: 960 * 16,
+        ..Pattern::default()
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    let registry = PluginRegistry::new_with_defaults();
+    let registry_id = hash_str("synth_karbeatzer_v2");
+    let (plugin_factory, _) = registry
+        .create_plugin_by_id(registry_id)
+        .expect("test generator should be registered");
+    let generator_id = crate::shared::GeneratorId::from(1);
+    engine.process_command(AudioCommand::AddGenerator {
+        generator_id,
+        track_id,
+        registry_id,
+        plugin_factory,
+    });
+
+    let toggle = || AudioCommand::TogglePatternPlayback {
+        pattern_id,
+        generator_id,
+    };
+    let mut block = vec![0.0_f32; 128];
+
+    // A position seeked while stopped is where playback starts.
+    engine.process_command(AudioCommand::SetPatternPlayhead(1_000));
+    engine.process_command(toggle());
+    engine.process(&mut block);
+    assert_eq!(engine.transport.pattern.playhead_samples, 1_064);
+
+    // Pausing keeps the position; playing again resumes from it.
+    engine.process_command(toggle());
+    assert!(!engine.transport.pattern.is_playing);
+    engine.process(&mut block);
+    assert_eq!(engine.transport.pattern.playhead_samples, 1_064);
+    engine.process_command(toggle());
+    assert!(engine.transport.pattern.is_playing);
+
+    // One beat at 120 BPM and 48 kHz is 24,000 samples; the loop wraps to its start.
+    engine.process_command(AudioCommand::SetPatternLoop(Some((960, 1_920))));
+    engine.process_command(AudioCommand::SetPatternPlayhead(48_000));
+    engine.process(&mut block);
+    assert_eq!(engine.transport.pattern.playhead_samples, 24_064);
+
+    // Stopping rewinds the pattern only.
+    engine.transport.song.playhead_samples = 5_000;
+    engine.process_command(AudioCommand::StopPatternPlayback);
+    assert_eq!(engine.transport.pattern.playhead_samples, 0);
+    assert_eq!(engine.transport.song.playhead_samples, 5_000);
+}
+
+/// Generator that records which keys it is holding, from the MIDI it actually receives.
+struct HeldKeysRecorder(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl karbeat_plugin_api::traits::AudioPlugin for HeldKeysRecorder {
+    fn name(&self) -> &str {
+        "Held keys recorder"
+    }
+    fn category(&self) -> karbeat_plugin_api::types::PluginCategory {
+        karbeat_plugin_api::types::PluginCategory::Instrument
+    }
+    fn prepare(&mut self, _: f32, _: usize) {}
+    fn reset(&mut self) {}
+    fn set_io_layout(
+        &mut self,
+        _: &[karbeat_plugin_api::types::BusConfig],
+        _: &[karbeat_plugin_api::types::BusConfig],
+    ) {
+    }
+    fn process(
+        &mut self,
+        _: &mut karbeat_plugin_api::types::AudioBuffers,
+        context: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        let mut held = self.0.lock().expect("recorder lock");
+        for event in context.midi_events {
+            match event.data {
+                MidiMessage::NoteOn { key, velocity, .. } if velocity > 0 => {
+                    if !held.contains(&key) {
+                        held.push(key);
+                    }
+                }
+                MidiMessage::NoteOn { key, .. } | MidiMessage::NoteOff { key, .. } => {
+                    held.retain(|held_key| *held_key != key);
+                }
+                _ => {}
+            }
+        }
+    }
+    fn set_parameter(&mut self, _: u32, _: f32) {}
+    fn get_parameter(&self, _: u32) -> f32 {
+        0.0
+    }
+    fn apply_automation(&mut self, _: u32, _: f32) {}
+    fn clear_automation(&mut self, _: u32) {}
+    fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
+        karbeat_plugin_api::traits::HashMap::new()
+    }
+    fn static_parameter_specs() -> Vec<karbeat_plugin_api::prelude::ParameterSpec> {
+        Vec::new()
+    }
+    fn get_parameter_specs(&self) -> Vec<karbeat_plugin_api::prelude::ParameterSpec> {
+        Vec::new()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+struct PatternRig {
+    engine: AudioEngine,
+    app_state: ApplicationState,
+    track_id: crate::shared::TrackId,
+    pattern_id: crate::shared::PatternId,
+    generator_id: crate::shared::GeneratorId,
+    held: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+}
+
+impl PatternRig {
+    /// A pattern with one long note on `key`, played by a recording generator.
+    fn new(key: u8) -> Self {
+        use crate::core::project::track::midi::Pattern;
+
+        let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+        let (position_producer, _) = RingBuffer::<TransportFeedback>::new(256);
+        let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+        let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+        let mut engine = AudioEngine::new(
+            command_consumer,
+            position_producer,
+            feedback_producer,
+            48_000,
+            2,
+            120.0,
+            64,
+            AudioEngineTelemetry::new_for_export(),
+            telemetry_sender,
+        );
+        let mut app_state = ApplicationState::default();
+        let track_id = app_state.tracks.insert_with_key(|id| {
+            AudioTrack::new(id, "Synth", Color::new_from_rgb(0, 0, 0), TrackType::Midi)
+        });
+        let pattern_id = app_state.pattern_pool.insert_with_key(|id| Pattern {
+            id,
+            ..Pattern::default()
+        });
+        app_state.pattern_pool[pattern_id]
+            .add_note(key, 0, Some(960 * 8))
+            .expect("valid note");
+        engine.process_command(AudioCommand::ReplaceFullGraph {
+            graph: AudioGraphState::from(&app_state),
+        });
+        let held = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let generator_id = crate::shared::GeneratorId::from(1);
+        engine.process_command(AudioCommand::InstallGenerator {
+            generator_id,
+            track_id,
+            registry_id: 0,
+            plugin: Box::new(HeldKeysRecorder(held.clone())),
+            telemetry: None,
+        });
+        Self {
+            engine,
+            app_state,
+            track_id,
+            pattern_id,
+            generator_id,
+            held,
+        }
+    }
+
+    fn play(&mut self) {
+        self.engine
+            .process_command(AudioCommand::TogglePatternPlayback {
+                pattern_id: self.pattern_id,
+                generator_id: self.generator_id,
+            });
+    }
+
+    fn render(&mut self, blocks: usize) {
+        let mut block = vec![0.0_f32; 128];
+        for _ in 0..blocks {
+            self.engine.process(&mut block);
+        }
+    }
+
+    /// Publishes the edited project the way note edits reach the audio thread.
+    fn publish(&mut self) {
+        let graph = AudioGraphState::from(&self.app_state);
+        self.engine.process_command(AudioCommand::UpdateTrackGraph {
+            tracks: graph.tracks,
+            clips: graph.clips,
+            patterns: graph.patterns,
+        });
+    }
+
+    fn held(&self) -> Vec<u8> {
+        self.held.lock().expect("recorder lock").clone()
+    }
+}
+
+#[test]
+fn moving_a_sounding_note_releases_the_key_it_was_holding() {
+    let mut rig = PatternRig::new(60);
+    rig.play();
+    rig.render(2);
+    assert_eq!(rig.held(), [60]);
+
+    // Drag the sounding note up to 64 while the pattern plays.
+    let note_id = rig.app_state.pattern_pool[rig.pattern_id].notes[0].id;
+    rig.app_state.pattern_pool[rig.pattern_id]
+        .notes
+        .iter_mut()
+        .find(|note| note.id == note_id)
+        .expect("note")
+        .key = 64;
+    rig.publish();
+    rig.render(1);
+    assert!(
+        rig.held().is_empty(),
+        "old key still held: {:?}",
+        rig.held()
+    );
+
+    rig.engine
+        .process_command(AudioCommand::StopPatternPlayback);
+    rig.render(1);
+    assert!(rig.held().is_empty());
+    assert!(
+        rig.engine
+            .voices
+            .active_generators
+            .iter()
+            .all(|voice| voice.playing_notes.is_empty())
+    );
+}
+
+#[test]
+fn releases_queued_while_a_track_is_muted_reach_the_generator_later() {
+    let mut rig = PatternRig::new(60);
+    rig.play();
+    rig.render(2);
+    assert_eq!(rig.held(), [60]);
+
+    rig.engine
+        .mixer_state
+        .track_channels
+        .entry(rig.track_id)
+        .or_default()
+        .mute = true;
+    rig.engine
+        .process_command(AudioCommand::StopPatternPlayback);
+    rig.render(3);
+    // The muted generator has not run, so it still holds the note, and so does tracking.
+    assert_eq!(rig.held(), [60]);
+
+    rig.engine
+        .mixer_state
+        .track_channels
+        .entry(rig.track_id)
+        .or_default()
+        .mute = false;
+    rig.render(1);
+    assert!(rig.held().is_empty(), "note hung: {:?}", rig.held());
+}

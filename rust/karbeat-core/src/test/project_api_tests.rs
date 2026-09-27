@@ -5,8 +5,6 @@ mod tests {
     use crate::api::project_api;
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
-    // ─── get_project_metadata ─────────────────────────────────────────────────
-
     #[test]
     fn get_project_metadata_happy_path() {
         let ctx = make_ctx();
@@ -50,8 +48,6 @@ mod tests {
         assert_eq!(ctx.app_state.metadata.name, "Untitled");
     }
 
-    // ─── get_transport_state ──────────────────────────────────────────────────
-
     #[test]
     fn get_transport_state_happy_path() {
         let ctx = make_ctx();
@@ -60,8 +56,6 @@ mod tests {
         let bpm = result.unwrap();
         assert!(bpm > 0.0, "Default BPM should be positive");
     }
-
-    // ─── get_generator_list ───────────────────────────────────────────────────
 
     #[test]
     fn get_generator_list_empty_on_fresh_ctx() {
@@ -81,8 +75,6 @@ mod tests {
             "Seeded ctx should have at least one generator"
         );
     }
-
-    // ─── new_blank_project ────────────────────────────────────────────────────
 
     #[test]
     fn new_blank_project_resets_state() {
@@ -106,8 +98,6 @@ mod tests {
             "Generators should be cleared"
         );
     }
-
-    // ─── save_project + load_project (roundtrip) ─────────────────────────────
 
     #[test]
     fn save_project_to_temp_file_succeeds() {
@@ -160,8 +150,6 @@ mod tests {
         assert_eq!(loaded_metadata.description, "Roundtrip description");
         assert_eq!(loaded_metadata.genre, "Ambient");
     }
-
-    // ─── hydrate_live_audio_engine ────────────────────────────────────────────
 
     #[test]
     fn hydrate_live_audio_engine_empty_state_returns_ok() {

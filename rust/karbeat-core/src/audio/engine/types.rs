@@ -106,7 +106,8 @@ impl AudioMixerChannelValues {
         if self.smoothing_sample_rate == sample_rate {
             return;
         }
-        self.volume.set_smoothing_time(0.015, f64::from(sample_rate));
+        self.volume
+            .set_smoothing_time(0.015, f64::from(sample_rate));
         self.pan.set_smoothing_time(0.015, f64::from(sample_rate));
         self.smoothing_sample_rate = sample_rate;
     }

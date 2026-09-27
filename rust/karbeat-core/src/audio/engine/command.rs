@@ -4,7 +4,7 @@ use super::{
     telemetry::PluginTelemetrySnapshot,
     transport::PlaybackMode,
     types::*,
-    voices::PreviewVoice,
+    voices::{GraphView, PreviewVoice},
 };
 use crate::{
     audio::{
@@ -867,23 +867,57 @@ impl AudioEngine {
                 pattern_id,
                 generator_id,
             } => {
-                if !matches!(self.transport.mode, PlaybackMode::Pattern { .. }) {
-                    self.stop_playback();
-                    self.transport.mode = PlaybackMode::Pattern {
-                        pattern_id,
-                        generator_id,
-                    };
-                    self.reset_pattern_state();
-                    self.transport.pattern.is_playing = true;
-                } else if self.transport.pattern.is_playing {
-                    self.transport.pattern.is_playing = false;
-                    self.stop_all_active_generators();
-                    self.reset_pattern_state();
-                } else {
-                    self.transport.pattern.is_playing = true;
+                let target = PlaybackMode::Pattern {
+                    pattern_id,
+                    generator_id,
+                };
+                match self.transport.mode {
+                    PlaybackMode::Pattern {
+                        pattern_id: current,
+                        ..
+                    } if current == pattern_id => {
+                        // Same pattern: play/pause from the current (possibly seeked) position.
+                        self.transport.mode = target;
+                        if self.transport.pattern.is_playing {
+                            self.transport.pattern.is_playing = false;
+                            self.stop_all_active_generators();
+                        } else {
+                            self.transport.pattern.is_playing = true;
+                        }
+                    }
+                    PlaybackMode::Pattern { .. } => {
+                        // Another pattern: start the new one from its beginning.
+                        self.stop_all_active_generators();
+                        self.transport.mode = target;
+                        self.reset_pattern_state();
+                        self.transport.pattern.is_playing = true;
+                    }
+                    PlaybackMode::Song => {
+                        // Leaving song mode keeps a pattern position seeked while stopped.
+                        self.transport.song.is_playing = false;
+                        self.stop_all_active_generators();
+                        self.transport.mode = target;
+                        self.transport.pattern.is_playing = true;
+                    }
                 }
 
                 self.emit_current_playback_position();
+            }
+            AudioCommand::StopPatternPlayback => {
+                self.transport.pattern.is_playing = false;
+                self.stop_all_active_generators();
+                self.reset_pattern_state();
+                self.emit_current_playback_position();
+            }
+            AudioCommand::SetPatternPlayhead(samples) => {
+                self.stop_all_active_generators();
+                self.transport.pattern.playhead_samples = samples;
+                self.transport.pattern.last_emitted_samples = samples;
+                self.recalculate_pattern_beat_bar();
+                self.emit_current_playback_position();
+            }
+            AudioCommand::SetPatternLoop(region) => {
+                self.transport.pattern.loop_region = region.filter(|(start, end)| end > start);
             }
             AudioCommand::SwitchPatternGenerator(new_gen_id) => {
                 if let PlaybackMode::Pattern { generator_id, .. } = &mut self.transport.mode {
@@ -895,13 +929,14 @@ impl AudioEngine {
                             .iter_mut()
                             .find(|g| g.id == *generator_id)
                         {
+                            // Release held notes explicitly, keeping tracking in step.
+                            old_voice.midi_events.clear();
+                            old_voice.release_all();
                             if let Some(gen_instance) =
                                 self.plugin_state.get_generator_mut(old_voice.id)
                             {
                                 gen_instance.plugin.reset();
                             }
-                            old_voice.midi_events.clear();
-                            old_voice.playing_keys.clear();
                         }
 
                         // Hot-swap the ID. The `process_pattern_mode` function will
@@ -1013,6 +1048,22 @@ impl AudioEngine {
                 let old_clips = std::mem::replace(&mut self.current_state.graph.clips, clips);
                 let old_patterns =
                     std::mem::replace(&mut self.current_state.graph.patterns, patterns);
+                // Notes sounding from a note or clip that just changed are released now;
+                // their scheduled note-offs would use the edited key and position.
+                let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
+                self.voices.release_changed_notes(
+                    GraphView {
+                        tracks: &old_tracks,
+                        clips: &old_clips,
+                        patterns: &old_patterns,
+                    },
+                    GraphView {
+                        tracks: &self.current_state.graph.tracks,
+                        clips: &self.current_state.graph.clips,
+                        patterns: &self.current_state.graph.patterns,
+                    },
+                    clips_matter,
+                );
                 self.retire_graph_state(RetiredGraphState::Tracks {
                     tracks: old_tracks,
                     clips: old_clips,
@@ -1169,6 +1220,20 @@ impl AudioEngine {
                 self.routing.set_routes(&graph.routing);
 
                 let previous = std::mem::replace(&mut self.current_state.graph, graph);
+                let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
+                self.voices.release_changed_notes(
+                    GraphView {
+                        tracks: &previous.tracks,
+                        clips: &previous.clips,
+                        patterns: &previous.patterns,
+                    },
+                    GraphView {
+                        tracks: &self.current_state.graph.tracks,
+                        clips: &self.current_state.graph.clips,
+                        patterns: &self.current_state.graph.patterns,
+                    },
+                    clips_matter,
+                );
                 self.retire_graph_state(RetiredGraphState::Full(previous));
                 self.sync_sidechain_buffers();
 

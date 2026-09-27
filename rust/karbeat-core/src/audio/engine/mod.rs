@@ -1,7 +1,7 @@
-pub mod factory;
 mod buffer;
 mod command;
 mod engine;
+pub mod factory;
 mod helper;
 mod hosted;
 mod macros;

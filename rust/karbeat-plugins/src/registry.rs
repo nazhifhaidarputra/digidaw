@@ -72,8 +72,7 @@ impl PluginRegistry {
         registry
     }
 
-    pub fn register_plugin(&mut self, id_str: &str, name: &str, factory: PluginFactory) -> u32
-    {
+    pub fn register_plugin(&mut self, id_str: &str, name: &str, factory: PluginFactory) -> u32 {
         let id = hash_str(id_str);
         let temp_plugin = factory();
         let parameter_specs = temp_plugin.get_parameter_specs();
@@ -94,16 +93,12 @@ impl PluginRegistry {
     // ID-based creation
     // =========================================================================
 
-    pub fn create_plugin_by_id(
-        &self,
-        id: u32,
-    ) -> Option<(PluginFactory, String)> {
+    pub fn create_plugin_by_id(&self, id: u32) -> Option<(PluginFactory, String)> {
         self.plugins.get(&id).map(|reg| {
             // let plugin = (reg.factory)();
             (reg.factory, reg.name.clone())
         })
     }
-
 
     // =========================================================================
     // Cached Parameter Specs

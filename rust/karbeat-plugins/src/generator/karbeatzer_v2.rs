@@ -455,7 +455,6 @@ impl AudioPlugin for KarbeatzerV2 {
 
         // Cleanup dead voices
         self.active_voices.retain(|v| v.is_active);
-
     }
 
     fn category(&self) -> PluginCategory {

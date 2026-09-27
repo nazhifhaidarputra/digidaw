@@ -93,7 +93,15 @@ class MainScreen extends ConsumerWidget {
         ),
         StopIntent: CallbackAction<StopIntent>(
           onInvoke: (_) {
-            unawaited(ref.read(transportProvider.notifier).stop());
+            // The piano roll stops its pattern without rewinding the song.
+            if (ref.read(workspaceStateProvider).currentView ==
+                WorkspaceView.pianoRoll) {
+              unawaited(
+                ref.read(pianoRollProvider.notifier).stopPatternPlayback(),
+              );
+            } else {
+              unawaited(ref.read(transportProvider.notifier).stop());
+            }
             return null;
           },
         ),
@@ -209,15 +217,11 @@ class MainScreen extends ConsumerWidget {
       if (ref.read(workspaceStateProvider).currentView ==
           WorkspaceView.pianoRoll) {
         final pianoRoll = ref.read(pianoRollProvider);
-        final patternId = pianoRoll.editingPatternId;
-        final generatorId = pianoRoll.previewGeneratorId;
-        if (patternId == null || generatorId == null) return;
-
-        await togglePatternPlayback(
-          ctx: context,
-          patternId: patternId,
-          generatorId: generatorId,
-        );
+        if (pianoRoll.editingPatternId == null ||
+            pianoRoll.previewGeneratorId == null) {
+          return;
+        }
+        await ref.read(pianoRollProvider.notifier).togglePatternPlayback();
         return;
       }
 

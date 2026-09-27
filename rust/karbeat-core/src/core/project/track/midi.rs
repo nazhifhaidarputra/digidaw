@@ -110,6 +110,8 @@ impl Pattern {
             probability: 1.0,
             micro_offset: 0,
             mute: false,
+            pan: 0.0,
+            pitch: 0.0,
         };
 
         // Use central method
@@ -478,6 +480,83 @@ impl Pattern {
 }
 
 impl ApplicationState {
+    /// Notes of `pattern_id` with the given IDs, or every note when `note_ids` is empty.
+    pub fn pattern_notes_for(
+        &self,
+        pattern_id: PatternId,
+        note_ids: &[NoteId],
+    ) -> anyhow::Result<Vec<Note>> {
+        let pattern = self
+            .pattern_pool
+            .get(pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        Ok(pattern
+            .notes
+            .iter()
+            .filter(|note| note_ids.is_empty() || note_ids.contains(&note.id))
+            .cloned()
+            .collect())
+    }
+
+    /// Validates and applies a note transform to one pattern, returning the history actions
+    /// that reverse it. Nothing changes when any note in the edit is invalid.
+    pub fn apply_note_edit(
+        &mut self,
+        pattern_id: PatternId,
+        edit: super::note_transform::NoteEdit,
+    ) -> anyhow::Result<Vec<crate::core::history::ProjectAction>> {
+        use crate::core::history::ProjectAction;
+
+        let pattern = self
+            .pattern_pool
+            .get_mut(pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        if let Some(invalid) = edit
+            .updates
+            .iter()
+            .chain(&edit.additions)
+            .find(|note| note.key > 127 || note.duration == 0)
+        {
+            anyhow::bail!(
+                "Invalid note: key {} with duration {}",
+                invalid.key,
+                invalid.duration
+            );
+        }
+        let mut replacements = Vec::with_capacity(edit.updates.len());
+        for after in edit.updates {
+            let index = pattern
+                .notes
+                .iter()
+                .position(|note| note.id == after.id)
+                .ok_or_else(|| anyhow::anyhow!("Note {} not found", after.id.to_u32()))?;
+            replacements.push((index, after));
+        }
+
+        let mut actions = Vec::with_capacity(replacements.len() + edit.additions.len());
+        for (index, after) in replacements {
+            let before = std::mem::replace(&mut pattern.notes[index], after.clone());
+            if before.start_tick != after.start_tick
+                || before.duration != after.duration
+                || before.key != after.key
+                || before.velocity != after.velocity
+                || before.pan != after.pan
+                || before.pitch != after.pitch
+            {
+                actions.push(ProjectAction::UpdateNote {
+                    pattern_id,
+                    before,
+                    after,
+                });
+            }
+        }
+        for note in pattern.insert_notes_batch(edit.additions)? {
+            actions.push(ProjectAction::AddNote { pattern_id, note });
+        }
+        pattern.sort_notes_unstable();
+        Ok(actions)
+    }
+
     pub fn add_note_to_pattern(
         &mut self,
         pattern_id: PatternId,
@@ -613,6 +692,8 @@ impl ApplicationState {
                 probability: 1.0,
                 micro_offset: 0,
                 mute: false,
+                pan: 0.0,
+                pitch: 0.0,
             });
         }
 

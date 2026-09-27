@@ -116,8 +116,7 @@ pub struct AudioPluginState {
 
 impl Default for AudioPluginState {
     fn default() -> Self {
-        let (retirement, mut consumer) =
-            rtrb::RingBuffer::<Box<dyn AudioPlugin>>::new(1_024);
+        let (retirement, mut consumer) = rtrb::RingBuffer::<Box<dyn AudioPlugin>>::new(1_024);
         std::thread::spawn(move || {
             loop {
                 // Checked before pop: once abandoned no push can follow, so empty is final.
@@ -163,10 +162,24 @@ impl AudioPluginState {
     pub fn plugin(&self, target: &crate::audio::event::PluginTarget) -> Option<&dyn AudioPlugin> {
         use crate::audio::event::PluginTarget;
         let effect = match target {
-            PluginTarget::Generator(id) => return self.get_generator(*id).map(|generator| generator.plugin.as_ref()),
-            PluginTarget::TrackEffect(track, effect) => self.track_effects.get(usize::try_from(track.to_u32()).ok()?)?.iter().find(|entry| entry.id == *effect),
-            PluginTarget::BusEffect(bus, effect) => self.bus_effects.get(usize::try_from(bus.to_u32()).ok()?)?.iter().find(|entry| entry.id == *effect),
-            PluginTarget::MasterEffect(effect) => self.master_effects.iter().find(|entry| entry.id == *effect),
+            PluginTarget::Generator(id) => {
+                return self
+                    .get_generator(*id)
+                    .map(|generator| generator.plugin.as_ref());
+            }
+            PluginTarget::TrackEffect(track, effect) => self
+                .track_effects
+                .get(usize::try_from(track.to_u32()).ok()?)?
+                .iter()
+                .find(|entry| entry.id == *effect),
+            PluginTarget::BusEffect(bus, effect) => self
+                .bus_effects
+                .get(usize::try_from(bus.to_u32()).ok()?)?
+                .iter()
+                .find(|entry| entry.id == *effect),
+            PluginTarget::MasterEffect(effect) => {
+                self.master_effects.iter().find(|entry| entry.id == *effect)
+            }
         }?;
         Some(effect.plugin.as_ref())
     }

@@ -18,7 +18,6 @@ pub(super) struct RenderWorkspace {
     pub channel_buffers_in: Vec<Vec<f32>>,
     pub channel_buffers_out: Vec<Vec<f32>>,
     pub aux_channel_buffers: Vec<Vec<f32>>,
-
 }
 
 impl RenderWorkspace {
@@ -46,7 +45,6 @@ impl RenderWorkspace {
             aux_channel_buffers: (0..max_plugin_channels)
                 .map(|_| vec![0.0; max_plugin_frames])
                 .collect(),
-
         }
     }
 

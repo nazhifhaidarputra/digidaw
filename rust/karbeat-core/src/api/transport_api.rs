@@ -51,6 +51,26 @@ pub fn toggle_playing_with_playback(ctx: &mut DawContext, playback_mode: Playbac
     let _ = ctx.send_audio_command(AudioCommand::TogglePlayingWithPlaybackMode(playback_mode));
 }
 
+/// Stops pattern playback and rewinds the pattern playhead without touching song position.
+pub fn stop_pattern_playback(ctx: &mut DawContext) {
+    let _ = ctx.send_audio_command(AudioCommand::StopPatternPlayback);
+}
+
+/// Moves the pattern playhead to `samples`, whether or not the pattern is playing.
+pub fn set_pattern_playhead(ctx: &mut DawContext, samples: u32) {
+    let _ = ctx.send_audio_command(AudioCommand::SetPatternPlayhead(samples));
+}
+
+/// Loops pattern playback between `start_tick` and `end_tick`, or clears the loop region so
+/// the whole pattern loops.
+pub fn set_pattern_loop(ctx: &mut DawContext, region: Option<(u64, u64)>) -> anyhow::Result<()> {
+    if let Some((start, end)) = region {
+        anyhow::ensure!(end > start, "Loop region must end after it starts");
+    }
+    let _ = ctx.send_audio_command(AudioCommand::SetPatternLoop(region));
+    Ok(())
+}
+
 /// Hot-swaps the generator used by active pattern preview playback.
 pub fn switch_pattern_generator(ctx: &mut DawContext, generator_id: GeneratorId) {
     let _ = ctx.send_audio_command(AudioCommand::SwitchPatternGenerator(generator_id));

@@ -691,16 +691,12 @@ pub fn start_audio_stream(
             };
 
             let maximum_device_frames = rate_bridge.maximum_output_samples() / OUTPUT_CHANNELS;
-            let ring_buffer_capacity =
-                (maximum_device_frames * 8).next_power_of_two().max(4_096);
-            let (mut producer, consumer) =
-                RingBuffer::<OutputFrame>::new(ring_buffer_capacity);
-            let mut staging_buffer =
-                vec![0.0; dsp_config.block_size as usize * OUTPUT_CHANNELS];
+            let ring_buffer_capacity = (maximum_device_frames * 8).next_power_of_two().max(4_096);
+            let (mut producer, consumer) = RingBuffer::<OutputFrame>::new(ring_buffer_capacity);
+            let mut staging_buffer = vec![0.0; dsp_config.block_size as usize * OUTPUT_CHANNELS];
 
             // Build the latency cushion before the CPAL stream is started.
-            let prefill_blocks =
-                ((ring_buffer_capacity / 2) / maximum_device_frames).max(1);
+            let prefill_blocks = ((ring_buffer_capacity / 2) / maximum_device_frames).max(1);
             for _ in 0..prefill_blocks {
                 engine.process(&mut staging_buffer);
                 let queued =
@@ -761,24 +757,23 @@ pub fn start_audio_stream(
             let mut current_config_pref = active_config_arc.read().clone();
             let current_dsp_config = runtime_settings_arc.read().requested_dsp;
 
-            let (device, config, sample_format) =
-                match get_device_and_config(&current_config_pref) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        runtime_settings_arc.write().stream_status =
-                            DeviceStreamStatus::Retrying {
-                                reason: e.to_string(),
-                            };
-                        log::error!(
-                            "Monitor: Failed to resolve audio device: {}. Retrying in {:?}...",
-                            e,
-                            retry_delay
-                        );
-                        std::thread::sleep(retry_delay);
-                        retry_delay = next_retry_delay(retry_delay);
-                        continue;
-                    }
-                };
+            let (device, config, sample_format) = match get_device_and_config(&current_config_pref)
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    runtime_settings_arc.write().stream_status = DeviceStreamStatus::Retrying {
+                        reason: e.to_string(),
+                    };
+                    log::error!(
+                        "Monitor: Failed to resolve audio device: {}. Retrying in {:?}...",
+                        e,
+                        retry_delay
+                    );
+                    std::thread::sleep(retry_delay);
+                    retry_delay = next_retry_delay(retry_delay);
+                    continue;
+                }
+            };
 
             let device_sample_rate = config.sample_rate;
             let device_buffer_size = match config.buffer_size {
@@ -824,10 +819,9 @@ pub fn start_audio_stream(
             let consumer = match ready_rx.recv() {
                 Ok(Ok(consumer)) => consumer,
                 Ok(Err(error)) => {
-                    runtime_settings_arc.write().stream_status =
-                        DeviceStreamStatus::Unavailable {
-                            reason: error.clone(),
-                        };
+                    runtime_settings_arc.write().stream_status = DeviceStreamStatus::Unavailable {
+                        reason: error.clone(),
+                    };
                     log::error!("Could not configure DSP output path: {error}");
                     std::thread::sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
@@ -843,70 +837,59 @@ pub fn start_audio_stream(
             let tx_clone = restart_tx.clone();
             let err_config_arc = Arc::clone(&active_config_arc);
 
-            let err_fn = move |err: cpal::StreamError| {
-                match err {
-                    cpal::StreamError::DeviceNotAvailable => {
-                        log::error!(
-                            "Audio device disconnected: {}. Triggering restart...",
-                            err
+            let err_fn = move |err: cpal::StreamError| match err {
+                cpal::StreamError::DeviceNotAvailable => {
+                    log::error!("Audio device disconnected: {}. Triggering restart...", err);
+                    let _ = tx_clone.try_send(());
+                }
+                cpal::StreamError::BackendSpecific { ref err } => {
+                    let err_msg = err.to_string().to_lowercase();
+                    if err_msg.contains("underrun") || err_msg.contains("overrun") {
+                        log::warn!(
+                            "Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally..."
                         );
-                        let _ = tx_clone.try_send(());
-                    }
-                    cpal::StreamError::BackendSpecific { ref err } => {
-                        let err_msg = err.to_string().to_lowercase();
-                        if err_msg.contains("underrun") || err_msg.contains("overrun") {
-                            log::warn!(
-                                "Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally..."
-                            );
-                        } else if err_msg.contains("buffer size changed to:") {
-                            log::warn!(
-                                "Host forced a different buffer size. Adapting config to prevent crash loop..."
-                            );
+                    } else if err_msg.contains("buffer size changed to:") {
+                        log::warn!(
+                            "Host forced a different buffer size. Adapting config to prevent crash loop..."
+                        );
 
-                            let parts: Vec<&str> =
-                                err_msg.split("buffer size changed to:").collect();
-                            if parts.len() > 1 {
-                                let num_str = parts[1]
-                                    .trim()
-                                    .chars()
-                                    .take_while(|c| c.is_ascii_digit())
-                                    .collect::<String>();
-                                if let Ok(new_size) = num_str.parse::<u32>() {
-                                    let mut cfg = err_config_arc.write();
-                                    if cfg.buffer_size != Some(new_size) {
-                                        log::info!(
-                                            "Dynamically updating buffer size to {}",
-                                            new_size
-                                        );
-                                        cfg.buffer_size = Some(new_size);
-                                        let _ = tx_clone.try_send(());
-                                    } else {
-                                        log::debug!(
-                                            "Buffer size is already synced to {}. Ignoring redundant error.",
-                                            new_size
-                                        );
-                                    }
+                        let parts: Vec<&str> = err_msg.split("buffer size changed to:").collect();
+                        if parts.len() > 1 {
+                            let num_str = parts[1]
+                                .trim()
+                                .chars()
+                                .take_while(|c| c.is_ascii_digit())
+                                .collect::<String>();
+                            if let Ok(new_size) = num_str.parse::<u32>() {
+                                let mut cfg = err_config_arc.write();
+                                if cfg.buffer_size != Some(new_size) {
+                                    log::info!("Dynamically updating buffer size to {}", new_size);
+                                    cfg.buffer_size = Some(new_size);
+                                    let _ = tx_clone.try_send(());
+                                } else {
+                                    log::debug!(
+                                        "Buffer size is already synced to {}. Ignoring redundant error.",
+                                        new_size
+                                    );
                                 }
                             }
-                        } else {
-                            log::error!(
-                                "Audio stream backend error: {}. Triggering restart...",
-                                err_msg
-                            );
-                            let _ = tx_clone.try_send(());
                         }
-                    }
-                    cpal::StreamError::BufferUnderrun => {
-                        log::warn!(
-                            "Native buffer underrun detected due to CPU lag. Recovering naturally..."
-                        );
-                    }
-                    cpal::StreamError::StreamInvalidated => {
+                    } else {
                         log::error!(
-                            "Audio stream invalidated by the OS. Triggering restart..."
+                            "Audio stream backend error: {}. Triggering restart...",
+                            err_msg
                         );
                         let _ = tx_clone.try_send(());
                     }
+                }
+                cpal::StreamError::BufferUnderrun => {
+                    log::warn!(
+                        "Native buffer underrun detected due to CPU lag. Recovering naturally..."
+                    );
+                }
+                cpal::StreamError::StreamInvalidated => {
+                    log::error!("Audio stream invalidated by the OS. Triggering restart...");
+                    let _ = tx_clone.try_send(());
                 }
             };
 
@@ -949,10 +932,9 @@ pub fn start_audio_stream(
                 drop(stream);
                 let _ = dsp_control_tx.send(DspControl::Detach);
 
-                runtime_settings_arc.write().stream_status =
-                    DeviceStreamStatus::Retrying {
-                        reason: e.to_string(),
-                    };
+                runtime_settings_arc.write().stream_status = DeviceStreamStatus::Retrying {
+                    reason: e.to_string(),
+                };
                 log::error!(
                     "Monitor: Failed to play stream: {}. Retrying in {:?}...",
                     e,
@@ -981,9 +963,7 @@ pub fn start_audio_stream(
                 let latest_config = active_config_arc.read().clone();
                 let latest_dsp_config = runtime_settings_arc.read().requested_dsp;
 
-                if latest_config != current_config_pref
-                    || latest_dsp_config != current_dsp_config
-                {
+                if latest_config != current_config_pref || latest_dsp_config != current_dsp_config {
                     log::info!(
                         "Monitor: Audio configuration changed by user. Restarting stream..."
                     );

@@ -3,7 +3,8 @@ use std::sync::mpsc;
 use rtrb::{Consumer, Producer};
 
 use crate::{
-    audio::{engine::runtime::consts::MAX_ENGINE_CHANNELS, event::TransportFeedback}, commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
+    audio::{engine::runtime::consts::MAX_ENGINE_CHANNELS, event::TransportFeedback},
+    commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
 };
 
 pub mod consts {

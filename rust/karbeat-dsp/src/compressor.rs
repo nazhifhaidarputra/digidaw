@@ -309,8 +309,7 @@ impl SidechainCompressor {
         let delay_ms = self.delay_ms.get().max(0);
         if delay_ms != self.cached_delay_ms {
             self.cached_delay_ms = delay_ms;
-            let delay_samples =
-                (f64::from(delay_ms) * 0.001 * self.sample_rate).max(0.0) as usize;
+            let delay_samples = (f64::from(delay_ms) * 0.001 * self.sample_rate).max(0.0) as usize;
             if delay_samples > self.delay_samples {
                 self.delay_buffer[self.delay_samples..delay_samples].fill(0.0);
             }
@@ -361,14 +360,12 @@ impl SidechainCompressor {
         // Envelope Smoothing (Ballistics)
         if gain_reduction_target_db > self.envelope_db {
             // Attack phase (compressing more)
-            self.envelope_db =
-                self.attack_coefficient * self.envelope_db
-                    + (1.0 - self.attack_coefficient) * gain_reduction_target_db;
+            self.envelope_db = self.attack_coefficient * self.envelope_db
+                + (1.0 - self.attack_coefficient) * gain_reduction_target_db;
         } else {
             // Release phase (compressing less)
-            self.envelope_db =
-                self.release_coefficient * self.envelope_db
-                    + (1.0 - self.release_coefficient) * gain_reduction_target_db;
+            self.envelope_db = self.release_coefficient * self.envelope_db
+                + (1.0 - self.release_coefficient) * gain_reduction_target_db;
         }
 
         // Lookahead Delay Line -> APPLIED TO MAIN INPUT

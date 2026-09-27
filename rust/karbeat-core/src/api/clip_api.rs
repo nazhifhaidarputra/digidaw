@@ -94,11 +94,9 @@ pub fn move_clip(
 ) -> anyhow::Result<Clip> {
     // 1. Capture old state if we want to support undo for single move
     let app = &mut ctx.app_state;
-    let old_clip = app.get_clip(&source_track_id, &clip_id).ok_or_else(|| {
-        anyhow::anyhow!(
-            "Clip {clip_id} not found in track {source_track_id}"
-        )
-    })?;
+    let old_clip = app
+        .get_clip(&source_track_id, &clip_id)
+        .ok_or_else(|| anyhow::anyhow!("Clip {clip_id} not found in track {source_track_id}"))?;
 
     // 2. Mutate state
     let modified_clip = app

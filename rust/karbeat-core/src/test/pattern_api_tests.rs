@@ -7,8 +7,6 @@ mod tests {
     use crate::shared::id::{GeneratorId, PatternId};
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
-    // ─── get_pattern ──────────────────────────────────────────────────────────
-
     #[test]
     fn get_pattern_happy_path() {
         let (ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
@@ -24,8 +22,6 @@ mod tests {
         let result = pattern_api::get_pattern(&ctx, &bogus_id);
         assert!(result.is_err());
     }
-
-    // ─── get_patterns ────────────────────────────────────────────────────────
 
     #[test]
     fn get_patterns_empty_pool_returns_empty() {
@@ -80,8 +76,6 @@ mod tests {
         ));
     }
 
-    // ─── play_pattern_preview ─────────────────────────────────────────────────
-
     #[test]
     fn play_pattern_preview_missing_pattern_returns_err() {
         let mut ctx = make_ctx();
@@ -105,8 +99,6 @@ mod tests {
         assert!(result.is_ok(), "No-stream should silently succeed");
     }
 
-    // ─── stop_pattern_preview_local ──────────────────────────────────────────
-
     #[test]
     fn stop_pattern_preview_local_no_stream_returns_ok() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
@@ -119,8 +111,6 @@ mod tests {
         let result = pattern_api::stop_pattern_preview_local(&mut ctx, pattern_id, gen_id);
         assert!(result.is_ok());
     }
-
-    // ─── stop_pattern_preview ────────────────────────────────────────────────
 
     #[test]
     fn stop_pattern_preview_no_stream_returns_ok() {

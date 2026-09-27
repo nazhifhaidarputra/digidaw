@@ -554,6 +554,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
+  List<UiNoteDraft> dco_decode_list_ui_note_draft(dynamic raw);
+
+  @protected
+  List<UiNoteParamUpdate> dco_decode_list_ui_note_param_update(dynamic raw);
+
+  @protected
   List<UiOutputDeviceInfo> dco_decode_list_ui_output_device_info(dynamic raw);
 
   @protected
@@ -903,6 +909,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiNote dco_decode_ui_note(dynamic raw);
+
+  @protected
+  UiNoteDraft dco_decode_ui_note_draft(dynamic raw);
+
+  @protected
+  UiNoteParamUpdate dco_decode_ui_note_param_update(dynamic raw);
 
   @protected
   UiOutputDeviceInfo dco_decode_ui_output_device_info(dynamic raw);
@@ -1583,6 +1595,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
+  List<UiNoteDraft> sse_decode_list_ui_note_draft(SseDeserializer deserializer);
+
+  @protected
+  List<UiNoteParamUpdate> sse_decode_list_ui_note_param_update(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiOutputDeviceInfo> sse_decode_list_ui_output_device_info(
     SseDeserializer deserializer,
   );
@@ -2012,6 +2032,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiNote sse_decode_ui_note(SseDeserializer deserializer);
+
+  @protected
+  UiNoteDraft sse_decode_ui_note_draft(SseDeserializer deserializer);
+
+  @protected
+  UiNoteParamUpdate sse_decode_ui_note_param_update(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiOutputDeviceInfo sse_decode_ui_output_device_info(
@@ -2816,6 +2844,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_ui_note_draft(
+    List<UiNoteDraft> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_note_param_update(
+    List<UiNoteParamUpdate> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_output_device_info(
     List<UiOutputDeviceInfo> self,
     SseSerializer serializer,
@@ -3330,6 +3370,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_note(UiNote self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_note_draft(UiNoteDraft self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_note_param_update(
+    UiNoteParamUpdate self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_output_device_info(

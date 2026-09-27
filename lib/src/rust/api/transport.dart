@@ -52,6 +52,30 @@ Future<void> togglePlaybackWithMode({
   playbackMode: playbackMode,
 );
 
+/// Stop pattern playback and rewind the pattern playhead, leaving the song position alone
+Future<void> stopPatternPlayback({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiTransportStopPatternPlayback(ctx: ctx);
+
+/// Move the pattern playhead to `samples`
+Future<void> setPatternPlayhead({
+  required DawContext ctx,
+  required int samples,
+}) => RustLib.instance.api.crateApiTransportSetPatternPlayhead(
+  ctx: ctx,
+  samples: samples,
+);
+
+/// Loop pattern playback between two ticks, or over the whole pattern when either is null
+Future<void> setPatternLoop({
+  required DawContext ctx,
+  int? startTick,
+  int? endTick,
+}) => RustLib.instance.api.crateApiTransportSetPatternLoop(
+  ctx: ctx,
+  startTick: startTick,
+  endTick: endTick,
+);
+
 Future<void> switchPatternGenerator({
   required DawContext ctx,
   required int generatorId,

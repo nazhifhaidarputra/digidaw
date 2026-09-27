@@ -45,13 +45,21 @@ impl PreparedPluginTelemetry {
 /// graph and parameter variants mutate only audio-thread-owned render state.
 pub enum AudioCommand {
     /// Installs all prepared hosted processors contained in a project snapshot.
-    InstallHostedProject(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedProjectInstall>),
+    InstallHostedProject(
+        karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedProjectInstall>,
+    ),
     /// Replaces active hosted endpoints with preconfigured instances after device changes.
-    ReconfigureHostedPlugins(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginReconfiguration>),
+    ReconfigureHostedPlugins(
+        karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginReconfiguration>,
+    ),
     /// Retires hosted processors and returns endpoint ownership to the native control owner.
-    RemoveHostedPlugins(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginRemoval>),
+    RemoveHostedPlugins(
+        karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginRemoval>,
+    ),
     /// Publishes one already prepared native endpoint; completion is acknowledged separately.
-    InstallHostedPlugin(karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginInstall>),
+    InstallHostedPlugin(
+        karbeat_host::ControlTransfer<crate::audio::hosted_plugin::HostedPluginInstall>,
+    ),
     // =============================
     // Transport Command
     // =============================
@@ -70,13 +78,20 @@ pub enum AudioCommand {
     SetPlaying(bool),
     /// Toggles transport playback and applies the supplied mode when starting.
     TogglePlayingWithPlaybackMode(PlaybackMode),
-    /// Starts or stops isolated playback of one MIDI pattern through a generator.
+    /// Plays or pauses isolated playback of one MIDI pattern through a generator. Pausing keeps
+    /// the pattern playhead; switching to another pattern starts it from the beginning.
     TogglePatternPlayback {
         /// Pattern rendered in isolation.
         pattern_id: PatternId,
         /// Generator receiving the pattern's MIDI events.
         generator_id: GeneratorId,
     },
+    /// Stops pattern playback and rewinds the pattern playhead, leaving song position alone.
+    StopPatternPlayback,
+    /// Moves the pattern playhead to a sample position.
+    SetPatternPlayhead(u32),
+    /// Loops pattern playback between two ticks, or over the whole pattern when `None`.
+    SetPatternLoop(Option<(u64, u64)>),
     /// Set loop mode
     SetLooping(bool),
     /// Stop playback and reset playhead to 0
@@ -282,11 +297,17 @@ pub enum AudioCommand {
     /// Called on project load / new project to fully hydrate the audio thread.
     HydratePlugin {
         /// Prepared effects grouped by track and effect identifier.
-        track_effects: IndexMap<TrackId, IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>>,
+        track_effects: IndexMap<
+            TrackId,
+            IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
+        >,
         /// Prepared effects in master-chain order.
         master_effects: IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
         /// Prepared effects grouped by bus and effect identifier.
-        bus_effects: IndexMap<BusId, IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>>,
+        bus_effects: IndexMap<
+            BusId,
+            IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
+        >,
         /// Prepared generator plugins keyed by project generator identifier.
         generators: IndexMap<GeneratorId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
         /// Initial DSP values for every track channel (volume, pan, mute, solo, inverted_phase)

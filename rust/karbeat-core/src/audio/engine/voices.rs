@@ -1,4 +1,4 @@
-use karbeat_plugin_api::types::{MidiEvent, MidiMessage};
+use karbeat_plugin_api::types::{MidiEvent, MidiMessage, NoteExpressionType};
 use memmap2::Mmap;
 use smallvec::SmallVec;
 use std::sync::Arc;
@@ -10,6 +10,66 @@ use crate::{
     shared::{GeneratorId, TrackId},
 };
 
+/// Borrowed parts of an audio graph used to decide which sounding notes changed.
+#[derive(Clone, Copy)]
+pub struct GraphView<'a> {
+    pub tracks: &'a [crate::core::project::AudioTrack],
+    pub clips: &'a hashbrown::HashMap<crate::core::project::ClipId, crate::core::project::Clip>,
+    pub patterns: &'a hashbrown::HashMap<crate::shared::PatternId, Pattern>,
+}
+
+impl<'a> GraphView<'a> {
+    /// The pattern and note behind a scheduled note ID (see `note_event_id`).
+    fn pattern_note(&self, event_id: u64) -> Option<(&'a Pattern, &'a Note)> {
+        let pattern_index = u32::try_from(event_id >> 32).ok()?;
+        let note_index = u32::try_from(event_id & u64::from(u32::MAX)).ok()?;
+        self.patterns
+            .values()
+            .filter(|pattern| pattern.id.to_u32() == pattern_index)
+            .find_map(|pattern| {
+                let note = pattern.notes.iter().find(|n| n.id.to_u32() == note_index)?;
+                Some((pattern, note))
+            })
+    }
+
+    /// Clips on `track_id` that play `pattern_id`.
+    fn placements(
+        &self,
+        track_id: TrackId,
+        pattern_id: crate::shared::PatternId,
+    ) -> impl Iterator<Item = &'a crate::core::project::Clip> + 'a {
+        let clips = self.clips;
+        self.tracks
+            .iter()
+            .filter(move |track| track.id == track_id)
+            .flat_map(|track| track.clips.iter())
+            .filter_map(move |clip_id| clips.get(clip_id))
+            .filter(move |clip| {
+                matches!(
+                    clip.source,
+                    Some(crate::core::project::DawSource::Midi(id)) if id == pattern_id
+                )
+            })
+    }
+
+    /// Whether `pattern_id` sits in the same clips, at the same times, on `track_id` in
+    /// both graphs.
+    fn same_placement(
+        &self,
+        other: &GraphView<'_>,
+        track_id: TrackId,
+        pattern_id: crate::shared::PatternId,
+    ) -> bool {
+        self.placements(track_id, pattern_id).count()
+            == other.placements(track_id, pattern_id).count()
+            && self.placements(track_id, pattern_id).all(|clip| {
+                other
+                    .placements(track_id, pattern_id)
+                    .any(|candidate| candidate.id == clip.id && candidate.time == clip.time)
+            })
+    }
+}
+
 /// Audio-thread reference to one active generator instance.
 pub struct GeneratorVoice {
     pub id: GeneratorId,
@@ -17,7 +77,10 @@ pub struct GeneratorVoice {
     pub midi_events: SmallVec<[MidiEvent; 4]>,
     pub active: bool,
     pub playing_keys: Vec<u8>,
+    /// Notes the plugin is holding: updated only from events it actually received.
     pub playing_notes: SmallVec<[PlayingNote; 8]>,
+    /// Whether the generator processed this block's events. Set by the renderer.
+    pub delivered: bool,
 }
 
 #[cfg(test)]
@@ -64,6 +127,120 @@ mod midi_tests {
     }
 
     #[test]
+    fn pattern_notes_carry_pan_and_pitch_as_expressions() {
+        let note = crate::core::project::Note {
+            id: NoteId::from(1),
+            start_tick: 0,
+            duration: 960,
+            key: 60,
+            velocity: 100,
+            probability: 1.0,
+            micro_offset: 0,
+            mute: false,
+            pan: -1.0,
+            pitch: 1.0,
+        };
+        let mut events = SmallVec::new();
+        VoiceState::schedule_pattern_notes(
+            &mut events,
+            PatternId::from(1),
+            &[note],
+            48_000,
+            120.0,
+            0,
+            64,
+        );
+
+        let expressions: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event.data {
+                MidiMessage::NoteExpression {
+                    expression, value, ..
+                } => Some((expression, value)),
+                _ => None,
+            })
+            .collect();
+        assert!(matches!(events[0].data, MidiMessage::NoteOn { .. }));
+        assert_eq!(
+            expressions,
+            [
+                (NoteExpressionType::Pan, 0.0),
+                (NoteExpressionType::Tuning, 0.75)
+            ]
+        );
+    }
+
+    #[test]
+    fn note_off_on_another_key_keeps_the_held_key_tracked() {
+        let mut notes = SmallVec::<[PlayingNote; 8]>::new();
+        VoiceState::update_playing_notes(
+            &mut notes,
+            &MidiMessage::NoteOn {
+                note_id: Some(7),
+                channel: 0,
+                key: 60,
+                velocity: 100,
+            },
+        );
+        VoiceState::update_playing_notes(
+            &mut notes,
+            &MidiMessage::NoteOff {
+                note_id: Some(7),
+                channel: 0,
+                key: 64,
+            },
+        );
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].key, 60);
+    }
+
+    #[test]
+    fn undelivered_blocks_keep_one_release_per_held_note() {
+        use crate::shared::{GeneratorId, TrackId};
+        use karbeat_plugin_api::types::MidiEvent;
+
+        let mut voice = super::GeneratorVoice::new(GeneratorId::from(1), TrackId::from(1), true);
+        voice.midi_events.push(MidiEvent {
+            sample_offset: 5,
+            data: MidiMessage::NoteOn {
+                note_id: Some(1),
+                channel: 0,
+                key: 60,
+                velocity: 100,
+            },
+        });
+        voice.delivered = true;
+        voice.finish_block();
+        assert_eq!(voice.playing_notes.len(), 1);
+
+        // Stopped twice while the generator is not rendering, plus a stray note-on.
+        voice.release_all();
+        voice.release_all();
+        voice.midi_events.push(MidiEvent {
+            sample_offset: 9,
+            data: MidiMessage::NoteOn {
+                note_id: Some(2),
+                channel: 0,
+                key: 62,
+                velocity: 100,
+            },
+        });
+        voice.finish_block();
+        voice.finish_block();
+        assert_eq!(voice.midi_events.len(), 1);
+        assert!(matches!(
+            voice.midi_events[0].data,
+            MidiMessage::NoteOff { key: 60, .. }
+        ));
+        assert_eq!(voice.playing_notes.len(), 1);
+
+        voice.delivered = true;
+        voice.finish_block();
+        assert!(voice.playing_notes.is_empty());
+        assert!(voice.midi_events.is_empty());
+    }
+
+    #[test]
     fn scheduled_identity_includes_pattern() {
         let note_id = NoteId::from(4);
 
@@ -90,12 +267,83 @@ impl GeneratorVoice {
             active,
             playing_keys: Vec::new(),
             playing_notes: SmallVec::new(),
+            delivered: false,
         }
     }
 
     pub fn track_midi_event(&mut self, message: &MidiMessage) {
         VoiceState::update_playing_notes(&mut self.playing_notes, message);
         VoiceState::update_playing_keys(&mut self.playing_keys, message);
+    }
+
+    fn note_off(note: PlayingNote) -> MidiEvent {
+        MidiEvent {
+            sample_offset: 0,
+            data: MidiMessage::NoteOff {
+                note_id: note.note_id,
+                channel: note.channel,
+                key: note.key,
+            },
+        }
+    }
+
+    fn is_release_of(event: &MidiEvent, note: PlayingNote) -> bool {
+        matches!(
+            event.data,
+            MidiMessage::NoteOff { note_id, channel, key }
+                if note_id == note.note_id && channel == note.channel && key == note.key
+        )
+    }
+
+    /// Queues a note-off for a held note at the start of the next block, unless one is
+    /// already queued. Tracking changes only once the plugin receives it.
+    pub fn queue_release(&mut self, note: PlayingNote) {
+        if !self
+            .midi_events
+            .iter()
+            .any(|event| Self::is_release_of(event, note))
+        {
+            self.midi_events.push(Self::note_off(note));
+        }
+    }
+
+    /// Queues note-offs for every note the plugin is holding.
+    pub fn release_all(&mut self) {
+        for index in 0..self.playing_notes.len() {
+            self.queue_release(self.playing_notes[index]);
+        }
+    }
+
+    /// Settles this block's events once rendering is done.
+    ///
+    /// When the generator ran, tracking follows what it received and the queue empties.
+    /// When it did not run (its track was muted, soloed out, or skipped), note-ons are
+    /// dropped but note-offs for held notes stay queued for the next block it runs, so a
+    /// release is never lost. The queue stays bounded by the held notes.
+    pub fn finish_block(&mut self) {
+        if self.delivered {
+            for event in &self.midi_events {
+                VoiceState::update_playing_notes(&mut self.playing_notes, &event.data);
+                VoiceState::update_playing_keys(&mut self.playing_keys, &event.data);
+            }
+            self.midi_events.clear();
+        } else {
+            // One pending note-off per held note that had a release queued.
+            let pending: SmallVec<[PlayingNote; 8]> = self
+                .playing_notes
+                .iter()
+                .copied()
+                .filter(|note| {
+                    self.midi_events
+                        .iter()
+                        .any(|event| Self::is_release_of(event, *note))
+                })
+                .collect();
+            self.midi_events.clear();
+            self.midi_events
+                .extend(pending.into_iter().map(Self::note_off));
+        }
+        self.delivered = false;
     }
 }
 
@@ -131,10 +379,13 @@ impl VoiceState {
                 channel,
                 key,
             } => playing_notes.retain(|note| {
-                if let Some(note_id) = note_id {
-                    note.note_id != Some(*note_id)
-                } else {
-                    note.channel != *channel || note.key != *key
+                // A note-off only ends the note it names on the key it holds. An
+                // off for the same ID on another key (a note moved while sounding)
+                // leaves the held key tracked, so cleanup can still release it.
+                let same_key = note.channel == *channel && note.key == *key;
+                match note_id {
+                    Some(note_id) => note.note_id != Some(*note_id) || !same_key,
+                    None => !same_key,
                 }
             }),
             MidiMessage::ControlChange {
@@ -211,6 +462,43 @@ pub(super) struct VoiceState {
 }
 
 impl VoiceState {
+    /// Releases sounding pattern notes whose source changed when the track graph is
+    /// replaced, so edits during playback never leave notes hanging.
+    ///
+    /// A note is released when it was deleted, moved, resized, or transposed, or, in song
+    /// mode (`clips_matter`), when the clips placing its pattern on the voice's track were
+    /// moved, resized, or removed. Each note-off uses the key and channel actually held,
+    /// not the edited note's. Unchanged notes, and notes that are not from a pattern (live
+    /// input), keep sounding.
+    pub fn release_changed_notes(
+        &mut self,
+        old: GraphView<'_>,
+        new: GraphView<'_>,
+        clips_matter: bool,
+    ) {
+        for voice in &mut self.active_generators {
+            for index in 0..voice.playing_notes.len() {
+                let playing = voice.playing_notes[index];
+                let Some(event_id) = playing.note_id else {
+                    continue;
+                };
+                let Some((pattern, before)) = old.pattern_note(event_id) else {
+                    continue;
+                };
+                let note_unchanged = new.pattern_note(event_id).is_some_and(|(_, after)| {
+                    after.start_tick == before.start_tick
+                        && after.duration == before.duration
+                        && after.key == before.key
+                });
+                let placement_unchanged =
+                    !clips_matter || old.same_placement(&new, voice.track_id, pattern.id);
+                if !note_unchanged || !placement_unchanged {
+                    voice.queue_release(playing);
+                }
+            }
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             active_generators: Vec::with_capacity(32),
@@ -537,8 +825,9 @@ impl VoiceState {
             let absolute_end = (absolute_start + note_duration).min(clip_end);
 
             if absolute_start >= buffer_start && absolute_start < buffer_end {
+                let sample_offset = (absolute_start - buffer_start) as usize;
                 events.push(MidiEvent {
-                    sample_offset: (absolute_start - buffer_start) as usize,
+                    sample_offset,
                     data: MidiMessage::NoteOn {
                         note_id: Some(note_id),
                         channel: 0,
@@ -546,6 +835,7 @@ impl VoiceState {
                         velocity: note.velocity,
                     },
                 });
+                Self::push_note_expressions(events, sample_offset, note_id, note);
             }
             if absolute_end >= buffer_start && absolute_end < buffer_end {
                 events.push(MidiEvent {
@@ -575,8 +865,9 @@ impl VoiceState {
             let note_start = (note.start_tick as f32 * samples_per_tick) as u32;
             let note_end = note_start + (note.duration as f32 * samples_per_tick) as u32;
             if note_start >= buffer_start && note_start < buffer_end {
+                let sample_offset = (note_start - buffer_start) as usize;
                 events.push(MidiEvent {
-                    sample_offset: (note_start - buffer_start) as usize,
+                    sample_offset,
                     data: MidiMessage::NoteOn {
                         note_id: Some(note_id),
                         channel: 0,
@@ -584,6 +875,7 @@ impl VoiceState {
                         velocity: note.velocity,
                     },
                 });
+                Self::push_note_expressions(events, sample_offset, note_id, note);
             }
             if note_end >= buffer_start && note_end < buffer_end {
                 events.push(MidiEvent {
@@ -595,6 +887,39 @@ impl VoiceState {
                     },
                 });
             }
+        }
+    }
+
+    /// Sends a note's pan and fine pitch as per-note expressions at its note-on. Values are
+    /// normalized: pan 0.5 and pitch 0.5 are neutral, with pitch spanning
+    /// ±[`PITCH_RANGE`](crate::core::project::track::note_transform::PITCH_RANGE) semitones.
+    fn push_note_expressions(
+        events: &mut SmallVec<[MidiEvent; 4]>,
+        sample_offset: usize,
+        note_id: u64,
+        note: &Note,
+    ) {
+        use crate::core::project::track::note_transform::PITCH_RANGE;
+        if note.pan != 0.0 {
+            events.push(MidiEvent {
+                sample_offset,
+                data: MidiMessage::NoteExpression {
+                    note_id,
+                    expression: NoteExpressionType::Pan,
+                    value: (note.pan.clamp(-1.0, 1.0) + 1.0) * 0.5,
+                },
+            });
+        }
+        if note.pitch != 0.0 {
+            events.push(MidiEvent {
+                sample_offset,
+                data: MidiMessage::NoteExpression {
+                    note_id,
+                    expression: NoteExpressionType::Tuning,
+                    value: (note.pitch.clamp(-PITCH_RANGE, PITCH_RANGE) + PITCH_RANGE)
+                        / (2.0 * PITCH_RANGE),
+                },
+            });
         }
     }
 

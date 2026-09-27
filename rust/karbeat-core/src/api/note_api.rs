@@ -1,5 +1,7 @@
 use crate::context::DawContext;
 use crate::core::history::ProjectAction;
+use crate::core::project::track::midi::Pattern;
+use crate::core::project::track::note_transform::{self, NoteEdit, NoteParams};
 use crate::core::project::{Note, NoteId};
 use crate::shared::id::*;
 
@@ -256,4 +258,193 @@ pub fn resize_notes_batch(
     }
 
     Ok(final_notes)
+}
+
+// ==============================================================================
+// Piano-roll transforms
+// ==============================================================================
+//
+// Each transform applies to the given notes, or to the whole pattern when `note_ids` is empty,
+// commits as one undo step, and returns the resulting pattern.
+
+fn commit_note_edit(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    edit: NoteEdit,
+) -> anyhow::Result<Pattern> {
+    let mut actions = ctx.app_state.apply_note_edit(pattern_id, edit)?;
+    if !actions.is_empty() {
+        if actions.len() == 1 {
+            ctx.push_history(actions.remove(0));
+        } else {
+            ctx.push_history(ProjectAction::Batch(actions));
+        }
+        ctx.broadcast_track_graph();
+    }
+    ctx.app_state
+        .pattern_pool
+        .get(pattern_id)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))
+}
+
+fn transform_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    transform: impl FnOnce(&[Note]) -> anyhow::Result<NoteEdit>,
+) -> anyhow::Result<Pattern> {
+    let notes = ctx.app_state.pattern_notes_for(pattern_id, note_ids)?;
+    let edit = transform(&notes)?;
+    commit_note_edit(ctx, pattern_id, edit)
+}
+
+/// Snaps note starts and ends to the nearest multiple of `step_ticks`.
+pub fn quantize_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    step_ticks: u64,
+) -> anyhow::Result<Pattern> {
+    anyhow::ensure!(step_ticks > 0, "Quantize step must be positive");
+    transform_notes(ctx, pattern_id, note_ids, |notes| {
+        Ok(note_transform::quantize(notes, step_ticks))
+    })
+}
+
+/// Snaps only note starts to the nearest multiple of `step_ticks`, keeping lengths.
+pub fn quantize_note_starts(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    step_ticks: u64,
+) -> anyhow::Result<Pattern> {
+    anyhow::ensure!(step_ticks > 0, "Quantize step must be positive");
+    transform_notes(ctx, pattern_id, note_ids, |notes| {
+        Ok(note_transform::quantize_start(notes, step_ticks))
+    })
+}
+
+/// Stretches each note to the start of the next note so the line plays legato.
+pub fn legato_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+) -> anyhow::Result<Pattern> {
+    transform_notes(ctx, pattern_id, note_ids, |notes| {
+        Ok(note_transform::legato(notes))
+    })
+}
+
+/// Randomizes note timing by up to `timing_ticks` and velocity by up to `velocity_amount`.
+/// The same `seed` reproduces the same result.
+pub fn humanize_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    timing_ticks: u64,
+    velocity_amount: u8,
+    seed: u64,
+) -> anyhow::Result<Pattern> {
+    transform_notes(ctx, pattern_id, note_ids, |notes| {
+        Ok(note_transform::humanize(
+            notes,
+            timing_ticks,
+            velocity_amount,
+            seed,
+        ))
+    })
+}
+
+/// Splits notes into pieces at every multiple of `step_ticks`.
+pub fn chop_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    step_ticks: u64,
+) -> anyhow::Result<Pattern> {
+    anyhow::ensure!(step_ticks > 0, "Chop step must be positive");
+    transform_notes(ctx, pattern_id, note_ids, |notes| {
+        Ok(note_transform::chop(notes, step_ticks))
+    })
+}
+
+/// Cuts one note in two at `at_tick`.
+pub fn slice_note(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_id: NoteId,
+    at_tick: u64,
+) -> anyhow::Result<Pattern> {
+    transform_notes(ctx, pattern_id, &[note_id], |notes| {
+        let note = notes
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("Note {} not found", note_id.to_u32()))?;
+        Ok(note_transform::slice(note, at_tick))
+    })
+}
+
+/// Transposes notes by `semitones`; fails if any note would leave the MIDI range.
+pub fn transpose_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    semitones: i32,
+) -> anyhow::Result<Pattern> {
+    transform_notes(ctx, pattern_id, note_ids, |notes| {
+        note_transform::transpose(notes, semitones)
+    })
+}
+
+/// Moves notes by `delta_ticks` in time, stopping the group at tick 0.
+pub fn shift_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    delta_ticks: i64,
+) -> anyhow::Result<Pattern> {
+    transform_notes(ctx, pattern_id, note_ids, |notes| {
+        Ok(note_transform::shift(notes, delta_ticks))
+    })
+}
+
+/// Sets velocity, pan, and fine pitch per note, as one undo step.
+pub fn set_note_params_batch(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    updates: &[(NoteId, NoteParams)],
+) -> anyhow::Result<Pattern> {
+    let ids: Vec<NoteId> = updates.iter().map(|(id, _)| *id).collect();
+    if ids.is_empty() {
+        return commit_note_edit(ctx, pattern_id, NoteEdit::default());
+    }
+    transform_notes(ctx, pattern_id, &ids, |notes| {
+        Ok(NoteEdit {
+            updates: notes
+                .iter()
+                .filter_map(|note| {
+                    let (_, params) = updates.iter().find(|(id, _)| *id == note.id)?;
+                    Some(note_transform::with_params(note, *params))
+                })
+                .collect(),
+            additions: Vec::new(),
+        })
+    })
+}
+
+/// Inserts complete notes, keeping each one's velocity, pan, and pitch, such as when the draw
+/// tool stamps copies of the selected notes.
+pub fn add_note_copies(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    notes: Vec<Note>,
+) -> anyhow::Result<Pattern> {
+    commit_note_edit(
+        ctx,
+        pattern_id,
+        NoteEdit {
+            updates: Vec::new(),
+            additions: notes,
+        },
+    )
 }

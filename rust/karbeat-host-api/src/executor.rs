@@ -1,10 +1,7 @@
 use std::{
     fmt,
     path::PathBuf,
-    sync::{
-        Arc,
-        atomic::AtomicBool,
-    },
+    sync::{Arc, atomic::AtomicBool},
 };
 
 use karbeat_plugin_api::prelude::ParameterSpec;
@@ -42,7 +39,10 @@ impl fmt::Debug for ScanRequest {
             .field("directories", &self.directories)
             .field("timeout_seconds", &self.timeout_seconds)
             .field("retry_quarantined", &self.retry_quarantined)
-            .field("cancelled", &self.cancelled.load(std::sync::atomic::Ordering::Relaxed))
+            .field(
+                "cancelled",
+                &self.cancelled.load(std::sync::atomic::Ordering::Relaxed),
+            )
             .field("cache_path", &self.cache_path)
             .field("has_progress_observer", &self.progress.is_some())
             .finish()
@@ -161,7 +161,10 @@ pub struct OfflinePrepareRequest {
 }
 
 /// Static-dispatch contract implemented once by every supported external plugin ABI.
-#[allow(async_fn_in_trait, reason = "executors are statically dispatched and never trait objects")]
+#[allow(
+    async_fn_in_trait,
+    reason = "executors are statically dispatched and never trait objects"
+)]
 pub trait PluginFormatExecutor: Clone + Send + Sync + 'static {
     /// ABI handled by this executor.
     fn format(&self) -> PluginFormat;
@@ -198,14 +201,14 @@ pub trait PluginFormatExecutor: Clone + Send + Sync + 'static {
     /// Opens or focuses the instance editor.
     async fn open_editor(&self, request: OpenEditorRequest) -> Result<(), HostError>;
     /// Closes the instance editor.
-    async fn close_editor(
-        &self,
-        instance: ExternalPluginInstanceHandle,
-    ) -> Result<(), HostError>;
+    async fn close_editor(&self, instance: ExternalPluginInstanceHandle) -> Result<(), HostError>;
     /// Restores the instance's processing intent after publication.
     async fn resume(&self, instance: ExternalPluginInstanceHandle) -> Result<(), HostError>;
     /// Creates a suspended duplicate of a live instance.
-    async fn duplicate(&self, request: DuplicateRequest) -> Result<PreparedExternalPlugin, HostError>;
+    async fn duplicate(
+        &self,
+        request: DuplicateRequest,
+    ) -> Result<PreparedExternalPlugin, HostError>;
     /// Creates a suspended realtime replacement.
     async fn reconfigure(
         &self,

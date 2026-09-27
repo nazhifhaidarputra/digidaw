@@ -139,10 +139,7 @@ where
         }
     }
 
-    async fn close_editor(
-        &self,
-        instance: ExternalPluginInstanceHandle,
-    ) -> Result<(), HostError> {
+    async fn close_editor(&self, instance: ExternalPluginInstanceHandle) -> Result<(), HostError> {
         match instance.format {
             PluginFormat::Vst3 => self.vst3.close_editor(instance).await,
             PluginFormat::Clap => self.clap.close_editor(instance).await,
@@ -158,7 +155,10 @@ where
         }
     }
 
-    async fn duplicate(&self, request: DuplicateRequest) -> Result<PreparedExternalPlugin, HostError> {
+    async fn duplicate(
+        &self,
+        request: DuplicateRequest,
+    ) -> Result<PreparedExternalPlugin, HostError> {
         match request.instance.format {
             PluginFormat::Vst3 => self.vst3.duplicate(request).await,
             PluginFormat::Clap => self.clap.duplicate(request).await,
@@ -207,21 +207,67 @@ enum HostRequest {
         request: ScanRequest,
         reply: oneshot::Sender<Result<scanner::ScanResult, HostError>>,
     },
-    Prepare { request: PrepareRequest, reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>> },
-    Capabilities { instance: ExternalPluginInstanceHandle, reply: oneshot::Sender<Result<HostCapabilities, HostError>> },
-    CaptureState { instance: ExternalPluginInstanceHandle, reply: oneshot::Sender<Result<PluginState, HostError>> },
-    RestoreState { instance: ExternalPluginInstanceHandle, state: PluginState, reply: oneshot::Sender<Result<(), HostError>> },
-    SetParameter { request: SetParameterRequest, reply: oneshot::Sender<Result<(), HostError>> },
-    ParameterText { request: ParameterTextRequest, reply: oneshot::Sender<Result<String, HostError>> },
-    ParseParameter { request: ParseParameterRequest, reply: oneshot::Sender<Result<f64, HostError>> },
-    ConvertParameter { request: ConvertParameterRequest, reply: oneshot::Sender<Result<f64, HostError>> },
-    OpenEditor { request: OpenEditorRequest, reply: oneshot::Sender<Result<(), HostError>> },
-    CloseEditor { instance: ExternalPluginInstanceHandle, reply: oneshot::Sender<Result<(), HostError>> },
-    Resume { instance: ExternalPluginInstanceHandle, reply: oneshot::Sender<Result<(), HostError>> },
-    Duplicate { request: DuplicateRequest, reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>> },
-    Reconfigure { request: ReconfigureRequest, reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>> },
-    PrepareOffline { request: OfflinePrepareRequest, reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>> },
-    Destroy { instance: ExternalPluginInstanceHandle, reply: oneshot::Sender<Result<(), HostError>> },
+    Prepare {
+        request: PrepareRequest,
+        reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>>,
+    },
+    Capabilities {
+        instance: ExternalPluginInstanceHandle,
+        reply: oneshot::Sender<Result<HostCapabilities, HostError>>,
+    },
+    CaptureState {
+        instance: ExternalPluginInstanceHandle,
+        reply: oneshot::Sender<Result<PluginState, HostError>>,
+    },
+    RestoreState {
+        instance: ExternalPluginInstanceHandle,
+        state: PluginState,
+        reply: oneshot::Sender<Result<(), HostError>>,
+    },
+    SetParameter {
+        request: SetParameterRequest,
+        reply: oneshot::Sender<Result<(), HostError>>,
+    },
+    ParameterText {
+        request: ParameterTextRequest,
+        reply: oneshot::Sender<Result<String, HostError>>,
+    },
+    ParseParameter {
+        request: ParseParameterRequest,
+        reply: oneshot::Sender<Result<f64, HostError>>,
+    },
+    ConvertParameter {
+        request: ConvertParameterRequest,
+        reply: oneshot::Sender<Result<f64, HostError>>,
+    },
+    OpenEditor {
+        request: OpenEditorRequest,
+        reply: oneshot::Sender<Result<(), HostError>>,
+    },
+    CloseEditor {
+        instance: ExternalPluginInstanceHandle,
+        reply: oneshot::Sender<Result<(), HostError>>,
+    },
+    Resume {
+        instance: ExternalPluginInstanceHandle,
+        reply: oneshot::Sender<Result<(), HostError>>,
+    },
+    Duplicate {
+        request: DuplicateRequest,
+        reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>>,
+    },
+    Reconfigure {
+        request: ReconfigureRequest,
+        reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>>,
+    },
+    PrepareOffline {
+        request: OfflinePrepareRequest,
+        reply: oneshot::Sender<Result<PreparedExternalPlugin, HostError>>,
+    },
+    Destroy {
+        instance: ExternalPluginInstanceHandle,
+        reply: oneshot::Sender<Result<(), HostError>>,
+    },
 }
 
 /// Cloneable format-independent client used by application and core control code.
@@ -262,10 +308,12 @@ impl HostClient {
             return Err(HostError::RuntimeUnavailable);
         }
         let (reply, receive) = oneshot::channel();
-        self.tx.try_send(request(reply)).map_err(|error| match error {
-            mpsc::error::TrySendError::Full(_) => HostError::QueueFull,
-            mpsc::error::TrySendError::Closed(_) => HostError::RuntimeUnavailable,
-        })?;
+        self.tx
+            .try_send(request(reply))
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => HostError::QueueFull,
+                mpsc::error::TrySendError::Closed(_) => HostError::RuntimeUnavailable,
+            })?;
         receive.await.map_err(|_| HostError::RuntimeUnavailable)?
     }
 
@@ -282,8 +330,12 @@ impl HostClient {
     }
 
     /// Returns conventional discovery roots for one format.
-    pub async fn default_scan_paths(&self, format: PluginFormat) -> Result<Vec<PathBuf>, HostError> {
-        self.submit(|reply| HostRequest::DefaultScanPaths { format, reply }).await
+    pub async fn default_scan_paths(
+        &self,
+        format: PluginFormat,
+    ) -> Result<Vec<PathBuf>, HostError> {
+        self.submit(|reply| HostRequest::DefaultScanPaths { format, reply })
+            .await
     }
     /// Returns conventional discovery roots from every supported format executor.
     pub async fn default_scan_paths_all(&self) -> Result<Vec<PathBuf>, HostError> {
@@ -295,8 +347,17 @@ impl HostClient {
         Ok(paths)
     }
     /// Discovers descriptors through the selected format executor.
-    pub async fn scan(&self, format: PluginFormat, request: ScanRequest) -> Result<scanner::ScanResult, HostError> {
-        self.submit(|reply| HostRequest::Scan { format, request, reply }).await
+    pub async fn scan(
+        &self,
+        format: PluginFormat,
+        request: ScanRequest,
+    ) -> Result<scanner::ScanResult, HostError> {
+        self.submit(|reply| HostRequest::Scan {
+            format,
+            request,
+            reply,
+        })
+        .await
     }
     /// Discovers plugins through all permanent executor slots.
     pub async fn scan_all(&self, request: ScanRequest) -> Result<scanner::ScanResult, HostError> {
@@ -315,64 +376,111 @@ impl HostClient {
         Ok(combined)
     }
     /// Creates and prepares a new external instance.
-    pub async fn prepare(&self, request: PrepareRequest) -> Result<PreparedExternalPlugin, HostError> {
-        self.submit(|reply| HostRequest::Prepare { request, reply }).await
+    pub async fn prepare(
+        &self,
+        request: PrepareRequest,
+    ) -> Result<PreparedExternalPlugin, HostError> {
+        self.submit(|reply| HostRequest::Prepare { request, reply })
+            .await
     }
     /// Returns optional facilities exposed by a live instance.
-    pub async fn capabilities(&self, instance: ExternalPluginInstanceHandle) -> Result<HostCapabilities, HostError> {
-        self.submit(|reply| HostRequest::Capabilities { instance, reply }).await
+    pub async fn capabilities(
+        &self,
+        instance: ExternalPluginInstanceHandle,
+    ) -> Result<HostCapabilities, HostError> {
+        self.submit(|reply| HostRequest::Capabilities { instance, reply })
+            .await
     }
     /// Captures fresh opaque native state.
-    pub async fn capture_state(&self, instance: ExternalPluginInstanceHandle) -> Result<PluginState, HostError> {
-        self.submit(|reply| HostRequest::CaptureState { instance, reply }).await
+    pub async fn capture_state(
+        &self,
+        instance: ExternalPluginInstanceHandle,
+    ) -> Result<PluginState, HostError> {
+        self.submit(|reply| HostRequest::CaptureState { instance, reply })
+            .await
     }
     /// Restores opaque native state.
-    pub async fn restore_state(&self, instance: ExternalPluginInstanceHandle, state: PluginState) -> Result<(), HostError> {
-        self.submit(|reply| HostRequest::RestoreState { instance, state, reply }).await
+    pub async fn restore_state(
+        &self,
+        instance: ExternalPluginInstanceHandle,
+        state: PluginState,
+    ) -> Result<(), HostError> {
+        self.submit(|reply| HostRequest::RestoreState {
+            instance,
+            state,
+            reply,
+        })
+        .await
     }
     /// Applies a normalized controller parameter.
     pub async fn set_parameter(&self, request: SetParameterRequest) -> Result<(), HostError> {
-        self.submit(|reply| HostRequest::SetParameter { request, reply }).await
+        self.submit(|reply| HostRequest::SetParameter { request, reply })
+            .await
     }
     /// Formats a normalized controller parameter.
     pub async fn parameter_text(&self, request: ParameterTextRequest) -> Result<String, HostError> {
-        self.submit(|reply| HostRequest::ParameterText { request, reply }).await
+        self.submit(|reply| HostRequest::ParameterText { request, reply })
+            .await
     }
     /// Parses controller display text.
     pub async fn parse_parameter(&self, request: ParseParameterRequest) -> Result<f64, HostError> {
-        self.submit(|reply| HostRequest::ParseParameter { request, reply }).await
+        self.submit(|reply| HostRequest::ParseParameter { request, reply })
+            .await
     }
     /// Converts a controller value between normalized and plain domains.
-    pub async fn convert_parameter(&self, request: ConvertParameterRequest) -> Result<f64, HostError> {
-        self.submit(|reply| HostRequest::ConvertParameter { request, reply }).await
+    pub async fn convert_parameter(
+        &self,
+        request: ConvertParameterRequest,
+    ) -> Result<f64, HostError> {
+        self.submit(|reply| HostRequest::ConvertParameter { request, reply })
+            .await
     }
     /// Opens or focuses the instance editor.
     pub async fn open_editor(&self, request: OpenEditorRequest) -> Result<(), HostError> {
-        self.submit(|reply| HostRequest::OpenEditor { request, reply }).await
+        self.submit(|reply| HostRequest::OpenEditor { request, reply })
+            .await
     }
     /// Closes the instance editor.
-    pub async fn close_editor(&self, instance: ExternalPluginInstanceHandle) -> Result<(), HostError> {
-        self.submit(|reply| HostRequest::CloseEditor { instance, reply }).await
+    pub async fn close_editor(
+        &self,
+        instance: ExternalPluginInstanceHandle,
+    ) -> Result<(), HostError> {
+        self.submit(|reply| HostRequest::CloseEditor { instance, reply })
+            .await
     }
     /// Restores processing after an endpoint is published.
     pub async fn resume(&self, instance: ExternalPluginInstanceHandle) -> Result<(), HostError> {
-        self.submit(|reply| HostRequest::Resume { instance, reply }).await
+        self.submit(|reply| HostRequest::Resume { instance, reply })
+            .await
     }
     /// Creates a suspended duplicate.
-    pub async fn duplicate(&self, request: DuplicateRequest) -> Result<PreparedExternalPlugin, HostError> {
-        self.submit(|reply| HostRequest::Duplicate { request, reply }).await
+    pub async fn duplicate(
+        &self,
+        request: DuplicateRequest,
+    ) -> Result<PreparedExternalPlugin, HostError> {
+        self.submit(|reply| HostRequest::Duplicate { request, reply })
+            .await
     }
     /// Creates a suspended realtime replacement.
-    pub async fn reconfigure(&self, request: ReconfigureRequest) -> Result<PreparedExternalPlugin, HostError> {
-        self.submit(|reply| HostRequest::Reconfigure { request, reply }).await
+    pub async fn reconfigure(
+        &self,
+        request: ReconfigureRequest,
+    ) -> Result<PreparedExternalPlugin, HostError> {
+        self.submit(|reply| HostRequest::Reconfigure { request, reply })
+            .await
     }
     /// Creates and starts an offline rendering instance.
-    pub async fn prepare_offline(&self, request: OfflinePrepareRequest) -> Result<PreparedExternalPlugin, HostError> {
-        self.submit(|reply| HostRequest::PrepareOffline { request, reply }).await
+    pub async fn prepare_offline(
+        &self,
+        request: OfflinePrepareRequest,
+    ) -> Result<PreparedExternalPlugin, HostError> {
+        self.submit(|reply| HostRequest::PrepareOffline { request, reply })
+            .await
     }
     /// Destroys a retired native instance on its owner.
     pub async fn destroy(&self, instance: ExternalPluginInstanceHandle) -> Result<(), HostError> {
-        self.submit(|reply| HostRequest::Destroy { instance, reply }).await
+        self.submit(|reply| HostRequest::Destroy { instance, reply })
+            .await
     }
 }
 
@@ -429,8 +537,7 @@ fn run_service<V, C, L>(
     mut shutdown: watch::Receiver<bool>,
     availability: watch::Sender<bool>,
     executors: PluginExecutors<V, C, L>,
-)
-where
+) where
     V: PluginFormatExecutor,
     C: PluginFormatExecutor,
     L: PluginFormatExecutor,
@@ -484,21 +591,49 @@ where
                 drop(reply.send(Ok(executors.default_scan_paths(format))));
             }
         }
-        HostRequest::Scan { format, request, reply } => complete!(reply, executors.scan(format, request)),
+        HostRequest::Scan {
+            format,
+            request,
+            reply,
+        } => complete!(reply, executors.scan(format, request)),
         HostRequest::Prepare { request, reply } => complete!(reply, executors.prepare(request)),
-        HostRequest::Capabilities { instance, reply } => complete!(reply, executors.capabilities(instance)),
-        HostRequest::CaptureState { instance, reply } => complete!(reply, executors.capture_state(instance)),
-        HostRequest::RestoreState { instance, state, reply } => complete!(reply, executors.restore_state(instance, state)),
-        HostRequest::SetParameter { request, reply } => complete!(reply, executors.set_parameter(request)),
-        HostRequest::ParameterText { request, reply } => complete!(reply, executors.parameter_text(request)),
-        HostRequest::ParseParameter { request, reply } => complete!(reply, executors.parse_parameter(request)),
-        HostRequest::ConvertParameter { request, reply } => complete!(reply, executors.convert_parameter(request)),
-        HostRequest::OpenEditor { request, reply } => complete!(reply, executors.open_editor(request)),
-        HostRequest::CloseEditor { instance, reply } => complete!(reply, executors.close_editor(instance)),
+        HostRequest::Capabilities { instance, reply } => {
+            complete!(reply, executors.capabilities(instance))
+        }
+        HostRequest::CaptureState { instance, reply } => {
+            complete!(reply, executors.capture_state(instance))
+        }
+        HostRequest::RestoreState {
+            instance,
+            state,
+            reply,
+        } => complete!(reply, executors.restore_state(instance, state)),
+        HostRequest::SetParameter { request, reply } => {
+            complete!(reply, executors.set_parameter(request))
+        }
+        HostRequest::ParameterText { request, reply } => {
+            complete!(reply, executors.parameter_text(request))
+        }
+        HostRequest::ParseParameter { request, reply } => {
+            complete!(reply, executors.parse_parameter(request))
+        }
+        HostRequest::ConvertParameter { request, reply } => {
+            complete!(reply, executors.convert_parameter(request))
+        }
+        HostRequest::OpenEditor { request, reply } => {
+            complete!(reply, executors.open_editor(request))
+        }
+        HostRequest::CloseEditor { instance, reply } => {
+            complete!(reply, executors.close_editor(instance))
+        }
         HostRequest::Resume { instance, reply } => complete!(reply, executors.resume(instance)),
         HostRequest::Duplicate { request, reply } => complete!(reply, executors.duplicate(request)),
-        HostRequest::Reconfigure { request, reply } => complete!(reply, executors.reconfigure(request)),
-        HostRequest::PrepareOffline { request, reply } => complete!(reply, executors.prepare_offline(request)),
+        HostRequest::Reconfigure { request, reply } => {
+            complete!(reply, executors.reconfigure(request))
+        }
+        HostRequest::PrepareOffline { request, reply } => {
+            complete!(reply, executors.prepare_offline(request))
+        }
         HostRequest::Destroy { instance, reply } => complete!(reply, executors.destroy(instance)),
     }
 }

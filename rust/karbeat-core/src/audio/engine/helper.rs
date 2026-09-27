@@ -432,7 +432,10 @@ pub fn prepare_planar_input(
     Some(frames)
 }
 
-#[allow(clippy::too_many_arguments, reason = "the render path passes preallocated channel storage explicitly")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the render path passes preallocated channel storage explicitly"
+)]
 pub fn process_plugin_planar(
     plugin: &mut dyn crate::core::project::plugin::AudioPlugin,
     aux_interleaved: Option<&[f32]>,
@@ -791,13 +794,8 @@ mod buffer_iteration_tests {
         let mut channel_inputs = vec![vec![0.0; 2], vec![0.0; 2]];
         let mut channel_outputs = vec![vec![0.0; 2], vec![0.0; 2]];
         let mut aux = vec![vec![0.0; 2], vec![0.0; 2]];
-        let frames = prepare_planar_input(
-            &output,
-            2,
-            &mut channel_inputs,
-            &channel_outputs,
-        )
-        .expect("valid stereo buffers");
+        let frames = prepare_planar_input(&output, 2, &mut channel_inputs, &channel_outputs)
+            .expect("valid stereo buffers");
         let mut first = MissingPlugin::effect();
         let mut second = MissingPlugin::effect();
         for plugin in [&mut first, &mut second] {

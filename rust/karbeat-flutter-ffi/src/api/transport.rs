@@ -87,6 +87,26 @@ pub fn toggle_playback_with_mode(ctx: &DawContext, playback_mode: PlaybackModeDt
     transport_api::toggle_playing_with_playback(&mut ctx.project_write(), playback_mode.into());
 }
 
+/// Stop pattern playback and rewind the pattern playhead, leaving the song position alone
+pub fn stop_pattern_playback(ctx: &DawContext) {
+    transport_api::stop_pattern_playback(&mut ctx.project_write());
+}
+
+/// Move the pattern playhead to `samples`
+pub fn set_pattern_playhead(ctx: &DawContext, samples: u32) {
+    transport_api::set_pattern_playhead(&mut ctx.project_write(), samples);
+}
+
+/// Loop pattern playback between two ticks, or over the whole pattern when either is null
+pub fn set_pattern_loop(
+    ctx: &DawContext,
+    start_tick: Option<u64>,
+    end_tick: Option<u64>,
+) -> Result<(), String> {
+    transport_api::set_pattern_loop(&mut ctx.project_write(), start_tick.zip(end_tick))
+        .map_err(|e| e.to_string())
+}
+
 pub fn switch_pattern_generator(ctx: &DawContext, generator_id: u64) {
     transport_api::switch_pattern_generator(&mut ctx.project_write(), generator_id.into());
 }

@@ -146,8 +146,8 @@ impl DelayMode for SimpleDelayMode {
                         }
 
                         let final_tap = delay.read(channel, parameters.delay_samples);
-                        buffer[frame] =
-                            input * parameters.dry_mix + (wet_sample / weight_sum) * parameters.wet_mix;
+                        buffer[frame] = input * parameters.dry_mix
+                            + (wet_sample / weight_sum) * parameters.wet_mix;
                         delay.write(channel, input + final_tap * parameters.feedback);
                     }
 
@@ -506,7 +506,11 @@ mod tests {
 
     const EPSILON: f64 = 1.0e-10;
 
-    fn configure_delay<T: DelayMode + 'static>(delay: &mut DelayDsp<T>, delay_ms: f64, feedback: f64) {
+    fn configure_delay<T: DelayMode + 'static>(
+        delay: &mut DelayDsp<T>,
+        delay_ms: f64,
+        feedback: f64,
+    ) {
         delay.delay_ms.set_base(delay_ms);
         delay.feedback.set_base(feedback);
         delay.dry_mix.set_base(0.0);

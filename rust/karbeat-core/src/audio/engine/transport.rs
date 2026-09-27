@@ -63,6 +63,8 @@ pub struct PatternPlaybackState {
     pub current_bar: usize,
     /// Sample position at which pattern feedback was last emitted.
     pub last_emitted_samples: u32,
+    /// Loop region as `(start_tick, end_tick)`; the whole pattern loops when `None`.
+    pub loop_region: Option<(u64, u64)>,
 }
 
 impl Default for PatternPlaybackState {
@@ -73,6 +75,7 @@ impl Default for PatternPlaybackState {
             current_beat: 1,
             current_bar: 1,
             last_emitted_samples: 0,
+            loop_region: None,
         }
     }
 }

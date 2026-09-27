@@ -5,7 +5,7 @@ use flutter_rust_bridge::frb;
 use karbeat_core::shared::id::*;
 use karbeat_core::{
     api::{note_api, pattern_api},
-    core::project::{GeneratorId, Note, NoteId, track::midi::Pattern},
+    core::project::{GeneratorId, Note, NoteId, track::midi::Pattern, track::note_transform},
 };
 
 #[derive(Clone)]
@@ -30,6 +30,10 @@ pub struct UiNote {
     pub probability: f32,
     pub micro_offset: i8,
     pub mute: bool,
+    /// Stereo placement, -1 (left) to 1 (right).
+    pub pan: f32,
+    /// Fine pitch in semitones, -2 to 2.
+    pub pitch: f32,
 }
 // Helper to convert internal Note to UiNote
 impl From<&Note> for UiNote {
@@ -43,6 +47,47 @@ impl From<&Note> for UiNote {
             probability: n.probability,
             micro_offset: n.micro_offset,
             mute: n.mute,
+            pan: n.pan,
+            pitch: n.pitch,
+        }
+    }
+}
+
+/// Velocity, pan, and fine pitch for one note; `None` leaves a value unchanged.
+#[derive(Clone)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiNoteParamUpdate {
+    pub note_id: u32,
+    pub velocity: Option<u8>,
+    pub pan: Option<f32>,
+    pub pitch: Option<f32>,
+}
+
+/// A complete note to insert, such as a draw-tool copy of a selected note.
+#[derive(Clone)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiNoteDraft {
+    pub key: u8,
+    pub start_tick: u64,
+    pub duration: u64,
+    pub velocity: u8,
+    pub pan: f32,
+    pub pitch: f32,
+}
+
+impl From<UiNoteDraft> for Note {
+    fn from(value: UiNoteDraft) -> Self {
+        Self {
+            id: NoteId::default(),
+            start_tick: value.start_tick,
+            duration: value.duration,
+            key: value.key,
+            velocity: value.velocity,
+            probability: 1.0,
+            micro_offset: 0,
+            mute: false,
+            pan: value.pan,
+            pitch: value.pitch,
         }
     }
 }
@@ -299,4 +344,202 @@ pub fn stop_pattern_preview_local(
 pub fn stop_pattern_preview(ctx: &DawContext) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     pattern_api::stop_pattern_preview(ctx).map_err(|e| e.to_string())
+}
+
+// ==============================================================================
+// Piano-roll transforms
+// ==============================================================================
+//
+// Each transform applies to `note_ids`, or to the whole pattern when it is empty, is one undo
+// step, and returns the updated pattern.
+
+fn note_ids(ids: &[u32]) -> Vec<NoteId> {
+    ids.iter().copied().map(NoteId::from).collect()
+}
+
+/// Snaps note starts and ends to the nearest multiple of `step_ticks`.
+pub fn quantize_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    step_ticks: u64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::quantize_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        step_ticks,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Snaps only note starts to the nearest multiple of `step_ticks`, keeping lengths.
+pub fn quantize_note_starts(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    step_ticks: u64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::quantize_note_starts(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        step_ticks,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Stretches each note to the start of the next one.
+pub fn legato_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::legato_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Randomizes timing by up to `timing_ticks` and velocity by up to `velocity_amount`.
+pub fn humanize_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    timing_ticks: u64,
+    velocity_amount: u8,
+    seed: u64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::humanize_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        timing_ticks,
+        velocity_amount,
+        seed,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Splits notes at every multiple of `step_ticks`.
+pub fn chop_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    step_ticks: u64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::chop_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        step_ticks,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Cuts one note in two at `at_tick`.
+pub fn slice_note(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_id: u32,
+    at_tick: u64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::slice_note(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        NoteId::from(note_id),
+        at_tick,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Transposes notes by `semitones`.
+pub fn transpose_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    semitones: i32,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::transpose_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        semitones,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Moves notes in time by `delta_ticks`.
+pub fn shift_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    delta_ticks: i64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::shift_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        delta_ticks,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
+/// Sets velocity, pan, and fine pitch for several notes as one undo step.
+pub fn set_note_params_batch(
+    ctx: &DawContext,
+    pattern_id: u64,
+    updates: Vec<UiNoteParamUpdate>,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    let updates: Vec<_> = updates
+        .into_iter()
+        .map(|update| {
+            (
+                NoteId::from(update.note_id),
+                note_transform::NoteParams {
+                    velocity: update.velocity,
+                    pan: update.pan,
+                    pitch: update.pitch,
+                },
+            )
+        })
+        .collect();
+    note_api::set_note_params_batch(ctx, PatternId::from_u64(pattern_id), &updates)
+        .map(|pattern| UiPattern::from(&pattern))
+        .map_err(|e| e.to_string())
+}
+
+/// Inserts complete notes, keeping their velocity, pan, and pitch.
+pub fn add_note_copies(
+    ctx: &DawContext,
+    pattern_id: u64,
+    notes: Vec<UiNoteDraft>,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::add_note_copies(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        notes.into_iter().map(Note::from).collect(),
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
 }

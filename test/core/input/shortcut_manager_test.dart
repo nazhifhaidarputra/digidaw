@@ -4,6 +4,8 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:karbeat/core/input/intents/workspace/intent.dart';
+import 'package:karbeat/core/input/intents/piano_roll/piano_roll_intent.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/input/intents/song_timeline/playback_intent.dart';
 import 'package:karbeat/core/input/input.dart';
@@ -63,7 +65,10 @@ void main() {
       expect(service.loadCount, 1);
       expect(container.read(shortcutManagerProvider).overrides, isEmpty);
       final shortcuts = container.read(activeShortcutMapProvider);
-      expect(shortcuts.length, 10);
+      expect(
+        shortcuts.length,
+        workspaceShortcuts.length + pianoRollShortcuts.length,
+      );
       expect(
         shortcuts.entries
             .singleWhere(

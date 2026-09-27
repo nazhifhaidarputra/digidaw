@@ -239,6 +239,14 @@ pub struct Note {
     pub micro_offset: i8,
     /// Whether playback scheduling suppresses this note.
     pub mute: bool,
+    /// Stereo placement from -1 (left) through 0 (center) to 1 (right), sent as a per-note
+    /// pan expression. Kept after the original fields with a default because projects are
+    /// saved as positional MessagePack, so older notes load centered.
+    #[serde(default)]
+    pub pan: f32,
+    /// Fine pitch offset in semitones, from -2 to 2, sent as a per-note tuning expression.
+    #[serde(default)]
+    pub pitch: f32,
 }
 
 impl PartialEq for Note {

@@ -216,7 +216,8 @@ where
         EffectTarget::Master => PluginTarget::MasterEffect(*effect_id),
     };
     if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
-        return get_plugin_parameter_specs(ctx, &plugin_target, mapper).map_err(|error| error.to_string());
+        return get_plugin_parameter_specs(ctx, &plugin_target, mapper)
+            .map_err(|error| error.to_string());
     }
     let (plugin_name, plugin_registry_id) = match target {
         EffectTarget::Track(track_id) => {
@@ -296,12 +297,22 @@ pub fn get_plugin_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
-    if let Some(plugin) = super::external_plugin_api::plugin_instance(ctx, *target).filter(|plugin| plugin.external.is_some()) {
-        return Ok(plugin.parameter_specs.iter().cloned().map(|spec| {
-            #[allow(clippy::as_conversions, reason = "normalized parameter defaults fit in the engine's f32 value range")]
-            let value = spec.default_value as f32;
-            mapper(spec, value)
-        }).collect());
+    if let Some(plugin) = super::external_plugin_api::plugin_instance(ctx, *target)
+        .filter(|plugin| plugin.external.is_some())
+    {
+        return Ok(plugin
+            .parameter_specs
+            .iter()
+            .cloned()
+            .map(|spec| {
+                #[allow(
+                    clippy::as_conversions,
+                    reason = "normalized parameter defaults fit in the engine's f32 value range"
+                )]
+                let value = spec.default_value as f32;
+                mapper(spec, value)
+            })
+            .collect());
     }
     let (plugin_name, plugin_registry_id) = match target {
         PluginTarget::Generator(gen_id) => {
@@ -571,7 +582,8 @@ pub fn execute_plugin_instance_command(
         .plugin_registry
         .create_plugin_by_id(plugin_registry_id)
         .map(|(p, _)| p))
-    .ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found in registry", plugin_name))?();
+    .ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found in registry", plugin_name))?(
+    );
 
     if !plugin_state.is_empty() {
         temp_plugin.set_state(&plugin_state);

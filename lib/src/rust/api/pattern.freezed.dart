@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$UiNote {
 
- int get id; int get startTick; int get duration; int get key; int get velocity; double get probability; int get microOffset; bool get mute;
+ int get id; int get startTick; int get duration; int get key; int get velocity; double get probability; int get microOffset; bool get mute; double get pan; double get pitch;
 /// Create a copy of UiNote
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $UiNoteCopyWith<UiNote> get copyWith => _$UiNoteCopyWithImpl<UiNote>(this as UiN
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiNote&&(identical(other.id, id) || other.id == id)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.key, key) || other.key == key)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.probability, probability) || other.probability == probability)&&(identical(other.microOffset, microOffset) || other.microOffset == microOffset)&&(identical(other.mute, mute) || other.mute == mute));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiNote&&(identical(other.id, id) || other.id == id)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.key, key) || other.key == key)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.probability, probability) || other.probability == probability)&&(identical(other.microOffset, microOffset) || other.microOffset == microOffset)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.pitch, pitch) || other.pitch == pitch));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,startTick,duration,key,velocity,probability,microOffset,mute);
+int get hashCode => Object.hash(runtimeType,id,startTick,duration,key,velocity,probability,microOffset,mute,pan,pitch);
 
 @override
 String toString() {
-  return 'UiNote(id: $id, startTick: $startTick, duration: $duration, key: $key, velocity: $velocity, probability: $probability, microOffset: $microOffset, mute: $mute)';
+  return 'UiNote(id: $id, startTick: $startTick, duration: $duration, key: $key, velocity: $velocity, probability: $probability, microOffset: $microOffset, mute: $mute, pan: $pan, pitch: $pitch)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $UiNoteCopyWith<$Res>  {
   factory $UiNoteCopyWith(UiNote value, $Res Function(UiNote) _then) = _$UiNoteCopyWithImpl;
 @useResult
 $Res call({
- int id, int startTick, int duration, int key, int velocity, double probability, int microOffset, bool mute
+ int id, int startTick, int duration, int key, int velocity, double probability, int microOffset, bool mute, double pan, double pitch
 });
 
 
@@ -62,7 +62,7 @@ class _$UiNoteCopyWithImpl<$Res>
 
 /// Create a copy of UiNote
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? startTick = null,Object? duration = null,Object? key = null,Object? velocity = null,Object? probability = null,Object? microOffset = null,Object? mute = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? startTick = null,Object? duration = null,Object? key = null,Object? velocity = null,Object? probability = null,Object? microOffset = null,Object? mute = null,Object? pan = null,Object? pitch = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
@@ -72,7 +72,9 @@ as int,velocity: null == velocity ? _self.velocity : velocity // ignore: cast_nu
 as int,probability: null == probability ? _self.probability : probability // ignore: cast_nullable_to_non_nullable
 as double,microOffset: null == microOffset ? _self.microOffset : microOffset // ignore: cast_nullable_to_non_nullable
 as int,mute: null == mute ? _self.mute : mute // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double,pitch: null == pitch ? _self.pitch : pitch // ignore: cast_nullable_to_non_nullable
+as double,
   ));
 }
 
@@ -154,10 +156,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  int startTick,  int duration,  int key,  int velocity,  double probability,  int microOffset,  bool mute)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  int startTick,  int duration,  int key,  int velocity,  double probability,  int microOffset,  bool mute,  double pan,  double pitch)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiNote() when $default != null:
-return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity,_that.probability,_that.microOffset,_that.mute);case _:
+return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity,_that.probability,_that.microOffset,_that.mute,_that.pan,_that.pitch);case _:
   return orElse();
 
 }
@@ -175,10 +177,10 @@ return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  int startTick,  int duration,  int key,  int velocity,  double probability,  int microOffset,  bool mute)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  int startTick,  int duration,  int key,  int velocity,  double probability,  int microOffset,  bool mute,  double pan,  double pitch)  $default,) {final _that = this;
 switch (_that) {
 case _UiNote():
-return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity,_that.probability,_that.microOffset,_that.mute);}
+return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity,_that.probability,_that.microOffset,_that.mute,_that.pan,_that.pitch);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -192,10 +194,10 @@ return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  int startTick,  int duration,  int key,  int velocity,  double probability,  int microOffset,  bool mute)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  int startTick,  int duration,  int key,  int velocity,  double probability,  int microOffset,  bool mute,  double pan,  double pitch)?  $default,) {final _that = this;
 switch (_that) {
 case _UiNote() when $default != null:
-return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity,_that.probability,_that.microOffset,_that.mute);case _:
+return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity,_that.probability,_that.microOffset,_that.mute,_that.pan,_that.pitch);case _:
   return null;
 
 }
@@ -207,7 +209,7 @@ return $default(_that.id,_that.startTick,_that.duration,_that.key,_that.velocity
 
 
 class _UiNote implements UiNote {
-  const _UiNote({required this.id, required this.startTick, required this.duration, required this.key, required this.velocity, required this.probability, required this.microOffset, required this.mute});
+  const _UiNote({required this.id, required this.startTick, required this.duration, required this.key, required this.velocity, required this.probability, required this.microOffset, required this.mute, required this.pan, required this.pitch});
   
 
 @override final  int id;
@@ -218,6 +220,8 @@ class _UiNote implements UiNote {
 @override final  double probability;
 @override final  int microOffset;
 @override final  bool mute;
+@override final  double pan;
+@override final  double pitch;
 
 /// Create a copy of UiNote
 /// with the given fields replaced by the non-null parameter values.
@@ -229,16 +233,16 @@ _$UiNoteCopyWith<_UiNote> get copyWith => __$UiNoteCopyWithImpl<_UiNote>(this, _
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiNote&&(identical(other.id, id) || other.id == id)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.key, key) || other.key == key)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.probability, probability) || other.probability == probability)&&(identical(other.microOffset, microOffset) || other.microOffset == microOffset)&&(identical(other.mute, mute) || other.mute == mute));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiNote&&(identical(other.id, id) || other.id == id)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.key, key) || other.key == key)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.probability, probability) || other.probability == probability)&&(identical(other.microOffset, microOffset) || other.microOffset == microOffset)&&(identical(other.mute, mute) || other.mute == mute)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.pitch, pitch) || other.pitch == pitch));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,startTick,duration,key,velocity,probability,microOffset,mute);
+int get hashCode => Object.hash(runtimeType,id,startTick,duration,key,velocity,probability,microOffset,mute,pan,pitch);
 
 @override
 String toString() {
-  return 'UiNote(id: $id, startTick: $startTick, duration: $duration, key: $key, velocity: $velocity, probability: $probability, microOffset: $microOffset, mute: $mute)';
+  return 'UiNote(id: $id, startTick: $startTick, duration: $duration, key: $key, velocity: $velocity, probability: $probability, microOffset: $microOffset, mute: $mute, pan: $pan, pitch: $pitch)';
 }
 
 
@@ -249,7 +253,7 @@ abstract mixin class _$UiNoteCopyWith<$Res> implements $UiNoteCopyWith<$Res> {
   factory _$UiNoteCopyWith(_UiNote value, $Res Function(_UiNote) _then) = __$UiNoteCopyWithImpl;
 @override @useResult
 $Res call({
- int id, int startTick, int duration, int key, int velocity, double probability, int microOffset, bool mute
+ int id, int startTick, int duration, int key, int velocity, double probability, int microOffset, bool mute, double pan, double pitch
 });
 
 
@@ -266,7 +270,7 @@ class __$UiNoteCopyWithImpl<$Res>
 
 /// Create a copy of UiNote
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? startTick = null,Object? duration = null,Object? key = null,Object? velocity = null,Object? probability = null,Object? microOffset = null,Object? mute = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? startTick = null,Object? duration = null,Object? key = null,Object? velocity = null,Object? probability = null,Object? microOffset = null,Object? mute = null,Object? pan = null,Object? pitch = null,}) {
   return _then(_UiNote(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
@@ -276,7 +280,535 @@ as int,velocity: null == velocity ? _self.velocity : velocity // ignore: cast_nu
 as int,probability: null == probability ? _self.probability : probability // ignore: cast_nullable_to_non_nullable
 as double,microOffset: null == microOffset ? _self.microOffset : microOffset // ignore: cast_nullable_to_non_nullable
 as int,mute: null == mute ? _self.mute : mute // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double,pitch: null == pitch ? _self.pitch : pitch // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$UiNoteDraft {
+
+ int get key; int get startTick; int get duration; int get velocity; double get pan; double get pitch;
+/// Create a copy of UiNoteDraft
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiNoteDraftCopyWith<UiNoteDraft> get copyWith => _$UiNoteDraftCopyWithImpl<UiNoteDraft>(this as UiNoteDraft, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiNoteDraft&&(identical(other.key, key) || other.key == key)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.pitch, pitch) || other.pitch == pitch));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,key,startTick,duration,velocity,pan,pitch);
+
+@override
+String toString() {
+  return 'UiNoteDraft(key: $key, startTick: $startTick, duration: $duration, velocity: $velocity, pan: $pan, pitch: $pitch)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiNoteDraftCopyWith<$Res>  {
+  factory $UiNoteDraftCopyWith(UiNoteDraft value, $Res Function(UiNoteDraft) _then) = _$UiNoteDraftCopyWithImpl;
+@useResult
+$Res call({
+ int key, int startTick, int duration, int velocity, double pan, double pitch
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiNoteDraftCopyWithImpl<$Res>
+    implements $UiNoteDraftCopyWith<$Res> {
+  _$UiNoteDraftCopyWithImpl(this._self, this._then);
+
+  final UiNoteDraft _self;
+  final $Res Function(UiNoteDraft) _then;
+
+/// Create a copy of UiNoteDraft
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? key = null,Object? startTick = null,Object? duration = null,Object? velocity = null,Object? pan = null,Object? pitch = null,}) {
+  return _then(_self.copyWith(
+key: null == key ? _self.key : key // ignore: cast_nullable_to_non_nullable
+as int,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
+as int,duration: null == duration ? _self.duration : duration // ignore: cast_nullable_to_non_nullable
+as int,velocity: null == velocity ? _self.velocity : velocity // ignore: cast_nullable_to_non_nullable
+as int,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double,pitch: null == pitch ? _self.pitch : pitch // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiNoteDraft].
+extension UiNoteDraftPatterns on UiNoteDraft {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiNoteDraft value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiNoteDraft() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiNoteDraft value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiNoteDraft():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiNoteDraft value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiNoteDraft() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int key,  int startTick,  int duration,  int velocity,  double pan,  double pitch)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiNoteDraft() when $default != null:
+return $default(_that.key,_that.startTick,_that.duration,_that.velocity,_that.pan,_that.pitch);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int key,  int startTick,  int duration,  int velocity,  double pan,  double pitch)  $default,) {final _that = this;
+switch (_that) {
+case _UiNoteDraft():
+return $default(_that.key,_that.startTick,_that.duration,_that.velocity,_that.pan,_that.pitch);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int key,  int startTick,  int duration,  int velocity,  double pan,  double pitch)?  $default,) {final _that = this;
+switch (_that) {
+case _UiNoteDraft() when $default != null:
+return $default(_that.key,_that.startTick,_that.duration,_that.velocity,_that.pan,_that.pitch);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiNoteDraft implements UiNoteDraft {
+  const _UiNoteDraft({required this.key, required this.startTick, required this.duration, required this.velocity, required this.pan, required this.pitch});
+  
+
+@override final  int key;
+@override final  int startTick;
+@override final  int duration;
+@override final  int velocity;
+@override final  double pan;
+@override final  double pitch;
+
+/// Create a copy of UiNoteDraft
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiNoteDraftCopyWith<_UiNoteDraft> get copyWith => __$UiNoteDraftCopyWithImpl<_UiNoteDraft>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiNoteDraft&&(identical(other.key, key) || other.key == key)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.pitch, pitch) || other.pitch == pitch));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,key,startTick,duration,velocity,pan,pitch);
+
+@override
+String toString() {
+  return 'UiNoteDraft(key: $key, startTick: $startTick, duration: $duration, velocity: $velocity, pan: $pan, pitch: $pitch)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiNoteDraftCopyWith<$Res> implements $UiNoteDraftCopyWith<$Res> {
+  factory _$UiNoteDraftCopyWith(_UiNoteDraft value, $Res Function(_UiNoteDraft) _then) = __$UiNoteDraftCopyWithImpl;
+@override @useResult
+$Res call({
+ int key, int startTick, int duration, int velocity, double pan, double pitch
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiNoteDraftCopyWithImpl<$Res>
+    implements _$UiNoteDraftCopyWith<$Res> {
+  __$UiNoteDraftCopyWithImpl(this._self, this._then);
+
+  final _UiNoteDraft _self;
+  final $Res Function(_UiNoteDraft) _then;
+
+/// Create a copy of UiNoteDraft
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? key = null,Object? startTick = null,Object? duration = null,Object? velocity = null,Object? pan = null,Object? pitch = null,}) {
+  return _then(_UiNoteDraft(
+key: null == key ? _self.key : key // ignore: cast_nullable_to_non_nullable
+as int,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
+as int,duration: null == duration ? _self.duration : duration // ignore: cast_nullable_to_non_nullable
+as int,velocity: null == velocity ? _self.velocity : velocity // ignore: cast_nullable_to_non_nullable
+as int,pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double,pitch: null == pitch ? _self.pitch : pitch // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$UiNoteParamUpdate {
+
+ int get noteId; int? get velocity; double? get pan; double? get pitch;
+/// Create a copy of UiNoteParamUpdate
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiNoteParamUpdateCopyWith<UiNoteParamUpdate> get copyWith => _$UiNoteParamUpdateCopyWithImpl<UiNoteParamUpdate>(this as UiNoteParamUpdate, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiNoteParamUpdate&&(identical(other.noteId, noteId) || other.noteId == noteId)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.pitch, pitch) || other.pitch == pitch));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,noteId,velocity,pan,pitch);
+
+@override
+String toString() {
+  return 'UiNoteParamUpdate(noteId: $noteId, velocity: $velocity, pan: $pan, pitch: $pitch)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiNoteParamUpdateCopyWith<$Res>  {
+  factory $UiNoteParamUpdateCopyWith(UiNoteParamUpdate value, $Res Function(UiNoteParamUpdate) _then) = _$UiNoteParamUpdateCopyWithImpl;
+@useResult
+$Res call({
+ int noteId, int? velocity, double? pan, double? pitch
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiNoteParamUpdateCopyWithImpl<$Res>
+    implements $UiNoteParamUpdateCopyWith<$Res> {
+  _$UiNoteParamUpdateCopyWithImpl(this._self, this._then);
+
+  final UiNoteParamUpdate _self;
+  final $Res Function(UiNoteParamUpdate) _then;
+
+/// Create a copy of UiNoteParamUpdate
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? noteId = null,Object? velocity = freezed,Object? pan = freezed,Object? pitch = freezed,}) {
+  return _then(_self.copyWith(
+noteId: null == noteId ? _self.noteId : noteId // ignore: cast_nullable_to_non_nullable
+as int,velocity: freezed == velocity ? _self.velocity : velocity // ignore: cast_nullable_to_non_nullable
+as int?,pan: freezed == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double?,pitch: freezed == pitch ? _self.pitch : pitch // ignore: cast_nullable_to_non_nullable
+as double?,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiNoteParamUpdate].
+extension UiNoteParamUpdatePatterns on UiNoteParamUpdate {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiNoteParamUpdate value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiNoteParamUpdate() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiNoteParamUpdate value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiNoteParamUpdate():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiNoteParamUpdate value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiNoteParamUpdate() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int noteId,  int? velocity,  double? pan,  double? pitch)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiNoteParamUpdate() when $default != null:
+return $default(_that.noteId,_that.velocity,_that.pan,_that.pitch);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int noteId,  int? velocity,  double? pan,  double? pitch)  $default,) {final _that = this;
+switch (_that) {
+case _UiNoteParamUpdate():
+return $default(_that.noteId,_that.velocity,_that.pan,_that.pitch);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int noteId,  int? velocity,  double? pan,  double? pitch)?  $default,) {final _that = this;
+switch (_that) {
+case _UiNoteParamUpdate() when $default != null:
+return $default(_that.noteId,_that.velocity,_that.pan,_that.pitch);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiNoteParamUpdate implements UiNoteParamUpdate {
+  const _UiNoteParamUpdate({required this.noteId, this.velocity, this.pan, this.pitch});
+  
+
+@override final  int noteId;
+@override final  int? velocity;
+@override final  double? pan;
+@override final  double? pitch;
+
+/// Create a copy of UiNoteParamUpdate
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiNoteParamUpdateCopyWith<_UiNoteParamUpdate> get copyWith => __$UiNoteParamUpdateCopyWithImpl<_UiNoteParamUpdate>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiNoteParamUpdate&&(identical(other.noteId, noteId) || other.noteId == noteId)&&(identical(other.velocity, velocity) || other.velocity == velocity)&&(identical(other.pan, pan) || other.pan == pan)&&(identical(other.pitch, pitch) || other.pitch == pitch));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,noteId,velocity,pan,pitch);
+
+@override
+String toString() {
+  return 'UiNoteParamUpdate(noteId: $noteId, velocity: $velocity, pan: $pan, pitch: $pitch)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiNoteParamUpdateCopyWith<$Res> implements $UiNoteParamUpdateCopyWith<$Res> {
+  factory _$UiNoteParamUpdateCopyWith(_UiNoteParamUpdate value, $Res Function(_UiNoteParamUpdate) _then) = __$UiNoteParamUpdateCopyWithImpl;
+@override @useResult
+$Res call({
+ int noteId, int? velocity, double? pan, double? pitch
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiNoteParamUpdateCopyWithImpl<$Res>
+    implements _$UiNoteParamUpdateCopyWith<$Res> {
+  __$UiNoteParamUpdateCopyWithImpl(this._self, this._then);
+
+  final _UiNoteParamUpdate _self;
+  final $Res Function(_UiNoteParamUpdate) _then;
+
+/// Create a copy of UiNoteParamUpdate
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? noteId = null,Object? velocity = freezed,Object? pan = freezed,Object? pitch = freezed,}) {
+  return _then(_UiNoteParamUpdate(
+noteId: null == noteId ? _self.noteId : noteId // ignore: cast_nullable_to_non_nullable
+as int,velocity: freezed == velocity ? _self.velocity : velocity // ignore: cast_nullable_to_non_nullable
+as int?,pan: freezed == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as double?,pitch: freezed == pitch ? _self.pitch : pitch // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 

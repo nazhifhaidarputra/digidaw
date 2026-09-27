@@ -64,6 +64,15 @@ pub enum ProjectAction {
         /// Duration applied by redo.
         new_duration: u64,
     },
+    /// Replaced a note's complete state, such as after a quantize, transpose, or parameter edit.
+    UpdateNote {
+        /// Pattern containing the note.
+        pattern_id: PatternId,
+        /// Complete state restored by undo.
+        before: Note,
+        /// Complete state applied by redo.
+        after: Note,
+    },
     /// Attached a clip to a track.
     AddClip {
         /// Track receiving the clip.
@@ -179,6 +188,26 @@ impl HistoryManager {
         Ok(())
     }
 
+    /// Replaces the note with `note`'s ID by `note` itself.
+    fn replace_note(
+        app: &mut ApplicationState,
+        pattern_id: PatternId,
+        note: &Note,
+    ) -> Result<(), String> {
+        let pattern = app
+            .pattern_pool
+            .get_mut(pattern_id)
+            .ok_or("Pattern not found")?;
+        let slot = pattern
+            .notes
+            .iter_mut()
+            .find(|n| n.id == note.id)
+            .ok_or("Note not found")?;
+        *slot = note.clone();
+        pattern.sort_notes_unstable();
+        Ok(())
+    }
+
     fn apply_inverse(
         &self,
         action: &ProjectAction,
@@ -248,6 +277,11 @@ impl HistoryManager {
                     .ok_or("Note not found")?;
                 p.resize_note(index, *old_duration)
                     .map_err(|e| e.to_string())?;
+            }
+            ProjectAction::UpdateNote {
+                pattern_id, before, ..
+            } => {
+                Self::replace_note(app, *pattern_id, before)?;
             }
             ProjectAction::Batch(actions) => {
                 // Inverse of Batch: Undo actions in REVERSE order
@@ -352,6 +386,11 @@ impl HistoryManager {
                     .ok_or("Note not found")?;
                 p.resize_note(index, *new_duration)
                     .map_err(|e| e.to_string())?;
+            }
+            ProjectAction::UpdateNote {
+                pattern_id, after, ..
+            } => {
+                Self::replace_note(app, *pattern_id, after)?;
             }
             ProjectAction::Batch(actions) => {
                 // Forward of Batch: Apply actions in NORMAL order

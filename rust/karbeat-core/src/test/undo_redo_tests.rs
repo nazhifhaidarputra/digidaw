@@ -6,8 +6,6 @@ mod tests {
 
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
 
-    // ─── undo with empty history ─────────────────────────────────────────────
-
     #[test]
     fn undo_with_empty_history_returns_err() {
         let mut ctx = make_ctx();
@@ -17,8 +15,6 @@ mod tests {
         assert!(msg.contains("Nothing to undo"), "Got: {}", msg);
     }
 
-    // ─── redo with empty redo stack ──────────────────────────────────────────
-
     #[test]
     fn redo_with_empty_redo_stack_returns_err() {
         let mut ctx = make_ctx();
@@ -27,8 +23,6 @@ mod tests {
         let msg = result.unwrap_err();
         assert!(msg.contains("Nothing to redo"), "Got: {}", msg);
     }
-
-    // ─── undo then redo note add ──────────────────────────────────────────────
 
     #[test]
     fn undo_then_redo_note_add() {
@@ -60,8 +54,6 @@ mod tests {
         );
     }
 
-    // ─── undo then redo clip move ─────────────────────────────────────────────
-
     #[test]
     fn undo_then_redo_clip_move() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
@@ -87,8 +79,6 @@ mod tests {
         let after_redo = ctx.app_state.clips_pool[clip.id].time.start_time_raw();
         assert_eq!(after_redo, 9600, "Redo should re-apply the move");
     }
-
-    // ─── batch undo reverses in reverse order ─────────────────────────────────
 
     #[test]
     fn batch_undo_reverses_actions_in_correct_order() {
@@ -119,8 +109,6 @@ mod tests {
         );
     }
 
-    // ─── undo clears redo stack on new action ─────────────────────────────────
-
     #[test]
     fn new_action_after_undo_clears_redo_stack() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
@@ -139,5 +127,83 @@ mod tests {
             ctx.history.redo_stack.is_empty(),
             "New action should clear the redo stack"
         );
+    }
+
+    fn pattern_spans(
+        ctx: &crate::context::DawContext,
+        pattern_id: crate::shared::PatternId,
+    ) -> Vec<(u32, u64, u64, u8)> {
+        ctx.app_state.pattern_pool[pattern_id]
+            .notes
+            .iter()
+            .map(|n| (n.id.to_u32(), n.start_tick, n.duration, n.key))
+            .collect()
+    }
+
+    #[test]
+    fn chop_then_undo_restores_the_original_notes() {
+        let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
+        let note = note_api::add_note(&mut ctx, pattern_id, 60, 1000, Some(960)).unwrap();
+        let before = pattern_spans(&ctx, pattern_id);
+
+        let chopped = note_api::chop_notes(&mut ctx, pattern_id, &[note.id], 240).unwrap();
+        assert_eq!(
+            chopped
+                .notes
+                .iter()
+                .filter(|n| n.key == 60 && n.start_tick >= 1000)
+                .count(),
+            5
+        );
+        let after = pattern_spans(&ctx, pattern_id);
+
+        api::undo(&mut ctx).expect("undo chop");
+        assert_eq!(pattern_spans(&ctx, pattern_id), before);
+        api::redo(&mut ctx).expect("redo chop");
+        assert_eq!(pattern_spans(&ctx, pattern_id), after);
+    }
+
+    #[test]
+    fn transpose_and_params_undo_independently() {
+        let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
+        let note = note_api::add_note(&mut ctx, pattern_id, 60, 0, Some(480)).unwrap();
+
+        note_api::transpose_notes(&mut ctx, pattern_id, &[note.id], 12).unwrap();
+        note_api::set_note_params_batch(
+            &mut ctx,
+            pattern_id,
+            &[(
+                note.id,
+                crate::core::project::track::note_transform::NoteParams {
+                    velocity: Some(40),
+                    pan: Some(-0.5),
+                    pitch: Some(1.0),
+                },
+            )],
+        )
+        .unwrap();
+        let find = |ctx: &crate::context::DawContext| {
+            ctx.app_state.pattern_pool[pattern_id]
+                .notes
+                .iter()
+                .find(|n| n.id == note.id)
+                .cloned()
+                .unwrap()
+        };
+        let edited = find(&ctx);
+        assert_eq!(
+            (edited.key, edited.velocity, edited.pan, edited.pitch),
+            (72, 40, -0.5, 1.0)
+        );
+
+        api::undo(&mut ctx).expect("undo params");
+        let transposed = find(&ctx);
+        assert_eq!(
+            (transposed.key, transposed.velocity, transposed.pan),
+            (72, 100, 0.0)
+        );
+
+        api::undo(&mut ctx).expect("undo transpose");
+        assert_eq!(find(&ctx).key, 60);
     }
 }

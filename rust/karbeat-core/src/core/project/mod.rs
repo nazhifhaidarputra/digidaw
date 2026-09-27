@@ -1,8 +1,8 @@
-mod index;
 pub mod automation;
 pub mod clip;
 pub mod clipboard;
 pub mod generator;
+mod index;
 pub mod mixer;
 pub mod plugin;
 pub mod track;

@@ -313,7 +313,7 @@ impl AudioEngine {
         transport.time_sig_denominator = time_sig_denominator;
 
         let mut workspace =
-            RenderWorkspace::new(render_state.graph.buffer_size,  config.num_channels);
+            RenderWorkspace::new(render_state.graph.buffer_size, config.num_channels);
         for &bus_id in &bus_ids {
             workspace.prepare_bus(bus_id);
         }
@@ -588,7 +588,6 @@ impl AudioEngine {
         if self.telemetry.advance(frame_count, self.config.sample_rate) {
             self.emit_all_mixer_snapshots();
             self.emit_plugin_telemetry();
-
         }
     }
 
@@ -673,7 +672,7 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
-         let Some(pattern) = self.current_state.graph.patterns.get(&pattern_id) else {
+        let Some(pattern) = self.current_state.graph.patterns.get(&pattern_id) else {
             // Pattern deleted? Stop.
             self.stop_playback();
             return;
@@ -690,17 +689,22 @@ impl AudioEngine {
         let sample_rate = self.config.sample_rate as f32;
 
         let samples_per_beat = (60.0 / tempo) * sample_rate;
-        let loop_len_samples =
-            (((pattern.length_ticks as f32) / PPQ as f32) * samples_per_beat) as u32;
+        let ticks_to_samples =
+            |ticks: u64| (((ticks as f32) / PPQ as f32) * samples_per_beat) as u32;
+        let (loop_start_samples, loop_end_samples) = match self.transport.pattern.loop_region {
+            Some((start, end)) => (ticks_to_samples(start), ticks_to_samples(end)),
+            None => (0, ticks_to_samples(pattern.length_ticks)),
+        };
 
-        if loop_len_samples == 0 {
+        if loop_end_samples <= loop_start_samples {
             return;
         }
 
-        // Use PATTERN playhead (independent from song)
-        if self.transport.pattern.playhead_samples >= loop_len_samples {
-            self.transport.pattern.playhead_samples = 0;
-            self.transport.pattern.last_emitted_samples = 0;
+        // Use PATTERN playhead (independent from song). A playhead before the loop region
+        // plays into it; reaching the end jumps back to the region start.
+        if self.transport.pattern.playhead_samples >= loop_end_samples {
+            self.transport.pattern.playhead_samples = loop_start_samples;
+            self.transport.pattern.last_emitted_samples = loop_start_samples;
 
             // This safely clears tracked keys to prevent hang on pattern loop
             Self::stop_all_active_generators_impl(&mut self.voices.active_generators);
@@ -780,21 +784,11 @@ impl AudioEngine {
         Self::stop_all_active_generators_impl(&mut self.voices.active_generators);
     }
 
+    /// Queues note-offs for every held note. Tracking clears as the plugins receive them,
+    /// so a release queued while a generator is not rendering is delivered later.
     pub(super) fn stop_all_active_generators_impl(active_generators: &mut Vec<GeneratorVoice>) {
         for voice in active_generators.iter_mut() {
-            for note in &voice.playing_notes {
-                voice.midi_events.push(MidiEvent {
-                    sample_offset: 0,
-                    data: MidiMessage::NoteOff {
-                        note_id: note.note_id,
-                        channel: note.channel,
-                        key: note.key,
-                    },
-                });
-            }
-
-            voice.playing_keys.clear();
-            voice.playing_notes.clear();
+            voice.release_all();
         }
     }
 
@@ -933,18 +927,10 @@ impl AudioEngine {
     }
 
     pub(super) fn cleanup_finished_voices(&mut self) {
-        // Generators stay alive (persistent), just clear their MIDI events for the next frame
+        // Generators stay alive (persistent). Tracking follows only the events each one
+        // actually received; undelivered releases carry over to the next block.
         for gen_voice in self.voices.active_generators.iter_mut() {
-            // DYNAMICALLY UPDATE PLAYING KEYS based on what just happened in this audio block
-            for event in &gen_voice.midi_events {
-                VoiceState::update_playing_notes(&mut gen_voice.playing_notes, &event.data);
-                VoiceState::update_playing_keys(&mut gen_voice.playing_keys, &event.data);
-            }
-
-            // Now it's safe to clear events for the next block
-            gen_voice.midi_events.clear();
-            // gen_voice.automation_events.clear();
-
+            gen_voice.finish_block();
             gen_voice.active = true;
         }
 
@@ -1208,6 +1194,14 @@ impl AudioEngine {
                                 &mut self.workspace.channel_buffers_out,
                                 &mut self.workspace.aux_channel_buffers,
                             );
+                            if let Some(voice) = self
+                                .voices
+                                .active_generators
+                                .iter_mut()
+                                .find(|voice| voice.id == gen_id)
+                            {
+                                voice.delivered = true;
+                            }
                             has_signal = true;
                         }
                     }
@@ -2331,10 +2325,7 @@ impl AudioEngine {
 
         let mut producers = std::mem::take(&mut self.telemetry.param_telemetry_producers);
         for (target, producer) in &mut producers {
-            let Some(buffer_names) = self
-                .telemetry
-                .active_telemetry_subscriptions
-                .get(target)
+            let Some(buffer_names) = self.telemetry.active_telemetry_subscriptions.get(target)
             else {
                 continue;
             };

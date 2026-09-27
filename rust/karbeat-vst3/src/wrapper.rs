@@ -397,7 +397,7 @@ impl Dsp {
                                     noteExpressionValue: Vst::NoteExpressionValueEvent {
                                         noteId: i32::try_from(id).unwrap_or(-1),
                                         typeId: type_id,
-                                        value: f64::from(*value),
+                                        value: vst3_expression_value(*expression, *value),
                                     },
                                 },
                             })
@@ -448,6 +448,18 @@ impl Dsp {
                 adapt_channels(planes, destination.channel_data, frames);
             }
         }
+    }
+}
+
+/// Host tuning expressions span ±2 semitones around 0.5, while VST3's tuning type spans
+/// ±120 semitones around 0.5; every other expression shares VST3's normalized range.
+fn vst3_expression_value(expression: NoteExpressionType, value: f32) -> f64 {
+    let value = f64::from(value);
+    if expression == NoteExpressionType::Tuning {
+        let semitones = value * 4.0 - 2.0;
+        0.5 + semitones / 240.0
+    } else {
+        value
     }
 }
 
@@ -961,6 +973,14 @@ mod tests {
         dsp.stop().unwrap();
         assert_eq!(out_l, [7.0; 4]);
         assert_eq!(out_r, [7.0; 4]);
+    }
+
+    #[test]
+    fn tuning_expressions_rescale_to_the_vst3_semitone_range() {
+        assert!((vst3_expression_value(NoteExpressionType::Tuning, 0.5) - 0.5).abs() < 1e-9);
+        let up_two = vst3_expression_value(NoteExpressionType::Tuning, 1.0);
+        assert!((up_two - (0.5 + 2.0 / 240.0)).abs() < 1e-9);
+        assert!((vst3_expression_value(NoteExpressionType::Pan, 0.25) - 0.25).abs() < 1e-9);
     }
 
     #[test]

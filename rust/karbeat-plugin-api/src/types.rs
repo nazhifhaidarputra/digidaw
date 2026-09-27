@@ -1,5 +1,5 @@
-use std::{cell::Cell, sync::Arc};
 pub use karbeat_plugin_types::*;
+use std::{cell::Cell, sync::Arc};
 
 pub struct MidiEvent {
     pub sample_offset: usize,

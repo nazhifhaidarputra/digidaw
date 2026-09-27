@@ -1,8 +1,8 @@
-mod general;
-pub mod error;
 pub mod audio;
 pub mod audio_utils;
 pub mod color;
+pub mod error;
+mod general;
 pub mod hash;
 pub mod macros;
 pub mod math;
