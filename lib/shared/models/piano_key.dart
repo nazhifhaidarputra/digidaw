@@ -76,11 +76,23 @@ final Map<LogicalKeyboardKey, int> logicalPianoKeyMap = {
 
 /// Resolves a computer-key event to a MIDI note, transposed from C3 to
 /// [baseKey]. Physical position is preferred, with logical keys as a fallback.
+///
+/// Chords with Ctrl, Alt, or Meta are not notes, so shortcuts such as Ctrl+S
+/// still reach the shortcut map while a playable keyboard holds focus.
 int? pianoNoteForKeyEvent(KeyEvent event, {int baseKey = 48}) {
+  if (isShortcutModifierPressed) return null;
   final baseNote =
       keyMap[event.physicalKey] ?? logicalPianoKeyMap[event.logicalKey];
   if (baseNote == null) return null;
 
   final note = baseNote + baseKey - 48;
   return note >= 0 && note <= 127 ? note : null;
+}
+
+/// Whether a modifier that turns a key press into a shortcut chord is held.
+bool get isShortcutModifierPressed {
+  final keyboard = HardwareKeyboard.instance;
+  return keyboard.isControlPressed ||
+      keyboard.isAltPressed ||
+      keyboard.isMetaPressed;
 }

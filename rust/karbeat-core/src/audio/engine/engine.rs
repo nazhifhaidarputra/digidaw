@@ -6,7 +6,7 @@ use crate::{
             helper::*,
             metronome::MetronomeState,
             modulation::{LiveModulationSource, ModulationState},
-            routing::RoutingState,
+            routing::{RouteTargets, RoutingState},
             runtime::*,
             telemetry::{AudioEngineTelemetry, PluginTelemetrySnapshot},
             transport::{PlaybackMode, TransportState},
@@ -23,7 +23,6 @@ use crate::{
     commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration},
     core::project::*,
     shared::{constants::f64::PPQ, id::*},
-    utils::{apply_simd_mix, apply_simd_mix_gain},
 };
 use hashbrown::{HashMap, HashSet};
 use karbeat_host::{HostError, HostInstanceId, PreparedProcessor};
@@ -326,7 +325,7 @@ impl AudioEngine {
 
         let mut routing = RoutingState::default();
         routing.cached_order = compute_routing_order(
-            render_state.graph.tracks.iter().map(|track| track.id),
+            &render_state.graph.tracks,
             bus_ids.into_iter(),
             &render_state.graph.routing,
         );
@@ -547,7 +546,7 @@ impl AudioEngine {
             plugin.has_latency_changed() || changed
         });
 
-        if plugin_latency_changed {
+        if plugin_latency_changed || self.routing.latency_dirty {
             self.recalculate_latencies();
         }
 
@@ -1088,6 +1087,16 @@ impl AudioEngine {
             buf.fill(0.0);
         }
 
+        // Pre-fader taps and connection delays share block-sized scratch reserved up front
+        for scratch in [
+            &mut self.workspace.pre_fader_buffer,
+            &mut self.workspace.edge_buffer,
+        ] {
+            if scratch.len() != buf_len {
+                scratch.resize(buf_len, 0.0);
+            }
+        }
+
         // Check for solo state
         let is_any_solo = self.mixer_state.track_channels.values().any(|ch| ch.solo);
 
@@ -1213,6 +1222,25 @@ impl AudioEngine {
                         has_signal = true;
                     }
 
+                    // A silent channel still runs its effects while a sidechain feeds them,
+                    // so gates and duckers keep reacting to their key signal.
+                    if !has_signal
+                        && self
+                            .plugin_state
+                            .get_track_effects(track_id.to_u32() as usize)
+                            .is_some_and(|effects| {
+                                effects.iter().any(|effect| {
+                                    self.routing.node_has_signal.contains_key(
+                                        &RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(
+                                            *track_id, effect.id,
+                                        )),
+                                    )
+                                })
+                            })
+                    {
+                        has_signal = true;
+                    }
+
                     // track tail handling
                     let track_effects_tail = self
                         .plugin_state
@@ -1251,9 +1279,15 @@ impl AudioEngine {
                         }
                     }
 
-                    // Apply track mixer channel (volume/pan/phase) and effects
+                    // Align the track with any later-arriving sidechain source before its effects
+                    if let Some(delay_line) = self.routing.track_input_delay_lines.get_mut(track_id)
+                    {
+                        delay_line.process_block(&mut self.workspace.mix_buffer, channels);
+                    }
+
+                    // Apply track phase and effects
                     // Effects receive an empty MIDI slice — track routing is audio-only at this stage
-                    Self::apply_mixer_channel_with_effects(
+                    Self::apply_track_effects(
                         &mut self
                             .mixer_state
                             .track_channels
@@ -1271,65 +1305,46 @@ impl AudioEngine {
                         &self.modulation.block_param_changes,
                     );
 
-                    if let Some(delay_line) = self.routing.track_delay_lines.get_mut(track_id) {
-                        delay_line.process_block(&mut self.workspace.mix_buffer, channels);
+                    let track_routes = outgoing_routes
+                        .get(&RoutingNode::Track(*track_id))
+                        .map_or(&[][..], Vec::as_slice);
+                    if track_routes
+                        .iter()
+                        .any(|route| route.tap == RoutingTap::PreFader)
+                    {
+                        self.workspace
+                            .pre_fader_buffer
+                            .copy_from_slice(&self.workspace.mix_buffer);
                     }
 
-                    if let Some(channel) = self.mixer_state.track_channels.get_mut(track_id) {
-                        channel.observe_magnitude(&self.workspace.mix_buffer);
-                    }
+                    let channel = self
+                        .mixer_state
+                        .track_channels
+                        .entry(*track_id)
+                        .or_default();
+                    apply_volume_and_pan_simd(
+                        &mut self.workspace.mix_buffer,
+                        channels,
+                        &mut channel.volume,
+                        &mut channel.pan,
+                    );
+                    channel.observe_magnitude(&self.workspace.mix_buffer);
 
                     // Route the track signal to destinations based on routing matrix
-                    let track_routes = outgoing_routes.get(&RoutingNode::Track(*track_id));
-
-                    if track_routes.is_none_or(Vec::is_empty) {
-                        self.routing
-                            .node_has_signal
-                            .insert(RoutingNode::Master, true);
-                        apply_simd_mix(output, &self.workspace.mix_buffer);
-                    } else {
-                        // Route to each destination with appropriate send level
-                        for conn in track_routes.into_iter().flatten() {
-                            self.routing.node_has_signal.insert(conn.destination, true);
-                            match conn.destination {
-                                RoutingNode::Master => {
-                                    apply_simd_mix_gain(
-                                        output,
-                                        &self.workspace.mix_buffer,
-                                        conn.send_level,
-                                    );
-                                }
-                                RoutingNode::Bus(bus_id) => {
-                                    if let Some(bus_buf) =
-                                        self.workspace.bus_buffers.get_mut(&bus_id)
-                                    {
-                                        apply_simd_mix_gain(
-                                            bus_buf,
-                                            &self.workspace.mix_buffer,
-                                            conn.send_level,
-                                        );
-                                    }
-                                }
-                                RoutingNode::Track(_) => {
-                                    // Invalid: can't route to a track
-                                }
-                                RoutingNode::PluginSidechain(sidechain_route_id) => {
-                                    let aux_buf = self
-                                        .workspace
-                                        .aux_buffers
-                                        .entry(sidechain_route_id)
-                                        .or_insert_with(|| vec![0.0; buf_len]);
-
-                                    // Mix the current track's signal into the aux buffer
-                                    apply_simd_mix_gain(
-                                        aux_buf,
-                                        &self.workspace.mix_buffer,
-                                        conn.send_level,
-                                    );
-                                }
-                            }
-                        }
-                    }
+                    let workspace = &mut self.workspace;
+                    self.routing.route_signal(
+                        RoutingNode::Track(*track_id),
+                        track_routes,
+                        &workspace.mix_buffer,
+                        &workspace.pre_fader_buffer,
+                        channels,
+                        &mut RouteTargets {
+                            output: &mut *output,
+                            bus_buffers: &mut workspace.bus_buffers,
+                            aux_buffers: &mut workspace.aux_buffers,
+                            edge_buffer: &mut workspace.edge_buffer,
+                        },
+                    );
                 }
                 RoutingNode::Bus(bus_id) => {
                     let bus_buf = match self.workspace.bus_buffers.get(bus_id) {
@@ -1356,12 +1371,25 @@ impl AudioEngine {
                     }
 
                     // ================= Bus Tail Handling ===================
+                    // Sidechain input counts as signal so keyed effects keep processing.
                     let mut bus_has_signal = self
                         .routing
                         .node_has_signal
                         .get(&RoutingNode::Bus(*bus_id))
                         .copied()
-                        .unwrap_or(false);
+                        .unwrap_or(false)
+                        || self
+                            .plugin_state
+                            .get_bus_effects(bus_id.to_u32() as usize)
+                            .is_some_and(|effects| {
+                                effects.iter().any(|effect| {
+                                    self.routing.node_has_signal.contains_key(
+                                        &RoutingNode::PluginSidechain(SidechainRoute::BusEffect(
+                                            *bus_id, effect.id,
+                                        )),
+                                    )
+                                })
+                            });
                     let bus_effects_tail = self
                         .plugin_state
                         .get_bus_effects(bus_id.to_u32() as usize)
@@ -1471,11 +1499,20 @@ impl AudioEngine {
                         }
                     }
 
-                    // Apply PDC on Bus
-                    if let Some(delay_line) = self.routing.bus_delay_lines.get_mut(bus_id) {
-                        delay_line.process_block(&mut self.workspace.mix_buffer, channels);
+                    let bus_routes = outgoing_routes
+                        .get(&RoutingNode::Bus(*bus_id))
+                        .map_or(&[][..], Vec::as_slice);
+                    if bus_routes
+                        .iter()
+                        .any(|route| route.tap == RoutingTap::PreFader)
+                    {
+                        self.workspace
+                            .pre_fader_buffer
+                            .copy_from_slice(&self.workspace.mix_buffer);
                     }
 
+                    let bus_settings_channel =
+                        self.mixer_state.bus_channels.entry(*bus_id).or_default();
                     apply_volume_and_pan_simd(
                         &mut self.workspace.mix_buffer,
                         channels,
@@ -1485,46 +1522,20 @@ impl AudioEngine {
                     bus_settings_channel.observe_magnitude(&self.workspace.mix_buffer);
 
                     // Route bus output to destinations
-                    let bus_routes = outgoing_routes.get(&RoutingNode::Bus(*bus_id));
-
-                    for conn in bus_routes.into_iter().flatten() {
-                        self.routing.node_has_signal.insert(conn.destination, true);
-                        match conn.destination {
-                            RoutingNode::Master => {
-                                apply_simd_mix_gain(
-                                    output,
-                                    &self.workspace.mix_buffer,
-                                    conn.send_level,
-                                );
-                            }
-                            RoutingNode::Bus(dest_bus_id) => {
-                                if let Some(dest_buf) =
-                                    self.workspace.bus_buffers.get_mut(&dest_bus_id)
-                                {
-                                    apply_simd_mix_gain(
-                                        dest_buf,
-                                        &self.workspace.mix_buffer,
-                                        conn.send_level,
-                                    );
-                                }
-                            }
-                            RoutingNode::Track(_) => {}
-                            RoutingNode::PluginSidechain(sidechain_route_id) => {
-                                let aux_buf = self
-                                    .workspace
-                                    .aux_buffers
-                                    .entry(sidechain_route_id)
-                                    .or_insert_with(|| vec![0.0; buf_len]);
-
-                                // Mix the current track's signal into the aux buffer
-                                apply_simd_mix_gain(
-                                    aux_buf,
-                                    &self.workspace.mix_buffer,
-                                    conn.send_level,
-                                );
-                            }
-                        }
-                    }
+                    let workspace = &mut self.workspace;
+                    self.routing.route_signal(
+                        RoutingNode::Bus(*bus_id),
+                        bus_routes,
+                        &workspace.mix_buffer,
+                        &workspace.pre_fader_buffer,
+                        channels,
+                        &mut RouteTargets {
+                            output: &mut *output,
+                            bus_buffers: &mut workspace.bus_buffers,
+                            aux_buffers: &mut workspace.aux_buffers,
+                            edge_buffer: &mut workspace.edge_buffer,
+                        },
+                    );
                 }
                 RoutingNode::Master => {
                     // TAIL HANDLING
@@ -1533,7 +1544,14 @@ impl AudioEngine {
                         .node_has_signal
                         .get(&RoutingNode::Master)
                         .copied()
-                        .unwrap_or(false);
+                        .unwrap_or(false)
+                        || self.plugin_state.master_effects.iter().any(|effect| {
+                            self.routing.node_has_signal.contains_key(
+                                &RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(
+                                    effect.id,
+                                )),
+                            )
+                        });
                     let master_effects_tail = self
                         .plugin_state
                         .master_effects
@@ -1580,19 +1598,9 @@ impl AudioEngine {
                         output.fill(0.0);
                     }
                 }
-                RoutingNode::PluginSidechain(sidechain_route_id) => {
-                    // the send level evaluation has been done, we only handles the PDC
-
-                    if let Some(aux_buf) = self.workspace.aux_buffers.get_mut(sidechain_route_id) {
-                        if let Some(delay_line) = self
-                            .routing
-                            .sidechain_delay_lines
-                            .get_mut(sidechain_route_id)
-                        {
-                            delay_line.process_block(aux_buf, channels);
-                        }
-                    }
-                }
+                // Sidechain inputs are filled while routing their sources; they are never
+                // scheduled as nodes of their own.
+                RoutingNode::PluginSidechain(_) => {}
             }
         }
 
@@ -1610,8 +1618,9 @@ impl AudioEngine {
         )
     }
 
-    /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
-    fn apply_mixer_channel_with_effects<'a>(
+    /// Apply a track's phase setting and effects chain from plugin_state. Fader and pan are
+    /// applied by the caller so pre-fader connections can tap the signal in between.
+    fn apply_track_effects<'a>(
         mixer_channel: &mut AudioMixerChannelValues,
         track_effects: &mut Vec<Vec<AudioEffectInstance>>,
         track_id: TrackId,
@@ -1672,13 +1681,6 @@ impl AudioEngine {
                 finish_planar_output(buffer, channel_buffers_in, channels, frames);
             }
         }
-
-        apply_volume_and_pan_simd(
-            buffer,
-            channels,
-            &mut mixer_channel.volume,
-            &mut mixer_channel.pan,
-        );
     }
 
     /// Apply master bus settings (volume, pan, phase) and effects from plugin_state
@@ -1943,11 +1945,32 @@ impl AudioEngine {
         );
     }
 
+    /// Gives every sidechain destination in the current routing an aux buffer, and retires the
+    /// buffers of routes that no longer exist off the audio thread.
+    pub(super) fn sync_sidechain_buffers(&mut self) {
+        for connection in &self.current_state.graph.routing {
+            if let RoutingNode::PluginSidechain(route) = connection.destination {
+                self.workspace.prepare_sidechain(route);
+            }
+        }
+        while let Some(stale) =
+            self.workspace.aux_buffers.keys().copied().find(|route| {
+                !self.current_state.graph.routing.iter().any(|connection| {
+                    connection.destination == RoutingNode::PluginSidechain(*route)
+                })
+            })
+        {
+            if let Some(buffer) = self.workspace.aux_buffers.remove(&stale) {
+                self.retire_graph_state(RetiredGraphState::AudioBuffer(buffer));
+            }
+        }
+    }
+
     pub(super) fn recalculate_latencies(&mut self) {
+        self.routing.latency_dirty = false;
         let max_system_latency = self.routing.recalculate_latencies(
             &self.current_state.graph,
             &self.plugin_state,
-            self.workspace.bus_buffers.keys().copied(),
             self.config.num_channels as usize,
         );
 
@@ -2191,15 +2214,7 @@ impl AudioEngine {
         let max_tail = max_tail.min(max_allowed_tail);
 
         // Include PDC latency since it naturally delays the final output
-        let max_system_latency = self
-            .routing
-            .compensation_delays
-            .values()
-            .copied()
-            .max()
-            .unwrap_or(0);
-
-        max_tail + max_system_latency
+        max_tail + self.routing.system_latency
     }
 
     /// Returns the absolute total length of the song in samples, including reverb tails.
@@ -2244,9 +2259,7 @@ impl AudioEngine {
         }
 
         // Clear delay lines to avoid playing back garbage/pitch-shifted audio
-        self.routing.track_delay_lines.clear();
-        self.routing.bus_delay_lines.clear();
-        self.routing.sidechain_delay_lines.clear();
+        self.routing.clear_delay_lines();
     }
 
     /// Recalculate max samples index of the timeline after

@@ -11,10 +11,11 @@ use crate::{
     audio::engine::runtime::consts::MAX_ENGINE_CHANNELS,
     commands::MixerChannelTarget,
     core::project::{
-        AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
-        RoutingConnection, RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
+        AudioTrack, AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
+        RoutingConnection, RoutingNode, SidechainRoute, TrackAutomationTarget,
+        audio_waveform::AudioSampleMode,
     },
-    shared::{BusId, TrackId},
+    shared::BusId,
 };
 
 /// Unified entry point to render an audio waveform slice.
@@ -584,58 +585,96 @@ fn interleave_buffer(
 // Routing Order Helper
 // =============================================================================
 
-/// Compute a topologically sorted routing order (sources → buses → master)
-/// from plain routing data and known track/bus IDs.
+/// Compute a topologically sorted routing order over tracks, buses, and master.
 ///
-/// This replicates MixerState::get_routing_order without needing the full
-/// MixerState on the audio thread.
+/// A connection into a plugin sidechain orders its source before the channel that owns the
+/// plugin, so the aux buffer is filled before that channel's effects run. Nodes without a
+/// dependency between them keep their input order (tracks, then buses, then master), and master
+/// is always last. `MixerState` rejects cycles; any node left unscheduled by one is appended in
+/// input order so the audio thread still renders it.
+///
+/// This mirrors `MixerState::get_routing_order` without needing the full `MixerState` on the
+/// audio thread.
 pub fn compute_routing_order(
-    track_ids: impl Iterator<Item = TrackId>,
+    tracks: &[AudioTrack],
     bus_ids: impl Iterator<Item = BusId>,
     routing: &[RoutingConnection],
 ) -> Vec<RoutingNode> {
-    let bus_ids_vec: Vec<BusId> = bus_ids.collect();
-
-    // All tracks come first
-    let mut order: Vec<RoutingNode> = track_ids.map(RoutingNode::Track).collect();
-
-    // Kahn's topological sort for buses
-    let mut in_degree: HashMap<BusId, usize> = bus_ids_vec.iter().map(|&id| (id, 0)).collect();
-    let mut adj: HashMap<BusId, Vec<BusId>> = bus_ids_vec.iter().map(|&id| (id, vec![])).collect();
-
-    for conn in routing {
-        if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination) {
-            if let Some(neighbors) = adj.get_mut(&src) {
-                neighbors.push(dst);
-            }
-            if let Some(deg) = in_degree.get_mut(&dst) {
-                *deg += 1;
-            }
-        }
-    }
-
-    let mut queue: std::collections::VecDeque<BusId> = in_degree
+    let nodes: Vec<RoutingNode> = tracks
         .iter()
-        .filter(|(_, deg)| **deg == 0)
-        .map(|(&id, _)| id)
+        .map(|track| RoutingNode::Track(track.id))
+        .chain(bus_ids.map(RoutingNode::Bus))
+        .chain(std::iter::once(RoutingNode::Master))
+        .collect();
+    let index: HashMap<RoutingNode, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(index, &node)| (node, index))
         .collect();
 
-    while let Some(bus_id) = queue.pop_front() {
-        order.push(RoutingNode::Bus(bus_id));
-        if let Some(neighbors) = adj.get(&bus_id) {
-            for &neighbor in neighbors {
-                if let Some(deg) = in_degree.get_mut(&neighbor) {
-                    *deg -= 1;
-                    if *deg == 0 {
-                        queue.push_back(neighbor);
-                    }
-                }
-            }
+    let mut in_degree = vec![0_usize; nodes.len()];
+    let mut adjacency = vec![Vec::new(); nodes.len()];
+    for connection in routing {
+        let destination = match connection.destination {
+            RoutingNode::PluginSidechain(route) => sidechain_owner(tracks, route),
+            other => Some(other),
+        };
+        let (Some(&source), Some(&destination)) = (
+            index.get(&connection.source),
+            destination.and_then(|node| index.get(&node)),
+        ) else {
+            continue;
+        };
+        if source != destination {
+            adjacency[source].push(destination);
+            in_degree[destination] += 1;
         }
     }
 
-    order.push(RoutingNode::Master);
+    let mut ready: std::collections::BinaryHeap<std::cmp::Reverse<usize>> = in_degree
+        .iter()
+        .enumerate()
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(index, _)| std::cmp::Reverse(index))
+        .collect();
+    let mut scheduled = vec![false; nodes.len()];
+    let mut order = Vec::with_capacity(nodes.len());
+    while let Some(std::cmp::Reverse(index)) = ready.pop() {
+        scheduled[index] = true;
+        order.push(nodes[index]);
+        for &next in &adjacency[index] {
+            in_degree[next] -= 1;
+            if in_degree[next] == 0 {
+                ready.push(std::cmp::Reverse(next));
+            }
+        }
+    }
+    order.extend(
+        nodes
+            .iter()
+            .zip(&scheduled)
+            .filter(|(_, scheduled)| !**scheduled)
+            .map(|(node, _)| *node),
+    );
     order
+}
+
+/// Channel that owns the plugin fed by `route`, resolved from the audio thread's track list.
+pub fn sidechain_owner(tracks: &[AudioTrack], route: SidechainRoute) -> Option<RoutingNode> {
+    match route {
+        SidechainRoute::Generator(generator_id) => tracks
+            .iter()
+            .find(|track| {
+                track
+                    .generator
+                    .as_ref()
+                    .is_some_and(|generator| generator.id == generator_id)
+            })
+            .map(|track| RoutingNode::Track(track.id)),
+        SidechainRoute::TrackEffect(track_id, _) => Some(RoutingNode::Track(track_id)),
+        SidechainRoute::BusEffect(bus_id, _) => Some(RoutingNode::Bus(bus_id)),
+        SidechainRoute::MasterEffect(_) => Some(RoutingNode::Master),
+    }
 }
 
 pub fn resolve_target_mixer_param(

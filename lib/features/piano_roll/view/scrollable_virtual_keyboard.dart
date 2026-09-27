@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/core/utils/formatter.dart';
+import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 
 /// A horizontally scrollable virtual piano keyboard that supports all 128 MIDI notes.
 /// Used for playing notes live in plugin screens and piano roll.
@@ -102,7 +103,7 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
 
   // Handle PC keyboard key events
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent) {
+    if (event is KeyDownEvent && !isShortcutModifierPressed) {
       final note = keyMap[event.physicalKey];
       if (note != null && !_keyboardActiveNotes.contains(note)) {
         setState(() => _keyboardActiveNotes.add(note));
@@ -141,9 +142,8 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
     // Combine external active notes with keyboard-triggered notes
     final allActiveNotes = {...widget.activeNotes, ..._keyboardActiveNotes};
 
-    return Focus(
+    return KeyboardFocusRegion(
       focusNode: _focusNode,
-      autofocus: false,
       onKeyEvent: _handleKeyEvent,
       child: GestureDetector(
         onTap: () => _focusNode.requestFocus(),

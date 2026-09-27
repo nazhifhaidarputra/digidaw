@@ -12,6 +12,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/core/utils/formatter.dart';
 import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 
 class FloatingMidiKeyboard extends ConsumerStatefulWidget {
   const FloatingMidiKeyboard({super.key});
@@ -152,7 +153,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     return Positioned(
       left: _x,
       top: _y,
-      child: Focus(
+      child: KeyboardFocusRegion(
         focusNode: _focusNode,
         onFocusChange: (hasFocus) {
           if (!hasFocus) _releaseKeyboardNotes();

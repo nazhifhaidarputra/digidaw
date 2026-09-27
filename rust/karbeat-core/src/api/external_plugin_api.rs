@@ -221,6 +221,22 @@ pub struct CompletedPluginInstall {
     instance: ExternalPluginInstanceHandle,
 }
 
+/// Realtime layout used to prepare a hosted plugin for the engine's stereo graph.
+///
+/// Every hosted plugin requests a stereo sidechain so that routes added after preparation reach
+/// its aux input without re-preparing it. Backends ignore the request when the plugin has no
+/// auxiliary input bus.
+pub(crate) fn hosted_processing_config(kind: PluginKind, sample_rate: f64) -> ProcessingConfig {
+    ProcessingConfig {
+        sample_rate,
+        max_block_size: 65_536,
+        main_input_channels: if kind == PluginKind::Instrument { 0 } else { 2 },
+        main_output_channels: 2,
+        sidechain_channels: 2,
+        offline: false,
+    }
+}
+
 fn begin_install(
     ctx: &DawContext,
     registry_id: u32,
@@ -248,14 +264,10 @@ fn begin_install(
         entry.descriptor.kind == kind,
         "Plugin has an incompatible instrument/effect type"
     );
-    let config = ProcessingConfig {
-        sample_rate: f64::from(ctx.audio_runtime_settings.read().requested_dsp.sample_rate),
-        max_block_size: 65_536,
-        main_input_channels: if kind == PluginKind::Instrument { 0 } else { 2 },
-        main_output_channels: 2,
-        sidechain_channels: 0,
-        offline: false,
-    };
+    let config = hosted_processing_config(
+        kind,
+        f64::from(ctx.audio_runtime_settings.read().requested_dsp.sample_rate),
+    );
     Ok(PendingPluginInstall {
         staged: ctx.app_state.clone(),
         registry_id,
@@ -916,18 +928,10 @@ pub fn begin_retry(ctx: &DawContext, target: PluginTarget) -> anyhow::Result<Pen
             || external.descriptor.clone(),
             |entry| entry.descriptor.clone(),
         );
-    let config = ProcessingConfig {
-        sample_rate: f64::from(ctx.audio_runtime_settings.read().requested_dsp.sample_rate),
-        max_block_size: 65_536,
-        main_input_channels: if descriptor.kind == PluginKind::Instrument {
-            0
-        } else {
-            2
-        },
-        main_output_channels: 2,
-        sidechain_channels: 0,
-        offline: false,
-    };
+    let config = hosted_processing_config(
+        descriptor.kind,
+        f64::from(ctx.audio_runtime_settings.read().requested_dsp.sample_rate),
+    );
     let track = if let PluginTarget::Generator(id) = target {
         Some(
             ctx.app_state
@@ -1147,18 +1151,8 @@ pub fn execute_reconfiguration(
             ))?;
         let instance = prepared.instance;
         futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
-        let config = ProcessingConfig {
-            sample_rate: f64::from(pending.sample_rate),
-            max_block_size: 65_536_usize.max(pending.block_size),
-            main_input_channels: if item.kind == PluginKind::Instrument {
-                0
-            } else {
-                2
-            },
-            main_output_channels: 2,
-            sidechain_channels: 0,
-            offline: false,
-        };
+        let mut config = hosted_processing_config(item.kind, f64::from(pending.sample_rate));
+        config.max_block_size = config.max_block_size.max(pending.block_size);
         states.push((item.target, prepared.state.clone(), instance));
         replacements.push(HostedPluginReplacement::new(
             item.target,

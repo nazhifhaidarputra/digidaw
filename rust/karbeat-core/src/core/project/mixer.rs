@@ -1,7 +1,7 @@
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::{Param, ParameterSpec};
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
-use karbeat_utils::move_element;
+use karbeat_utils::{color::Color, move_element};
 use smallvec::SmallVec;
 
 use serde::{Deserialize, Serialize};
@@ -109,6 +109,17 @@ impl From<PluginTarget> for SidechainRoute {
     }
 }
 
+/// Point in a source channel strip where a routing connection takes its signal.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum RoutingTap {
+    /// After the effects, fader, and pan; the channel's normal output.
+    #[default]
+    PostFader,
+    /// After the effects but before the fader and pan, so the level is independent of the
+    /// source fader. Mute still silences the connection.
+    PreFader,
+}
+
 /// A routing connection in the matrix
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoutingConnection {
@@ -118,10 +129,14 @@ pub struct RoutingConnection {
     pub destination: RoutingNode,
     /// Send level (0.0 = no signal, 1.0 = full signal)
     pub send_level: f32,
-    /// If true, this is a "send" (post-fader tap) not the main output
+    /// If true, this is an auxiliary send rather than the main output
     pub is_send: bool,
     // TODO here: Add is_bypassed bool flag to indicate whether
     // we bypass this connection during the DSP
+    /// Where the source strip is tapped. Kept last with a default because projects are saved
+    /// as positional MessagePack, so connections saved before it existed load as post-fader.
+    #[serde(default)]
+    pub tap: RoutingTap,
 }
 
 impl RoutingConnection {
@@ -132,6 +147,7 @@ impl RoutingConnection {
             destination,
             send_level: 1.0,
             is_send: false,
+            tap: RoutingTap::PostFader,
         }
     }
 
@@ -142,6 +158,7 @@ impl RoutingConnection {
             destination,
             send_level,
             is_send: true,
+            tap: RoutingTap::PostFader,
         }
     }
 }
@@ -158,6 +175,15 @@ pub struct BusMixerChannel {
     pub name: String,
     /// Bus fader, flags, and ordered effects.
     pub channel: MixerChannel,
+    /// UI color assigned to the bus. Kept last because projects are saved as
+    /// positional MessagePack, so buses saved before it existed load as grey.
+    #[serde(default = "default_bus_color")]
+    pub color: Color,
+}
+
+/// Neutral grey given to buses until the user picks a color.
+pub fn default_bus_color() -> Color {
+    Color::new_from_rgb(0x9E, 0x9E, 0x9E)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -181,6 +207,7 @@ impl Default for BusMixerChannel {
             graph_node_id: GraphNodeId::default(),
             name: String::new(),
             channel: MixerChannel::default(),
+            color: default_bus_color(),
         }
     }
 }
@@ -204,6 +231,7 @@ impl BusMixerChannel {
             graph_node_id: GraphNodeId::default(),
             name: name.to_string(),
             channel: MixerChannel::default(),
+            color: default_bus_color(),
         }
     }
 }
@@ -629,6 +657,16 @@ impl MixerState {
             )
         });
 
+        // Channels whose main output fed this bus fall back to master rather
+        // than going silent.
+        let orphaned_outputs: Vec<RoutingNode> = self
+            .routing
+            .iter()
+            .filter(|conn| !conn.is_send && conn.destination == RoutingNode::Bus(bus_id))
+            .map(|conn| conn.source)
+            .filter(|source| *source != RoutingNode::Bus(bus_id))
+            .collect();
+
         // Remove all routing connections involving this bus
         self.routing.retain(|conn| {
             let touches_bus_directly = conn.source == RoutingNode::Bus(bus_id)
@@ -639,6 +677,11 @@ impl MixerState {
             );
             !(touches_bus_directly || touches_bus_via_sidechain)
         });
+        for source in orphaned_outputs {
+            let connection = RoutingConnection::new(source, RoutingNode::Master);
+            self.register_connection_nodes(&connection);
+            self.routing.push(connection);
+        }
 
         Ok(())
     }
@@ -659,6 +702,16 @@ impl MixerState {
         bus.name = new_name.to_string();
 
         log::info!("Bus {:?} renamed from {} to {}", bus_id, old_name, new_name);
+        Ok(())
+    }
+
+    /// Assigns the UI color shown for a bus in the mixer and track list.
+    pub fn change_bus_color(&mut self, bus_id: BusId, color: Color) -> anyhow::Result<()> {
+        let bus = self
+            .buses
+            .get_mut(bus_id)
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
+        bus.color = color;
         Ok(())
     }
 
@@ -1181,4 +1234,72 @@ fn find_track_hosting_generator(
                 .is_some_and(|g| g.id == generator_id)
         })
         .map(|(id, _)| id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bus_saved_without_color_loads_grey() {
+        let legacy = (
+            BusId::from(0),
+            GraphNodeId::default(),
+            "Legacy".to_string(),
+            MixerChannel::default(),
+        );
+        let bytes = rmp_serde::to_vec(&legacy).expect("serialize legacy bus");
+
+        let bus: BusMixerChannel = rmp_serde::from_slice(&bytes).expect("deserialize legacy bus");
+
+        assert_eq!(bus.name, "Legacy");
+        assert_eq!(bus.color, default_bus_color());
+    }
+
+    #[test]
+    fn bus_color_round_trips() {
+        let mut bus = BusMixerChannel::new(BusId::from(0), "Drums");
+        assert_eq!(bus.color, default_bus_color());
+        bus.color = Color::new_from_rgb(0xFF, 0x8A, 0x65);
+
+        let bytes = rmp_serde::to_vec(&bus).expect("serialize bus");
+        let decoded: BusMixerChannel = rmp_serde::from_slice(&bytes).expect("deserialize bus");
+
+        assert_eq!(decoded.color, bus.color);
+    }
+
+    #[test]
+    fn routing_saved_without_tap_loads_post_fader() {
+        let legacy = (
+            RoutingNode::Bus(BusId::from(1)),
+            RoutingNode::Master,
+            0.5_f32,
+            true,
+        );
+        let bytes = rmp_serde::to_vec(&legacy).expect("serialize legacy routing");
+
+        let connection: RoutingConnection =
+            rmp_serde::from_slice(&bytes).expect("deserialize legacy routing");
+
+        assert_eq!(connection.destination, RoutingNode::Master);
+        assert!(connection.is_send);
+        assert_eq!(connection.tap, RoutingTap::PostFader);
+    }
+
+    #[test]
+    fn pre_fader_sidechain_routing_round_trips() {
+        let mut connection = RoutingConnection::new_send(
+            RoutingNode::Bus(BusId::from(1)),
+            RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(EffectId::from(3))),
+            0.75,
+        );
+        connection.tap = RoutingTap::PreFader;
+
+        let bytes = rmp_serde::to_vec(&connection).expect("serialize routing");
+        let decoded: RoutingConnection =
+            rmp_serde::from_slice(&bytes).expect("deserialize routing");
+
+        assert_eq!(decoded.destination, connection.destination);
+        assert_eq!(decoded.tap, RoutingTap::PreFader);
+    }
 }

@@ -33,4 +33,18 @@ void main() {
 
     expect(pianoNoteForKeyEvent(event, baseKey: 120), isNull);
   });
+
+  testWidgets('leaves modifier chords to the shortcut map', (tester) async {
+    const event = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.keyS,
+      logicalKey: LogicalKeyboardKey.keyS,
+      timeStamp: Duration.zero,
+    );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    expect(pianoNoteForKeyEvent(event), isNull);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+
+    expect(pianoNoteForKeyEvent(event), 49);
+  });
 }

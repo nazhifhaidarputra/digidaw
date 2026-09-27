@@ -438,6 +438,7 @@ impl PluginController for Vst3PluginHost {
                 }
             }
             let flags = instance.exchange.restart.swap(0, Ordering::AcqRel);
+            instance.apply_restart_flags(flags);
             if flags != 0 {
                 events.push(HostEvent::RestartRequested {
                     instance: id,

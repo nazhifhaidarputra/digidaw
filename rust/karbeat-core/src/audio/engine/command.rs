@@ -23,6 +23,26 @@ use hashbrown::{HashMap, HashSet};
 impl AudioEngine {
     /// Process incoming commands from command queue buffer
     pub fn process_command(&mut self, cmd: AudioCommand) {
+        // Commands that change routing or a chain's latency replan delay compensation once
+        // before the next block renders.
+        if matches!(
+            cmd,
+            AudioCommand::InstallHostedProject(_)
+                | AudioCommand::RemoveHostedPlugins(_)
+                | AudioCommand::InstallHostedPlugin(_)
+                | AudioCommand::InstallGenerator { .. }
+                | AudioCommand::RemoveGenerator { .. }
+                | AudioCommand::InstallEffect { .. }
+                | AudioCommand::RemoveEffect { .. }
+                | AudioCommand::MoveEffect { .. }
+                | AudioCommand::AddBus { .. }
+                | AudioCommand::RemoveBus { .. }
+                | AudioCommand::UpdateRouting { .. }
+                | AudioCommand::UpdateTrackGraph { .. }
+                | AudioCommand::ReplaceFullGraph { .. }
+        ) {
+            self.routing.latency_dirty = true;
+        }
         match cmd {
             AudioCommand::InstallHostedProject(mut transfer) => {
                 use crate::audio::hosted_plugin::HostedInstallResult;
@@ -561,10 +581,12 @@ impl AudioEngine {
                 // Initialize the missing bus mixer channel
                 self.mixer_state.bus_channels.entry(bus_id).or_default();
 
-                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.workspace.bus_buffers.keys().copied();
-                self.routing.cached_order =
-                    compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+                self.routing.cached_order = compute_routing_order(
+                    &self.current_state.graph.tracks,
+                    bus_ids,
+                    &self.current_state.graph.routing,
+                );
 
                 log::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
             }
@@ -576,27 +598,25 @@ impl AudioEngine {
                     self.retire_graph_state(RetiredGraphState::AudioBuffer(buffer));
                 }
                 self.mixer_state.bus_channels.remove(&bus_id);
-                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.workspace.bus_buffers.keys().copied();
-                self.routing.cached_order =
-                    compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+                self.routing.cached_order = compute_routing_order(
+                    &self.current_state.graph.tracks,
+                    bus_ids,
+                    &self.current_state.graph.routing,
+                );
 
                 log::info!("[AudioEngine] Removed bus {:?}", bus_id);
             }
             AudioCommand::UpdateRouting { routing } => {
                 // Routing is now directly owned by the audio thread — update and
                 // recompute the cached order immediately.
-                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.workspace.bus_buffers.keys().copied();
-                self.routing.cached_order = compute_routing_order(track_ids, bus_ids, &routing);
+                self.routing.cached_order =
+                    compute_routing_order(&self.current_state.graph.tracks, bus_ids, &routing);
                 self.routing.set_routes(&routing);
-                for connection in &routing {
-                    if let RoutingNode::PluginSidechain(route) = connection.destination {
-                        self.workspace.prepare_sidechain(route);
-                    }
-                }
                 let previous = std::mem::replace(&mut self.current_state.graph.routing, routing);
                 self.retire_graph_state(RetiredGraphState::Routing(previous));
+                self.sync_sidechain_buffers();
                 log::info!(
                     "[AudioEngine] UpdateRouting: {} connections",
                     self.current_state.graph.routing.len()
@@ -1017,10 +1037,12 @@ impl AudioEngine {
                 }
 
                 // Recompute routing order so new tracks are included in the DSP loop!
-                let track_ids = self.current_state.graph.tracks.iter().map(|t| t.id);
                 let bus_ids = self.workspace.bus_buffers.keys().copied();
-                self.routing.cached_order =
-                    compute_routing_order(track_ids, bus_ids, &self.current_state.graph.routing);
+                self.routing.cached_order = compute_routing_order(
+                    &self.current_state.graph.tracks,
+                    bus_ids,
+                    &self.current_state.graph.routing,
+                );
                 self.recalculate_max_sample_index();
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {
@@ -1141,19 +1163,14 @@ impl AudioEngine {
 
                 // Used for undo/redo. Atomically replace the full graph snapshot
                 // and recompute the cached routing order.
-                let track_ids = graph.tracks.iter().map(|t| t.id);
                 let bus_ids = graph.bus_ids.iter().copied();
                 self.routing.cached_order =
-                    compute_routing_order(track_ids, bus_ids, &graph.routing);
+                    compute_routing_order(&graph.tracks, bus_ids, &graph.routing);
                 self.routing.set_routes(&graph.routing);
-                for route in &graph.routing {
-                    if let RoutingNode::PluginSidechain(sidechain) = route.destination {
-                        self.workspace.prepare_sidechain(sidechain);
-                    }
-                }
 
                 let previous = std::mem::replace(&mut self.current_state.graph, graph);
                 self.retire_graph_state(RetiredGraphState::Full(previous));
+                self.sync_sidechain_buffers();
 
                 self.modulation
                     .replace_from_graph(&self.current_state.graph);

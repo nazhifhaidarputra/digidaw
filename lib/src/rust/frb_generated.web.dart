@@ -964,6 +964,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingNode dco_decode_ui_routing_node(dynamic raw);
 
   @protected
+  UiRoutingTap dco_decode_ui_routing_tap(dynamic raw);
+
+  @protected
   UiSidechainSource dco_decode_ui_sidechain_source(dynamic raw);
 
   @protected
@@ -2090,6 +2093,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer);
+
+  @protected
+  UiRoutingTap sse_decode_ui_routing_tap(SseDeserializer deserializer);
 
   @protected
   UiSidechainSource sse_decode_ui_sidechain_source(
@@ -3425,6 +3431,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_routing_node(UiRoutingNode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_routing_tap(UiRoutingTap self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_sidechain_source(

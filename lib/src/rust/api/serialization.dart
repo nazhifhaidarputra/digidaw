@@ -7,6 +7,7 @@ import '../frb_generated.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pattern.dart';
+import 'plugin.dart';
 import 'project.dart';
 
 /// Save the currrent project to path_name

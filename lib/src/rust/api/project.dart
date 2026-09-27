@@ -8,6 +8,7 @@ import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
+import 'plugin.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 

@@ -591,7 +591,7 @@ as List<String>,
 /// @nodoc
 mixin _$UiBus {
 
- int get id; String get name; UiMixerChannel get channel;
+ int get id; String get name; UiMixerChannel get channel; String get color;
 /// Create a copy of UiBus
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -602,16 +602,16 @@ $UiBusCopyWith<UiBus> get copyWith => _$UiBusCopyWithImpl<UiBus>(this as UiBus, 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiBus&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.channel, channel) || other.channel == channel));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiBus&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.channel, channel) || other.channel == channel)&&(identical(other.color, color) || other.color == color));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,channel);
+int get hashCode => Object.hash(runtimeType,id,name,channel,color);
 
 @override
 String toString() {
-  return 'UiBus(id: $id, name: $name, channel: $channel)';
+  return 'UiBus(id: $id, name: $name, channel: $channel, color: $color)';
 }
 
 
@@ -622,7 +622,7 @@ abstract mixin class $UiBusCopyWith<$Res>  {
   factory $UiBusCopyWith(UiBus value, $Res Function(UiBus) _then) = _$UiBusCopyWithImpl;
 @useResult
 $Res call({
- int id, String name, UiMixerChannel channel
+ int id, String name, UiMixerChannel channel, String color
 });
 
 
@@ -639,12 +639,13 @@ class _$UiBusCopyWithImpl<$Res>
 
 /// Create a copy of UiBus
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? channel = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? channel = null,Object? color = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,channel: null == channel ? _self.channel : channel // ignore: cast_nullable_to_non_nullable
-as UiMixerChannel,
+as UiMixerChannel,color: null == color ? _self.color : color // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -726,10 +727,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String name,  UiMixerChannel channel)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String name,  UiMixerChannel channel,  String color)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiBus() when $default != null:
-return $default(_that.id,_that.name,_that.channel);case _:
+return $default(_that.id,_that.name,_that.channel,_that.color);case _:
   return orElse();
 
 }
@@ -747,10 +748,10 @@ return $default(_that.id,_that.name,_that.channel);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String name,  UiMixerChannel channel)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String name,  UiMixerChannel channel,  String color)  $default,) {final _that = this;
 switch (_that) {
 case _UiBus():
-return $default(_that.id,_that.name,_that.channel);}
+return $default(_that.id,_that.name,_that.channel,_that.color);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -764,10 +765,10 @@ return $default(_that.id,_that.name,_that.channel);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String name,  UiMixerChannel channel)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String name,  UiMixerChannel channel,  String color)?  $default,) {final _that = this;
 switch (_that) {
 case _UiBus() when $default != null:
-return $default(_that.id,_that.name,_that.channel);case _:
+return $default(_that.id,_that.name,_that.channel,_that.color);case _:
   return null;
 
 }
@@ -779,12 +780,13 @@ return $default(_that.id,_that.name,_that.channel);case _:
 
 
 class _UiBus implements UiBus {
-  const _UiBus({required this.id, required this.name, required this.channel});
+  const _UiBus({required this.id, required this.name, required this.channel, required this.color});
   
 
 @override final  int id;
 @override final  String name;
 @override final  UiMixerChannel channel;
+@override final  String color;
 
 /// Create a copy of UiBus
 /// with the given fields replaced by the non-null parameter values.
@@ -796,16 +798,16 @@ _$UiBusCopyWith<_UiBus> get copyWith => __$UiBusCopyWithImpl<_UiBus>(this, _$ide
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiBus&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.channel, channel) || other.channel == channel));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiBus&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.channel, channel) || other.channel == channel)&&(identical(other.color, color) || other.color == color));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,channel);
+int get hashCode => Object.hash(runtimeType,id,name,channel,color);
 
 @override
 String toString() {
-  return 'UiBus(id: $id, name: $name, channel: $channel)';
+  return 'UiBus(id: $id, name: $name, channel: $channel, color: $color)';
 }
 
 
@@ -816,7 +818,7 @@ abstract mixin class _$UiBusCopyWith<$Res> implements $UiBusCopyWith<$Res> {
   factory _$UiBusCopyWith(_UiBus value, $Res Function(_UiBus) _then) = __$UiBusCopyWithImpl;
 @override @useResult
 $Res call({
- int id, String name, UiMixerChannel channel
+ int id, String name, UiMixerChannel channel, String color
 });
 
 
@@ -833,12 +835,13 @@ class __$UiBusCopyWithImpl<$Res>
 
 /// Create a copy of UiBus
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? channel = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? channel = null,Object? color = null,}) {
   return _then(_UiBus(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,channel: null == channel ? _self.channel : channel // ignore: cast_nullable_to_non_nullable
-as UiMixerChannel,
+as UiMixerChannel,color: null == color ? _self.color : color // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -2505,7 +2508,7 @@ as List<UiRoutingConnection>,
 /// @nodoc
 mixin _$UiRoutingConnection {
 
- UiRoutingNode get source; UiRoutingNode get destination; double get sendLevel; bool get isSend;
+ UiRoutingNode get source; UiRoutingNode get destination; double get sendLevel; bool get isSend; UiRoutingTap get tap;
 /// Create a copy of UiRoutingConnection
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -2516,16 +2519,16 @@ $UiRoutingConnectionCopyWith<UiRoutingConnection> get copyWith => _$UiRoutingCon
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiRoutingConnection&&(identical(other.source, source) || other.source == source)&&(identical(other.destination, destination) || other.destination == destination)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel)&&(identical(other.isSend, isSend) || other.isSend == isSend));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiRoutingConnection&&(identical(other.source, source) || other.source == source)&&(identical(other.destination, destination) || other.destination == destination)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel)&&(identical(other.isSend, isSend) || other.isSend == isSend)&&(identical(other.tap, tap) || other.tap == tap));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,source,destination,sendLevel,isSend);
+int get hashCode => Object.hash(runtimeType,source,destination,sendLevel,isSend,tap);
 
 @override
 String toString() {
-  return 'UiRoutingConnection(source: $source, destination: $destination, sendLevel: $sendLevel, isSend: $isSend)';
+  return 'UiRoutingConnection(source: $source, destination: $destination, sendLevel: $sendLevel, isSend: $isSend, tap: $tap)';
 }
 
 
@@ -2536,7 +2539,7 @@ abstract mixin class $UiRoutingConnectionCopyWith<$Res>  {
   factory $UiRoutingConnectionCopyWith(UiRoutingConnection value, $Res Function(UiRoutingConnection) _then) = _$UiRoutingConnectionCopyWithImpl;
 @useResult
 $Res call({
- UiRoutingNode source, UiRoutingNode destination, double sendLevel, bool isSend
+ UiRoutingNode source, UiRoutingNode destination, double sendLevel, bool isSend, UiRoutingTap tap
 });
 
 
@@ -2553,13 +2556,14 @@ class _$UiRoutingConnectionCopyWithImpl<$Res>
 
 /// Create a copy of UiRoutingConnection
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? source = null,Object? destination = null,Object? sendLevel = null,Object? isSend = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? source = null,Object? destination = null,Object? sendLevel = null,Object? isSend = null,Object? tap = null,}) {
   return _then(_self.copyWith(
 source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
 as UiRoutingNode,destination: null == destination ? _self.destination : destination // ignore: cast_nullable_to_non_nullable
 as UiRoutingNode,sendLevel: null == sendLevel ? _self.sendLevel : sendLevel // ignore: cast_nullable_to_non_nullable
 as double,isSend: null == isSend ? _self.isSend : isSend // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,tap: null == tap ? _self.tap : tap // ignore: cast_nullable_to_non_nullable
+as UiRoutingTap,
   ));
 }
 /// Create a copy of UiRoutingConnection
@@ -2659,10 +2663,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiRoutingNode source,  UiRoutingNode destination,  double sendLevel,  bool isSend)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiRoutingNode source,  UiRoutingNode destination,  double sendLevel,  bool isSend,  UiRoutingTap tap)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiRoutingConnection() when $default != null:
-return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend);case _:
+return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend,_that.tap);case _:
   return orElse();
 
 }
@@ -2680,10 +2684,10 @@ return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend);cas
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiRoutingNode source,  UiRoutingNode destination,  double sendLevel,  bool isSend)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiRoutingNode source,  UiRoutingNode destination,  double sendLevel,  bool isSend,  UiRoutingTap tap)  $default,) {final _that = this;
 switch (_that) {
 case _UiRoutingConnection():
-return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend);}
+return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend,_that.tap);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -2697,10 +2701,10 @@ return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiRoutingNode source,  UiRoutingNode destination,  double sendLevel,  bool isSend)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiRoutingNode source,  UiRoutingNode destination,  double sendLevel,  bool isSend,  UiRoutingTap tap)?  $default,) {final _that = this;
 switch (_that) {
 case _UiRoutingConnection() when $default != null:
-return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend);case _:
+return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend,_that.tap);case _:
   return null;
 
 }
@@ -2712,13 +2716,14 @@ return $default(_that.source,_that.destination,_that.sendLevel,_that.isSend);cas
 
 
 class _UiRoutingConnection implements UiRoutingConnection {
-  const _UiRoutingConnection({required this.source, required this.destination, required this.sendLevel, required this.isSend});
+  const _UiRoutingConnection({required this.source, required this.destination, required this.sendLevel, required this.isSend, required this.tap});
   
 
 @override final  UiRoutingNode source;
 @override final  UiRoutingNode destination;
 @override final  double sendLevel;
 @override final  bool isSend;
+@override final  UiRoutingTap tap;
 
 /// Create a copy of UiRoutingConnection
 /// with the given fields replaced by the non-null parameter values.
@@ -2730,16 +2735,16 @@ _$UiRoutingConnectionCopyWith<_UiRoutingConnection> get copyWith => __$UiRouting
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiRoutingConnection&&(identical(other.source, source) || other.source == source)&&(identical(other.destination, destination) || other.destination == destination)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel)&&(identical(other.isSend, isSend) || other.isSend == isSend));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiRoutingConnection&&(identical(other.source, source) || other.source == source)&&(identical(other.destination, destination) || other.destination == destination)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel)&&(identical(other.isSend, isSend) || other.isSend == isSend)&&(identical(other.tap, tap) || other.tap == tap));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,source,destination,sendLevel,isSend);
+int get hashCode => Object.hash(runtimeType,source,destination,sendLevel,isSend,tap);
 
 @override
 String toString() {
-  return 'UiRoutingConnection(source: $source, destination: $destination, sendLevel: $sendLevel, isSend: $isSend)';
+  return 'UiRoutingConnection(source: $source, destination: $destination, sendLevel: $sendLevel, isSend: $isSend, tap: $tap)';
 }
 
 
@@ -2750,7 +2755,7 @@ abstract mixin class _$UiRoutingConnectionCopyWith<$Res> implements $UiRoutingCo
   factory _$UiRoutingConnectionCopyWith(_UiRoutingConnection value, $Res Function(_UiRoutingConnection) _then) = __$UiRoutingConnectionCopyWithImpl;
 @override @useResult
 $Res call({
- UiRoutingNode source, UiRoutingNode destination, double sendLevel, bool isSend
+ UiRoutingNode source, UiRoutingNode destination, double sendLevel, bool isSend, UiRoutingTap tap
 });
 
 
@@ -2767,13 +2772,14 @@ class __$UiRoutingConnectionCopyWithImpl<$Res>
 
 /// Create a copy of UiRoutingConnection
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? source = null,Object? destination = null,Object? sendLevel = null,Object? isSend = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? source = null,Object? destination = null,Object? sendLevel = null,Object? isSend = null,Object? tap = null,}) {
   return _then(_UiRoutingConnection(
 source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
 as UiRoutingNode,destination: null == destination ? _self.destination : destination // ignore: cast_nullable_to_non_nullable
 as UiRoutingNode,sendLevel: null == sendLevel ? _self.sendLevel : sendLevel // ignore: cast_nullable_to_non_nullable
 as double,isSend: null == isSend ? _self.isSend : isSend // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,tap: null == tap ? _self.tap : tap // ignore: cast_nullable_to_non_nullable
+as UiRoutingTap,
   ));
 }
 
@@ -2912,13 +2918,13 @@ return pluginSidechain(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int field0)?  track,TResult Function( int field0)?  bus,TResult Function()?  master,TResult Function()?  pluginSidechain,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int field0)?  track,TResult Function( int field0)?  bus,TResult Function()?  master,TResult Function( UiPluginTarget field0)?  pluginSidechain,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case UiRoutingNode_Track() when track != null:
 return track(_that.field0);case UiRoutingNode_Bus() when bus != null:
 return bus(_that.field0);case UiRoutingNode_Master() when master != null:
 return master();case UiRoutingNode_PluginSidechain() when pluginSidechain != null:
-return pluginSidechain();case _:
+return pluginSidechain(_that.field0);case _:
   return orElse();
 
 }
@@ -2936,13 +2942,13 @@ return pluginSidechain();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int field0)  track,required TResult Function( int field0)  bus,required TResult Function()  master,required TResult Function()  pluginSidechain,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int field0)  track,required TResult Function( int field0)  bus,required TResult Function()  master,required TResult Function( UiPluginTarget field0)  pluginSidechain,}) {final _that = this;
 switch (_that) {
 case UiRoutingNode_Track():
 return track(_that.field0);case UiRoutingNode_Bus():
 return bus(_that.field0);case UiRoutingNode_Master():
 return master();case UiRoutingNode_PluginSidechain():
-return pluginSidechain();}
+return pluginSidechain(_that.field0);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -2956,13 +2962,13 @@ return pluginSidechain();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int field0)?  track,TResult? Function( int field0)?  bus,TResult? Function()?  master,TResult? Function()?  pluginSidechain,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int field0)?  track,TResult? Function( int field0)?  bus,TResult? Function()?  master,TResult? Function( UiPluginTarget field0)?  pluginSidechain,}) {final _that = this;
 switch (_that) {
 case UiRoutingNode_Track() when track != null:
 return track(_that.field0);case UiRoutingNode_Bus() when bus != null:
 return bus(_that.field0);case UiRoutingNode_Master() when master != null:
 return master();case UiRoutingNode_PluginSidechain() when pluginSidechain != null:
-return pluginSidechain();case _:
+return pluginSidechain(_that.field0);case _:
   return null;
 
 }
@@ -3138,38 +3144,81 @@ String toString() {
 
 
 class UiRoutingNode_PluginSidechain extends UiRoutingNode {
-  const UiRoutingNode_PluginSidechain(): super._();
+  const UiRoutingNode_PluginSidechain(this.field0): super._();
   
 
+ final  UiPluginTarget field0;
 
-
+/// Create a copy of UiRoutingNode
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiRoutingNode_PluginSidechainCopyWith<UiRoutingNode_PluginSidechain> get copyWith => _$UiRoutingNode_PluginSidechainCopyWithImpl<UiRoutingNode_PluginSidechain>(this, _$identity);
 
 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiRoutingNode_PluginSidechain);
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiRoutingNode_PluginSidechain&&(identical(other.field0, field0) || other.field0 == field0));
 }
 
 
 @override
-int get hashCode => runtimeType.hashCode;
+int get hashCode => Object.hash(runtimeType,field0);
 
 @override
 String toString() {
-  return 'UiRoutingNode.pluginSidechain()';
+  return 'UiRoutingNode.pluginSidechain(field0: $field0)';
 }
 
 
 }
 
+/// @nodoc
+abstract mixin class $UiRoutingNode_PluginSidechainCopyWith<$Res> implements $UiRoutingNodeCopyWith<$Res> {
+  factory $UiRoutingNode_PluginSidechainCopyWith(UiRoutingNode_PluginSidechain value, $Res Function(UiRoutingNode_PluginSidechain) _then) = _$UiRoutingNode_PluginSidechainCopyWithImpl;
+@useResult
+$Res call({
+ UiPluginTarget field0
+});
 
 
+$UiPluginTargetCopyWith<$Res> get field0;
+
+}
+/// @nodoc
+class _$UiRoutingNode_PluginSidechainCopyWithImpl<$Res>
+    implements $UiRoutingNode_PluginSidechainCopyWith<$Res> {
+  _$UiRoutingNode_PluginSidechainCopyWithImpl(this._self, this._then);
+
+  final UiRoutingNode_PluginSidechain _self;
+  final $Res Function(UiRoutingNode_PluginSidechain) _then;
+
+/// Create a copy of UiRoutingNode
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiRoutingNode_PluginSidechain(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as UiPluginTarget,
+  ));
+}
+
+/// Create a copy of UiRoutingNode
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiPluginTargetCopyWith<$Res> get field0 {
+  
+  return $UiPluginTargetCopyWith<$Res>(_self.field0, (value) {
+    return _then(_self.copyWith(field0: value));
+  });
+}
+}
 
 /// @nodoc
 mixin _$UiSidechainSource {
 
- UiRoutingNode get source; String get name; bool get enabled; double get sendLevel;
+ UiRoutingNode get source; String get name; bool get enabled; double get sendLevel; UiRoutingTap get tap;
 /// Create a copy of UiSidechainSource
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -3180,16 +3229,16 @@ $UiSidechainSourceCopyWith<UiSidechainSource> get copyWith => _$UiSidechainSourc
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiSidechainSource&&(identical(other.source, source) || other.source == source)&&(identical(other.name, name) || other.name == name)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiSidechainSource&&(identical(other.source, source) || other.source == source)&&(identical(other.name, name) || other.name == name)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel)&&(identical(other.tap, tap) || other.tap == tap));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,source,name,enabled,sendLevel);
+int get hashCode => Object.hash(runtimeType,source,name,enabled,sendLevel,tap);
 
 @override
 String toString() {
-  return 'UiSidechainSource(source: $source, name: $name, enabled: $enabled, sendLevel: $sendLevel)';
+  return 'UiSidechainSource(source: $source, name: $name, enabled: $enabled, sendLevel: $sendLevel, tap: $tap)';
 }
 
 
@@ -3200,7 +3249,7 @@ abstract mixin class $UiSidechainSourceCopyWith<$Res>  {
   factory $UiSidechainSourceCopyWith(UiSidechainSource value, $Res Function(UiSidechainSource) _then) = _$UiSidechainSourceCopyWithImpl;
 @useResult
 $Res call({
- UiRoutingNode source, String name, bool enabled, double sendLevel
+ UiRoutingNode source, String name, bool enabled, double sendLevel, UiRoutingTap tap
 });
 
 
@@ -3217,13 +3266,14 @@ class _$UiSidechainSourceCopyWithImpl<$Res>
 
 /// Create a copy of UiSidechainSource
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? source = null,Object? name = null,Object? enabled = null,Object? sendLevel = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? source = null,Object? name = null,Object? enabled = null,Object? sendLevel = null,Object? tap = null,}) {
   return _then(_self.copyWith(
 source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
 as UiRoutingNode,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
 as bool,sendLevel: null == sendLevel ? _self.sendLevel : sendLevel // ignore: cast_nullable_to_non_nullable
-as double,
+as double,tap: null == tap ? _self.tap : tap // ignore: cast_nullable_to_non_nullable
+as UiRoutingTap,
   ));
 }
 /// Create a copy of UiSidechainSource
@@ -3314,10 +3364,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel,  UiRoutingTap tap)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiSidechainSource() when $default != null:
-return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);case _:
+return $default(_that.source,_that.name,_that.enabled,_that.sendLevel,_that.tap);case _:
   return orElse();
 
 }
@@ -3335,10 +3385,10 @@ return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel,  UiRoutingTap tap)  $default,) {final _that = this;
 switch (_that) {
 case _UiSidechainSource():
-return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);}
+return $default(_that.source,_that.name,_that.enabled,_that.sendLevel,_that.tap);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -3352,10 +3402,10 @@ return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiRoutingNode source,  String name,  bool enabled,  double sendLevel,  UiRoutingTap tap)?  $default,) {final _that = this;
 switch (_that) {
 case _UiSidechainSource() when $default != null:
-return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);case _:
+return $default(_that.source,_that.name,_that.enabled,_that.sendLevel,_that.tap);case _:
   return null;
 
 }
@@ -3367,13 +3417,14 @@ return $default(_that.source,_that.name,_that.enabled,_that.sendLevel);case _:
 
 
 class _UiSidechainSource implements UiSidechainSource {
-  const _UiSidechainSource({required this.source, required this.name, required this.enabled, required this.sendLevel});
+  const _UiSidechainSource({required this.source, required this.name, required this.enabled, required this.sendLevel, required this.tap});
   
 
 @override final  UiRoutingNode source;
 @override final  String name;
 @override final  bool enabled;
 @override final  double sendLevel;
+@override final  UiRoutingTap tap;
 
 /// Create a copy of UiSidechainSource
 /// with the given fields replaced by the non-null parameter values.
@@ -3385,16 +3436,16 @@ _$UiSidechainSourceCopyWith<_UiSidechainSource> get copyWith => __$UiSidechainSo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiSidechainSource&&(identical(other.source, source) || other.source == source)&&(identical(other.name, name) || other.name == name)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiSidechainSource&&(identical(other.source, source) || other.source == source)&&(identical(other.name, name) || other.name == name)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.sendLevel, sendLevel) || other.sendLevel == sendLevel)&&(identical(other.tap, tap) || other.tap == tap));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,source,name,enabled,sendLevel);
+int get hashCode => Object.hash(runtimeType,source,name,enabled,sendLevel,tap);
 
 @override
 String toString() {
-  return 'UiSidechainSource(source: $source, name: $name, enabled: $enabled, sendLevel: $sendLevel)';
+  return 'UiSidechainSource(source: $source, name: $name, enabled: $enabled, sendLevel: $sendLevel, tap: $tap)';
 }
 
 
@@ -3405,7 +3456,7 @@ abstract mixin class _$UiSidechainSourceCopyWith<$Res> implements $UiSidechainSo
   factory _$UiSidechainSourceCopyWith(_UiSidechainSource value, $Res Function(_UiSidechainSource) _then) = __$UiSidechainSourceCopyWithImpl;
 @override @useResult
 $Res call({
- UiRoutingNode source, String name, bool enabled, double sendLevel
+ UiRoutingNode source, String name, bool enabled, double sendLevel, UiRoutingTap tap
 });
 
 
@@ -3422,13 +3473,14 @@ class __$UiSidechainSourceCopyWithImpl<$Res>
 
 /// Create a copy of UiSidechainSource
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? source = null,Object? name = null,Object? enabled = null,Object? sendLevel = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? source = null,Object? name = null,Object? enabled = null,Object? sendLevel = null,Object? tap = null,}) {
   return _then(_UiSidechainSource(
 source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
 as UiRoutingNode,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
 as bool,sendLevel: null == sendLevel ? _self.sendLevel : sendLevel // ignore: cast_nullable_to_non_nullable
-as double,
+as double,tap: null == tap ? _self.tap : tap // ignore: cast_nullable_to_non_nullable
+as UiRoutingTap,
   ));
 }
 

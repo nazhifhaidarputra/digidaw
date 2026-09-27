@@ -10,7 +10,9 @@ mod tests {
         AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
     };
 
-    use crate::core::project::mixer::{RoutingConnection, RoutingNode};
+    use crate::core::project::mixer::{
+        RoutingConnection, RoutingNode, RoutingTap, default_bus_color,
+    };
     use crate::shared::id::{AutomationId, BusId, EffectId, TrackId};
     use crate::test::helpers::{
         make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
@@ -100,6 +102,50 @@ mod tests {
     }
 
     #[test]
+    fn deleting_a_bus_relinks_its_main_inputs_to_master() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        let bus_id = mixer_api::create_bus(&mut ctx, "Drums".to_string());
+        mixer_api::update_routing(
+            &mut ctx,
+            RoutingConnection::new(RoutingNode::Track(audio_id), RoutingNode::Bus(bus_id)),
+        )
+        .unwrap();
+
+        mixer_api::delete_bus(&mut ctx, bus_id).unwrap();
+
+        let outputs = ctx
+            .app_state
+            .mixer
+            .routing
+            .iter()
+            .filter(|conn| conn.source == RoutingNode::Track(audio_id) && !conn.is_send)
+            .map(|conn| conn.destination)
+            .collect::<Vec<_>>();
+        assert_eq!(outputs, [RoutingNode::Master]);
+    }
+
+    #[test]
+    fn unlinking_a_track_from_master_leaves_it_without_a_main_output() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+
+        mixer_api::remove_routing(
+            &mut ctx,
+            RoutingNode::Track(audio_id),
+            RoutingNode::Master,
+            false,
+        )
+        .unwrap();
+
+        assert!(
+            !ctx.app_state
+                .mixer
+                .routing
+                .iter()
+                .any(|conn| conn.source == RoutingNode::Track(audio_id) && !conn.is_send)
+        );
+    }
+
+    #[test]
     fn delete_bus_missing_returns_err() {
         let mut ctx = make_ctx();
         let bogus_id = BusId::from(99999);
@@ -126,6 +172,34 @@ mod tests {
     }
 
     #[test]
+    fn change_bus_color_happy_path() {
+        let mut ctx = make_ctx();
+        let bus_id = mixer_api::create_bus(&mut ctx, "Drums".to_string());
+        let result = mixer_api::change_bus_color(&mut ctx, bus_id, "#FF8A65");
+        assert!(result.is_ok());
+        let color = ctx.app_state.mixer.buses[bus_id].color.to_string();
+        assert_eq!(color, "#FF8A65FF");
+    }
+
+    #[test]
+    fn change_bus_color_invalid_format_returns_err() {
+        let mut ctx = make_ctx();
+        let bus_id = mixer_api::create_bus(&mut ctx, "Drums".to_string());
+        let result = mixer_api::change_bus_color(&mut ctx, bus_id, "notacolor");
+        assert!(result.is_err());
+        let color = &ctx.app_state.mixer.buses[bus_id].color;
+        assert_eq!(*color, default_bus_color());
+    }
+
+    #[test]
+    fn change_bus_color_missing_returns_err() {
+        let mut ctx = make_ctx();
+        let bogus_id = BusId::from(99999);
+        let result = mixer_api::change_bus_color(&mut ctx, bogus_id, "#FF0000");
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn set_routing_happy_path() {
         let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
         let bus_id = mixer_api::create_bus(&mut ctx, "FX Bus".to_string());
@@ -135,6 +209,7 @@ mod tests {
             destination: RoutingNode::Bus(bus_id),
             is_send: true,
             send_level: 1.0,
+            tap: RoutingTap::PostFader,
         };
         let result = mixer_api::set_routing(&mut ctx, conn);
         assert!(result.is_ok(), "{:?}", result.err());
@@ -488,6 +563,7 @@ mod tests {
             target,
             RoutingNode::Track(source_track),
             Some(0.5),
+            RoutingTap::PostFader,
         )
         .unwrap();
         let sources = mixer_api::get_sidechain_sources(&ctx, target);
@@ -502,6 +578,7 @@ mod tests {
             target,
             RoutingNode::Track(source_track),
             Some(0.25),
+            RoutingTap::PreFader,
         )
         .unwrap();
         let matching_routes = ctx
@@ -516,9 +593,20 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(matching_routes.len(), 1);
         assert_eq!(matching_routes[0].send_level, 0.25);
+        assert_eq!(matching_routes[0].tap, RoutingTap::PreFader);
+        let sources = mixer_api::get_sidechain_sources(&ctx, target);
+        assert!(sources.iter().any(|source| {
+            source.source == RoutingNode::Track(source_track) && source.tap == RoutingTap::PreFader
+        }));
 
-        mixer_api::set_sidechain_source(&mut ctx, target, RoutingNode::Track(source_track), None)
-            .unwrap();
+        mixer_api::set_sidechain_source(
+            &mut ctx,
+            target,
+            RoutingNode::Track(source_track),
+            None,
+            RoutingTap::PostFader,
+        )
+        .unwrap();
         assert!(!ctx.app_state.mixer.routing.iter().any(|connection| {
             connection.source == RoutingNode::Track(source_track)
                 && matches!(connection.destination, RoutingNode::PluginSidechain(_))
@@ -548,6 +636,7 @@ mod tests {
                 target,
                 RoutingNode::Track(target_track),
                 Some(1.0),
+                RoutingTap::PostFader,
             )
             .is_err()
         );
@@ -569,8 +658,14 @@ mod tests {
                 .any(|item| item.source == RoutingNode::Bus(bus_id))
         );
         assert!(
-            mixer_api::set_sidechain_source(&mut ctx, target, RoutingNode::Bus(bus_id), Some(1.0),)
-                .is_err()
+            mixer_api::set_sidechain_source(
+                &mut ctx,
+                target,
+                RoutingNode::Bus(bus_id),
+                Some(1.0),
+                RoutingTap::PostFader,
+            )
+            .is_err()
         );
     }
 }

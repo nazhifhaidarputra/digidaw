@@ -18,6 +18,7 @@ import 'package:karbeat/core/input/intents/workspace/export_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/open_midi_keyboard_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/save_intent.dart';
 import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/features/workspace/view/project_export.dart';
 import 'package:karbeat/features/workspace/view/main_content.dart';
 import 'package:karbeat/features/workspace/view/side_panel.dart';
@@ -118,8 +119,7 @@ class MainScreen extends ConsumerWidget {
               },
             ),
       },
-      child: Focus(
-        autofocus: true,
+      child: ShortcutFocusAnchor(
         child: Scaffold(
           backgroundColor: Theme.of(context).colorScheme.surface,
           body: Stack(

@@ -25,6 +25,7 @@
 //! ```
 
 pub mod api;
+mod bus_layout;
 mod context;
 mod editor;
 mod executor;

@@ -16,7 +16,6 @@ use crate::{
 use anyhow::Context;
 use hashbrown::HashMap;
 use indexmap::IndexMap;
-use karbeat_host::{PluginKind, ProcessingConfig};
 use karbeat_plugin_api::types::BusConfig;
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 
@@ -259,18 +258,10 @@ pub(super) fn execute_replace(
                 || external.descriptor.clone(),
                 |entry| entry.descriptor.clone(),
             );
-        let config = ProcessingConfig {
-            sample_rate: f64::from(pending.sample_rate),
-            max_block_size: 65_536,
-            main_input_channels: if descriptor.kind == PluginKind::Instrument {
-                0
-            } else {
-                2
-            },
-            main_output_channels: 2,
-            sidechain_channels: 0,
-            offline: false,
-        };
+        let config = crate::api::external_plugin_api::hosted_processing_config(
+            descriptor.kind,
+            f64::from(pending.sample_rate),
+        );
         let state = external.state.clone();
         let prepared = futures_lite::future::block_on(pending.handles.external_plugins.prepare(
             karbeat_host::PrepareRequest {

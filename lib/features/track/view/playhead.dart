@@ -45,6 +45,10 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
 
   final bool isInteracting;
 
+  /// Snaps a dragged position before it is shown and seeked to, such as to
+  /// the grid while snap-to-grid is on. The drag itself accumulates unsnapped.
+  final int Function(int position)? snapPosition;
+
   const PlayheadOverlay({
     super.key,
     required this.offsetAdjustment,
@@ -53,6 +57,7 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
     required this.zoomLevel,
     required this.sampleSelector,
     this.isInteracting = false,
+    this.snapPosition,
   });
 
   @override
@@ -63,6 +68,9 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   bool _isDragging = false;
   int _dragSamples = 0;
   int _lastKnownSamples = 0;
+
+  int get _dragTarget =>
+      widget.snapPosition?.call(_dragSamples) ?? _dragSamples;
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +93,7 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                   // If the user is actively dragging, use their finger position.
                   // Otherwise, snap to the actual engine position.
                   final currentSamples = _isDragging
-                      ? _dragSamples
+                      ? _dragTarget
                       : _lastKnownSamples;
 
                   double playheadAbsoluteX = 0;
@@ -143,7 +151,7 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                                 });
                               },
                               onHorizontalDragEnd: (details) {
-                                widget.onSeek(_dragSamples);
+                                widget.onSeek(_dragTarget);
                                 setState(() {
                                   _isDragging = false;
                                 });

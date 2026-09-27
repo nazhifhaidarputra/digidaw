@@ -6,13 +6,14 @@ use crate::{
         RemovedModulations, SidechainRoute, TrackId,
         mixer::{
             BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
-            RoutingConnection, RoutingNode,
+            RoutingConnection, RoutingNode, RoutingTap,
         },
     },
     shared::id::*,
 };
 use anyhow::Context;
 use karbeat_plugin_types::ParameterSpec;
+use karbeat_utils::color::Color;
 
 #[derive(Clone, Debug)]
 /// A track or bus that can feed a plugin's sidechain input.
@@ -23,6 +24,8 @@ pub struct SidechainSource {
     pub name: String,
     /// Existing send gain, or `None` when this source is available but not connected.
     pub send_level: Option<f32>,
+    /// Tap of the existing send, or the post-fader default when not connected.
+    pub tap: RoutingTap,
 }
 
 /// **GETTER: Fetch the mixer state from application state and map it to T value**
@@ -463,6 +466,9 @@ pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
 
     ctx.app_state.mixer.remove_bus(bus_id)?;
     let _ = ctx.send_audio_command(AudioCommand::RemoveBus { bus_id });
+    // Removing the bus relinks its orphaned inputs to master.
+    let routing = ctx.app_state.mixer.routing.clone().into_boxed_slice();
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
     Ok(())
 }
 
@@ -508,6 +514,18 @@ pub fn add_effect_to_bus(
 /// Renames a bus in serialized project state.
 pub fn rename_bus(ctx: &mut DawContext, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
     ctx.app_state.mixer.rename_bus(bus_id, new_name)
+}
+
+/// Changes a bus color from a `#RRGGBB` or `#RRGGBBAA` hex string.
+pub fn change_bus_color(
+    ctx: &mut DawContext,
+    bus_id: BusId,
+    new_color: &str,
+) -> anyhow::Result<()> {
+    let color = Color::new_from_string(new_color).ok_or_else(|| {
+        anyhow::anyhow!("Invalid color format. Use hex string like #RRGGBB or #RRGGBBAA")
+    })?;
+    ctx.app_state.mixer.change_bus_color(bus_id, color)
 }
 
 /// Adds a validated routing connection and publishes the complete routing matrix to the engine.
@@ -585,13 +603,13 @@ pub fn get_sidechain_sources(
 
     let mut available_sources = Vec::new();
 
-    let get_existing_level = |source: RoutingNode| {
+    let get_existing = |source: RoutingNode| {
         ctx.app_state
             .mixer
             .routing
             .iter()
             .find(|connection| connection.source == source && connection.destination == destination)
-            .map(|connection| connection.send_level)
+            .map(|connection| (connection.send_level, connection.tap))
     };
 
     let can_add_source = |source: RoutingNode| {
@@ -610,12 +628,13 @@ pub fn get_sidechain_sources(
             continue;
         }
 
-        let send_level = get_existing_level(source);
-        if send_level.is_some() || can_add_source(source) {
+        let existing = get_existing(source);
+        if existing.is_some() || can_add_source(source) {
             available_sources.push(SidechainSource {
                 source,
                 name: track.name.clone(),
-                send_level,
+                send_level: existing.map(|(level, _)| level),
+                tap: existing.map_or_else(RoutingTap::default, |(_, tap)| tap),
             });
         }
     }
@@ -626,12 +645,13 @@ pub fn get_sidechain_sources(
             continue;
         }
 
-        let send_level = get_existing_level(source);
-        if send_level.is_some() || can_add_source(source) {
+        let existing = get_existing(source);
+        if existing.is_some() || can_add_source(source) {
             available_sources.push(SidechainSource {
                 source,
                 name: bus.name.clone(),
-                send_level,
+                send_level: existing.map(|(level, _)| level),
+                tap: existing.map_or_else(RoutingTap::default, |(_, tap)| tap),
             });
         }
     }
@@ -640,13 +660,14 @@ pub fn get_sidechain_sources(
     available_sources
 }
 
-/// Add/update a sidechain send when `send_level` is `Some`, or remove it when
+/// Add/update a sidechain send tapped at `tap` when `send_level` is `Some`, or remove it when
 /// `send_level` is `None`.
 pub fn set_sidechain_source(
     ctx: &mut DawContext,
     this_plugin: PluginTarget,
     from: RoutingNode,
     send_level: Option<f32>,
+    tap: RoutingTap,
 ) -> anyhow::Result<()> {
     let sidechain_route = SidechainRoute::from(this_plugin);
     let routing_node_dest = RoutingNode::PluginSidechain(sidechain_route);
@@ -662,8 +683,9 @@ pub fn set_sidechain_source(
 
     match send_level {
         Some(level) => {
-            let connection =
+            let mut connection =
                 RoutingConnection::new_send(from, routing_node_dest, level.clamp(0.0, 1.0));
+            connection.tap = tap;
             ctx.app_state
                 .mixer
                 .update_routing(connection, &ctx.app_state.tracks)?;

@@ -2,7 +2,9 @@
 
 use crate::{
     api::{EventList, ParameterChanges},
+    bus_layout::{BusPlan, BusRole},
     context::ParameterExchange,
+    instance::check_optional,
 };
 use karbeat_host_api::{HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate};
 use karbeat_plugin_api::prelude::{
@@ -28,6 +30,8 @@ use vst3::{
 pub(crate) struct Dsp {
     pub processor: ComPtr<IAudioProcessor>,
     pub config: ProcessingConfig,
+    input_plans: Vec<BusPlan>,
+    output_plans: Vec<BusPlan>,
     input_channels: Vec<usize>,
     output_channels: Vec<usize>,
     input32: Vec<Vec<f32>>,
@@ -56,11 +60,13 @@ impl Dsp {
     pub fn new(
         processor: ComPtr<IAudioProcessor>,
         config: ProcessingConfig,
-        inputs: Vec<usize>,
-        outputs: Vec<usize>,
+        input_plans: Vec<BusPlan>,
+        output_plans: Vec<BusPlan>,
         ids: &[u32],
         use_f64: bool,
     ) -> Self {
+        let inputs = input_plans.iter().map(|p| p.channels).collect::<Vec<_>>();
+        let outputs = output_plans.iter().map(|p| p.channels).collect::<Vec<_>>();
         let input_count: usize = inputs.iter().sum();
         let output_count: usize = outputs.iter().sum();
         let frames = config.max_block_size;
@@ -81,6 +87,8 @@ impl Dsp {
             output_ptrs64: vec![ptr::null_mut(); output_count],
             input_buses: inputs.iter().map(|_| empty_bus()).collect(),
             output_buses: outputs.iter().map(|_| empty_bus()).collect(),
+            input_plans,
+            output_plans,
             input_channels: inputs,
             output_channels: outputs,
             events: ComWrapper::new(EventList::default()),
@@ -99,13 +107,9 @@ impl Dsp {
     pub fn stop(&mut self) -> Result<(), HostError> {
         if self.processing {
             // SAFETY: Called only after the processing gate is suspended.
-            let code = unsafe { self.processor.setProcessing(0) };
-            if code != kResultOk {
-                return Err(HostError::PluginCall {
-                    operation: "setProcessing(false)",
-                    code,
-                });
-            }
+            check_optional("setProcessing(false)", unsafe {
+                self.processor.setProcessing(0)
+            })?;
             self.processing = false;
         }
         Ok(())
@@ -114,13 +118,9 @@ impl Dsp {
     pub fn start(&mut self) -> Result<(), HostError> {
         if !self.processing {
             // SAFETY: Component was prepared/activated by the UI owner, with DSP suspended.
-            let code = unsafe { self.processor.setProcessing(1) };
-            if code != kResultOk {
-                return Err(HostError::PluginCall {
-                    operation: "setProcessing(true)",
-                    code,
-                });
-            }
+            check_optional("setProcessing(true)", unsafe {
+                self.processor.setProcessing(1)
+            })?;
             self.processing = true;
         }
         Ok(())
@@ -138,15 +138,9 @@ impl Dsp {
         }
         let mut data = self.process_data(0, ptr::null_mut());
         // SAFETY: All parameter storage is preallocated and lives through this zero-sample call.
-        let code = unsafe { self.processor.process(&raw mut data) };
-        if code == kResultOk {
-            Ok(())
-        } else {
-            Err(HostError::PluginCall {
-                operation: "processor.flush",
-                code,
-            })
-        }
+        check_optional("processor.flush", unsafe {
+            self.processor.process(&raw mut data)
+        })
     }
 
     fn process_data(&mut self, frames: i32, context: *mut Vst::ProcessContext) -> Vst::ProcessData {
@@ -215,14 +209,18 @@ impl Dsp {
         for plane in &mut self.output32 {
             plane[..frames].fill(0.0);
         }
-        let sources = buffers
-            .main_inputs
-            .iter()
-            .chain(buffers.aux_inputs.iter())
-            .flat_map(|b| b.channel_data.iter());
-        for (source, destination) in sources.zip(&mut self.input32) {
-            let count = frames.min(source.len());
-            destination[..count].copy_from_slice(&source[..count]);
+        let mut offset = 0;
+        for plan in &self.input_plans {
+            let planes = &mut self.input32[offset..offset + plan.channels];
+            offset += plan.channels;
+            let source = match plan.role {
+                BusRole::Main => buffers.main_inputs.first(),
+                BusRole::Sidechain => buffers.aux_inputs.first(),
+                BusRole::Other => None,
+            };
+            if let Some(source) = source {
+                adapt_channels(&*source.channel_data, planes, frames);
+            }
         }
         if self.use_f64 {
             for (source, destination) in self.input32.iter().zip(&mut self.input64) {
@@ -431,27 +429,23 @@ impl Dsp {
                 parameter.edits.fetch_or(2, Ordering::Relaxed);
             }
         });
-        let destinations = buffers
-            .main_outputs
-            .iter_mut()
-            .chain(buffers.aux_outputs.iter_mut())
-            .flat_map(|b| b.channel_data.iter_mut());
-        for (index, destination) in destinations.enumerate() {
-            let count = frames.min(destination.len());
-            if self.use_f64 {
-                if let Some(source) = self.output64.get(index) {
-                    for (source, destination) in
-                        source[..count].iter().zip(&mut destination[..count])
-                    {
-                        *destination = narrow_sample(*source);
-                    }
-                } else {
-                    destination[..count].fill(0.0);
+        if self.use_f64 {
+            for (source, destination) in self.output64.iter().zip(&mut self.output32) {
+                for (source, destination) in source[..frames].iter().zip(&mut destination[..frames])
+                {
+                    *destination = narrow_sample(*source);
                 }
-            } else if let Some(source) = self.output32.get(index) {
-                destination[..count].copy_from_slice(&source[..count]);
-            } else {
-                destination[..count].fill(0.0);
+            }
+        }
+        silence(buffers);
+        let mut offset = 0;
+        for plan in &self.output_plans {
+            let planes = &self.output32[offset..offset + plan.channels];
+            offset += plan.channels;
+            if plan.role == BusRole::Main
+                && let Some(destination) = buffers.main_outputs.first_mut()
+            {
+                adapt_channels(planes, destination.channel_data, frames);
             }
         }
     }
@@ -464,6 +458,46 @@ impl Dsp {
 )]
 fn narrow_sample(value: f64) -> f32 {
     if value.is_finite() { value as f32 } else { 0.0 }
+}
+
+/// Maps `sources` onto `destinations` for the first `frames` samples.
+///
+/// Equal layouts copy channel by channel. A stereo source feeding a mono destination is averaged,
+/// and a mono source feeding a wider destination is duplicated into its first two channels.
+/// Otherwise the first shared channels are copied. Destination channels without a source keep
+/// their existing contents, which callers clear beforehand.
+fn adapt_channels<S: AsRef<[f32]>, D: AsMut<[f32]>>(
+    sources: &[S],
+    destinations: &mut [D],
+    frames: usize,
+) {
+    match (sources, &mut *destinations) {
+        ([left, right, ..], [mono]) => {
+            let (left, right, mono) = (left.as_ref(), right.as_ref(), mono.as_mut());
+            let count = frames.min(left.len()).min(right.len()).min(mono.len());
+            for ((destination, left), right) in mono[..count]
+                .iter_mut()
+                .zip(&left[..count])
+                .zip(&right[..count])
+            {
+                *destination = (left + right) * 0.5;
+            }
+        }
+        ([mono], [first, second, ..]) => {
+            let mono = mono.as_ref();
+            for destination in [first.as_mut(), second.as_mut()] {
+                let count = frames.min(mono.len()).min(destination.len());
+                destination[..count].copy_from_slice(&mono[..count]);
+            }
+        }
+        _ => {
+            for (source, destination) in sources.iter().zip(destinations.iter_mut()) {
+                let (source, destination) = (source.as_ref(), destination.as_mut());
+                let count = frames.min(source.len()).min(destination.len());
+                destination[..count].copy_from_slice(&source[..count]);
+            }
+        }
+    }
 }
 
 fn empty_bus() -> Vst::AudioBusBuffers {
@@ -805,6 +839,140 @@ mod tests {
         }
     }
 
+    fn plan(role: BusRole, channels: usize) -> BusPlan {
+        BusPlan {
+            role,
+            channels,
+            active: true,
+        }
+    }
+
+    /// Mono plugin with a mono sidechain: `out = main + 10 * sidechain`, and no
+    /// `setProcessing` implementation, like LSP's VST3 wrapper.
+    struct MonoSidechainProcessor;
+    impl Class for MonoSidechainProcessor {
+        type Interfaces = (IAudioProcessor,);
+    }
+    impl IAudioProcessorTrait for MonoSidechainProcessor {
+        unsafe fn setBusArrangements(&self, _: *mut u64, _: i32, _: *mut u64, _: i32) -> i32 {
+            kResultFalse
+        }
+        unsafe fn getBusArrangement(&self, _: i32, _: i32, _: *mut u64) -> i32 {
+            kNotImplemented
+        }
+        unsafe fn canProcessSampleSize(&self, _: i32) -> i32 {
+            kResultOk
+        }
+        unsafe fn getLatencySamples(&self) -> u32 {
+            0
+        }
+        unsafe fn setupProcessing(&self, _: *mut Vst::ProcessSetup) -> i32 {
+            kResultOk
+        }
+        unsafe fn setProcessing(&self, _: u8) -> i32 {
+            kNotImplemented
+        }
+        unsafe fn getTailSamples(&self) -> u32 {
+            0
+        }
+        unsafe fn process(&self, data: *mut Vst::ProcessData) -> i32 {
+            // SAFETY: Dsp passes live process data for the duration of this call.
+            let data = unsafe { &*data };
+            if data.numSamples == 0 {
+                return kResultOk;
+            }
+            let frames = usize::try_from(data.numSamples).unwrap();
+            // SAFETY: Dsp provides two single-channel f32 input buses.
+            let main = unsafe { first_channel(data.inputs, frames) };
+            // SAFETY: The second input bus is within the two-bus input array.
+            let sidechain_bus = unsafe { data.inputs.add(1) };
+            // SAFETY: The sidechain bus is a live single-channel f32 bus.
+            let sidechain = unsafe { first_channel(sidechain_bus, frames) };
+            // SAFETY: Dsp provides one single-channel f32 output bus.
+            let output = unsafe { first_channel(data.outputs, frames) };
+            for ((output, main), sidechain) in output.iter_mut().zip(main).zip(sidechain) {
+                *output = *main + 10.0 * *sidechain;
+            }
+            kResultOk
+        }
+    }
+
+    /// # Safety
+    /// `bus` must point to a live f32 bus whose first channel holds `frames` samples.
+    unsafe fn first_channel<'a>(bus: *mut Vst::AudioBusBuffers, frames: usize) -> &'a mut [f32] {
+        // SAFETY: The caller guarantees a live bus.
+        let bus = unsafe { &*bus };
+        // SAFETY: The caller guarantees the bus carries f32 channel pointers.
+        let planes = unsafe { bus.__field0.channelBuffers32 };
+        // SAFETY: The bus has at least one channel pointer.
+        let plane = unsafe { *planes };
+        // SAFETY: The caller guarantees the channel holds `frames` writable samples.
+        unsafe { std::slice::from_raw_parts_mut(plane, frames) }
+    }
+
+    #[test]
+    fn mono_plugin_downmixes_stereo_inputs_and_duplicates_its_output() {
+        let processor = ComWrapper::new(MonoSidechainProcessor);
+        let mut dsp = Dsp::new(
+            processor.to_com_ptr::<IAudioProcessor>().unwrap(),
+            ProcessingConfig {
+                sample_rate: 48_000.0,
+                max_block_size: 8,
+                main_input_channels: 2,
+                main_output_channels: 2,
+                sidechain_channels: 2,
+                offline: false,
+            },
+            vec![plan(BusRole::Main, 1), plan(BusRole::Sidechain, 1)],
+            vec![plan(BusRole::Main, 1)],
+            &[],
+            false,
+        );
+        dsp.start().unwrap();
+        let (mut in_l, mut in_r) = ([1.0_f32; 4], [3.0_f32; 4]);
+        let (mut side_l, mut side_r) = ([0.25_f32; 4], [0.75_f32; 4]);
+        let (mut out_l, mut out_r) = ([0.0_f32; 4], [0.0_f32; 4]);
+        let mut main_channels: [&mut [f32]; 2] = [&mut in_l, &mut in_r];
+        let mut side_channels: [&mut [f32]; 2] = [&mut side_l, &mut side_r];
+        let mut out_channels: [&mut [f32]; 2] = [&mut out_l, &mut out_r];
+        let mut main = [karbeat_plugin_api::prelude::AudioBusBuffer {
+            channel_data: &mut main_channels,
+            is_silent: false,
+        }];
+        let mut side = [karbeat_plugin_api::prelude::AudioBusBuffer {
+            channel_data: &mut side_channels,
+            is_silent: false,
+        }];
+        let mut output = [karbeat_plugin_api::prelude::AudioBusBuffer {
+            channel_data: &mut out_channels,
+            is_silent: false,
+        }];
+        let exchange = ParameterExchange::new(&[]);
+        dsp.process(
+            &mut AudioBuffers {
+                main_inputs: &mut main,
+                main_outputs: &mut output,
+                aux_inputs: &mut side,
+                aux_outputs: &mut [],
+            },
+            &context(&[]),
+            &exchange,
+        );
+        dsp.stop().unwrap();
+        assert_eq!(out_l, [7.0; 4]);
+        assert_eq!(out_r, [7.0; 4]);
+    }
+
+    #[test]
+    fn channel_adaptation_covers_equal_widening_and_truncating_layouts() {
+        let mut stereo = [vec![0.0_f32; 2], vec![0.0; 2]];
+        adapt_channels(&[[2.0_f32, 4.0]], &mut stereo, 2);
+        assert_eq!(stereo, [vec![2.0, 4.0], vec![2.0, 4.0]]);
+        let mut three = [vec![9.0_f32; 2], vec![9.0; 2], vec![0.0; 2]];
+        adapt_channels(&[[1.0_f32, 1.0], [2.0, 2.0]], &mut three, 1);
+        assert_eq!(three, [vec![1.0, 9.0], vec![2.0, 9.0], vec![0.0, 0.0]]);
+    }
+
     #[test]
     fn zero_sample_state_flush_delivers_edits_without_consuming_audio_errors() {
         let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
@@ -819,8 +987,8 @@ mod tests {
         let mut dsp = Dsp::new(
             processor.to_com_ptr::<IAudioProcessor>().unwrap(),
             config,
-            vec![2],
-            vec![2],
+            vec![plan(BusRole::Main, 2)],
+            vec![plan(BusRole::Main, 2)],
             &[77],
             false,
         );
@@ -870,23 +1038,27 @@ mod tests {
                 aux_inputs: &mut [],
                 aux_outputs: &mut [],
             },
-            &ProcessContext {
-                bpm: 120.0,
-                time_sig_numerator: 4,
-                time_sig_denominator: 4,
-                is_playing: true,
-                is_recording: false,
-                mode: karbeat_plugin_api::prelude::ProcessingMode::Realtime,
-                project_time_seconds: 0.0,
-                project_time_samples: 0,
-                beat_position: 0.0,
-                bar_position: 0.0,
-                loop_start_beat: None,
-                loop_end_beat: None,
-                midi_events: midi,
-                param_changes: &[],
-            },
+            &context(midi),
         );
+    }
+
+    fn context(midi: &[karbeat_plugin_api::prelude::MidiEvent]) -> ProcessContext<'_> {
+        ProcessContext {
+            bpm: 120.0,
+            time_sig_numerator: 4,
+            time_sig_denominator: 4,
+            is_playing: true,
+            is_recording: false,
+            mode: karbeat_plugin_api::prelude::ProcessingMode::Realtime,
+            project_time_seconds: 0.0,
+            project_time_samples: 0,
+            beat_position: 0.0,
+            bar_position: 0.0,
+            loop_start_beat: None,
+            loop_end_beat: None,
+            midi_events: midi,
+            param_changes: &[],
+        }
     }
 
     #[test]
@@ -906,7 +1078,7 @@ mod tests {
                     offline: false,
                 },
                 vec![],
-                vec![1],
+                vec![plan(BusRole::Main, 1)],
                 &[77],
                 false,
             );

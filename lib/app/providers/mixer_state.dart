@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/painting.dart' show Color;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
+import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -383,9 +386,7 @@ class MixerNotifier extends Notifier<MixerEditorState> {
         invertedPhase = param.field0;
     }
 
-    final updatedBus = mixer_api.UiBus(
-      id: bus.id,
-      name: bus.name,
+    final updatedBus = bus.copyWith(
       channel: mixer_api.UiMixerChannel(
         volume: volume,
         pan: pan,
@@ -748,6 +749,68 @@ extension MixerService on MixerNotifier {
     return Result.ok(null);
   }
 
+  /// Rename a bus with optimistic update and backend rollback.
+  Future<Result<void>> renameBus({required int busId, required String name}) {
+    return _patchBusIdentity(
+      busId,
+      name: name,
+      commit: () => mixer_api.renameBus(ctx: _ctx, busId: busId, newName: name),
+    );
+  }
+
+  /// Change a bus color with optimistic update and backend rollback.
+  Future<Result<void>> changeBusColor({
+    required int busId,
+    required Color color,
+  }) {
+    final colorStr = color.toRGBA();
+    return _patchBusIdentity(
+      busId,
+      color: colorStr,
+      commit: () =>
+          mixer_api.changeBusColor(ctx: _ctx, busId: busId, newColor: colorStr),
+    );
+  }
+
+  /// Applies a bus name or color locally, then commits it to the backend.
+  /// On failure only the name and color are restored, so channel edits made
+  /// meanwhile are kept.
+  Future<Result<void>> _patchBusIdentity(
+    int busId, {
+    String? name,
+    String? color,
+    required Future<void> Function() commit,
+  }) {
+    return _runBackendOperation(() async {
+      final original = _mixerState?.buses[busId];
+      if (original == null) {
+        return notifyErrorResult(Exception('Bus not found'));
+      }
+
+      _projectNotifier.upsertBusMixerChannel(
+        busId,
+        original.copyWith(
+          name: name ?? original.name,
+          color: color ?? original.color,
+        ),
+      );
+
+      final result = await AsyncValue.guard(commit);
+      if (result.hasError) {
+        AppLogger.error('MixerNotifier: failed to update bus: ${result.error}');
+        final current = _mixerState?.buses[busId];
+        if (current != null) {
+          _projectNotifier.upsertBusMixerChannel(
+            busId,
+            current.copyWith(name: original.name, color: original.color),
+          );
+        }
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
+  }
+
   Future<Result<Null>> removeBus({required int busId}) {
     return _runBackendOperation(() async {
       final originalMixer = _mixerState;
@@ -760,8 +823,19 @@ extension MixerService on MixerNotifier {
         ..remove(busId);
       final targetNode = mixer_api.UiRoutingNode.bus(busId);
 
+      // Sidechains keyed into effects on this bus disappear with it too.
+      bool feedsRemovedBusEffect(mixer_api.UiRoutingNode node) =>
+          switch (node) {
+            mixer_api.UiRoutingNode_PluginSidechain(
+              field0: plugin_api.UiPluginTarget_BusEffect(busId: final id),
+            ) =>
+              id == busId,
+            _ => false,
+          };
       final newRouting = originalMixer.routing.where((conn) {
-        return conn.source != targetNode && conn.destination != targetNode;
+        return conn.source != targetNode &&
+            conn.destination != targetNode &&
+            !feedsRemovedBusEffect(conn.destination);
       }).toList();
 
       _projectNotifier.updateMixer(
@@ -780,16 +854,22 @@ extension MixerService on MixerNotifier {
         return notifyErrorResult(Exception(result.error.toString()));
       }
 
+      // The backend relinks channels that fed the bus back to master.
+      await syncRoutingConnection();
       return Result.ok(null);
     });
   }
 
-  /// Add or update a routing connection.
+  /// Add or update a routing connection, tapping the source at [tap].
+  ///
+  /// A main output ([isSend] false) replaces the source's previous main
+  /// output, matching the backend, which keeps one main output per channel.
   Future<Result<void>> updateRoutingCall({
     required mixer_api.UiRoutingNode src,
     required mixer_api.UiRoutingNode dest,
     required double sendLvl,
     required bool isSend,
+    mixer_api.UiRoutingTap tap = mixer_api.UiRoutingTap.postFader,
   }) async {
     final originalMixer = _mixerState;
     if (originalMixer == null) {
@@ -802,20 +882,18 @@ extension MixerService on MixerNotifier {
       destination: dest,
       sendLevel: sendLvl,
       isSend: isSend,
+      tap: tap,
     );
 
-    final currentRoutes = List<mixer_api.UiRoutingConnection>.from(
-      originalMixer.routing,
-    );
-    final existingIdx = currentRoutes.indexWhere(
-      (r) => r.source == src && r.destination == dest && r.isSend == isSend,
-    );
-
-    if (existingIdx != -1) {
-      currentRoutes[existingIdx] = newConn;
-    } else {
-      currentRoutes.add(newConn);
-    }
+    bool replaced(mixer_api.UiRoutingConnection r) =>
+        r.source == src &&
+        r.isSend == isSend &&
+        (!isSend || r.destination == dest);
+    final currentRoutes = [
+      for (final route in originalMixer.routing)
+        if (!replaced(route)) route,
+      newConn,
+    ];
 
     _projectNotifier.updateMixer(
       originalMixer.copyWith(routing: currentRoutes),
@@ -833,6 +911,32 @@ extension MixerService on MixerNotifier {
       return notifyErrorResult(Exception(result.error.toString()));
     }
 
+    await syncRoutingConnection();
+    return Result.ok(null);
+  }
+
+  /// Keys [plugin]'s sidechain input from [source] at [sendLevel], or removes
+  /// that sidechain route when [sendLevel] is null.
+  Future<Result<void>> setSidechainSend({
+    required plugin_api.UiPluginTarget plugin,
+    required mixer_api.UiRoutingNode source,
+    required double? sendLevel,
+    mixer_api.UiRoutingTap tap = mixer_api.UiRoutingTap.postFader,
+  }) async {
+    final result = await AsyncValue.guard(() async {
+      await mixer_api.setSidechainSource(
+        ctx: _ctx,
+        plugin: plugin,
+        from: source,
+        sendLevel: sendLevel,
+        tap: tap,
+      );
+    });
+    await syncRoutingConnection();
+    if (result.hasError) {
+      AppLogger.error("Failed to update sidechain: ${result.error}");
+      return notifyErrorResult(Exception(result.error.toString()));
+    }
     return Result.ok(null);
   }
 
@@ -878,6 +982,7 @@ extension MixerService on MixerNotifier {
       return notifyErrorResult(Exception(result.error.toString()));
     }
 
+    await syncRoutingConnection();
     return Result.ok(null);
   }
 }

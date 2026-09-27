@@ -11,10 +11,11 @@ pub use karbeat_core::{
 
 use crate::api::{automation::RemovedAutomationDto, context::DawContext, plugin::UiPluginTarget};
 use karbeat_core::api::mixer_api;
+use karbeat_core::audio::event::PluginTarget;
 use karbeat_core::commands::MixerChannelTarget;
 use karbeat_core::core::project::mixer::{
     BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
-    RoutingConnection, RoutingNode,
+    RoutingConnection, RoutingNode, RoutingTap, SidechainRoute,
 };
 
 // ======================================
@@ -158,6 +159,8 @@ pub struct UiBus {
     pub id: u64,
     pub name: String,
     pub channel: UiMixerChannel,
+    /// Hex color string in `#RRGGBBAA` form.
+    pub color: String,
 }
 
 impl From<&BusMixerChannel> for UiBus {
@@ -166,6 +169,7 @@ impl From<&BusMixerChannel> for UiBus {
             id: value.id.to_u64(),
             name: value.name.clone(),
             channel: (&value.channel).into(),
+            color: value.color.to_string(),
         }
     }
 }
@@ -177,6 +181,7 @@ pub struct UiRoutingConnection {
     pub destination: UiRoutingNode,
     pub send_level: f32,
     pub is_send: bool,
+    pub tap: UiRoutingTap,
 }
 
 impl From<&RoutingConnection> for UiRoutingConnection {
@@ -186,6 +191,7 @@ impl From<&RoutingConnection> for UiRoutingConnection {
             destination: (&value.destination).into(),
             send_level: value.send_level,
             is_send: value.is_send,
+            tap: value.tap.into(),
         }
     }
 }
@@ -197,18 +203,48 @@ impl From<UiRoutingConnection> for RoutingConnection {
             destination: value.destination.into(),
             send_level: value.send_level,
             is_send: value.is_send,
+            tap: value.tap.into(),
         }
     }
 }
 
-/// UI DTO describing a routing node (Track, Bus, Master).
+/// Point in the source channel strip a connection takes its signal from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[frb]
+pub enum UiRoutingTap {
+    /// After effects, fader, and pan.
+    PostFader,
+    /// After effects, before fader and pan.
+    PreFader,
+}
+
+impl From<RoutingTap> for UiRoutingTap {
+    fn from(value: RoutingTap) -> Self {
+        match value {
+            RoutingTap::PostFader => Self::PostFader,
+            RoutingTap::PreFader => Self::PreFader,
+        }
+    }
+}
+
+impl From<UiRoutingTap> for RoutingTap {
+    fn from(value: UiRoutingTap) -> Self {
+        match value {
+            UiRoutingTap::PostFader => Self::PostFader,
+            UiRoutingTap::PreFader => Self::PreFader,
+        }
+    }
+}
+
+/// UI DTO describing a routing node: a track, a bus, master, or a plugin's sidechain input.
 #[derive(Clone, Debug)]
 #[frb]
 pub enum UiRoutingNode {
     Track(u64),
     Bus(u64),
     Master,
-    PluginSidechain, // this actually useless because the UI does not need this
+    /// Sidechain input of the identified plugin.
+    PluginSidechain(UiPluginTarget),
 }
 
 /// A mixer channel that can feed the selected plugin's auxiliary input.
@@ -219,6 +255,7 @@ pub struct UiSidechainSource {
     pub name: String,
     pub enabled: bool,
     pub send_level: f64,
+    pub tap: UiRoutingTap,
 }
 
 impl From<&RoutingNode> for UiRoutingNode {
@@ -227,7 +264,17 @@ impl From<&RoutingNode> for UiRoutingNode {
             RoutingNode::Track(id) => UiRoutingNode::Track(id.to_u64()),
             RoutingNode::Bus(id) => UiRoutingNode::Bus(id.to_u64()),
             RoutingNode::Master => UiRoutingNode::Master,
-            _ => Self::PluginSidechain,
+            RoutingNode::PluginSidechain(route) => {
+                let plugin = match *route {
+                    SidechainRoute::Generator(id) => PluginTarget::Generator(id),
+                    SidechainRoute::TrackEffect(track, effect) => {
+                        PluginTarget::TrackEffect(track, effect)
+                    }
+                    SidechainRoute::BusEffect(bus, effect) => PluginTarget::BusEffect(bus, effect),
+                    SidechainRoute::MasterEffect(effect) => PluginTarget::MasterEffect(effect),
+                };
+                UiRoutingNode::PluginSidechain(UiPluginTarget::from(&plugin))
+            }
         }
     }
 }
@@ -238,7 +285,9 @@ impl From<UiRoutingNode> for RoutingNode {
             UiRoutingNode::Track(id) => RoutingNode::Track(TrackId::from_u64(id)),
             UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from_u64(id)),
             UiRoutingNode::Master => RoutingNode::Master,
-            _ => RoutingNode::Master,
+            UiRoutingNode::PluginSidechain(plugin) => {
+                RoutingNode::PluginSidechain(SidechainRoute::from(PluginTarget::from(plugin)))
+            }
         }
     }
 }
@@ -790,6 +839,12 @@ pub fn rename_bus(ctx: &DawContext, bus_id: u64, new_name: String) -> Result<(),
     mixer_api::rename_bus(ctx, BusId::from_u64(bus_id), &new_name).map_err(|e| e.to_string())
 }
 
+/// Change a bus color to a hex string such as "#RRGGBB" or "#RRGGBBAA".
+pub fn change_bus_color(ctx: &DawContext, bus_id: u64, new_color: String) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
+    mixer_api::change_bus_color(ctx, BusId::from_u64(bus_id), &new_color).map_err(|e| e.to_string())
+}
+
 // ======================================
 // ROUTING APIs
 // ======================================
@@ -811,16 +866,18 @@ pub fn get_channel_destinations(
         send_level: conn.send_level,
         source: UiRoutingNode::from(&source_node),
         is_send: conn.is_send,
+        tap: conn.tap.into(),
     })
 }
 
-/// Set routing: source → destination with send level.
+/// Set routing: source → destination with send level, tapped at `tap`.
 pub fn set_routing(
     ctx: &DawContext,
     source: UiRoutingNode,
     destination: UiRoutingNode,
     send_level: f32,
     is_send: bool,
+    tap: UiRoutingTap,
 ) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     let conn = RoutingConnection {
@@ -828,6 +885,7 @@ pub fn set_routing(
         destination: destination.into(),
         send_level,
         is_send,
+        tap: tap.into(),
     };
 
     mixer_api::set_routing(ctx, conn).map_err(|e| e.to_string())
@@ -880,17 +938,19 @@ pub fn get_sidechain_sources(
             name: source.name,
             enabled: source.send_level.is_some(),
             send_level: source.send_level.unwrap_or(1.0) as f64,
+            tap: source.tap.into(),
         })
         .collect()
 }
 
-/// Add/update a sidechain send when `send_level` is provided, or remove it
-/// when `send_level` is null.
+/// Add/update a sidechain send tapped at `tap` when `send_level` is provided,
+/// or remove it when `send_level` is null.
 pub fn set_sidechain_source(
     ctx: &DawContext,
     plugin: UiPluginTarget,
     from: UiRoutingNode,
     send_level: Option<f64>,
+    tap: UiRoutingTap,
 ) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     mixer_api::set_sidechain_source(
@@ -898,6 +958,7 @@ pub fn set_sidechain_source(
         plugin.into(),
         from.into(),
         send_level.map(|level| level as f32),
+        tap.into(),
     )
     .map_err(|e| e.to_string())
 }

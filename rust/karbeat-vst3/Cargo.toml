@@ -31,3 +31,7 @@ workspace = true
 [[test]]
 name = "vital"
 harness = false
+
+[[test]]
+name = "lsp"
+harness = false

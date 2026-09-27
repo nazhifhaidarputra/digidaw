@@ -443,14 +443,12 @@ mod tests {
             HostInstanceId(1),
         ));
         let (endpoint, retirement) = endpoint.prepare_transfer().unwrap();
-        let config = ProcessingConfig {
-            sample_rate: rate,
-            max_block_size: 65_536,
-            main_input_channels: 2,
-            main_output_channels: 2,
-            sidechain_channels: 0,
-            offline: false,
-        };
+        // The production layout, including its stereo sidechain request.
+        let config = crate::api::external_plugin_api::hosted_processing_config(
+            karbeat_host::PluginKind::Effect,
+            rate,
+        );
+        assert_eq!(config.sidechain_channels, 2);
         let (command, receipt) = HostedPluginInstall::new(
             PluginTarget::MasterEffect(EffectId::from(11)),
             None,

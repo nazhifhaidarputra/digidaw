@@ -2,6 +2,7 @@
 
 use crate::{
     api::{MemoryStream, create_instance, string128_to_string},
+    bus_layout::{self, BusDescription, BusPlan, BusRole},
     context::{ComponentHandler, ParameterExchange},
     module::{Vst3Module, parse_class_id},
     wrapper::{Dsp, ProcessorSlot},
@@ -44,6 +45,94 @@ pub(crate) fn check(operation: &'static str, code: i32) -> Result<(), HostError>
     } else {
         Err(HostError::PluginCall { operation, code })
     }
+}
+
+/// Like [`check`], but also accepts `kNotImplemented` for calls the VST3 specification lets
+/// plugins leave unimplemented, such as `setProcessing`.
+pub(crate) fn check_optional(operation: &'static str, code: i32) -> Result<(), HostError> {
+    if code == kNotImplemented {
+        Ok(())
+    } else {
+        check(operation, code)
+    }
+}
+
+fn describe_buses(
+    component: &ComPtr<IComponent>,
+    processor: &ComPtr<IAudioProcessor>,
+    direction: i32,
+) -> Result<Vec<BusDescription>, HostError> {
+    // SAFETY: Query initialized component bus metadata on its UI thread.
+    let count = unsafe { component.getBusCount(0, direction) };
+    if !(0..=64).contains(&count) {
+        return Err(HostError::Unsupported("invalid audio bus count"));
+    }
+    let mut infos = Vec::new();
+    for index in 0..count {
+        // SAFETY: BusInfo has only scalar/fixed-array fields.
+        let mut info: BusInfo = unsafe { std::mem::zeroed() };
+        // SAFETY: Bus index is in range and output storage is writable.
+        check("component.getBusInfo", unsafe {
+            component.getBusInfo(0, direction, index, &raw mut info)
+        })?;
+        infos.push(info);
+    }
+    let types = infos.iter().map(|info| info.busType).collect::<Vec<_>>();
+    let roles = bus_layout::classify(&types, direction == 0);
+    infos
+        .iter()
+        .zip(roles)
+        .enumerate()
+        .map(|(index, (info, role))| {
+            Ok(BusDescription {
+                role,
+                native: bus_arrangement(processor, direction, index, info)?,
+                default_active: info.flags & BusInfo_::BusFlags_::kDefaultActive != 0,
+            })
+        })
+        .collect()
+}
+
+fn bus_arrangement(
+    processor: &ComPtr<IAudioProcessor>,
+    direction: i32,
+    index: usize,
+    info: &BusInfo,
+) -> Result<u64, HostError> {
+    let mut arrangement = 0;
+    // SAFETY: Bus index comes from the component's reported range and output is writable.
+    let code = unsafe {
+        processor.getBusArrangement(
+            direction,
+            i32::try_from(index).map_err(|_| HostError::InvalidConfiguration)?,
+            &raw mut arrangement,
+        )
+    };
+    Ok(if code == kResultOk {
+        arrangement
+    } else {
+        bus_layout::arrangement_for_count(usize::try_from(info.channelCount).unwrap_or(0))
+    })
+}
+
+fn current_arrangements(
+    component: &ComPtr<IComponent>,
+    processor: &ComPtr<IAudioProcessor>,
+    direction: i32,
+    count: usize,
+) -> Result<Vec<u64>, HostError> {
+    (0..count)
+        .map(|index| {
+            let native_index = i32::try_from(index).map_err(|_| HostError::InvalidConfiguration)?;
+            // SAFETY: BusInfo has only scalar/fixed-array fields.
+            let mut info: BusInfo = unsafe { std::mem::zeroed() };
+            // SAFETY: Bus index is within the count read before negotiation.
+            check("component.getBusInfo", unsafe {
+                component.getBusInfo(0, direction, native_index, &raw mut info)
+            })?;
+            bus_arrangement(processor, direction, index, &info)
+        })
+        .collect()
 }
 
 pub(crate) struct Vst3Instance {
@@ -249,95 +338,32 @@ impl Vst3Instance {
             })?;
             self.active = false;
         }
-        let mut input_layouts = Vec::new();
-        let mut output_layouts = Vec::new();
-        let mut input_channels = Vec::new();
-        let mut output_channels = Vec::new();
-        for direction in 0..2 {
-            // SAFETY: Query initialized component bus metadata on its UI thread.
-            let count = unsafe { component.getBusCount(0, direction) };
-            if !(0..=64).contains(&count) {
-                return Err(HostError::Unsupported("invalid audio bus count"));
-            }
-            let mut seen_main = false;
-            let mut seen_aux = false;
-            for index in 0..count {
-                // SAFETY: BusInfo has only scalar/fixed-array fields.
-                let mut info: BusInfo = unsafe { std::mem::zeroed() };
-                // SAFETY: Bus index is in range and output storage is writable.
-                check("component.getBusInfo", unsafe {
-                    component.getBusInfo(0, direction, index, &raw mut info)
-                })?;
-                let channels = if info.busType == 0 && !seen_main {
-                    seen_main = true;
-                    if direction == 0 {
-                        config.main_input_channels
-                    } else {
-                        config.main_output_channels
-                    }
-                } else if info.busType == 1 && !seen_aux && direction == 0 {
-                    seen_aux = true;
-                    config.sidechain_channels
-                } else {
-                    0
-                };
-                let arrangement = match channels {
-                    0 => 0,
-                    1 => 1 << 19,
-                    2 => 3,
-                    _ => return Err(HostError::InvalidConfiguration),
-                };
-                if direction == 0 {
-                    input_layouts.push(arrangement);
-                    input_channels.push(channels);
-                } else {
-                    output_layouts.push(arrangement);
-                    output_channels.push(channels);
-                }
-            }
-            if direction == 1 && !seen_main {
-                return Err(HostError::Unsupported("plugin has no main audio output"));
-            }
-            if direction == 0
-                && ((!seen_main && config.main_input_channels != 0)
-                    || (!seen_aux && config.sidechain_channels != 0))
-            {
-                return Err(HostError::Unsupported("requested input bus"));
-            }
-        }
+        let inputs = describe_buses(component, processor, 0)?;
+        let outputs = describe_buses(component, processor, 1)?;
+        let (mut input_layouts, mut output_layouts) =
+            bus_layout::requested(&inputs, &outputs, config)?;
         // SAFETY: Arrangement arrays contain one entry per discovered audio bus and stay live through the call.
-        check("processor.setBusArrangements", unsafe {
+        let code = unsafe {
             processor.setBusArrangements(
                 input_layouts.as_mut_ptr(),
                 i32::try_from(input_layouts.len()).unwrap_or(0),
                 output_layouts.as_mut_ptr(),
                 i32::try_from(output_layouts.len()).unwrap_or(0),
             )
-        })?;
-        for (direction, channels) in [(0, &input_channels), (1, &output_channels)] {
-            for (index, &count) in channels.iter().enumerate() {
-                // SAFETY: Negotiated bus index is valid and DSP is inactive.
-                check("component.activateBus(audio)", unsafe {
-                    component.activateBus(
-                        0,
-                        direction,
-                        i32::try_from(index).unwrap_or(0),
-                        u8::from(count != 0),
-                    )
-                })?;
-            }
-            // SAFETY: Query event buses on initialized component.
-            let count = unsafe { component.getBusCount(1, direction) };
-            if !(0..=64).contains(&count) {
-                return Err(HostError::Unsupported("invalid event bus count"));
-            }
-            for index in 0..count {
-                // SAFETY: Activate only the first supported event bus in each direction.
-                check("component.activateBus(events)", unsafe {
-                    component.activateBus(1, direction, index, u8::from(index == 0))
-                })?;
-            }
+        };
+        if code != kResultOk {
+            // kResultFalse means the plugin adapted to its closest supported layout; read back
+            // what it actually chose and map the engine's channels onto it.
+            log::debug!(
+                "{}: setBusArrangements returned {code}; using the plugin's adapted layout",
+                self.descriptor.name
+            );
+            input_layouts = current_arrangements(component, processor, 0, inputs.len())?;
+            output_layouts = current_arrangements(component, processor, 1, outputs.len())?;
         }
+        let (input_plans, output_plans) =
+            bus_layout::resolve(&inputs, &input_layouts, &outputs, &output_layouts, config)?;
+        self.activate_buses(component, &input_plans, &output_plans)?;
         // SAFETY: Processor capability query on its control thread.
         let use_f64 = unsafe { processor.canProcessSampleSize(0) } != kResultOk;
         if use_f64 {
@@ -361,8 +387,8 @@ impl Vst3Instance {
         let dsp = Dsp::new(
             processor.clone(),
             config.clone(),
-            input_channels,
-            output_channels,
+            input_plans,
+            output_plans,
             &ids,
             use_f64,
         );
@@ -375,6 +401,52 @@ impl Vst3Instance {
             mapping,
             next_mapping: 0,
         })
+    }
+
+    fn activate_buses(
+        &self,
+        component: &ComPtr<IComponent>,
+        input_plans: &[BusPlan],
+        output_plans: &[BusPlan],
+    ) -> Result<(), HostError> {
+        for (direction, plans) in [(0, input_plans), (1, output_plans)] {
+            for (index, plan) in plans.iter().enumerate() {
+                // SAFETY: Negotiated bus index is valid and DSP is inactive.
+                let code = unsafe {
+                    component.activateBus(
+                        0,
+                        direction,
+                        i32::try_from(index).unwrap_or(0),
+                        u8::from(plan.active),
+                    )
+                };
+                if direction == 1 && plan.role == BusRole::Main {
+                    check("component.activateBus(audio)", code)?;
+                } else if code != kResultOk {
+                    log::warn!(
+                        "{}: activateBus(audio, {direction}, {index}) returned {code}",
+                        self.descriptor.name
+                    );
+                }
+            }
+            // SAFETY: Query event buses on initialized component.
+            let count = unsafe { component.getBusCount(1, direction) };
+            if !(0..=64).contains(&count) {
+                return Err(HostError::Unsupported("invalid event bus count"));
+            }
+            for index in 0..count {
+                // SAFETY: Activate only the first supported event bus in each direction.
+                let code =
+                    unsafe { component.activateBus(1, direction, index, u8::from(index == 0)) };
+                if code != kResultOk {
+                    log::warn!(
+                        "{}: activateBus(events, {direction}, {index}) returned {code}",
+                        self.descriptor.name
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn advance_prepare(
@@ -454,6 +526,27 @@ impl Vst3Instance {
         let mut job = self.begin_prepare(config)?;
         while !self.advance_prepare(&mut job, MIDI_MAPPING_QUERY_COUNT)? {}
         Ok(())
+    }
+
+    /// Applies the parts of a `restartComponent` request the host handles in place.
+    ///
+    /// A latency change is re-read on this UI owner and published to the audio endpoint, whose
+    /// `has_latency_changed` edge then triggers delay-compensation recalculation.
+    pub fn apply_restart_flags(&self, flags: i32) {
+        if flags & RestartFlags_::kLatencyChanged != 0
+            && self.active
+            && let (Some(processor), Some(slot)) = (&self.processor, &self.slot)
+        {
+            // SAFETY: Latency is queried on the owning UI thread of an active processor.
+            let latency = unsafe { processor.getLatencySamples() };
+            slot.latency.store(latency, Ordering::Release);
+        }
+        if flags & RestartFlags_::kIoChanged != 0 {
+            log::warn!(
+                "{}: plugin changed its audio buses; the new layout applies after the next reconfiguration",
+                self.descriptor.name
+            );
+        }
     }
 
     pub fn suspend(&mut self) -> Result<(), HostError> {

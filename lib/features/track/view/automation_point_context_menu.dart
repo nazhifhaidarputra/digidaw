@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
+import 'package:karbeat/features/track/view/automation_point_value_dialog.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
 String _curveTypeLabel(AutomationCurveTypeDto curveType) => switch (curveType) {
@@ -37,6 +38,10 @@ Future<void> showAutomationPointContextMenu({
 
   editor.openPointContext(laneId: laneId, pointId: pointId);
 
+  // Menu actions run as the menu closes; the value dialog opens after it so
+  // the point stays highlighted while the value is typed.
+  var setValueRequested = false;
+
   await showDawContextMenu(
     context: context,
     title: 'Point: ${lane.label}',
@@ -46,6 +51,11 @@ Future<void> showAutomationPointContextMenu({
       style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
     ),
     actions: [
+      DawContextAction(
+        title: 'Set value',
+        icon: Icons.edit,
+        onTap: () => setValueRequested = true,
+      ),
       DawContextAction(
         title: 'Copy value',
         icon: Icons.copy,
@@ -98,6 +108,21 @@ Future<void> showAutomationPointContextMenu({
       ),
     ],
   );
+
+  if (setValueRequested && context.mounted) {
+    final value = await showAutomationPointValueDialog(
+      context: context,
+      lane: lane,
+      point: point,
+    );
+    if (value != null) {
+      await editor.setPointValue(
+        laneId: laneId,
+        pointId: pointId,
+        normalizedValue: value,
+      );
+    }
+  }
 
   editor.closePointContext(laneId: laneId, pointId: pointId);
 }

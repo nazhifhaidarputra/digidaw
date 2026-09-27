@@ -10,6 +10,10 @@ pub(super) struct RenderWorkspace {
     pub bus_buffers: HashMap<BusId, Vec<f32>>,
     pub bus_temp_buffer: Vec<f32>,
     pub aux_buffers: HashMap<SidechainRoute, Vec<f32>>,
+    /// Channel signal after effects and before fader/pan, for pre-fader connections.
+    pub pre_fader_buffer: Vec<f32>,
+    /// Scratch for delaying one routed connection.
+    pub edge_buffer: Vec<f32>,
 
     pub channel_buffers_in: Vec<Vec<f32>>,
     pub channel_buffers_out: Vec<Vec<f32>>,
@@ -28,6 +32,8 @@ impl RenderWorkspace {
             bus_buffers: HashMap::new(),
             bus_temp_buffer: Vec::with_capacity(interleaved_samples),
             aux_buffers: HashMap::new(),
+            pre_fader_buffer: Vec::with_capacity(interleaved_samples),
+            edge_buffer: Vec::with_capacity(interleaved_samples),
 
             channel_buffers_in: (0..max_plugin_channels)
                 .map(|_| vec![0.0; max_plugin_frames])

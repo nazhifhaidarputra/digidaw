@@ -739,6 +739,30 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  /// Seeks to the ruler position under [localX], snapped to the grid while
+  /// snap-to-grid is on.
+  void _seekFromRuler(double localX) {
+    final scrollX = _rulerController.hasClients ? _rulerController.offset : 0.0;
+    final workspaceState = ref.read(workspaceStateProvider);
+    final ticks = ((localX + scrollX) * workspaceState.horizontalZoomLevel)
+        .round();
+    _seekToTicks(_snapTick(ticks, workspaceState));
+  }
+
+  void _seekToTicks(int ticks) {
+    final pos = ref.read(transportPositionStreamProvider).value;
+    if (pos == null) return;
+    final tempo = pos.tempo;
+    final sampleRate = pos.sampleRate;
+    if (tempo <= 0 || sampleRate <= 0) return;
+    final safeTicks = ticks < 0 ? 0 : ticks;
+    final samples = (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
+    AppLogger.info(
+      "[UI Seek] safeTicks=$safeTicks, tempo=$tempo, sr=$sampleRate -> samples=$samples",
+    );
+    ref.read(transportProvider.notifier).seekTo(samples);
+  }
+
   Widget _buildTimelineArea(BuildContext context) {
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
@@ -766,45 +790,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         Column(
           children: [
             GestureDetector(
-              onTapDown: (details) {
-                double scrollX = _rulerController.hasClients
-                    ? _rulerController.offset
-                    : 0;
-                double absoluteX = details.localPosition.dx + scrollX;
-                final ticks = absoluteX * horizontalZoom;
-
-                final pos = ref.read(transportPositionStreamProvider).value;
-                if (pos == null) return;
-
-                final sr = pos.sampleRate;
-                final tempo = pos.tempo;
-
-                final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
-                AppLogger.info(
-                  "[UI Seek] onTapDown: absoluteX=$absoluteX, ticks=$ticks, tempo=$tempo, sr=$sr -> samples=$samples",
-                );
-                ref.read(transportProvider.notifier).seekTo(samples);
-              },
-              onPanUpdate: (details) {
-                // Throttled by the TransportNotifier's seekTo queue implementation
-                double scrollX = _rulerController.hasClients
-                    ? _rulerController.offset
-                    : 0;
-                double absoluteX = details.localPosition.dx + scrollX;
-                final ticks = absoluteX * horizontalZoom;
-
-                final pos = ref.read(transportPositionStreamProvider).value;
-                if (pos == null) return;
-
-                final sr = pos.sampleRate;
-                final tempo = pos.tempo;
-
-                final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
-                AppLogger.info(
-                  "[UI Seek] onPanUpdate: absoluteX=$absoluteX, ticks=$ticks, tempo=$tempo, sr=$sr -> samples=$samples",
-                );
-                ref.read(transportProvider.notifier).seekTo(samples);
-              },
+              onTapDown: (details) => _seekFromRuler(details.localPosition.dx),
+              // Throttled by the TransportNotifier's seekTo queue implementation
+              onPanUpdate: (details) =>
+                  _seekFromRuler(details.localPosition.dx),
               child: Container(
                 height: 30,
                 color: Theme.of(context).colorScheme.surfaceContainer,
@@ -1034,20 +1023,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               scrollController: _trackContentController,
               zoomLevel: horizontalZoom,
               sampleSelector: (pos) => pos.ticks,
-              onSeek: (int newTicks) {
-                final pos = ref.read(transportPositionStreamProvider).value;
-                if (pos == null) return;
-                final tempo = pos.tempo;
-                final sampleRate = pos.sampleRate;
-                if (tempo <= 0 || sampleRate <= 0) return;
-                final safeTicks = newTicks < 0 ? 0 : newTicks;
-                final samples =
-                    (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
-                AppLogger.info(
-                  "[UI Seek] onSeek: safeTicks=$safeTicks, tempo=$tempo, sr=$sampleRate -> samples=$samples",
-                );
-                ref.read(transportProvider.notifier).seekTo(samples);
-              },
+              snapPosition: (ticks) => _snapTick(ticks, workspaceState),
+              onSeek: _seekToTicks,
             ),
           ),
         ),
@@ -1316,24 +1293,37 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
-                final trackColor = Theme.of(context).colorScheme.secondary;
+                final trackColor = bus.color.fromRGBorRGBAtoColor();
 
                 if (lanes.isEmpty) return const SizedBox.shrink();
 
                 return Column(
                   children: [
                     // Bus Title Header
-                    Container(
-                      height: 30,
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.only(left: 10),
-                      color: Theme.of(context).colorScheme.surfaceContainer,
-                      child: Text(
-                        bus.name,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                    ContextMenuWrapper(
+                      title: 'Bus $busId',
+                      header: Column(children: [Text(bus.name)]),
+                      actions: busIdentityActions(
+                        context: context,
+                        ref: ref,
+                        busId: busId,
+                        name: bus.name,
+                        color: trackColor,
+                      ),
+                      child: Container(
+                        height: 30,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.only(left: 10),
+                        color: trackColor,
+                        child: Text(
+                          bus.name,
+                          style: TextStyle(
+                            color: trackColor.computeLuminance() > 0.5
+                                ? Colors.black
+                                : Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -1382,6 +1372,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           itemCount: busIds.length,
           itemBuilder: (context, index) {
             final busId = busIds[index];
+            final trackColor = buses[busId]!.color.fromRGBorRGBAtoColor();
 
             return Consumer(
               builder: (context, ref, _) {
@@ -1389,7 +1380,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
-                final trackColor = Theme.of(context).colorScheme.secondary;
 
                 if (lanes.isEmpty) return const SizedBox.shrink();
 
@@ -1450,7 +1440,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   case 'header':
                     return _buildHeaderArea();
                   case 'timeline':
-                    return _buildTimelineArea(context);
+                    // Areas paint in reverse order, so without a clip the
+                    // playhead and cut line overflow onto the browser panel.
+                    return ClipRect(child: _buildTimelineArea(context));
                   case 'browser':
                     return SampleBrowserPanel(
                       scrollController: _browserPanelController,

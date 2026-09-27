@@ -1,12 +1,10 @@
-import 'dart:async';
-
-import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/color.dart';
+import 'package:karbeat/core/widgets/color_picker_dialog.dart';
 // import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/math.dart';
@@ -49,82 +47,6 @@ class TrackHeader extends ConsumerWidget {
       case UiTrackType.automation:
         return Icons.show_chart;
     }
-  }
-
-  Future<Color?> _showColorPickerDialog(
-    BuildContext context,
-    Color currentColor,
-  ) {
-    var selectedColor = currentColor;
-
-    return showDialog<Color>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text("Select Track Color"),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: ColorPicker(
-                  color: selectedColor,
-                  onColorChanged: (color) {
-                    setDialogState(() => selectedColor = color);
-                  },
-                  pickersEnabled: const {
-                    ColorPickerType.both: true,
-                    ColorPickerType.primary: false,
-                    ColorPickerType.accent: false,
-                    ColorPickerType.bw: true,
-                    ColorPickerType.custom: false,
-                    ColorPickerType.customSecondary: false,
-                    ColorPickerType.wheel: true,
-                  },
-                  enableShadesSelection: true,
-                  enableOpacity: true,
-                  showMaterialName: true,
-                  showColorName: true,
-                  showColorCode: true,
-                  showEditIconButton: true,
-                  colorCodeHasColor: true,
-                  wheelDiameter: 220,
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  hasBorder: true,
-                  heading: Text(
-                    'Choose a color',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  subheading: Text(
-                    'Choose a shade',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  wheelSubheading: Text(
-                    'Fine tune',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  opacitySubheading: Text(
-                    'Opacity',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text("Cancel"),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(selectedColor),
-                child: const Text("Select"),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   @override
@@ -290,7 +212,11 @@ class TrackHeader extends ConsumerWidget {
           onTap: () {
             final currentColor = track.color.fromRGBorRGBAtoColor();
 
-            _showColorPickerDialog(context, currentColor).then((selectedColor) {
+            showColorPickerDialog(
+              context,
+              currentColor,
+              title: "Select Track Color",
+            ).then((selectedColor) {
               if (selectedColor != null &&
                   selectedColor.toARGB32() != currentColor.toARGB32()) {
                 AppLogger.info(

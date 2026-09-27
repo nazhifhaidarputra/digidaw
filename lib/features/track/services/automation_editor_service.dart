@@ -82,6 +82,25 @@ class AutomationEditorNotifier extends Notifier<AutomationLaneEditorState> {
         );
   }
 
+  /// Sets the point to an exact normalized value, clamped to 0..1.
+  Future<void> setPointValue({
+    required int laneId,
+    required int pointId,
+    required double normalizedValue,
+  }) async {
+    final point = _findPoint(laneId: laneId, pointId: pointId);
+    final clamped = normalizedValue.clamp(0.0, 1.0);
+    if (point == null || point.value == clamped) return;
+
+    await ref
+        .read(automationProvider.notifier)
+        .updatePoint(
+          automationLaneId: laneId,
+          pointId: pointId,
+          value: clamped,
+        );
+  }
+
   Future<void> deletePoint({required int laneId, required int pointId}) async {
     clearHoveredPoint(laneId: laneId, pointId: pointId);
     closePointContext(laneId: laneId, pointId: pointId);

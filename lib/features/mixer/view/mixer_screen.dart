@@ -5,11 +5,18 @@ import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/widgets/channel_toggle_button.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
+import 'package:karbeat/features/mixer/view/bus_identity_actions.dart';
+import 'package:karbeat/features/mixer/services/routing_labels.dart';
+import 'package:karbeat/features/mixer/view/channel_output_chip.dart';
+import 'package:karbeat/features/mixer/view/routing_dialog.dart';
+import 'package:karbeat/features/mixer/view/sidechain_input_dialog.dart';
+import 'package:karbeat/features/mixer/view/sidechain_target_picker.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
 import 'package:karbeat/features/track/view/plugin_automation_parameter_dialog.dart';
@@ -19,7 +26,6 @@ import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/core/utils/logger.dart';
-import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/project.dart' show DawContext;
 import 'package:multi_split_view/multi_split_view.dart';
 
@@ -93,14 +99,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         final sortedTrackIds = mixerState.channels.keys.toList()..sort();
         for (final trackId in sortedTrackIds) {
           final channel = mixerState.channels[trackId]!;
-          final trackName = tracks[trackId]?.name ?? 'Track $trackId';
+          final track = tracks[trackId];
           channelEntries.add(
             _ChannelEntry(
               id: trackId,
-              name: trackName,
+              name: track?.name ?? 'Track $trackId',
               channel: channel,
               magnitude: telemetry.trackMagnitudes[trackId] ?? 0.0,
               isMaster: false,
+              color: track?.color.fromRGBorRGBAtoColor(),
             ),
           );
         }
@@ -135,16 +142,16 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 child: ContextMenuWrapper(
                   title: 'Track ${entry.id}',
                   header: Column(children: [Text(entry.name)]),
-                  actions: [
-                    DawContextAction(
-                      title: 'Route to node...',
-                      onTap: () {
-                        _showRoutingDialog(context, entry);
-                      },
-                    ),
-                  ],
+                  actions: _routingActions(context, entry),
                   child: _ChannelStrip(
                     entry: entry,
+                    footer: ChannelOutputChip(
+                      source: _nodeOf(entry),
+                      onTap: () => showRoutingDialog(
+                        context: context,
+                        source: _nodeOf(entry),
+                      ),
+                    ),
                     onVolumeChanged: (value) {
                       ref
                           .read(mixerStateProvider.notifier)
@@ -241,6 +248,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               magnitude: telemetry.busMagnitudes[bus.id] ?? 0.0,
               isMaster: false,
               isBus: true,
+              color: bus.color.fromRGBorRGBAtoColor(),
             ),
           );
         }
@@ -301,13 +309,14 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   title: 'Bus ${entry.id}',
                   header: Column(children: [Text(entry.name)]),
                   actions: [
-                    DawContextAction(
-                      title: 'Route to node...',
-                      icon: Icons.account_tree,
-                      onTap: () {
-                        _showRoutingDialog(context, entry);
-                      },
+                    ...busIdentityActions(
+                      context: context,
+                      ref: ref,
+                      busId: entry.id,
+                      name: entry.name,
+                      color: entry.color ?? colors.primary,
                     ),
+                    ..._routingActions(context, entry),
                     DawContextAction(
                       title: 'Delete Bus',
                       icon: Icons.delete,
@@ -321,6 +330,13 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   ],
                   child: _ChannelStrip(
                     entry: entry,
+                    footer: ChannelOutputChip(
+                      source: _nodeOf(entry),
+                      onTap: () => showRoutingDialog(
+                        context: context,
+                        source: _nodeOf(entry),
+                      ),
+                    ),
                     onVolumeChanged: (value) {
                       ref
                           .read(mixerStateProvider.notifier)
@@ -395,16 +411,104 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     );
   }
 
-  void _showRoutingDialog(BuildContext context, _ChannelEntry entry) {
-    final sourceNode = entry.isBus
-        ? mixer_api.UiRoutingNode.bus(entry.id)
-        : mixer_api.UiRoutingNode.track(entry.id);
+  _ChannelEntry _masterEntry(UiMixerState mixerState, double magnitude) =>
+      _ChannelEntry(
+        id: -1,
+        name: 'Master',
+        channel: mixerState.masterBus,
+        magnitude: magnitude,
+        isMaster: true,
+      );
 
-    showDialog(
+  mixer_api.UiRoutingNode _nodeOf(_ChannelEntry entry) => entry.isMaster
+      ? const mixer_api.UiRoutingNode.master()
+      : entry.isBus
+      ? mixer_api.UiRoutingNode.bus(entry.id)
+      : mixer_api.UiRoutingNode.track(entry.id);
+
+  /// The selected track or bus, which can key plugins on other channels.
+  mixer_api.UiRoutingNode? get _selectedSource {
+    final id = _selectedChannelId;
+    if (id == null || (id == -1 && !_isSelectedBus)) return null;
+    return _isSelectedBus
+        ? mixer_api.UiRoutingNode.bus(id)
+        : mixer_api.UiRoutingNode.track(id);
+  }
+
+  Future<void> _keySidechain(
+    BuildContext context, {
+    required mixer_api.UiRoutingNode source,
+    mixer_api.UiRoutingNode? onlyChannel,
+  }) async {
+    final plugin = await showSidechainTargetPicker(
       context: context,
-      builder: (ctx) =>
-          _RoutingDialog(sourceNode: sourceNode, sourceName: entry.name),
+      source: source,
+      onlyChannel: onlyChannel,
     );
+    if (plugin == null) return;
+    await ref
+        .read(mixerStateProvider.notifier)
+        .setSidechainSend(plugin: plugin, source: source, sendLevel: 1.0);
+  }
+
+  /// Routing actions for a strip's context menu. The FL-style "sidechain the
+  /// selected channel to this one" entry appears when another channel is
+  /// selected.
+  List<DawContextAction> _routingActions(
+    BuildContext context,
+    _ChannelEntry entry,
+  ) {
+    final store = ref.read(projectProvider).value;
+    if (store == null) return [];
+    final labels = RoutingLabels(mixer: store.mixer, tracks: store.tracks);
+    final node = _nodeOf(entry);
+    final output = store.mixer.routing
+        .where((route) => route.source == node && !route.isSend)
+        .firstOrNull;
+    final selected = _selectedSource;
+    final mixer = ref.read(mixerStateProvider.notifier);
+    return [
+      if (!entry.isMaster) ...[
+        DawContextAction(
+          title: 'Routing…',
+          icon: Icons.account_tree,
+          onTap: () => showRoutingDialog(context: context, source: node),
+        ),
+        if (output?.destination == const mixer_api.UiRoutingNode.master())
+          DawContextAction(
+            title: 'Unlink from master',
+            icon: Icons.link_off,
+            onTap: () => mixer.removeRouting(
+              source: node,
+              destination: const mixer_api.UiRoutingNode.master(),
+              isSend: false,
+            ),
+          )
+        else
+          DawContextAction(
+            title: 'Route to master',
+            icon: Icons.link,
+            onTap: () => mixer.updateRoutingCall(
+              src: node,
+              dest: const mixer_api.UiRoutingNode.master(),
+              sendLvl: 1.0,
+              isSend: false,
+            ),
+          ),
+        DawContextAction(
+          title: 'Sidechain this channel into…',
+          icon: Icons.alt_route,
+          onTap: () => _keySidechain(context, source: node),
+        ),
+      ],
+      if (selected != null && selected != node)
+        DawContextAction(
+          title: 'Sidechain "${labels.channelName(selected)}" to this channel…',
+          icon: Icons.call_merge,
+          onTap: () =>
+              _keySidechain(context, source: selected, onlyChannel: node),
+        ),
+    ];
   }
 
   @override
@@ -443,77 +547,83 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
                     // === Master Channel (fixed) ===
                     Padding(
+                      key: _stripKeys.putIfAbsent('master', () => GlobalKey()),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 4,
                         vertical: 12,
                       ),
-                      child: _ChannelStrip(
-                        entry: _ChannelEntry(
-                          id: -1,
-                          name: 'Master',
-                          channel: mixerState.masterBus,
-                          magnitude: telemetry.masterMagnitude,
-                          isMaster: true,
+                      child: ContextMenuWrapper(
+                        title: 'Master',
+                        actions: _routingActions(
+                          context,
+                          _masterEntry(mixerState, telemetry.masterMagnitude),
                         ),
-                        onVolumeChanged: (value) {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(
-                                param: UiMixerChannelParams.volume(value),
-                              );
-                        },
-                        onVolumeChangeStart: () {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .markParamTouched(4294967295, 'volume');
-                        },
-                        onVolumeChangeEnd: () {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .markParamReleased(4294967295, 'volume');
-                        },
-                        onPanChanged: (value) {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(
-                                param: UiMixerChannelParams.pan(value),
-                              );
-                        },
-                        onPanChangeStart: () {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .markParamTouched(4294967295, 'pan');
-                        },
-                        onPanChangeEnd: () {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .markParamReleased(4294967295, 'pan');
-                        },
-                        onMuteToggled: () {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(
-                                param: UiMixerChannelParams.mute(
-                                  !mixerState.masterBus.mute,
-                                ),
-                              );
-                        },
-                        onSoloToggled: () {
-                          ref
-                              .read(mixerStateProvider.notifier)
-                              .setMasterBusParam(
-                                param: UiMixerChannelParams.solo(
-                                  !mixerState.masterBus.solo,
-                                ),
-                              );
-                        },
-                        isSelected: _selectedChannelId == -1 && !_isSelectedBus,
-                        onTap: () {
-                          setState(() {
-                            _selectedChannelId = -1;
-                            _isSelectedBus = false;
-                          });
-                        },
+                        child: _ChannelStrip(
+                          entry: _masterEntry(
+                            mixerState,
+                            telemetry.masterMagnitude,
+                          ),
+                          onVolumeChanged: (value) {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .setMasterBusParam(
+                                  param: UiMixerChannelParams.volume(value),
+                                );
+                          },
+                          onVolumeChangeStart: () {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .markParamTouched(4294967295, 'volume');
+                          },
+                          onVolumeChangeEnd: () {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .markParamReleased(4294967295, 'volume');
+                          },
+                          onPanChanged: (value) {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .setMasterBusParam(
+                                  param: UiMixerChannelParams.pan(value),
+                                );
+                          },
+                          onPanChangeStart: () {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .markParamTouched(4294967295, 'pan');
+                          },
+                          onPanChangeEnd: () {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .markParamReleased(4294967295, 'pan');
+                          },
+                          onMuteToggled: () {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .setMasterBusParam(
+                                  param: UiMixerChannelParams.mute(
+                                    !mixerState.masterBus.mute,
+                                  ),
+                                );
+                          },
+                          onSoloToggled: () {
+                            ref
+                                .read(mixerStateProvider.notifier)
+                                .setMasterBusParam(
+                                  param: UiMixerChannelParams.solo(
+                                    !mixerState.masterBus.solo,
+                                  ),
+                                );
+                          },
+                          isSelected:
+                              _selectedChannelId == -1 && !_isSelectedBus,
+                          onTap: () {
+                            setState(() {
+                              _selectedChannelId = -1;
+                              _isSelectedBus = false;
+                            });
+                          },
+                        ),
                       ),
                     ),
 
@@ -829,6 +939,16 @@ class _EffectRackItem extends ConsumerWidget {
           onTap: () => _openPlugin(context, ref),
         ),
         DawContextAction(
+          title: 'Sidechain input…',
+          icon: Icons.alt_route,
+          onTap: () => showSidechainInputDialog(
+            context: context,
+            target: pluginTarget,
+            registryId: effect.registryId,
+            pluginName: effect.name,
+          ),
+        ),
+        DawContextAction(
           title: 'Add automation on...',
           icon: Icons.timeline,
           onTap: () => showPluginAutomationParameterDialog(
@@ -927,6 +1047,9 @@ class _ChannelEntry {
   final bool isMaster;
   final bool isBus;
 
+  /// Color of the track or bus behind this strip; the theme accent when null.
+  final Color? color;
+
   const _ChannelEntry({
     required this.id,
     required this.name,
@@ -934,6 +1057,7 @@ class _ChannelEntry {
     required this.magnitude,
     required this.isMaster,
     this.isBus = false,
+    this.color,
   });
 }
 
@@ -954,8 +1078,12 @@ class _ChannelStrip extends ConsumerStatefulWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
+  /// Shown under the mute and solo buttons, such as the output indicator.
+  final Widget? footer;
+
   const _ChannelStrip({
     required this.entry,
+    this.footer,
     required this.onVolumeChanged,
     this.onVolumeChangeStart,
     this.onVolumeChangeEnd,
@@ -1087,7 +1215,9 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final entry = widget.entry;
-    final accentColor = entry.isMaster ? colors.tertiary : colors.primary;
+    final accentColor = entry.isMaster
+        ? colors.tertiary
+        : entry.color ?? colors.primary;
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -1218,6 +1348,11 @@ class _ChannelStripState extends ConsumerState<_ChannelStrip> {
                 ),
               ],
             ),
+
+            if (widget.footer case final footer?) ...[
+              const SizedBox(height: 6),
+              footer,
+            ],
 
             const SizedBox(height: 8),
           ],
@@ -1419,6 +1554,7 @@ class _VolumeFader extends ConsumerWidget {
                   ),
                 ),
                 child: DigidawParameterSlider(
+                  color: accentColor,
                   slider: Slider(
                     value: value.clamp(visualMin, spec.max),
                     min: visualMin,
@@ -1467,12 +1603,19 @@ class _RoutingPainter extends CustomPainter {
     required this.plugColor,
   });
 
-  String? _getNodeKeyString(mixer_api.UiRoutingNode node) {
-    if (node is mixer_api.UiRoutingNode_Track) return 'track_${node.field0}';
-    if (node is mixer_api.UiRoutingNode_Bus) return 'bus_${node.field0}';
-    if (node is mixer_api.UiRoutingNode_Master) return 'master';
-    return null;
-  }
+  /// Strip key for [node]. A sidechain input is drawn to the channel that
+  /// owns the keyed plugin; generator sidechains have no strip of their own.
+  String? _getNodeKeyString(mixer_api.UiRoutingNode node) => switch (node) {
+    mixer_api.UiRoutingNode_Track(:final field0) => 'track_$field0',
+    mixer_api.UiRoutingNode_Bus(:final field0) => 'bus_$field0',
+    mixer_api.UiRoutingNode_Master() => 'master',
+    mixer_api.UiRoutingNode_PluginSidechain(:final field0) => switch (field0) {
+      plugin_api.UiPluginTarget_TrackEffect(:final trackId) => 'track_$trackId',
+      plugin_api.UiPluginTarget_BusEffect(:final busId) => 'bus_$busId',
+      plugin_api.UiPluginTarget_MasterEffect() => 'master',
+      plugin_api.UiPluginTarget_Generator() => null,
+    },
+  };
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1592,316 +1735,4 @@ class _RoutingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RoutingPainter oldDelegate) => true;
-}
-
-// Place this at the bottom of your file with _RoutingPainter
-class _RoutingDialog extends ConsumerStatefulWidget {
-  final mixer_api.UiRoutingNode sourceNode;
-  final String sourceName;
-
-  const _RoutingDialog({required this.sourceNode, required this.sourceName});
-
-  @override
-  _RoutingDialogState createState() => _RoutingDialogState();
-}
-
-class _RoutingDialogState extends ConsumerState<_RoutingDialog> {
-  late List<mixer_api.UiRoutingConnection> currentRoutes;
-  mixer_api.UiRoutingConnection? mainRoute;
-  List<mixer_api.UiRoutingConnection> sends = [];
-
-  // Local state for smooth slider dragging before pushing to backend
-  final Map<String, double> _localSendLevels = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _refreshData();
-  }
-
-  void _refreshData() {
-    currentRoutes = ref
-        .read(mixerStateProvider.notifier)
-        .getMixerChannelDest(source: widget.sourceNode);
-    mainRoute = currentRoutes.where((r) => !r.isSend).firstOrNull;
-    sends = currentRoutes.where((r) => r.isSend).toList();
-
-    for (final s in sends) {
-      final key = _getNodeKeyStr(s.destination);
-      if (key != null) {
-        _localSendLevels[key] = s.sendLevel;
-      }
-    }
-  }
-
-  String? _getNodeKeyStr(mixer_api.UiRoutingNode node) {
-    if (node is mixer_api.UiRoutingNode_Track) return 'track_${node.field0}';
-    if (node is mixer_api.UiRoutingNode_Bus) return 'bus_${node.field0}';
-    if (node is mixer_api.UiRoutingNode_Master) return 'master';
-    return null;
-  }
-
-  bool _isSameNode(mixer_api.UiRoutingNode a, mixer_api.UiRoutingNode b) {
-    return _getNodeKeyStr(a) == _getNodeKeyStr(b);
-  }
-
-  /// Result errors are emitted by [MixerNotifier] through notificationProvider.
-  void _handleRoutingResult(Result<void> result) {
-    // Awaiting the result still sequences optimistic routing updates. The
-    // global notification observer owns all user-facing failure feedback.
-  }
-
-  Future<void> _setMainOutput(mixer_api.UiRoutingNode newDest) async {
-    final result = await ref
-        .read(mixerStateProvider.notifier)
-        .updateRoutingCall(
-          src: widget.sourceNode,
-          dest: newDest,
-          sendLvl: 1.0,
-          isSend: false,
-        );
-
-    _handleRoutingResult(result);
-
-    if (mounted) {
-      setState(() {
-        _refreshData();
-      });
-    }
-  }
-
-  Future<void> _toggleSend(mixer_api.UiRoutingNode dest, bool enable) async {
-    if (enable) {
-      final result = await ref
-          .read(mixerStateProvider.notifier)
-          .updateRoutingCall(
-            src: widget.sourceNode,
-            dest: dest,
-            sendLvl: 0.5, // Default start level (50%)
-            isSend: true,
-          );
-      _handleRoutingResult(result);
-    } else {
-      // We still use removeRouting here because updateRoutingCall only UPSERTS
-      final result = await ref
-          .read(mixerStateProvider.notifier)
-          .removeRouting(
-            source: widget.sourceNode,
-            destination: dest,
-            isSend: true,
-          );
-      _handleRoutingResult(result);
-    }
-
-    if (mounted) {
-      setState(() {
-        _refreshData();
-      });
-    }
-  }
-
-  Future<void> _updateSendLevel(
-    mixer_api.UiRoutingNode dest,
-    double level,
-  ) async {
-    final result = await ref
-        .read(mixerStateProvider.notifier)
-        .updateRoutingCall(
-          src: widget.sourceNode,
-          dest: dest,
-          sendLvl: level,
-          isSend: true,
-        );
-
-    _handleRoutingResult(result);
-
-    if (mounted) {
-      setState(() {
-        _refreshData();
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final mixerState = ref.watch(projectProvider).value?.mixer;
-    if (mixerState == null) return const SizedBox.shrink();
-    // 1. Gather Valid Main Outputs (Master + All Buses except self)
-    final List<MapEntry<String, mixer_api.UiRoutingNode>> availableMainOutputs =
-        [const MapEntry("Master", mixer_api.UiRoutingNode.master())];
-    for (final bus in mixerState.buses.values) {
-      final node = mixer_api.UiRoutingNode.bus(bus.id);
-      if (!_isSameNode(widget.sourceNode, node)) {
-        availableMainOutputs.add(MapEntry(bus.name, node));
-      }
-    }
-
-    // 2. Gather Valid Sends (All Buses except self AND except current Main Output)
-    final List<MapEntry<String, mixer_api.UiRoutingNode>> availableSends = [];
-    for (final bus in mixerState.buses.values) {
-      final node = mixer_api.UiRoutingNode.bus(bus.id);
-      if (!_isSameNode(widget.sourceNode, node) &&
-          (mainRoute == null || !_isSameNode(mainRoute!.destination, node))) {
-        availableSends.add(MapEntry(bus.name, node));
-      }
-    }
-
-    return AlertDialog(
-      title: Text("Routing: ${widget.sourceName}"),
-      titleTextStyle: TextStyle(
-        color: colors.onSurface,
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-      ),
-      content: SizedBox(
-        width: 400,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- MAIN OUTPUT ---
-            Text(
-              "MAIN OUTPUT (Pre-Fader)",
-              style: TextStyle(
-                color: colors.onSurfaceVariant,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: mainRoute != null
-                      ? _getNodeKeyStr(mainRoute!.destination)
-                      : null,
-                  isExpanded: true,
-                  dropdownColor: colors.surfaceContainerHigh,
-                  style: TextStyle(color: colors.primary),
-                  items: availableMainOutputs.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: _getNodeKeyStr(entry.value),
-                      child: Text(entry.key),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val == null) return;
-                    final node = availableMainOutputs
-                        .firstWhere((e) => _getNodeKeyStr(e.value) == val)
-                        .value;
-                    _setMainOutput(node);
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // --- SENDS ---
-            Text(
-              "SENDS (Post-Fader)",
-              style: TextStyle(
-                color: colors.onSurfaceVariant,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (availableSends.isEmpty)
-              Text(
-                "No available buses to send to.",
-                style: TextStyle(
-                  color: colors.outline,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ...availableSends.map((entry) {
-              final destKey = _getNodeKeyStr(entry.value)!;
-              final existingSend = sends
-                  .where((s) => _isSameNode(s.destination, entry.value))
-                  .firstOrNull;
-              final isEnabled = existingSend != null;
-              final level = _localSendLevels[destKey] ?? 0.0;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: Row(
-                  children: [
-                    Switch(
-                      value: isEnabled,
-                      activeThumbColor: colors.primary,
-                      onChanged: (v) => _toggleSend(entry.value, v),
-                    ),
-                    SizedBox(
-                      width: 80,
-                      child: Text(
-                        entry.key,
-                        style: TextStyle(
-                          color: isEnabled
-                              ? colors.onSurface
-                              : colors.onSurfaceVariant,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      child: SliderTheme(
-                        data: SliderThemeData(
-                          activeTrackColor: colors.primary,
-                          inactiveTrackColor: colors.surfaceContainerHighest,
-                          thumbColor: colors.primary,
-                          trackHeight: 2,
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 6,
-                          ),
-                        ),
-                        child: Slider(
-                          value: level.clamp(0.0, 1.0),
-                          onChanged: isEnabled
-                              ? (v) {
-                                  setState(() {
-                                    _localSendLevels[destKey] = v;
-                                  });
-                                }
-                              : null,
-                          onChangeEnd: isEnabled
-                              ? (v) => _updateSendLevel(entry.value, v)
-                              : null,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 40,
-                      child: Text(
-                        "${(level * 100).toInt()}%",
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: isEnabled
-                              ? colors.onSurfaceVariant
-                              : colors.outline,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Close"),
-        ),
-      ],
-    );
-  }
 }

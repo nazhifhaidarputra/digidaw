@@ -623,3 +623,260 @@ fn removing_an_effect_drops_its_automation_in_the_same_command() {
     assert!(lanes.contains_key(&volume_lane.id));
     assert!(engine.plugin_state.master_effects.is_empty());
 }
+
+/// Effect that replaces its main input with a constant tone, ignoring its sidechain.
+struct ToneEffect;
+
+/// Effect that passes its main input through and accumulates the energy of its sidechain input.
+struct AuxProbe(std::sync::Arc<std::sync::Mutex<f32>>);
+
+macro_rules! test_effect_boilerplate {
+    () => {
+        fn name(&self) -> &str {
+            "Routing test effect"
+        }
+        fn category(&self) -> karbeat_plugin_api::types::PluginCategory {
+            karbeat_plugin_api::types::PluginCategory::Effect
+        }
+        fn prepare(&mut self, _: f32, _: usize) {}
+        fn reset(&mut self) {}
+        fn set_io_layout(
+            &mut self,
+            _: &[karbeat_plugin_api::types::BusConfig],
+            _: &[karbeat_plugin_api::types::BusConfig],
+        ) {
+        }
+        fn set_parameter(&mut self, _: u32, _: f32) {}
+        fn get_parameter(&self, _: u32) -> f32 {
+            0.0
+        }
+        fn apply_automation(&mut self, _: u32, _: f32) {}
+        fn clear_automation(&mut self, _: u32) {}
+        fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
+            karbeat_plugin_api::traits::HashMap::new()
+        }
+        fn static_parameter_specs() -> Vec<karbeat_plugin_api::prelude::ParameterSpec> {
+            Vec::new()
+        }
+        fn get_parameter_specs(&self) -> Vec<karbeat_plugin_api::prelude::ParameterSpec> {
+            Vec::new()
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    };
+}
+
+impl karbeat_plugin_api::traits::AudioPlugin for ToneEffect {
+    test_effect_boilerplate!();
+    fn process(
+        &mut self,
+        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
+        _: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        for output in buffers.main_outputs.iter_mut() {
+            for channel in output.channel_data.iter_mut() {
+                channel.fill(0.5);
+            }
+        }
+    }
+}
+
+impl karbeat_plugin_api::traits::AudioPlugin for AuxProbe {
+    test_effect_boilerplate!();
+    fn process(
+        &mut self,
+        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
+        _: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        for (output, input) in buffers
+            .main_outputs
+            .iter_mut()
+            .zip(buffers.main_inputs.iter())
+        {
+            for (destination, source) in output
+                .channel_data
+                .iter_mut()
+                .zip(input.channel_data.iter())
+            {
+                destination.copy_from_slice(source);
+            }
+        }
+        let energy: f32 = buffers
+            .aux_inputs
+            .iter()
+            .flat_map(|bus| bus.channel_data.iter())
+            .flat_map(|channel| channel.iter())
+            .map(|sample| sample.abs())
+            .sum();
+        *self.0.lock().expect("probe lock") += energy;
+    }
+}
+
+/// Renders a tone track through a bus into the sidechain of a probe effect on a silent track,
+/// with the source fader pulled down, and returns the sidechain energy the probe received.
+fn render_bus_keyed_sidechain(tap: crate::core::project::RoutingTap) -> f32 {
+    use crate::core::project::{RoutingConnection, RoutingNode, SidechainRoute};
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    // The keyed track is created first, so without sidechain-aware ordering it would render
+    // before the bus that feeds its sidechain and receive silence.
+    let mut app_state = ApplicationState::default();
+    let keyed = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Keyed", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
+    });
+    let source = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Source", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    let bus = crate::shared::BusId::from(1);
+    engine.process_command(AudioCommand::AddBus {
+        bus_id: bus,
+        name: "Key".into(),
+    });
+    let tone = crate::shared::EffectId::from(1);
+    let probe = crate::shared::EffectId::from(2);
+    let energy = std::sync::Arc::new(std::sync::Mutex::new(0.0));
+    engine.process_command(AudioCommand::InstallEffect {
+        target: EffectTarget::Track(source),
+        effect_id: tone,
+        registry_id: 0,
+        plugin: Box::new(ToneEffect),
+        telemetry: None,
+    });
+    engine.process_command(AudioCommand::InstallEffect {
+        target: EffectTarget::Track(keyed),
+        effect_id: probe,
+        registry_id: 0,
+        plugin: Box::new(AuxProbe(energy.clone())),
+        telemetry: None,
+    });
+    let mut key =
+        RoutingConnection::new_send(RoutingNode::Track(source), RoutingNode::Bus(bus), 1.0);
+    key.tap = tap;
+    engine.process_command(AudioCommand::UpdateRouting {
+        routing: vec![
+            key,
+            RoutingConnection::new_send(
+                RoutingNode::Bus(bus),
+                RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(keyed, probe)),
+                1.0,
+            ),
+            RoutingConnection::new(RoutingNode::Track(keyed), RoutingNode::Master),
+        ]
+        .into_boxed_slice(),
+    });
+    let mut source_channel = crate::audio::engine::AudioMixerChannelValues::default();
+    source_channel.volume.set_base(-100.0);
+    engine
+        .mixer_state
+        .track_channels
+        .insert(source, source_channel);
+    // The tone effect has no clips to render, so a ringing tail keeps its track processing.
+    engine.routing.track_tails.insert(source, u32::MAX);
+
+    // Let the fader finish smoothing before measuring.
+    let mut block = vec![0.0_f32; 128];
+    for _ in 0..16 {
+        engine.process(&mut block);
+    }
+    *energy.lock().expect("probe lock") = 0.0;
+    for _ in 0..8 {
+        engine.process(&mut block);
+    }
+    *energy.lock().expect("probe lock")
+}
+
+#[test]
+fn bus_feeds_a_track_sidechain_and_pre_fader_taps_ignore_the_source_fader() {
+    use crate::core::project::RoutingTap;
+
+    let pre_fader = render_bus_keyed_sidechain(RoutingTap::PreFader);
+    let post_fader = render_bus_keyed_sidechain(RoutingTap::PostFader);
+    // 8 blocks of 64 stereo frames at the tone's 0.5 amplitude, through the bus's
+    // constant-power center pan.
+    let expected = 512.0 * std::f32::consts::FRAC_1_SQRT_2;
+    assert!(
+        (pre_fader - expected).abs() < 1.0,
+        "bus signal must reach the track sidechain, got {pre_fader}"
+    );
+    assert!(
+        post_fader < pre_fader * 0.01,
+        "post-fader tap must follow the lowered source fader: pre {pre_fader}, post {post_fader}"
+    );
+}
+
+/// Renders a tone track and returns the master output energy of the last block.
+fn render_tone_track(linked_to_master: bool) -> f32 {
+    use crate::core::project::{RoutingConnection, RoutingNode};
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app_state = ApplicationState::default();
+    let track = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Tone", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine.process_command(AudioCommand::InstallEffect {
+        target: EffectTarget::Track(track),
+        effect_id: crate::shared::EffectId::from(1),
+        registry_id: 0,
+        plugin: Box::new(ToneEffect),
+        telemetry: None,
+    });
+    let routing = if linked_to_master {
+        vec![RoutingConnection::new(
+            RoutingNode::Track(track),
+            RoutingNode::Master,
+        )]
+    } else {
+        Vec::new()
+    };
+    engine.process_command(AudioCommand::UpdateRouting {
+        routing: routing.into_boxed_slice(),
+    });
+    engine.routing.track_tails.insert(track, u32::MAX);
+
+    let mut block = vec![0.0_f32; 128];
+    for _ in 0..4 {
+        engine.process(&mut block);
+    }
+    block.iter().map(|sample| sample.abs()).sum()
+}
+
+#[test]
+fn unlinked_track_does_not_reach_master() {
+    assert!(render_tone_track(true) > 1.0);
+    assert_eq!(render_tone_track(false), 0.0);
+}

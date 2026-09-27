@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -10,11 +11,16 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 typedef SidechainSourceLoader =
     Future<List<mixer_api.UiSidechainSource>> Function();
 typedef SidechainSourceSetter =
-    Future<void> Function(mixer_api.UiRoutingNode source, double? sendLevel);
+    Future<void> Function(
+      mixer_api.UiRoutingNode source,
+      double? sendLevel,
+      mixer_api.UiRoutingTap tap,
+    );
 
 /// Reusable editor for a plugin's auxiliary-input routing.
 ///
-/// A null send level removes the route. A non-null value adds or updates it.
+/// A null send level removes the route. A non-null value adds or updates it,
+/// tapping the source before or after its fader.
 class SidechainSourcePanel extends ConsumerStatefulWidget {
   const SidechainSourcePanel({
     super.key,
@@ -63,14 +69,18 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
   Future<void> _setOnBackend(
     mixer_api.UiRoutingNode source,
     double? sendLevel,
-  ) {
+    mixer_api.UiRoutingTap tap,
+  ) async {
     final ctx = ref.read(projectProvider.notifier).dawContext;
-    return mixer_api.setSidechainSource(
+    await mixer_api.setSidechainSource(
       ctx: ctx,
       plugin: widget.target,
       from: source,
       sendLevel: sendLevel,
+      tap: tap,
     );
+    // Keep the mixer's routing view (wires, output chips) in step.
+    await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
   }
 
   Future<void> _load() async {
@@ -116,7 +126,23 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
     _sources = updated;
   }
 
-  Future<void> _toggleSource(int index, bool enabled) async {
+  Future<void> _toggleSource(int index, bool enabled) =>
+      _applySource(index, _sources[index].copyWith(enabled: enabled));
+
+  Future<void> _setTap(int index, bool preFader) => _applySource(
+    index,
+    _sources[index].copyWith(
+      tap: preFader
+          ? mixer_api.UiRoutingTap.preFader
+          : mixer_api.UiRoutingTap.postFader,
+    ),
+  );
+
+  /// Shows [updated] immediately and rolls it back if the backend rejects it.
+  Future<void> _applySource(
+    int index,
+    mixer_api.UiSidechainSource updated,
+  ) async {
     final previous = _sources[index];
     final key = _sourceKey(previous.source);
     if (_busySources.contains(key)) return;
@@ -124,12 +150,16 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
     setState(() {
       _error = null;
       _busySources.add(key);
-      _replaceSource(index, previous.copyWith(enabled: enabled));
+      _replaceSource(index, updated);
     });
 
     try {
       final setter = widget.setSource ?? _setOnBackend;
-      await setter(previous.source, enabled ? previous.sendLevel : null);
+      await setter(
+        updated.source,
+        updated.enabled ? updated.sendLevel : null,
+        updated.tap,
+      );
     } catch (error) {
       ref.read(notificationProvider.notifier).error(error);
       if (!mounted) return;
@@ -162,7 +192,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
     });
     try {
       final setter = widget.setSource ?? _setOnBackend;
-      await setter(source.source, value);
+      await setter(source.source, value, source.tap);
     } catch (error) {
       ref.read(notificationProvider.notifier).error(error);
       if (!mounted) return;
@@ -273,6 +303,20 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                               ],
                             ),
                           ),
+                          Tooltip(
+                            message: 'Tap the source before its fader',
+                            child: FilterChip(
+                              label: const Text('PRE'),
+                              labelStyle: const TextStyle(fontSize: 10),
+                              visualDensity: VisualDensity.compact,
+                              selected:
+                                  source.tap == mixer_api.UiRoutingTap.preFader,
+                              onSelected: source.enabled && !busy
+                                  ? (value) => _setTap(index, value)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
                           if (busy)
                             const Padding(
                               padding: EdgeInsets.only(right: 10),
