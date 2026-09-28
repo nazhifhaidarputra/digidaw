@@ -13613,12 +13613,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiStartupRecovery dco_decode_ui_startup_recovery(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return UiStartupRecovery(
       previousSessionUnclean: dco_decode_bool(arr[0]),
-      recovery: dco_decode_opt_box_autoadd_ui_recovery_info(arr[1]),
-      crashReports: dco_decode_list_ui_crash_report_summary(arr[2]),
+      previousSessionForced: dco_decode_bool(arr[1]),
+      recovery: dco_decode_opt_box_autoadd_ui_recovery_info(arr[2]),
+      crashReports: dco_decode_list_ui_crash_report_summary(arr[3]),
     );
   }
 
@@ -17170,6 +17171,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_previousSessionUnclean = sse_decode_bool(deserializer);
+    var var_previousSessionForced = sse_decode_bool(deserializer);
     var var_recovery = sse_decode_opt_box_autoadd_ui_recovery_info(
       deserializer,
     );
@@ -17178,6 +17180,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     );
     return UiStartupRecovery(
       previousSessionUnclean: var_previousSessionUnclean,
+      previousSessionForced: var_previousSessionForced,
       recovery: var_recovery,
       crashReports: var_crashReports,
     );
@@ -20441,6 +20444,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.previousSessionUnclean, serializer);
+    sse_encode_bool(self.previousSessionForced, serializer);
     sse_encode_opt_box_autoadd_ui_recovery_info(self.recovery, serializer);
     sse_encode_list_ui_crash_report_summary(self.crashReports, serializer);
   }

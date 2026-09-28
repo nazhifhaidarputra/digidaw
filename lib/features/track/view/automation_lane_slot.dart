@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/track/models/automation_lane_editor.dart';
 import 'package:karbeat/features/track/services/automation_curve_evaluator.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
+import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_point_context_menu.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -577,13 +578,19 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
           right: BorderSide(color: colors.outlineVariant, width: 1),
         ),
       ),
-      child: GestureDetector(
+      child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
-        // Empty callbacks absorb the drag gestures, preventing the parent
-        // horizontalScrollController from scrolling while interacting here.
-        onHorizontalDragStart: (_) {},
-        onHorizontalDragUpdate: (_) {},
-        onHorizontalDragEnd: (_) {},
+        // Claims point and tension drags so the timeline's scroll views and
+        // pan gestures never move while a point is being edited.
+        gestures: {
+          _AutomationEditDragRecognizer:
+              GestureRecognizerFactoryWithHandlers<
+                _AutomationEditDragRecognizer
+              >(
+                () => _AutomationEditDragRecognizer(debugOwner: this),
+                (recognizer) => recognizer.isEditing = () => _isInteracting,
+              ),
+        },
         child: Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: _onPointerDown,
@@ -656,10 +663,62 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 }
 
+/// Wins the gesture arena once a primary pointer that started a point or
+/// tension edit moves past the platform's drag slop, so enclosing scroll views
+/// and timeline pan gestures reject the drag. Pointers that lift without
+/// moving are released, keeping taps and double-taps on the lane working.
+class _AutomationEditDragRecognizer extends OneSequenceGestureRecognizer {
+  _AutomationEditDragRecognizer({super.debugOwner})
+    : super(allowedButtonsFilter: (buttons) => buttons == kPrimaryButton);
+
+  /// Whether the lane is currently dragging a point or tension handle.
+  bool Function() isEditing = () => false;
+
+  Offset? _downPosition;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    _downPosition = event.position;
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    final downPosition = _downPosition;
+    if (event is PointerMoveEvent && downPosition != null) {
+      final slop = computeHitSlop(event.kind, gestureSettings);
+      if (isEditing() && (event.position - downPosition).distance > slop) {
+        resolve(GestureDisposition.accepted);
+        _release(event.pointer);
+      }
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      resolve(GestureDisposition.rejected);
+      _release(event.pointer);
+    }
+  }
+
+  @override
+  void rejectGesture(int pointer) => _release(pointer);
+
+  void _release(int pointer) {
+    _downPosition = null;
+    stopTrackingPointer(pointer);
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {}
+
+  @override
+  String get debugDescription => 'automation edit drag';
+}
+
 /// Title-only stand-in for a shrunk automation lane on the timeline. The
 /// label follows the horizontal scroll so it stays readable.
 class AutomationLaneCollapsedSlot extends StatelessWidget {
   final AutomationLaneDto lane;
+
+  /// What owns the automated parameter, such as the plugin or mixer channel.
+  final String sourceName;
   final double height;
   final ScrollController horizontalScrollController;
   final Color trackColor;
@@ -667,6 +726,7 @@ class AutomationLaneCollapsedSlot extends StatelessWidget {
   const AutomationLaneCollapsedSlot({
     super.key,
     required this.lane,
+    required this.sourceName,
     required this.height,
     required this.horizontalScrollController,
     required this.trackColor,
@@ -701,14 +761,10 @@ class AutomationLaneCollapsedSlot extends StatelessWidget {
         },
         child: Align(
           alignment: Alignment.centerLeft,
-          child: Text(
-            lane.label,
-            style: TextStyle(
-              color: lane.enabled ? colors.onSurface : colors.onSurfaceVariant,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 1,
+          child: AutomationLaneTitle(
+            sourceName: sourceName,
+            lane: lane,
+            fontSize: 11,
           ),
         ),
       ),

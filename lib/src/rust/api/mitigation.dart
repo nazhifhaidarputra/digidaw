@@ -16,8 +16,9 @@ part 'mitigation.freezed.dart';
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AutoSaveOutcome`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`
 
-/// Configures crash reporting and auto save recovery under `support_dir`, then starts the auto
-/// save worker. Call once after the project is initialized; later calls return the current state.
+/// Configures crash reporting and auto save recovery under `support_dir`, records Ctrl+C as a
+/// forced shutdown, then starts the auto save worker. Call once after the project is initialized;
+/// later calls return the current state.
 Future<UiStartupRecovery> configureMitigation({
   required DawContext ctx,
   required String supportDir,
@@ -135,6 +136,7 @@ sealed class UiRecoveryInfo with _$UiRecoveryInfo {
 sealed class UiStartupRecovery with _$UiStartupRecovery {
   const factory UiStartupRecovery({
     required bool previousSessionUnclean,
+    required bool previousSessionForced,
     UiRecoveryInfo? recovery,
     required List<UiCrashReportSummary> crashReports,
   }) = _UiStartupRecovery;

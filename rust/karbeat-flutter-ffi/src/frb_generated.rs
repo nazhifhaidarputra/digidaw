@@ -15893,12 +15893,14 @@ impl SseDecode for crate::api::mitigation::UiStartupRecovery {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_previousSessionUnclean = <bool>::sse_decode(deserializer);
+        let mut var_previousSessionForced = <bool>::sse_decode(deserializer);
         let mut var_recovery =
             <Option<crate::api::mitigation::UiRecoveryInfo>>::sse_decode(deserializer);
         let mut var_crashReports =
             <Vec<crate::api::mitigation::UiCrashReportSummary>>::sse_decode(deserializer);
         return crate::api::mitigation::UiStartupRecovery {
             previous_session_unclean: var_previousSessionUnclean,
+            previous_session_forced: var_previousSessionForced,
             recovery: var_recovery,
             crash_reports: var_crashReports,
         };
@@ -19016,6 +19018,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::mitigation::UiStartupRecovery
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.previous_session_unclean.into_into_dart().into_dart(),
+            self.previous_session_forced.into_into_dart().into_dart(),
             self.recovery.into_into_dart().into_dart(),
             self.crash_reports.into_into_dart().into_dart(),
         ]
@@ -21684,6 +21687,7 @@ impl SseEncode for crate::api::mitigation::UiStartupRecovery {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.previous_session_unclean, serializer);
+        <bool>::sse_encode(self.previous_session_forced, serializer);
         <Option<crate::api::mitigation::UiRecoveryInfo>>::sse_encode(self.recovery, serializer);
         <Vec<crate::api::mitigation::UiCrashReportSummary>>::sse_encode(
             self.crash_reports,

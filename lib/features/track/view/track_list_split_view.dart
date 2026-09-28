@@ -434,6 +434,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               entry: entry,
               child: AutomationLaneHeader(
                 lane: entry.lane,
+                sourceName: entry.sourceName,
                 itemHeight: layout.height,
                 trackColor: trackColor,
                 collapsed: layout.collapsed,
@@ -490,6 +491,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           child: layout.collapsed
               ? AutomationLaneCollapsedSlot(
                   lane: entry.lane,
+                  sourceName: entry.sourceName,
                   height: layout.height,
                   horizontalScrollController: _trackContentController,
                   trackColor: trackColor,

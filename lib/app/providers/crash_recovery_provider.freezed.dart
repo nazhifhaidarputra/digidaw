@@ -14,7 +14,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$CrashRecoveryState {
 
- bool get previousSessionUnclean; UiRecoveryInfo? get recovery; IList<UiCrashReportSummary> get crashReports; bool get isBusy;
+ bool get previousSessionUnclean;/// The previous run was ended on request, such as by Ctrl+C. Not a crash,
+/// so it only needs attention when it left an auto saved copy behind.
+ bool get previousSessionForced; UiRecoveryInfo? get recovery; IList<UiCrashReportSummary> get crashReports; bool get isBusy;
 /// Create a copy of CrashRecoveryState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +27,16 @@ $CrashRecoveryStateCopyWith<CrashRecoveryState> get copyWith => _$CrashRecoveryS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CrashRecoveryState&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other.crashReports, crashReports)&&(identical(other.isBusy, isBusy) || other.isBusy == isBusy));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CrashRecoveryState&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.previousSessionForced, previousSessionForced) || other.previousSessionForced == previousSessionForced)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other.crashReports, crashReports)&&(identical(other.isBusy, isBusy) || other.isBusy == isBusy));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,previousSessionUnclean,recovery,const DeepCollectionEquality().hash(crashReports),isBusy);
+int get hashCode => Object.hash(runtimeType,previousSessionUnclean,previousSessionForced,recovery,const DeepCollectionEquality().hash(crashReports),isBusy);
 
 @override
 String toString() {
-  return 'CrashRecoveryState(previousSessionUnclean: $previousSessionUnclean, recovery: $recovery, crashReports: $crashReports, isBusy: $isBusy)';
+  return 'CrashRecoveryState(previousSessionUnclean: $previousSessionUnclean, previousSessionForced: $previousSessionForced, recovery: $recovery, crashReports: $crashReports, isBusy: $isBusy)';
 }
 
 
@@ -45,7 +47,7 @@ abstract mixin class $CrashRecoveryStateCopyWith<$Res>  {
   factory $CrashRecoveryStateCopyWith(CrashRecoveryState value, $Res Function(CrashRecoveryState) _then) = _$CrashRecoveryStateCopyWithImpl;
 @useResult
 $Res call({
- bool previousSessionUnclean, UiRecoveryInfo? recovery, IList<UiCrashReportSummary> crashReports, bool isBusy
+ bool previousSessionUnclean, bool previousSessionForced, UiRecoveryInfo? recovery, IList<UiCrashReportSummary> crashReports, bool isBusy
 });
 
 
@@ -62,9 +64,10 @@ class _$CrashRecoveryStateCopyWithImpl<$Res>
 
 /// Create a copy of CrashRecoveryState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? previousSessionUnclean = null,Object? recovery = freezed,Object? crashReports = null,Object? isBusy = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? previousSessionUnclean = null,Object? previousSessionForced = null,Object? recovery = freezed,Object? crashReports = null,Object? isBusy = null,}) {
   return _then(_self.copyWith(
 previousSessionUnclean: null == previousSessionUnclean ? _self.previousSessionUnclean : previousSessionUnclean // ignore: cast_nullable_to_non_nullable
+as bool,previousSessionForced: null == previousSessionForced ? _self.previousSessionForced : previousSessionForced // ignore: cast_nullable_to_non_nullable
 as bool,recovery: freezed == recovery ? _self.recovery : recovery // ignore: cast_nullable_to_non_nullable
 as UiRecoveryInfo?,crashReports: null == crashReports ? _self.crashReports : crashReports // ignore: cast_nullable_to_non_nullable
 as IList<UiCrashReportSummary>,isBusy: null == isBusy ? _self.isBusy : isBusy // ignore: cast_nullable_to_non_nullable
@@ -165,10 +168,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  UiRecoveryInfo? recovery,  IList<UiCrashReportSummary> crashReports,  bool isBusy)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  bool previousSessionForced,  UiRecoveryInfo? recovery,  IList<UiCrashReportSummary> crashReports,  bool isBusy)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CrashRecoveryState() when $default != null:
-return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports,_that.isBusy);case _:
+return $default(_that.previousSessionUnclean,_that.previousSessionForced,_that.recovery,_that.crashReports,_that.isBusy);case _:
   return orElse();
 
 }
@@ -186,10 +189,10 @@ return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  UiRecoveryInfo? recovery,  IList<UiCrashReportSummary> crashReports,  bool isBusy)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  bool previousSessionForced,  UiRecoveryInfo? recovery,  IList<UiCrashReportSummary> crashReports,  bool isBusy)  $default,) {final _that = this;
 switch (_that) {
 case _CrashRecoveryState():
-return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports,_that.isBusy);case _:
+return $default(_that.previousSessionUnclean,_that.previousSessionForced,_that.recovery,_that.crashReports,_that.isBusy);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -206,10 +209,10 @@ return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool previousSessionUnclean,  UiRecoveryInfo? recovery,  IList<UiCrashReportSummary> crashReports,  bool isBusy)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool previousSessionUnclean,  bool previousSessionForced,  UiRecoveryInfo? recovery,  IList<UiCrashReportSummary> crashReports,  bool isBusy)?  $default,) {final _that = this;
 switch (_that) {
 case _CrashRecoveryState() when $default != null:
-return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports,_that.isBusy);case _:
+return $default(_that.previousSessionUnclean,_that.previousSessionForced,_that.recovery,_that.crashReports,_that.isBusy);case _:
   return null;
 
 }
@@ -221,10 +224,13 @@ return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports,_
 
 
 class _CrashRecoveryState extends CrashRecoveryState {
-  const _CrashRecoveryState({this.previousSessionUnclean = false, this.recovery, this.crashReports = const IListConst([]), this.isBusy = false}): super._();
+  const _CrashRecoveryState({this.previousSessionUnclean = false, this.previousSessionForced = false, this.recovery, this.crashReports = const IListConst([]), this.isBusy = false}): super._();
   
 
 @override@JsonKey() final  bool previousSessionUnclean;
+/// The previous run was ended on request, such as by Ctrl+C. Not a crash,
+/// so it only needs attention when it left an auto saved copy behind.
+@override@JsonKey() final  bool previousSessionForced;
 @override final  UiRecoveryInfo? recovery;
 @override@JsonKey() final  IList<UiCrashReportSummary> crashReports;
 @override@JsonKey() final  bool isBusy;
@@ -239,16 +245,16 @@ _$CrashRecoveryStateCopyWith<_CrashRecoveryState> get copyWith => __$CrashRecove
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CrashRecoveryState&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other.crashReports, crashReports)&&(identical(other.isBusy, isBusy) || other.isBusy == isBusy));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CrashRecoveryState&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.previousSessionForced, previousSessionForced) || other.previousSessionForced == previousSessionForced)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other.crashReports, crashReports)&&(identical(other.isBusy, isBusy) || other.isBusy == isBusy));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,previousSessionUnclean,recovery,const DeepCollectionEquality().hash(crashReports),isBusy);
+int get hashCode => Object.hash(runtimeType,previousSessionUnclean,previousSessionForced,recovery,const DeepCollectionEquality().hash(crashReports),isBusy);
 
 @override
 String toString() {
-  return 'CrashRecoveryState(previousSessionUnclean: $previousSessionUnclean, recovery: $recovery, crashReports: $crashReports, isBusy: $isBusy)';
+  return 'CrashRecoveryState(previousSessionUnclean: $previousSessionUnclean, previousSessionForced: $previousSessionForced, recovery: $recovery, crashReports: $crashReports, isBusy: $isBusy)';
 }
 
 
@@ -259,7 +265,7 @@ abstract mixin class _$CrashRecoveryStateCopyWith<$Res> implements $CrashRecover
   factory _$CrashRecoveryStateCopyWith(_CrashRecoveryState value, $Res Function(_CrashRecoveryState) _then) = __$CrashRecoveryStateCopyWithImpl;
 @override @useResult
 $Res call({
- bool previousSessionUnclean, UiRecoveryInfo? recovery, IList<UiCrashReportSummary> crashReports, bool isBusy
+ bool previousSessionUnclean, bool previousSessionForced, UiRecoveryInfo? recovery, IList<UiCrashReportSummary> crashReports, bool isBusy
 });
 
 
@@ -276,9 +282,10 @@ class __$CrashRecoveryStateCopyWithImpl<$Res>
 
 /// Create a copy of CrashRecoveryState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? previousSessionUnclean = null,Object? recovery = freezed,Object? crashReports = null,Object? isBusy = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? previousSessionUnclean = null,Object? previousSessionForced = null,Object? recovery = freezed,Object? crashReports = null,Object? isBusy = null,}) {
   return _then(_CrashRecoveryState(
 previousSessionUnclean: null == previousSessionUnclean ? _self.previousSessionUnclean : previousSessionUnclean // ignore: cast_nullable_to_non_nullable
+as bool,previousSessionForced: null == previousSessionForced ? _self.previousSessionForced : previousSessionForced // ignore: cast_nullable_to_non_nullable
 as bool,recovery: freezed == recovery ? _self.recovery : recovery // ignore: cast_nullable_to_non_nullable
 as UiRecoveryInfo?,crashReports: null == crashReports ? _self.crashReports : crashReports // ignore: cast_nullable_to_non_nullable
 as IList<UiCrashReportSummary>,isBusy: null == isBusy ? _self.isBusy : isBusy // ignore: cast_nullable_to_non_nullable

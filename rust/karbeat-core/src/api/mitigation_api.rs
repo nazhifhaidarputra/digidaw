@@ -10,6 +10,7 @@ use crate::{
             AutoSaveSettings, CrashReporter, CrashSource, CrashStore, FlutterCrashSource,
             MitigationError, MitigationPaths, MitigationState, RecoveryInfo, RecoveryStore,
             RustCrashSource, StoredCrashReport, UserDevice, crash, session_marker,
+            session_marker::PreviousSession,
         },
         project::ApplicationState,
     },
@@ -20,6 +21,8 @@ use crate::{
 pub struct StartupRecovery {
     /// The previous session ended without a clean shutdown.
     pub previous_session_unclean: bool,
+    /// The previous session was terminated on request, such as by Ctrl+C. Not a crash.
+    pub previous_session_forced: bool,
     /// Auto saved copy that can be recovered.
     pub recovery: Option<RecoveryInfo>,
     /// Crash reports on disk, newest first.
@@ -43,9 +46,13 @@ pub fn configure(
     ));
     let recovery_store = RecoveryStore::open(paths.autosave_dir())?;
 
-    let previous_session_unclean = session_marker::begin_session(&paths.session_marker())?;
-    if previous_session_unclean {
-        reporter.record(CrashSource::Rust(RustCrashSource::UncleanShutdown))?;
+    let previous_session = session_marker::begin_session(&paths.session_marker())?;
+    match previous_session {
+        PreviousSession::Unclean => {
+            reporter.record(CrashSource::Rust(RustCrashSource::UncleanShutdown))?;
+        }
+        PreviousSession::Forced => log::info!("The previous session was forcibly shut down"),
+        PreviousSession::Clean => {}
     }
 
     let recovery = recovery_store.read_info()?;
@@ -54,7 +61,8 @@ pub fn configure(
         session_marker: paths.session_marker(),
     });
     Ok(StartupRecovery {
-        previous_session_unclean,
+        previous_session_unclean: previous_session == PreviousSession::Unclean,
+        previous_session_forced: previous_session == PreviousSession::Forced,
         recovery,
         crash_reports: reporter.store().list()?,
     })
@@ -192,6 +200,19 @@ pub fn set_session_suspended(ctx: &DawContext, suspended: bool) -> Result<(), Mi
     } else {
         session_marker::begin_session(&mitigation.session_marker).map(|_| ())
     }
+}
+
+/// Records termination signals such as Ctrl+C as a forced shutdown rather than a crash.
+///
+/// Installs process-wide signal handling, so only the application calls this, once mitigation is
+/// configured. Does nothing on platforms without POSIX signals.
+pub fn watch_shutdown_signals(ctx: &DawContext) {
+    #[cfg(unix)]
+    if let Some(mitigation) = &ctx.mitigation {
+        crate::core::mitigation::shutdown_signals::watch(mitigation.session_marker.clone());
+    }
+    #[cfg(not(unix))]
+    let _ = ctx;
 }
 
 /// Ends the session cleanly: removes the recovery copy and the session marker.

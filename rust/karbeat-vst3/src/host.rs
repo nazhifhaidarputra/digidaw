@@ -3,7 +3,7 @@
 use crate::{
     context::Vst3HostContext,
     editor::Vst3Editor,
-    instance::{Vst3Instance, Vst3PrepareJob, check},
+    instance::{Vst3Instance, Vst3PrepareJob, check, check_optional},
     module::{self, Vst3Module},
     wrapper::Vst3Processor,
 };
@@ -12,7 +12,9 @@ use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, sync::atomic::Ordering, thread::ThreadId};
 use vst3::{
     ComWrapper,
-    Steinberg::{FUnknown, IPluginFactory3, IPluginFactory3Trait, Vst::IEditControllerTrait},
+    Steinberg::{
+        FUnknown, IPluginFactory3, IPluginFactory3Trait, Vst::IEditControllerTrait, kNotImplemented,
+    },
 };
 
 /// UI-thread owner of loaded VST3 modules, instances, controllers, editors, and host services.
@@ -193,9 +195,16 @@ impl PluginInstanceManager for Vst3PluginHost {
                     .as_com_ref::<FUnknown>()
                     .ok_or(HostError::Unsupported("host context"))?;
                 // SAFETY: Host context including IRunLoop outlives all module instances.
-                check("factory.setHostContext", unsafe {
-                    factory.setHostContext(context.as_ptr())
-                })?;
+                let code = unsafe { factory.setHostContext(context.as_ptr()) };
+                if code == kNotImplemented {
+                    // Optional per the SDK (e.g. Dplug plugins); components still receive the
+                    // context through IComponent::initialize.
+                    log::debug!(
+                        "{}: factory.setHostContext is not implemented",
+                        path.display()
+                    );
+                }
+                check_optional("factory.setHostContext", code)?;
             }
             self.modules.insert(path, module.clone());
             module

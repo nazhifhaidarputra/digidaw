@@ -105,6 +105,7 @@ impl From<StoredCrashReport> for UiCrashReportSummary {
 #[frb(dart_metadata=("freezed"))]
 pub struct UiStartupRecovery {
     pub previous_session_unclean: bool,
+    pub previous_session_forced: bool,
     pub recovery: Option<UiRecoveryInfo>,
     pub crash_reports: Vec<UiCrashReportSummary>,
 }
@@ -113,6 +114,7 @@ impl From<StartupRecovery> for UiStartupRecovery {
     fn from(startup: StartupRecovery) -> Self {
         Self {
             previous_session_unclean: startup.previous_session_unclean,
+            previous_session_forced: startup.previous_session_forced,
             recovery: startup.recovery.map(UiRecoveryInfo::from),
             crash_reports: startup
                 .crash_reports
@@ -136,18 +138,21 @@ pub enum UiFlutterCrashKind {
 // APIs
 // =======================================
 
-/// Configures crash reporting and auto save recovery under `support_dir`, then starts the auto
-/// save worker. Call once after the project is initialized; later calls return the current state.
+/// Configures crash reporting and auto save recovery under `support_dir`, records Ctrl+C as a
+/// forced shutdown, then starts the auto save worker. Call once after the project is initialized;
+/// later calls return the current state.
 pub fn configure_mitigation(
     ctx: &DawContext,
     support_dir: String,
     app_version: String,
 ) -> anyhow::Result<UiStartupRecovery> {
-    let startup = mitigation_api::configure(
-        &mut ctx.runtime_write(),
-        Path::new(&support_dir),
-        &app_version,
-    )?;
+    let startup = {
+        let mut runtime = ctx.runtime_write();
+        let startup =
+            mitigation_api::configure(&mut runtime, Path::new(&support_dir), &app_version)?;
+        mitigation_api::watch_shutdown_signals(&runtime);
+        startup
+    };
     start_auto_save_worker(ctx)?;
     Ok(startup.into())
 }

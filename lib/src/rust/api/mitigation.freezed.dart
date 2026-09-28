@@ -788,7 +788,7 @@ as int,
 /// @nodoc
 mixin _$UiStartupRecovery {
 
- bool get previousSessionUnclean; UiRecoveryInfo? get recovery; List<UiCrashReportSummary> get crashReports;
+ bool get previousSessionUnclean; bool get previousSessionForced; UiRecoveryInfo? get recovery; List<UiCrashReportSummary> get crashReports;
 /// Create a copy of UiStartupRecovery
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -799,16 +799,16 @@ $UiStartupRecoveryCopyWith<UiStartupRecovery> get copyWith => _$UiStartupRecover
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiStartupRecovery&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other.crashReports, crashReports));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiStartupRecovery&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.previousSessionForced, previousSessionForced) || other.previousSessionForced == previousSessionForced)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other.crashReports, crashReports));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,previousSessionUnclean,recovery,const DeepCollectionEquality().hash(crashReports));
+int get hashCode => Object.hash(runtimeType,previousSessionUnclean,previousSessionForced,recovery,const DeepCollectionEquality().hash(crashReports));
 
 @override
 String toString() {
-  return 'UiStartupRecovery(previousSessionUnclean: $previousSessionUnclean, recovery: $recovery, crashReports: $crashReports)';
+  return 'UiStartupRecovery(previousSessionUnclean: $previousSessionUnclean, previousSessionForced: $previousSessionForced, recovery: $recovery, crashReports: $crashReports)';
 }
 
 
@@ -819,7 +819,7 @@ abstract mixin class $UiStartupRecoveryCopyWith<$Res>  {
   factory $UiStartupRecoveryCopyWith(UiStartupRecovery value, $Res Function(UiStartupRecovery) _then) = _$UiStartupRecoveryCopyWithImpl;
 @useResult
 $Res call({
- bool previousSessionUnclean, UiRecoveryInfo? recovery, List<UiCrashReportSummary> crashReports
+ bool previousSessionUnclean, bool previousSessionForced, UiRecoveryInfo? recovery, List<UiCrashReportSummary> crashReports
 });
 
 
@@ -836,9 +836,10 @@ class _$UiStartupRecoveryCopyWithImpl<$Res>
 
 /// Create a copy of UiStartupRecovery
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? previousSessionUnclean = null,Object? recovery = freezed,Object? crashReports = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? previousSessionUnclean = null,Object? previousSessionForced = null,Object? recovery = freezed,Object? crashReports = null,}) {
   return _then(_self.copyWith(
 previousSessionUnclean: null == previousSessionUnclean ? _self.previousSessionUnclean : previousSessionUnclean // ignore: cast_nullable_to_non_nullable
+as bool,previousSessionForced: null == previousSessionForced ? _self.previousSessionForced : previousSessionForced // ignore: cast_nullable_to_non_nullable
 as bool,recovery: freezed == recovery ? _self.recovery : recovery // ignore: cast_nullable_to_non_nullable
 as UiRecoveryInfo?,crashReports: null == crashReports ? _self.crashReports : crashReports // ignore: cast_nullable_to_non_nullable
 as List<UiCrashReportSummary>,
@@ -935,10 +936,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  UiRecoveryInfo? recovery,  List<UiCrashReportSummary> crashReports)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  bool previousSessionForced,  UiRecoveryInfo? recovery,  List<UiCrashReportSummary> crashReports)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiStartupRecovery() when $default != null:
-return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports);case _:
+return $default(_that.previousSessionUnclean,_that.previousSessionForced,_that.recovery,_that.crashReports);case _:
   return orElse();
 
 }
@@ -956,10 +957,10 @@ return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports);
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  UiRecoveryInfo? recovery,  List<UiCrashReportSummary> crashReports)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool previousSessionUnclean,  bool previousSessionForced,  UiRecoveryInfo? recovery,  List<UiCrashReportSummary> crashReports)  $default,) {final _that = this;
 switch (_that) {
 case _UiStartupRecovery():
-return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports);}
+return $default(_that.previousSessionUnclean,_that.previousSessionForced,_that.recovery,_that.crashReports);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -973,10 +974,10 @@ return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports);
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool previousSessionUnclean,  UiRecoveryInfo? recovery,  List<UiCrashReportSummary> crashReports)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool previousSessionUnclean,  bool previousSessionForced,  UiRecoveryInfo? recovery,  List<UiCrashReportSummary> crashReports)?  $default,) {final _that = this;
 switch (_that) {
 case _UiStartupRecovery() when $default != null:
-return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports);case _:
+return $default(_that.previousSessionUnclean,_that.previousSessionForced,_that.recovery,_that.crashReports);case _:
   return null;
 
 }
@@ -988,10 +989,11 @@ return $default(_that.previousSessionUnclean,_that.recovery,_that.crashReports);
 
 
 class _UiStartupRecovery implements UiStartupRecovery {
-  const _UiStartupRecovery({required this.previousSessionUnclean, this.recovery, required final  List<UiCrashReportSummary> crashReports}): _crashReports = crashReports;
+  const _UiStartupRecovery({required this.previousSessionUnclean, required this.previousSessionForced, this.recovery, required final  List<UiCrashReportSummary> crashReports}): _crashReports = crashReports;
   
 
 @override final  bool previousSessionUnclean;
+@override final  bool previousSessionForced;
 @override final  UiRecoveryInfo? recovery;
  final  List<UiCrashReportSummary> _crashReports;
 @override List<UiCrashReportSummary> get crashReports {
@@ -1011,16 +1013,16 @@ _$UiStartupRecoveryCopyWith<_UiStartupRecovery> get copyWith => __$UiStartupReco
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiStartupRecovery&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other._crashReports, _crashReports));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiStartupRecovery&&(identical(other.previousSessionUnclean, previousSessionUnclean) || other.previousSessionUnclean == previousSessionUnclean)&&(identical(other.previousSessionForced, previousSessionForced) || other.previousSessionForced == previousSessionForced)&&(identical(other.recovery, recovery) || other.recovery == recovery)&&const DeepCollectionEquality().equals(other._crashReports, _crashReports));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,previousSessionUnclean,recovery,const DeepCollectionEquality().hash(_crashReports));
+int get hashCode => Object.hash(runtimeType,previousSessionUnclean,previousSessionForced,recovery,const DeepCollectionEquality().hash(_crashReports));
 
 @override
 String toString() {
-  return 'UiStartupRecovery(previousSessionUnclean: $previousSessionUnclean, recovery: $recovery, crashReports: $crashReports)';
+  return 'UiStartupRecovery(previousSessionUnclean: $previousSessionUnclean, previousSessionForced: $previousSessionForced, recovery: $recovery, crashReports: $crashReports)';
 }
 
 
@@ -1031,7 +1033,7 @@ abstract mixin class _$UiStartupRecoveryCopyWith<$Res> implements $UiStartupReco
   factory _$UiStartupRecoveryCopyWith(_UiStartupRecovery value, $Res Function(_UiStartupRecovery) _then) = __$UiStartupRecoveryCopyWithImpl;
 @override @useResult
 $Res call({
- bool previousSessionUnclean, UiRecoveryInfo? recovery, List<UiCrashReportSummary> crashReports
+ bool previousSessionUnclean, bool previousSessionForced, UiRecoveryInfo? recovery, List<UiCrashReportSummary> crashReports
 });
 
 
@@ -1048,9 +1050,10 @@ class __$UiStartupRecoveryCopyWithImpl<$Res>
 
 /// Create a copy of UiStartupRecovery
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? previousSessionUnclean = null,Object? recovery = freezed,Object? crashReports = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? previousSessionUnclean = null,Object? previousSessionForced = null,Object? recovery = freezed,Object? crashReports = null,}) {
   return _then(_UiStartupRecovery(
 previousSessionUnclean: null == previousSessionUnclean ? _self.previousSessionUnclean : previousSessionUnclean // ignore: cast_nullable_to_non_nullable
+as bool,previousSessionForced: null == previousSessionForced ? _self.previousSessionForced : previousSessionForced // ignore: cast_nullable_to_non_nullable
 as bool,recovery: freezed == recovery ? _self.recovery : recovery // ignore: cast_nullable_to_non_nullable
 as UiRecoveryInfo?,crashReports: null == crashReports ? _self._crashReports : crashReports // ignore: cast_nullable_to_non_nullable
 as List<UiCrashReportSummary>,
