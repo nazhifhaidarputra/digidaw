@@ -9,6 +9,7 @@ import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/input/input.dart';
+import 'package:karbeat/core/input/text_input_shortcut_manager.dart';
 import 'package:karbeat/core/services/crash_report_service.dart';
 import 'package:karbeat/core/services/rust_log_bridge.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -45,6 +46,8 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
   bool Function(Object, StackTrace)? _previousUncaughtErrorHandler;
   late final FlutterExceptionHandler _frameworkErrorHandler;
   FlutterExceptionHandler? _previousFrameworkErrorHandler;
+  final TextInputAwareShortcutManager _shortcutManager =
+      TextInputAwareShortcutManager();
 
   @override
   void initState() {
@@ -97,6 +100,7 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
     if (dawContext != null) {
       unawaited(_retainDawContextUntilInitializationCompletes(dawContext));
     }
+    _shortcutManager.dispose();
     super.dispose();
   }
 
@@ -226,10 +230,11 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
     }
 
     final projectState = ref.watch(projectProvider);
-    final activeShortcuts = ref.watch(activeShortcutMapProvider);
+    // The setter only notifies when the map actually changes
+    _shortcutManager.shortcuts = ref.watch(activeShortcutMapProvider);
 
-    return Shortcuts(
-      shortcuts: activeShortcuts,
+    return Shortcuts.manager(
+      manager: _shortcutManager,
       child: MaterialApp(
         title: 'DigiDAW',
         theme: lightTheme,

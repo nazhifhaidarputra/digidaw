@@ -302,6 +302,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
+  FlacExportConfigDTO dco_decode_box_autoadd_flac_export_config_dto(
+    dynamic raw,
+  );
+
+  @protected
   MasterAutomationTargetDto dco_decode_box_autoadd_master_automation_target_dto(
     dynamic raw,
   );
@@ -318,6 +323,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Mp3ExportConfigDTO dco_decode_box_autoadd_mp_3_export_config_dto(dynamic raw);
+
+  @protected
+  OggExportConfigDTO dco_decode_box_autoadd_ogg_export_config_dto(dynamic raw);
 
   @protected
   PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw);
@@ -411,6 +419,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FlacExportConfigDTO dco_decode_flac_export_config_dto(dynamic raw);
+
+  @protected
   int dco_decode_i_16(dynamic raw);
 
   @protected
@@ -442,6 +453,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -612,6 +626,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Mp3ExportConfigDTO dco_decode_mp_3_export_config_dto(dynamic raw);
+
+  @protected
+  OggExportConfigDTO dco_decode_ogg_export_config_dto(dynamic raw);
 
   @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
@@ -1314,6 +1331,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
+  FlacExportConfigDTO sse_decode_box_autoadd_flac_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   MasterAutomationTargetDto sse_decode_box_autoadd_master_automation_target_dto(
     SseDeserializer deserializer,
   );
@@ -1336,6 +1358,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Mp3ExportConfigDTO sse_decode_box_autoadd_mp_3_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  OggExportConfigDTO sse_decode_box_autoadd_ogg_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -1461,6 +1488,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  FlacExportConfigDTO sse_decode_flac_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_i_16(SseDeserializer deserializer);
 
   @protected
@@ -1498,6 +1530,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -1704,6 +1739,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Mp3ExportConfigDTO sse_decode_mp_3_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  OggExportConfigDTO sse_decode_ogg_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -2552,6 +2592,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_flac_export_config_dto(
+    FlacExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_master_automation_target_dto(
     MasterAutomationTargetDto self,
     SseSerializer serializer,
@@ -2578,6 +2624,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_mp_3_export_config_dto(
     Mp3ExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ogg_export_config_dto(
+    OggExportConfigDTO self,
     SseSerializer serializer,
   );
 
@@ -2723,6 +2775,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_flac_export_config_dto(
+    FlacExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_i_16(int self, SseSerializer serializer);
 
   @protected
@@ -2772,6 +2830,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     Uint32List self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -3015,6 +3076,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_mp_3_export_config_dto(
     Mp3ExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ogg_export_config_dto(
+    OggExportConfigDTO self,
     SseSerializer serializer,
   );
 

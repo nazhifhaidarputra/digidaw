@@ -13,7 +13,9 @@ pub use super::plugin::AudioPlugin;
 pub use super::track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern};
 pub use super::transport::TransportState;
 
-use crate::core::project::{ModulationLinkForOrderedLaneView, ModulationSource};
+use crate::core::project::{
+    CoverArtError, CoverImage, ModulationLinkForOrderedLaneView, ModulationSource,
+};
 use crate::core::project::{automation::AutomationLane, mixer::MixerState, session::SessionState};
 
 pub use crate::shared::*;
@@ -115,14 +117,21 @@ pub struct ProjectMetadata {
     pub version: String,
     /// UTC timestamp assigned when metadata is first created.
     pub created_at: Timestamp,
+    /// Optional square cover art, embedded into exported audio. Last so older
+    /// positional MessagePack projects still load.
+    #[serde(default)]
+    pub cover: Option<CoverImage>,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error)]
 /// Validation failure for user-editable project metadata.
 pub enum ProjectMetadataError {
     /// The trimmed project title is empty.
     #[error("Project title cannot be empty")]
     EmptyTitle,
+    /// The cover image is missing, unreadable, or not a square JPEG/PNG.
+    #[error(transparent)]
+    Cover(#[from] CoverArtError),
     /// A Unicode character count exceeds its field-specific maximum.
     #[error("Project metadata field '{field}' exceeds {maximum} characters")]
     FieldTooLong {
@@ -151,6 +160,9 @@ impl ProjectMetadata {
         Self::validate_length("description", &self.description, 4000)?;
         Self::validate_length("genre", &self.genre, 80)?;
         Self::validate_length("version", &self.version, 64)?;
+        if let Some(cover) = &self.cover {
+            cover.load()?;
+        }
         Ok(self)
     }
 
@@ -175,6 +187,7 @@ impl Default for ProjectMetadata {
             genre: Default::default(),
             version: Default::default(),
             created_at: Timestamp::now(),
+            cover: None,
         }
     }
 }

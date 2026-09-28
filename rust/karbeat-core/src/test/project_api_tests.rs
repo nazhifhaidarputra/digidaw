@@ -25,6 +25,7 @@ mod tests {
             genre: " Electronic ".to_string(),
             version: " 1.0 ".to_string(),
             created_at,
+            cover: None,
         };
 
         let updated = project_api::update_project_metadata(&mut ctx, metadata)

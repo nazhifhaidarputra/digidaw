@@ -29,6 +29,7 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/widgets/daw_input_detector.dart';
+import 'package:karbeat/core/widgets/scroll_physics/unclamped_never_scrollable_physics.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
 class PianoRollScreen extends ConsumerStatefulWidget {
@@ -205,20 +206,47 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     return KeyEventResult.ignored;
   }
 
-  void _handleZoom(double scale) {
-    final state = ref.read(pianoRollProvider);
-    final newZoom =
-        state.zoomLevelTick *
-        scale; // we not clamp here because the zoomLevelTick setter already handle clamping
+  /// Scales the horizontal zoom by [scale], keeping the tick under
+  /// [focalPointX] (relative to the visible grid) in place. Pivots on the
+  /// viewport center when no focal point is given.
+  void _handleZoom(double scale, {double? focalPointX}) {
+    final oldZoom = ref.read(pianoRollProvider).zoomLevelTick;
+    // The zoomLevelTick setter clamps, so read back the applied value.
+    ref.read(pianoRollProvider.notifier).setZoomLevelTick(oldZoom * scale);
+    final newZoom = ref.read(pianoRollProvider).zoomLevelTick;
+    if (newZoom == oldZoom) return;
 
-    // Only update if the value actually changed
-    if (state.zoomLevelTick != newZoom) {
-      ref.read(pianoRollProvider.notifier).setZoomLevelTick(newZoom);
-      // The state provider *should* trigger a rebuild via notifyListeners(),
-      // but to guarantee the local pointer event updates the UI instantly:
-      setState(() {});
-    }
+    final controller = _gridHorizontalController;
+    if (!controller.hasClients) return;
+    final currentScroll = controller.offset;
+    final viewportWidth = controller.position.viewportDimension;
+    final focalX = focalPointX ?? viewportWidth / 2;
+
+    // Pivot Math: Lock the exact tick under the cursor
+    final tickAtFocalPoint = (currentScroll + focalX) / oldZoom;
+    final newScroll = max(0.0, tickAtFocalPoint * newZoom - focalX);
+
+    // Synchronous Jump
+    // The zoomed grid is laid out in the same frame as this jump. The
+    // unclamped physics lets the offset sit past the old extent until then,
+    // so the pivot never flickers through an intermediate position.
+    controller.jumpTo(newScroll);
+
+    // Dynamic Window Strategy
+    // Wrap the new scroll position, so zooming in never runs out of room and
+    // zooming out shrinks the window back toward the pattern content.
+    setState(() {
+      _timelineWidth = newScroll + viewportWidth + _timelineExtensionWidth;
+    });
   }
+
+  /// Converts an x position in grid content coordinates to one relative to
+  /// the visible grid.
+  double _viewportX(double contentX) =>
+      contentX -
+      (_gridHorizontalController.hasClients
+          ? _gridHorizontalController.offset
+          : 0.0);
 
   /// Scales the row height by [scale], keeping the key under [focalPointY]
   /// (relative to the visible grid) in place.
@@ -230,21 +258,29 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     );
     if (oldHeight == newHeight) return;
 
-    final controllerOffset = _gridVerticalController.hasClients
-        ? _gridVerticalController.offset
+    final controller = _gridVerticalController;
+    final currentScroll = controller.hasClients ? controller.offset : 0.0;
+    final viewportHeight = controller.hasClients
+        ? controller.position.viewportDimension
         : 0.0;
-    final keyIndex = (controllerOffset + focalPointY) / oldHeight;
+
+    // Pivot Math: Lock the exact key position under the cursor
+    final keyPosition = (currentScroll + focalPointY) / oldHeight;
+    final maxScroll = max(0.0, 128 * newHeight - viewportHeight);
+    final newScroll = (keyPosition * newHeight - focalPointY).clamp(
+      0.0,
+      maxScroll,
+    );
 
     ref.read(pianoRollProvider.notifier).setKeyHeight(newHeight);
 
-    // Rows are re-laid out next frame; scroll once the new extent exists.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_gridVerticalController.hasClients) return;
-      final newOffset = keyIndex * newHeight - focalPointY;
-      _gridVerticalController.jumpTo(
-        newOffset.clamp(0.0, _gridVerticalController.position.maxScrollExtent),
-      );
-    });
+    // Synchronous Jump
+    // The rows are re-laid out in the same frame as this jump. The unclamped
+    // physics lets the offset sit past the old extent until then, so the
+    // pivot never flickers through an intermediate position.
+    if (controller.hasClients) {
+      controller.jumpTo(newScroll);
+    }
   }
 
   /// Snap distance for drawing, moving, and resizing: the draw step.
@@ -768,7 +804,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                             itemExtent: _keyHeight,
                             physics: isPan
                                 ? const ClampingScrollPhysics()
-                                : const NeverScrollableScrollPhysics(),
+                                : const UnclampedNeverScrollableScrollPhysics(),
                             itemBuilder: (context, index) {
                               // MIDI 127 is top, 0 is bottom. List index 0 is top.
                               final midiKey = 127 - index;
@@ -829,11 +865,13 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                             child: SingleChildScrollView(
                               controller: _gridHorizontalController,
                               scrollDirection: Axis.horizontal,
-                              physics: const NeverScrollableScrollPhysics(),
+                              physics:
+                                  const UnclampedNeverScrollableScrollPhysics(),
                               child: SingleChildScrollView(
                                 controller: _gridVerticalController,
                                 scrollDirection: Axis.vertical,
-                                physics: const NeverScrollableScrollPhysics(),
+                                physics:
+                                    const UnclampedNeverScrollableScrollPhysics(),
                                 child: Listener(
                                   onPointerSignal: _handleEditorPointerSignal,
                                   onPointerDown: (event) {
@@ -885,10 +923,19 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                           event.localPosition.dy -
                                           _lastZoomDragY;
                                       _lastZoomDragY = event.localPosition.dy;
+                                      final focalX = _viewportX(
+                                        event.localPosition.dx,
+                                      );
                                       if (deltaY < 0) {
-                                        _handleZoom(1 / 1.05);
+                                        _handleZoom(
+                                          1 / 1.05,
+                                          focalPointX: focalX,
+                                        );
                                       } else if (deltaY > 0) {
-                                        _handleZoom(1.05);
+                                        _handleZoom(
+                                          1.05,
+                                          focalPointX: focalX,
+                                        );
                                       }
                                     } else if (isSelecting &&
                                         _selectionStart != null) {
@@ -928,7 +975,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       final double multiplier = delta > 0
                                           ? 0.9
                                           : 1.1;
-                                      _handleZoom(multiplier);
+                                      _handleZoom(
+                                        multiplier,
+                                        focalPointX: _viewportX(
+                                          localPosition.dx,
+                                        ),
+                                      );
                                     },
                                     onAltScroll: (delta, localPosition) {
                                       final double multiplier = delta > 0
@@ -946,7 +998,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       );
                                     },
                                     onPinchZoom: (details) {
-                                      _handleZoom(details.scale);
+                                      _handleZoom(
+                                        details.scale,
+                                        focalPointX: _viewportX(
+                                          details.localFocalPoint.dx,
+                                        ),
+                                      );
                                     },
                                     onOneFingerPan: isPan ? _panEditor : null,
                                     child: GestureDetector(

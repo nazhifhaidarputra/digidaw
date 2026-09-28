@@ -45,11 +45,23 @@ Stream<double> exportProject({
         );
         break;
       case SupportedAudioFormat.ogg:
-        // TODO: Handle this case.
-        return;
+        // Opus always renders at 48 kHz, so the sample rate is not forwarded
+        config = AudioExportConfigDTO.ogg(
+          OggExportConfigDTO(
+            channels: numberOfChannels,
+            bitRate: bitDepthProper,
+          ),
+        );
+        break;
       case SupportedAudioFormat.flac:
-        // TODO: Handle this case.
-        return;
+        config = AudioExportConfigDTO.flac(
+          FlacExportConfigDTO(
+            sampleRate: sampleRate.value,
+            channels: numberOfChannels,
+            bitDepth: bitDepthProper,
+          ),
+        );
+        break;
     }
     yield* exportProjectFlutter(
       ctx: ctx,

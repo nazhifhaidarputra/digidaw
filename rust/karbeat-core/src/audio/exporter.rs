@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use crate::{
     audio::engine::{AudioEngine, AudioExportSnapshot},
-    audio::writer::{AudioExportConfig, AudioWriter, create_writer},
+    audio::writer::{AudioExportConfig, AudioWriter, create_writer, metadata::AudioMetadata},
     commands::AudioCommand,
     context::DawContext,
 };
@@ -115,6 +115,8 @@ where
             )
         })?;
     validate_external_plugins(&pending.app, &snapshot)?;
+    let metadata = AudioMetadata::from_project(&pending.app.metadata)
+        .map_err(|error| AudioExportError::new("Metadata", error.to_string()))?;
     let output_path = output_path.to_owned();
     let plugin_registry = pending.plugin_registry;
     let external_plugins = pending.handles.external_plugins;
@@ -127,6 +129,7 @@ where
                     snapshot,
                     &output_path,
                     config,
+                    &metadata,
                     tail_handling,
                     plugin_registry,
                     external_plugins,
@@ -196,6 +199,7 @@ fn render_snapshot<F>(
     mut snapshot: AudioExportSnapshot,
     output_path: &str,
     config: AudioExportConfig,
+    metadata: &AudioMetadata,
     tail_handling: TailHandling,
     plugin_registry: PluginRegistry,
     external_plugins: karbeat_host::HostClient,
@@ -241,7 +245,7 @@ where
     )
     .map_err(|e| AudioExportError::new("Snapshot", e.to_string()))?;
     let path = std::path::Path::new(output_path);
-    let mut writer = create_writer(path, config).map_err(|e| {
+    let mut writer = create_writer(path, config, metadata).map_err(|e| {
         AudioExportError::new("WriterInit", format!("Failed to create writer: {e}"))
     })?;
 
@@ -400,7 +404,7 @@ mod tests {
             engine::AudioEngineTelemetry,
             event::PluginTarget,
             hosted_plugin::HostedPluginInstall,
-            writer::{BitDepth, BitPerSample, WavAudioWriterConfig},
+            writer::{BitDepth, BitPerSample, wav::WavAudioWriterConfig},
         },
         core::project::{
             ApplicationState, ExternalPluginInstance, GeneratorInstanceType, PluginInstance,
@@ -502,6 +506,7 @@ mod tests {
             engine.export_snapshot(),
             path.to_str().unwrap(),
             config,
+            &AudioMetadata::default(),
             TailHandling::CutRemainder,
             PluginRegistry::new_with_defaults(),
             karbeat_host::HostClient::unavailable(),

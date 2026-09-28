@@ -1,8 +1,14 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/setting/services/cover_art_service.dart';
 import 'package:karbeat/features/setting/services/project_settings_provider.dart';
+import 'package:karbeat/features/setting/view/cover_crop_dialog.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 class ProjectSettingsPage extends ConsumerStatefulWidget {
@@ -24,8 +30,10 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
   late final ProviderSubscription<UiProjectMetadata?> _metadataSubscription;
   UiProjectMetadata? _sourceMetadata;
   UiProjectMetadata? _pendingMetadata;
+  String? _coverPath;
   bool _dirty = false;
   bool _saving = false;
+  bool _processingCover = false;
 
   Iterable<TextEditingController> get _controllers => [
     _titleController,
@@ -79,6 +87,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
     _descriptionController.text = metadata.description;
     _genreController.text = metadata.genre;
     _versionController.text = metadata.version;
+    _coverPath = metadata.coverPath;
     if (mounted) {
       setState(() => _dirty = false);
     } else {
@@ -94,8 +103,47 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
         _authorController.text != source.author ||
         _descriptionController.text != source.description ||
         _genreController.text != source.genre ||
-        _versionController.text != source.version;
+        _versionController.text != source.version ||
+        _coverPath != source.coverPath;
     if (_dirty != dirty) setState(() => _dirty = dirty);
+  }
+
+  void _setCover(String? path) {
+    setState(() => _coverPath = path);
+    _updateDirtyState();
+  }
+
+  /// Picks an image, lets the user crop it square, and stages the encoded
+  /// cover. Nothing reaches the project until the form is saved.
+  Future<void> _chooseCover() async {
+    final notifications = ref.read(notificationProvider.notifier);
+    setState(() => _processingCover = true);
+    final picked = await pickCoverSource();
+    switch (picked) {
+      case Error(:final error):
+        notifications.error(error, title: 'Could not open the image');
+      case Ok(value: final image?):
+        if (mounted) await _cropAndStage(image);
+        image.dispose();
+      case Ok():
+        break;
+    }
+    if (mounted) setState(() => _processingCover = false);
+  }
+
+  Future<void> _cropAndStage(ui.Image image) async {
+    final crop = await CoverCropDialog.show(context, image);
+    if (crop == null) return;
+    final encoded = await encodeCoverCrop(image, crop);
+    if (!mounted) return;
+    switch (encoded) {
+      case Ok(value: final path):
+        _setCover(path);
+      case Error(:final error):
+        ref
+            .read(notificationProvider.notifier)
+            .error(error, title: 'Could not save the cover');
+    }
   }
 
   Future<void> _save() async {
@@ -113,6 +161,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
             genre: _genreController.text,
             version: _versionController.text,
             createdAt: source.createdAt,
+            coverPath: _coverPath,
           ),
         );
     if (!mounted) return;
@@ -161,6 +210,14 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
                 if (!projectAvailable || _sourceMetadata == null)
                   const LinearProgressIndicator()
                 else ...[
+                  _CoverField(
+                    path: _coverPath,
+                    busy: _processingCover,
+                    enabled: !_saving && !_processingCover,
+                    onChoose: _chooseCover,
+                    onRemove: () => _setCover(null),
+                  ),
+                  const SizedBox(height: 24),
                   _field(
                     controller: _titleController,
                     label: 'Title',
@@ -173,6 +230,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
                     controller: _authorController,
                     label: 'Author',
                     maximum: 120,
+                    helperText: 'Separate multiple artists with ;',
                   ),
                   _field(
                     controller: _genreController,
@@ -223,6 +281,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
     required String label,
     required int maximum,
     int maxLines = 1,
+    String? helperText,
     String? Function(String?)? validator,
   }) {
     return Padding(
@@ -235,9 +294,102 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
         validator: validator,
         decoration: InputDecoration(
           labelText: label,
+          helperText: helperText,
           border: const OutlineInputBorder(),
         ),
       ),
+    );
+  }
+}
+
+/// Square cover preview with choose and remove actions
+class _CoverField extends StatelessWidget {
+  const _CoverField({
+    required this.path,
+    required this.busy,
+    required this.enabled,
+    required this.onChoose,
+    required this.onRemove,
+  });
+
+  static const _previewExtent = 128.0;
+
+  final String? path;
+  final bool busy;
+  final bool enabled;
+  final VoidCallback onChoose;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final placeholder = Icon(
+      Icons.album_outlined,
+      size: 48,
+      color: colors.onSurfaceVariant,
+    );
+    final path = this.path;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          key: const ValueKey('project-cover-preview'),
+          width: _previewExtent,
+          height: _previewExtent,
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: path == null
+              ? placeholder
+              : Image.file(
+                  File(path),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => placeholder,
+                ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Cover art', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                'Square image embedded into exported audio',
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('choose-project-cover'),
+                    onPressed: enabled ? onChoose : null,
+                    icon: busy
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.image_outlined),
+                    label: Text(path == null ? 'Choose image…' : 'Replace…'),
+                  ),
+                  if (path != null)
+                    TextButton.icon(
+                      key: const ValueKey('remove-project-cover'),
+                      onPressed: enabled ? onRemove : null,
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Remove'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

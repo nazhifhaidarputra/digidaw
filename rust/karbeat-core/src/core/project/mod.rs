@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod clip;
 pub mod clipboard;
+pub mod cover;
 pub mod generator;
 mod index;
 pub mod mixer;
@@ -12,6 +13,7 @@ pub mod transport;
 pub use automation::*;
 pub use clip::*;
 pub use clipboard::*;
+pub use cover::{CoverArt, CoverArtError, CoverFormat, CoverImage};
 pub use generator::*;
 pub use index::*;
 pub use mixer::*;

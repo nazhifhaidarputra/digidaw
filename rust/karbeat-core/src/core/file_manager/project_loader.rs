@@ -1,7 +1,7 @@
 use std::{
     fs::File,
-    io::{BufReader, Read, Write},
-    path::Path,
+    io::{BufReader, Read, Seek, Write},
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -11,8 +11,11 @@ use zip::{CompressionMethod, ZipWriter, read::ZipArchive, write::SimpleFileOptio
 
 use crate::core::{
     file_manager::{app_cache_dir, audio_loader::load_audio_file},
-    project::{ApplicationState, AudioSourceId, ProjectMetadata},
+    project::{ApplicationState, AudioSourceId, CoverImage, ProjectMetadata},
 };
+
+/// Archive folder holding the embedded cover image.
+const COVER_ARCHIVE_DIR: &str = "cover";
 
 const KARBEAT_MAGIC_HEADER: &[u8; 8] = b"KARBEAT1";
 
@@ -24,7 +27,29 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
     let file = temporary.as_file_mut();
     file.write_all(KARBEAT_MAGIC_HEADER)?;
-    let metadata_toml = toml::to_string(&app_state.metadata)?;
+
+    // Clone the app state so we can modify file paths for embedded files
+    let mut saveable_state = app_state.clone();
+    let cover = app_state
+        .metadata
+        .cover
+        .as_ref()
+        .map(|cover| -> anyhow::Result<_> {
+            let art = cover.load().context("Failed to read the project cover image")?;
+            let archive_path = format!("{COVER_ARCHIVE_DIR}/cover.{}", art.format().extension());
+            // Point future loads at the file on this machine; a cover that was already
+            // a fallback extraction keeps the link it came with
+            let linked_path = cover.linked_path.clone().or_else(|| Some(cover.path.clone()));
+            Ok((art, archive_path, linked_path))
+        })
+        .transpose()?;
+    if let Some((_, archive_path, linked_path)) = &cover {
+        saveable_state.metadata.cover = Some(CoverImage {
+            path: PathBuf::from(archive_path),
+            linked_path: linked_path.clone(),
+        });
+    }
+    let metadata_toml = toml::to_string(&saveable_state.metadata)?;
 
     let mut zip = ZipWriter::new(file);
 
@@ -35,8 +60,11 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
     zip.start_file("metadata.toml", deflated_options)?;
     zip.write_all(metadata_toml.as_bytes())?;
 
-    // Clone the app state so we can modify file paths for embedded audio
-    let mut saveable_state = app_state.clone();
+    if let Some((art, archive_path, _)) = &cover {
+        // JPEG and PNG are already compressed
+        zip.start_file(archive_path.as_str(), stored_options)?;
+        zip.write_all(art.bytes())?;
+    }
     let library = &mut saveable_state.asset_library;
 
     zip.add_directory("audio/", stored_options)?;
@@ -112,6 +140,12 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
     let session_dir = extraction_session_dir()?;
     let cache_dir = session_dir.path();
 
+    app_state.metadata.cover = app_state
+        .metadata
+        .cover
+        .take()
+        .and_then(|cover| resolve_cover(&cover, &mut archive, cache_dir));
+
     // PHASE 1: Sequentially extract all audio files to disk (I/O Bound)
     // We collect the paths into a vector to process them concurrently later.
     let mut audio_tasks = Vec::with_capacity(archive.len());
@@ -186,6 +220,74 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
     library.session_dir = Some(Arc::new(session_dir));
 
     Ok(app_state)
+}
+
+/// Points the loaded cover at a readable file inside the session directory:
+/// a symlink to the linked original when it exists on this machine, otherwise
+/// the copy extracted from the archive. A missing or unreadable cover is dropped
+/// with a warning rather than failing the whole project load.
+fn resolve_cover<R: Read + Seek>(
+    cover: &CoverImage,
+    archive: &mut ZipArchive<R>,
+    session_dir: &Path,
+) -> Option<CoverImage> {
+    let file_name = cover.path.file_name()?;
+    let cover_dir = session_dir.join(COVER_ARCHIVE_DIR);
+    let local_path = cover_dir.join(file_name);
+    if let Err(error) = std::fs::create_dir_all(&cover_dir) {
+        log::warn!("Project cover dropped, session folder unavailable: {error}");
+        return None;
+    }
+
+    if let Some(linked) = cover.linked_path.as_ref().filter(|path| path.is_file()) {
+        let path = match link_file(linked, &local_path) {
+            Ok(()) => local_path,
+            // Symlinks can need extra privileges (Windows); reading in place is equivalent
+            Err(error) => {
+                log::debug!("Cover symlink unavailable, using {}: {error}", linked.display());
+                linked.clone()
+            }
+        };
+        return Some(CoverImage {
+            path,
+            linked_path: Some(linked.clone()),
+        });
+    }
+
+    let entry_name = cover.path.to_str()?.replace('\\', "/");
+    let extracted = archive
+        .by_name(&entry_name)
+        .map_err(anyhow::Error::from)
+        .and_then(|mut entry| {
+            let mut file = File::create(&local_path)?;
+            std::io::copy(&mut entry, &mut file)?;
+            Ok(())
+        });
+    match extracted {
+        Ok(()) => Some(CoverImage {
+            path: local_path,
+            linked_path: cover.linked_path.clone(),
+        }),
+        Err(error) => {
+            log::warn!("Project cover dropped, embedded image unavailable: {error}");
+            None
+        }
+    }
+}
+
+#[cfg(unix)]
+fn link_file(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn link_file(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(target, link)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn link_file(_target: &Path, _link: &Path) -> std::io::Result<()> {
+    Err(std::io::ErrorKind::Unsupported.into())
 }
 
 /// Creates the directory that holds one loaded project's extracted audio files.
@@ -440,5 +542,72 @@ mod test {
             load_result.is_ok(),
             "Failed to load a known-valid project file"
         );
+    }
+
+    fn state_with_cover(cover_path: &Path) -> ApplicationState {
+        let art = crate::core::project::CoverArt::encode_rgba(8, &[10_u8, 20, 30, 255].repeat(64))
+            .unwrap();
+        std::fs::write(cover_path, art.bytes()).unwrap();
+        let mut state = ApplicationState::default();
+        state.metadata.cover = Some(CoverImage::new(cover_path));
+        state
+    }
+
+    fn archive_entry(project: &Path, name: &str) -> Option<Vec<u8>> {
+        let mut file = File::open(project).unwrap();
+        file.read_exact(&mut [0; 8]).unwrap();
+        let mut archive = ZipArchive::new(file).unwrap();
+        let mut entry = archive.by_name(name).ok()?;
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).unwrap();
+        Some(bytes)
+    }
+
+    #[test]
+    fn cover_is_embedded_with_a_relative_path_and_linked_on_load() {
+        let dir = tempdir().unwrap();
+        let cover_path = dir.path().join("crop.jpg");
+        let project = dir.path().join("cover.dgdaw");
+        save_daw_project(&project, &state_with_cover(&cover_path)).unwrap();
+
+        let embedded = archive_entry(&project, "cover/cover.jpg").expect("embedded cover");
+        assert_eq!(embedded, std::fs::read(&cover_path).unwrap());
+        let toml = String::from_utf8(archive_entry(&project, "metadata.toml").unwrap()).unwrap();
+        assert!(toml.contains("path = \"cover/cover.jpg\""), "{toml}");
+
+        let loaded = load_daw_project(&project, 48_000).unwrap();
+        let cover = loaded.metadata.cover.expect("resolved cover");
+        assert_eq!(cover.linked_path.as_deref(), Some(cover_path.as_path()));
+        // The session path leads to the original file on this machine
+        assert_eq!(
+            std::fs::canonicalize(&cover.path).unwrap(),
+            std::fs::canonicalize(&cover_path).unwrap()
+        );
+    }
+
+    #[test]
+    fn missing_link_falls_back_to_the_embedded_copy() {
+        let dir = tempdir().unwrap();
+        let cover_path = dir.path().join("crop.jpg");
+        let project = dir.path().join("moved.dgdaw");
+        save_daw_project(&project, &state_with_cover(&cover_path)).unwrap();
+        let original = std::fs::read(&cover_path).unwrap();
+        std::fs::remove_file(&cover_path).unwrap();
+
+        let loaded = load_daw_project(&project, 48_000).unwrap();
+        let cover = loaded.metadata.cover.expect("extracted cover");
+        assert_ne!(cover.path, cover_path);
+        assert_eq!(std::fs::read(&cover.path).unwrap(), original);
+        // The original link is kept for machines where it still exists
+        assert_eq!(cover.linked_path.as_deref(), Some(cover_path.as_path()));
+    }
+
+    #[test]
+    fn projects_without_cover_have_no_cover_entry() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().join("plain.dgdaw");
+        save_daw_project(&project, &ApplicationState::default()).unwrap();
+        assert!(archive_entry(&project, "cover/cover.jpg").is_none());
+        assert!(load_daw_project(&project, 48_000).unwrap().metadata.cover.is_none());
     }
 }

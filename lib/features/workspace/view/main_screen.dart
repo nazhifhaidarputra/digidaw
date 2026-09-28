@@ -55,79 +55,85 @@ class MainScreen extends ConsumerWidget {
     );
 
     return Actions(
-      actions: {
-        SaveIntent: CallbackAction<SaveIntent>(
-          onInvoke: (_) {
-            unawaited(saveCurrentProject(ref));
-            return null;
-          },
-        ),
-        SaveAsIntent: CallbackAction<SaveAsIntent>(
-          onInvoke: (_) {
-            unawaited(saveCurrentProject(ref, saveAs: true));
-            return null;
-          },
-        ),
-        ExportIntent: CallbackAction<ExportIntent>(
-          onInvoke: (_) {
-            ref.read(workspaceStateProvider.notifier).openExportPanel();
-            return null;
-          },
-        ),
-        UndoIntent: CallbackAction<UndoIntent>(
-          onInvoke: (_) {
-            unawaited(_runHistoryAction(ref, undo: true));
-            return null;
-          },
-        ),
-        RedoIntent: CallbackAction<RedoIntent>(
-          onInvoke: (_) {
-            unawaited(_runHistoryAction(ref, undo: false));
-            return null;
-          },
-        ),
-        TogglePlayIntent: CallbackAction<TogglePlayIntent>(
-          onInvoke: (_) {
-            unawaited(_togglePlayback(ref));
-            return null;
-          },
-        ),
-        StopIntent: CallbackAction<StopIntent>(
-          onInvoke: (_) {
-            // The piano roll stops its pattern without rewinding the song.
-            if (ref.read(workspaceStateProvider).currentView ==
-                WorkspaceView.pianoRoll) {
-              unawaited(
-                ref.read(pianoRollProvider.notifier).stopPatternPlayback(),
-              );
-            } else {
-              unawaited(ref.read(transportProvider.notifier).stop());
-            }
-            return null;
-          },
-        ),
-        ToggleLoopIntent: CallbackAction<ToggleLoopIntent>(
-          onInvoke: (_) {
-            unawaited(ref.read(transportProvider.notifier).toggleLoop());
-            return null;
-          },
-        ),
-        ToggleMetronomeIntent: CallbackAction<ToggleMetronomeIntent>(
-          onInvoke: (_) {
-            ref.read(transportProvider.notifier).toggleMetronomeActive();
-            return null;
-          },
-        ),
-        ToggleVirtualMidiKeyboardIntent:
-            CallbackAction<ToggleVirtualMidiKeyboardIntent>(
-              onInvoke: (_) {
-                ref
-                    .read(workspaceStateProvider.notifier)
-                    .toggleFloatingMidiKeyboard();
-                return null;
-              },
-            ),
-      },
+      // The export panel is modal: with no workspace actions to find, every
+      // shortcut key passes through unhandled while it is open.
+      actions: showExportPanel
+          ? const <Type, Action<Intent>>{}
+          : {
+              SaveIntent: CallbackAction<SaveIntent>(
+                onInvoke: (_) {
+                  unawaited(saveCurrentProject(ref));
+                  return null;
+                },
+              ),
+              SaveAsIntent: CallbackAction<SaveAsIntent>(
+                onInvoke: (_) {
+                  unawaited(saveCurrentProject(ref, saveAs: true));
+                  return null;
+                },
+              ),
+              ExportIntent: CallbackAction<ExportIntent>(
+                onInvoke: (_) {
+                  ref.read(workspaceStateProvider.notifier).openExportPanel();
+                  return null;
+                },
+              ),
+              UndoIntent: CallbackAction<UndoIntent>(
+                onInvoke: (_) {
+                  unawaited(_runHistoryAction(ref, undo: true));
+                  return null;
+                },
+              ),
+              RedoIntent: CallbackAction<RedoIntent>(
+                onInvoke: (_) {
+                  unawaited(_runHistoryAction(ref, undo: false));
+                  return null;
+                },
+              ),
+              TogglePlayIntent: CallbackAction<TogglePlayIntent>(
+                onInvoke: (_) {
+                  unawaited(_togglePlayback(ref));
+                  return null;
+                },
+              ),
+              StopIntent: CallbackAction<StopIntent>(
+                onInvoke: (_) {
+                  // The piano roll stops its pattern without rewinding the song.
+                  if (ref.read(workspaceStateProvider).currentView ==
+                      WorkspaceView.pianoRoll) {
+                    unawaited(
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .stopPatternPlayback(),
+                    );
+                  } else {
+                    unawaited(ref.read(transportProvider.notifier).stop());
+                  }
+                  return null;
+                },
+              ),
+              ToggleLoopIntent: CallbackAction<ToggleLoopIntent>(
+                onInvoke: (_) {
+                  unawaited(ref.read(transportProvider.notifier).toggleLoop());
+                  return null;
+                },
+              ),
+              ToggleMetronomeIntent: CallbackAction<ToggleMetronomeIntent>(
+                onInvoke: (_) {
+                  ref.read(transportProvider.notifier).toggleMetronomeActive();
+                  return null;
+                },
+              ),
+              ToggleVirtualMidiKeyboardIntent:
+                  CallbackAction<ToggleVirtualMidiKeyboardIntent>(
+                    onInvoke: (_) {
+                      ref
+                          .read(workspaceStateProvider.notifier)
+                          .toggleFloatingMidiKeyboard();
+                      return null;
+                    },
+                  ),
+            },
       child: UnsavedChangesGuard(
         child: StartupRecoveryPrompt(
           child: ShortcutFocusAnchor(

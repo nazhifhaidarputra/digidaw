@@ -1,23 +1,30 @@
 use std::{fs::File, io::Write, mem::MaybeUninit, slice};
 
-use crate::audio::writer::{AudioWriter, BitDepth};
-use anyhow::Context;
-use mp3lame_encoder::{Bitrate, Builder, DualPcm, Encoder, FlushNoGap, Id3Tag, Quality};
+use crate::audio::writer::{
+    AudioFileFormat, AudioWriteError, AudioWriter, BitDepth, metadata::AudioMetadata,
+};
+use mp3lame_encoder::{Bitrate, Builder, DualPcm, Encoder, FlushNoGap, Quality};
 
 pub struct Mp3AudioWriter {
     pub encoder: Encoder,
     pub mp3_out_buffer: Vec<u8>,
     pub output_path: String,
     pub channels: u8,
+    /// ID3v2 tag written ahead of the audio; empty when there is no metadata.
+    /// Built here rather than by LAME, whose tag setters only accept Latin-1.
+    id3_tag: Vec<u8>,
 }
 
 impl TryFrom<BitDepth> for mp3lame_encoder::Bitrate {
-    type Error = anyhow::Error;
+    type Error = AudioWriteError;
 
     fn try_from(value: BitDepth) -> Result<Self, Self::Error> {
         match value {
             BitDepth::BitPerSample(_) => {
-                return Err(anyhow::anyhow!("MP3 used Bit/second, not Bit/sample"));
+                return Err(AudioWriteError::unsupported(
+                    AudioFileFormat::Mp3,
+                    "a bit depth in bits per sample; use a bitrate instead",
+                ));
             }
             BitDepth::BitPerSecond(bit_per_second) => {
                 let lame_encoder = match bit_per_second {
@@ -34,22 +41,20 @@ impl TryFrom<BitDepth> for mp3lame_encoder::Bitrate {
     }
 }
 
-pub struct Mp3AudioWriterConfig<'a> {
-    pub id3_tag: Option<Id3Tag<'a>>,
+pub struct Mp3AudioWriterConfig {
     pub sample_rate: u32,
     pub num_channels: u8,
     pub bit_rate: Bitrate,
     pub quality: Quality,
 }
 
-impl<'a> Mp3AudioWriterConfig<'a> {
+impl Mp3AudioWriterConfig {
     pub fn try_new(
         sample_rate: u32,
         num_channels: u8,
         bit_depth: BitDepth,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, AudioWriteError> {
         Ok(Self {
-            id3_tag: None,
             sample_rate,
             num_channels,
             bit_rate: bit_depth.try_into()?,
@@ -61,40 +66,35 @@ impl<'a> Mp3AudioWriterConfig<'a> {
 impl Mp3AudioWriter {
     pub fn try_new(
         output_path: impl Into<String>,
-        config: Mp3AudioWriterConfig<'_>,
-    ) -> anyhow::Result<Self> {
-        let mut builder =
-            Builder::new().ok_or_else(|| anyhow::anyhow!("Error creating Mp3 Writer Builder"))?;
+        config: Mp3AudioWriterConfig,
+        metadata: &AudioMetadata,
+    ) -> Result<Self, AudioWriteError> {
+        let mut builder = Builder::new().ok_or_else(|| {
+            AudioWriteError::encoder(AudioFileFormat::Mp3, "failed to allocate LAME encoder")
+        })?;
         builder
             .set_num_channels(config.num_channels)
-            .map_err(|e| anyhow::anyhow!("Set channels error: {:?}", e))?;
+            .map_err(mp3_error)?;
         builder
             .set_sample_rate(config.sample_rate)
-            .map_err(|e| anyhow::anyhow!("Set sample rate error: {:?}", e))?;
-        builder
-            .set_brate(config.bit_rate)
-            .map_err(|e| anyhow::anyhow!("Set bitrate error: {:?}", e))?;
-        builder
-            .set_quality(config.quality)
-            .map_err(|e| anyhow::anyhow!("Set quality error: {:?}", e))?;
+            .map_err(mp3_error)?;
+        builder.set_brate(config.bit_rate).map_err(mp3_error)?;
+        builder.set_quality(config.quality).map_err(mp3_error)?;
 
-        if let Some(tag) = config.id3_tag {
-            let _ = builder.set_id3_tag(tag);
-        }
-
-        let encoder = builder.build().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let encoder = builder.build().map_err(mp3_error)?;
 
         Ok(Self {
             encoder,
             mp3_out_buffer: Vec::new(),
             output_path: output_path.into(),
             channels: config.num_channels,
+            id3_tag: metadata.id3v2_tag().unwrap_or_default(),
         })
     }
 }
 
 impl AudioWriter for Mp3AudioWriter {
-    fn write(&mut self, samples: &[f32]) -> anyhow::Result<()> {
+    fn write(&mut self, samples: &[f32]) -> Result<(), AudioWriteError> {
         if samples.is_empty() {
             return Ok(());
         }
@@ -126,7 +126,7 @@ impl AudioWriter for Mp3AudioWriter {
         let encoded_size = self
             .encoder
             .encode(input, self.mp3_out_buffer.spare_capacity_mut())
-            .map_err(|e| anyhow::anyhow!("Encoding error: {:?}", e))?;
+            .map_err(mp3_error)?;
 
         // SAFETY: The encoder initialized exactly `encoded_size` bytes in the spare capacity.
         unsafe {
@@ -137,14 +137,14 @@ impl AudioWriter for Mp3AudioWriter {
         Ok(())
     }
 
-    fn finalize(&mut self) -> anyhow::Result<()> {
+    fn finalize(&mut self) -> Result<(), AudioWriteError> {
         // Flush any remaining data from the encoder without gaps
         self.mp3_out_buffer
             .reserve(mp3lame_encoder::max_required_buffer_size(0));
         let encoded_size = self
             .encoder
             .flush::<FlushNoGap>(self.mp3_out_buffer.spare_capacity_mut())
-            .map_err(|e| anyhow::anyhow!("Flush error: {:?}", e))?;
+            .map_err(mp3_error)?;
 
         // SAFETY: The encoder initialized exactly `encoded_size` bytes in the spare capacity.
         unsafe {
@@ -153,33 +153,34 @@ impl AudioWriter for Mp3AudioWriter {
         }
 
         // Open output file for the final write
-        let mut file = File::create(&self.output_path)
-            .with_context(|| format!("Failed to create output file: {}", self.output_path))?;
+        let mut file = File::create(&self.output_path)?;
 
-        // Insert VBR/LAME tags and write the actual file
+        // Layout: [ID3v2] -> [Lame Tag] -> [Audio Data]
+        file.write_all(&self.id3_tag)?;
         if self.encoder.lame_tag_size() > 0 {
-            let id3v2_tag_boundary = self.encoder.id3v2_tag_size();
             let mut lame_tag = [MaybeUninit::uninit(); 1024];
 
-            let lame_tag_size = self
-                .encoder
-                .lame_tag_encode(&mut lame_tag)
-                .ok_or_else(|| anyhow::anyhow!("Failed to encode LAME tag because it is empty"))?;
+            let lame_tag_size = self.encoder.lame_tag_encode(&mut lame_tag).ok_or_else(|| {
+                AudioWriteError::encoder(
+                    AudioFileFormat::Mp3,
+                    "failed to encode LAME tag because it is empty",
+                )
+            })?;
 
             // SAFETY: `lame_tag_encode` initialized `lame_tag_size` bytes in `lame_tag`.
             let lame_tag_slice = unsafe {
                 slice::from_raw_parts(lame_tag.as_ptr() as *const u8, lame_tag_size.get())
             };
 
-            // Splice the file together: [ID3v2] -> [Lame Tag] -> [Audio Data]
-            file.write_all(&self.mp3_out_buffer[..id3v2_tag_boundary])?;
             file.write_all(lame_tag_slice)?;
-            file.write_all(&self.mp3_out_buffer[id3v2_tag_boundary..])?;
-        } else {
-            // No lame tags required, just dump the buffer
-            file.write_all(&self.mp3_out_buffer)?;
         }
+        file.write_all(&self.mp3_out_buffer)?;
 
         Ok(())
     }
+}
+
+/// LAME errors only implement `std::error::Error` behind the crate's `std` feature
+fn mp3_error(error: impl std::fmt::Debug) -> AudioWriteError {
+    AudioWriteError::encoder(AudioFileFormat::Mp3, format!("{error:?}"))
 }

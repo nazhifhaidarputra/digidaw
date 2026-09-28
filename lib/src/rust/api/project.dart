@@ -12,7 +12,7 @@ import 'plugin.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -57,6 +57,11 @@ Future<UiProjectMetadata> updateProjectMetadata({
   ctx: ctx,
   metadata: metadata,
 );
+
+/// Encodes a square RGBA crop from the cover editor as a JPEG in the app cache
+/// and returns its path, ready to be set as the project's `cover_path`.
+Future<String> encodeCoverArt({required int size, required List<int> rgba}) =>
+    RustLib.instance.api.crateApiProjectEncodeCoverArt(size: size, rgba: rgba);
 
 /// Get the transport state from the backend
 Future<UiTransportState> getTransportState({required DawContext ctx}) =>
@@ -178,6 +183,10 @@ sealed class AudioExportConfigDTO with _$AudioExportConfigDTO {
       AudioExportConfigDTO_Wav;
   const factory AudioExportConfigDTO.mp3(Mp3ExportConfigDTO field0) =
       AudioExportConfigDTO_Mp3;
+  const factory AudioExportConfigDTO.flac(FlacExportConfigDTO field0) =
+      AudioExportConfigDTO_Flac;
+  const factory AudioExportConfigDTO.ogg(OggExportConfigDTO field0) =
+      AudioExportConfigDTO_Ogg;
 }
 
 @freezed
@@ -195,6 +204,31 @@ sealed class BitDepthDTO with _$BitDepthDTO {
 
   const factory BitDepthDTO.bitPerSample(int field0) = BitDepthDTO_BitPerSample;
   const factory BitDepthDTO.bitPerSecond(int field0) = BitDepthDTO_BitPerSecond;
+}
+
+class FlacExportConfigDTO {
+  final int sampleRate;
+  final int channels;
+  final BitDepthDTO bitDepth;
+
+  const FlacExportConfigDTO({
+    required this.sampleRate,
+    required this.channels,
+    required this.bitDepth,
+  });
+
+  @override
+  int get hashCode =>
+      sampleRate.hashCode ^ channels.hashCode ^ bitDepth.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlacExportConfigDTO &&
+          runtimeType == other.runtimeType &&
+          sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          bitDepth == other.bitDepth;
 }
 
 class Mp3ExportConfigDTO {
@@ -218,6 +252,25 @@ class Mp3ExportConfigDTO {
       other is Mp3ExportConfigDTO &&
           runtimeType == other.runtimeType &&
           sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          bitRate == other.bitRate;
+}
+
+/// OGG Opus always renders at 48 kHz, so no sample rate is configurable
+class OggExportConfigDTO {
+  final int channels;
+  final BitDepthDTO bitRate;
+
+  const OggExportConfigDTO({required this.channels, required this.bitRate});
+
+  @override
+  int get hashCode => channels.hashCode ^ bitRate.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OggExportConfigDTO &&
+          runtimeType == other.runtimeType &&
           channels == other.channels &&
           bitRate == other.bitRate;
 }
@@ -344,6 +397,7 @@ sealed class UiProjectMetadata with _$UiProjectMetadata {
     required String genre,
     required String version,
     required String createdAt,
+    String? coverPath,
   }) = _UiProjectMetadata;
   static Future<UiProjectMetadata> default_() =>
       RustLib.instance.api.crateApiProjectUiProjectMetadataDefault();

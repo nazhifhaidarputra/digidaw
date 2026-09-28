@@ -29,10 +29,19 @@ class _ClipRenderer extends ConsumerWidget {
     this.compact = false,
   });
 
+  static const double _headerHeight = 16;
+
+  /// Header fill. Follows the track color until clips carry their own color.
+  Color get _headerColor => color;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
     if (compact) return _buildCompact(colors);
+    final headerColor = _headerColor;
+    final headerForeground = headerColor.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
     return Container(
       decoration: BoxDecoration(
         color: color.withAlpha(100),
@@ -45,28 +54,33 @@ class _ClipRenderer extends ConsumerWidget {
         borderRadius: BorderRadius.circular(3),
         child: Stack(
           children: [
-            // A. Content (Waveform or MIDI Notes)
-            Positioned.fill(child: _buildContent(context, ref)),
-
-            // B. Label Header
+            // A. Label Header
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              height: 16,
+              height: _headerHeight,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                color: colors.inverseSurface.withValues(alpha: 0.72),
+                alignment: Alignment.centerLeft,
+                color: headerColor,
                 child: Text(
                   clip.name,
                   style: TextStyle(
-                    color: colors.onInverseSurface,
+                    color: headerForeground,
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+            ),
+
+            // B. Content (Waveform or MIDI Notes), laid out below the header
+            Positioned.fill(
+              top: _headerHeight,
+              child: _buildContent(context, ref),
             ),
           ],
         ),

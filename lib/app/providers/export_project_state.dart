@@ -47,6 +47,10 @@ class ExportProjectNotifier extends Notifier<ExportProjectStateData> {
     state = state.copyWith(
       selectedFormat: format,
       selectedBitDepth: newBitDepth,
+      // Opus only encodes at 48 kHz
+      selectedSampleRate: format == SupportedAudioFormat.ogg
+          ? SampleRate.hz48000
+          : state.selectedSampleRate,
     );
   }
 

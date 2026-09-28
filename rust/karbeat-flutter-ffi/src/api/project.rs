@@ -4,10 +4,13 @@ use flutter_rust_bridge::frb;
 use jiff::Timestamp;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
-use karbeat_core::audio::writer::{AudioExportConfig, BitDepth, WavAudioWriterConfig};
+use karbeat_core::audio::writer::{
+    AudioExportConfig, BitDepth, flac::FlacAudioWriterConfig, ogg::OggOpusAudioWriterConfig,
+    wav::WavAudioWriterConfig,
+};
 use karbeat_core::context::DawContext as CoreDawContext;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
-use karbeat_core::core::project::{ApplicationState, PluginInstance};
+use karbeat_core::core::project::{ApplicationState, CoverArt, CoverImage, PluginInstance};
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
     clip::Clip,
@@ -130,6 +133,8 @@ pub struct UiProjectMetadata {
     pub genre: String,
     pub version: String,
     pub created_at: String,
+    /// Absolute path of the square cover image file, when the project has one
+    pub cover_path: Option<String>,
 }
 
 impl From<ProjectMetadata> for UiProjectMetadata {
@@ -141,6 +146,9 @@ impl From<ProjectMetadata> for UiProjectMetadata {
             genre: m.genre,
             version: m.version,
             created_at: m.created_at.to_string(),
+            cover_path: m
+                .cover
+                .map(|cover| cover.path.to_string_lossy().into_owned()),
         }
     }
 }
@@ -157,6 +165,7 @@ impl From<UiProjectMetadata> for ProjectMetadata {
                 .created_at
                 .parse::<Timestamp>()
                 .unwrap_or_else(|_| Timestamp::now()),
+            cover: m.cover_path.map(CoverImage::new),
         }
     }
 }
@@ -529,9 +538,54 @@ pub struct Mp3ExportConfigDTO {
 }
 
 #[derive(Clone)]
+pub struct FlacExportConfigDTO {
+    pub sample_rate: u32,
+    pub channels: u8,
+    pub bit_depth: BitDepthDTO,
+}
+
+impl TryFrom<FlacExportConfigDTO> for FlacAudioWriterConfig {
+    type Error = String;
+
+    fn try_from(value: FlacExportConfigDTO) -> Result<Self, Self::Error> {
+        let BitDepth::BitPerSample(bits_per_sample) = value.bit_depth.try_into()? else {
+            return Err("FLAC export requires a bit depth in bits per sample".to_string());
+        };
+        Ok(Self {
+            sample_rate: value.sample_rate,
+            channels: u16::from(value.channels),
+            bits_per_sample,
+        })
+    }
+}
+
+/// OGG Opus always renders at 48 kHz, so no sample rate is configurable
+#[derive(Clone)]
+pub struct OggExportConfigDTO {
+    pub channels: u8,
+    pub bit_rate: BitDepthDTO,
+}
+
+impl TryFrom<OggExportConfigDTO> for OggOpusAudioWriterConfig {
+    type Error = String;
+
+    fn try_from(value: OggExportConfigDTO) -> Result<Self, Self::Error> {
+        let BitDepth::BitPerSecond(bitrate) = value.bit_rate.try_into()? else {
+            return Err("OGG Opus export requires a bitrate in kbps".to_string());
+        };
+        Ok(Self {
+            channels: value.channels,
+            bitrate,
+        })
+    }
+}
+
+#[derive(Clone)]
 pub enum AudioExportConfigDTO {
     Wav(WavExportConfigDTO),
     Mp3(Mp3ExportConfigDTO),
+    Flac(FlacExportConfigDTO),
+    Ogg(OggExportConfigDTO),
 }
 
 // ============================ APIs ==================================
@@ -550,8 +604,23 @@ pub fn update_project_metadata(
     let created_at = ctx.app_state.metadata.created_at;
     let mut metadata = ProjectMetadata::from(metadata);
     metadata.created_at = created_at;
+    // An unchanged cover keeps the link recorded when the project was loaded
+    if let (Some(cover), Some(current)) = (&mut metadata.cover, &ctx.app_state.metadata.cover)
+        && cover.path == current.path
+    {
+        *cover = current.clone();
+    }
     project_api::update_project_metadata(&mut ctx, metadata)
         .map(UiProjectMetadata::from)
+        .map_err(|error| error.to_string())
+}
+
+/// Encodes a square RGBA crop from the cover editor as a JPEG in the app cache
+/// and returns its path, ready to be set as the project's `cover_path`.
+pub fn encode_cover_art(size: u32, rgba: Vec<u8>) -> Result<String, String> {
+    CoverArt::encode_rgba(size, &rgba)
+        .and_then(|cover| cover.store_in_cache())
+        .map(|path| path.to_string_lossy().into_owned())
         .map_err(|error| error.to_string())
 }
 
@@ -639,6 +708,8 @@ pub fn export_project_flutter(
                 bit_depth,
             }
         }
+        AudioExportConfigDTO::Flac(flac_dto) => AudioExportConfig::Flac(flac_dto.try_into()?),
+        AudioExportConfigDTO::Ogg(ogg_dto) => AudioExportConfig::Ogg(ogg_dto.try_into()?),
     };
 
     let operation = ctx.begin_project_operation();

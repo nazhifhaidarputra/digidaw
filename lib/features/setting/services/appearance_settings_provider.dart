@@ -16,7 +16,8 @@ final workspaceBackgroundImageProvider = FutureProvider<ui.Image?>((ref) async {
 
   final bytes = await File(path).readAsBytes();
 
-  final screenWidth = ui.PlatformDispatcher.instance.views.first.physicalSize.width;
+  final screenWidth =
+      ui.PlatformDispatcher.instance.views.first.physicalSize.width;
   final codec = await ui.instantiateImageCodec(
     bytes,
     targetWidth: screenWidth.round(),
