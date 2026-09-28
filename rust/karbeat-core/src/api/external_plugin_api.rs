@@ -422,7 +422,13 @@ pub fn commit_install(ctx: &mut DawContext, completed: CompletedPluginInstall) -
     {
         registry.insert_plugin_consumer(completed.target, output);
     }
+    let session = std::mem::take(&mut ctx.app_state.session);
     ctx.app_state = completed.staged;
+    ctx.app_state.session = session;
+    ctx.mark_project_modified();
+    // Hosted native instances cannot be rebuilt from history, so this edit is not undoable
+    // and earlier entries may no longer match the project.
+    ctx.clear_history();
     ctx.hosted_targets.insert(
         completed.target,
         crate::context::HostedTargetState::Active(completed.instance),
@@ -626,7 +632,12 @@ pub fn commit_removal(
         ctx.external_plugin_failures.remove(&target);
         ctx.hosted_targets.remove(&target);
     }
+    let session = std::mem::take(&mut ctx.app_state.session);
     ctx.app_state = completed.staged;
+    ctx.app_state.session = session;
+    ctx.mark_project_modified();
+    // Not undoable: hosted native instances cannot be rebuilt from history.
+    ctx.clear_history();
     // Removed native plugin instances are torn down shortly after their endpoints retire.
     crate::heap::schedule_release_to_os();
     completed.removed
@@ -779,7 +790,9 @@ pub fn set_parameter(
         resolve_hosted_target(prepare_hosted_target(ctx, target)?)?,
         parameter,
         value,
-    )
+    )?;
+    ctx.mark_project_modified();
+    Ok(())
 }
 
 /// Removes an external effect after the audio thread has retired its hosted processor.

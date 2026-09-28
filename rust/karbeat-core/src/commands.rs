@@ -473,6 +473,16 @@ pub enum AudioCommand {
 // MixerChannelTarget
 // ======================================
 
+impl From<EffectTarget> for MixerChannelTarget {
+    fn from(target: EffectTarget) -> Self {
+        match target {
+            EffectTarget::Track(track_id) => Self::Track(track_id),
+            EffectTarget::Bus(bus_id) => Self::Bus(bus_id),
+            EffectTarget::Master => Self::Master,
+        }
+    }
+}
+
 /// Identifies which mixer channel a command or snapshot applies to.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MixerChannelTarget {
@@ -505,7 +515,7 @@ pub struct MixerChannelSeed {
 // ======================================
 
 /// Specifies the location of an effect to ensure precise UI syncing
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EffectTarget {
     /// Effect chain belonging to a track.
     Track(TrackId),

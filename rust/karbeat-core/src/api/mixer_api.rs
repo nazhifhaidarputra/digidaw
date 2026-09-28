@@ -2,11 +2,17 @@ use crate::{
     audio::{engine::MixerTelemetrySnapshot, event::PluginTarget},
     commands::{AudioCommand, EffectTarget, MixerChannelTarget},
     context::DawContext,
-    core::project::{
-        RemovedModulations, SidechainRoute, TrackId,
-        mixer::{
-            BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
-            RoutingConnection, RoutingNode, RoutingTap,
+    core::{
+        history::actions::{
+            AutomationRecorder, BusRecolored, BusRenamed, EffectBypassed, EffectMoved,
+            EffectToggled, RoutingRecorder, StructureRecorder,
+        },
+        project::{
+            RemovedModulations, SidechainRoute, TrackId,
+            mixer::{
+                BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
+                RoutingConnection, RoutingNode, RoutingTap,
+            },
         },
     },
     shared::id::*,
@@ -218,6 +224,7 @@ pub fn set_mixer_channel_param(
     param: MixerChannelParams,
 ) {
     let _ = ctx.send_audio_command(AudioCommand::SetMixerChannelParameter { target, param });
+    ctx.mark_project_modified();
 }
 
 /// Ask the audio thread to emit a full MixerChannelSnapshot for the given
@@ -276,6 +283,7 @@ pub fn add_effect_to_mixer_channel_by_id(
             registry_id
         );
     }
+    record_effect_added(ctx, EffectTarget::Track(track_id), effect_id);
     Ok(())
 }
 
@@ -325,6 +333,7 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
             registry_id
         );
     }
+    record_effect_added(ctx, EffectTarget::Master, effect_id);
     Ok(())
 }
 
@@ -336,6 +345,10 @@ pub fn move_effect_order(
     new_position: usize,
 ) -> anyhow::Result<()> {
     let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
+    let previous_position = ctx
+        .app_state
+        .get_mixer_channel_from_target(mixer_channel_target.clone())
+        .and_then(|channel| channel.effects.position(effect_id));
     ctx.app_state
         .get_mixer_channel_from_target_mut(mixer_channel_target)
         .with_context(|| "Cannot find the target mixer channel")?
@@ -345,6 +358,9 @@ pub fn move_effect_order(
         effect_id,
         new_position,
     });
+    if let Some(previous) = previous_position {
+        ctx.push_history(EffectMoved::new(effect_target, effect_id, previous));
+    }
     Ok(())
 }
 
@@ -364,6 +380,11 @@ pub fn set_effect_bypass(
         .get(effect_id)
         .is_some();
     anyhow::ensure!(exists, "Effect {effect_id:?} not found");
+    let previous_bypass = ctx
+        .app_state
+        .get_mixer_channel_from_target(mixer_channel_target.clone())
+        .and_then(|channel| channel.effects.get(effect_id))
+        .map(|effect| effect.instance.bypass);
 
     // Publish first so a rejected command leaves project state unchanged.
     ctx.send_audio_command(AudioCommand::SetEffectBypass {
@@ -377,6 +398,9 @@ pub fn set_effect_bypass(
         .and_then(|channel| channel.effects.get_mut(effect_id))
     {
         effect.instance.bypass = bypass;
+    }
+    if let Some(previous) = previous_bypass {
+        ctx.push_history(EffectBypassed::new(effect_target, effect_id, previous));
     }
     Ok(())
 }
@@ -402,6 +426,20 @@ pub fn remove_effect_from_target_mixer_channel(
         return super::external_plugin_api::remove_effect(ctx, effect_target, effect_instance_id);
     }
 
+    if let Err(error) = super::project_api::capture_live_state(ctx, &[plugin_target], &[]) {
+        log::warn!("Removing effect without its live state: {error:#}");
+    }
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
+    let (index, removed_effect) = ctx
+        .app_state
+        .get_mixer_channel_from_target(mixer_channel_target.clone())
+        .and_then(|channel| {
+            Some((
+                channel.effects.position(effect_instance_id)?,
+                channel.effects.get(effect_instance_id)?.clone(),
+            ))
+        })
+        .ok_or_else(|| anyhow::anyhow!("Effect {effect_instance_id:?} not found"))?;
     let mut staged_mixer = ctx.app_state.mixer.clone();
     match mixer_channel_target {
         MixerChannelTarget::Track(track_id) => {
@@ -424,7 +462,16 @@ pub fn remove_effect_from_target_mixer_channel(
     )?;
 
     ctx.app_state.mixer = staged_mixer;
-    Ok(ctx.app_state.remove_modulations_for_plugin(plugin_target))
+    let removed = ctx.app_state.remove_modulations_for_plugin(plugin_target);
+    let automation = automation_before.finish(&ctx.app_state, "Remove Effect");
+    ctx.push_history(EffectToggled::removed(
+        effect_target,
+        effect_instance_id,
+        index,
+        removed_effect,
+        automation,
+    ));
+    Ok(removed)
 }
 
 /// Sends `command` when an audio engine is running. Without one, project state is the only copy
@@ -455,8 +502,11 @@ pub fn remove_effect_from_master_bus(
 
 /// Creates a project bus and asynchronously mirrors it into the engine graph.
 pub fn create_bus(ctx: &mut DawContext, name: String) -> BusId {
+    let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[]);
     let bus_id = ctx.app_state.mixer.create_bus(name.clone());
     let _ = ctx.send_audio_command(AudioCommand::AddBus { bus_id, name });
+    let action = structure_before.finish(&ctx.app_state, "Create Bus");
+    ctx.push_history(action);
     bus_id
 }
 
@@ -469,11 +519,20 @@ pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
         return super::external_plugin_api::delete_bus(ctx, bus_id);
     }
 
+    let plugins = super::external_plugin_api::bus_targets(ctx, bus_id);
+    if let Err(error) =
+        super::project_api::capture_live_state(ctx, &plugins, &[MixerChannelTarget::Bus(bus_id)])
+    {
+        log::warn!("Deleting bus without its live plugin state: {error:#}");
+    }
+    let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[bus_id]);
     ctx.app_state.mixer.remove_bus(bus_id)?;
     let _ = ctx.send_audio_command(AudioCommand::RemoveBus { bus_id });
     // Removing the bus relinks its orphaned inputs to master.
     let routing = ctx.app_state.mixer.routing.clone().into_boxed_slice();
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let action = structure_before.finish(&ctx.app_state, "Delete Bus");
+    ctx.push_history(action);
     Ok(())
 }
 
@@ -513,12 +572,22 @@ pub fn add_effect_to_bus(
             registry_id
         );
     }
+    record_effect_added(ctx, EffectTarget::Bus(bus_id), effect_id);
     Ok(())
 }
 
 /// Renames a bus in serialized project state.
 pub fn rename_bus(ctx: &mut DawContext, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
-    ctx.app_state.mixer.rename_bus(bus_id, new_name)
+    let previous = ctx
+        .app_state
+        .mixer
+        .buses
+        .get(bus_id)
+        .map(|bus| bus.name.clone())
+        .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
+    ctx.app_state.mixer.rename_bus(bus_id, new_name)?;
+    ctx.push_history(BusRenamed::new(bus_id, previous));
+    Ok(())
 }
 
 /// Changes a bus color from a `#RRGGBB` or `#RRGGBBAA` hex string.
@@ -530,15 +599,27 @@ pub fn change_bus_color(
     let color = Color::new_from_string(new_color).ok_or_else(|| {
         anyhow::anyhow!("Invalid color format. Use hex string like #RRGGBB or #RRGGBBAA")
     })?;
-    ctx.app_state.mixer.change_bus_color(bus_id, color)
+    let previous = ctx
+        .app_state
+        .mixer
+        .buses
+        .get(bus_id)
+        .map(|bus| bus.color.clone())
+        .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
+    ctx.app_state.mixer.change_bus_color(bus_id, color)?;
+    ctx.push_history(BusRecolored::new(bus_id, previous));
+    Ok(())
 }
 
 /// Adds a validated routing connection and publishes the complete routing matrix to the engine.
 pub fn set_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
+    let routing_before = RoutingRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     app.mixer.add_routing(conn, &app.tracks)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let action = routing_before.finish(&ctx.app_state, "Add Route");
+    ctx.push_history(action);
     Ok(())
 }
 
@@ -549,18 +630,24 @@ pub fn remove_routing(
     destination: RoutingNode,
     is_send: bool,
 ) -> anyhow::Result<()> {
+    let routing_before = RoutingRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     app.mixer.remove_routing(source, destination, is_send)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let action = routing_before.finish(&ctx.app_state, "Remove Route");
+    ctx.push_history(action);
     Ok(())
 }
 
 /// Replaces a matching route's properties, or validates and inserts it when absent.
 pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Result<()> {
+    let routing_before = RoutingRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     let routing = app.mixer.update_routing(conn, &app.tracks)?;
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let action = routing_before.finish(&ctx.app_state, "Change Route");
+    ctx.push_history(action);
     Ok(())
 }
 
@@ -674,6 +761,7 @@ pub fn set_sidechain_source(
     send_level: Option<f32>,
     tap: RoutingTap,
 ) -> anyhow::Result<()> {
+    let routing_before = RoutingRecorder::begin(&ctx.app_state);
     let sidechain_route = SidechainRoute::from(this_plugin);
     let routing_node_dest = RoutingNode::PluginSidechain(sidechain_route);
 
@@ -711,5 +799,18 @@ pub fn set_sidechain_source(
 
     let routings = ctx.app_state.mixer.routing.clone().into_boxed_slice();
     let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing: routings });
+    let action = routing_before.finish(&ctx.app_state, "Change Sidechain");
+    ctx.push_history(action);
     Ok(())
+}
+
+/// Records a first-party effect that was just appended to `target`'s chain.
+fn record_effect_added(ctx: &mut DawContext, target: EffectTarget, effect_id: EffectId) {
+    let index = ctx
+        .app_state
+        .get_mixer_channel_from_target(target.into())
+        .and_then(|channel| channel.effects.position(effect_id));
+    if let Some(index) = index {
+        ctx.push_history(EffectToggled::added(target, effect_id, index));
+    }
 }

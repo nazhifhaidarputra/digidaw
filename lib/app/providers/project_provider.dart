@@ -11,6 +11,7 @@ import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
+import 'package:karbeat/src/rust/api/mitigation.dart' as mitigation_api;
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 // Rust FFI Imports
@@ -125,6 +126,26 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
       state = result;
       return result.hasError
           ? ref.notifyErrorResult(Exception(result.error.toString()))
+          : Result.ok(null);
+    });
+  }
+
+  /// Replaces the project with the auto saved recovery copy. The recovered
+  /// project stays unsaved and keeps the file path it was auto saved from.
+  Future<Result<void>> loadRecoveredProject(String? originalPath) {
+    return _runBackendOperation(() async {
+      final result = await AsyncValue.guard(() async {
+        final uiState = await mitigation_api.loadRecoveredProject(
+          ctx: dawContext,
+        );
+        return _fetchFullState(uiState, originalPath);
+      });
+      state = result;
+      return result.hasError
+          ? ref.notifyErrorResult(
+              Exception(result.error.toString()),
+              title: 'Could not recover the project',
+            )
           : Result.ok(null);
     });
   }

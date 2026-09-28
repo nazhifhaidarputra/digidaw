@@ -19,7 +19,8 @@ use crate::{
     },
     commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
     core::{
-        history::{HistoryManager, ProjectAction},
+        history::{EngineSync, HistoryAction, HistoryManager, PluginSync},
+        mitigation::{MitigationState, SessionSettings},
         project::{ApplicationState, AudioTrack, AutomationLane, Clip, Pattern},
     },
     message::TelemetryRegistry,
@@ -35,6 +36,12 @@ pub struct DawContext {
     pub app_state: ApplicationState,
     /// Undo/redo history manager
     pub history: HistoryManager,
+
+    /// Application-level settings such as auto save; never persisted in a project.
+    pub session_settings: SessionSettings,
+
+    /// Recovery and session-marker locations, available once the host configures mitigation.
+    pub mitigation: Option<MitigationState>,
 
     /// Audio command queue producer (UI → Audio)
     pub command_sender: Arc<Mutex<Option<Producer<AudioCommand>>>>,
@@ -113,6 +120,8 @@ impl DawContext {
         Self {
             app_state: ApplicationState::default(),
             history: HistoryManager::new(),
+            session_settings: SessionSettings::default(),
+            mitigation: None,
             command_sender: Arc::new(Mutex::new(None)),
             feedback_consumer: Arc::new(Mutex::new(None)),
             project_state_feedback: Arc::new(Mutex::new(Default::default())),
@@ -273,8 +282,190 @@ impl DawContext {
     }
 
     /// Records one reversible project action and clears redo state according to history rules.
-    pub fn push_history(&mut self, action: ProjectAction) {
+    ///
+    /// Recording history also marks the project modified, so undoable edits never need a separate
+    /// [`Self::mark_project_modified`] call.
+    pub fn push_history(&mut self, action: impl HistoryAction) {
         self.history.push(action);
+        self.mark_project_modified();
+    }
+
+    /// Discards undo/redo history.
+    ///
+    /// Call after the project is replaced, and after any edit that removes project entities
+    /// without recording history: history entries hold detached keys that such an edit would
+    /// invalidate.
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+    }
+
+    /// Sends the engine updates an undo or redo reported. Plugin changes run first so the
+    /// graph and routing published afterwards refer to processors that exist.
+    pub fn apply_engine_sync(&mut self, sync: EngineSync) {
+        for change in &sync.plugins {
+            self.apply_plugin_sync(*change);
+        }
+        if sync.routing && !sync.full_graph {
+            let routing = self.app_state.mixer.routing.clone().into_boxed_slice();
+            let _ = self.send_audio_command(AudioCommand::UpdateRouting { routing });
+        }
+        if !sync.full_graph {
+            for id in &sync.lanes {
+                if let Some(lane) = self.app_state.automation_pool.get(*id).cloned() {
+                    self.broadcast_automation_lane(*id, &lane);
+                }
+            }
+        }
+        if sync.full_graph {
+            self.broadcast_full_graph();
+        } else if sync.track_graph {
+            self.broadcast_track_graph();
+        }
+        if sync.tempo {
+            let bpm = self.app_state.transport.bpm;
+            let _ = self.send_audio_command(AudioCommand::SetBPM(bpm));
+        }
+    }
+
+    fn apply_plugin_sync(&mut self, change: PluginSync) {
+        let command = match change {
+            PluginSync::InstallGenerator {
+                generator_id,
+                track_id,
+            } => {
+                let Some(crate::core::project::GeneratorInstanceType::Plugin(instance)) = self
+                    .app_state
+                    .generator_pool
+                    .get(generator_id)
+                    .map(|generator| generator.instance_type.clone())
+                else {
+                    return;
+                };
+                let Some((plugin, telemetry)) = self.prepare_restored_plugin(&instance) else {
+                    return;
+                };
+                AudioCommand::InstallGenerator {
+                    generator_id,
+                    track_id,
+                    registry_id: instance.registry_id,
+                    plugin,
+                    telemetry: Some(telemetry),
+                }
+            }
+            PluginSync::RemoveGenerator { generator_id } => {
+                AudioCommand::RemoveGenerator { generator_id }
+            }
+            PluginSync::InstallEffect { target, effect_id } => {
+                let Some((effect, position)) = self
+                    .app_state
+                    .get_mixer_channel_from_target_mut(target.into())
+                    .and_then(|channel| {
+                        let position = channel.effects.position(effect_id)?;
+                        Some((channel.effects.get(effect_id)?.clone(), position))
+                    })
+                else {
+                    return;
+                };
+                let Some((plugin, telemetry)) = self.prepare_restored_plugin(&effect.instance)
+                else {
+                    return;
+                };
+                let _ = self.send_audio_command(AudioCommand::InstallEffect {
+                    target,
+                    effect_id,
+                    registry_id: effect.instance.registry_id,
+                    plugin,
+                    telemetry: Some(telemetry),
+                });
+                if effect.instance.bypass {
+                    let _ = self.send_audio_command(AudioCommand::SetEffectBypass {
+                        target,
+                        effect_id,
+                        bypass: true,
+                    });
+                }
+                AudioCommand::MoveEffect {
+                    target,
+                    effect_id,
+                    new_position: position,
+                }
+            }
+            PluginSync::RemoveEffect { target, effect_id } => {
+                AudioCommand::RemoveEffect { target, effect_id }
+            }
+            PluginSync::MoveEffect {
+                target,
+                effect_id,
+                position,
+            } => AudioCommand::MoveEffect {
+                target,
+                effect_id,
+                new_position: position,
+            },
+            PluginSync::SetEffectBypass {
+                target,
+                effect_id,
+                bypass,
+            } => AudioCommand::SetEffectBypass {
+                target,
+                effect_id,
+                bypass,
+            },
+            PluginSync::AddBus(bus_id) => {
+                let Some(name) = self
+                    .app_state
+                    .mixer
+                    .buses
+                    .get(bus_id)
+                    .map(|bus| bus.name.clone())
+                else {
+                    return;
+                };
+                AudioCommand::AddBus { bus_id, name }
+            }
+            PluginSync::RemoveBus(bus_id) => AudioCommand::RemoveBus { bus_id },
+        };
+        let _ = self.send_audio_command(command);
+    }
+
+    /// Builds a first-party processor from a restored project instance at the requested DSP
+    /// configuration. Returns `None` when the plugin is no longer registered.
+    fn prepare_restored_plugin(
+        &self,
+        instance: &crate::core::project::PluginInstance,
+    ) -> Option<(
+        Box<dyn karbeat_plugin_api::traits::AudioPlugin>,
+        crate::commands::PreparedPluginTelemetry,
+    )> {
+        let Some(factory) = self.get_plugin_factory(instance.registry_id) else {
+            log::warn!(
+                "Cannot restore plugin {}: registry id {} is not available",
+                instance.name,
+                instance.registry_id
+            );
+            return None;
+        };
+        let dsp = self.audio_runtime_settings.read().requested_dsp;
+        Some(crate::api::project_api::prepare_builtin_plugin(
+            factory,
+            instance,
+            dsp.sample_rate,
+            usize::try_from(dsp.block_size).unwrap_or(usize::MAX),
+        ))
+    }
+
+    /// Marks the project as having unsaved changes.
+    ///
+    /// Call this after a mutation succeeds when the change would appear in the saved project,
+    /// either directly in `app_state` or in live engine values that saving syncs back into it
+    /// (mixer and plugin parameters). Transport, preview, telemetry, clipboard-copy, device and
+    /// query operations must not call it. APIs that record history are already covered by
+    /// [`Self::push_history`].
+    ///
+    /// Edits made inside an external plugin's native editor never reach this API, so they do not
+    /// mark the project modified until a host parameter-change notification is wired in.
+    pub fn mark_project_modified(&mut self) {
+        self.app_state.session.mark_modified();
     }
 
     /// Extracts the position consumer. This should only be called once when starting the UI stream.

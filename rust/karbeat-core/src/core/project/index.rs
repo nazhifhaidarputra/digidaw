@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, sync::Arc};
 
 use anyhow::anyhow;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use thiserror::Error;
@@ -14,7 +14,7 @@ pub use super::track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern}
 pub use super::transport::TransportState;
 
 use crate::core::project::{ModulationLinkForOrderedLaneView, ModulationSource};
-use crate::core::project::{automation::AutomationLane, mixer::MixerState};
+use crate::core::project::{automation::AutomationLane, mixer::MixerState, session::SessionState};
 
 pub use crate::shared::*;
 
@@ -74,6 +74,10 @@ pub struct ApplicationState {
     #[serde(skip)]
     /// Session clipboard omitted from project serialization.
     pub clipboard: ClipboardContent,
+
+    #[serde(skip)]
+    /// Runtime save tracking; every freshly created or loaded project starts saved.
+    pub session: SessionState,
 }
 
 /// Reserved marker for future peak-controller project state.
@@ -110,7 +114,7 @@ pub struct ProjectMetadata {
     /// Project format/application version label, limited to 64 characters during validation.
     pub version: String,
     /// UTC timestamp assigned when metadata is first created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -170,7 +174,7 @@ impl Default for ProjectMetadata {
             description: Default::default(),
             genre: Default::default(),
             version: Default::default(),
-            created_at: Utc::now(),
+            created_at: Timestamp::now(),
         }
     }
 }
@@ -216,6 +220,31 @@ mod project_metadata_tests {
         assert_eq!(decoded.name, metadata.name);
         assert_eq!(decoded.description, metadata.description);
         assert_eq!(decoded.genre, metadata.genre);
+        assert_eq!(decoded.created_at, metadata.created_at);
+    }
+
+    #[test]
+    fn chrono_written_timestamps_still_load() {
+        for created_at in [
+            "2025-01-01T00:00:00Z",
+            "2025-01-01T00:00:00.123456789Z",
+            "2025-01-01T00:00:00+00:00",
+        ] {
+            let json = format!(
+                r#"{{"name":"Legacy","author":"","version":"1","created_at":"{created_at}"}}"#
+            );
+            let metadata: ProjectMetadata = serde_json::from_str(&json).expect("legacy metadata");
+            assert_eq!(metadata.created_at.as_second(), 1_735_689_600);
+        }
+    }
+
+    #[test]
+    fn chrono_written_timestamp_loads_from_message_pack() {
+        let legacy = ("Legacy", "Author", "", "", "1", "2025-01-01T00:00:00.5Z");
+        let bytes = rmp_serde::to_vec(&legacy).expect("serialize legacy tuple");
+        let metadata: ProjectMetadata = rmp_serde::from_slice(&bytes).expect("legacy metadata");
+
+        assert_eq!(metadata.created_at.as_millisecond(), 1_735_689_600_500);
     }
 }
 
@@ -451,15 +480,33 @@ mod slotmap_persistence_tests {
     }
 
     #[test]
-    fn reused_slots_receive_a_new_generation() {
+    fn deleted_track_keys_are_never_reused() {
+        // Deleted tracks are detached so undo can restore them under the same key; their slot
+        // is never handed to a new track.
         let mut state = ApplicationState::default();
         let old_id = state.add_new_audio_track().id;
         state.remove_track(old_id).expect("remove track");
         let new_id = state.add_new_audio_track().id;
 
-        assert_eq!(old_id.to_u32(), new_id.to_u32());
+        assert_ne!(old_id.to_u32(), new_id.to_u32());
         assert_ne!(old_id.to_u64(), new_id.to_u64());
         assert!(!state.tracks.contains_key(old_id));
         assert!(state.tracks.contains_key(new_id));
+    }
+}
+
+/// Detaches every entry `keep` rejects, like `SlotMap::retain`, but leaves the keys reserved so
+/// undo can reattach the entries under the same keys.
+pub(crate) fn detach_unless<K: slotmap::Key, V>(
+    pool: &mut SlotMap<K, V>,
+    mut keep: impl FnMut(K, &V) -> bool,
+) {
+    let rejected: Vec<K> = pool
+        .iter()
+        .filter(|(key, value)| !keep(*key, value))
+        .map(|(key, _)| key)
+        .collect();
+    for key in rejected {
+        pool.detach(key);
     }
 }

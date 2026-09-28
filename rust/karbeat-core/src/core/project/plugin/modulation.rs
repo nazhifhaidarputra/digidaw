@@ -125,10 +125,11 @@ impl ApplicationState {
 
     /// Removes a generator AND all cables connected to it
     pub fn remove_modulation_source(&mut self, source_id: ModulationId) {
-        self.modulation_sources.remove(source_id);
+        self.modulation_sources.detach(source_id);
         // Cascade delete: Remove any cables that were plugged into this source
-        self.modulation_links
-            .retain(|_, link| link.prop.source_id != source_id);
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
+            link.prop.source_id != source_id
+        });
     }
 
     /// Connects a Generator to a Parameter
@@ -191,7 +192,7 @@ impl ApplicationState {
 
     /// Removes a specific connection
     pub fn remove_modulation_link(&mut self, link_id: ModulationLinkId) {
-        self.modulation_links.remove(link_id);
+        self.modulation_links.detach(link_id);
     }
 
     // =========================================================================
@@ -327,13 +328,13 @@ impl ApplicationState {
 
         // Perform the removals from the application state
         for (link_id, source_id, lane_id) in to_remove {
-            if self.modulation_links.remove(link_id).is_some() {
+            if self.modulation_links.detach(link_id).is_some() {
                 removed_links.insert(link_id); // HashSet uses insert()
             }
-            if self.modulation_sources.remove(source_id).is_some() {
+            if self.modulation_sources.detach(source_id).is_some() {
                 removed_sources.insert(source_id); // HashSet uses insert()
             }
-            if self.automation_pool.remove(lane_id).is_some() {
+            if self.automation_pool.detach(lane_id).is_some() {
                 // Capture the first lane_id we find to return it
                 if main_lane_id.is_none() {
                     main_lane_id = Some(lane_id);
@@ -367,7 +368,7 @@ impl ApplicationState {
     pub fn remove_modulations_for_track(&mut self, track_id: TrackId) {
         let mut orphaned_lanes = Vec::new();
 
-        self.modulation_links.retain(|_, link| {
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_track(track_id);
 
             if references {
@@ -382,7 +383,7 @@ impl ApplicationState {
 
         // Clean up the pure data lanes so we don't leak memory
         for lane_id in orphaned_lanes {
-            self.automation_pool.remove(lane_id);
+            self.automation_pool.detach(lane_id);
         }
     }
 
@@ -391,7 +392,7 @@ impl ApplicationState {
         let mut automation_sources = Vec::new();
         let mut automation_lanes = Vec::new();
 
-        self.modulation_links.retain(|_, link| {
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_generator(generator_id);
             if references
                 && let Some(ModulationSource::Automation { lane_id }) =
@@ -404,10 +405,10 @@ impl ApplicationState {
         });
 
         for source_id in automation_sources {
-            self.modulation_sources.remove(source_id);
+            self.modulation_sources.detach(source_id);
         }
         for lane_id in automation_lanes {
-            self.automation_pool.remove(lane_id);
+            self.automation_pool.detach(lane_id);
         }
     }
 
@@ -426,15 +427,15 @@ impl ApplicationState {
 
         let mut removed = RemovedModulations::default();
         for (link_id, source_id, target) in owned {
-            if self.modulation_links.remove(link_id).is_some() {
+            if self.modulation_links.detach(link_id).is_some() {
                 removed.modulation_links.push(link_id);
             }
             if let Some(&ModulationSource::Automation { lane_id }) =
                 self.modulation_sources.get(source_id)
             {
-                self.modulation_sources.remove(source_id);
+                self.modulation_sources.detach(source_id);
                 removed.modulation_sources.push(source_id);
-                if self.automation_pool.remove(lane_id).is_some() {
+                if self.automation_pool.detach(lane_id).is_some() {
                     removed.automation_lanes.push(lane_id);
                 }
             }
@@ -492,7 +493,7 @@ impl ApplicationState {
     pub fn remove_modulations_for_bus(&mut self, bus_id: BusId) {
         let mut orphaned_lanes = Vec::new();
 
-        self.modulation_links.retain(|_, link| {
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_bus(bus_id);
             if references {
                 if let Some(ModulationSource::Automation { lane_id }) =
@@ -505,7 +506,7 @@ impl ApplicationState {
         });
 
         for lane_id in orphaned_lanes {
-            self.automation_pool.remove(lane_id);
+            self.automation_pool.detach(lane_id);
         }
     }
 

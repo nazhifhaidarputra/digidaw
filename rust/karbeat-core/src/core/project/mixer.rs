@@ -339,10 +339,41 @@ impl EffectChain {
         id
     }
 
-    /// Removes an effect from both the arena and processing order.
+    /// Removes an effect from both the arena and processing order. The arena key stays reserved
+    /// so undo can [`restore`](Self::restore) the effect under the same ID.
     pub fn remove(&mut self, id: EffectId) -> Option<EffectInstance> {
         self.order.retain(|candidate| *candidate != id);
-        self.arena.remove(id)
+        self.arena.detach(id)
+    }
+
+    /// Zero-based processing position of an effect.
+    pub fn position(&self, id: EffectId) -> Option<usize> {
+        self.order.iter().position(|candidate| *candidate == id)
+    }
+
+    /// Puts a removed effect back under its original ID at `index` in the processing order.
+    pub fn restore(
+        &mut self,
+        id: EffectId,
+        index: usize,
+        effect: EffectInstance,
+    ) -> anyhow::Result<()> {
+        if self.arena.contains_key(id) {
+            anyhow::bail!("Effect {id:?} is already in the chain");
+        }
+        self.arena.reattach(id, effect);
+        self.order.insert(index.min(self.order.len()), id);
+        Ok(())
+    }
+
+    /// Moves an effect to `index` in the processing order and returns its previous position.
+    pub fn move_to(&mut self, id: EffectId, index: usize) -> anyhow::Result<usize> {
+        let current = self
+            .position(id)
+            .ok_or_else(|| anyhow::anyhow!("Effect {id:?} not found"))?;
+        self.order.remove(current);
+        self.order.insert(index.min(self.order.len()), id);
+        Ok(current)
     }
 
     /// Borrows an effect by stable slot ID.
@@ -646,10 +677,10 @@ impl MixerState {
         }
 
         // Remove the bus
-        if let Some(bus) = self.buses.remove(bus_id) {
-            self.graph_nodes.remove(bus.graph_node_id);
+        if let Some(bus) = self.buses.detach(bus_id) {
+            self.graph_nodes.detach(bus.graph_node_id);
         }
-        self.graph_nodes.retain(|_, node| {
+        crate::core::project::detach_unless(&mut self.graph_nodes, |_, node| {
             !matches!(
                 node,
                 RoutingNode::PluginSidechain(SidechainRoute::BusEffect(id, _))
@@ -1028,7 +1059,7 @@ impl MixerState {
             !(is_source || is_effect_dest || is_generator_dest)
         });
 
-        self.graph_nodes.retain(|_, node| {
+        crate::core::project::detach_unless(&mut self.graph_nodes, |_, node| {
             let is_track = *node == RoutingNode::Track(track_id);
             let is_track_effect = matches!(
                 node,
@@ -1122,7 +1153,7 @@ impl MixerState {
         let node = RoutingNode::PluginSidechain(route);
         self.routing.retain(|c| c.destination != node);
         if let Some(node_id) = self.graph_node_id(node) {
-            self.graph_nodes.remove(node_id);
+            self.graph_nodes.detach(node_id);
         }
     }
 

@@ -2,7 +2,10 @@ use crate::{
     audio::engine::PlaybackMode,
     commands::AudioCommand,
     context::DawContext,
-    core::project::{DawSource, GeneratorId, Pattern, PatternId},
+    core::{
+        history::actions::PatternRenamed,
+        project::{DawSource, GeneratorId, Pattern, PatternId},
+    },
 };
 
 /// Returns a cloned MIDI pattern or an error when the identifier is absent.
@@ -54,14 +57,21 @@ pub fn rename_pattern(
         .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
     let old_name = std::mem::replace(&mut pattern.name, new_name.to_owned());
 
-    for (_, clip) in ctx.app_state.clips_pool.iter_mut() {
+    let mut previous_clip_names = Vec::new();
+    for (clip_id, clip) in ctx.app_state.clips_pool.iter_mut() {
         if clip.name == old_name
             && matches!(clip.source, Some(DawSource::Midi(id)) if id == pattern_id)
         {
+            previous_clip_names.push((clip_id, clip.name.clone()));
             clip.rename_clip(new_name);
         }
     }
 
+    ctx.push_history(PatternRenamed::new(
+        pattern_id,
+        old_name,
+        previous_clip_names,
+    ));
     Ok(())
 }
 

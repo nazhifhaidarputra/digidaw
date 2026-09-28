@@ -11,6 +11,11 @@ pub(crate) use crate::api::project::DawContext;
 pub(crate) struct DawSessionInner {
     core: RwLock<CoreDawContext>,
     project_operation: Mutex<()>,
+    /// Wakes the auto save worker after a settings change; dropping it stops the worker.
+    ///
+    /// A plain OS lock rather than `crate::sync`: the worker runs on a real OS thread, outside
+    /// any Shuttle schedule.
+    pub(crate) auto_save_wake: parking_lot::Mutex<Option<std::sync::mpsc::Sender<()>>>,
 }
 
 pub(crate) type CoreReadGuard<'a> = RwLockReadGuard<'a, CoreDawContext>;
@@ -56,6 +61,7 @@ impl DawContext {
             inner: Arc::new(DawSessionInner {
                 core: RwLock::new(core),
                 project_operation: Mutex::new(()),
+                auto_save_wake: parking_lot::Mutex::new(None),
             }),
         }
     }

@@ -280,7 +280,9 @@ pub fn set_external_plugin_parameter(
     let _operation = ctx
         .try_runtime_operation()
         .ok_or_else(|| anyhow::anyhow!("project operation is in progress"))?;
-    external_plugin_api::set_parameter_for(resolve_hosted_target(ctx, target)?, parameter, value)
+    external_plugin_api::set_parameter_for(resolve_hosted_target(ctx, target)?, parameter, value)?;
+    ctx.runtime_write().mark_project_modified();
+    Ok(())
 }
 
 pub fn external_plugin_parameter_text(

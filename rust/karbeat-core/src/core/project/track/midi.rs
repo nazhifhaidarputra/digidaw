@@ -498,14 +498,15 @@ impl ApplicationState {
             .collect())
     }
 
-    /// Validates and applies a note transform to one pattern, returning the history actions
-    /// that reverse it. Nothing changes when any note in the edit is invalid.
+    /// Validates and applies a note transform to one pattern, returning the history record that
+    /// reverses it. Nothing changes when any note in the edit is invalid.
     pub fn apply_note_edit(
         &mut self,
         pattern_id: PatternId,
+        label: &'static str,
         edit: super::note_transform::NoteEdit,
-    ) -> anyhow::Result<Vec<crate::core::history::ProjectAction>> {
-        use crate::core::history::ProjectAction;
+    ) -> anyhow::Result<crate::core::history::actions::NotesChanged> {
+        use crate::core::history::actions::NotesChanged;
 
         let pattern = self
             .pattern_pool
@@ -533,7 +534,7 @@ impl ApplicationState {
             replacements.push((index, after));
         }
 
-        let mut actions = Vec::with_capacity(replacements.len() + edit.additions.len());
+        let mut touched = Vec::with_capacity(replacements.len() + edit.additions.len());
         for (index, after) in replacements {
             let before = std::mem::replace(&mut pattern.notes[index], after.clone());
             if before.start_tick != after.start_tick
@@ -543,18 +544,14 @@ impl ApplicationState {
                 || before.pan != after.pan
                 || before.pitch != after.pitch
             {
-                actions.push(ProjectAction::UpdateNote {
-                    pattern_id,
-                    before,
-                    after,
-                });
+                touched.push((before.id, Some(before)));
             }
         }
         for note in pattern.insert_notes_batch(edit.additions)? {
-            actions.push(ProjectAction::AddNote { pattern_id, note });
+            touched.push((note.id, None));
         }
         pattern.sort_notes_unstable();
-        Ok(actions)
+        Ok(NotesChanged::new(label, pattern_id, touched))
     }
 
     pub fn add_note_to_pattern(

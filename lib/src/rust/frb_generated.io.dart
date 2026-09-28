@@ -8,6 +8,7 @@ import 'api/audio_settings.dart';
 import 'api/automation.dart';
 import 'api/external_plugins.dart';
 import 'api/logging.dart';
+import 'api/mitigation.dart';
 import 'api/mixer.dart';
 import 'api/monitor.dart';
 import 'api/pattern.dart';
@@ -344,6 +345,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_ui_actual_device_stream_config(dynamic raw);
 
   @protected
+  UiAutoSaveSettings dco_decode_box_autoadd_ui_auto_save_settings(dynamic raw);
+
+  @protected
   UiExternalPluginDescriptor
   dco_decode_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
 
@@ -376,6 +380,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiProjectMetadata dco_decode_box_autoadd_ui_project_metadata(dynamic raw);
+
+  @protected
+  UiRecoveryInfo dco_decode_box_autoadd_ui_recovery_info(dynamic raw);
 
   @protected
   UiRoutingConnection dco_decode_box_autoadd_ui_routing_connection(dynamic raw);
@@ -536,6 +543,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
 
   @protected
+  List<UiCrashReportSummary> dco_decode_list_ui_crash_report_summary(
+    dynamic raw,
+  );
+
+  @protected
   List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
 
   @protected
@@ -685,6 +697,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannelSnapshot? dco_decode_opt_box_autoadd_ui_mixer_channel_snapshot(
     dynamic raw,
   );
+
+  @protected
+  UiRecoveryInfo? dco_decode_opt_box_autoadd_ui_recovery_info(dynamic raw);
 
   @protected
   UiTrack? dco_decode_opt_box_autoadd_ui_track(dynamic raw);
@@ -850,6 +865,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAudioRuntimeSettings dco_decode_ui_audio_runtime_settings(dynamic raw);
 
   @protected
+  UiAutoSaveSettings dco_decode_ui_auto_save_settings(dynamic raw);
+
+  @protected
   UiBus dco_decode_ui_bus(dynamic raw);
 
   @protected
@@ -860,6 +878,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw);
+
+  @protected
+  UiCrashReportSummary dco_decode_ui_crash_report_summary(dynamic raw);
 
   @protected
   UiDeviceStreamStatus dco_decode_ui_device_stream_status(dynamic raw);
@@ -885,6 +906,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiExternalPluginFormat dco_decode_ui_external_plugin_format(dynamic raw);
+
+  @protected
+  UiFlutterCrashKind dco_decode_ui_flutter_crash_kind(dynamic raw);
 
   @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
@@ -959,6 +983,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw);
 
   @protected
+  UiRecoveryInfo dco_decode_ui_recovery_info(dynamic raw);
+
+  @protected
   UiRequestedDspConfig dco_decode_ui_requested_dsp_config(dynamic raw);
 
   @protected
@@ -981,6 +1008,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiSourceType dco_decode_ui_source_type(dynamic raw);
+
+  @protected
+  UiStartupRecovery dco_decode_ui_startup_recovery(dynamic raw);
 
   @protected
   UiTrack dco_decode_ui_track(dynamic raw);
@@ -1343,6 +1373,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiAutoSaveSettings sse_decode_box_autoadd_ui_auto_save_settings(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiExternalPluginDescriptor
   sse_decode_box_autoadd_ui_external_plugin_descriptor(
     SseDeserializer deserializer,
@@ -1383,6 +1418,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiProjectMetadata sse_decode_box_autoadd_ui_project_metadata(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiRecoveryInfo sse_decode_box_autoadd_ui_recovery_info(
     SseDeserializer deserializer,
   );
 
@@ -1573,6 +1613,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
 
   @protected
+  List<UiCrashReportSummary> sse_decode_list_ui_crash_report_summary(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiEffectInstance> sse_decode_list_ui_effect_instance(
     SseDeserializer deserializer,
   );
@@ -1750,6 +1795,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannelSnapshot? sse_decode_opt_box_autoadd_ui_mixer_channel_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiRecoveryInfo? sse_decode_opt_box_autoadd_ui_recovery_info(
     SseDeserializer deserializer,
   );
 
@@ -1955,6 +2005,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiAutoSaveSettings sse_decode_ui_auto_save_settings(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiBus sse_decode_ui_bus(SseDeserializer deserializer);
 
   @protected
@@ -1965,6 +2020,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiClipboardContent sse_decode_ui_clipboard_content(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiCrashReportSummary sse_decode_ui_crash_report_summary(
     SseDeserializer deserializer,
   );
 
@@ -1996,6 +2056,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiExternalPluginFormat sse_decode_ui_external_plugin_format(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiFlutterCrashKind sse_decode_ui_flutter_crash_kind(
     SseDeserializer deserializer,
   );
 
@@ -2100,6 +2165,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiRecoveryInfo sse_decode_ui_recovery_info(SseDeserializer deserializer);
+
+  @protected
   UiRequestedDspConfig sse_decode_ui_requested_dsp_config(
     SseDeserializer deserializer,
   );
@@ -2130,6 +2198,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
+
+  @protected
+  UiStartupRecovery sse_decode_ui_startup_recovery(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiTrack sse_decode_ui_track(SseDeserializer deserializer);
@@ -2545,6 +2618,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_auto_save_settings(
+    UiAutoSaveSettings self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_external_plugin_descriptor(
     UiExternalPluginDescriptor self,
     SseSerializer serializer,
@@ -2595,6 +2674,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_project_metadata(
     UiProjectMetadata self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_recovery_info(
+    UiRecoveryInfo self,
     SseSerializer serializer,
   );
 
@@ -2817,6 +2902,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_ui_crash_report_summary(
+    List<UiCrashReportSummary> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_effect_instance(
     List<UiEffectInstance> self,
     SseSerializer serializer,
@@ -3024,6 +3115,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_ui_mixer_channel_snapshot(
     UiMixerChannelSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_recovery_info(
+    UiRecoveryInfo? self,
     SseSerializer serializer,
   );
 
@@ -3273,6 +3370,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_auto_save_settings(
+    UiAutoSaveSettings self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_bus(UiBus self, SseSerializer serializer);
 
   @protected
@@ -3284,6 +3387,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_clipboard_content(
     UiClipboardContent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_crash_report_summary(
+    UiCrashReportSummary self,
     SseSerializer serializer,
   );
 
@@ -3326,6 +3435,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_external_plugin_format(
     UiExternalPluginFormat self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_flutter_crash_kind(
+    UiFlutterCrashKind self,
     SseSerializer serializer,
   );
 
@@ -3456,6 +3571,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_recovery_info(
+    UiRecoveryInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_requested_dsp_config(
     UiRequestedDspConfig self,
     SseSerializer serializer,
@@ -3490,6 +3611,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_startup_recovery(
+    UiStartupRecovery self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_track(UiTrack self, SseSerializer serializer);

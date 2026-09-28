@@ -430,6 +430,7 @@ pub fn set_plugin_parameter(
     };
 
     ctx.send_audio_command(command)?;
+    ctx.mark_project_modified();
     Ok(())
 }
 
@@ -651,7 +652,7 @@ pub fn end_generator_parameter_edit(
 }
 
 // =============================================================
-// ========= NEW shared pointer plugin telemetry getter ========
+// ========= Shared pointer plugin telemetry getter ========
 // =============================================================
 
 /// Synchronously fetches the parameters and buffers for a specific plugin.

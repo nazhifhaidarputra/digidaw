@@ -1,15 +1,13 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
-import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/view/setting_screen.dart';
+import 'package:karbeat/features/workspace/services/project_file_actions.dart';
+import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
 import 'package:karbeat/shared/enums/global.dart';
-import 'package:window_manager/window_manager.dart';
 
 /// Toolbar Menu Group
 class DawToolbarMenuGroup {
@@ -45,42 +43,6 @@ typedef DawToolbarMenuActionCallback = void Function(BuildContext, WidgetRef);
 ///
 /// **DEVELOPER NOTE**: *Create a new initialization here for a new group menu type*
 class DawToolbarMenuGroupFactory {
-  /// Helper to safely update the window title on Desktop platforms
-  static Future<void> _updateWindowTitle(String filePath) async {
-    // Only attempt to change the window title on desktop OS
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      final fileName = filePath.split(RegExp(r'[/\\]')).last;
-
-      try {
-        await windowManager.setTitle('DigiDAW — $fileName');
-      } catch (e) {
-        debugPrint("Failed to set window title: $e");
-      }
-    }
-  }
-
-  /// Helper to handle "Save As" logic used by both Save and Save As buttons
-  static Future<void> _performSaveAs(BuildContext context, WidgetRef ref) async {
-    final path = await FilePicker.saveFile(
-      dialogTitle: 'Save Project As...',
-      fileName: 'untitled.dgdaw',
-      type: FileType.custom,
-      allowedExtensions: ['karbeat', 'dgdaw'],
-    );
-
-    if (path != null) {
-      final saved = await _saveProjectBlocking(ref, path);
-      if (saved.isOk()) await _updateWindowTitle(path);
-    }
-  }
-
-  static Future<Result<void>> _saveProjectBlocking(WidgetRef ref, String path) {
-    final project = ref.read(projectProvider.notifier);
-    return ref
-        .read(blockingTaskProvider.notifier)
-        .run(label: 'Saving project...', task: () => project.saveProject(path));
-  }
-
   static DawToolbarMenuGroup createProjectMenuGroup() => DawToolbarMenuGroup(
     id: ToolbarMenuContextGroup.project,
     icon: Icons.work,
@@ -90,23 +52,17 @@ class DawToolbarMenuGroupFactory {
         'New project',
         shortcut: 'Ctrl + N',
         callback: (context, ref) async {
+          if (!await confirmDiscardUnsavedChanges(context, ref)) return;
           await ref.read(projectProvider.notifier).newBlankProject();
-
-          // Safely update window title back to default
-          if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-            try {
-              await windowManager.setTitle('DigiDAW — Untitled');
-            } catch (e) {
-              debugPrint("Failed to set window title: $e");
-            }
-          }
+          await updateProjectWindowTitle(null);
         },
       ),
       DawToolbarMenuAction(
         'Open project',
         shortcut: 'Ctrl+O',
         callback: (context, ref) async {
-          final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['karbeat', 'dgdaw']);
+          if (!await confirmDiscardUnsavedChanges(context, ref)) return;
+          final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: projectFileExtensions);
           if (result != null && result.files.single.path != null) {
             final path = result.files.single.path!;
             final project = ref.read(projectProvider.notifier);
@@ -115,7 +71,7 @@ class DawToolbarMenuGroupFactory {
             final loaded = await ref
                 .read(blockingTaskProvider.notifier)
                 .run(label: 'Loading project...', task: () => project.loadProject(path));
-            if (loaded.isOk()) await _updateWindowTitle(path);
+            if (loaded.isOk()) await updateProjectWindowTitle(path);
           }
         },
       ),
@@ -123,21 +79,15 @@ class DawToolbarMenuGroupFactory {
         'Save Project',
         shortcut: 'Ctrl+S',
         callback: (context, ref) async {
-          final currentFilePath = ref.read(projectProvider).value?.currentFilePath;
-          if (currentFilePath == null) {
-            // If the project has never been saved, trigger Save As
-            await _performSaveAs(context, ref);
-          } else {
-            // Otherwise, save to the existing path
-            await _saveProjectBlocking(ref, currentFilePath);
-          }
+          // Untitled projects fall back to Save As.
+          await saveCurrentProject(ref);
         },
       ),
       DawToolbarMenuAction(
         'Save As...',
         shortcut: 'Ctrl+Shift+S',
         callback: (context, ref) async {
-          await _performSaveAs(context, ref);
+          await saveCurrentProject(ref, saveAs: true);
         },
       ),
       DawToolbarMenuAction('Import Audio'),

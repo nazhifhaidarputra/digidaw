@@ -8,6 +8,7 @@ class GeneralSettingsPage extends ConsumerWidget {
   const GeneralSettingsPage({super.key});
 
   static const historyOptions = <int>[0, 25, 50, 100, 250, 500, 1000];
+  static const autoSaveIntervalMinutes = <int>[1, 2, 5, 10, 15, 30];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,6 +20,19 @@ class GeneralSettingsPage extends ConsumerWidget {
         ),
       ),
     );
+    final autoSave = ref.watch(
+      generalSettingsProvider.select(
+        (state) => (
+          enabled: state.autoSaveEnabled,
+          intervalSeconds: state.autoSaveIntervalSeconds,
+          busy: state.isApplyingAutoSave,
+        ),
+      ),
+    );
+    final intervalOptions = {
+      for (final minutes in autoSaveIntervalMinutes) minutes * 60,
+      autoSave.intervalSeconds,
+    }.toList(growable: false)..sort();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -70,10 +84,70 @@ class GeneralSettingsPage extends ConsumerWidget {
                 const SizedBox(height: 16),
                 const LinearProgressIndicator(),
               ],
+              const SizedBox(height: 32),
+              Text('Auto save', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                key: const ValueKey('auto-save-enabled-switch'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Enable auto save'),
+                value: autoSave.enabled,
+                onChanged: autoSave.busy
+                    ? null
+                    : (value) => unawaited(
+                        ref
+                            .read(generalSettingsProvider.notifier)
+                            .setAutoSaveEnabled(value),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: ValueKey(
+                  'auto-save-interval-field-${autoSave.intervalSeconds}',
+                ),
+                initialValue: autoSave.intervalSeconds,
+                decoration: const InputDecoration(
+                  labelText: 'Auto save every',
+                  border: OutlineInputBorder(),
+                ),
+                items: intervalOptions
+                    .map(
+                      (seconds) => DropdownMenuItem(
+                        value: seconds,
+                        child: Text(_formatInterval(seconds)),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: autoSave.busy || !autoSave.enabled
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          unawaited(
+                            ref
+                                .read(generalSettingsProvider.notifier)
+                                .setAutoSaveInterval(value),
+                          );
+                        }
+                      },
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Auto save writes a recovery copy of unsaved changes. It never overwrites your project file; after a crash, DigiDAW offers to restore the copy on the next launch.',
+              ),
+              if (autoSave.busy) ...[
+                const SizedBox(height: 16),
+                const LinearProgressIndicator(),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  static String _formatInterval(int seconds) {
+    if (seconds % 60 != 0) return '$seconds seconds';
+    final minutes = seconds ~/ 60;
+    return minutes == 1 ? '1 minute' : '$minutes minutes';
   }
 }

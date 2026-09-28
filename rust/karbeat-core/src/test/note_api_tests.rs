@@ -217,12 +217,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ctx.history.undo_stack.len(), before_hist + 1);
-        // The top entry should be a Batch
-        use crate::core::history::ProjectAction;
-        assert!(
-            matches!(ctx.history.undo_stack.last(), Some(ProjectAction::Batch(_))),
-            "Multiple notes should produce a Batch history entry"
-        );
+        // All notes form one history entry.
+        assert_eq!(ctx.history.undo_label(), Some("Add Notes"));
     }
 
     #[test]

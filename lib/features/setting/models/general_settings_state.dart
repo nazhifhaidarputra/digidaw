@@ -7,6 +7,9 @@ abstract class GeneralSettingsState with _$GeneralSettingsState {
   const factory GeneralSettingsState({
     @Default(100) int maxHistoryEntries,
     @Default(false) bool isApplyingHistoryLimit,
+    @Default(true) bool autoSaveEnabled,
+    @Default(300) int autoSaveIntervalSeconds,
+    @Default(false) bool isApplyingAutoSave,
     @Default(false) bool isInitialized,
   }) = _GeneralSettingsState;
 }

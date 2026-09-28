@@ -12,6 +12,7 @@ use crate::init_logger;
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
     init_logger();
+    karbeat_core::core::mitigation::crash::install_panic_hook();
     log::info!("FRB Base Utilities Initialized");
 }
 

@@ -452,7 +452,15 @@ pub struct PendingProjectSave {
 }
 
 pub struct CompletedProjectSave {
+    path: PathBuf,
     saved: ApplicationState,
+}
+
+impl CompletedProjectSave {
+    /// Project modification revision captured when this save began.
+    pub fn revision(&self) -> u64 {
+        self.saved.session.revision()
+    }
 }
 
 pub(super) fn begin_save(ctx: &DawContext, path: &Path) -> PendingProjectSave {
@@ -523,42 +531,26 @@ fn execute_save_with(
             }
         }
         for snapshot in mixer {
-            let channel = match snapshot.target {
-                MixerChannelTarget::Track(id) => {
-                    &mut pending
-                        .saved
-                        .mixer
-                        .channels
-                        .get_mut(id)
-                        .context("Track disappeared during save")?
-                        .channel
-                }
-                MixerChannelTarget::Bus(id) => {
-                    &mut pending
-                        .saved
-                        .mixer
-                        .buses
-                        .get_mut(id)
-                        .context("Bus disappeared during save")?
-                        .channel
-                }
-                MixerChannelTarget::Master => &mut pending.saved.mixer.master_bus,
-            };
-            channel.volume.set_base(snapshot.volume);
-            channel.pan.set_base(snapshot.pan);
-            channel.mute = snapshot.mute;
-            channel.solo = snapshot.solo;
-            channel.inverted_phase = snapshot.inverted_phase;
+            apply_mixer_snapshot(&mut pending.saved, &snapshot)
+                .context("Mixer channel disappeared during save")?;
         }
     }
     save_daw_project(&pending.path, &pending.saved)?;
     Ok(CompletedProjectSave {
+        path: pending.path,
         saved: pending.saved,
     })
 }
 
+/// Publishes the engine-synced project and marks it saved as of the revision captured at
+/// `begin_save`, so edits that landed while the save ran keep the project unsaved.
 pub(super) fn commit_save(ctx: &mut DawContext, completed: CompletedProjectSave) {
+    let revision = completed.revision();
+    let mut session = std::mem::take(&mut ctx.app_state.session);
+    session.mark_saved_at(revision);
+    session.set_file_path(Some(completed.path));
     ctx.app_state = completed.saved;
+    ctx.app_state.session = session;
 }
 
 pub(super) fn save_project(
@@ -572,6 +564,70 @@ pub(super) fn save_project(
 ) -> anyhow::Result<()> {
     let completed = execute_save_with(begin_save(ctx, path), timeout, capture_host_state)?;
     commit_save(ctx, completed);
+    Ok(())
+}
+
+fn apply_mixer_snapshot(app: &mut ApplicationState, snapshot: &MixerChannelSnapshot) -> Option<()> {
+    let channel = match snapshot.target {
+        MixerChannelTarget::Track(id) => &mut app.mixer.channels.get_mut(id)?.channel,
+        MixerChannelTarget::Bus(id) => &mut app.mixer.buses.get_mut(id)?.channel,
+        MixerChannelTarget::Master => &mut app.mixer.master_bus,
+    };
+    channel.volume.set_base(snapshot.volume);
+    channel.pan.set_base(snapshot.pan);
+    channel.mute = snapshot.mute;
+    channel.solo = snapshot.solo;
+    channel.inverted_phase = snapshot.inverted_phase;
+    Some(())
+}
+
+/// How long an edit waits for the engine to report live state before going ahead without it.
+#[cfg(not(test))]
+const LIVE_CAPTURE_TIMEOUT: Duration = Duration::from_millis(500);
+/// Unit tests never run an engine that could answer, so the capture gives up at once.
+#[cfg(test)]
+const LIVE_CAPTURE_TIMEOUT: Duration = Duration::ZERO;
+
+/// Copies the live engine state of first-party plugins and mixer channels into the project.
+///
+/// Plugin parameters and mixer values live on the audio thread and reach the project only when
+/// it is saved. Call this before recording an edit that removes those objects, so undo brings
+/// them back as they sounded. Without a running engine the project copy is already current.
+pub(crate) fn capture_live_state(
+    ctx: &mut DawContext,
+    plugins: &[PluginTarget],
+    mixers: &[MixerChannelTarget],
+) -> anyhow::Result<()> {
+    if ctx.command_sender.lock().is_none() {
+        return Ok(());
+    }
+    let requested = plugins
+        .iter()
+        .filter(|target| {
+            !ctx.external_plugin_failures.contains_key(*target)
+                && crate::api::external_plugin_api::plugin_instance(ctx, **target)
+                    .is_some_and(|plugin| plugin.external.is_none())
+        })
+        .map(|target| PendingTarget::Plugin(*target))
+        .chain(mixers.iter().cloned().map(PendingTarget::Mixer))
+        .collect();
+    let (captured, snapshots) = collect(&ctx.control_handles(), LIVE_CAPTURE_TIMEOUT, requested)?;
+    for captured in captured {
+        if let Some(plugin) = plugin_mut(&mut ctx.app_state, captured.target)
+            && plugin.external.is_none()
+        {
+            plugin.plugin_state = captured.state;
+            if let Some(specs) = ctx
+                .plugin_registry
+                .get_plugin_parameter_specs_by_id(plugin.registry_id)
+            {
+                plugin.parameter_specs = specs;
+            }
+        }
+    }
+    for snapshot in snapshots {
+        apply_mixer_snapshot(&mut ctx.app_state, &snapshot);
+    }
     Ok(())
 }
 

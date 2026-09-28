@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
+use jiff::Timestamp;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
 use karbeat_core::audio::writer::{AudioExportConfig, BitDepth, WavAudioWriterConfig};
@@ -140,7 +140,7 @@ impl From<ProjectMetadata> for UiProjectMetadata {
             description: m.description,
             genre: m.genre,
             version: m.version,
-            created_at: m.created_at.to_rfc3339(),
+            created_at: m.created_at.to_string(),
         }
     }
 }
@@ -153,7 +153,10 @@ impl From<UiProjectMetadata> for ProjectMetadata {
             description: m.description,
             genre: m.genre,
             version: m.version,
-            created_at: m.created_at.parse::<DateTime<Utc>>().unwrap_or(Utc::now()),
+            created_at: m
+                .created_at
+                .parse::<Timestamp>()
+                .unwrap_or_else(|_| Timestamp::now()),
         }
     }
 }

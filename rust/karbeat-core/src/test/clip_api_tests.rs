@@ -3,12 +3,9 @@
 #[cfg(test)]
 mod tests {
     use crate::api::clip_api;
-    use crate::core::{
-        history::ProjectAction,
-        project::{
-            ClipboardContent, DawSource,
-            clip::{Clip, ClipSourceType, ClipTimeUnit, ResizeEdge},
-        },
+    use crate::core::project::{
+        ClipboardContent, DawSource,
+        clip::{Clip, ClipSourceType, ClipTimeUnit, ResizeEdge},
     };
     use crate::shared::AudioSourceId;
     use crate::shared::id::{ClipId, TrackId};
@@ -393,14 +390,9 @@ mod tests {
         );
         assert!(matches!(ctx.app_state.clipboard, ClipboardContent::Empty));
         assert_eq!(ctx.history.undo_stack.len(), history_count_before + 1);
-        assert!(matches!(
-            ctx.history.undo_stack.last(),
-            Some(ProjectAction::Batch(actions)) if actions.len() == 4
-        ));
+        assert_eq!(ctx.history.undo_label(), Some("Duplicate Clips"));
 
-        ctx.history
-            .undo(&mut ctx.app_state)
-            .expect("one undo should remove the complete draw batch");
+        crate::api::undo(&mut ctx).expect("one undo should remove the complete draw batch");
         assert_eq!(ctx.app_state.tracks[midi_id].clips.len(), clip_count_before);
     }
 

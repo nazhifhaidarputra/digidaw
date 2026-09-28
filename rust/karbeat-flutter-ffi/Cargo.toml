@@ -29,7 +29,7 @@ karbeat-plugins.workspace = true
 smallvec.workspace = true
 memmap2.workspace = true
 bytemuck.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 cpal.workspace = true
 serde_json.workspace = true
 parking_lot.workspace = true
@@ -46,6 +46,7 @@ karbeat-core.workspace = true
 
 [dev-dependencies]
 shuttle.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

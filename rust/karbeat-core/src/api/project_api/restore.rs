@@ -89,6 +89,34 @@ fn seed(channel: &MixerChannel) -> MixerChannelSeed {
     }
 }
 
+/// Builds a first-party plugin processor restored to `plugin`'s saved state and parameters.
+pub(crate) fn prepare_builtin_plugin(
+    factory: PluginFactory,
+    plugin: &PluginInstance,
+    sample_rate: u32,
+    block_size: usize,
+) -> (
+    Box<dyn karbeat_plugin_api::traits::AudioPlugin>,
+    PreparedPluginTelemetry,
+) {
+    let mut prepared = factory();
+    if !plugin.plugin_state.is_empty() {
+        prepared.set_state(&plugin.plugin_state);
+    }
+    for spec in &plugin.parameter_specs {
+        prepared.set_parameter(spec.id, spec.value as f32);
+    }
+    prepared.prepare(sample_rate as f32, block_size.max(512));
+    let bus = BusConfig {
+        name: "Main".into(),
+        channel_count: 2,
+        is_optional: false,
+    };
+    prepared.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
+    let telemetry = PreparedPluginTelemetry::new(prepared.as_ref());
+    (prepared, telemetry)
+}
+
 pub(super) fn hydration_command(
     app: &ApplicationState,
     registry: &PluginRegistry,
@@ -104,21 +132,8 @@ pub(super) fn hydration_command(
         let Some(factory) = factory(plugin, target, registry, missing) else {
             continue;
         };
-        let mut prepared = factory();
-        if !plugin.plugin_state.is_empty() {
-            prepared.set_state(&plugin.plugin_state);
-        }
-        for spec in &plugin.parameter_specs {
-            prepared.set_parameter(spec.id, spec.value as f32);
-        }
-        prepared.prepare(sample_rate as f32, block_size.max(512));
-        let bus = BusConfig {
-            name: "Main".into(),
-            channel_count: 2,
-            is_optional: false,
-        };
-        prepared.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
-        let telemetry = PreparedPluginTelemetry::new(prepared.as_ref());
+        let (prepared, telemetry) =
+            prepare_builtin_plugin(factory, plugin, sample_rate, block_size);
         let entry = (plugin.registry_id, prepared, telemetry);
         match target {
             PluginTarget::Generator(id) => {

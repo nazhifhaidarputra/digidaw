@@ -509,17 +509,21 @@ mod tests {
 
     #[test]
     fn effect_removal_reaches_the_engine_as_one_command() {
+        // Removal first asks the engine for the effect's live state so undo can restore it. No
+        // engine answers here, so the capture gives up and the removal goes ahead.
         let (mut ctx, audio_id, effect_id, _, _) = seeded_effect_automation();
         let (producer, mut consumer) = rtrb::RingBuffer::<AudioCommand>::new(8);
         *ctx.command_sender.lock() = Some(producer);
 
         mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id).unwrap();
 
+        let removals = std::iter::from_fn(|| consumer.pop().ok())
+            .filter(|command| !matches!(command, AudioCommand::QueryPluginState { .. }))
+            .collect::<Vec<_>>();
         assert!(matches!(
-            consumer.pop(),
-            Ok(AudioCommand::RemoveEffect { effect_id: removed, .. }) if removed == effect_id
+            removals.as_slice(),
+            [AudioCommand::RemoveEffect { effect_id: removed, .. }] if *removed == effect_id
         ));
-        assert!(consumer.pop().is_err());
     }
 
     #[test]

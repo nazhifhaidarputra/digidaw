@@ -1,15 +1,18 @@
 import 'dart:async';
-import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/crash_recovery_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/input/input.dart';
+import 'package:karbeat/core/services/crash_report_service.dart';
 import 'package:karbeat/core/services/rust_log_bridge.dart';
 import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/core/widgets/blocking_task_overlay.dart';
 import 'package:karbeat/core/widgets/notification_overlay.dart';
 import 'package:karbeat/features/misc/error_init_screen.dart';
@@ -40,6 +43,8 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
   late final Future<void> _initialization;
   late final bool Function(Object, StackTrace) _uncaughtErrorHandler;
   bool Function(Object, StackTrace)? _previousUncaughtErrorHandler;
+  late final FlutterExceptionHandler _frameworkErrorHandler;
+  FlutterExceptionHandler? _previousFrameworkErrorHandler;
 
   @override
   void initState() {
@@ -51,6 +56,13 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         error: error,
         stackTrace: stackTrace,
       );
+      final recorded = CrashReportService.recordUncaughtError(
+        error,
+        stackTrace,
+      );
+      if (recorded case Error<void>(error: final recordError)) {
+        AppLogger.warn('Crash report was not recorded: $recordError');
+      }
       if (mounted) {
         ref
             .read(notificationProvider.notifier)
@@ -60,6 +72,16 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
       return true;
     };
     PlatformDispatcher.instance.onError = _uncaughtErrorHandler;
+
+    _previousFrameworkErrorHandler = FlutterError.onError;
+    _frameworkErrorHandler = (details) {
+      final recorded = CrashReportService.recordFrameworkError(details);
+      if (recorded case Error<void>(error: final recordError)) {
+        AppLogger.warn('Crash report was not recorded: $recordError');
+      }
+      _previousFrameworkErrorHandler?.call(details);
+    };
+    FlutterError.onError = _frameworkErrorHandler;
     _initialization = _initializeApplication();
   }
 
@@ -67,6 +89,9 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
   void dispose() {
     if (identical(PlatformDispatcher.instance.onError, _uncaughtErrorHandler)) {
       PlatformDispatcher.instance.onError = _previousUncaughtErrorHandler;
+    }
+    if (identical(FlutterError.onError, _frameworkErrorHandler)) {
+      FlutterError.onError = _previousFrameworkErrorHandler;
     }
     final dawContext = _dawContextLifetimeAnchor;
     if (dawContext != null) {
@@ -114,6 +139,10 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
       final dawContext = ref.read(projectProvider.notifier).dawContext;
       _dawContextLifetimeAnchor = dawContext;
+      // Crash reporting starts before the remaining startup work so failures
+      // there are captured. A failure is reported but does not block startup.
+      await ref.read(crashRecoveryProvider.notifier).initialize(dawContext);
+      if (!mounted) return;
       await ref.read(pluginSettingsProvider.notifier).initialize();
       if (!mounted) return;
       await ref.read(audioPluginProvider.future);

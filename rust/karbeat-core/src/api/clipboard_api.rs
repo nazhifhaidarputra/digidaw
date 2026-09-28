@@ -1,7 +1,7 @@
 use crate::{
     context::DawContext,
     core::{
-        history::ProjectAction,
+        history::actions::{ClipEditRecorder, NotesChanged},
         project::{Clip, ClipboardContent, Note, clip::ClipTimeUnit},
     },
     shared::{ClipId, NoteId, PatternId, TrackId},
@@ -53,20 +53,11 @@ where
         return Ok(Vec::new());
     }
 
-    let mut actions = Vec::with_capacity(inserted_notes.len());
-    for note in inserted_notes.iter() {
-        actions.push(ProjectAction::AddNote {
-            pattern_id: target_pattern_id,
-            note: note.clone(),
-        });
-    }
-
-    let history = &mut ctx.history;
-    if actions.len() == 1 {
-        history.push(actions.remove(0));
-    } else {
-        history.push(ProjectAction::Batch(actions));
-    }
+    ctx.push_history(NotesChanged::added(
+        "Paste Notes",
+        target_pattern_id,
+        &inserted_notes,
+    ));
 
     ctx.broadcast_track_graph();
     Ok(inserted_notes.iter().map(mapper).collect())
@@ -91,17 +82,11 @@ pub fn cut_notes(
     }
 
     // 2. Update history
-    let mut actions = Vec::with_capacity(deleted_notes.len());
-    for note in deleted_notes {
-        actions.push(ProjectAction::DeleteNote { pattern_id, note });
-    }
-
-    // let mut history = get_history_lock();
-    if actions.len() == 1 {
-        ctx.push_history(actions.remove(0));
-    } else {
-        ctx.push_history(ProjectAction::Batch(actions));
-    }
+    ctx.push_history(NotesChanged::replaced(
+        "Cut Notes",
+        pattern_id,
+        deleted_notes,
+    ));
 
     // 3. Notify UI
     ctx.broadcast_track_graph();
@@ -124,28 +109,19 @@ pub fn cut_clips(ctx: &mut DawContext, source_track_id: TrackId, clip_ids: Vec<C
         return;
     }
 
-    // 1. Mutate state
-    let app = &mut ctx.app_state;
-    let deleted_clips = app.cut_clipboard_clip_batch(source_track_id, &clip_ids);
+    let recorder =
+        ClipEditRecorder::begin(&ctx.app_state, "Cut Clips", &[source_track_id], &clip_ids);
+    let deleted_clips = ctx
+        .app_state
+        .cut_clipboard_clip_batch(source_track_id, &clip_ids);
 
     if deleted_clips.is_empty() {
         return;
     }
 
-    // 2. Update history
-    let mut actions = Vec::with_capacity(deleted_clips.len());
-    for clip in deleted_clips {
-        actions.push(ProjectAction::DeleteClip {
-            track_id: source_track_id,
-            clip,
-        });
-    }
+    let action = recorder.finish(&mut ctx.app_state);
 
-    if actions.len() == 1 {
-        ctx.push_history(actions.remove(0));
-    } else {
-        ctx.push_history(ProjectAction::Batch(actions));
-    }
+    ctx.push_history(action);
 
     ctx.broadcast_track_graph();
 }
@@ -156,28 +132,18 @@ pub fn paste_clips(
     target_track_id: TrackId,
     paste_start_time: ClipTimeUnit,
 ) -> anyhow::Result<Vec<Clip>> {
-    // Mutate state
-    let app = &mut ctx.app_state;
-    let pasted_clips = app.paste_clip_batch(target_track_id, paste_start_time)?;
+    let recorder = ClipEditRecorder::begin(&ctx.app_state, "Paste Clips", &[target_track_id], &[]);
+    let pasted_clips = ctx
+        .app_state
+        .paste_clip_batch(target_track_id, paste_start_time)?;
 
     if pasted_clips.is_empty() {
         return Ok(Vec::new());
     }
 
-    // 2. Update history
-    let mut actions = Vec::with_capacity(pasted_clips.len());
-    for clip in pasted_clips.clone() {
-        actions.push(ProjectAction::AddClip {
-            track_id: target_track_id,
-            clip,
-        });
-    }
+    let action = recorder.finish(&mut ctx.app_state);
 
-    if actions.len() == 1 {
-        ctx.push_history(actions.remove(0));
-    } else {
-        ctx.push_history(ProjectAction::Batch(actions));
-    }
+    ctx.push_history(action);
 
     ctx.broadcast_track_graph();
     Ok(pasted_clips)

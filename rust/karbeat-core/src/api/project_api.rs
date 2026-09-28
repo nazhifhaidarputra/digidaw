@@ -9,6 +9,7 @@ use crate::audio::writer::AudioExportConfig;
 use crate::commands::AudioCommand;
 use crate::context::DawContext;
 use crate::core::file_manager::project_loader::load_daw_project;
+use crate::core::history::actions::MetadataChanged;
 use crate::core::project::ApplicationState;
 use crate::core::project::{
     ProjectMetadata, generator::GeneratorInstance, transport::TransportState,
@@ -27,7 +28,8 @@ pub fn update_project_metadata(
     metadata: ProjectMetadata,
 ) -> anyhow::Result<ProjectMetadata> {
     let metadata = metadata.normalize_and_validate()?;
-    ctx.app_state.metadata = metadata.clone();
+    let previous = std::mem::replace(&mut ctx.app_state.metadata, metadata.clone());
+    ctx.push_history(MetadataChanged::new(previous));
     Ok(metadata)
 }
 
@@ -55,9 +57,10 @@ where
 
 mod restore;
 mod save;
+pub(crate) use restore::prepare_builtin_plugin;
 pub use restore::{CompletedProjectRestore, PendingProjectRestore};
-pub(crate) use save::hosted_instance_with_handles;
 pub use save::{CompletedProjectSave, PendingProjectSave};
+pub(crate) use save::{capture_live_state, hosted_instance_with_handles};
 
 pub fn begin_save_project(ctx: &DawContext, path_name: &str) -> PendingProjectSave {
     save::begin_save(ctx, Path::new(path_name))
@@ -71,8 +74,11 @@ pub fn commit_save_project(ctx: &mut DawContext, completed: CompletedProjectSave
     save::commit_save(ctx, completed);
 }
 
+/// Reads a project file into a staged state that remembers `path_name` as its project file.
 pub fn load_project_file(path_name: &str, sample_rate: u32) -> anyhow::Result<ApplicationState> {
-    load_daw_project(Path::new(path_name), sample_rate)
+    let mut loaded = load_daw_project(Path::new(path_name), sample_rate)?;
+    loaded.session.set_file_path(Some(path_name.into()));
+    Ok(loaded)
 }
 
 pub fn begin_loaded_project_restore(
@@ -97,8 +103,10 @@ pub fn execute_project_restore(
     restore::execute_replace(pending)
 }
 
+/// Publishes a replacement project. History belongs to the previous project and is cleared.
 pub fn commit_project_restore(ctx: &mut DawContext, completed: CompletedProjectRestore) {
     restore::commit_replace(ctx, completed);
+    ctx.clear_history();
 }
 
 /// Synchronizes live engine values, captures hosted state, and atomically saves the project.
@@ -118,7 +126,7 @@ where
     F: FnOnce(&ApplicationState) -> T,
 {
     let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
-    let mut loaded = load_daw_project(Path::new(path_name), sample_rate)?;
+    let mut loaded = load_project_file(path_name, sample_rate)?;
     loaded.audio_config = ctx.app_state.audio_config.clone();
     loaded.clipboard = ctx.app_state.clipboard.clone();
     if restore::has_external(&loaded) || restore::has_external(&ctx.app_state) {
@@ -139,6 +147,7 @@ where
             hydrate_live_audio_engine(ctx)?;
         }
     }
+    ctx.clear_history();
     Ok(mapper(&ctx.app_state))
 }
 
@@ -198,6 +207,7 @@ pub fn new_blank_project(ctx: &mut DawContext) -> anyhow::Result<ApplicationStat
             hydrate_live_audio_engine(ctx)?;
         }
     }
+    ctx.clear_history();
     Ok(ctx.app_state.clone())
 }
 

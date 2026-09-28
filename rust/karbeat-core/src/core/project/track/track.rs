@@ -386,7 +386,7 @@ impl ApplicationState {
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
             self.remove_modulations_for_generator(gen_id);
-            self.generator_pool.remove(gen_id);
+            self.generator_pool.detach(gen_id);
             deleted_track_type = RemovedTrackType::Midi;
         }
 
@@ -394,11 +394,11 @@ impl ApplicationState {
         self.remove_modulations_for_track(track_id);
 
         // Remove the track and its globally-owned clips.
-        let Some(track) = self.tracks.remove(track_id) else {
+        let Some(track) = self.tracks.detach(track_id) else {
             return Err(anyhow::anyhow!("Track {:?} not found", track_id));
         };
         for clip_id in track.clips {
-            self.clips_pool.remove(clip_id);
+            self.clips_pool.detach(clip_id);
         }
 
         self.normalize_track_orders();

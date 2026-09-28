@@ -159,6 +159,7 @@ pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> anyhow::Result
             return Err(anyhow::anyhow!("Failed to load the audio source"));
         }
     };
+    ctx.mark_project_modified();
     ctx.broadcast_full_graph();
     Ok(id)
 }

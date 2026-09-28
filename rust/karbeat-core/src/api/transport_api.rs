@@ -1,6 +1,7 @@
 use crate::audio::engine::PlaybackMode;
 use crate::commands::AudioCommand;
 use crate::context::DawContext;
+use crate::core::history::actions::TempoChanged;
 use crate::shared::{GeneratorId, PatternId};
 
 /// Set is playing for song mode
@@ -25,7 +26,8 @@ pub fn set_looping(ctx: &mut DawContext, val: bool) {
 
 /// Updates tempo, rebuilds timing-dependent graph state, and queues the tempo change.
 pub fn set_bpm(ctx: &mut DawContext, val: f32) {
-    ctx.app_state.transport.bpm = val;
+    let previous = std::mem::replace(&mut ctx.app_state.transport.bpm, val);
+    ctx.push_history(TempoChanged::new(previous));
     let _ = ctx.send_audio_command(AudioCommand::SetBPM(val));
 }
 

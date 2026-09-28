@@ -968,7 +968,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mixer_lookup_preserves_reused_track_generation() {
+    fn mixer_lookup_rejects_a_deleted_track_id() {
         crate::sync::check_random(
             || {
                 let mut core = karbeat_core::context::DawContext::new();
@@ -977,7 +977,8 @@ mod tests {
                 let replacement = core.app_state.add_new_audio_track().id;
                 let ctx = DawContext::new(core);
 
-                assert_eq!(removed.to_u32(), replacement.to_u32());
+                // Deleted slots stay reserved for undo, so a new entity never reuses one.
+                assert_ne!(removed.to_u32(), replacement.to_u32());
                 assert_ne!(removed.to_u64(), replacement.to_u64());
                 assert!(get_mixer_channel(&ctx, removed.to_u64()).is_err());
                 assert!(get_mixer_channel(&ctx, replacement.to_u64()).is_ok());

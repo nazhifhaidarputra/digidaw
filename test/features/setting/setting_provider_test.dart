@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/services/settings_service.dart';
+import 'package:karbeat/src/rust/api/mitigation.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -17,6 +18,14 @@ class _FakeSettingsService extends SettingsService {
   Exception? loadError;
   Exception? applyError;
   Exception? saveError;
+
+  UiAutoSaveSettings loadedAutoSave = const UiAutoSaveSettings(
+    isEnabled: true,
+    intervalSeconds: 300,
+  );
+  UiAutoSaveSettings? appliedAutoSave;
+  UiAutoSaveSettings? savedAutoSave;
+  Exception? autoSaveApplyError;
 
   @override
   Future<Result<int>> loadHistoryLimit() async {
@@ -37,6 +46,28 @@ class _FakeSettingsService extends SettingsService {
     final error = saveError;
     if (error != null) return Result.error(error);
     savedLimit = limit;
+    return Result.ok(null);
+  }
+
+  @override
+  Future<Result<UiAutoSaveSettings>> loadAutoSaveSettings() async {
+    return Result.ok(loadedAutoSave);
+  }
+
+  @override
+  Future<Result<UiAutoSaveSettings>> applyAutoSaveSettings(
+    DawContext context,
+    UiAutoSaveSettings settings,
+  ) async {
+    final error = autoSaveApplyError;
+    if (error != null) return Result.error(error);
+    appliedAutoSave = settings;
+    return Result.ok(settings);
+  }
+
+  @override
+  Future<Result<void>> saveAutoSaveSettings(UiAutoSaveSettings settings) async {
+    savedAutoSave = settings;
     return Result.ok(null);
   }
 }
@@ -94,6 +125,71 @@ void main() {
       container.read(generalSettingsProvider).isApplyingHistoryLimit,
       isFalse,
     );
+  });
+
+  test('initialize restores and applies persisted auto save settings', () async {
+    final service = _FakeSettingsService()
+      ..loadedAutoSave = const UiAutoSaveSettings(
+        isEnabled: false,
+        intervalSeconds: 600,
+      );
+    final container = ProviderContainer(
+      overrides: [settingsServiceProvider.overrideWithValue(service)],
+    );
+    addTearDown(container.dispose);
+
+    final result = await container
+        .read(generalSettingsProvider.notifier)
+        .initialize(_MockDawContext());
+
+    final state = container.read(generalSettingsProvider);
+    expect(result.isOk(), isTrue);
+    expect(service.appliedAutoSave, service.loadedAutoSave);
+    expect(state.autoSaveEnabled, isFalse);
+    expect(state.autoSaveIntervalSeconds, 600);
+    expect(state.isApplyingAutoSave, isFalse);
+  });
+
+  test('auto save changes are applied then persisted', () async {
+    final service = _FakeSettingsService();
+    final container = ProviderContainer(
+      overrides: [settingsServiceProvider.overrideWithValue(service)],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(generalSettingsProvider.notifier);
+    await notifier.initialize(_MockDawContext());
+
+    await notifier.setAutoSaveInterval(120);
+    final disabled = await notifier.setAutoSaveEnabled(false);
+
+    const expected = UiAutoSaveSettings(isEnabled: false, intervalSeconds: 120);
+    expect(disabled.isOk(), isTrue);
+    expect(service.appliedAutoSave, expected);
+    expect(service.savedAutoSave, expected);
+    expect(container.read(generalSettingsProvider).autoSaveEnabled, isFalse);
+    expect(
+      container.read(generalSettingsProvider).autoSaveIntervalSeconds,
+      120,
+    );
+  });
+
+  test('rejected auto save change keeps the previous settings', () async {
+    final service = _FakeSettingsService();
+    final container = ProviderContainer(
+      overrides: [settingsServiceProvider.overrideWithValue(service)],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(generalSettingsProvider.notifier);
+    await notifier.initialize(_MockDawContext());
+    service.autoSaveApplyError = Exception('backend rejected interval');
+
+    final result = await notifier.setAutoSaveInterval(30);
+
+    final state = container.read(generalSettingsProvider);
+    expect(result.isErr(), isTrue);
+    expect(state.autoSaveIntervalSeconds, 300);
+    expect(state.isApplyingAutoSave, isFalse);
+    expect(service.savedAutoSave, isNull);
   });
 
   test('failed initialization can be retried', () async {

@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/floating_midi_keyboard_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
@@ -19,7 +17,10 @@ import 'package:karbeat/core/input/intents/workspace/open_midi_keyboard_intent.d
 import 'package:karbeat/core/input/intents/workspace/save_intent.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
+import 'package:karbeat/features/workspace/services/project_file_actions.dart';
 import 'package:karbeat/features/workspace/view/project_export.dart';
+import 'package:karbeat/features/workspace/view/startup_recovery_prompt.dart';
+import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
 import 'package:karbeat/features/workspace/view/main_content.dart';
 import 'package:karbeat/features/workspace/view/side_panel.dart';
 import 'package:karbeat/features/workspace/view/sidebar.dart';
@@ -57,13 +58,13 @@ class MainScreen extends ConsumerWidget {
       actions: {
         SaveIntent: CallbackAction<SaveIntent>(
           onInvoke: (_) {
-            unawaited(_saveProject(ref));
+            unawaited(saveCurrentProject(ref));
             return null;
           },
         ),
         SaveAsIntent: CallbackAction<SaveAsIntent>(
           onInvoke: (_) {
-            unawaited(_saveProject(ref, saveAs: true));
+            unawaited(saveCurrentProject(ref, saveAs: true));
             return null;
           },
         ),
@@ -127,83 +128,66 @@ class MainScreen extends ConsumerWidget {
               },
             ),
       },
-      child: ShortcutFocusAnchor(
-        child: Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          body: Stack(
-            children: [
-              Positioned.fill(
-                child: WorkspaceBackground(
-                  fit: background.fit,
-                  overlayOpacity: background.overlay,
-                ),
-              ),
-              const Row(
+      child: UnsavedChangesGuard(
+        child: StartupRecoveryPrompt(
+          child: ShortcutFocusAnchor(
+            child: Scaffold(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              body: Stack(
                 children: [
-                  Sidebar(),
-                  Expanded(child: MainContent()),
-                ],
-              ),
-              // Optimized Context Panel Overlay
-              if (currentContext != ToolbarMenuContextGroup.none)
-                Positioned(
-                  left: 60,
-                  top: 0,
-                  bottom: 0,
-                  child: _buildContextPanel(context, ref, currentContext),
-                ),
-
-              if (showMidiKeyboard) const FloatingMidiKeyboard(),
-              if (showExportPanel) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    onTap: () {
-                      // ref.read(karbeatStateProvider).closeExportPanel();
-                    },
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-                      child: Container(color: Colors.black.withAlpha(100)),
+                  Positioned.fill(
+                    child: WorkspaceBackground(
+                      fit: background.fit,
+                      overlayOpacity: background.overlay,
                     ),
                   ),
-                ),
-
-                // Export panel
-                Positioned.fill(
-                  child: ProjectExportPanel(
-                    onClose: () {
-                      ref
-                          .read(workspaceStateProvider.notifier)
-                          .closeExportPanel();
-                    },
+                  const Row(
+                    children: [
+                      Sidebar(),
+                      Expanded(child: MainContent()),
+                    ],
                   ),
-                ),
-              ],
-            ],
+                  // Optimized Context Panel Overlay
+                  if (currentContext != ToolbarMenuContextGroup.none)
+                    Positioned(
+                      left: 60,
+                      top: 0,
+                      bottom: 0,
+                      child: _buildContextPanel(context, ref, currentContext),
+                    ),
+
+                  if (showMidiKeyboard) const FloatingMidiKeyboard(),
+                  if (showExportPanel) ...[
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: () {
+                          // ref.read(karbeatStateProvider).closeExportPanel();
+                        },
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                          child: Container(color: Colors.black.withAlpha(100)),
+                        ),
+                      ),
+                    ),
+
+                    // Export panel
+                    Positioned.fill(
+                      child: ProjectExportPanel(
+                        onClose: () {
+                          ref
+                              .read(workspaceStateProvider.notifier)
+                              .closeExportPanel();
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
-  }
-
-  Future<void> _saveProject(WidgetRef ref, {bool saveAs = false}) async {
-    var path = ref.read(projectProvider).value?.currentFilePath;
-    if (saveAs || path == null) {
-      path = await FilePicker.saveFile(
-        dialogTitle: 'Save Project As...',
-        fileName: 'untitled.dgdaw',
-        type: FileType.custom,
-        allowedExtensions: const ['karbeat', 'dgdaw'],
-      );
-    }
-    if (path == null) return;
-    final savePath = path;
-    final project = ref.read(projectProvider.notifier);
-    await ref
-        .read(blockingTaskProvider.notifier)
-        .run(
-          label: 'Saving project...',
-          task: () => project.saveProject(savePath),
-        );
   }
 
   Future<void> _runHistoryAction(WidgetRef ref, {required bool undo}) async {

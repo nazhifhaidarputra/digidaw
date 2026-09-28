@@ -1,5 +1,9 @@
 use crate::commands::AudioCommand;
+use crate::commands::MixerChannelTarget;
 use crate::context::DawContext;
+use crate::core::history::actions::{
+    StructureRecorder, TrackRecolored, TrackRenamed, TracksReordered,
+};
 use crate::core::project::AudioTrack;
 use crate::core::project::track::RemovedTrackType;
 use crate::shared::id::*;
@@ -22,6 +26,7 @@ pub fn add_midi_track_with_generator_id(
     if ctx.plugin_catalog.external(registry_id).is_some() {
         return super::external_plugin_api::add_instrument(ctx, registry_id);
     }
+    let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[]);
     let (audio_track, gen_id, generator_plugin_factory) = ctx
         .app_state
         .add_new_midi_track_with_generator_id(&mut ctx.plugin_registry, registry_id)?;
@@ -35,6 +40,8 @@ pub fn add_midi_track_with_generator_id(
         telemetry: Some(telemetry),
     });
 
+    let action = structure_before.finish(&ctx.app_state, "Add Instrument Track");
+    ctx.push_history(action);
     ctx.broadcast_track_graph();
     Ok(audio_track)
 }
@@ -53,7 +60,8 @@ pub fn change_track_name(
         .tracks
         .get_mut(track_id)
         .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
-    track.name = new_name.to_string();
+    let previous = std::mem::replace(&mut track.name, new_name.to_string());
+    ctx.push_history(TrackRenamed::new(track_id, previous));
     Ok(())
 }
 
@@ -68,15 +76,20 @@ pub fn change_track_color(
         .tracks
         .get_mut(track_id)
         .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
-    track.color = Color::new_from_string(new_color).ok_or_else(|| {
+    let color = Color::new_from_string(new_color).ok_or_else(|| {
         anyhow::anyhow!("Invalid color format. Use hex string like #RRGGBB or #RRGGBBAA")
     })?;
+    let previous = std::mem::replace(&mut track.color, color);
+    ctx.push_history(TrackRecolored::new(track_id, previous));
     Ok(())
 }
 
 /// Creates an audio track, records its insertion, and publishes the updated track graph.
 pub fn add_new_audio_track(ctx: &mut DawContext) -> AudioTrack {
+    let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[]);
     let track = ctx.app_state.add_new_audio_track();
+    let action = structure_before.finish(&ctx.app_state, "Add Audio Track");
+    ctx.push_history(action);
     ctx.broadcast_track_graph();
     track
 }
@@ -117,6 +130,30 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
         return super::external_plugin_api::delete_track(ctx, track_id);
     }
 
+    let plugins = super::external_plugin_api::track_targets(ctx, track_id);
+    if let Err(error) = super::project_api::capture_live_state(
+        ctx,
+        &plugins,
+        &[MixerChannelTarget::Track(track_id)],
+    ) {
+        log::warn!("Deleting track without its live plugin state: {error:#}");
+    }
+    let structure_before = StructureRecorder::begin(&ctx.app_state, &[track_id], &[]);
+    let effect_ids: Vec<_> = ctx
+        .app_state
+        .mixer
+        .channels
+        .get(track_id)
+        .map(|channel| {
+            channel
+                .channel
+                .effects
+                .iter()
+                .map(|effect| effect.id)
+                .collect()
+        })
+        .unwrap_or_default();
+
     let generator_id = ctx
         .app_state
         .tracks
@@ -130,6 +167,14 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
             generator_id: gen_id,
         });
     }
+    for effect_id in effect_ids {
+        let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
+            target: crate::commands::EffectTarget::Track(track_id),
+            effect_id,
+        });
+    }
+    let action = structure_before.finish(&ctx.app_state, "Delete Track");
+    ctx.push_history(action);
     ctx.broadcast_track_graph();
     Ok(deleted_track_type)
 }
@@ -140,5 +185,8 @@ pub fn update_track_order(
     track_id: TrackId,
     new_idx: usize,
 ) -> anyhow::Result<()> {
-    ctx.app_state.update_track_order(track_id, new_idx)
+    let previous = TracksReordered::capture(&ctx.app_state);
+    ctx.app_state.update_track_order(track_id, new_idx)?;
+    ctx.push_history(previous);
+    Ok(())
 }

@@ -451,7 +451,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generator_lookup_preserves_reused_slot_generation() {
+    fn generator_lookup_rejects_a_deleted_generator_id() {
         crate::sync::check_random(
             || {
                 let mut core = karbeat_core::context::DawContext::new();
@@ -460,8 +460,10 @@ mod tests {
                 let replacement = core.app_state.add_generator(Default::default());
                 let ctx = DawContext::new(core);
 
-                assert_eq!(removed.to_u32(), replacement.to_u32());
+                // Deleted slots stay reserved for undo, so a new entity never reuses one.
+                assert_ne!(removed.to_u32(), replacement.to_u32());
                 assert_ne!(removed.to_u64(), replacement.to_u64());
+                assert!(get_generator(&ctx, removed.to_u64()).is_err());
                 assert!(get_generator(&ctx, replacement.to_u64()).is_ok());
             },
             1,
