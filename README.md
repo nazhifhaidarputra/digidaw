@@ -35,7 +35,7 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Bus Automation lanes rack
 - [x] Real-time pitch shifting (Via Rubberband FFI binding). There is a plan to rewrite the pitch shifting entirely in Rust to remove reliability to an C++ library via FFI boundary
 - [x] Finishing and optimizing Bus Mixer Routing
-- [ ] Action history (Undo/Redo). Currently the system exists, but not all action has HistoryEntry
+- [x] Action history (Undo/Redo).
 - [ ] Time-stretched audio waveform processing
 - [x] Audio host selector (ASIO, JACK, or AudioCore)
 - [x] Automation for generator
@@ -62,6 +62,8 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Version manager
 - [ ] Comprehensive Documentation for both User and Developer
 - [ ] Official logo and icon
+- [x] Auto-save
+- [x] Crash reporting
 
 ## Tech Stack
 
