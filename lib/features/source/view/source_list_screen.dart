@@ -2,11 +2,12 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/blocking_task_provider.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
-import 'package:karbeat/features/plugins/plugin_registry.dart';
-import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
-import 'package:karbeat/features/plugins/view/dynamic_plugin_screen.dart';
+import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -17,19 +18,87 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 class SourceListScreen extends ConsumerWidget {
   const SourceListScreen({super.key});
 
-  Future<void> _pickFile(WidgetRef ref) async {
-    FilePickerResult? result = await FilePicker.pickFiles(type: FileType.audio);
+  Future<void> _pickFile(BuildContext context, WidgetRef ref) async {
+    final notifications = ref.read(notificationProvider.notifier);
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(type: FileType.audio);
+    } catch (error, stackTrace) {
+      AppLogger.error('Could not select an audio file: $error');
+      notifications.error(
+        error,
+        title: 'Could not select audio',
+        stackTrace: stackTrace,
+      );
+      return;
+    }
 
-    if (result != null && result.files.single.path != null) {
-      String path = result.files.single.path!;
-      final ctx = ref.read(projectProvider.notifier).dawContext;
-      await addAudioSource(ctx: ctx, filePath: path);
+    final path = result?.files.single.path;
+    if (path == null || !context.mounted) return;
+
+    final projectNotifier = ref.read(projectProvider.notifier);
+    final importResult = await ref
+        .read(blockingTaskProvider.notifier)
+        .run(
+          label: 'Loading audio...',
+          task: () => projectNotifier.loadAudioSource(path),
+        );
+
+    if (context.mounted && importResult.isOk()) {
       ref.invalidate(audioSourcesProvider);
     }
   }
 
+  Future<void> _renamePattern(
+    BuildContext context,
+    WidgetRef ref,
+    int patternId,
+    String currentName,
+  ) async {
+    var pendingName = currentName;
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Rename Pattern"),
+        content: TextFormField(
+          initialValue: currentName,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "New pattern name",
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => pendingName = value,
+          onFieldSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, pendingName),
+            child: const Text("Rename"),
+          ),
+        ],
+      ),
+    );
+
+    final trimmedName = newName?.trim();
+    if (!context.mounted ||
+        trimmedName == null ||
+        trimmedName.isEmpty ||
+        trimmedName == currentName) {
+      return;
+    }
+
+    await ref
+        .read(pianoRollProvider.notifier)
+        .renamePattern(patternId: patternId, newName: trimmedName);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     // Access the source map from state
     final audioSourcesAsync = ref.watch(audioSourcesProvider);
 
@@ -42,10 +111,8 @@ class SourceListScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade900,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickFile(ref),
-        backgroundColor: Colors.cyanAccent,
+        onPressed: () => _pickFile(context, ref),
         child: const Icon(Icons.add),
       ),
       body: CustomScrollView(
@@ -53,13 +120,13 @@ class SourceListScreen extends ConsumerWidget {
           // ================================================
           // 1. GENERATORS SECTION
           // ================================================
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
                 "Instruments / Generators",
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: colors.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -68,13 +135,13 @@ class SourceListScreen extends ConsumerWidget {
           ),
 
           if (generators.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
                   "No Instruments.",
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: colors.onSurfaceVariant,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -100,35 +167,18 @@ class SourceListScreen extends ConsumerWidget {
                 title: name,
                 subtitle: "ID: $id",
                 icon: Icons.piano,
-                color: Colors.orangeAccent,
+                color: colors.tertiary,
                 onTap: () async {
-                  Widget screen;
-
-                  if (!context.mounted) return;
-
-                  try {
-                    final availableGenerators = await ref
-                        .read(audioPluginProvider.notifier)
-                        .getAvailableGenerators();
-                    final registryId = availableGenerators
-                        .firstWhere((p) => p.id == genInstance?.registryId)
-                        .id;
-                    // final builder = SynthRegistry.getSynthBuilder(registryId);
-                    screen = PluginRegistryFlutter.getGeneratorScreen(
-                      registryId: registryId,
-                      instanceId: id,
-                    );
-                  } catch (_) {
-                    screen = DynamicPluginScreen(
-                      target: UiPluginTarget.generator(id),
-                      pluginName: name,
-                    );
-                  }
-
-                  if (!context.mounted) return;
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => screen));
+                  final registryId = genInstance?.registryId;
+                  if (registryId == null) return;
+                  await openPluginInterface(
+                    context: context,
+                    ref: ref,
+                    target: UiPluginTarget.generator(id),
+                    registryId: registryId,
+                    instanceId: id,
+                    pluginName: name,
+                  );
                 },
                 onPlace: null,
                 // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement
@@ -136,18 +186,18 @@ class SourceListScreen extends ConsumerWidget {
             }, childCount: generators.length),
           ),
 
-          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+          SliverToBoxAdapter(child: Divider(color: colors.outlineVariant)),
 
           // ================================================
           // 2. AUDIO CLIPS SECTION
           // ================================================
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
                 "Audio Clips",
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: colors.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -158,13 +208,13 @@ class SourceListScreen extends ConsumerWidget {
           audioSourcesAsync.when(
             data: (audioSources) {
               if (audioSources.isEmpty) {
-                return const SliverToBoxAdapter(
+                return SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(16.0),
                     child: Text(
                       "No Audio Files.",
                       style: TextStyle(
-                        color: Colors.grey,
+                        color: colors.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -181,7 +231,7 @@ class SourceListScreen extends ConsumerWidget {
                     title: source.name,
                     subtitle: "ID: $id | ${source.sampleRate} Hz",
                     icon: Icons.audio_file,
-                    color: Colors.cyanAccent,
+                    color: colors.primary,
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -224,22 +274,22 @@ class SourceListScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
                   "Error loading audio sources: $err",
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: colors.error),
                 ),
               ),
             ),
           ),
 
-          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+          SliverToBoxAdapter(child: Divider(color: colors.outlineVariant)),
 
           // Patterns list
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
                 "Patterns",
                 style: TextStyle(
-                  color: Colors.white54,
+                  color: colors.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -248,13 +298,13 @@ class SourceListScreen extends ConsumerWidget {
           ),
 
           if (patterns.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
                   "No Patterns.",
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: colors.onSurfaceVariant,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -269,7 +319,7 @@ class SourceListScreen extends ConsumerWidget {
                 title: pattern.name,
                 subtitle: "ID: $id | ${pattern.name}",
                 icon: Icons.music_note,
-                color: Colors.purpleAccent,
+                color: colors.secondary,
                 onTap: () {
                   ref.read(pianoRollProvider.notifier).openPattern(id);
                 },
@@ -288,6 +338,7 @@ class SourceListScreen extends ConsumerWidget {
                         initialTrackId: firstTrackId,
                       );
                 },
+                onRename: () => _renamePattern(context, ref, id, pattern.name),
               );
             }, childCount: patterns.length),
           ),
@@ -307,6 +358,7 @@ class _SourceTile extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final VoidCallback? onPlace;
+  final VoidCallback? onRename;
 
   const _SourceTile({
     required this.title,
@@ -315,18 +367,24 @@ class _SourceTile extends StatelessWidget {
     required this.color,
     required this.onTap,
     this.onPlace,
+    this.onRename,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(icon, color: color),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
-      subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey)),
+      title: Text(title, style: TextStyle(color: colors.onSurface)),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: colors.onSurfaceVariant),
+      ),
       trailing: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert, color: Colors.white),
+        icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
         onSelected: (value) {
           if (value == 'place') onPlace?.call();
+          if (value == 'rename') onRename?.call();
         },
         itemBuilder: (context) => [
           if (onPlace != null)
@@ -334,9 +392,20 @@ class _SourceTile extends StatelessWidget {
               value: 'place',
               child: Row(
                 children: [
-                  Icon(Icons.input, color: Colors.black54),
+                  Icon(Icons.input),
                   SizedBox(width: 8),
                   Text("Put in timeline"),
+                ],
+              ),
+            ),
+          if (onRename != null)
+            const PopupMenuItem(
+              value: 'rename',
+              child: Row(
+                children: [
+                  Icon(Icons.edit),
+                  SizedBox(width: 8),
+                  Text("Rename"),
                 ],
               ),
             ),
@@ -344,7 +413,7 @@ class _SourceTile extends StatelessWidget {
             value: 'delete',
             child: Row(
               children: [
-                Icon(Icons.delete, color: Colors.red),
+                Icon(Icons.delete),
                 SizedBox(width: 8),
                 Text("Delete"),
               ],

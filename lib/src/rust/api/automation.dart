@@ -10,7 +10,7 @@ import 'plugin.dart';
 import 'project.dart';
 part 'automation.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
@@ -38,14 +38,14 @@ Future<(AutomationLaneDto, ModulationLinkDto)> addAutomationLane({
   required String label,
   required double min,
   required double max,
-  required double defaultValue,
+  required double initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLane(
   ctx: ctx,
   target: target,
   label: label,
   min: min,
   max: max,
-  defaultValue: defaultValue,
+  initialValue: initialValue,
 );
 
 /// Fetch all automation lanes across all targets
@@ -69,7 +69,7 @@ Future<AutomationLaneDto> addAutomationLaneForTrack({
   required String label,
   required double min,
   required double max,
-  required double defaultValue,
+  required double initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForTrack(
   ctx: ctx,
   trackId: trackId,
@@ -77,7 +77,7 @@ Future<AutomationLaneDto> addAutomationLaneForTrack({
   label: label,
   min: min,
   max: max,
-  defaultValue: defaultValue,
+  initialValue: initialValue,
 );
 
 Future<AutomationLaneDto> addAutomationLaneForBus({
@@ -87,7 +87,7 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   required String label,
   required double min,
   required double max,
-  required double defaultValue,
+  required double initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForBus(
   ctx: ctx,
   busId: busId,
@@ -95,7 +95,7 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   label: label,
   min: min,
   max: max,
-  defaultValue: defaultValue,
+  initialValue: initialValue,
 );
 
 /// ## Overview
@@ -105,12 +105,23 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
 /// ## Returns
 ///
 /// * Tuple of (removed_automation_id, removed_modulation_source_ids, removed_modulation_link_ids)
-Future<(int, Uint32List, Uint32List)> removeAutomationLaneFor({
+Future<(int, List<int>, List<int>)> removeAutomationLaneFor({
   required DawContext ctx,
   required AutomationTargetDto target,
 }) => RustLib.instance.api.crateApiAutomationRemoveAutomationLaneFor(
   ctx: ctx,
   target: target,
+);
+
+/// Sets whether a lane controls its target while preserving its data and link.
+Future<AutomationLaneDto> setAutomationLaneEnabled({
+  required DawContext ctx,
+  required int automationId,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiAutomationSetAutomationLaneEnabled(
+  ctx: ctx,
+  automationId: automationId,
+  enabled: enabled,
 );
 
 Future<AutomationLaneDto> addNewAutomationPoint({
@@ -326,6 +337,16 @@ sealed class ModulationSourceDto with _$ModulationSourceDto {
       ModulationSourceDto_Automation;
   const factory ModulationSourceDto.lfo({required double rateHz}) =
       ModulationSourceDto_Lfo;
+}
+
+/// Automation removed as part of another project operation, such as deleting an effect.
+@freezed
+sealed class RemovedAutomationDto with _$RemovedAutomationDto {
+  const factory RemovedAutomationDto({
+    required List<int> automationLaneIds,
+    required List<int> modulationSourceIds,
+    required List<int> modulationLinkIds,
+  }) = _RemovedAutomationDto;
 }
 
 @freezed

@@ -8,11 +8,12 @@ import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
+import 'plugin.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -48,6 +49,14 @@ UiTransportState transportStateNewWithParam({
 /// Get the current project metadata state from the backend
 Future<UiProjectMetadata> getProjectMetadata({required DawContext ctx}) =>
     RustLib.instance.api.crateApiProjectGetProjectMetadata(ctx: ctx);
+
+Future<UiProjectMetadata> updateProjectMetadata({
+  required DawContext ctx,
+  required UiProjectMetadata metadata,
+}) => RustLib.instance.api.crateApiProjectUpdateProjectMetadata(
+  ctx: ctx,
+  metadata: metadata,
+);
 
 /// Get the transport state from the backend
 Future<UiTransportState> getTransportState({required DawContext ctx}) =>
@@ -97,9 +106,6 @@ Stream<double> exportProjectFlutter({
   config: config,
   tailHandling: tailHandling,
 );
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveform>>
-abstract class AudioWaveform implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>>
 abstract class AudioWaveformUiForAudioProperties
@@ -159,15 +165,6 @@ abstract class AudioWaveformUiForAudioProperties
   set trimEnd(int trimEnd);
 
   set trimStart(int trimStart);
-
-  static Future<AudioWaveformUiForAudioProperties> tryFromWithContext({
-    required DawContext ctx,
-    required AudioWaveform value,
-  }) => RustLib.instance.api
-      .crateApiProjectAudioWaveformUiForAudioPropertiesTryFromWithContext(
-        ctx: ctx,
-        value: value,
-      );
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>
@@ -343,6 +340,8 @@ sealed class UiProjectMetadata with _$UiProjectMetadata {
   const factory UiProjectMetadata({
     required String name,
     required String author,
+    required String description,
+    required String genre,
     required String version,
     required String createdAt,
   }) = _UiProjectMetadata;

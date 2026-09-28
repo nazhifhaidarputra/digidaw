@@ -1,7 +1,46 @@
 use std::fmt::Debug;
 
 use karbeat_utils::types::*;
+use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
+
+fn f64_to_f32(value: f64) -> f32 {
+    value.to_f32().unwrap_or_else(|| {
+        if value.is_nan() {
+            f32::NAN
+        } else if value.is_sign_negative() {
+            f32::NEG_INFINITY
+        } else {
+            f32::INFINITY
+        }
+    })
+}
+
+fn f64_to_i32(value: f64) -> i32 {
+    value.to_i32().unwrap_or_else(|| {
+        if value.is_nan() {
+            0
+        } else if value.is_sign_negative() {
+            i32::MIN
+        } else {
+            i32::MAX
+        }
+    })
+}
+
+fn f64_to_usize(value: f64) -> usize {
+    value.to_usize().unwrap_or_else(|| {
+        if value.is_nan() || value.is_sign_negative() {
+            0
+        } else {
+            usize::MAX
+        }
+    })
+}
+
+fn usize_to_f64(value: usize) -> f64 {
+    ToPrimitive::to_f64(&value).unwrap_or(f64::MAX)
+}
 
 pub trait Normalizable: ParamType {}
 impl Normalizable for f32 {}
@@ -14,6 +53,10 @@ pub enum ParameterValueType {
     Int,
     Bool,
     Choice,
+}
+
+fn parameter_automatable_default() -> bool {
+    true
 }
 
 /// Generic description of a parameter spec for UI generation
@@ -30,6 +73,9 @@ pub struct ParameterSpec {
     pub step: f64, // 0.0 for continuous
     pub value_type: ParameterValueType,
     pub choices: Vec<String>, // Labels for Choice type (index = value)
+    /// Whether hosts may create automation lanes for this parameter.
+    #[serde(default = "parameter_automatable_default")]
+    pub automatable: bool,
 }
 
 impl ParameterSpec {
@@ -56,6 +102,7 @@ impl ParameterSpec {
             step,
             value_type: ParameterValueType::Float,
             choices: Vec::new(),
+            automatable: true,
         }
     }
 
@@ -73,6 +120,7 @@ impl ParameterSpec {
             step: 1.0,
             value_type: ParameterValueType::Bool,
             choices: Vec::new(),
+            automatable: true,
         }
     }
 
@@ -90,13 +138,42 @@ impl ParameterSpec {
             path: String::new(),
             name: name.to_string(),
             group: group.to_string(),
-            value: val as f64,
+            value: f64::from(val),
             min: 0.0,
-            max: choices.len().saturating_sub(1) as f64,
-            default_value: default as f64,
+            max: usize_to_f64(choices.len().saturating_sub(1)),
+            default_value: f64::from(default),
             step: 1.0,
             value_type: ParameterValueType::Choice,
             choices,
+            automatable: true,
+        }
+    }
+}
+
+#[cfg(test)]
+mod parameter_spec_tests {
+    use super::*;
+
+    #[test]
+    fn missing_automatable_field_defaults_to_true() {
+        let json = r#"{
+            "id": 1,
+            "path": "filter/cutoff",
+            "name": "Cutoff",
+            "group": "Filter",
+            "value": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "default_value": 0.5,
+            "step": 0.0,
+            "value_type": "Float",
+            "choices": []
+        }"#;
+
+        let result = serde_json::from_str::<ParameterSpec>(json);
+        assert!(result.is_ok());
+        if let Ok(spec) = result {
+            assert!(spec.automatable);
         }
     }
 }
@@ -105,7 +182,6 @@ pub trait ParamType: Copy + Clone + Debug + PartialEq + std::any::Any {
     type Smoother: Clone + Debug + PartialEq + Serialize + for<'a> Deserialize<'a>;
     fn create_smoother(val: Self) -> Self::Smoother;
     fn update_smoother_target(smoother: &mut Self::Smoother, target: Self);
-
 
     fn from_f64_clamped(val: f64, bounds: &ParamBounds<Self>) -> Self;
     fn from_f64(val: f64) -> Self;
@@ -116,24 +192,24 @@ pub trait ParamType: Copy + Clone + Debug + PartialEq + std::any::Any {
 impl ParamType for f32 {
     type Smoother = ParameterSmoother;
     fn create_smoother(val: Self) -> Self::Smoother {
-        ParameterSmoother::new(val as f64, 1.0)
+        ParameterSmoother::new(f64::from(val), 1.0)
     }
     fn update_smoother_target(smoother: &mut Self::Smoother, target: Self) {
-        smoother.set_target(target as f64);
+        smoother.set_target(f64::from(target));
     }
 
     fn from_f64_clamped(val: f64, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
             // Note: Since min/max are now type T (f32 in this impl), we cast val to f32.
-            ParamBounds::Continuous { min, max, .. } => (val as f32).clamp(*min, *max),
-            _ => val as f32,
+            ParamBounds::Continuous { min, max, .. } => f64_to_f32(val).clamp(*min, *max),
+            _ => f64_to_f32(val),
         }
     }
     fn from_f64(val: f64) -> Self {
-        val as f32
+        f64_to_f32(val)
     }
     fn to_f64(self) -> f64 {
-        self as f64
+        f64::from(self)
     }
     fn clamp_value(self, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
@@ -175,16 +251,16 @@ impl ParamType for i32 {
     fn from_f64_clamped(val: f64, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
             ParamBounds::Discrete { min, max, .. } => {
-                val.round().clamp(*min as f64, *max as f64) as i32
+                f64_to_i32(val.round().clamp(f64::from(*min), f64::from(*max)))
             }
-            _ => val.round() as i32,
+            _ => f64_to_i32(val.round()),
         }
     }
     fn from_f64(val: f64) -> Self {
-        val.round() as i32
+        f64_to_i32(val.round())
     }
     fn to_f64(self) -> f64 {
-        self as f64
+        f64::from(self)
     }
     fn clamp_value(self, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
@@ -192,16 +268,12 @@ impl ParamType for i32 {
             _ => self,
         }
     }
-    
+
     type Smoother = ();
-    
-    fn create_smoother(_: Self) -> Self::Smoother {
-        
-    }
-    
-    fn update_smoother_target(_: &mut Self::Smoother, _: Self) {
-        
-    }
+
+    fn create_smoother(_: Self) -> Self::Smoother {}
+
+    fn update_smoother_target(_: &mut Self::Smoother, _: Self) {}
 }
 
 impl ParamType for bool {
@@ -217,13 +289,13 @@ impl ParamType for bool {
     fn clamp_value(self, _bounds: &ParamBounds<Self>) -> Self {
         self
     }
-    
+
     type Smoother = ();
-    
+
     fn create_smoother(_val: Self) -> Self::Smoother {
         ()
     }
-    
+
     fn update_smoother_target(_smoother: &mut Self::Smoother, target: Self) {
         ()
     }
@@ -234,17 +306,17 @@ impl ParamType for usize {
     fn from_f64_clamped(val: f64, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
             ParamBounds::Choice { count, .. } => {
-                let max_idx = count.saturating_sub(1) as f64;
-                val.round().clamp(0.0, max_idx) as usize
+                let max_idx = usize_to_f64(count.saturating_sub(1));
+                f64_to_usize(val.round().clamp(0.0, max_idx))
             }
-            _ => val.round() as usize,
+            _ => f64_to_usize(val.round()),
         }
     }
     fn from_f64(val: f64) -> Self {
-        val.round() as usize
+        f64_to_usize(val.round())
     }
     fn to_f64(self) -> f64 {
-        self as f64
+        usize_to_f64(self)
     }
     fn clamp_value(self, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
@@ -255,16 +327,12 @@ impl ParamType for usize {
             _ => self,
         }
     }
-    
+
     type Smoother = ();
-    
-    fn create_smoother(_val: Self) -> Self::Smoother {
-        
-    }
-    
-    fn update_smoother_target(_smoother: &mut Self::Smoother, _target: Self) {
-        
-    }
+
+    fn create_smoother(_val: Self) -> Self::Smoother {}
+
+    fn update_smoother_target(_smoother: &mut Self::Smoother, _target: Self) {}
 }
 
 /// A trait that allows an enum to be used safely as an automated parameter.
@@ -280,17 +348,17 @@ pub trait EnumParam: Copy + Clone + std::fmt::Debug + PartialEq + std::any::Any 
 impl<T: EnumParam> ParamType for T {
     fn from_f64_clamped(val: f64, _bounds: &ParamBounds<Self>) -> Self {
         // Clamp the float to the exact number of enum variants
-        let max_idx = T::variants().len().saturating_sub(1) as f64;
-        let idx = val.round().clamp(0.0, max_idx) as usize;
+        let max_idx = usize_to_f64(T::variants().len().saturating_sub(1));
+        let idx = f64_to_usize(val.round().clamp(0.0, max_idx));
         T::from_index(idx)
     }
 
     fn from_f64(val: f64) -> Self {
-        T::from_index(val.round() as usize)
+        T::from_index(f64_to_usize(val.round()))
     }
 
     fn to_f64(self) -> f64 {
-        self.to_index() as f64
+        usize_to_f64(self.to_index())
     }
 
     fn clamp_value(self, _bounds: &ParamBounds<Self>) -> Self {
@@ -298,16 +366,12 @@ impl<T: EnumParam> ParamType for T {
         let idx = self.to_index().clamp(0, max_idx);
         T::from_index(idx)
     }
-    
+
     type Smoother = ();
-    
-    fn create_smoother(_val: Self) -> Self::Smoother {
-        
-    }
-    
-    fn update_smoother_target(_smoother: &mut Self::Smoother, _target: Self) {
-        
-    }
+
+    fn create_smoother(_val: Self) -> Self::Smoother {}
+
+    fn update_smoother_target(_smoother: &mut Self::Smoother, _target: Self) {}
 }
 
 /// Defines the constraints and behavior of a parameter.
@@ -426,7 +490,7 @@ impl<T: ParamType> Param<T> {
                 ParamBounds::Continuous { max, .. } => max.to_f64(),
                 ParamBounds::Discrete { max, .. } => max.to_f64(),
                 ParamBounds::Toggle => 1.0,
-                ParamBounds::Choice { count, .. } => count.saturating_sub(1) as f64,
+                ParamBounds::Choice { count, .. } => usize_to_f64(count.saturating_sub(1)),
             },
             // Use the immutable factory default, not the current base_value.
             // This ensures the UI "reset to default" always resets to the
@@ -449,6 +513,7 @@ impl<T: ParamType> Param<T> {
                 }
                 _ => vec![],
             },
+            automatable: true,
         }
     }
 
@@ -458,11 +523,9 @@ impl<T: ParamType> Param<T> {
                 (min.to_f64(), max.to_f64())
             }
             ParamBounds::Toggle => (0.0, 1.0),
-            ParamBounds::Choice { count, .. } => {
-                (0.0, count.saturating_sub(1) as f64)
-            }
+            ParamBounds::Choice { count, .. } => (0.0, usize_to_f64(count.saturating_sub(1))),
         };
-        
+
         NormalizedF64::from_range(value.to_f64(), min_f, max_f)
     }
 
@@ -485,11 +548,9 @@ impl<T: ParamType> Param<T> {
                 (min.to_f64(), max.to_f64())
             }
             ParamBounds::Toggle => (0.0, 1.0),
-            ParamBounds::Choice { count, .. } => {
-                (0.0, count.saturating_sub(1) as f64)
-            }
+            ParamBounds::Choice { count, .. } => (0.0, usize_to_f64(count.saturating_sub(1))),
         };
-        
+
         let denormalized_f64 = normalized.to_range(min_f, max_f);
         T::from_f64_clamped(denormalized_f64, &self.bounds)
     }
@@ -574,7 +635,7 @@ impl Param<i32> {
             current_value: default_clamped,
             bounds: ParamBounds::Discrete { min, max, step },
             is_automated: false,
-            smoother: i32::create_smoother(default_clamped)
+            smoother: i32::create_smoother(default_clamped),
         }
     }
 }
@@ -629,7 +690,7 @@ impl<T: EnumParam> Param<T> {
                 labels: T::variants().iter().map(|s| s.to_string()).collect(),
             },
             is_automated: false,
-            smoother: T::create_smoother(default)
+            smoother: T::create_smoother(default),
         }
     }
 }
@@ -639,6 +700,9 @@ impl<T: EnumParam> Param<T> {
 pub trait AutoParams {
     fn auto_set_parameter<V: ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool;
     fn auto_get_parameter<V: ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V>;
+    fn auto_get_current_parameter<V: ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V> {
+        self.auto_get_parameter(prefix_hash, id)
+    }
     fn auto_apply_automation<V: ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool;
     fn auto_clear_automation(&mut self, prefix_hash: u32, id: u32) -> bool;
     fn auto_get_parameter_specs(&self, prefix_hash: u32, prefix_str: &str) -> Vec<ParameterSpec>;
@@ -704,7 +768,7 @@ pub struct ParameterSmoother {
 impl ParameterSmoother {
     /// Creates a new parameter smoother.
     /// - `initial_value`: The starting value of the parameter.
-    /// - `coefficient`: Smoothing factor (0.0 = no change, 1.0 = instant). 
+    /// - `coefficient`: Smoothing factor (0.0 = no change, 1.0 = instant).
     ///   Typically calculated as `1.0 - (-2.0 * PI * cutoff_freq / sample_rate).exp()`.
     #[inline(always)]
     pub fn new(initial_value: f64, coefficient: f64) -> Self {
@@ -745,6 +809,16 @@ impl ParameterSmoother {
         self.current
     }
 
+    #[inline(always)]
+    pub fn current(&self) -> f64 {
+        self.current
+    }
+
+    #[inline(always)]
+    pub fn is_settled(&self) -> bool {
+        (self.target - self.current).abs() <= 1.0e-9
+    }
+
     /// Applies the smoothly changing parameter to a mono buffer in-place.
     #[inline(always)]
     pub fn apply(&mut self, buffer: &mut [f64]) {
@@ -765,7 +839,7 @@ impl ParameterSmoother {
             *chunk *= self.next();
         }
     }
-    
+
     /// Resets the smoother to a specific value instantly (bypassing smoothing).
     #[inline(always)]
     pub fn reset(&mut self, value: f64) {

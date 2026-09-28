@@ -10,8 +10,8 @@ mod tests {
     #[test]
     fn get_audio_waveform_clips_data_empty_state() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
-            audio_waveform_api::get_audio_waveform_clips_data(&ctx, |id, _w| id.to_u32())
+        let result: Vec<u64> =
+            audio_waveform_api::get_audio_waveform_clips_data(&ctx, |id, _w| id.to_u64())
                 .expect("Should succeed on empty state");
         assert!(result.is_empty());
     }
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn get_audio_waveform_for_clip_all_available_in_tracks_empty_state() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
+        let result: Vec<u64> =
             audio_waveform_api::get_audio_waveform_for_clip_all_available_in_tracks(
                 &ctx,
                 |id, _w| id,
@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn get_audio_source_list_empty() {
         let ctx = make_ctx();
-        let result: Vec<u32> =
+        let result: Vec<u64> =
             audio_waveform_api::get_audio_source_list(&ctx, |id, _w| id).expect("Should succeed");
         assert!(result.is_empty());
     }
@@ -79,6 +79,32 @@ mod tests {
         let mut ctx = make_ctx();
         let result = audio_waveform_api::add_audio_source(&mut ctx, "nonexistent_file_xyz.wav");
         assert!(result.is_err(), "Invalid path should return Err");
+    }
+
+    #[test]
+    fn add_audio_source_reuses_an_existing_file_source() {
+        let mut ctx = make_ctx();
+        ctx.active_audio_config.write().sample_rate = Some(48_000);
+        let file = tempfile::NamedTempFile::new().expect("audio fixture file");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::new(file.reopen().expect("fixture handle"), spec)
+            .expect("fixture writer");
+        writer.write_sample(0_i16).expect("fixture sample");
+        writer.finalize().expect("finalize fixture");
+        let path = file.path().to_str().expect("fixture path");
+
+        let first = audio_waveform_api::add_audio_source(&mut ctx, path)
+            .expect("first source import should succeed");
+        let second = audio_waveform_api::add_audio_source(&mut ctx, path)
+            .expect("second source import should succeed");
+
+        assert_eq!(first, second);
+        assert_eq!(ctx.app_state.asset_library.source_map.len(), 1);
     }
 
     #[test]

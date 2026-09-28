@@ -421,8 +421,10 @@ class KarbeatParametricEqState
 
   @override
   Widget buildPluginBody(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return Container(
-      color: Colors.grey.shade900,
+      color: colors.surface,
       child: Column(
         children: [
           // TOP: Response Curve
@@ -431,9 +433,9 @@ class KarbeatParametricEqState
             child: Container(
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF16213E),
+                color: colors.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade800),
+                border: Border.all(color: colors.outlineVariant),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -451,6 +453,19 @@ class KarbeatParametricEqState
                           activeNodeIndex: _draggingNodeIndex,
                           magnitudeBuffer: _magnitudeBuffer,
                           spectrumBuffer: _spectrumBuffer,
+                          gridColor: colors.onSurface.withValues(alpha: 0.08),
+                          axisColor: colors.onSurface.withValues(alpha: 0.54),
+                          spectrumColor: colors.onSurface,
+                          responseColor: colors.primary,
+                          labelStyle: theme.textTheme.labelSmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 10,
+                          ),
+                          nodeTextStyle: theme.textTheme.labelSmall?.copyWith(
+                            color: colors.surface,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     );
@@ -466,7 +481,7 @@ class KarbeatParametricEqState
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.grey.shade800)),
+                border: Border(top: BorderSide(color: colors.outlineVariant)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -474,7 +489,7 @@ class KarbeatParametricEqState
                   _buildMasterStrip(),
                   Container(
                     width: 1,
-                    color: Colors.grey.shade800,
+                    color: colors.outlineVariant,
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                   Expanded(
@@ -500,6 +515,7 @@ class KarbeatParametricEqState
   }
 
   Widget _buildBandStrip(int i) {
+    final colors = Theme.of(context).colorScheme;
     final band = bands[i];
     final color = _bandColors[i % _bandColors.length];
     final specs = _bandSpecs[i];
@@ -523,7 +539,7 @@ class KarbeatParametricEqState
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade800.withAlpha(50),
+        color: colors.surfaceContainer.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: band.active ? color.withAlpha(100) : Colors.transparent,
@@ -553,7 +569,7 @@ class KarbeatParametricEqState
                     Text(
                       "B${i + 1}",
                       style: TextStyle(
-                        color: band.active ? Colors.white70 : Colors.white30,
+                        color: band.active ? colors.onSurface : colors.outline,
                         fontSize: 9,
                         fontWeight: FontWeight.bold,
                       ),
@@ -583,7 +599,7 @@ class KarbeatParametricEqState
               child: PopupMenuButton<int>(
                 initialValue: band.filterType,
                 padding: EdgeInsets.zero,
-                color: Colors.grey.shade800,
+                color: colors.surfaceContainerHigh,
                 onSelected: (val) => _updateBandParam(i, 4, val.toDouble()),
                 itemBuilder: (context) => List.generate(
                   filterChoices.length,
@@ -592,10 +608,7 @@ class KarbeatParametricEqState
                     height: 32,
                     child: Text(
                       filterChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
-                      ),
+                      style: TextStyle(color: colors.onSurface, fontSize: 9),
                     ),
                   ),
                 ),
@@ -608,17 +621,17 @@ class KarbeatParametricEqState
                                 band.filterType < filterChoices.length
                             ? filterChoices[band.filterType]
                             : "",
-                        style: const TextStyle(
-                          color: Colors.white54,
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
                           fontSize: 9,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Icons.arrow_drop_down,
                       size: 12,
-                      color: Colors.white54,
+                      color: colors.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -657,7 +670,7 @@ class KarbeatParametricEqState
               child: PopupMenuButton<int>(
                 initialValue: band.order,
                 padding: EdgeInsets.zero,
-                color: Colors.grey.shade800,
+                color: colors.surfaceContainerHigh,
                 onSelected: (val) => _updateBandParam(i, 5, val.toDouble()),
                 itemBuilder: (context) => List.generate(
                   slopeChoices.length,
@@ -666,10 +679,7 @@ class KarbeatParametricEqState
                     height: 32,
                     child: Text(
                       slopeChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
-                      ),
+                      style: TextStyle(color: colors.onSurface, fontSize: 9),
                     ),
                   ),
                 ),
@@ -682,17 +692,17 @@ class KarbeatParametricEqState
                                 band.order < slopeChoices.length
                             ? slopeChoices[band.order]
                             : "",
-                        style: const TextStyle(
-                          color: Colors.white54,
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
                           fontSize: 9,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Icons.arrow_drop_down,
                       size: 12,
-                      color: Colors.white54,
+                      color: colors.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -705,6 +715,7 @@ class KarbeatParametricEqState
   }
 
   Widget _buildMasterStrip() {
+    final colors = Theme.of(context).colorScheme;
     plugin_api.UiPluginParameter? p;
     for (final param in parameters) {
       if (param.id == DigiParametricEQSpecs.baseGain.id) {
@@ -714,18 +725,17 @@ class KarbeatParametricEqState
     }
     p ??= DigiParametricEQSpecs.baseGain;
 
-
     return Container(
       width: 80,
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Column(
         children: [
-          const FittedBox(
+          FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               "MASTER",
               style: TextStyle(
-                color: Colors.white70,
+                color: colors.onSurface,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
@@ -754,7 +764,7 @@ class KarbeatParametricEqState
             fit: BoxFit.scaleDown,
             child: Text(
               "${masterGain.toStringAsFixed(1)} dB",
-              style: const TextStyle(color: Colors.white54, fontSize: 10),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10),
             ),
           ),
         ],
@@ -777,7 +787,6 @@ class KarbeatParametricEqState
       }
     }
     p ??= spec;
-
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6.0),
@@ -805,6 +814,12 @@ class _EqResponsePainter extends CustomPainter {
   final int? activeNodeIndex;
   final Float32List? magnitudeBuffer;
   final Float32List? spectrumBuffer;
+  final Color gridColor;
+  final Color axisColor;
+  final Color spectrumColor;
+  final Color responseColor;
+  final TextStyle? labelStyle;
+  final TextStyle? nodeTextStyle;
 
   _EqResponsePainter({
     required this.bands,
@@ -812,6 +827,12 @@ class _EqResponsePainter extends CustomPainter {
     required this.activeNodeIndex,
     required this.magnitudeBuffer,
     required this.spectrumBuffer,
+    required this.gridColor,
+    required this.axisColor,
+    required this.spectrumColor,
+    required this.responseColor,
+    required this.labelStyle,
+    required this.nodeTextStyle,
   });
 
   List<Offset> _bufferToOffsets(
@@ -851,7 +872,7 @@ class _EqResponsePainter extends CustomPainter {
 
   void _drawGrid(Canvas canvas, double w, double h) {
     final gridPaint = Paint()
-      ..color = Colors.white.withAlpha(20)
+      ..color = gridColor
       ..strokeWidth = 1;
     final tp = TextPainter(textDirection: TextDirection.ltr);
 
@@ -861,7 +882,7 @@ class _EqResponsePainter extends CustomPainter {
 
       tp.text = TextSpan(
         text: f >= 1000 ? '${f ~/ 1000}k' : '${f.toInt()}',
-        style: const TextStyle(color: Colors.white30, fontSize: 10),
+        style: labelStyle,
       );
       tp.layout();
       tp.paint(canvas, Offset(x + 2, h - 14));
@@ -873,7 +894,7 @@ class _EqResponsePainter extends CustomPainter {
       Offset(0, h / 2),
       Offset(w, h / 2),
       Paint()
-        ..color = Colors.white54
+        ..color = axisColor
         ..strokeWidth = 1,
     );
   }
@@ -902,7 +923,10 @@ class _EqResponsePainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.white.withAlpha(120), Colors.white.withAlpha(20)],
+          colors: [
+            spectrumColor.withValues(alpha: 0.47),
+            spectrumColor.withValues(alpha: 0.08),
+          ],
         ).createShader(Rect.fromLTWH(0, 0, w, h))
         ..style = PaintingStyle.fill,
     );
@@ -910,7 +934,7 @@ class _EqResponsePainter extends CustomPainter {
     canvas.drawPath(
       curvePath,
       Paint()
-        ..color = Colors.white.withAlpha(150)
+        ..color = spectrumColor.withValues(alpha: 0.59)
         ..strokeWidth = 1.0
         ..style = PaintingStyle.stroke
         ..isAntiAlias = true,
@@ -934,14 +958,14 @@ class _EqResponsePainter extends CustomPainter {
     canvas.drawPath(
       fillPath,
       Paint()
-        ..color = Colors.cyanAccent.withAlpha(20)
+        ..color = responseColor.withValues(alpha: 0.08)
         ..style = PaintingStyle.fill,
     );
 
     canvas.drawPath(
       curvePath,
       Paint()
-        ..color = Colors.cyanAccent
+        ..color = responseColor
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke
         ..isAntiAlias = true,
@@ -980,19 +1004,12 @@ class _EqResponsePainter extends CustomPainter {
         Offset(x, y),
         radius,
         Paint()
-          ..color = Colors.white
+          ..color = spectrumColor
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
 
-      tp.text = TextSpan(
-        text: '${i + 1}',
-        style: const TextStyle(
-          color: Colors.black,
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-        ),
-      );
+      tp.text = TextSpan(text: '${i + 1}', style: nodeTextStyle);
       tp.layout();
       tp.paint(canvas, Offset(x - tp.width / 2, y - tp.height / 2));
     }
@@ -1003,7 +1020,13 @@ class _EqResponsePainter extends CustomPainter {
       old.magnitudeBuffer != magnitudeBuffer ||
       old.spectrumBuffer != spectrumBuffer ||
       old.activeNodeIndex != activeNodeIndex ||
-      old.bands != bands;
+      old.bands != bands ||
+      old.gridColor != gridColor ||
+      old.axisColor != axisColor ||
+      old.spectrumColor != spectrumColor ||
+      old.responseColor != responseColor ||
+      old.labelStyle != labelStyle ||
+      old.nodeTextStyle != nodeTextStyle;
 }
 
 Path _buildSmoothPath(List<Offset> pts) {

@@ -12,6 +12,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final List<int> selectedClipIds;
   final ScrollController horizontalScrollController;
   final Map<int, WaveformHandle> waveformMap;
+  final bool compact;
 
   const _InteractiveClip({
     super.key,
@@ -26,6 +27,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
     required this.selectedClipIds,
     required this.horizontalScrollController,
     required this.waveformMap,
+    this.compact = false,
   });
 
   @override
@@ -77,9 +79,67 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final sr = ref.read(transportProvider).value?.sampleRate;
     // Convert to tick-equivalent for rendering on the tick-based timeline
     if (bpm == null || sr == null) return;
-    _visualStartTime = widget.clip.startTimeInTicks(bpm, sr);
+    _visualStartTime = widget.clip.startTimeInTicks;
     _visualLoopLength = widget.clip.loopLengthInTicks(bpm, sr);
     _visualOffset = widget.clip.offsetStartInTicks(bpm, sr);
+  }
+
+  void _openInPianoRoll(int patternId) {
+    final generatorId = ref
+        .read(projectProvider)
+        .value
+        ?.tracks[widget.trackId]
+        ?.generatorId;
+
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
+    ref
+        .read(pianoRollProvider.notifier)
+        .openPattern(patternId, previewGeneratorId: generatorId);
+    ref.read(workspaceStateProvider.notifier).openPattern(patternId);
+  }
+
+  Future<void> _renameClip() async {
+    var pendingName = widget.clip.name;
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Rename Clip"),
+        content: TextFormField(
+          initialValue: pendingName,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "New clip name",
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => pendingName = value,
+          onFieldSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, pendingName),
+            child: const Text("Rename"),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+
+    final trimmedName = newName?.trim();
+    if (trimmedName == null ||
+        trimmedName.isEmpty ||
+        trimmedName == widget.clip.name) {
+      return;
+    }
+
+    await ref
+        .read(trackListStateProvider.notifier)
+        .renameClip(widget.trackId, widget.clip.id, trimmedName);
   }
 
   @override
@@ -191,6 +251,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       scrollController: widget.horizontalScrollController,
       clipLeftOffset: left,
       waveformMap: widget.waveformMap,
+      compact: widget.compact,
     );
 
     final gestureDetector = GestureDetector(
@@ -239,36 +300,13 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               .read(trackListStateProvider.notifier)
               .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
         } else if (widget.selectedTool == ToolSelection.slice) {
-          final bpm = ref.read(transportProvider).value?.state?.bpm;
-          final sr = ref.read(transportProvider).value?.sampleRate;
-
-          if (bpm == null || sr == null || sr == 0) {
-            throw Exception("BPM or Sample Rate is null or zero");
-          }
-          int cutPoint;
-          if (widget.clip.isSampleBased) {
-            int cutTick =
-                widget.clip.startTimeInTicks(bpm, sr) +
-                (details.localPosition.dx * widget.zoomLevel).round();
-            cutTick = _snapClipShiftTick(
-              ticks: cutTick,
-              step: ref
-                  .read(workspaceStateProvider)
-                  .horizontalClipShiftSizeDenom,
-            );
-            cutPoint = ticksToSamples(cutTick, bpm, sr);
-          } else {
-            int cutTick =
-                widget.clip.startTime +
-                (details.localPosition.dx * widget.zoomLevel).round();
-            cutTick = _snapClipShiftTick(
-              ticks: cutTick,
-              step: ref
-                  .read(workspaceStateProvider)
-                  .horizontalClipShiftSizeDenom,
-            );
-            cutPoint = cutTick;
-          }
+          int cutPoint =
+              widget.clip.startTimeInTicks +
+              (details.localPosition.dx * widget.zoomLevel).round();
+          cutPoint = _snapClipShiftTick(
+            ticks: cutPoint,
+            step: ref.read(workspaceStateProvider).horizontalClipShiftSizeDenom,
+          );
 
           await ref
               .read(trackListStateProvider.notifier)
@@ -307,20 +345,17 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               if (track != null && currentSelectedIds.isNotEmpty) {
                 final tempo = ref.read(transportProvider).value?.state?.bpm;
                 final sr = ref.read(transportProvider).value?.sampleRate;
-                if (tempo == null || sr == null)
+                if (tempo == null || sr == null) {
                   throw Exception("Tempo or Sample Rate is null");
+                }
 
                 final leaderClip = track.clips
                     .where((c) => currentSelectedIds.contains(c.id))
                     .reduce(
-                      (a, b) =>
-                          a.startTimeInTicks(tempo, sr) <
-                              b.startTimeInTicks(tempo, sr)
-                          ? a
-                          : b,
+                      (a, b) => a.startTimeInTicks < b.startTimeInTicks ? a : b,
                     );
 
-                _leaderBaseStartTime = leaderClip.startTimeInTicks(tempo, sr);
+                _leaderBaseStartTime = leaderClip.startTimeInTicks;
                 _leaderBaseLoopLength = leaderClip.loopLengthInTicks(tempo, sr);
               }
 
@@ -354,18 +389,21 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               int rawTotalDelta = _accumulatedDeltaTicks.round();
 
               final minTicks = 10;
-              final shortestClip = track.clips
+              final shortestClipLengthTicks = track.clips
                   .where((c) => currentSelectedIds.contains(c.id))
-                  .reduce((a, b) => a.loopLength < b.loopLength ? a : b);
+                  .map((clip) => clip.loopLengthInTicks(tempo, sampleRate))
+                  .reduce(math.min);
 
               if (_currentAction == _DragAction.resizeRight) {
-                final maxShrink = -(shortestClip.loopLength - minTicks);
-                if (rawTotalDelta < maxShrink)
-                  rawTotalDelta = maxShrink.toInt();
+                final maxShrink = -(shortestClipLengthTicks - minTicks);
+                if (rawTotalDelta < maxShrink) {
+                  rawTotalDelta = maxShrink;
+                }
               } else if (_currentAction == _DragAction.resizeLeft) {
-                final maxShrink = shortestClip.loopLength - minTicks;
-                if (rawTotalDelta > maxShrink)
-                  rawTotalDelta = maxShrink.toInt();
+                final maxShrink = shortestClipLengthTicks - minTicks;
+                if (rawTotalDelta > maxShrink) {
+                  rawTotalDelta = maxShrink;
+                }
               }
 
               int snappedTotalDelta = rawTotalDelta;
@@ -417,11 +455,6 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               final state = ref.read(trackListStateProvider);
               final currentSelectedIds = state.selectedClipIds;
 
-              final isSampleBased = widget.clip.isSampleBased;
-              final delta = isSampleBased
-                  ? ticksToSamples(_previousSnappedDelta, tempo, sampleRate)
-                  : _previousSnappedDelta;
-
               if (_currentAction == _DragAction.resizeRight) {
                 ref
                     .read(trackListStateProvider.notifier)
@@ -429,7 +462,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       widget.trackId,
                       currentSelectedIds.toList(),
                       UiResizeEdge.right,
-                      delta,
+                      _previousSnappedDelta,
                     );
               } else if (_currentAction == _DragAction.resizeLeft) {
                 ref
@@ -438,7 +471,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       widget.trackId,
                       currentSelectedIds.toList(),
                       UiResizeEdge.left,
-                      delta,
+                      _previousSnappedDelta,
                     );
               }
 
@@ -452,13 +485,27 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       child: clipRenderer,
     );
 
+    final interactiveChild = ContextMenuWrapper(
+      title: widget.clip.name,
+      actions: [
+        DawContextAction(title: "Rename", icon: Icons.edit, onTap: _renameClip),
+        if (widget.clip.source case UiClipSource_Midi(:final patternId))
+          DawContextAction(
+            title: "Open in Piano Roll",
+            icon: Icons.piano,
+            onTap: () => _openInPianoRoll(patternId),
+          ),
+      ],
+      child: gestureDetector,
+    );
+
     if (widget.selectedTool == ToolSelection.move) {
       return Draggable<List<int>>(
         data: widget.selectedClipIds.isNotEmpty && widget.isSelected
             ? widget.selectedClipIds
             : [widget.clip.id],
         feedback: const SizedBox.shrink(),
-        childWhenDragging: gestureDetector,
+        childWhenDragging: interactiveChild,
         onDragStarted: () {
           setState(() => _currentAction = _DragAction.move);
           _accumulatedDeltaTicks = 0.0;
@@ -481,17 +528,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             final leaderClip = track.clips
                 .where((c) => currentSelectedIds.contains(c.id))
                 .reduce(
-                  (a, b) =>
-                      a.startTimeInTicks(tempo, sampleRate) <
-                          b.startTimeInTicks(tempo, sampleRate)
-                      ? a
-                      : b,
+                  (a, b) => a.startTimeInTicks < b.startTimeInTicks ? a : b,
                 );
 
-            _leaderBaseStartTime = leaderClip.startTimeInTicks(
-              tempo,
-              sampleRate,
-            );
+            _leaderBaseStartTime = leaderClip.startTimeInTicks;
             _leaderBaseLoopLength = leaderClip.loopLengthInTicks(
               tempo,
               sampleRate,
@@ -556,17 +596,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               ? placementState.trackId
               : null;
 
-          final isSampleBased = widget.clip.isSampleBased;
-          final delta = isSampleBased
-              ? ticksToSamples(_previousSnappedDelta, tempo, sampleRate)
-              : _previousSnappedDelta;
-
           ref
               .read(trackListStateProvider.notifier)
               .moveClipBatch(
                 widget.trackId,
                 currentSelectedIds.toList(),
-                delta,
+                _previousSnappedDelta,
                 newTrackId: newTrackId,
               );
 
@@ -576,10 +611,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
           ref.read(clipPlacementProvider.notifier).cancelBatchDrag();
         },
-        child: gestureDetector,
+        child: interactiveChild,
       );
     }
 
-    return gestureDetector;
+    return interactiveChild;
   }
 }

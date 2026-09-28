@@ -4,13 +4,14 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'plugin.dart';
 import 'project.dart';
 part 'mixer.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Set a single DSP parameter on a mixer channel.
 /// Routes through the audio thread ring buffer; AppState is only updated on save.
@@ -106,13 +107,50 @@ Future<void> addEffectToMixerChannelById({
   registryId: registryId,
 );
 
-Future<void> removeEffectFromMixerChannel({
+Future<RemovedAutomationDto> removeEffectFromMixerChannel({
   required DawContext ctx,
   required int trackId,
   required int effectInstanceId,
 }) => RustLib.instance.api.crateApiMixerRemoveEffectFromMixerChannel(
   ctx: ctx,
   trackId: trackId,
+  effectInstanceId: effectInstanceId,
+);
+
+Future<void> moveEffectOrder({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required int effectInstanceId,
+  required int newPosition,
+}) => RustLib.instance.api.crateApiMixerMoveEffectOrder(
+  ctx: ctx,
+  target: target,
+  effectInstanceId: effectInstanceId,
+  newPosition: newPosition,
+);
+
+/// Enables or bypasses an effect slot in a track, bus, or master chain.
+Future<void> setEffectBypass({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required int effectInstanceId,
+  required bool bypass,
+}) => RustLib.instance.api.crateApiMixerSetEffectBypass(
+  ctx: ctx,
+  target: target,
+  effectInstanceId: effectInstanceId,
+  bypass: bypass,
+);
+
+/// Removes an effect and the automation lanes that drive it in one transaction, returning
+/// the removed automation IDs so the UI can prune the same entries.
+Future<RemovedAutomationDto> removeEffectFromTargetMixerChannel({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required int effectInstanceId,
+}) => RustLib.instance.api.crateApiMixerRemoveEffectFromTargetMixerChannel(
+  ctx: ctx,
+  target: target,
   effectInstanceId: effectInstanceId,
 );
 
@@ -124,7 +162,7 @@ Future<void> addEffectToMasterBus({
   registryId: registryId,
 );
 
-Future<void> removeEffectFromMasterBus({
+Future<RemovedAutomationDto> removeEffectFromMasterBus({
   required DawContext ctx,
   required int effectInstanceId,
 }) => RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(
@@ -161,6 +199,17 @@ Future<void> renameBus({
   newName: newName,
 );
 
+/// Change a bus color to a hex string such as "#RRGGBB" or "#RRGGBBAA".
+Future<void> changeBusColor({
+  required DawContext ctx,
+  required int busId,
+  required String newColor,
+}) => RustLib.instance.api.crateApiMixerChangeBusColor(
+  ctx: ctx,
+  busId: busId,
+  newColor: newColor,
+);
+
 Future<List<UiRoutingConnection>> getChannelDestinations({
   required DawContext ctx,
   required bool isBus,
@@ -171,19 +220,21 @@ Future<List<UiRoutingConnection>> getChannelDestinations({
   channelId: channelId,
 );
 
-/// Set routing: source → destination with send level.
+/// Set routing: source → destination with send level, tapped at `tap`.
 Future<void> setRouting({
   required DawContext ctx,
   required UiRoutingNode source,
   required UiRoutingNode destination,
   required double sendLevel,
   required bool isSend,
+  required UiRoutingTap tap,
 }) => RustLib.instance.api.crateApiMixerSetRouting(
   ctx: ctx,
   source: source,
   destination: destination,
   sendLevel: sendLevel,
   isSend: isSend,
+  tap: tap,
 );
 
 /// Remove a routing connection.
@@ -226,18 +277,20 @@ Future<List<UiSidechainSource>> getSidechainSources({
   sidechainPlugin: sidechainPlugin,
 );
 
-/// Add/update a sidechain send when `send_level` is provided, or remove it
-/// when `send_level` is null.
+/// Add/update a sidechain send tapped at `tap` when `send_level` is provided,
+/// or remove it when `send_level` is null.
 Future<void> setSidechainSource({
   required DawContext ctx,
   required UiPluginTarget plugin,
   required UiRoutingNode from,
   double? sendLevel,
+  required UiRoutingTap tap,
 }) => RustLib.instance.api.crateApiMixerSetSidechainSource(
   ctx: ctx,
   plugin: plugin,
   from: from,
   sendLevel: sendLevel,
+  tap: tap,
 );
 
 @freezed
@@ -274,6 +327,7 @@ sealed class UiBus with _$UiBus {
     required int id,
     required String name,
     required UiMixerChannel channel,
+    required String color,
   }) = _UiBus;
 }
 
@@ -288,14 +342,19 @@ class UiEffectSummary {
   final int registryId;
   final String name;
 
+  /// Whether the effect slot passes audio through untouched.
+  final bool bypass;
+
   const UiEffectSummary({
     required this.id,
     required this.registryId,
     required this.name,
+    required this.bypass,
   });
 
   @override
-  int get hashCode => id.hashCode ^ registryId.hashCode ^ name.hashCode;
+  int get hashCode =>
+      id.hashCode ^ registryId.hashCode ^ name.hashCode ^ bypass.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -304,7 +363,8 @@ class UiEffectSummary {
           runtimeType == other.runtimeType &&
           id == other.id &&
           registryId == other.registryId &&
-          name == other.name;
+          name == other.name &&
+          bypass == other.bypass;
 }
 
 /// UI representation of a mixer channel.
@@ -424,6 +484,7 @@ sealed class UiRoutingConnection with _$UiRoutingConnection {
     required UiRoutingNode destination,
     required double sendLevel,
     required bool isSend,
+    required UiRoutingTap tap,
   }) = _UiRoutingConnection;
 }
 
@@ -434,7 +495,19 @@ sealed class UiRoutingNode with _$UiRoutingNode {
   const factory UiRoutingNode.track(int field0) = UiRoutingNode_Track;
   const factory UiRoutingNode.bus(int field0) = UiRoutingNode_Bus;
   const factory UiRoutingNode.master() = UiRoutingNode_Master;
-  const factory UiRoutingNode.pluginSidechain() = UiRoutingNode_PluginSidechain;
+
+  /// Sidechain input of the identified plugin.
+  const factory UiRoutingNode.pluginSidechain(UiPluginTarget field0) =
+      UiRoutingNode_PluginSidechain;
+}
+
+/// Point in the source channel strip a connection takes its signal from.
+enum UiRoutingTap {
+  /// After effects, fader, and pan.
+  postFader,
+
+  /// After effects, before fader and pan.
+  preFader,
 }
 
 /// A mixer channel that can feed the selected plugin's auxiliary input.
@@ -445,5 +518,6 @@ sealed class UiSidechainSource with _$UiSidechainSource {
     required String name,
     required bool enabled,
     required double sendLevel,
+    required UiRoutingTap tap,
   }) = _UiSidechainSource;
 }

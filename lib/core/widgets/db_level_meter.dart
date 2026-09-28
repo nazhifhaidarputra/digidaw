@@ -40,6 +40,8 @@ class DbLevelMeter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return RepaintBoundary(
       child: CustomPaint(
         painter: _DbLevelMeterPainter(
@@ -48,6 +50,12 @@ class DbLevelMeter extends StatelessWidget {
           showScale: showScale,
           minDb: minDb,
           maxDb: maxDb,
+          backgroundColor: colors.surfaceContainerLowest,
+          guideColor: colors.onSurface,
+          labelStyle: theme.textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontSize: 6,
+          ),
         ),
         child: const SizedBox.expand(),
       ),
@@ -62,6 +70,9 @@ class _DbLevelMeterPainter extends CustomPainter {
     required this.showScale,
     required this.minDb,
     required this.maxDb,
+    required this.backgroundColor,
+    required this.guideColor,
+    required this.labelStyle,
   });
 
   final double magnitude;
@@ -69,6 +80,9 @@ class _DbLevelMeterPainter extends CustomPainter {
   final bool showScale;
   final double minDb;
   final double maxDb;
+  final Color backgroundColor;
+  final Color guideColor;
+  final TextStyle? labelStyle;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -76,7 +90,7 @@ class _DbLevelMeterPainter extends CustomPainter {
 
     final bounds = Offset.zero & size;
     final background = RRect.fromRectAndRadius(bounds, Radius.zero);
-    canvas.drawRRect(background, Paint()..color = const Color(0xFF090C12));
+    canvas.drawRRect(background, Paint()..color = backgroundColor);
 
     final db = magnitudeToDb(magnitude, floorDb: minDb).clamp(minDb, maxDb);
     final amount = normalizeMeterDb(db, minDb: minDb, maxDb: maxDb);
@@ -111,7 +125,7 @@ class _DbLevelMeterPainter extends CustomPainter {
     canvas.drawRRect(
       background,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.18)
+        ..color = guideColor.withValues(alpha: 0.18)
         ..style = PaintingStyle.stroke,
     );
   }
@@ -119,7 +133,7 @@ class _DbLevelMeterPainter extends CustomPainter {
   void _paintVerticalScale(Canvas canvas, Size size) {
     const marks = <double>[0, -3, -6, -12, -24, -36, -48, -60];
     final linePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.42)
+      ..color = guideColor.withValues(alpha: 0.42)
       ..strokeWidth = 0.7;
 
     for (final mark in marks) {
@@ -136,14 +150,7 @@ class _DbLevelMeterPainter extends CustomPainter {
 
       if (major && size.width >= 22) {
         final label = TextPainter(
-          text: TextSpan(
-            text: mark.round().toString(),
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 6,
-              fontFamily: 'monospace',
-            ),
-          ),
+          text: TextSpan(text: mark.round().toString(), style: labelStyle),
           textDirection: TextDirection.ltr,
         )..layout();
         label.paint(
@@ -163,6 +170,9 @@ class _DbLevelMeterPainter extends CustomPainter {
         axis != oldDelegate.axis ||
         showScale != oldDelegate.showScale ||
         minDb != oldDelegate.minDb ||
-        maxDb != oldDelegate.maxDb;
+        maxDb != oldDelegate.maxDb ||
+        backgroundColor != oldDelegate.backgroundColor ||
+        guideColor != oldDelegate.guideColor ||
+        labelStyle != oldDelegate.labelStyle;
   }
 }

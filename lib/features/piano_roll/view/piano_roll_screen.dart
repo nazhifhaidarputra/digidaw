@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
@@ -11,6 +12,11 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dart';
+import 'package:karbeat/features/piano_roll/view/note_param_editor.dart';
+import 'package:karbeat/features/piano_roll/view/pattern_ruler.dart';
+import 'package:karbeat/features/piano_roll/view/piano_roll_actions.dart';
+import 'package:karbeat/features/track/view/playhead.dart';
+import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
@@ -23,13 +29,10 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/widgets/daw_input_detector.dart';
+import 'package:multi_split_view/multi_split_view.dart';
 
 class PianoRollScreen extends ConsumerStatefulWidget {
-  final int? patternId;
-  // We need the Generator ID to know which Generator to preview sound with
-  final int? generatorId;
-
-  const PianoRollScreen({super.key, this.patternId, this.generatorId});
+  const PianoRollScreen({super.key});
 
   @override
   ConsumerState<PianoRollScreen> createState() {
@@ -38,19 +41,33 @@ class PianoRollScreen extends ConsumerStatefulWidget {
 }
 
 class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
-  double _keyHeight = 20.0;
+  static const double _initialTimelineWidth = 2000;
+  static const double _timelineExtensionWidth = 2000;
+
+  /// Row height, owned by [pianoRollProvider] so the toolbar can change it.
+  double get _keyHeight => ref.read(pianoRollProvider).keyHeight;
   final double _keyWidth = 60.0;
+  final FocusNode _focusNode = FocusNode(debugLabel: 'PianoRoll');
+  double _timelineWidth = _initialTimelineWidth;
 
   late LinkedScrollControllerGroup _verticalControllers;
   late ScrollController _keysController;
   late ScrollController _gridVerticalController;
   late ScrollController _gridHorizontalController;
+  late final MultiSplitViewController _editorSplitController;
+
+  _PianoRollBottomPanel _bottomPanel = _PianoRollBottomPanel.keyboard;
 
   // Track active notes for Keyboard visualization
   final Set<int> _activeKeyboardNotes = {};
 
-  final Set<String> _recentlyAddedNotes = {};
-  final List<(int, int, int)> _brushAddNotes = []; // (key, startTick, duration)
+  /// Notes stamped by the current draw stroke, previewed until pointer up.
+  final List<UiNoteDraft> _brushAddNotes = [];
+
+  /// Stamp slots (multiples of the stamp span from the stroke origin) already
+  /// filled in this stroke, so stamps never overlap.
+  final Set<int> _stampedSlots = {};
+  int? _strokeOriginTick;
   final Set<int> _brushDeleteNoteIds = {};
   Timer? _autoScrollTimer;
   double _lastZoomDragY = 0;
@@ -67,6 +84,13 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _keysController = _verticalControllers.addAndGet();
     _gridVerticalController = _verticalControllers.addAndGet();
     _gridHorizontalController = ScrollController();
+    _gridHorizontalController.addListener(_handleTimelineExpansion);
+    _editorSplitController = MultiSplitViewController(
+      areas: [
+        Area(min: 200, data: 'editor'),
+        Area(size: 160, min: 100, max: 360, data: 'bottomPanel'),
+      ],
+    );
 
     // Jump to Middle C (MIDI 72)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -76,15 +100,49 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
   @override
   void dispose() {
+    _gridHorizontalController.removeListener(_handleTimelineExpansion);
     _keysController.dispose();
     _gridVerticalController.dispose();
     _gridHorizontalController.dispose();
+    _editorSplitController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
+  void _handleTimelineExpansion() {
+    if (!_gridHorizontalController.hasClients) return;
+
+    final position = _gridHorizontalController.position;
+    if (position.extentAfter >= 500) return;
+
+    final laidOutWidth = position.maxScrollExtent + position.viewportDimension;
+    final nextWidth = max(_timelineWidth, laidOutWidth) +
+        _timelineExtensionWidth;
+    if (nextWidth == _timelineWidth) return;
+
+    setState(() => _timelineWidth = nextWidth);
+  }
+
+  double _effectiveTimelineWidth(UiPattern pattern, double zoomX) {
+    var contentEndTick = pattern.lengthTicks;
+    for (final note in pattern.notes) {
+      contentEndTick = max(contentEndTick, note.startTick + note.duration);
+    }
+
+    const endPaddingWidth = 1000.0;
+    final contentWidth = contentEndTick * zoomX + endPaddingWidth;
+    final viewportWidth = max(0.0, MediaQuery.sizeOf(context).width - _keyWidth);
+    final scrollableViewportWidth = viewportWidth + _timelineExtensionWidth;
+    return max(_timelineWidth, max(contentWidth, scrollableViewportWidth));
+  }
+
+  void _panEditor(Offset delta) {
+    _scrollBy(_gridHorizontalController, -delta.dx);
+    _scrollBy(_gridVerticalController, -delta.dy);
+  }
+
   void _handleNoteOn(int note) {
-    final generatorId =
-        ref.read(pianoRollProvider).previewGeneratorId ?? widget.generatorId;
+    final generatorId = ref.read(pianoRollProvider).previewGeneratorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -102,8 +160,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   }
 
   void _handleNoteOff(int note) {
-    final generatorId =
-        ref.read(pianoRollProvider).previewGeneratorId ?? widget.generatorId;
+    final generatorId = ref.read(pianoRollProvider).previewGeneratorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -118,6 +175,34 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
         ref.read(notificationProvider.notifier).error(e);
       }
     }
+  }
+
+  /// Plays the computer keyboard as a piano. Keys held with Ctrl, Alt, or
+  /// Meta are left for the piano-roll shortcuts.
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    final keyboard = HardwareKeyboard.instance;
+    if (event is KeyDownEvent &&
+        (keyboard.isControlPressed ||
+            keyboard.isAltPressed ||
+            keyboard.isMetaPressed)) {
+      return KeyEventResult.ignored;
+    }
+    if (event is KeyDownEvent) {
+      final note = keyMap[event.physicalKey];
+      if (note != null && !_activeKeyboardNotes.contains(note)) {
+        setState(() => _activeKeyboardNotes.add(note));
+        _handleNoteOn(note);
+        return KeyEventResult.handled;
+      }
+    } else if (event is KeyUpEvent) {
+      final note = keyMap[event.physicalKey];
+      if (note != null && _activeKeyboardNotes.contains(note)) {
+        setState(() => _activeKeyboardNotes.remove(note));
+        _handleNoteOff(note);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   void _handleZoom(double scale) {
@@ -135,69 +220,134 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     }
   }
 
+  /// Scales the row height by [scale], keeping the key under [focalPointY]
+  /// (relative to the visible grid) in place.
   void _handleKeyHeightZoom(double scale, double focalPointY) {
-    double oldHeight = _keyHeight;
-    double newHeight = (_keyHeight * scale).clamp(10.0, 60.0);
+    final oldHeight = _keyHeight;
+    final newHeight = (oldHeight * scale).clamp(
+      minPianoRollKeyHeight,
+      maxPianoRollKeyHeight,
+    );
     if (oldHeight == newHeight) return;
 
-    double controllerOffset = _gridVerticalController.hasClients
+    final controllerOffset = _gridVerticalController.hasClients
         ? _gridVerticalController.offset
         : 0.0;
+    final keyIndex = (controllerOffset + focalPointY) / oldHeight;
 
-    double keyIndex = (controllerOffset + focalPointY) / oldHeight;
+    ref.read(pianoRollProvider.notifier).setKeyHeight(newHeight);
 
-    setState(() {
-      _keyHeight = newHeight;
-    });
-
-    double newOffset = (keyIndex * newHeight) - focalPointY;
-    if (_gridVerticalController.hasClients) {
+    // Rows are re-laid out next frame; scroll once the new extent exists.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_gridVerticalController.hasClients) return;
+      final newOffset = keyIndex * newHeight - focalPointY;
       _gridVerticalController.jumpTo(
         newOffset.clamp(0.0, _gridVerticalController.position.maxScrollExtent),
       );
-    }
-  }
-
-  int _getSnapTicks(GridSize denom) {
-    return (960.0 * 4.0 / denom.value).round();
-  }
-
-  void _handleBrushAdd(Offset localPos) {
-    // final state = ref.read(globalStateProvider);
-    final pianoRollState = ref.read(pianoRollProvider);
-
-    final gridDenom = pianoRollState.pianoRollGridDenom;
-    final zoomX = pianoRollState.zoomLevelTick;
-
-    int tick = (localPos.dx / zoomX).round();
-    int snap = _getSnapTicks(gridDenom);
-    tick = (tick / snap).round() * snap;
-
-    int keyIndex = (localPos.dy / _keyHeight).floor();
-    int midiKey = (127 - keyIndex).clamp(0, 127);
-
-    final noteKeyStr = "${tick}_$midiKey";
-    if (_recentlyAddedNotes.contains(noteKeyStr)) return;
-
-    setState(() {
-      _recentlyAddedNotes.add(noteKeyStr);
-      _brushAddNotes.add((midiKey, tick, snap));
     });
   }
 
-  void _submitBrushAdd(int patternId) {
-    if (_brushAddNotes.isNotEmpty) {
-      ref
-          .read(pianoRollProvider.notifier)
-          .addPatternNoteBatch(
-            patternId: patternId,
-            notesToInsert: List.from(_brushAddNotes),
-          );
-      setState(() {
-        _brushAddNotes.clear();
-        _recentlyAddedNotes.clear();
-      });
-    }
+  /// Snap distance for drawing, moving, and resizing: the draw step.
+  int get _stepTicks => ref.read(pianoRollProvider).stepTicks;
+
+  int _snapTick(int tick) {
+    final step = _stepTicks;
+    return step <= 1 ? tick : (tick / step).round() * step;
+  }
+
+  /// Draw-tool stamp at the pointer: a copy of the latest selection (FL
+  /// Studio style), or a single step-long note when nothing was selected yet.
+  ///
+  /// Dragging repeats the stamp every span from where the stroke began, so
+  /// copies line up end to end without overlapping. Each copy follows the
+  /// pointer's pitch.
+  void _handleBrushAdd(Offset localPos) {
+    final state = ref.read(pianoRollProvider);
+    final step = max(1, _stepTicks);
+    final pointerTick = max(0, (localPos.dx / state.zoomLevelTick).floor());
+    final tick = step <= 1 ? pointerTick : pointerTick ~/ step * step;
+    final pointerKey = (127 - (localPos.dy / _keyHeight).floor()).clamp(0, 127);
+
+    final template = state.drawTemplate.isNotEmpty
+        ? state.drawTemplate.toList()
+        : [
+            UiNote(
+              id: -1,
+              startTick: 0,
+              duration: step <= 1 ? 240 : step,
+              key: pointerKey,
+              velocity: 100,
+              probability: 1,
+              microOffset: 0,
+              mute: false,
+              pan: 0,
+              pitch: 0,
+            ),
+          ];
+    final templateStart = template.map((n) => n.startTick).reduce(min);
+    final templateEnd = template
+        .map((n) => n.startTick + n.duration)
+        .reduce(max);
+    final span = max(templateEnd - templateStart, step);
+    // The earliest (then highest) note anchors the stamp to the pointer.
+    final anchor = template.reduce(
+      (a, b) =>
+          a.startTick < b.startTick ||
+              (a.startTick == b.startTick && a.key >= b.key)
+          ? a
+          : b,
+    );
+
+    final origin = _strokeOriginTick ??= tick;
+    final slot = ((tick - origin) / span).floor();
+    final stampStart = origin + slot * span;
+    if (stampStart < 0 || !_stampedSlots.add(slot)) return;
+
+    final keyOffset = pointerKey - anchor.key;
+    setState(() {
+      for (final note in template) {
+        final key = note.key + keyOffset;
+        if (key < 0 || key > 127) continue;
+        _brushAddNotes.add(
+          UiNoteDraft(
+            key: key,
+            startTick: stampStart + note.startTick - templateStart,
+            duration: note.duration,
+            velocity: note.velocity,
+            pan: note.pan,
+            pitch: note.pitch,
+          ),
+        );
+      }
+    });
+  }
+
+  void _submitBrushAdd() {
+    if (_brushAddNotes.isEmpty) return;
+    ref
+        .read(pianoRollProvider.notifier)
+        .stampNotes(List.of(_brushAddNotes));
+    setState(_resetPaintState);
+  }
+
+  /// Slice tool: cuts the note under the pointer at the nearest step.
+  void _handleSlice(Offset localPos, UiPattern pattern) {
+    final zoomX = ref.read(pianoRollProvider).zoomLevelTick;
+    final tick = (localPos.dx / zoomX).round();
+    final key = (127 - (localPos.dy / _keyHeight).floor()).clamp(0, 127);
+    final note = pattern.notes
+        .where(
+          (n) =>
+              n.key == key &&
+              tick > n.startTick &&
+              tick < n.startTick + n.duration,
+        )
+        .firstOrNull;
+    if (note == null) return;
+    final cut = _snapTick(tick);
+    ref
+        .read(pianoRollProvider.notifier)
+        .sliceNote(noteId: note.id, atTick: cut);
   }
 
   void _handleBrushDelete(Offset localPos, UiPattern pattern) {
@@ -238,7 +388,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   }
 
   void _resetPaintState() {
-    _recentlyAddedNotes.clear();
+    _stampedSlots.clear();
+    _strokeOriginTick = null;
     _brushAddNotes.clear();
     _brushDeleteNoteIds.clear();
   }
@@ -326,6 +477,69 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _autoScrollTimer = null;
   }
 
+  void _handleEditorPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+
+    final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
+    final isControlPressed =
+        pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.controlRight);
+    final isAltPressed =
+        pressedKeys.contains(LogicalKeyboardKey.altLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.altRight);
+    if (isControlPressed || isAltPressed) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (
+      resolvedEvent,
+    ) {
+      if (resolvedEvent is! PointerScrollEvent) return;
+
+      final isShiftPressed =
+          pressedKeys.contains(LogicalKeyboardKey.shiftLeft) ||
+          pressedKeys.contains(LogicalKeyboardKey.shiftRight);
+      var horizontalDelta = resolvedEvent.scrollDelta.dx;
+      var verticalDelta = resolvedEvent.scrollDelta.dy;
+
+      // Mouse wheels report vertical deltas. Shift maps the wheel to the
+      // timeline, while trackpads can scroll both axes directly.
+      if (isShiftPressed) {
+        horizontalDelta = horizontalDelta == 0
+            ? verticalDelta
+            : horizontalDelta;
+        verticalDelta = 0;
+      }
+
+      _scrollBy(_gridHorizontalController, horizontalDelta);
+      _scrollBy(_gridVerticalController, verticalDelta);
+    });
+  }
+
+  /// Alt+scroll over the keys resizes rows; other scrolling pans the editor.
+  void _handleKeysPointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent && HardwareKeyboard.instance.isAltPressed) {
+      GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
+        if (resolved is! PointerScrollEvent) return;
+        _handleKeyHeightZoom(
+          resolved.scrollDelta.dy > 0 ? 0.9 : 1.1,
+          resolved.localPosition.dy,
+        );
+      });
+      return;
+    }
+    _handleEditorPointerSignal(event);
+  }
+
+  void _scrollBy(ScrollController controller, double delta) {
+    if (delta == 0 || !controller.hasClients) return;
+
+    controller.jumpTo(
+      (controller.offset + delta).clamp(
+        controller.position.minScrollExtent,
+        controller.position.maxScrollExtent,
+      ),
+    );
+  }
+
   // void _handleVirtualKeyPan(Offset localPos) {
   //   const double whiteKeyWidth = 40.0;
   // }
@@ -365,32 +579,88 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     });
   }
 
+  Widget _buildPatternPicker(
+    BuildContext context,
+    IMap<int, UiPattern> patterns,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final entries = patterns.entries.toList()
+      ..sort((a, b) => a.value.name.compareTo(b.value.name));
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "No Pattern Selected",
+            style: TextStyle(color: colors.onSurface),
+          ),
+          const SizedBox(height: 12),
+          DropdownButton<int>(
+            hint: Text(
+              entries.isEmpty ? "No Patterns Available" : "Choose a Pattern",
+              style: TextStyle(color: colors.onSurfaceVariant),
+            ),
+            menuMaxHeight: 320,
+            dropdownColor: colors.surfaceContainerHigh,
+            underline: const SizedBox(),
+            items: entries
+                .map(
+                  (entry) => DropdownMenuItem<int>(
+                    value: entry.key,
+                    child: Text(entry.value.name),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: entries.isEmpty
+                ? null
+                : (patternId) {
+                    if (patternId == null) return;
+                    final previewGeneratorId = ref
+                        .read(pianoRollProvider)
+                        .previewGeneratorId;
+                    ref
+                        .read(pianoRollProvider.notifier)
+                        .openPattern(
+                          patternId,
+                          previewGeneratorId: previewGeneratorId,
+                        );
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (widget.patternId == null) {
-      return const Center(
-        child: Text(
-          "No Pattern Selected",
-          style: TextStyle(color: Colors.white),
-        ),
-      );
+    final colors = Theme.of(context).colorScheme;
+    final pianoRollState = ref.watch(pianoRollProvider);
+    final projectState = ref.watch(projectProvider);
+    final patternId = pianoRollState.editingPatternId;
+    final patterns =
+        projectState.value?.patterns ?? const IMapConst<int, UiPattern>({});
+    if (patternId == null) {
+      return _buildPatternPicker(context, patterns);
     }
 
-    final projectState = ref.watch(projectProvider);
-    // final pattern = projectState.patterns[widget.patternId];
-    final pattern = projectState.value?.patterns[widget.patternId!];
+    final pattern = patterns[patternId];
 
-    final pianoRollState = ref.watch(pianoRollProvider);
     final zoomX = pianoRollState.zoomLevelTick;
     final selectedTool = pianoRollState.tool;
     final gridDenom = pianoRollState.pianoRollGridDenom;
+    final generatorId = pianoRollState.previewGeneratorId;
 
     final selectedNoteIds = pianoRollState.selectedNoteIds;
+    final transportPosition = ref.watch(transportPositionStreamProvider).value;
     bool isInteracting = false;
 
     if (pattern == null) {
-      return const Center(
-        child: Text("Pattern not found", style: TextStyle(color: Colors.white)),
+      return Center(
+        child: Text(
+          "Pattern not found",
+          style: TextStyle(color: colors.onSurface),
+        ),
       );
     }
 
@@ -407,30 +677,17 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     final isPan = selectedTool == PianoRollToolSelection.pan;
     final isZoom = selectedTool == PianoRollToolSelection.zoom;
     final isSelecting = selectedTool == PianoRollToolSelection.select;
+    final isSlicing = selectedTool == PianoRollToolSelection.slice;
+    final timelineWidth = _effectiveTimelineWidth(pattern, zoomX);
 
     return Stack(
       children: [
-        Focus(
-          autofocus: false,
-          onKeyEvent: (node, event) {
-            if (event is KeyDownEvent) {
-              final note = keyMap[event.physicalKey];
-              if (note != null && !_activeKeyboardNotes.contains(note)) {
-                setState(() => _activeKeyboardNotes.add(note));
-                _handleNoteOn(note);
-                return KeyEventResult.handled;
-              }
-            } else if (event is KeyUpEvent) {
-              final note = keyMap[event.physicalKey];
-              if (note != null) {
-                setState(() => _activeKeyboardNotes.remove(note));
-                _handleNoteOff(note);
-                return KeyEventResult.handled;
-              }
-            }
-            return KeyEventResult.ignored;
-          },
-          child: Column(
+        Actions(
+          actions: pianoRollShortcutActions(ref),
+          child: KeyboardFocusRegion(
+            focusNode: _focusNode,
+            onKeyEvent: _handleKeyEvent,
+            child: Column(
             children: [
               // ==== TOOLBAR ===
               _PianoRollToolbar(
@@ -446,50 +703,88 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                 },
               ),
 
+              SizedBox(
+                height: 30,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: _keyWidth,
+                      child: ColoredBox(color: colors.surfaceContainer),
+                    ),
+                    Expanded(
+                      child: PatternRuler(
+                        scrollController: _gridHorizontalController,
+                        zoomX: zoomX,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               // === EDITOR AREA ===
               Expanded(
-                child: Row(
+                child: MultiSplitViewTheme(
+                  data: MultiSplitViewThemeData(
+                    dividerPainter: DividerPainters.grooved1(
+                      color: colors.outlineVariant,
+                      highlightedColor: colors.primary,
+                      thickness: 1,
+                    ),
+                  ),
+                  child: MultiSplitView(
+                    axis: Axis.vertical,
+                    controller: _editorSplitController,
+                    builder: (context, area) {
+                      if (area.data == 'bottomPanel') {
+                        return _PianoRollBottomPanelView(
+                          scrollController: _gridHorizontalController,
+                          zoomX: zoomX,
+                          gutterWidth: _keyWidth,
+                          selectedPanel: _bottomPanel,
+                          onPanelChanged: (panel) {
+                            setState(() => _bottomPanel = panel);
+                          },
+                          onNoteOn: _handleNoteOn,
+                          onNoteOff: _handleNoteOff,
+                          activeNotes: _activeKeyboardNotes,
+                        );
+                      }
+
+                      return Row(
                   children: [
                     // PIANO KEYS (Left)
                     SizedBox(
                       width: _keyWidth,
-                      child: ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(
-                          context,
-                        ).copyWith(scrollbars: false),
-                        child: ListView.builder(
-                          controller: _keysController,
-                          itemCount: 128,
-                          itemExtent: _keyHeight,
-                          physics: isPan
-                              ? const ClampingScrollPhysics()
-                              : const NeverScrollableScrollPhysics(),
-                          itemBuilder: (context, index) {
-                            // MIDI 127 is top, 0 is bottom. List index 0 is top.
-                            final midiKey = 127 - index;
-                            return _PianoKey(
-                              midiKey: midiKey,
-                              height: _keyHeight,
-                              onPlayNote: (isOn) {
-                                if (widget.generatorId != null) {
-                                  try {
-                                    playPreviewNoteGenerator(
-                                      ctx: _ctx,
-                                      generatorId: widget.generatorId!,
-                                      noteKey: midiKey,
-                                      velocity: 100,
-                                      isOn: isOn,
-                                    );
-                                  } catch (e) {
-                                    AppLogger.error(e.toString());
-                                    ref
-                                        .read(notificationProvider.notifier)
-                                        .error(e);
+                      child: Listener(
+                        onPointerDown: (_) => _focusNode.requestFocus(),
+                        onPointerSignal: _handleKeysPointerSignal,
+                        child: ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(
+                            context,
+                          ).copyWith(scrollbars: false),
+                          child: ListView.builder(
+                            controller: _keysController,
+                            itemCount: 128,
+                            itemExtent: _keyHeight,
+                            physics: isPan
+                                ? const ClampingScrollPhysics()
+                                : const NeverScrollableScrollPhysics(),
+                            itemBuilder: (context, index) {
+                              // MIDI 127 is top, 0 is bottom. List index 0 is top.
+                              final midiKey = 127 - index;
+                              return _PianoKey(
+                                midiKey: midiKey,
+                                height: _keyHeight,
+                                onPlayNote: (isOn) {
+                                  if (isOn) {
+                                    _handleNoteOn(midiKey);
+                                  } else {
+                                    _handleNoteOff(midiKey);
                                   }
-                                }
-                              },
-                            );
-                          },
+                                },
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -498,6 +793,31 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                     Expanded(
                       child: Stack(
                         children: [
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: RepaintBoundary(
+                                child: CustomPaint(
+                                  painter: _PianoGridPainter(
+                                    horizontalController:
+                                        _gridHorizontalController,
+                                    verticalController: _gridVerticalController,
+                                    zoomX: zoomX,
+                                    keyHeight: _keyHeight,
+                                    gridDenom: gridDenom,
+                                    lineColor: colors.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: PatternLoopShade(
+                                scrollController: _gridHorizontalController,
+                                zoomX: zoomX,
+                              ),
+                            ),
+                          ),
                           ScrollConfiguration(
                             behavior: ScrollConfiguration.of(context).copyWith(
                               scrollbars: true,
@@ -509,18 +829,19 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                             child: SingleChildScrollView(
                               controller: _gridHorizontalController,
                               scrollDirection: Axis.horizontal,
-                              physics: isPan
-                                  ? const AlwaysScrollableScrollPhysics()
-                                  : const NeverScrollableScrollPhysics(),
+                              physics: const NeverScrollableScrollPhysics(),
                               child: SingleChildScrollView(
                                 controller: _gridVerticalController,
                                 scrollDirection: Axis.vertical,
-                                physics: isPan
-                                    ? const AlwaysScrollableScrollPhysics()
-                                    : const NeverScrollableScrollPhysics(),
+                                physics: const NeverScrollableScrollPhysics(),
                                 child: Listener(
+                                  onPointerSignal: _handleEditorPointerSignal,
                                   onPointerDown: (event) {
+                                    _focusNode.requestFocus();
                                     _lastInteractionPos = event.localPosition;
+                                    if (event.buttons & kPrimaryButton == 0) {
+                                      return;
+                                    }
                                     if (isZoom || isPan) {
                                       setState(() => isInteracting = true);
                                     }
@@ -528,6 +849,11 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     if (isDrawing) {
                                       _resetPaintState();
                                       _handleBrushAdd(event.localPosition);
+                                    } else if (isSlicing) {
+                                      _handleSlice(
+                                        event.localPosition,
+                                        pattern,
+                                      );
                                     } else if (isDeleting) {
                                       _resetPaintState();
                                       _handleBrushDelete(
@@ -544,6 +870,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     }
                                   },
                                   onPointerMove: (event) {
+                                    if (event.buttons & kPrimaryButton == 0) {
+                                      return;
+                                    }
                                     if (isDrawing) {
                                       _handleBrushAdd(event.localPosition);
                                     } else if (isDeleting) {
@@ -587,7 +916,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       setState(() => isInteracting = false);
                                     }
                                     if (isDrawing) {
-                                      _submitBrushAdd(pattern.id);
+                                      _submitBrushAdd();
                                     } else if (isDeleting) {
                                       _submitBrushDelete(pattern.id);
                                     } else if (isSelecting) {
@@ -605,14 +934,21 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       final double multiplier = delta > 0
                                           ? 0.9
                                           : 1.1;
+                                      // localPosition is in grid content
+                                      // coordinates; the focal point is
+                                      // relative to the visible viewport.
                                       _handleKeyHeightZoom(
                                         multiplier,
-                                        localPosition.dy,
+                                        localPosition.dy -
+                                            (_gridVerticalController.hasClients
+                                                ? _gridVerticalController.offset
+                                                : 0.0),
                                       );
                                     },
                                     onPinchZoom: (details) {
                                       _handleZoom(details.scale);
                                     },
+                                    onOneFingerPan: isPan ? _panEditor : null,
                                     child: GestureDetector(
                                       behavior: HitTestBehavior.translucent,
                                       child: MouseRegion(
@@ -625,12 +961,16 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                             : SystemMouseCursors.basic,
                                         child: SizedBox(
                                           height: 128 * _keyHeight,
-                                          width:
-                                              pattern.lengthTicks * zoomX +
-                                              1000, // Approx width
+                                          width: timelineWidth,
                                           child: ContextMenuWrapper(
-                                            title: "Actions",
+                                            title: pianoRollNoteActionsTitle(
+                                              pianoRollState,
+                                            ),
                                             actions: [
+                                              ...pianoRollNoteActions(
+                                                context: context,
+                                                ref: ref,
+                                              ),
                                               DawContextAction(
                                                 title: "Paste",
                                                 icon: Icons.paste,
@@ -652,13 +992,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                   int midiKey = (127 - keyIndex)
                                                       .clamp(0, 127);
 
-                                                  // Snap to grid for clean pasting
-                                                  int snap = _getSnapTicks(
-                                                    gridDenom,
+                                                  // Snap to the draw step for clean pasting
+                                                  final snappedTick = _snapTick(
+                                                    tick,
                                                   );
-                                                  int snappedTick =
-                                                      (tick / snap).round() *
-                                                      snap;
 
                                                   ref
                                                       .read(
@@ -675,22 +1012,6 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                             ],
                                             child: Stack(
                                               children: [
-                                                // Grid background
-                                                Positioned.fill(
-                                                  child: RepaintBoundary(
-                                                    child: CustomPaint(
-                                                      painter:
-                                                          _PianoGridPainter(
-                                                            zoomX: zoomX,
-                                                            keyHeight:
-                                                                _keyHeight,
-                                                            gridDenom:
-                                                                gridDenom,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-
                                                 // LAYER B1: Unselected Interactive Notes
                                                 ...unselectedNotes.map((note) {
                                                   final isPendingDelete =
@@ -701,18 +1022,19 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     note: note,
                                                     noteId: note.id,
                                                     patternId: pattern.id,
-                                                    generatorId:
-                                                        widget.generatorId,
+                                                    generatorId: generatorId,
                                                     zoomX: zoomX,
                                                     keyHeight: _keyHeight,
                                                     selectedTool: selectedTool,
-                                                    snapTicks: _getSnapTicks(
-                                                      gridDenom,
+                                                    snapTicks: max(
+                                                      1,
+                                                      _stepTicks,
                                                     ),
                                                     opacity: isPendingDelete
                                                         ? 0.3
                                                         : 0.8,
-                                                    borderColor: Colors.white30,
+                                                    borderColor:
+                                                        colors.outlineVariant,
                                                     onDragUpdate: (globalPos) {
                                                       if (selectedTool ==
                                                           PianoRollToolSelection
@@ -759,13 +1081,13 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                   _InteractiveNoteGroup(
                                                     notes: selectedNotes,
                                                     patternId: pattern.id,
-                                                    generatorId:
-                                                        widget.generatorId,
+                                                    generatorId: generatorId,
                                                     zoomX: zoomX,
                                                     keyHeight: _keyHeight,
                                                     selectedTool: selectedTool,
-                                                    snapTicks: _getSnapTicks(
-                                                      gridDenom,
+                                                    snapTicks: max(
+                                                      1,
+                                                      _stepTicks,
                                                     ),
                                                     pendingDeleteIds:
                                                         _brushDeleteNoteIds,
@@ -793,13 +1115,13 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
                                                 // LAYER C: Preview Add Notes
                                                 ..._brushAddNotes.map((
-                                                  addInfo,
+                                                  draft,
                                                 ) {
-                                                  final (
-                                                    key,
-                                                    startTick,
-                                                    duration,
-                                                  ) = addInfo;
+                                                  final key = draft.key;
+                                                  final startTick =
+                                                      draft.startTick;
+                                                  final duration =
+                                                      draft.duration;
                                                   return Positioned(
                                                     top:
                                                         (127 - key) *
@@ -813,16 +1135,17 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     child: IgnorePointer(
                                                       child: Container(
                                                         decoration: BoxDecoration(
-                                                          color: Colors
-                                                              .pinkAccent
-                                                              .withAlpha(128),
+                                                          color: colors.primary
+                                                              .withValues(
+                                                                alpha: 0.5,
+                                                              ),
                                                           borderRadius:
                                                               BorderRadius.circular(
                                                                 2,
                                                               ),
                                                           border: Border.all(
                                                             color:
-                                                                Colors.white54,
+                                                                colors.primary,
                                                           ),
                                                         ),
                                                       ),
@@ -840,11 +1163,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     ),
                                                     child: Container(
                                                       decoration: BoxDecoration(
-                                                        color: Colors.blueAccent
-                                                            .withAlpha(80),
+                                                        color: colors.primary
+                                                            .withValues(
+                                                              alpha: 0.32,
+                                                            ),
                                                         border: Border.all(
-                                                          color:
-                                                              Colors.blueAccent,
+                                                          color: colors.primary,
                                                           width: 1.0,
                                                         ),
                                                       ),
@@ -865,6 +1189,20 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                             FloatingContextPanel(
                               actions: [
                                 DawContextAction(
+                                  title: "More…",
+                                  icon: Icons.more_horiz,
+                                  onTap: () => showDawContextMenu(
+                                    context: context,
+                                    title: pianoRollNoteActionsTitle(
+                                      ref.read(pianoRollProvider),
+                                    ),
+                                    actions: pianoRollNoteActions(
+                                      context: context,
+                                      ref: ref,
+                                    ),
+                                  ),
+                                ),
+                                DawContextAction(
                                   title: "Delete",
                                   onTap: () {
                                     ref
@@ -881,13 +1219,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                 DawContextAction(
                                   title: "Copy",
                                   onTap: () async {
-                                    if (widget.patternId == null) {
-                                      return;
-                                    }
                                     await ref
                                         .read(pianoRollProvider.notifier)
                                         .copyNotesFromPattern(
-                                          widget.patternId!,
+                                          pattern.id,
                                           selectedNoteIds.toList(),
                                         );
                                     // we do not clear because every DAW do this
@@ -896,14 +1231,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                 DawContextAction(
                                   title: "Cut",
                                   onTap: () async {
-                                    if (widget.patternId == null) {
-                                      return;
-                                    }
-
                                     await ref
                                         .read(pianoRollProvider.notifier)
                                         .cutNotesFromPattern(
-                                          widget.patternId!,
+                                          pattern.id,
                                           selectedNoteIds.toList(),
                                         );
                                   },
@@ -916,35 +1247,162 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                               },
                               title: "${selectedNoteIds.length} Note(s)",
                             ),
+                          // Same draggable playhead as the song timeline,
+                          // reading and seeking the pattern position.
                           Positioned.fill(
-                            child: IgnorePointer(
-                              ignoring: true,
-                              child: PianoRollPlayheadOverlay(
-                                scrollController: _gridHorizontalController,
-                                zoomX: zoomX,
-                                isInteracting: isInteracting,
-                              ),
+                            child: PlayheadOverlay(
+                              offsetAdjustment: 0,
+                              scrollController: _gridHorizontalController,
+                              zoomLevel:
+                                  patternSamplesPerTick(transportPosition) /
+                                  zoomX,
+                              sampleSelector: (position) =>
+                                  position.patternSamples,
+                              isInteracting: isInteracting,
+                              snapPosition: (samples) {
+                                final samplesPerTick = patternSamplesPerTick(
+                                  transportPosition,
+                                );
+                                return (_snapTick(
+                                          (samples / samplesPerTick).round(),
+                                        ) *
+                                        samplesPerTick)
+                                    .round();
+                              },
+                              onSeek: (samples) => ref
+                                  .read(pianoRollProvider.notifier)
+                                  .seekPattern(samples),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-
-              // ========= SCROLLABLE VIRTUAL KEYBOARD ===========
-              ScrollableVirtualKeyboard(
-                height: 120,
-                onNoteOn: _handleNoteOn,
-                onNoteOff: _handleNoteOff,
-                activeNotes: _activeKeyboardNotes,
-                initialCenterNote: 72,
               ),
             ],
           ),
+          ),
         ),
       ],
+    );
+  }
+}
+
+enum _PianoRollBottomPanel { keyboard, noteParameters }
+
+class _PianoRollBottomPanelView extends StatelessWidget {
+  final ScrollController scrollController;
+  final double zoomX;
+  final double gutterWidth;
+  final _PianoRollBottomPanel selectedPanel;
+  final ValueChanged<_PianoRollBottomPanel> onPanelChanged;
+  final ValueChanged<int> onNoteOn;
+  final ValueChanged<int> onNoteOff;
+  final Set<int> activeNotes;
+
+  const _PianoRollBottomPanelView({
+    required this.scrollController,
+    required this.zoomX,
+    required this.gutterWidth,
+    required this.selectedPanel,
+    required this.onPanelChanged,
+    required this.onNoteOn,
+    required this.onNoteOff,
+    required this.activeNotes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return ColoredBox(
+      color: colors.surfaceContainerLowest,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 32,
+            child: Row(
+              children: [
+                _BottomPanelTab(
+                  label: 'Keyboard',
+                  selected: selectedPanel == _PianoRollBottomPanel.keyboard,
+                  onTap: () => onPanelChanged(_PianoRollBottomPanel.keyboard),
+                ),
+                _BottomPanelTab(
+                  label: 'Note parameters',
+                  selected:
+                      selectedPanel == _PianoRollBottomPanel.noteParameters,
+                  onTap: () =>
+                      onPanelChanged(_PianoRollBottomPanel.noteParameters),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: colors.outlineVariant),
+          Expanded(
+            child: selectedPanel == _PianoRollBottomPanel.keyboard
+                ? LayoutBuilder(
+                    builder: (context, constraints) =>
+                        ScrollableVirtualKeyboard(
+                          height: constraints.maxHeight,
+                          onNoteOn: onNoteOn,
+                          onNoteOff: onNoteOff,
+                          activeNotes: activeNotes,
+                          initialCenterNote: 72,
+                        ),
+                  )
+                : NoteParamEditorPanel(
+                    scrollController: scrollController,
+                    zoomX: zoomX,
+                    gutterWidth: gutterWidth,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomPanelTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _BottomPanelTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? colors.surfaceContainerHigh : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? colors.primary : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: selected ? colors.primary : colors.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -968,6 +1426,7 @@ class _PianoRollToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
     final pianoRollState = ref.watch(pianoRollProvider);
     final projectState = ref.watch(projectProvider);
 
@@ -979,52 +1438,62 @@ class _PianoRollToolbar extends ConsumerWidget {
     final positionAsync = ref.watch(transportPositionStreamProvider);
     final feedback = positionAsync.value;
     final isPatternPlaying =
-        feedback != null && feedback.isPlaying && feedback.isPatternMode;
+        feedback != null && feedback.isPatternMode && feedback.isPatternPlaying;
+    final notifier = ref.read(pianoRollProvider.notifier);
 
     return Container(
       height: 50,
-      color: Colors.grey.shade800,
+      color: colors.surfaceContainer,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            // Pattern transport (Refactored to use Riverpod)
+            // Pattern transport: play/pause resumes from the pattern
+            // playhead, stop rewinds it.
             IconButton(
               icon: Icon(
-                isPatternPlaying ? Icons.stop : Icons.play_arrow,
-                color: isPatternPlaying ? Colors.orange : Colors.white70,
+                isPatternPlaying ? Icons.pause : Icons.play_arrow,
+                color: isPatternPlaying
+                    ? colors.tertiary
+                    : colors.onSurfaceVariant,
               ),
               onPressed: previewGeneratorId != null
-                  ? () => _togglePatternPlayback(
-                      ref,
-                      previewGeneratorId,
-                      patternId,
-                    )
+                  ? notifier.togglePatternPlayback
                   : null,
-              tooltip: isPatternPlaying ? 'Stop' : 'Play Pattern',
+              tooltip: previewGeneratorId == null
+                  ? 'Choose a generator to play this pattern'
+                  : isPatternPlaying
+                  ? 'Pause (Space)'
+                  : 'Play pattern (Space)',
               iconSize: 24,
             ),
+            IconButton(
+              icon: Icon(Icons.stop, color: colors.onSurfaceVariant),
+              onPressed: notifier.stopPatternPlayback,
+              tooltip: 'Stop and rewind',
+              iconSize: 22,
+            ),
             const SizedBox(width: 4),
-            _buildDivider(),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Pattern name
             Text(
               name,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: colors.onSurface,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(width: 16),
-            _buildDivider(),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Tool buttons
             _ToolButton(
               icon: Icons.near_me,
-              label: 'Grab',
+              label: 'Grab (Alt+1)',
               isActive: selectedTool == PianoRollToolSelection.grab,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1032,7 +1501,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.edit,
-              label: 'Draw',
+              label: 'Draw: stamps the last selection (Alt+2)',
               isActive: selectedTool == PianoRollToolSelection.draw,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1040,7 +1509,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.delete,
-              label: 'Delete',
+              label: 'Delete (Alt+3)',
               isActive: selectedTool == PianoRollToolSelection.delete,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1048,15 +1517,30 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.crop_free,
-              label: 'Select',
+              label: 'Select (Alt+4)',
               isActive: selectedTool == PianoRollToolSelection.select,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
                   .selectPianoRollTool(PianoRollToolSelection.select),
             ),
             _ToolButton(
+              icon: Icons.settings_ethernet,
+              label: 'Select region: drag the ruler to loop (Alt+5)',
+              isActive: selectedTool == PianoRollToolSelection.selectRegion,
+              onTap: () => notifier.selectPianoRollTool(
+                PianoRollToolSelection.selectRegion,
+              ),
+            ),
+            _ToolButton(
+              icon: Icons.content_cut,
+              label: 'Slice (Alt+6)',
+              isActive: selectedTool == PianoRollToolSelection.slice,
+              onTap: () =>
+                  notifier.selectPianoRollTool(PianoRollToolSelection.slice),
+            ),
+            _ToolButton(
               icon: Icons.pan_tool,
-              label: 'Pan',
+              label: 'Pan (Alt+7)',
               isActive: selectedTool == PianoRollToolSelection.pan,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1064,104 +1548,114 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.zoom_in,
-              label: 'Zoom',
+              label: 'Zoom (Alt+8)',
               isActive: selectedTool == PianoRollToolSelection.zoom,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
                   .selectPianoRollTool(PianoRollToolSelection.zoom),
             ),
             const SizedBox(width: 8),
-            _buildDivider(),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Zoom controls
             IconButton(
-              icon: const Icon(Icons.zoom_in, color: Colors.white70),
+              icon: Icon(Icons.zoom_in, color: colors.onSurfaceVariant),
               onPressed: onZoomIn,
               tooltip: 'Zoom In',
               iconSize: 20,
             ),
             IconButton(
-              icon: const Icon(Icons.zoom_out, color: Colors.white70),
+              icon: Icon(Icons.zoom_out, color: colors.onSurfaceVariant),
               onPressed: onZoomOut,
               tooltip: 'Zoom Out',
               iconSize: 20,
             ),
+            IconButton(
+              icon: Icon(Icons.unfold_less, color: colors.onSurfaceVariant),
+              onPressed: () => notifier.scaleKeyHeight(1 / 1.15),
+              tooltip: 'Shorter note rows (Alt+scroll)',
+              iconSize: 20,
+            ),
+            IconButton(
+              icon: Icon(Icons.unfold_more, color: colors.onSurfaceVariant),
+              onPressed: () => notifier.scaleKeyHeight(1.15),
+              tooltip: 'Taller note rows (Alt+scroll)',
+              iconSize: 20,
+            ),
+            IconButton(
+              icon: Icon(Icons.auto_fix_high, color: colors.onSurfaceVariant),
+              onPressed: () => showDawContextMenu(
+                context: context,
+                title: pianoRollNoteActionsTitle(ref.read(pianoRollProvider)),
+                actions: pianoRollNoteActions(context: context, ref: ref),
+              ),
+              tooltip: 'Note tools: quantize, legato, chop, transpose…',
+              iconSize: 20,
+            ),
             const SizedBox(width: 8),
 
-            // Grid dropdown
+            // Grid: the lines drawn behind the notes.
+            Text(
+              'Grid ',
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+            ),
             DropdownButton<GridSize>(
               value: gridDenom,
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
-              items: GridSize.values.map((element) {
-                String label = "";
-                switch (element) {
-                  case GridSize.oneBar:
-                    label = "4 Beats";
-                    break;
-                  case GridSize.twoBeat:
-                    label = "2 Beats";
-                    break;
-                  case GridSize.full:
-                    label = "1 Beat";
-                    break;
-                  case GridSize.half:
-                    label = "1/2 Beat";
-                    break;
-                  case GridSize.third:
-                    label = "1/3 Beat";
-                    break;
-                  case GridSize.quarter:
-                    label = "1/4 Beat";
-                    break;
-                  case GridSize.sixth:
-                    label = "1/6 Beat";
-                    break;
-                  case GridSize.eighth:
-                    label = "1/8 Beat";
-                  case GridSize.twelfth:
-                    label = "1/12 Beat";
-                    break;
-                  case GridSize.sixteenth:
-                    label = "1/16 Beat";
-                    break;
-                  case GridSize.thirtysecond:
-                    label = "1/32 Beat";
-                    break;
-                  case GridSize.sixtyfourth:
-                    label = "1/64 Beat";
-                    break;
-                  case GridSize.infinity:
-                    label = "None";
-                    break;
-                }
-
-                return DropdownMenuItem<GridSize>(
-                  value: element,
-                  child: Text(label),
-                );
-              }).toList(),
+              items: [
+                for (final size in GridSize.values)
+                  DropdownMenuItem(value: size, child: Text(_gridLabel(size))),
+              ],
               onChanged: onGridDenomChanged,
             ),
             const SizedBox(width: 8),
-            _buildDivider(),
+
+            // Step: what drawing, moving, and resizing snap to.
+            Tooltip(
+              message: 'Snap step for drawing and moving notes',
+              child: Text(
+                'Step ',
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+              ),
+            ),
+            DropdownButton<GridSize?>(
+              value: pianoRollState.drawStep,
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
+              underline: const SizedBox(),
+              items: [
+                const DropdownMenuItem<GridSize?>(
+                  value: null,
+                  child: Text('Grid'),
+                ),
+                for (final size in GridSize.values)
+                  DropdownMenuItem<GridSize?>(
+                    value: size,
+                    child: Text(_gridLabel(size)),
+                  ),
+              ],
+              onChanged: notifier.setDrawStep,
+            ),
+            const SizedBox(width: 8),
+            _buildDivider(context),
             const SizedBox(width: 8),
 
             // Generator dropdown
-            const Text(
+            Text(
               'Generator: ',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             DropdownButton<int?>(
               value: previewGeneratorId,
-              hint: const Text(
+              hint: Text(
                 'Select',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: colors.onSurfaceVariant),
               ),
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: [
                 const DropdownMenuItem<int?>(value: null, child: Text('None')),
@@ -1204,25 +1698,15 @@ class _PianoRollToolbar extends ConsumerWidget {
     );
   }
 
-  Widget _buildDivider() {
-    return Container(width: 1, height: 30, color: Colors.grey.shade600);
-  }
+  /// Note-length label: 1/4 is one beat and 1/1 one bar in 4/4.
+  static String _gridLabel(GridSize size) => size.label;
 
-  void _togglePatternPlayback(
-    WidgetRef ref,
-    int generatorId,
-    int patternId,
-  ) async {
-    try {
-      await togglePatternPlayback(
-        ctx: ref.read(projectProvider.notifier).dawContext,
-        patternId: patternId,
-        generatorId: generatorId,
-      );
-    } catch (e) {
-      AppLogger.error('Pattern playback error: $e');
-      ref.read(notificationProvider.notifier).error(e);
-    }
+  Widget _buildDivider(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 30,
+      color: Theme.of(context).colorScheme.outlineVariant,
+    );
   }
 }
 
@@ -1241,6 +1725,7 @@ class _ToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Tooltip(
       message: label,
       child: InkWell(
@@ -1250,13 +1735,13 @@ class _ToolButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: isActive
               ? BoxDecoration(
-                  color: Colors.blueAccent.withAlpha(50),
+                  color: colors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 )
               : null,
           child: Icon(
             icon,
-            color: isActive ? Colors.blueAccent : Colors.white70,
+            color: isActive ? colors.primary : colors.onSurfaceVariant,
             size: 20,
           ),
         ),
@@ -1286,6 +1771,7 @@ class _PianoKeyState extends State<_PianoKey> {
   bool _isPressed = false;
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     const blackIndices = [1, 3, 6, 8, 10];
     final isBlack = blackIndices.contains(widget.midiKey % 12);
     final label = numToMidiKey(widget.midiKey);
@@ -1315,7 +1801,7 @@ class _PianoKeyState extends State<_PianoKey> {
         height: widget.height,
         decoration: BoxDecoration(
           color: _isPressed
-              ? Colors.cyanAccent
+              ? colors.primary
               : (isBlack ? Colors.black : Colors.white),
           border: Border(
             bottom: BorderSide(color: Colors.grey.shade700, width: 0.5),
@@ -1354,7 +1840,7 @@ class _InteractiveNote extends ConsumerStatefulWidget {
   final ValueChanged<Offset>? onDragUpdate;
   final VoidCallback? onDragEnd;
   final double opacity;
-  final Color borderColor;
+  final Color? borderColor;
   final VoidCallback? onTapOverride;
 
   const _InteractiveNote({
@@ -1370,7 +1856,7 @@ class _InteractiveNote extends ConsumerStatefulWidget {
     this.onDragUpdate,
     this.onDragEnd,
     this.opacity = 1.0,
-    this.borderColor = Colors.white30,
+    this.borderColor,
     this.onTapOverride,
   });
 
@@ -1430,6 +1916,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     // Determine cursor based on tool
     MouseCursor cursor = SystemMouseCursors.click;
     if (widget.selectedTool == PianoRollToolSelection.delete) {
@@ -1449,7 +1936,19 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
         opacity: widget.opacity,
         child: MouseRegion(
           cursor: cursor,
-          child: GestureDetector(
+          child: IgnorePointer(
+            ignoring: widget.selectedTool == PianoRollToolSelection.pan,
+            // Right-clicking an unselected note selects it, so the grid's
+            // context menu acts on the note under the pointer.
+            child: Listener(
+            onPointerDown: (event) {
+              if (event.buttons & kSecondaryButton == 0) return;
+              final selection = ref.read(pianoRollProvider).selectedNoteIds;
+              if (!selection.contains(widget.noteId)) {
+                ref.read(pianoRollProvider.notifier).selectNotes({widget.noteId});
+              }
+            },
+            child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
               if (widget.onTapOverride != null) {
@@ -1649,92 +2148,133 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
             child: Container(
               decoration: BoxDecoration(
                 color: _mode != _NoteDragMode.none
-                    ? Colors.pink
-                    : Colors.pinkAccent,
+                    ? colors.primary
+                    : colors.primaryContainer,
                 borderRadius: BorderRadius.circular(2),
-                border: Border.all(color: Colors.white30),
+                border: Border.all(color: widget.borderColor ?? colors.primary),
               ),
               child: _localWidth > 30
-                  ? const Center(
+                  ? Center(
                       child: Icon(
                         Icons.drag_handle,
                         size: 12,
-                        color: Colors.white24,
+                        color: colors.onPrimaryContainer.withValues(alpha: 0.5),
                       ),
                     )
                   : null,
             ),
           ),
+          ),
         ),
       ),
+    ),
     );
   }
 }
 
 class _PianoGridPainter extends CustomPainter {
+  final ScrollController horizontalController;
+  final ScrollController verticalController;
   final double zoomX;
   final double keyHeight;
   final GridSize gridDenom;
+  final Color lineColor;
 
   _PianoGridPainter({
+    required this.horizontalController,
+    required this.verticalController,
     required this.zoomX,
     required this.keyHeight,
     required this.gridDenom,
-  });
+    required this.lineColor,
+  }) : super(
+         repaint: Listenable.merge([
+           horizontalController,
+           verticalController,
+         ]),
+       );
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (zoomX <= 0 || keyHeight <= 0 || size.isEmpty) return;
+
+    final horizontalOffset = horizontalController.hasClients
+        ? horizontalController.offset
+        : 0.0;
+    final verticalOffset = verticalController.hasClients
+        ? verticalController.offset
+        : 0.0;
     final paint = Paint()..strokeWidth = 1.0;
 
-    // Horizontal Lines (Keys)
-    paint.color = Colors.white10;
-    for (int i = 0; i < 128; i++) {
-      final y = i * keyHeight;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    paint.color = lineColor.withValues(alpha: 0.12);
+    final firstKeyLine = max(0, (verticalOffset / keyHeight).floor());
+    final lastKeyLine = min(
+      128,
+      ((verticalOffset + size.height) / keyHeight).ceil(),
+    );
+    for (var keyLine = firstKeyLine; keyLine <= lastKeyLine; keyLine++) {
+      final viewportY = keyLine * keyHeight - verticalOffset;
+      canvas.drawLine(
+        Offset(0, viewportY),
+        Offset(size.width, viewportY),
+        paint,
+      );
     }
 
-    // Vertical Lines (Grid)
-    double ticksPerGrid = 960.0 * 4.0 / gridDenom.value;
-    double pixelsPerGrid = ticksPerGrid * zoomX;
+    if (gridDenom == GridSize.infinity) return;
 
-    if (pixelsPerGrid < 4) return;
+    final ticksPerGrid = 3840.0 / gridDenom.value;
+    final basePixelsPerGrid = ticksPerGrid * zoomX;
+    if (!basePixelsPerGrid.isFinite || basePixelsPerGrid <= 0) return;
 
-    double currentX = 0;
-    int gridIndex = 0;
+    var skippedGridLines = 1;
+    while (basePixelsPerGrid * skippedGridLines < 4) {
+      skippedGridLines *= 2;
+    }
+    final pixelsPerVisibleGrid = basePixelsPerGrid * skippedGridLines;
+    final visibleStart = max(0.0, horizontalOffset - 2);
+    final visibleEnd = horizontalOffset + size.width + 2;
+    var visibleGridIndex = (visibleStart / pixelsPerVisibleGrid).floor();
+    var absoluteX = visibleGridIndex * pixelsPerVisibleGrid;
 
-    while (currentX < size.width) {
-      // Calculate absolute ticks for precise modulo math
-      int currentTick = (gridIndex * ticksPerGrid).round();
+    while (absoluteX <= visibleEnd) {
+      final baseGridIndex = visibleGridIndex * skippedGridLines;
+      final currentTick = (baseGridIndex * ticksPerGrid).round();
 
-      // 3840 ticks = 1 Bar (4/4 time). 960 ticks = 1 Beat.
-      bool isBar = (currentTick % 3840) == 0;
-      bool isBeat = (currentTick % 960) == 0;
+      final isBar = currentTick % 3840 == 0;
+      final isBeat = currentTick % 960 == 0;
 
       if (isBar) {
-        paint.color = Colors.white54;
+        paint.color = lineColor.withValues(alpha: 0.54);
         paint.strokeWidth = 1.5;
       } else if (isBeat) {
-        paint.color = Colors.white24;
+        paint.color = lineColor.withValues(alpha: 0.24);
         paint.strokeWidth = 1.0;
       } else {
-        paint.color = Colors.white10;
+        paint.color = lineColor.withValues(alpha: 0.12);
         paint.strokeWidth = 0.5;
       }
 
+      final viewportX = absoluteX - horizontalOffset;
       canvas.drawLine(
-        Offset(currentX, 0),
-        Offset(currentX, size.height),
+        Offset(viewportX, 0),
+        Offset(viewportX, size.height),
         paint,
       );
 
-      currentX += pixelsPerGrid;
-      gridIndex++;
+      visibleGridIndex++;
+      absoluteX = visibleGridIndex * pixelsPerVisibleGrid;
     }
   }
 
   @override
   bool shouldRepaint(covariant _PianoGridPainter old) =>
-      old.zoomX != zoomX || old.gridDenom != gridDenom;
+      old.horizontalController != horizontalController ||
+      old.verticalController != verticalController ||
+      old.zoomX != zoomX ||
+      old.keyHeight != keyHeight ||
+      old.gridDenom != gridDenom ||
+      old.lineColor != lineColor;
 }
 
 /// A specialized widget to handle grouped interactions for multiple selected notes.
@@ -1796,6 +2336,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (widget.notes.isEmpty) return const SizedBox.shrink();
 
     int minTick = widget.notes.map((n) => n.startTick).reduce(min);
@@ -1824,9 +2365,11 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
       height: baseHeight,
       child: MouseRegion(
         cursor: cursor,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: widget.notes.map((note) {
+        child: IgnorePointer(
+          ignoring: widget.selectedTool == PianoRollToolSelection.pan,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: widget.notes.map((note) {
             double noteLeft = (note.startTick - minTick) * widget.zoomX;
             double noteTop = (maxKey - note.key) * widget.keyHeight;
             double noteWidth = note.duration * widget.zoomX;
@@ -1955,20 +2498,22 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: _mode != _NoteDragMode.none
-                          ? Colors.pink
-                          : Colors.pinkAccent,
+                          ? colors.primary
+                          : colors.primaryContainer,
                       borderRadius: BorderRadius.circular(2),
                       border: Border.all(
-                        color: Colors.white,
+                        color: colors.primary,
                         width: 1.5,
                       ), // Thick white border for selection
                     ),
                     child: noteWidth > 30
-                        ? const Center(
+                        ? Center(
                             child: Icon(
                               Icons.drag_handle,
                               size: 12,
-                              color: Colors.white24,
+                              color: colors.onPrimaryContainer.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                           )
                         : null,
@@ -1979,129 +2524,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
           }).toList(),
         ),
       ),
-    );
-  }
-}
-
-class _PianoRollPlayheadPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      // Using orange to match your pattern play button theme
-      ..color = Colors.orangeAccent
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    path.moveTo(0, 0); // Top Left
-    path.lineTo(size.width, 0); // Top Right
-    path.lineTo(size.width / 2, size.height); // Bottom Center
-    path.close();
-
-    canvas.drawPath(path, paint);
-    canvas.drawShadow(path, Colors.black, 2.0, false);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class PianoRollPlayheadOverlay extends ConsumerStatefulWidget {
-  final ScrollController scrollController;
-  final double zoomX; // Pixels per tick
-  final bool isInteracting;
-
-  const PianoRollPlayheadOverlay({
-    super.key,
-    required this.scrollController,
-    required this.zoomX,
-    this.isInteracting = false,
-  });
-
-  @override
-  ConsumerState<PianoRollPlayheadOverlay> createState() =>
-      _PianoRollPlayheadOverlayState();
-}
-
-class _PianoRollPlayheadOverlayState
-    extends ConsumerState<PianoRollPlayheadOverlay> {
-  int _lastKnownTicks = 0;
-
-  int _getTicksFromFeedback(UiTransportFeedback pos) {
-    if (!pos.isPatternMode || pos.sampleRate <= 0) return 0;
-
-    // Convert samples directly to ticks safely
-    const ppq = 960;
-    final ticks =
-        (pos.patternSamples * ppq * pos.tempo) / (60.0 * pos.sampleRate);
-    return ticks.round();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 1. Watch the transport stream provider directly
-    final positionAsync = ref.watch(transportPositionStreamProvider);
-
-    // 2. Update the last known ticks if new data arrived
-    if (positionAsync.hasValue && positionAsync.value != null) {
-      _lastKnownTicks = _getTicksFromFeedback(positionAsync.value!);
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewportWidth = constraints.maxWidth;
-
-        // Calculate exact pixel position on the internal grid
-        final playheadAbsoluteX = _lastKnownTicks * widget.zoomX;
-
-        return AnimatedBuilder(
-          animation: widget.scrollController,
-          builder: (context, child) {
-            double scrollOffset = 0;
-            if (widget.scrollController.hasClients) {
-              scrollOffset = widget.scrollController.offset;
-            }
-
-            // Map grid position to screen viewport position
-            final double left = playheadAbsoluteX - scrollOffset;
-
-            // Optimization: Cull rendering if off-screen to save CPU
-            if (left < -20 || left > viewportWidth + 20) {
-              return const SizedBox.shrink();
-            }
-
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  left: left - 7.5, // Center the 15px wide playhead
-                  top: 0,
-                  bottom: 0,
-                  width: 15,
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        height: 10,
-                        width: 15,
-                        child: CustomPaint(
-                          painter: _PianoRollPlayheadPainter(),
-                        ),
-                      ),
-                      Expanded(
-                        child: Container(
-                          width: 1.5,
-                          color: Colors.orangeAccent.withAlpha(
-                            widget.isInteracting ? 100 : 204,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    ),
     );
   }
 }

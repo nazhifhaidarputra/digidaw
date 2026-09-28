@@ -41,6 +41,16 @@ Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
 Future<void> playSourcePreview({required DawContext ctx, required int id}) =>
     RustLib.instance.api.crateApiAudioPlaySourcePreview(ctx: ctx, id: id);
 
+/// Preview a browser sample without adding it to the project asset library.
+/// Playback is capped by the audio engine at 15 seconds.
+Future<void> playFilePreview({
+  required DawContext ctx,
+  required String filePath,
+}) => RustLib.instance.api.crateApiAudioPlayFilePreview(
+  ctx: ctx,
+  filePath: filePath,
+);
+
 Future<void> stopAllPreviews({required DawContext ctx}) =>
     RustLib.instance.api.crateApiAudioStopAllPreviews(ctx: ctx);
 

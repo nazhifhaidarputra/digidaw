@@ -12,53 +12,98 @@ use crate::{
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
 
+/// Automation and modulation state removed together with a plugin instance.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RemovedModulations {
+    /// Automation lanes that only drove the removed plugin.
+    pub automation_lanes: Vec<AutomationId>,
+    /// Automation sources owned by those lanes.
+    pub modulation_sources: Vec<ModulationId>,
+    /// Every link whose target belonged to the removed plugin.
+    pub modulation_links: Vec<ModulationLinkId>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Runtime-ready description of a modulation source already paired with its destination.
 pub enum ModulationEvent {
     /// Driven by the audio output of a specific plugin (e.g., Peak Controller)
     PeakController {
+        /// Plugin whose output amplitude drives the modulation.
         source: PluginTarget,
+        /// Parameter receiving the modulation.
         target: AutomationTarget,
+        /// Bipolar amount applied around the base value.
         depth: f32,
+        /// Center value before modulation is applied.
         base_value: f32,
     },
     /// Driven by a timeline automation lane
     Automation {
+        /// Timeline lane sampled by the engine.
         lane_id: AutomationId,
+        /// Parameter receiving lane values.
         target: AutomationTarget,
     },
     /// Driven by a mathematical oscillator (LFO)
     LFO {
+        /// Oscillator frequency in cycles per second.
         rate_hz: f32,
+        /// Bipolar oscillator amount around the base value.
         depth: f32,
+        /// Center value before oscillator modulation.
         base_value: f32,
+        /// Parameter receiving oscillator values.
         target: AutomationTarget,
     },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Persisted generator of modulation values, independent of any destination link.
 pub enum ModulationSource {
-    PeakController { source: PluginTarget },
-    Automation { lane_id: AutomationId },
-    LFO { rate_hz: f32 },
+    /// Envelope follower driven by a plugin's output.
+    PeakController {
+        /// Plugin providing the analyzed signal.
+        source: PluginTarget,
+    },
+    /// Values sampled from a project automation lane.
+    Automation {
+        /// Referenced automation lane.
+        lane_id: AutomationId,
+    },
+    /// Host-generated low-frequency oscillator.
+    LFO {
+        /// Oscillator frequency in cycles per second.
+        rate_hz: f32,
+    },
     // Future: Envelope, MacroKnob, StepSequencer, etc.
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Persisted connection from one modulation source to one automation target.
 pub struct ModulationLink {
+    /// Stable identity of this connection.
     pub id: ModulationLinkId,
-    pub source_id: ModulationId,  // Which LFO/Macro is driving this?
-    pub target: AutomationTarget, // What parameter is being turned?
-    pub depth: f32,               // How much is it turning? (-1.0 to 1.0)
-    pub base_value: f32,          // The center point of the parameter
+    /// Source producing modulation values.
+    pub source_id: ModulationId,
+    /// Parameter receiving modulation.
+    pub target: AutomationTarget,
+    /// Signed modulation amount, conventionally in the range -1.0 to 1.0.
+    pub depth: f32,
+    /// Center value around which modulation is applied.
+    pub base_value: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Modulation link paired with its ordering inside the target's UI group.
 pub struct ModulationLinkForOrderedLaneView {
+    /// Zero-based position among links displayed for the same target drawer.
     pub order_idx: usize,
+    /// Persisted routing properties.
     pub prop: ModulationLink,
 }
 
 impl ModulationEvent {
+    /// Returns the destination parameter shared by every event kind.
     pub fn target(&self) -> &AutomationTarget {
         match self {
             ModulationEvent::PeakController { target, .. } => target,
@@ -80,10 +125,11 @@ impl ApplicationState {
 
     /// Removes a generator AND all cables connected to it
     pub fn remove_modulation_source(&mut self, source_id: ModulationId) {
-        self.modulation_sources.remove(source_id);
+        self.modulation_sources.detach(source_id);
         // Cascade delete: Remove any cables that were plugged into this source
-        self.modulation_links
-            .retain(|_, link| link.prop.source_id != source_id);
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
+            link.prop.source_id != source_id
+        });
     }
 
     /// Connects a Generator to a Parameter
@@ -113,7 +159,7 @@ impl ApplicationState {
         let order_idx = self
             .modulation_links
             .values()
-            .filter(|l| l.prop.target == target)
+            .filter(|l| l.prop.target.belongs_to_same_drawer_as(&target))
             .count();
 
         let link_id =
@@ -146,7 +192,7 @@ impl ApplicationState {
 
     /// Removes a specific connection
     pub fn remove_modulation_link(&mut self, link_id: ModulationLinkId) {
-        self.modulation_links.remove(link_id);
+        self.modulation_links.detach(link_id);
     }
 
     // =========================================================================
@@ -160,7 +206,7 @@ impl ApplicationState {
         label: impl Into<String>,
         min: f64,
         max: f64,
-        default_value: f64,
+        initial_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         // === PREVENT DUPLICATES ===
         // Check if this exact target already has an Automation source linked to it.
@@ -184,9 +230,14 @@ impl ApplicationState {
 
         // Create the Lane (Pure Data)
         let label = label.into();
-        let lane_id = self
-            .automation_pool
-            .insert_with_key(|id| AutomationLane::new(id, label, min, max, default_value));
+        let lane_id = self.automation_pool.insert_with_key(|id| {
+            let mut lane = AutomationLane::new(id, label, min, max, initial_value);
+            lane.add_point(AutomationPoint::new(
+                0,
+                NormalizedF64::from_range(initial_value, min, max),
+            ));
+            lane
+        });
         let lane = self.automation_pool[lane_id].clone();
 
         // Create the Source Generator
@@ -212,12 +263,12 @@ impl ApplicationState {
         label: impl Into<String>,
         min: f64,
         max: f64,
-        default_value: f64,
+        initial_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_track(track_id) {
             return Err(anyhow!("Target does not reference the specified track"));
         }
-        self.add_automation_lane(target, label, min, max, default_value)
+        self.add_automation_lane(target, label, min, max, initial_value)
     }
 
     /// Get all Modulations AND their associated Automation Lanes for a specific Track.
@@ -277,13 +328,13 @@ impl ApplicationState {
 
         // Perform the removals from the application state
         for (link_id, source_id, lane_id) in to_remove {
-            if self.modulation_links.remove(link_id).is_some() {
+            if self.modulation_links.detach(link_id).is_some() {
                 removed_links.insert(link_id); // HashSet uses insert()
             }
-            if self.modulation_sources.remove(source_id).is_some() {
+            if self.modulation_sources.detach(source_id).is_some() {
                 removed_sources.insert(source_id); // HashSet uses insert()
             }
-            if self.automation_pool.remove(lane_id).is_some() {
+            if self.automation_pool.detach(lane_id).is_some() {
                 // Capture the first lane_id we find to return it
                 if main_lane_id.is_none() {
                     main_lane_id = Some(lane_id);
@@ -291,15 +342,33 @@ impl ApplicationState {
             }
         }
 
+        self.normalize_link_orders_for_target(&target);
+
         // Map the found lane_id with the collected HashSets, otherwise return None
         main_lane_id.map(|id| (id, removed_sources, removed_links))
+    }
+
+    fn normalize_link_orders_for_target(&mut self, target: &AutomationTarget) {
+        let mut sibling_links: Vec<_> = self
+            .modulation_links
+            .values()
+            .filter(|link| link.prop.target.belongs_to_same_drawer_as(target))
+            .map(|link| (link.order_idx, link.prop.id))
+            .collect();
+        sibling_links.sort_by_key(|(order_idx, _)| *order_idx);
+
+        for (order_idx, (_, link_id)) in sibling_links.into_iter().enumerate() {
+            if let Some(link) = self.modulation_links.get_mut(link_id) {
+                link.order_idx = order_idx;
+            }
+        }
     }
 
     /// Completely remove all Modulation Links and orphaned Automation Lanes for a Track.
     pub fn remove_modulations_for_track(&mut self, track_id: TrackId) {
         let mut orphaned_lanes = Vec::new();
 
-        self.modulation_links.retain(|_, link| {
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_track(track_id);
 
             if references {
@@ -314,8 +383,65 @@ impl ApplicationState {
 
         // Clean up the pure data lanes so we don't leak memory
         for lane_id in orphaned_lanes {
-            self.automation_pool.remove(lane_id);
+            self.automation_pool.detach(lane_id);
         }
+    }
+
+    /// Removes modulation links, automation sources, and lanes owned by a generator.
+    pub fn remove_modulations_for_generator(&mut self, generator_id: crate::shared::GeneratorId) {
+        let mut automation_sources = Vec::new();
+        let mut automation_lanes = Vec::new();
+
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
+            let references = link.prop.target.references_generator(generator_id);
+            if references
+                && let Some(ModulationSource::Automation { lane_id }) =
+                    self.modulation_sources.get(link.prop.source_id)
+            {
+                automation_sources.push(link.prop.source_id);
+                automation_lanes.push(*lane_id);
+            }
+            !references
+        });
+
+        for source_id in automation_sources {
+            self.modulation_sources.detach(source_id);
+        }
+        for lane_id in automation_lanes {
+            self.automation_pool.detach(lane_id);
+        }
+    }
+
+    /// Removes every modulation link whose target belongs to `plugin`, plus the automation
+    /// sources and lanes that drove those links. Other source kinds (LFOs, peak controllers)
+    /// may drive several targets, so only their links are removed.
+    ///
+    /// Infallible, so callers can run it as the final commit step of a removal transaction.
+    pub fn remove_modulations_for_plugin(&mut self, plugin: PluginTarget) -> RemovedModulations {
+        let owned: Vec<_> = self
+            .modulation_links
+            .iter()
+            .filter(|(_, link)| link.prop.target.as_plugin_target() == Some(plugin))
+            .map(|(link_id, link)| (link_id, link.prop.source_id, link.prop.target.clone()))
+            .collect();
+
+        let mut removed = RemovedModulations::default();
+        for (link_id, source_id, target) in owned {
+            if self.modulation_links.detach(link_id).is_some() {
+                removed.modulation_links.push(link_id);
+            }
+            if let Some(&ModulationSource::Automation { lane_id }) =
+                self.modulation_sources.get(source_id)
+            {
+                self.modulation_sources.detach(source_id);
+                removed.modulation_sources.push(source_id);
+                if self.automation_pool.detach(lane_id).is_some() {
+                    removed.automation_lanes.push(lane_id);
+                }
+            }
+            self.normalize_link_orders_for_target(&target);
+        }
+        removed
     }
 
     /// Add an automation lane specifically validated for a Bus target.
@@ -326,12 +452,12 @@ impl ApplicationState {
         label: impl Into<String>,
         min: f64,
         max: f64,
-        default_value: f64,
+        initial_value: f64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_bus(bus_id) {
             return Err(anyhow!("Target does not reference the specified bus"));
         }
-        self.add_automation_lane(target, label, min, max, default_value)
+        self.add_automation_lane(target, label, min, max, initial_value)
     }
 
     /// Get all Modulations AND their associated Automation Lanes for a specific Bus.
@@ -367,7 +493,7 @@ impl ApplicationState {
     pub fn remove_modulations_for_bus(&mut self, bus_id: BusId) {
         let mut orphaned_lanes = Vec::new();
 
-        self.modulation_links.retain(|_, link| {
+        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_bus(bus_id);
             if references {
                 if let Some(ModulationSource::Automation { lane_id }) =
@@ -380,7 +506,7 @@ impl ApplicationState {
         });
 
         for lane_id in orphaned_lanes {
-            self.automation_pool.remove(lane_id);
+            self.automation_pool.detach(lane_id);
         }
     }
 
@@ -399,6 +525,7 @@ impl ApplicationState {
     // =========================================================================
     // AUTOMATION POINT MANAGEMENT
     // =========================================================================
+    /// Inserts a linear point into a lane and returns the updated lane plus its new numeric ID.
     pub fn add_automation_point(
         &mut self,
         lane_id: AutomationId,
@@ -417,6 +544,10 @@ impl ApplicationState {
         Ok((lane.clone(), point_id))
     }
 
+    /// Removes a point when present and returns the current lane snapshot.
+    ///
+    /// The current implementation reports an error only when the lane is absent; an unknown point
+    /// ID leaves the lane unchanged and still returns success.
     pub fn remove_automation_point(
         &mut self,
         lane_id: AutomationId,
@@ -434,6 +565,21 @@ impl ApplicationState {
         Ok(lane.clone())
     }
 
+    /// Sets whether a lane contributes automation and returns its updated snapshot.
+    pub fn set_automation_lane_enabled(
+        &mut self,
+        lane_id: AutomationId,
+        enabled: bool,
+    ) -> anyhow::Result<AutomationLane> {
+        let lane = self
+            .automation_pool
+            .get_mut(lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+        lane.enabled = enabled;
+        Ok(lane.clone())
+    }
+
+    /// Applies supplied point fields, restores chronological ordering, and returns its new index.
     pub fn update_automation_point(
         &mut self,
         lane_id: AutomationId,
@@ -504,5 +650,117 @@ impl ApplicationState {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::project::{
+        AudioTrack, GeneratorInstanceType, MasterAutomationTarget, TrackType,
+    };
+    use crate::shared::GeneratorId;
+
+    #[test]
+    fn new_automation_lane_starts_with_the_initial_value_at_project_start() {
+        let mut app = ApplicationState::default();
+
+        let result = app.add_automation_lane(
+            AutomationTarget::Master(MasterAutomationTarget::TempoBpm),
+            "Tempo",
+            40.0,
+            240.0,
+            140.0,
+        );
+        assert!(result.is_ok());
+        if let Ok((lane, _)) = result {
+            assert_eq!(lane.points.len(), 1);
+            if let Some(point) = lane.points.first() {
+                assert_eq!(point.time_ticks, 0);
+                assert!((point.value.get() - 0.5).abs() < f64::EPSILON);
+            }
+        }
+    }
+
+    #[test]
+    fn generator_lanes_share_sequential_drawer_order() {
+        let mut app = ApplicationState::default();
+        let generator_id = GeneratorId::from_u64(1);
+        let targets = [10, 20, 30].map(|param_id| AutomationTarget::Generator {
+            generator_id,
+            param_id,
+        });
+
+        let mut links = Vec::new();
+        for target in targets.clone() {
+            let result = app.add_automation_lane(target, "Parameter", 0.0, 1.0, 0.5);
+            assert!(result.is_ok());
+            if let Ok((_, link_id)) = result {
+                links.push(link_id);
+            }
+        }
+
+        let orders: Vec<_> = links
+            .iter()
+            .map(|link_id| app.modulation_links[*link_id].order_idx)
+            .collect();
+        assert_eq!(orders, vec![0, 1, 2]);
+
+        assert!(app.remove_automation_lane(targets[1].clone()).is_some());
+        let mut remaining_orders: Vec<_> = app
+            .modulation_links
+            .values()
+            .map(|link| link.order_idx)
+            .collect();
+        remaining_orders.sort_unstable();
+        assert_eq!(remaining_orders, vec![0, 1]);
+    }
+
+    #[test]
+    fn disabling_lane_preserves_its_points_source_and_link() {
+        let mut app = ApplicationState::default();
+        let target = AutomationTarget::Master(MasterAutomationTarget::TempoBpm);
+        let result = app.add_automation_lane(target, "Tempo", 40.0, 240.0, 120.0);
+        assert!(result.is_ok());
+        let Ok((lane, link_id)) = result else {
+            return;
+        };
+        let source_id = app.modulation_links[link_id].prop.source_id;
+
+        let updated = app.set_automation_lane_enabled(lane.id, false);
+        assert!(updated.is_ok());
+        if let Ok(updated) = updated {
+            assert!(!updated.enabled);
+            assert_eq!(updated.points, lane.points);
+        }
+        assert!(app.modulation_links.contains_key(link_id));
+        assert!(app.modulation_sources.contains_key(source_id));
+    }
+
+    #[test]
+    fn deleting_generator_track_removes_automation_data() {
+        let mut app = ApplicationState::default();
+        let generator_id = app.add_generator(GeneratorInstanceType::default());
+        let generator = app.generator_pool[generator_id].clone();
+        let track_id = app.tracks.insert_with_key(|id| AudioTrack {
+            id,
+            track_type: TrackType::Midi,
+            generator: Some(generator),
+            ..Default::default()
+        });
+        let target = AutomationTarget::Generator {
+            generator_id,
+            param_id: 10,
+        };
+        let result = app.add_automation_lane(target, "Cutoff", 0.0, 1.0, 0.5);
+        assert!(result.is_ok());
+
+        let removal = app.remove_track(track_id);
+
+        assert!(removal.is_ok());
+        assert!(!app.generator_pool.contains_key(generator_id));
+        assert!(app.modulation_links.is_empty());
+        assert!(app.modulation_sources.is_empty());
+        assert!(app.automation_pool.is_empty());
     }
 }

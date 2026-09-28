@@ -85,16 +85,11 @@ mod tests {
 
         clipboard_api::copy_pattern_notes(&mut ctx, pattern_id, note_ids, |_| ()).unwrap();
 
-        // Paste with key override to key=48 (C3)
+        // Anchor the earliest copied note at key 48 while preserving pitch intervals.
         let result = clipboard_api::paste_notes(&mut ctx, pattern_id, 5000, Some(48), |n| n.key);
         assert!(result.is_ok());
         let keys = result.unwrap();
-        assert!(!keys.is_empty());
-        // All pasted notes should have key=48
-        assert!(
-            keys.iter().all(|&k| k == 48),
-            "All notes should be remapped to key 48"
-        );
+        assert_eq!(keys, vec![48, 52, 55]);
     }
 
     #[test]
@@ -128,7 +123,6 @@ mod tests {
         });
         assert!(has_notes, "Clipboard should contain notes after cut");
     }
-
 
     #[test]
     fn copy_clips_empty_ids_leaves_clipboard_empty() {

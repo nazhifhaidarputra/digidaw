@@ -16,6 +16,17 @@ use crate::{
     shared::id::{ClipId, PatternId, TrackId},
 };
 
+/// Returns a per-test mitigation root inside one directory that lives for the whole test process.
+///
+/// Crash reporting is configured once per process, so the first test to configure it keeps using
+/// its directory; that directory must outlive every other test.
+pub fn mitigation_root(name: &str) -> std::path::PathBuf {
+    static ROOT: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| tempfile::tempdir().expect("mitigation test root"))
+        .path()
+        .join(name)
+}
+
 /// Returns a fresh, empty `DawContext` with no audio stream attached.
 pub fn make_ctx() -> DawContext {
     DawContext::new()

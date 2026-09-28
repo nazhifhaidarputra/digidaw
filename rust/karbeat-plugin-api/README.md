@@ -1,161 +1,163 @@
 # Karbeat Plugin API
 
-This document describes how to implement plugins using the Karbeat Plugin API.
+This crate defines the core traits, lifecycle interfaces, and context objects for audio plugins in the DigiDAW (Karbeat) engine.
 
-It covers the core traits, helper macros, and how to register your plugin.
-More detailed documentation will be added over time.
-
-👉 For complete examples, see: [karbeat-plugins](../karbeat-plugins/)
+👉 **For the comprehensive developer guide with macros and full examples, see: [karbeat-plugins README](../karbeat-plugins/README.md)**
 
 ---
 
 ## Overview
 
-A Karbeat plugin can be either:
+In the modern Karbeat plugin architecture, both **Effects** and **Synthesizers/Generators** implement the unified [`AudioPlugin`](./src/traits.rs) trait. The category is declared via `plugin.category()`:
 
-* **Effect** (audio processing)
-* **Generator** (sound source / synth)
-
-Both are defined via traits that you implement.
+- `PluginCategory::Effect`: Processes existing audio from input buses into output buses.
+- `PluginCategory::Instrument`: Generates sound into output buses (e.g. synths, samplers).
 
 ---
 
-## 1. Core Traits
+## 1. Core Trait: `AudioPlugin`
 
-The base traits are defined in [`traits.rs`](./src/traits.rs).
+The trait definition lives in [`src/traits.rs`](./src/traits.rs):
 
 ```rust
-pub trait KarbeatEffect: Send + Sync {
+pub trait AudioPlugin: DynClone + Send + Sync {
+    // --- Metadata ---
     fn name(&self) -> &str;
-    // ...
-}
+    fn category(&self) -> PluginCategory;
+    fn vendor(&self) -> &str { "DigiDAW" }
+    fn version(&self) -> &str { "1.0.0" }
 
-pub trait KarbeatGenerator: Send + Sync {
-    fn name(&self) -> &str;
-    // ...
+    // --- Audio Lifecycle ---
+    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    fn reset(&mut self);
+    fn can_apply_io_layout(&self, inputs: &[BusConfig], outputs: &[BusConfig]) -> bool { true }
+    fn set_io_layout(&mut self, inputs: &[BusConfig], outputs: &[BusConfig]);
+
+    // --- Real-time DSP Callback ---
+    fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext);
+
+    // --- Plugin Delay Compensation (PDC) & Bypass ---
+    fn set_bypass(&mut self, _bypass: bool) {}
+    fn has_latency_changed(&mut self) -> bool { false }
+    fn latency_samples(&self) -> u32 { 0 }
+    fn tail_samples(&self) -> u32 { 0 }
+
+    // --- Parameter Accessors ---
+    fn set_parameter(&mut self, id: u32, value: f32);
+    fn get_parameter(&self, id: u32) -> f32;
+
+    /// Returns the effective value currently used by DSP, including real-time automation.
+    fn get_current_parameter(&self, id: u32) -> f32 {
+        self.get_parameter(id)
+    }
+
+    // --- Parameter Gestures & Automation ---
+    fn begin_parameter_edit(&mut self, _id: u32) {}
+    fn end_parameter_edit(&mut self, _id: u32) {}
+    fn apply_automation(&mut self, id: u32, value: f32);
+    fn clear_automation(&mut self, id: u32);
+
+    // --- Parameter Specifications ---
+    fn default_parameters(&self) -> HashMap<u32, f32>;
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
+    fn static_parameter_specs() -> Vec<ParameterSpec> where Self: Sized;
+
+    // --- State Persistence & Presets ---
+    fn get_state(&self) -> Vec<u8>;
+    fn set_state(&mut self, state: &[u8]);
+    fn get_factory_presets(&self) -> Vec<(String, Vec<u8>)> { Vec::new() }
+    fn load_preset(&mut self, _index: usize) {}
+    fn current_preset_index(&self) -> Option<usize> { None }
+
+    // --- Reflection & Custom Commands ---
+    fn as_any(&self) -> &dyn Any;
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> { None }
+    fn get_zero_copy_buffer(&self, _name: &str) -> Option<ZeroCopyBuffer> { None }
+    fn get_editor(&mut self) -> Option<Box<dyn PluginEditor>> { None }
 }
 ```
 
-### Notes
-
-* You are free to implement the required methods however you like.
-* Parameter handling is **fully customizable**, but:
-
-  * The frontend must understand your parameter mapping.
-  * Consistency between frontend and backend is your responsibility.
-
-### Recommended Approach
-
-To avoid errors, map parameter IDs (`u32`) using:
-
-* Enums or constants shared across frontend/backend, **or**
-* The provided `#[karbeat_plugin]` macro (recommended)
-
-The macro generates stable parameter IDs from string-based identifiers (hashed internally).
-
 ---
 
-## 2. Macro Support (`#[karbeat_plugin]`)
+## 2. Parameter System & Macro Automation
 
-Writing parameter boilerplate manually can be tedious.
-The `karbeat_macros` crate provides a derive macro to simplify this.
+Rather than implementing all parameter methods manually, combine [`karbeat_macros`](../karbeat-macros/) and [`karbeat_plugin_types`](../karbeat-plugin-types/):
 
-👉 See implementation: [`karbeat-macros`](../karbeat-macros/src/lib.rs)
+1. Decorate your struct with `#[karbeat_plugin]`:
+   - Annotate fields with `#[param(id = "...", name = "...", min = ..., max = ..., default = ...)]`.
+   - Sub-modules use `#[nested(prefix = "...")]`.
+   - Generates `base_default()` and the `AutoParams` trait reflection.
 
-### Example
+2. Decorate your `AudioPlugin` implementation with `#[auto_param]`:
+   - Automatically fulfills: `set_parameter`, `get_parameter`, `get_current_parameter`, `apply_automation`, `clear_automation`, `default_parameters`, `get_parameter_specs`, `static_parameter_specs`, and `as_any`.
+   - Optionally trigger callbacks on parameter change: `#[auto_param(on_change = "self.recompute()")]`.
+
+### Minimal Example
 
 ```rust
-#[derive(Clone)]
-#[karbeat_plugin]
-pub struct Karbeatzer {
-    // IMPORTANT:
-    // Nested components must implement AutoParams (from karbeat-plugin-types)
-    // Built-in Oscillator already supports this.
-    #[nested(prefix = "osc")]
-    oscillators: [Oscillator; 3],
+use karbeat_macros::{auto_param, karbeat_plugin};
+use karbeat_plugin_api::prelude::*;
 
+#[karbeat_plugin]
+#[derive(Clone, Debug)]
+pub struct SimpleGain {
     #[param(
-        id = "drive",
-        name = "Drive",
+        id = "gain",
+        name = "Gain",
         group = "Master",
         min = 0.0,
-        max = 1.0,
-        default = 0.0
+        max = 2.0,
+        default = 1.0,
+        step = 0.01
     )]
-    drive: f32,
+    pub gain: f32,
 }
-```
 
-### Generated Helpers
-
-The macro generates helper methods like:
-
-* `auto_set_parameter`
-* `auto_get_parameter`
-* `auto_apply_automation`
-* `auto_clear_automation`
-* `auto_get_parameter_specs`
-
-You can delegate your trait implementation to these:
-
-```rust
-impl KarbeatGenerator for Karbeatzer {
-    fn set_custom_parameter(&mut self, id: u32, value: f32) {
-        self.auto_set_parameter(id, value);
-    }
-
-    fn get_custom_parameter(&self, id: u32) -> Option<f32> {
-        self.auto_get_parameter(id)
-    }
-
-    fn apply_automation(&mut self, id: u32, value: f32) {
-        self.auto_apply_automation(id, value);
-    }
-
-    fn clear_automation(&mut self, id: u32) {
-        self.auto_clear_automation(id);
-    }
-
-    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
-        self.auto_get_parameter_specs()
-    }
-}
-```
-
----
-
-## 3. Plugin Registration
-
-To register your plugin, your internal engine must implement `Default`.
-
-```rust
-impl Default for MyPlugin {
+impl Default for SimpleGain {
     fn default() -> Self {
-        // Your initialization logic
+        Self::base_default()
     }
 }
-```
 
-Then implement the AudioPluginBuilder trait to the plugin:
+#[auto_param]
+impl AudioPlugin for SimpleGain {
+    fn name(&self) -> &str {
+        "Simple Gain"
+    }
 
-```rust
-impl AudioPluginBuilder for MyPlugin {
-    pub fn build() -> Self {
-        Self::default();
+    fn category(&self) -> PluginCategory {
+        PluginCategory::Effect
+    }
+
+    fn prepare(&mut self, _sample_rate: f32, _max_buffer_size: usize) {}
+    fn reset(&mut self) {}
+    fn set_io_layout(&mut self, _inputs: &[BusConfig], _outputs: &[BusConfig]) {}
+
+    fn process(&mut self, buffers: &mut AudioBuffers, _context: &ProcessContext) {
+        let gain = self.gain.get(); // Reads the live, automation-applied value
+        if let (Some(input), Some(output)) = (buffers.main_inputs.first(), buffers.main_outputs.first_mut()) {
+            for (in_ch, out_ch) in input.channel_data.iter().zip(output.channel_data.iter_mut()) {
+                for (src, dst) in in_ch.iter().zip(out_ch.iter_mut()) {
+                    *dst = *src * gain;
+                }
+            }
+        }
     }
 }
-```
 
-And lastly, implement the Manifestable if you want to generate
-the plugin JSON manifest
+impl AudioPluginBuilder for SimpleGain {
+    fn build() -> Self {
+        Self::default()
+    }
+}
 
-```rust
-impl Manifestable for KarbeatParametricEQ {
+impl Manifestable for SimpleGain {
     fn build_manifest() -> PluginManifest {
         PluginManifest {
-            id: 0,
-            name: "Karbeat Parametric EQ".into(),
-            internal_type: "KarbeatParametricEQ".into(),
+            id: karbeat_utils::hash::hash_str("effect_simple_gain"),
+            id_string: "effect_simple_gain".to_string(),
+            name: "Simple Gain".to_string(),
+            internal_type: "SimpleGain".to_string(),
             is_synth: false,
             parameters: Self::static_parameter_specs(),
         }
@@ -163,40 +165,10 @@ impl Manifestable for KarbeatParametricEQ {
 }
 ```
 
-This enables automatic construction via the registry.
-
 ---
 
-## ⚠ Limitations & Notes
+## 3. Supporting Traits
 
-### API Stability
-
-* The API is **still in alpha**
-* Breaking changes are expected as the system evolves
-* Trait definitions and available features may change
-
----
-
-### Architecture Update
-
-> **Recent change:** Wrapper-based design has been removed.
-
-The system now uses a **modular approach**, which is:
-
-* Easier to maintain
-* More flexible for future extensions
-
-At the moment:
-
-* The `karbeat-dsp` crate has limited components
-* More utilities and DSP modules will be added progressively
-
----
-
-## Future Improvements
-
-* More built-in DSP components
-* Better documentation and examples
-* Stabilized API (post-alpha)
-
----
+- **`AudioPluginBuilder`**: Factory trait for instantiation (`fn build() -> Self`).
+- **`Manifestable`**: Exports plugin schema to JSON for Flutter UI synchronization via `export_manifest(&dir)`.
+- **`PluginEditor`**: Interface for hosting native or platform window GUI views.

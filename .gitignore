@@ -50,6 +50,7 @@ app.*.map.json
 .agents/
 opencode.json
 .zed
+.claude/
 
 # ENVs and Secrets
 .env
@@ -64,3 +65,6 @@ client_secret*.json
 TODOS.md
 REQUEST.md
 GUIDELINE.md
+
+# Local implementation handoff plans
+.phases/

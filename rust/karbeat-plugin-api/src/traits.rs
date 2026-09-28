@@ -1,4 +1,3 @@
-pub use dyn_clone::{clone_trait_object, DynClone};
 pub use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
 pub use serde_json::Value;
@@ -13,7 +12,7 @@ use crate::types::{AudioBuffers, BusConfig, PluginCategory, ProcessContext, Zero
 
 use raw_window_handle::RawWindowHandle;
 
-/// Handles the GUI layer of the plugin. 
+/// Handles the GUI layer of the plugin.
 /// This lives entirely on the main UI thread.
 pub trait PluginEditor {
     /// Instructs the plugin to attach its GUI to the provided platform-specific window handle.
@@ -29,7 +28,6 @@ pub trait PluginEditor {
     /// Requests the plugin to resize its GUI. Returns true if accepted.
     fn set_size(&mut self, width: u32, height: u32) -> bool;
 }
-
 
 /// ## Overview
 ///
@@ -47,7 +45,9 @@ pub trait PluginEditor {
 /// This trait is now fully aligned with VST3/CLAP capabilities,
 /// supporting non-interleaved audio, sample-accurate automation,
 /// parameter gestures, and rich transport context.
-pub trait AudioPlugin: DynClone + Send + Sync {
+pub trait AudioPlugin: Any + Send {
+    /// Release an owned endpoint. Hosted plugins return native resources to their control owner.
+    fn retire(self: Box<Self>) {}
     // --- Metadata ---
     fn name(&self) -> &str;
     fn category(&self) -> PluginCategory;
@@ -108,6 +108,12 @@ pub trait AudioPlugin: DynClone + Send + Sync {
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
 
+    /// Returns the effective value currently used by DSP, including automation.
+    /// External plugins may fall back to their regular parameter getter.
+    fn get_current_parameter(&self, id: u32) -> f32 {
+        self.get_parameter(id)
+    }
+
     /// Called when the user starts touching a parameter in the UI.
     /// Crucial for the host to draw automation curves correctly.
     fn begin_parameter_edit(&mut self, _id: u32) {}
@@ -151,7 +157,7 @@ pub trait AudioPlugin: DynClone + Send + Sync {
         Self: Sized;
 
     fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
-    
+
     // --- State & Presets ---
 
     /// Get state of plugin when loading preset / saving project
@@ -241,5 +247,3 @@ pub trait AudioPluginBuilder {
     /// Creates a fresh, default instance of the plugin.
     fn build() -> Self;
 }
-
-clone_trait_object!(AudioPlugin);

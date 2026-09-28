@@ -9,7 +9,8 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'pattern.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `note_ids`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `from`, `from`, `from`
 
 Future<UiPattern> getPattern({
   required DawContext ctx,
@@ -21,6 +22,16 @@ Future<UiPattern> getPattern({
 
 Future<Map<int, UiPattern>> getPatterns({required DawContext ctx}) =>
     RustLib.instance.api.crateApiPatternGetPatterns(ctx: ctx);
+
+Future<void> renamePattern({
+  required DawContext ctx,
+  required int patternId,
+  required String newName,
+}) => RustLib.instance.api.crateApiPatternRenamePattern(
+  ctx: ctx,
+  patternId: patternId,
+  newName: newName,
+);
 
 Future<UiNote> addNote({
   required DawContext ctx,
@@ -93,7 +104,7 @@ Future<UiNote> changeNoteParams({
 /// Add notes in batch
 ///
 /// ## Parameters
-/// * pattern_id: [u32], id of the pattern
+/// * pattern_id: [u64], id of the pattern
 /// * new_notes: Vector of tuples that contains (key, start_tick, duration)
 Future<List<UiNote>> addNotesBatch({
   required DawContext ctx,
@@ -108,7 +119,7 @@ Future<List<UiNote>> addNotesBatch({
 /// Delete notes in batch
 ///
 /// ## Parameters
-/// * pattern_id: [u32], id of the pattern
+/// * pattern_id: [u64], id of the pattern
 /// * note_ids: Vector of notes ID to delete
 Future<void> deleteNotesBatch({
   required DawContext ctx,
@@ -123,7 +134,7 @@ Future<void> deleteNotesBatch({
 /// Move notes in batch
 ///
 /// ## Parameters
-/// * pattern_id: [u32], id of the pattern
+/// * pattern_id: [u64], id of the pattern
 /// * note_ids: Vector of notes updates (id, )
 Future<List<UiNote>> moveNotesBatch({
   required DawContext ctx,
@@ -172,6 +183,134 @@ Future<void> stopPatternPreviewLocal({
 Future<void> stopPatternPreview({required DawContext ctx}) =>
     RustLib.instance.api.crateApiPatternStopPatternPreview(ctx: ctx);
 
+/// Snaps note starts and ends to the nearest multiple of `step_ticks`.
+Future<UiPattern> quantizeNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int stepTicks,
+}) => RustLib.instance.api.crateApiPatternQuantizeNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  stepTicks: stepTicks,
+);
+
+/// Snaps only note starts to the nearest multiple of `step_ticks`, keeping lengths.
+Future<UiPattern> quantizeNoteStarts({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int stepTicks,
+}) => RustLib.instance.api.crateApiPatternQuantizeNoteStarts(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  stepTicks: stepTicks,
+);
+
+/// Stretches each note to the start of the next one.
+Future<UiPattern> legatoNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiPatternLegatoNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+);
+
+/// Randomizes timing by up to `timing_ticks` and velocity by up to `velocity_amount`.
+Future<UiPattern> humanizeNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int timingTicks,
+  required int velocityAmount,
+  required int seed,
+}) => RustLib.instance.api.crateApiPatternHumanizeNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  timingTicks: timingTicks,
+  velocityAmount: velocityAmount,
+  seed: seed,
+);
+
+/// Splits notes at every multiple of `step_ticks`.
+Future<UiPattern> chopNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int stepTicks,
+}) => RustLib.instance.api.crateApiPatternChopNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  stepTicks: stepTicks,
+);
+
+/// Cuts one note in two at `at_tick`.
+Future<UiPattern> sliceNote({
+  required DawContext ctx,
+  required int patternId,
+  required int noteId,
+  required int atTick,
+}) => RustLib.instance.api.crateApiPatternSliceNote(
+  ctx: ctx,
+  patternId: patternId,
+  noteId: noteId,
+  atTick: atTick,
+);
+
+/// Transposes notes by `semitones`.
+Future<UiPattern> transposeNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int semitones,
+}) => RustLib.instance.api.crateApiPatternTransposeNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  semitones: semitones,
+);
+
+/// Moves notes in time by `delta_ticks`.
+Future<UiPattern> shiftNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int deltaTicks,
+}) => RustLib.instance.api.crateApiPatternShiftNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  deltaTicks: deltaTicks,
+);
+
+/// Sets velocity, pan, and fine pitch for several notes as one undo step.
+Future<UiPattern> setNoteParamsBatch({
+  required DawContext ctx,
+  required int patternId,
+  required List<UiNoteParamUpdate> updates,
+}) => RustLib.instance.api.crateApiPatternSetNoteParamsBatch(
+  ctx: ctx,
+  patternId: patternId,
+  updates: updates,
+);
+
+/// Inserts complete notes, keeping their velocity, pan, and pitch.
+Future<UiPattern> addNoteCopies({
+  required DawContext ctx,
+  required int patternId,
+  required List<UiNoteDraft> notes,
+}) => RustLib.instance.api.crateApiPatternAddNoteCopies(
+  ctx: ctx,
+  patternId: patternId,
+  notes: notes,
+);
+
 @freezed
 sealed class UiNote with _$UiNote {
   const factory UiNote({
@@ -183,7 +322,33 @@ sealed class UiNote with _$UiNote {
     required double probability,
     required int microOffset,
     required bool mute,
+    required double pan,
+    required double pitch,
   }) = _UiNote;
+}
+
+/// A complete note to insert, such as a draw-tool copy of a selected note.
+@freezed
+sealed class UiNoteDraft with _$UiNoteDraft {
+  const factory UiNoteDraft({
+    required int key,
+    required int startTick,
+    required int duration,
+    required int velocity,
+    required double pan,
+    required double pitch,
+  }) = _UiNoteDraft;
+}
+
+/// Velocity, pan, and fine pitch for one note; `None` leaves a value unchanged.
+@freezed
+sealed class UiNoteParamUpdate with _$UiNoteParamUpdate {
+  const factory UiNoteParamUpdate({
+    required int noteId,
+    int? velocity,
+    double? pan,
+    double? pitch,
+  }) = _UiNoteParamUpdate;
 }
 
 @freezed

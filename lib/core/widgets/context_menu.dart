@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Context action for an context menu available component
-/// 
+///
 /// This is related to [ContextMenuWrapper].
 class DawContextAction {
   final String title;
@@ -10,13 +10,148 @@ class DawContextAction {
   final bool isDestructive;
   final Color? color;
 
+  /// Secondary text, used by submenus to show the current selection.
+  final String? subtitle;
+
+  /// Nested choices shown in a collapsible dropdown drawer when not null.
+  final List<DawContextAction>? children;
+
   DawContextAction({
     required this.title,
     required this.onTap,
     this.icon,
     this.isDestructive = false,
     this.color,
+  }) : subtitle = null,
+       children = null;
+
+  /// A collapsible group whose [children] open in a dropdown drawer.
+  DawContextAction.submenu({
+    required this.title,
+    required List<DawContextAction> this.children,
+    this.icon,
+    this.subtitle,
+    this.color,
+  }) : onTap = _noop,
+       isDestructive = false;
+
+  static void _noop() {}
+}
+
+/// Shows the DAW styled context menu dialog. Resolves when the menu closes.
+Future<void> showDawContextMenu({
+  required BuildContext context,
+  required List<DawContextAction> actions,
+  String? title,
+  Widget? header,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      final colors = Theme.of(dialogContext).colorScheme;
+      return AlertDialog(
+        title: title != null
+            ? Text(title, style: TextStyle(color: colors.onSurface))
+            : null,
+        contentPadding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (header != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 8.0,
+                  ),
+                  child: header,
+                ),
+                Divider(color: colors.outlineVariant, height: 16),
+              ],
+
+              ...actions.map(
+                (action) => _DawContextMenuEntry(
+                  action: action,
+                  dialogContext: dialogContext,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// One row of [showDawContextMenu]; submenus expand in place as a drawer.
+class _DawContextMenuEntry extends StatelessWidget {
+  final DawContextAction action;
+  final BuildContext dialogContext;
+  final double indent;
+
+  const _DawContextMenuEntry({
+    required this.action,
+    required this.dialogContext,
+    this.indent = 0,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final color =
+        action.color ??
+        (action.isDestructive ? colors.error : colors.onSurface);
+    final padding = EdgeInsets.only(left: 24.0 + indent, right: 24.0);
+    final leading = action.icon != null
+        ? Icon(action.icon, color: color, size: 20)
+        : null;
+    final title = Text(
+      action.title,
+      style: TextStyle(color: color, fontSize: 14),
+    );
+    final subtitle = action.subtitle == null
+        ? null
+        : Text(
+            action.subtitle!,
+            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+          );
+
+    final children = action.children;
+    if (children != null) {
+      return ExpansionTile(
+        tilePadding: padding,
+        leading: leading,
+        title: title,
+        subtitle: subtitle,
+        iconColor: colors.onSurfaceVariant,
+        collapsedIconColor: colors.onSurfaceVariant,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        backgroundColor: colors.onSurface.withValues(alpha: 0.04),
+        children: [
+          for (final child in children)
+            _DawContextMenuEntry(
+              action: child,
+              dialogContext: dialogContext,
+              indent: indent + 16,
+            ),
+        ],
+      );
+    }
+
+    return ListTile(
+      contentPadding: padding,
+      leading: leading,
+      title: title,
+      subtitle: subtitle,
+      hoverColor: colors.onSurface.withValues(alpha: 0.08),
+      onTap: () {
+        Navigator.of(dialogContext).pop();
+        action.onTap();
+      },
+    );
+  }
 }
 
 /// A wrapper for a interactable widget that will display Context Menu
@@ -35,61 +170,20 @@ class ContextMenuWrapper extends StatelessWidget {
   });
 
   void _showContextMenu(BuildContext context) {
-    showDialog(
+    showDawContextMenu(
       context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: Colors.grey.shade900,
-          title: title != null 
-              ? Text(title!, style: const TextStyle(color: Colors.white)) 
-              : null,
-          contentPadding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              if (header != null) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-                  child: header!,
-                ),
-                const Divider(color: Colors.white24, height: 16),
-              ],
-              
-              // Actions list
-              ...actions.map((action) {
-                final color = action.isDestructive ? Colors.redAccent : Colors.white70;
-                
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  leading: action.icon != null
-                      ? Icon(action.icon, color: color, size: 20)
-                      : null,
-                  title: Text(
-                    action.title,
-                    style: TextStyle(color: color, fontSize: 14),
-                  ),
-                  hoverColor: Colors.white10,
-                  onTap: () {
-                    Navigator.of(dialogContext).pop(); 
-                    action.onTap(); 
-                  },
-                );
-              }),
-            ],
-          ),
-        );
-      },
+      actions: actions,
+      title: title,
+      header: header,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      behavior: HitTestBehavior.opaque, 
-      onLongPress: () => _showContextMenu(context), 
-      onSecondaryTap: () => _showContextMenu(context), 
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => _showContextMenu(context),
+      onSecondaryTap: () => _showContextMenu(context),
       child: child,
     );
   }
@@ -112,6 +206,7 @@ class FloatingContextPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (actions.isEmpty) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
 
     return Positioned(
       bottom: 20,
@@ -121,7 +216,7 @@ class FloatingContextPanel extends StatelessWidget {
         child: Material(
           elevation: 8,
           borderRadius: BorderRadius.circular(12),
-          color: const Color(0xFF2A2A2A),
+          color: colors.surfaceContainerHigh,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -135,12 +230,16 @@ class FloatingContextPanel extends StatelessWidget {
                     padding: const EdgeInsets.only(right: 12),
                     child: Row(
                       children: [
-                        const Icon(Icons.close, color: Colors.white54, size: 16),
+                        Icon(
+                          Icons.close,
+                          color: colors.onSurfaceVariant,
+                          size: 16,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           title,
-                          style: const TextStyle(
-                            color: Colors.white54,
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -149,11 +248,13 @@ class FloatingContextPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(width: 1, height: 24, color: Colors.white24),
+                Container(width: 1, height: 24, color: colors.outlineVariant),
                 const SizedBox(width: 8),
 
                 // Action Buttons
-                ...actions.map((action) => _FloatingActionButtonItem(action: action)),
+                ...actions.map(
+                  (action) => _FloatingActionButtonItem(action: action),
+                ),
               ],
             ),
           ),
@@ -171,8 +272,11 @@ class _FloatingActionButtonItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Resolve the final color based on destructive flag or explicit color
-    final color = action.color ?? (action.isDestructive ? Colors.redAccent : Colors.white);
-    
+    final colors = Theme.of(context).colorScheme;
+    final color =
+        action.color ??
+        (action.isDestructive ? colors.error : colors.onSurface);
+
     return Tooltip(
       message: action.title,
       child: InkWell(
@@ -187,10 +291,7 @@ class _FloatingActionButtonItem extends StatelessWidget {
                 Icon(action.icon, color: color, size: 20),
                 const SizedBox(height: 2),
               ],
-              Text(
-                action.title,
-                style: TextStyle(color: color, fontSize: 10),
-              ),
+              Text(action.title, style: TextStyle(color: color, fontSize: 10)),
             ],
           ),
         ),

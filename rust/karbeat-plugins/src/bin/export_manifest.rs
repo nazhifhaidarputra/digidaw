@@ -1,6 +1,6 @@
 use karbeat_plugin_api::manifest::Manifestable;
 use karbeat_plugins::{
-    effect::{pitch_shifter::Pitcher, sidechain::DigidawSidechainCompressor},
+    effect::{pitch_shifter::PitchShifter, sidechain::DigidawSidechainCompressor},
     plugins::*,
 };
 
@@ -14,8 +14,11 @@ macro_rules! export_plugins {
     };
 }
 
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::expect_used)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "the manifest export command must fail immediately when its inputs or writes are invalid"
+)]
 fn main() {
     println!("Starting Karbeat Manifest Extractor...");
 
@@ -29,8 +32,9 @@ fn main() {
         MyRetro,
         KarbeatzerV2,
         DigiParametricEQ,
-        Pitcher,
-        DigidawSidechainCompressor
+        PitchShifter,
+        DigidawSidechainCompressor,
+        DigidawDelay
     );
 
     println!("INFO: All manifests exported successfully to Flutter assets!");

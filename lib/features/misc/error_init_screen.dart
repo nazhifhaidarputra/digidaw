@@ -7,29 +7,24 @@ class ErrorInitScreen extends StatelessWidget {
   const ErrorInitScreen({super.key, required this.err, this.stack});
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.black,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.redAccent,
-                size: 48,
-              ),
+              Icon(Icons.error_outline, color: colors.error, size: 48),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Fatal Error Initializing DAW',
-                style: TextStyle(color: Colors.white, fontSize: 18),
+                style: TextStyle(color: colors.onSurface, fontSize: 18),
               ),
               const SizedBox(height: 8),
               Text(
                 err.toString(),
-                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                style: TextStyle(color: colors.error, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
             ],

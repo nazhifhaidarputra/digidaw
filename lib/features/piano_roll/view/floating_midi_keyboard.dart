@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,8 @@ import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/core/utils/formatter.dart';
+import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 
 class FloatingMidiKeyboard extends ConsumerStatefulWidget {
   const FloatingMidiKeyboard({super.key});
@@ -22,7 +26,25 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   double _x = 100;
   double _y = 100;
 
+  final FocusNode _focusNode = FocusNode(debugLabel: 'Floating MIDI keyboard');
   final Set<int> _activeNotes = {};
+  final Map<PhysicalKeyboardKey, ({int note, int? generatorId})>
+  _keyboardNotes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _releaseKeyboardNotes(updateState: false);
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   String _getGeneratorName(UiGeneratorInstance instance) {
     return instance.instanceType.when(
@@ -32,7 +54,10 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   }
 
   // Safe resolver that doesn't mutate state during build
-  int? _resolveActiveGeneratorId(int? selectedGeneratorId, IMap<int, UiGeneratorInstance> generators) {
+  int? _resolveActiveGeneratorId(
+    int? selectedGeneratorId,
+    IMap<int, UiGeneratorInstance> generators,
+  ) {
     int? genId = selectedGeneratorId;
     if (genId != null && !generators.containsKey(genId)) {
       genId = null;
@@ -43,49 +68,101 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     return genId;
   }
 
+  KeyEventResult _handleKeyEvent(
+    KeyEvent event, {
+    required int baseKey,
+    required int? generatorId,
+  }) {
+    if (event is KeyDownEvent) {
+      final note = pianoNoteForKeyEvent(event, baseKey: baseKey);
+      if (note == null) return KeyEventResult.ignored;
+
+      if (!_keyboardNotes.containsKey(event.physicalKey)) {
+        final soundingNote = _keyboardNotes.values
+            .where((activeNote) => activeNote.note == note)
+            .firstOrNull;
+        _keyboardNotes[event.physicalKey] = (
+          note: note,
+          generatorId: soundingNote?.generatorId ?? generatorId,
+        );
+        if (soundingNote == null) _handleNoteOn(note, generatorId);
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (event is KeyRepeatEvent) {
+      return pianoNoteForKeyEvent(event, baseKey: baseKey) == null
+          ? KeyEventResult.ignored
+          : KeyEventResult.handled;
+    }
+
+    if (event is KeyUpEvent) {
+      final activeNote = _keyboardNotes.remove(event.physicalKey);
+      if (activeNote != null) {
+        final isStillHeld = _keyboardNotes.values.any(
+          (otherNote) => otherNote.note == activeNote.note,
+        );
+        if (!isStillHeld) {
+          _handleNoteOff(activeNote.note, activeNote.generatorId);
+        }
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _releaseKeyboardNotes({bool updateState = true}) {
+    if (_keyboardNotes.isEmpty) return;
+
+    final notes = <int, int?>{};
+    for (final activeNote in _keyboardNotes.values) {
+      notes.putIfAbsent(activeNote.note, () => activeNote.generatorId);
+    }
+    _keyboardNotes.clear();
+
+    if (updateState && mounted) {
+      setState(() => _activeNotes.removeAll(notes.keys));
+    }
+    for (final entry in notes.entries) {
+      unawaited(_sendPreviewNote(entry.key, entry.value, isOn: false));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
 
     final workspaceState = ref.watch(workspaceStateProvider);
-        final kState = workspaceState.floatingMidiKeyboardState;
-        final workspaceNotifier = ref.read(workspaceStateProvider.notifier);
-    
-        // Safely unwrap the async project state
-        final IMap<int, UiGeneratorInstance> generators = ref.watch(projectProvider).maybeWhen(
-              data: (project) => project.generators,
-              orElse: () => const IMapConst<int, UiGeneratorInstance>({}),
-            );
-    
-        final activeGeneratorId = _resolveActiveGeneratorId(
-          kState.selectedGeneratorId,
-          generators,
+    final kState = workspaceState.floatingMidiKeyboardState;
+    final workspaceNotifier = ref.read(workspaceStateProvider.notifier);
+
+    // Safely unwrap the async project state
+    final IMap<int, UiGeneratorInstance> generators = ref
+        .watch(projectProvider)
+        .maybeWhen(
+          data: (project) => project.generators,
+          orElse: () => const IMapConst<int, UiGeneratorInstance>({}),
         );
+
+    final activeGeneratorId = _resolveActiveGeneratorId(
+      kState.selectedGeneratorId,
+      generators,
+    );
 
     return Positioned(
       left: _x,
       top: _y,
-      child: Focus(
-        autofocus: true,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent) {
-            final baseNote = keyMap[event.physicalKey];
-            if (baseNote != null) {
-              final note = baseNote + (kState.baseKey - 48);
-              if (!_activeNotes.contains(note)) {
-                _handleNoteOn(note, activeGeneratorId);
-                return KeyEventResult.handled;
-              }
-            }
-          } else if (event is KeyUpEvent) {
-            final baseNote = keyMap[event.physicalKey];
-            if (baseNote != null) {
-              final note = baseNote + (kState.baseKey - 48);
-              _handleNoteOff(note, activeGeneratorId);
-              return KeyEventResult.handled;
-            }
-          }
-          return KeyEventResult.ignored;
+      child: KeyboardFocusRegion(
+        focusNode: _focusNode,
+        onFocusChange: (hasFocus) {
+          if (!hasFocus) _releaseKeyboardNotes();
         },
+        onKeyEvent: (_, event) => _handleKeyEvent(
+          event,
+          baseKey: kState.baseKey,
+          generatorId: activeGeneratorId,
+        ),
         child: Material(
           color: Colors.transparent,
           elevation: 12,
@@ -93,12 +170,12 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
           child: Container(
             width: 520,
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E), // Hardware synth look
+              color: colors.surfaceContainer,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade700),
-              boxShadow: const [
+              border: Border.all(color: colors.outlineVariant),
+              boxShadow: [
                 BoxShadow(
-                  color: Colors.black54,
+                  color: colors.shadow.withValues(alpha: 0.55),
                   blurRadius: 10,
                   offset: Offset(0, 5),
                 ),
@@ -121,26 +198,26 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade900,
+                      color: colors.surfaceContainerHigh,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(8),
                       ),
                       border: Border(
-                        bottom: BorderSide(color: Colors.grey.shade800),
+                        bottom: BorderSide(color: colors.outlineVariant),
                       ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.drag_indicator,
-                          color: Colors.grey,
+                          color: colors.onSurfaceVariant,
                           size: 16,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
+                        Text(
                           "MIDI CONTROLLER",
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: colors.onSurface,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
@@ -148,11 +225,11 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         ),
                         const Spacer(),
                         InkWell(
-                          onTap: () => workspaceNotifier
-                              .toggleFloatingMidiKeyboard(),
-                          child: const Icon(
+                          onTap: () =>
+                              workspaceNotifier.toggleFloatingMidiKeyboard(),
+                          child: Icon(
                             Icons.close,
-                            color: Colors.grey,
+                            color: colors.onSurfaceVariant,
                             size: 16,
                           ),
                         ),
@@ -164,17 +241,21 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                 // Synth Control Panel
                 Container(
                   padding: const EdgeInsets.all(12),
-                  color: const Color(0xFF232323),
+                  color: colors.surfaceContainerLow,
                   child: Row(
                     children: [
                       _buildControlKnob(
                         "BASE KEY",
                         numToMidiKey(kState.baseKey),
                         () {
-                          workspaceNotifier.setMidiKeyboardBaseKey(kState.baseKey - 1);
+                          workspaceNotifier.setMidiKeyboardBaseKey(
+                            kState.baseKey - 1,
+                          );
                         },
                         () {
-                          workspaceNotifier.setMidiKeyboardBaseKey(kState.baseKey + 1);
+                          workspaceNotifier.setMidiKeyboardBaseKey(
+                            kState.baseKey + 1,
+                          );
                         },
                       ),
                       const SizedBox(width: 20),
@@ -182,10 +263,14 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         "RANGE",
                         "+${kState.keyRange}",
                         () {
-                          workspaceNotifier.setMidiKeyboardRange(kState.keyRange - 1);
+                          workspaceNotifier.setMidiKeyboardRange(
+                            kState.keyRange - 1,
+                          );
                         },
                         () {
-                          workspaceNotifier.setMidiKeyboardRange(kState.keyRange + 1);
+                          workspaceNotifier.setMidiKeyboardRange(
+                            kState.keyRange + 1,
+                          );
                         },
                       ),
                       const Spacer(),
@@ -193,29 +278,28 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         height: 36,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: Colors.black,
-                          border: Border.all(color: Colors.red.shade900),
+                          color: colors.surfaceContainerLowest,
+                          border: Border.all(color: colors.outlineVariant),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<int>(
                             value: activeGeneratorId,
-                            hint: const Text(
+                            hint: Text(
                               "Select Synth",
                               style: TextStyle(
-                                color: Colors.redAccent,
+                                color: colors.onSurfaceVariant,
                                 fontSize: 12,
                               ),
                             ),
-                            dropdownColor: Colors.black,
-                            icon: const Icon(
+                            dropdownColor: colors.surfaceContainerHigh,
+                            icon: Icon(
                               Icons.arrow_drop_down,
-                              color: Colors.redAccent,
+                              color: colors.primary,
                             ),
-                            style: const TextStyle(
-                              color: Colors.redAccent,
+                            style: TextStyle(
+                              color: colors.primary,
                               fontSize: 12,
-                              fontFamily: 'monospace',
                             ),
                             onChanged: (val) {
                               workspaceNotifier.setMidiKeyboardGenerator(val);
@@ -241,7 +325,8 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                     totalKeys: kState.keyRange,
                     activeNotes: _activeNotes,
                     onNoteOn: (note) => _handleNoteOn(note, activeGeneratorId),
-                    onNoteOff: (note) => _handleNoteOff(note, activeGeneratorId),
+                    onNoteOff: (note) =>
+                        _handleNoteOff(note, activeGeneratorId),
                   ),
                 ),
               ],
@@ -258,12 +343,13 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     VoidCallback onDec,
     VoidCallback onInc,
   ) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.grey,
+          style: TextStyle(
+            color: colors.onSurfaceVariant,
             fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
@@ -273,9 +359,9 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
           children: [
             InkWell(
               onTap: onDec,
-              child: const Icon(
+              child: Icon(
                 Icons.remove_circle_outline,
-                color: Colors.grey,
+                color: colors.onSurfaceVariant,
                 size: 20,
               ),
             ),
@@ -285,9 +371,8 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
               alignment: Alignment.center,
               child: Text(
                 value,
-                style: const TextStyle(
-                  color: Colors.cyanAccent,
-                  fontFamily: 'monospace',
+                style: TextStyle(
+                  color: colors.primary,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -296,9 +381,9 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
             const SizedBox(width: 8),
             InkWell(
               onTap: onInc,
-              child: const Icon(
+              child: Icon(
                 Icons.add_circle_outline,
-                color: Colors.grey,
+                color: colors.onSurfaceVariant,
                 size: 20,
               ),
             ),
@@ -308,38 +393,39 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     );
   }
 
-  void _handleNoteOn(int note, int? generatorId) async {
+  void _handleNoteOn(int note, int? generatorId) {
     setState(() => _activeNotes.add(note));
-    if (generatorId != null) {
-      try {
-        await audio_api.playPreviewNoteGenerator(
-          ctx: ref.read(projectProvider.notifier).dawContext,
-          generatorId: generatorId,
-          noteKey: note,
-          velocity: 100,
-          isOn: true,
-        );
-      } catch (e) {
-        debugPrint('Error playing note on: $e');
-        ref.read(notificationProvider.notifier).error(e);
-      }
-    }
+    unawaited(_sendPreviewNote(note, generatorId, isOn: true));
   }
 
-  void _handleNoteOff(int note, int? generatorId) async {
+  void _handleNoteOff(int note, int? generatorId) {
     setState(() => _activeNotes.remove(note));
-    if (generatorId != null) {
-      try {
-        await audio_api.playPreviewNoteGenerator(
-          ctx: ref.read(projectProvider.notifier).dawContext,
-          generatorId: generatorId,
-          noteKey: note,
-          velocity: 100,
-          isOn: false,
-        );
-      } catch (e) {
-        debugPrint('Error playing note off: $e');
-        ref.read(notificationProvider.notifier).error(e);
+    unawaited(_sendPreviewNote(note, generatorId, isOn: false));
+  }
+
+  Future<void> _sendPreviewNote(
+    int note,
+    int? generatorId, {
+    required bool isOn,
+  }) async {
+    if (generatorId == null) return;
+
+    try {
+      await audio_api.playPreviewNoteGenerator(
+        ctx: ref.read(projectProvider.notifier).dawContext,
+        generatorId: generatorId,
+        noteKey: note,
+        velocity: 100,
+        isOn: isOn,
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to ${isOn ? 'start' : 'stop'} MIDI preview note',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        ref.read(notificationProvider.notifier).error(error);
       }
     }
   }
@@ -475,10 +561,12 @@ class _PianoKeyState extends State<_PianoKey> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final isActive = widget.isPressed || _touchActive;
 
     return Listener(
       onPointerDown: (_) {
+        Focus.of(context).requestFocus();
         setState(() => _touchActive = true);
         widget.onNoteOn(widget.note);
       },
@@ -495,7 +583,7 @@ class _PianoKeyState extends State<_PianoKey> {
         height: widget.height,
         decoration: BoxDecoration(
           color: isActive
-              ? Colors.cyanAccent
+              ? colors.primary
               : (widget.isBlack ? Colors.black : Colors.white),
           border: Border.all(color: Colors.black, width: 1),
           borderRadius: const BorderRadius.only(

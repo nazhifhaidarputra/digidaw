@@ -16,7 +16,7 @@ mixin _$ClipPlacementState {
 
 // New clip placement
  int? get sourceId; UiSourceType? get sourceType; int get trackId;// Used as target track for both new placement and moving
- double get timeSamples;// Existing clip batch drag
+ double get startTick;// Existing clip batch drag
  List<int> get draggedClipIds; BatchDragAction get dragAction; int get snappedDeltaTicks; int get originalTrackId;
 /// Create a copy of ClipPlacementState
 /// with the given fields replaced by the non-null parameter values.
@@ -28,16 +28,16 @@ $ClipPlacementStateCopyWith<ClipPlacementState> get copyWith => _$ClipPlacementS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClipPlacementState&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.sourceType, sourceType) || other.sourceType == sourceType)&&(identical(other.trackId, trackId) || other.trackId == trackId)&&(identical(other.timeSamples, timeSamples) || other.timeSamples == timeSamples)&&const DeepCollectionEquality().equals(other.draggedClipIds, draggedClipIds)&&(identical(other.dragAction, dragAction) || other.dragAction == dragAction)&&(identical(other.snappedDeltaTicks, snappedDeltaTicks) || other.snappedDeltaTicks == snappedDeltaTicks)&&(identical(other.originalTrackId, originalTrackId) || other.originalTrackId == originalTrackId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClipPlacementState&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.sourceType, sourceType) || other.sourceType == sourceType)&&(identical(other.trackId, trackId) || other.trackId == trackId)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&const DeepCollectionEquality().equals(other.draggedClipIds, draggedClipIds)&&(identical(other.dragAction, dragAction) || other.dragAction == dragAction)&&(identical(other.snappedDeltaTicks, snappedDeltaTicks) || other.snappedDeltaTicks == snappedDeltaTicks)&&(identical(other.originalTrackId, originalTrackId) || other.originalTrackId == originalTrackId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,sourceId,sourceType,trackId,timeSamples,const DeepCollectionEquality().hash(draggedClipIds),dragAction,snappedDeltaTicks,originalTrackId);
+int get hashCode => Object.hash(runtimeType,sourceId,sourceType,trackId,startTick,const DeepCollectionEquality().hash(draggedClipIds),dragAction,snappedDeltaTicks,originalTrackId);
 
 @override
 String toString() {
-  return 'ClipPlacementState(sourceId: $sourceId, sourceType: $sourceType, trackId: $trackId, timeSamples: $timeSamples, draggedClipIds: $draggedClipIds, dragAction: $dragAction, snappedDeltaTicks: $snappedDeltaTicks, originalTrackId: $originalTrackId)';
+  return 'ClipPlacementState(sourceId: $sourceId, sourceType: $sourceType, trackId: $trackId, startTick: $startTick, draggedClipIds: $draggedClipIds, dragAction: $dragAction, snappedDeltaTicks: $snappedDeltaTicks, originalTrackId: $originalTrackId)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $ClipPlacementStateCopyWith<$Res>  {
   factory $ClipPlacementStateCopyWith(ClipPlacementState value, $Res Function(ClipPlacementState) _then) = _$ClipPlacementStateCopyWithImpl;
 @useResult
 $Res call({
- int? sourceId, UiSourceType? sourceType, int trackId, double timeSamples, List<int> draggedClipIds, BatchDragAction dragAction, int snappedDeltaTicks, int originalTrackId
+ int? sourceId, UiSourceType? sourceType, int trackId, double startTick, List<int> draggedClipIds, BatchDragAction dragAction, int snappedDeltaTicks, int originalTrackId
 });
 
 
@@ -65,12 +65,12 @@ class _$ClipPlacementStateCopyWithImpl<$Res>
 
 /// Create a copy of ClipPlacementState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sourceId = freezed,Object? sourceType = freezed,Object? trackId = null,Object? timeSamples = null,Object? draggedClipIds = null,Object? dragAction = null,Object? snappedDeltaTicks = null,Object? originalTrackId = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sourceId = freezed,Object? sourceType = freezed,Object? trackId = null,Object? startTick = null,Object? draggedClipIds = null,Object? dragAction = null,Object? snappedDeltaTicks = null,Object? originalTrackId = null,}) {
   return _then(_self.copyWith(
 sourceId: freezed == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
 as int?,sourceType: freezed == sourceType ? _self.sourceType : sourceType // ignore: cast_nullable_to_non_nullable
 as UiSourceType?,trackId: null == trackId ? _self.trackId : trackId // ignore: cast_nullable_to_non_nullable
-as int,timeSamples: null == timeSamples ? _self.timeSamples : timeSamples // ignore: cast_nullable_to_non_nullable
+as int,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
 as double,draggedClipIds: null == draggedClipIds ? _self.draggedClipIds : draggedClipIds // ignore: cast_nullable_to_non_nullable
 as List<int>,dragAction: null == dragAction ? _self.dragAction : dragAction // ignore: cast_nullable_to_non_nullable
 as BatchDragAction,snappedDeltaTicks: null == snappedDeltaTicks ? _self.snappedDeltaTicks : snappedDeltaTicks // ignore: cast_nullable_to_non_nullable
@@ -160,10 +160,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? sourceId,  UiSourceType? sourceType,  int trackId,  double timeSamples,  List<int> draggedClipIds,  BatchDragAction dragAction,  int snappedDeltaTicks,  int originalTrackId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? sourceId,  UiSourceType? sourceType,  int trackId,  double startTick,  List<int> draggedClipIds,  BatchDragAction dragAction,  int snappedDeltaTicks,  int originalTrackId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ClipPlacementState() when $default != null:
-return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.timeSamples,_that.draggedClipIds,_that.dragAction,_that.snappedDeltaTicks,_that.originalTrackId);case _:
+return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.startTick,_that.draggedClipIds,_that.dragAction,_that.snappedDeltaTicks,_that.originalTrackId);case _:
   return orElse();
 
 }
@@ -181,10 +181,10 @@ return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.timeSamples,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? sourceId,  UiSourceType? sourceType,  int trackId,  double timeSamples,  List<int> draggedClipIds,  BatchDragAction dragAction,  int snappedDeltaTicks,  int originalTrackId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? sourceId,  UiSourceType? sourceType,  int trackId,  double startTick,  List<int> draggedClipIds,  BatchDragAction dragAction,  int snappedDeltaTicks,  int originalTrackId)  $default,) {final _that = this;
 switch (_that) {
 case _ClipPlacementState():
-return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.timeSamples,_that.draggedClipIds,_that.dragAction,_that.snappedDeltaTicks,_that.originalTrackId);case _:
+return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.startTick,_that.draggedClipIds,_that.dragAction,_that.snappedDeltaTicks,_that.originalTrackId);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -201,10 +201,10 @@ return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.timeSamples,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? sourceId,  UiSourceType? sourceType,  int trackId,  double timeSamples,  List<int> draggedClipIds,  BatchDragAction dragAction,  int snappedDeltaTicks,  int originalTrackId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? sourceId,  UiSourceType? sourceType,  int trackId,  double startTick,  List<int> draggedClipIds,  BatchDragAction dragAction,  int snappedDeltaTicks,  int originalTrackId)?  $default,) {final _that = this;
 switch (_that) {
 case _ClipPlacementState() when $default != null:
-return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.timeSamples,_that.draggedClipIds,_that.dragAction,_that.snappedDeltaTicks,_that.originalTrackId);case _:
+return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.startTick,_that.draggedClipIds,_that.dragAction,_that.snappedDeltaTicks,_that.originalTrackId);case _:
   return null;
 
 }
@@ -216,7 +216,7 @@ return $default(_that.sourceId,_that.sourceType,_that.trackId,_that.timeSamples,
 
 
 class _ClipPlacementState implements ClipPlacementState {
-  const _ClipPlacementState({this.sourceId, this.sourceType, this.trackId = -1, this.timeSamples = 0.0, final  List<int> draggedClipIds = const [], this.dragAction = BatchDragAction.none, this.snappedDeltaTicks = 0, this.originalTrackId = -1}): _draggedClipIds = draggedClipIds;
+  const _ClipPlacementState({this.sourceId, this.sourceType, this.trackId = -1, this.startTick = 0.0, final  List<int> draggedClipIds = const [], this.dragAction = BatchDragAction.none, this.snappedDeltaTicks = 0, this.originalTrackId = -1}): _draggedClipIds = draggedClipIds;
   
 
 // New clip placement
@@ -224,7 +224,7 @@ class _ClipPlacementState implements ClipPlacementState {
 @override final  UiSourceType? sourceType;
 @override@JsonKey() final  int trackId;
 // Used as target track for both new placement and moving
-@override@JsonKey() final  double timeSamples;
+@override@JsonKey() final  double startTick;
 // Existing clip batch drag
  final  List<int> _draggedClipIds;
 // Existing clip batch drag
@@ -248,16 +248,16 @@ _$ClipPlacementStateCopyWith<_ClipPlacementState> get copyWith => __$ClipPlaceme
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClipPlacementState&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.sourceType, sourceType) || other.sourceType == sourceType)&&(identical(other.trackId, trackId) || other.trackId == trackId)&&(identical(other.timeSamples, timeSamples) || other.timeSamples == timeSamples)&&const DeepCollectionEquality().equals(other._draggedClipIds, _draggedClipIds)&&(identical(other.dragAction, dragAction) || other.dragAction == dragAction)&&(identical(other.snappedDeltaTicks, snappedDeltaTicks) || other.snappedDeltaTicks == snappedDeltaTicks)&&(identical(other.originalTrackId, originalTrackId) || other.originalTrackId == originalTrackId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClipPlacementState&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId)&&(identical(other.sourceType, sourceType) || other.sourceType == sourceType)&&(identical(other.trackId, trackId) || other.trackId == trackId)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&const DeepCollectionEquality().equals(other._draggedClipIds, _draggedClipIds)&&(identical(other.dragAction, dragAction) || other.dragAction == dragAction)&&(identical(other.snappedDeltaTicks, snappedDeltaTicks) || other.snappedDeltaTicks == snappedDeltaTicks)&&(identical(other.originalTrackId, originalTrackId) || other.originalTrackId == originalTrackId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,sourceId,sourceType,trackId,timeSamples,const DeepCollectionEquality().hash(_draggedClipIds),dragAction,snappedDeltaTicks,originalTrackId);
+int get hashCode => Object.hash(runtimeType,sourceId,sourceType,trackId,startTick,const DeepCollectionEquality().hash(_draggedClipIds),dragAction,snappedDeltaTicks,originalTrackId);
 
 @override
 String toString() {
-  return 'ClipPlacementState(sourceId: $sourceId, sourceType: $sourceType, trackId: $trackId, timeSamples: $timeSamples, draggedClipIds: $draggedClipIds, dragAction: $dragAction, snappedDeltaTicks: $snappedDeltaTicks, originalTrackId: $originalTrackId)';
+  return 'ClipPlacementState(sourceId: $sourceId, sourceType: $sourceType, trackId: $trackId, startTick: $startTick, draggedClipIds: $draggedClipIds, dragAction: $dragAction, snappedDeltaTicks: $snappedDeltaTicks, originalTrackId: $originalTrackId)';
 }
 
 
@@ -268,7 +268,7 @@ abstract mixin class _$ClipPlacementStateCopyWith<$Res> implements $ClipPlacemen
   factory _$ClipPlacementStateCopyWith(_ClipPlacementState value, $Res Function(_ClipPlacementState) _then) = __$ClipPlacementStateCopyWithImpl;
 @override @useResult
 $Res call({
- int? sourceId, UiSourceType? sourceType, int trackId, double timeSamples, List<int> draggedClipIds, BatchDragAction dragAction, int snappedDeltaTicks, int originalTrackId
+ int? sourceId, UiSourceType? sourceType, int trackId, double startTick, List<int> draggedClipIds, BatchDragAction dragAction, int snappedDeltaTicks, int originalTrackId
 });
 
 
@@ -285,12 +285,12 @@ class __$ClipPlacementStateCopyWithImpl<$Res>
 
 /// Create a copy of ClipPlacementState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sourceId = freezed,Object? sourceType = freezed,Object? trackId = null,Object? timeSamples = null,Object? draggedClipIds = null,Object? dragAction = null,Object? snappedDeltaTicks = null,Object? originalTrackId = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sourceId = freezed,Object? sourceType = freezed,Object? trackId = null,Object? startTick = null,Object? draggedClipIds = null,Object? dragAction = null,Object? snappedDeltaTicks = null,Object? originalTrackId = null,}) {
   return _then(_ClipPlacementState(
 sourceId: freezed == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
 as int?,sourceType: freezed == sourceType ? _self.sourceType : sourceType // ignore: cast_nullable_to_non_nullable
 as UiSourceType?,trackId: null == trackId ? _self.trackId : trackId // ignore: cast_nullable_to_non_nullable
-as int,timeSamples: null == timeSamples ? _self.timeSamples : timeSamples // ignore: cast_nullable_to_non_nullable
+as int,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
 as double,draggedClipIds: null == draggedClipIds ? _self._draggedClipIds : draggedClipIds // ignore: cast_nullable_to_non_nullable
 as List<int>,dragAction: null == dragAction ? _self.dragAction : dragAction // ignore: cast_nullable_to_non_nullable
 as BatchDragAction,snappedDeltaTicks: null == snappedDeltaTicks ? _self.snappedDeltaTicks : snappedDeltaTicks // ignore: cast_nullable_to_non_nullable

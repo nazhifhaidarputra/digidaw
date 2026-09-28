@@ -28,7 +28,7 @@ void main() {
   }
 
   testWidgets('enables, updates, and removes a sidechain send', (tester) async {
-    final updates = <(UiRoutingNode, double?)>[];
+    final updates = <(UiRoutingNode, double?, UiRoutingTap)>[];
     await tester.pumpWidget(
       buildPanel(
         loader: () async => const [
@@ -37,9 +37,10 @@ void main() {
             name: 'Kick',
             enabled: false,
             sendLevel: 1.0,
+            tap: UiRoutingTap.postFader,
           ),
         ],
-        setter: (source, level) async => updates.add((source, level)),
+        setter: (source, level, tap) async => updates.add((source, level, tap)),
       ),
     );
     await tester.pumpAndSettle();
@@ -57,6 +58,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(updates.last.$2, 0.5);
 
+    await tester.tap(find.byType(FilterChip));
+    await tester.pumpAndSettle();
+    expect(updates.last.$2, 0.5);
+    expect(updates.last.$3, UiRoutingTap.preFader);
+
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(updates.last.$2, isNull);
@@ -73,9 +79,10 @@ void main() {
             name: 'Kick',
             enabled: false,
             sendLevel: 1.0,
+            tap: UiRoutingTap.postFader,
           ),
         ],
-        setter: (_, _) async => throw Exception('feedback cycle'),
+        setter: (_, _, _) async => throw Exception('feedback cycle'),
       ),
     );
     await tester.pumpAndSettle();

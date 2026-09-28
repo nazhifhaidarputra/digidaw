@@ -1,3 +1,8 @@
+#![allow(
+    clippy::as_conversions,
+    reason = "LFO phase calculations intentionally convert bounded waveform indices"
+)]
+
 use karbeat_macros::karbeat_plugin;
 
 use crate::oscillator::Waveform;

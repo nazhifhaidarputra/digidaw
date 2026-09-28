@@ -1,19 +1,20 @@
 use std::path::Path;
-use std::time::{Duration, Instant};
 
-use indexmap::IndexMap;
-
-use crate::audio::event::PluginTarget;
-use crate::audio::exporter::{TailHandling, export_project as export_project_internal};
+use crate::audio::exporter::{
+    PendingAudioExport, TailHandling, begin_export, execute_export,
+    export_project as export_project_internal,
+};
 
 use crate::audio::writer::AudioExportConfig;
-use crate::commands::{AudioCommand, AudioFeedback, MixerChannelSeed, MixerChannelTarget};
+use crate::commands::AudioCommand;
 use crate::context::DawContext;
-use crate::core::file_manager::project_loader::{load_daw_project, save_daw_project};
-use crate::core::project::{ApplicationState, GeneratorInstanceType};
+use crate::core::file_manager::project_loader::load_daw_project;
+use crate::core::history::actions::MetadataChanged;
+use crate::core::project::ApplicationState;
 use crate::core::project::{
     ProjectMetadata, generator::GeneratorInstance, transport::TransportState,
 };
+/// Maps the current project's metadata without cloning unrelated project state.
 pub fn get_project_metadata<T, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&ProjectMetadata) -> T,
@@ -21,6 +22,18 @@ where
     Ok(mapper(&ctx.app_state.metadata))
 }
 
+/// Replaces project metadata, records history, and leaves audio-only state unchanged.
+pub fn update_project_metadata(
+    ctx: &mut DawContext,
+    metadata: ProjectMetadata,
+) -> anyhow::Result<ProjectMetadata> {
+    let metadata = metadata.normalize_and_validate()?;
+    let previous = std::mem::replace(&mut ctx.app_state.metadata, metadata.clone());
+    ctx.push_history(MetadataChanged::new(previous));
+    Ok(metadata)
+}
+
+/// Maps the serialized project transport state.
 pub fn get_transport_state<T, F>(ctx: &DawContext, mapper: F) -> anyhow::Result<T>
 where
     F: Fn(&TransportState) -> T,
@@ -28,264 +41,117 @@ where
     Ok(mapper(&ctx.app_state.transport))
 }
 
+/// Maps every project generator instance into a caller-selected collection.
 pub fn get_generator_list<C, U, M>(ctx: &DawContext, mapper: M) -> anyhow::Result<C>
 where
-    M: Fn(u32, &GeneratorInstance) -> U,
+    M: Fn(u64, &GeneratorInstance) -> U,
     C: FromIterator<U>,
 {
     Ok(ctx
         .app_state
         .generator_pool
         .iter()
-        .map(|(id, generator)| mapper(id.to_u32(), generator))
+        .map(|(id, generator)| mapper(id.to_u64(), generator))
         .collect())
 }
 
-pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()> {
-    log::info!("Initiating project save. Syncing plugin states from audio engine...");
+mod restore;
+mod save;
+pub(crate) use restore::prepare_builtin_plugin;
+pub use restore::{CompletedProjectRestore, PendingProjectRestore};
+pub use save::{CompletedProjectSave, PendingProjectSave};
+pub(crate) use save::{capture_live_state, hosted_instance_with_handles};
 
-    let mut pending_requests = Vec::new();
-    let mut expected_responses = 0;
-
-    // Gather all targets we need to query (using a tight read lock)
-    let mut mixer_channel_targets: Vec<MixerChannelTarget> = Vec::new();
-
-    for (gen_id, _) in &ctx.app_state.generator_pool {
-        pending_requests.push(PluginTarget::Generator(gen_id));
-        expected_responses += 1;
-    }
-    for (track_id, channel) in &ctx.app_state.mixer.channels {
-        for effect in &channel.channel.effects {
-            pending_requests.push(PluginTarget::TrackEffect(track_id, effect.id));
-            expected_responses += 1;
-        }
-        // Also query mixer channel DSP state
-        mixer_channel_targets.push(MixerChannelTarget::Track(track_id));
-    }
-    for (bus_id, bus) in &ctx.app_state.mixer.buses {
-        for effect in &bus.channel.effects {
-            pending_requests.push(PluginTarget::BusEffect(bus_id, effect.id));
-            expected_responses += 1;
-        }
-        // Also query bus channel DSP state
-        mixer_channel_targets.push(MixerChannelTarget::Bus(bus_id));
-    }
-    for effect in &ctx.app_state.mixer.master_bus.effects {
-        pending_requests.push(PluginTarget::MasterEffect(effect.id));
-        expected_responses += 1;
-    } // Query master channel DSP state
-    mixer_channel_targets.push(MixerChannelTarget::Master);
-
-    let expected_mixer_snapshots = mixer_channel_targets.len();
-
-    // Fire off all Query Commands to the audio thread
-    for (i, target) in pending_requests.into_iter().enumerate() {
-        let _ = ctx.send_audio_command(AudioCommand::QueryPluginState {
-            target,
-            request_id: i as u32,
-        });
-    }
-    for target in mixer_channel_targets {
-        let _ = ctx.send_audio_command(AudioCommand::QueryMixerChannel { target });
-    }
-
-    // Wait for the audio thread to return the snapshots
-    let mut updated_states: Vec<(PluginTarget, Vec<u8>)> = Vec::with_capacity(expected_responses);
-    let mut mixer_snapshots: Vec<crate::commands::MixerChannelSnapshot> =
-        Vec::with_capacity(expected_mixer_snapshots);
-    let timeout = Duration::from_secs(2);
-    let start_time = Instant::now();
-
-    while updated_states.len() < expected_responses
-        || mixer_snapshots.len() < expected_mixer_snapshots
-    {
-        if start_time.elapsed() > timeout {
-            log::warn!(
-                "Timed out waiting for plugin/mixer states from audio engine. Saving with available state."
-            );
-            break;
-        }
-
-        if let Some(consumer) = ctx.feedback_consumer.lock().as_mut() {
-            while let Ok(feedback) = consumer.pop() {
-                match feedback {
-                    AudioFeedback::PluginStateSnapshot { target, state, .. } => {
-                        updated_states.push((target, state));
-                    }
-                    AudioFeedback::MixerChannelSnapshot(snap) => {
-                        mixer_snapshots.push(snap);
-                    }
-                    AudioFeedback::GeneratorParameterSnapshot(_snap) => {}
-                    AudioFeedback::EffectParameterSnapshot(_snap) => {}
-                    _ => {}
-                }
-            }
-        } else {
-            log::error!("Feedback consumer is None. Aborting state synchronization.");
-            break;
-        }
-
-        std::thread::sleep(Duration::from_millis(2));
-    }
-
-    // Lock the app state for writing, apply the binary blobs, and save!
-    for (target, state_blob) in updated_states {
-        match target {
-            PluginTarget::Generator(gen_id) => {
-                if let Some(gen_mut) = ctx.app_state.generator_pool.get_mut(gen_id) {
-                    if let GeneratorInstanceType::Plugin(plugin_instance) =
-                        &mut gen_mut.instance_type
-                    {
-                        plugin_instance.plugin_state = state_blob;
-
-                        let specs = ctx
-                            .plugin_registry
-                            .get_plugin_parameter_specs_by_id(plugin_instance.registry_id);
-                        if let Some(specs) = specs {
-                            plugin_instance.parameter_specs = specs;
-                        }
-                    }
-                }
-            }
-            PluginTarget::TrackEffect(track_id, effect_id) => {
-                if let Some(channel) = ctx.app_state.mixer.channels.get_mut(track_id) {
-                    let ch_mut = channel;
-                    if let Some(effect) = ch_mut
-                        .channel
-                        .effects
-                        .iter_mut()
-                        .find(|e| e.id == effect_id)
-                    {
-                        let instance_mut = &mut effect.instance;
-                        instance_mut.plugin_state = state_blob;
-
-                        let specs = ctx
-                            .plugin_registry
-                            .get_plugin_parameter_specs_by_id(instance_mut.registry_id);
-                        if let Some(specs) = specs {
-                            instance_mut.parameter_specs = specs;
-                        }
-                    }
-                }
-            }
-            PluginTarget::BusEffect(bus_id, effect_id) => {
-                if let Some(bus) = ctx.app_state.mixer.buses.get_mut(bus_id) {
-                    let bus_mut = bus;
-                    if let Some(effect) = bus_mut
-                        .channel
-                        .effects
-                        .iter_mut()
-                        .find(|e| e.id == effect_id)
-                    {
-                        let instance_mut = &mut effect.instance;
-                        instance_mut.plugin_state = state_blob;
-
-                        let specs = ctx
-                            .plugin_registry
-                            .get_plugin_parameter_specs_by_id(instance_mut.registry_id);
-                        if let Some(specs) = specs {
-                            instance_mut.parameter_specs = specs;
-                        }
-                    }
-                }
-            }
-            PluginTarget::MasterEffect(effect_id) => {
-                if let Some(effect) = ctx
-                    .app_state
-                    .mixer
-                    .master_bus
-                    .effects
-                    .iter_mut()
-                    .find(|e| e.id == effect_id)
-                {
-                    let instance_mut = &mut effect.instance;
-                    instance_mut.plugin_state = state_blob;
-
-                    let specs = ctx
-                        .plugin_registry
-                        .get_plugin_parameter_specs_by_id(instance_mut.registry_id);
-                    if let Some(specs) = specs {
-                        instance_mut.parameter_specs = specs;
-                    }
-                }
-            }
-        }
-    }
-
-    // Apply mixer channel DSP snapshots from the audio thread
-    for snap in mixer_snapshots {
-        match snap.target {
-            MixerChannelTarget::Track(track_id) => {
-                if let Some(ch) = ctx.app_state.mixer.channels.get_mut(track_id) {
-                    ch.channel.volume.set_base(snap.volume);
-                    ch.channel.pan.set_base(snap.pan);
-                    ch.channel.mute = snap.mute;
-                    ch.channel.solo = snap.solo;
-                    ch.channel.inverted_phase = snap.inverted_phase;
-                }
-            }
-            MixerChannelTarget::Bus(bus_id) => {
-                if let Some(bus) = ctx.app_state.mixer.buses.get_mut(bus_id) {
-                    bus.channel.volume.set_base(snap.volume);
-                    bus.channel.pan.set_base(snap.pan);
-                    bus.channel.mute = snap.mute;
-                    bus.channel.solo = snap.solo;
-                    bus.channel.inverted_phase = snap.inverted_phase;
-                }
-            }
-            MixerChannelTarget::Master => {
-                let master = &mut ctx.app_state.mixer.master_bus;
-                master.volume.set_base(snap.volume);
-                master.pan.set_base(snap.pan);
-                master.mute = snap.mute;
-                master.solo = snap.solo;
-                master.inverted_phase = snap.inverted_phase;
-            }
-        }
-    }
-
-    // Finally write the fully synchronized AppState to disk
-    save_daw_project(Path::new(path_name), &ctx.app_state)?;
-
-    log::info!("Project saved successfully.");
-    Ok(())
+pub fn begin_save_project(ctx: &DawContext, path_name: &str) -> PendingProjectSave {
+    save::begin_save(ctx, Path::new(path_name))
 }
 
+pub fn execute_save_project(pending: PendingProjectSave) -> anyhow::Result<CompletedProjectSave> {
+    save::execute_save(pending, std::time::Duration::from_secs(2))
+}
+
+pub fn commit_save_project(ctx: &mut DawContext, completed: CompletedProjectSave) {
+    save::commit_save(ctx, completed);
+}
+
+/// Reads a project file into a staged state that remembers `path_name` as its project file.
+pub fn load_project_file(path_name: &str, sample_rate: u32) -> anyhow::Result<ApplicationState> {
+    let mut loaded = load_daw_project(Path::new(path_name), sample_rate)?;
+    loaded.session.set_file_path(Some(path_name.into()));
+    Ok(loaded)
+}
+
+pub fn begin_loaded_project_restore(
+    ctx: &DawContext,
+    mut loaded: ApplicationState,
+) -> anyhow::Result<PendingProjectRestore> {
+    loaded.audio_config = ctx.app_state.audio_config.clone();
+    loaded.clipboard = ctx.app_state.clipboard.clone();
+    restore::begin_replace(ctx, loaded)
+}
+
+pub fn begin_project_restore(
+    ctx: &DawContext,
+    staged: ApplicationState,
+) -> anyhow::Result<PendingProjectRestore> {
+    restore::begin_replace(ctx, staged)
+}
+
+pub fn execute_project_restore(
+    pending: PendingProjectRestore,
+) -> anyhow::Result<CompletedProjectRestore> {
+    restore::execute_replace(pending)
+}
+
+/// Publishes a replacement project. History belongs to the previous project and is cleared.
+pub fn commit_project_restore(ctx: &mut DawContext, completed: CompletedProjectRestore) {
+    restore::commit_replace(ctx, completed);
+    ctx.clear_history();
+}
+
+/// Synchronizes live engine values, captures hosted state, and atomically saves the project.
+pub fn save_project(ctx: &mut DawContext, path_name: &str) -> anyhow::Result<()> {
+    let host_state_capture = ctx.host_state_capture.clone();
+    save::save_project(
+        ctx,
+        Path::new(path_name),
+        std::time::Duration::from_secs(2),
+        move |identity, instance| host_state_capture.capture_state(identity, instance),
+    )
+}
+
+/// Loads and migrates a project, restores runtime resources, hydrates the engine, and maps it.
 pub fn load_project<T, F>(ctx: &mut DawContext, path_name: &str, mapper: F) -> anyhow::Result<T>
 where
     F: FnOnce(&ApplicationState) -> T,
 {
-    let sample_rate = { ctx.active_audio_config.read().sample_rate }
-        .ok_or_else(|| anyhow::anyhow!("Invalid sample rate because it is None"))?;
-    // 1. Load the project from disk
-    let loaded_app = load_daw_project(Path::new(path_name), sample_rate)?;
-
-    // Extract the BPM before we move the loaded app into the global lock
-    let bpm = loaded_app.transport.bpm;
-
-    // 2. Halt the audio engine immediately to prevent reading partially overwritten state
-    let _ = ctx.send_audio_command(AudioCommand::StopAndReset);
-
-    // 3. Lock, mutate the global state, and map to the UI DTO
-    let app = &mut ctx.app_state;
-    let current_audio_config = app.audio_config.clone();
-    let current_clipboard = app.clipboard.clone();
-
-    *app = loaded_app;
-
-    app.audio_config = current_audio_config;
-    app.clipboard = current_clipboard;
-
-    let mapped_ui_state = mapper(&app);
-
-    // 4. Fire all necessary sync and loading events to the engine/UI
-    ctx.broadcast_full_graph();
-    let _ = ctx.send_audio_command(AudioCommand::SetBPM(bpm));
-    let _ = hydrate_live_audio_engine(ctx);
-
-    Ok(mapped_ui_state)
+    let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
+    let mut loaded = load_project_file(path_name, sample_rate)?;
+    loaded.audio_config = ctx.app_state.audio_config.clone();
+    loaded.clipboard = ctx.app_state.clipboard.clone();
+    if restore::has_external(&loaded) || restore::has_external(&ctx.app_state) {
+        restore::replace(ctx, loaded)?;
+    } else {
+        ctx.send_audio_command(AudioCommand::StopAndReset)
+            .or_else(|error| {
+                if ctx.command_sender.lock().is_none() {
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            })?;
+        ctx.app_state = loaded;
+        ctx.broadcast_full_graph();
+        if ctx.command_sender.lock().is_some() {
+            ctx.send_audio_command(AudioCommand::SetBPM(ctx.app_state.transport.bpm))?;
+            hydrate_live_audio_engine(ctx)?;
+        }
+    }
+    ctx.clear_history();
+    Ok(mapper(&ctx.app_state))
 }
 
+/// Renders the current project through an offline engine snapshot and reports export progress.
 pub fn export_project<F>(
     ctx: &mut DawContext,
     output_path: &str,
@@ -294,7 +160,7 @@ pub fn export_project<F>(
     progress_callback: F,
 ) -> anyhow::Result<()>
 where
-    F: FnMut(f32) -> bool,
+    F: FnMut(f32) -> bool + Send,
 {
     export_project_internal(ctx, output_path, config, tail_handling, progress_callback)
         .map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -302,165 +168,64 @@ where
     Ok(())
 }
 
-/// Create a blank, new, default project.
-pub fn new_blank_project(ctx: &mut DawContext) -> ApplicationState {
-    // let mut app = get_app_write();
-    ctx.app_state.new_blank_project();
-    let app_clone = ctx.app_state.clone();
-
-    // prepare plugin with this new state
-    ctx.broadcast_full_graph();
-    let _ = ctx.send_audio_command(AudioCommand::SetBPM(app_clone.transport.bpm));
-    let _ = hydrate_live_audio_engine(ctx);
-
-    app_clone
+pub fn begin_project_export(ctx: &DawContext) -> PendingAudioExport {
+    begin_export(ctx)
 }
 
-/// Safely instantiates all DSP plugins from the current state,
-/// explicitly applies their saved parameters, and sends them to the audio thread.
+pub fn execute_project_export<F>(
+    pending: PendingAudioExport,
+    output_path: &str,
+    config: AudioExportConfig,
+    tail_handling: TailHandling,
+    progress_callback: F,
+) -> anyhow::Result<()>
+where
+    F: FnMut(f32) -> bool + Send,
+{
+    execute_export(
+        pending,
+        output_path,
+        config,
+        tail_handling,
+        progress_callback,
+    )
+    .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+/// Create a blank, new, default project.
+/// Replaces project state with a blank project and fully rehydrates audio-thread state.
+pub fn new_blank_project(ctx: &mut DawContext) -> anyhow::Result<ApplicationState> {
+    let mut staged = ctx.app_state.clone();
+    staged.new_blank_project();
+    if restore::has_external(&ctx.app_state) {
+        restore::replace(ctx, staged)?;
+    } else {
+        ctx.app_state = staged;
+        ctx.broadcast_full_graph();
+        if ctx.command_sender.lock().is_some() {
+            ctx.send_audio_command(AudioCommand::SetBPM(ctx.app_state.transport.bpm))?;
+            hydrate_live_audio_engine(ctx)?;
+        }
+    }
+    ctx.clear_history();
+    Ok(ctx.app_state.clone())
+}
+
+/// Rebuilds and publishes plugins, mixer values, routing, transport, and graph state.
 pub fn hydrate_live_audio_engine(ctx: &mut DawContext) -> anyhow::Result<()> {
-    // let app = crate::lock::get_app_read();
-    // let registry = crate::context::ctx().plugin_registry.read();
-
-    let mut generators = IndexMap::new();
-    let mut track_effects = IndexMap::new();
-    let mut bus_effects = IndexMap::new();
-    let mut master_effects = IndexMap::new();
-
-    // 1. Hydrate Generators
-    for (gen_id, gen_arc) in &ctx.app_state.generator_pool {
-        if let GeneratorInstanceType::Plugin(plugin_instance) = &gen_arc.instance_type {
-            if let Some((mut plugin, _)) = ctx
-                .plugin_registry
-                .create_plugin_by_id(plugin_instance.registry_id)
-            {
-                // Pass the binary state to the plugin
-                if !plugin_instance.plugin_state.is_empty() {
-                    plugin.set_state(&plugin_instance.plugin_state);
-                } else {
-                    // Fallback for older project files that only saved parameters
-                    for spec in &plugin_instance.parameter_specs {
-                        plugin.set_parameter(spec.id, spec.value as f32);
-                    }
-                }
-                generators.insert(gen_id, plugin);
-            }
-        }
+    if restore::has_external(&ctx.app_state) {
+        return restore::replace(ctx, ctx.app_state.clone());
     }
-
-    // 2. Hydrate Track Effects
-    for (track_id, channel_arc) in &ctx.app_state.mixer.channels {
-        let mut track_chain = IndexMap::new();
-        for effect in &channel_arc.channel.effects {
-            if let Some((mut plugin, _)) = ctx
-                .plugin_registry
-                .create_plugin_by_id(effect.instance.registry_id)
-            {
-                if !effect.instance.plugin_state.is_empty() {
-                    plugin.set_state(&effect.instance.plugin_state);
-                }
-                {
-                    for spec in &effect.instance.parameter_specs {
-                        plugin.set_parameter(spec.id, spec.value as f32);
-                    }
-                }
-                track_chain.insert(effect.id, plugin);
-            }
-        }
-        if !track_chain.is_empty() {
-            track_effects.insert(track_id, track_chain);
-        }
+    if ctx.command_sender.lock().is_none() {
+        return Ok(());
     }
-
-    // 3. Hydrate Bus Effects
-    for (bus_id, bus_arc) in &ctx.app_state.mixer.buses {
-        let mut bus_chain = IndexMap::new();
-        for effect in &bus_arc.channel.effects {
-            if let Some((mut plugin, _)) = ctx
-                .plugin_registry
-                .create_plugin_by_id(effect.instance.registry_id)
-            {
-                if !effect.instance.plugin_state.is_empty() {
-                    plugin.set_state(&effect.instance.plugin_state);
-                }
-                {
-                    for spec in &effect.instance.parameter_specs {
-                        plugin.set_parameter(spec.id, spec.value as f32);
-                    }
-                }
-                bus_chain.insert(effect.id, plugin);
-            }
-        }
-        if !bus_chain.is_empty() {
-            bus_effects.insert(bus_id, bus_chain);
-        }
-    }
-
-    // 4. Hydrate Master Effects
-    for effect in &ctx.app_state.mixer.master_bus.effects {
-        if let Some((mut plugin, _)) = ctx
-            .plugin_registry
-            .create_plugin_by_id(effect.instance.registry_id)
-        {
-            if !effect.instance.plugin_state.is_empty() {
-                plugin.set_state(&effect.instance.plugin_state);
-            }
-            {
-                for spec in &effect.instance.parameter_specs {
-                    plugin.set_parameter(spec.id, spec.value as f32);
-                }
-            }
-            master_effects.insert(effect.id, plugin);
-        }
-    }
-
-    // Build mixer channel seeds from AppState (read before lock is dropped)
-    let mut track_channels = IndexMap::new();
-    let mut bus_channels = IndexMap::new();
-    let master_channel;
-
-    for (track_id, channel_arc) in &ctx.app_state.mixer.channels {
-        track_channels.insert(
-            track_id,
-            MixerChannelSeed {
-                volume: channel_arc.channel.volume.get(),
-                pan: channel_arc.channel.pan.get(),
-                mute: channel_arc.channel.mute,
-                solo: channel_arc.channel.solo,
-                inverted_phase: channel_arc.channel.inverted_phase,
-            },
-        );
-    }
-    for (bus_id, bus_arc) in &ctx.app_state.mixer.buses {
-        bus_channels.insert(
-            bus_id,
-            MixerChannelSeed {
-                volume: bus_arc.channel.volume.get(),
-                pan: bus_arc.channel.pan.get(),
-                mute: bus_arc.channel.mute,
-                solo: bus_arc.channel.solo,
-                inverted_phase: bus_arc.channel.inverted_phase,
-            },
-        );
-    }
-    master_channel = MixerChannelSeed {
-        volume: ctx.app_state.mixer.master_bus.volume.get(),
-        pan: ctx.app_state.mixer.master_bus.pan.get(),
-        mute: ctx.app_state.mixer.master_bus.mute,
-        solo: ctx.app_state.mixer.master_bus.solo,
-        inverted_phase: ctx.app_state.mixer.master_bus.inverted_phase,
-    };
-
-    // Send the fully configured plugins to the Live Audio Engine
-    let _ = ctx.send_audio_command(AudioCommand::HydratePlugin {
-        generators,
-        track_effects,
-        bus_effects,
-        master_effects,
-        track_channels,
-        bus_channels,
-        master_channel,
-    });
-
-    Ok(())
+    let dsp = ctx.audio_runtime_settings.read().requested_dsp;
+    let command = restore::hydration_command(
+        &ctx.app_state,
+        &ctx.plugin_registry,
+        &ctx.external_plugin_failures,
+        dsp.sample_rate,
+        dsp.block_size as usize,
+    );
+    ctx.send_audio_command(command)
 }

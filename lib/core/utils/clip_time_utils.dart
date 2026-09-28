@@ -2,8 +2,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 
 /// ======================================
 /// Clip Time Conversion Utilities
-/// Handles conversion between sample-based (audio) and tick-based (MIDI)
-/// clip positioning for the timeline UI.
+/// Handles conversion of sample-based clip dimensions for the tick timeline.
 /// ======================================
 
 const int _ticksPerBeat = 960;
@@ -31,14 +30,11 @@ int ticksToSamples(int ticks, double bpm, int sampleRate) {
 
 /// Extension on UiClip that provides tick-equivalent accessors for rendering.
 ///
-/// For tick-based clips (MIDI/automation), values are returned as-is.
-/// For sample-based clips (audio), values are converted to ticks using BPM and sample rate.
+/// Placement is always stored in ticks. Sample-based content dimensions are
+/// converted using the current BPM and sample rate.
 extension UiClipTickConversion on UiClip {
-  /// Get the start time in ticks (for timeline rendering).
-  int startTimeInTicks(double bpm, int sampleRate) {
-    if (!isSampleBased) return startTime;
-    return samplesToTicks(startTime, bpm, sampleRate);
-  }
+  /// Get the timeline placement in ticks.
+  int get startTimeInTicks => startTime;
 
   /// Get the loop length in ticks (for clip width rendering).
   int loopLengthInTicks(double bpm, int sampleRate) {

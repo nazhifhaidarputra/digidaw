@@ -280,7 +280,7 @@ as bool,
 /// @nodoc
 mixin _$WorkspaceState {
 
- WorkspaceView get currentView; ToolSelection get selectedTool; ToolbarMenuContextGroup get currentToolbarContext; InteractionTarget? get interactionTarget; int? get editingPatternId; double get horizontalZoomLevel; MusicalBeatSize get horizontalClipShiftSizeDenom; GridSize get gridSize; bool get snapToGrid; bool get showExportPanel; bool get sampleBrowserPanelisExpanded; FloatingMidiKeyboardFieldState get floatingMidiKeyboardState;
+ WorkspaceView get currentView; ToolSelection get selectedTool; ToolbarMenuContextGroup get currentToolbarContext; InteractionTarget? get interactionTarget; int? get editingPatternId; double get horizontalZoomLevel; MusicalBeatSize get horizontalClipShiftSizeDenom; GridSize get gridSize; bool get snapToGrid; bool get showExportPanel; BrowserPanelState get browserPanelState; FloatingMidiKeyboardFieldState get floatingMidiKeyboardState;
 /// Create a copy of WorkspaceState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -291,16 +291,16 @@ $WorkspaceStateCopyWith<WorkspaceState> get copyWith => _$WorkspaceStateCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is WorkspaceState&&(identical(other.currentView, currentView) || other.currentView == currentView)&&(identical(other.selectedTool, selectedTool) || other.selectedTool == selectedTool)&&(identical(other.currentToolbarContext, currentToolbarContext) || other.currentToolbarContext == currentToolbarContext)&&(identical(other.interactionTarget, interactionTarget) || other.interactionTarget == interactionTarget)&&(identical(other.editingPatternId, editingPatternId) || other.editingPatternId == editingPatternId)&&(identical(other.horizontalZoomLevel, horizontalZoomLevel) || other.horizontalZoomLevel == horizontalZoomLevel)&&(identical(other.horizontalClipShiftSizeDenom, horizontalClipShiftSizeDenom) || other.horizontalClipShiftSizeDenom == horizontalClipShiftSizeDenom)&&(identical(other.gridSize, gridSize) || other.gridSize == gridSize)&&(identical(other.snapToGrid, snapToGrid) || other.snapToGrid == snapToGrid)&&(identical(other.showExportPanel, showExportPanel) || other.showExportPanel == showExportPanel)&&(identical(other.sampleBrowserPanelisExpanded, sampleBrowserPanelisExpanded) || other.sampleBrowserPanelisExpanded == sampleBrowserPanelisExpanded)&&(identical(other.floatingMidiKeyboardState, floatingMidiKeyboardState) || other.floatingMidiKeyboardState == floatingMidiKeyboardState));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is WorkspaceState&&(identical(other.currentView, currentView) || other.currentView == currentView)&&(identical(other.selectedTool, selectedTool) || other.selectedTool == selectedTool)&&(identical(other.currentToolbarContext, currentToolbarContext) || other.currentToolbarContext == currentToolbarContext)&&(identical(other.interactionTarget, interactionTarget) || other.interactionTarget == interactionTarget)&&(identical(other.editingPatternId, editingPatternId) || other.editingPatternId == editingPatternId)&&(identical(other.horizontalZoomLevel, horizontalZoomLevel) || other.horizontalZoomLevel == horizontalZoomLevel)&&(identical(other.horizontalClipShiftSizeDenom, horizontalClipShiftSizeDenom) || other.horizontalClipShiftSizeDenom == horizontalClipShiftSizeDenom)&&(identical(other.gridSize, gridSize) || other.gridSize == gridSize)&&(identical(other.snapToGrid, snapToGrid) || other.snapToGrid == snapToGrid)&&(identical(other.showExportPanel, showExportPanel) || other.showExportPanel == showExportPanel)&&(identical(other.browserPanelState, browserPanelState) || other.browserPanelState == browserPanelState)&&(identical(other.floatingMidiKeyboardState, floatingMidiKeyboardState) || other.floatingMidiKeyboardState == floatingMidiKeyboardState));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,currentView,selectedTool,currentToolbarContext,interactionTarget,editingPatternId,horizontalZoomLevel,horizontalClipShiftSizeDenom,gridSize,snapToGrid,showExportPanel,sampleBrowserPanelisExpanded,floatingMidiKeyboardState);
+int get hashCode => Object.hash(runtimeType,currentView,selectedTool,currentToolbarContext,interactionTarget,editingPatternId,horizontalZoomLevel,horizontalClipShiftSizeDenom,gridSize,snapToGrid,showExportPanel,browserPanelState,floatingMidiKeyboardState);
 
 @override
 String toString() {
-  return 'WorkspaceState(currentView: $currentView, selectedTool: $selectedTool, currentToolbarContext: $currentToolbarContext, interactionTarget: $interactionTarget, editingPatternId: $editingPatternId, horizontalZoomLevel: $horizontalZoomLevel, horizontalClipShiftSizeDenom: $horizontalClipShiftSizeDenom, gridSize: $gridSize, snapToGrid: $snapToGrid, showExportPanel: $showExportPanel, sampleBrowserPanelisExpanded: $sampleBrowserPanelisExpanded, floatingMidiKeyboardState: $floatingMidiKeyboardState)';
+  return 'WorkspaceState(currentView: $currentView, selectedTool: $selectedTool, currentToolbarContext: $currentToolbarContext, interactionTarget: $interactionTarget, editingPatternId: $editingPatternId, horizontalZoomLevel: $horizontalZoomLevel, horizontalClipShiftSizeDenom: $horizontalClipShiftSizeDenom, gridSize: $gridSize, snapToGrid: $snapToGrid, showExportPanel: $showExportPanel, browserPanelState: $browserPanelState, floatingMidiKeyboardState: $floatingMidiKeyboardState)';
 }
 
 
@@ -311,11 +311,11 @@ abstract mixin class $WorkspaceStateCopyWith<$Res>  {
   factory $WorkspaceStateCopyWith(WorkspaceState value, $Res Function(WorkspaceState) _then) = _$WorkspaceStateCopyWithImpl;
 @useResult
 $Res call({
- WorkspaceView currentView, ToolSelection selectedTool, ToolbarMenuContextGroup currentToolbarContext, InteractionTarget? interactionTarget, int? editingPatternId, double horizontalZoomLevel, MusicalBeatSize horizontalClipShiftSizeDenom, GridSize gridSize, bool snapToGrid, bool showExportPanel, bool sampleBrowserPanelisExpanded, FloatingMidiKeyboardFieldState floatingMidiKeyboardState
+ WorkspaceView currentView, ToolSelection selectedTool, ToolbarMenuContextGroup currentToolbarContext, InteractionTarget? interactionTarget, int? editingPatternId, double horizontalZoomLevel, MusicalBeatSize horizontalClipShiftSizeDenom, GridSize gridSize, bool snapToGrid, bool showExportPanel, BrowserPanelState browserPanelState, FloatingMidiKeyboardFieldState floatingMidiKeyboardState
 });
 
 
-$FloatingMidiKeyboardFieldStateCopyWith<$Res> get floatingMidiKeyboardState;
+$BrowserPanelStateCopyWith<$Res> get browserPanelState;$FloatingMidiKeyboardFieldStateCopyWith<$Res> get floatingMidiKeyboardState;
 
 }
 /// @nodoc
@@ -328,7 +328,7 @@ class _$WorkspaceStateCopyWithImpl<$Res>
 
 /// Create a copy of WorkspaceState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? currentView = null,Object? selectedTool = null,Object? currentToolbarContext = null,Object? interactionTarget = freezed,Object? editingPatternId = freezed,Object? horizontalZoomLevel = null,Object? horizontalClipShiftSizeDenom = null,Object? gridSize = null,Object? snapToGrid = null,Object? showExportPanel = null,Object? sampleBrowserPanelisExpanded = null,Object? floatingMidiKeyboardState = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? currentView = null,Object? selectedTool = null,Object? currentToolbarContext = null,Object? interactionTarget = freezed,Object? editingPatternId = freezed,Object? horizontalZoomLevel = null,Object? horizontalClipShiftSizeDenom = null,Object? gridSize = null,Object? snapToGrid = null,Object? showExportPanel = null,Object? browserPanelState = null,Object? floatingMidiKeyboardState = null,}) {
   return _then(_self.copyWith(
 currentView: null == currentView ? _self.currentView : currentView // ignore: cast_nullable_to_non_nullable
 as WorkspaceView,selectedTool: null == selectedTool ? _self.selectedTool : selectedTool // ignore: cast_nullable_to_non_nullable
@@ -340,12 +340,21 @@ as double,horizontalClipShiftSizeDenom: null == horizontalClipShiftSizeDenom ? _
 as MusicalBeatSize,gridSize: null == gridSize ? _self.gridSize : gridSize // ignore: cast_nullable_to_non_nullable
 as GridSize,snapToGrid: null == snapToGrid ? _self.snapToGrid : snapToGrid // ignore: cast_nullable_to_non_nullable
 as bool,showExportPanel: null == showExportPanel ? _self.showExportPanel : showExportPanel // ignore: cast_nullable_to_non_nullable
-as bool,sampleBrowserPanelisExpanded: null == sampleBrowserPanelisExpanded ? _self.sampleBrowserPanelisExpanded : sampleBrowserPanelisExpanded // ignore: cast_nullable_to_non_nullable
-as bool,floatingMidiKeyboardState: null == floatingMidiKeyboardState ? _self.floatingMidiKeyboardState : floatingMidiKeyboardState // ignore: cast_nullable_to_non_nullable
+as bool,browserPanelState: null == browserPanelState ? _self.browserPanelState : browserPanelState // ignore: cast_nullable_to_non_nullable
+as BrowserPanelState,floatingMidiKeyboardState: null == floatingMidiKeyboardState ? _self.floatingMidiKeyboardState : floatingMidiKeyboardState // ignore: cast_nullable_to_non_nullable
 as FloatingMidiKeyboardFieldState,
   ));
 }
 /// Create a copy of WorkspaceState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$BrowserPanelStateCopyWith<$Res> get browserPanelState {
+  
+  return $BrowserPanelStateCopyWith<$Res>(_self.browserPanelState, (value) {
+    return _then(_self.copyWith(browserPanelState: value));
+  });
+}/// Create a copy of WorkspaceState
 /// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
@@ -436,10 +445,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( WorkspaceView currentView,  ToolSelection selectedTool,  ToolbarMenuContextGroup currentToolbarContext,  InteractionTarget? interactionTarget,  int? editingPatternId,  double horizontalZoomLevel,  MusicalBeatSize horizontalClipShiftSizeDenom,  GridSize gridSize,  bool snapToGrid,  bool showExportPanel,  bool sampleBrowserPanelisExpanded,  FloatingMidiKeyboardFieldState floatingMidiKeyboardState)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( WorkspaceView currentView,  ToolSelection selectedTool,  ToolbarMenuContextGroup currentToolbarContext,  InteractionTarget? interactionTarget,  int? editingPatternId,  double horizontalZoomLevel,  MusicalBeatSize horizontalClipShiftSizeDenom,  GridSize gridSize,  bool snapToGrid,  bool showExportPanel,  BrowserPanelState browserPanelState,  FloatingMidiKeyboardFieldState floatingMidiKeyboardState)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _WorkspaceState() when $default != null:
-return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext,_that.interactionTarget,_that.editingPatternId,_that.horizontalZoomLevel,_that.horizontalClipShiftSizeDenom,_that.gridSize,_that.snapToGrid,_that.showExportPanel,_that.sampleBrowserPanelisExpanded,_that.floatingMidiKeyboardState);case _:
+return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext,_that.interactionTarget,_that.editingPatternId,_that.horizontalZoomLevel,_that.horizontalClipShiftSizeDenom,_that.gridSize,_that.snapToGrid,_that.showExportPanel,_that.browserPanelState,_that.floatingMidiKeyboardState);case _:
   return orElse();
 
 }
@@ -457,10 +466,10 @@ return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( WorkspaceView currentView,  ToolSelection selectedTool,  ToolbarMenuContextGroup currentToolbarContext,  InteractionTarget? interactionTarget,  int? editingPatternId,  double horizontalZoomLevel,  MusicalBeatSize horizontalClipShiftSizeDenom,  GridSize gridSize,  bool snapToGrid,  bool showExportPanel,  bool sampleBrowserPanelisExpanded,  FloatingMidiKeyboardFieldState floatingMidiKeyboardState)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( WorkspaceView currentView,  ToolSelection selectedTool,  ToolbarMenuContextGroup currentToolbarContext,  InteractionTarget? interactionTarget,  int? editingPatternId,  double horizontalZoomLevel,  MusicalBeatSize horizontalClipShiftSizeDenom,  GridSize gridSize,  bool snapToGrid,  bool showExportPanel,  BrowserPanelState browserPanelState,  FloatingMidiKeyboardFieldState floatingMidiKeyboardState)  $default,) {final _that = this;
 switch (_that) {
 case _WorkspaceState():
-return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext,_that.interactionTarget,_that.editingPatternId,_that.horizontalZoomLevel,_that.horizontalClipShiftSizeDenom,_that.gridSize,_that.snapToGrid,_that.showExportPanel,_that.sampleBrowserPanelisExpanded,_that.floatingMidiKeyboardState);case _:
+return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext,_that.interactionTarget,_that.editingPatternId,_that.horizontalZoomLevel,_that.horizontalClipShiftSizeDenom,_that.gridSize,_that.snapToGrid,_that.showExportPanel,_that.browserPanelState,_that.floatingMidiKeyboardState);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -477,10 +486,10 @@ return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( WorkspaceView currentView,  ToolSelection selectedTool,  ToolbarMenuContextGroup currentToolbarContext,  InteractionTarget? interactionTarget,  int? editingPatternId,  double horizontalZoomLevel,  MusicalBeatSize horizontalClipShiftSizeDenom,  GridSize gridSize,  bool snapToGrid,  bool showExportPanel,  bool sampleBrowserPanelisExpanded,  FloatingMidiKeyboardFieldState floatingMidiKeyboardState)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( WorkspaceView currentView,  ToolSelection selectedTool,  ToolbarMenuContextGroup currentToolbarContext,  InteractionTarget? interactionTarget,  int? editingPatternId,  double horizontalZoomLevel,  MusicalBeatSize horizontalClipShiftSizeDenom,  GridSize gridSize,  bool snapToGrid,  bool showExportPanel,  BrowserPanelState browserPanelState,  FloatingMidiKeyboardFieldState floatingMidiKeyboardState)?  $default,) {final _that = this;
 switch (_that) {
 case _WorkspaceState() when $default != null:
-return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext,_that.interactionTarget,_that.editingPatternId,_that.horizontalZoomLevel,_that.horizontalClipShiftSizeDenom,_that.gridSize,_that.snapToGrid,_that.showExportPanel,_that.sampleBrowserPanelisExpanded,_that.floatingMidiKeyboardState);case _:
+return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext,_that.interactionTarget,_that.editingPatternId,_that.horizontalZoomLevel,_that.horizontalClipShiftSizeDenom,_that.gridSize,_that.snapToGrid,_that.showExportPanel,_that.browserPanelState,_that.floatingMidiKeyboardState);case _:
   return null;
 
 }
@@ -492,7 +501,7 @@ return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext
 
 
 class _WorkspaceState extends WorkspaceState {
-  const _WorkspaceState({this.currentView = WorkspaceView.trackList, this.selectedTool = ToolSelection.pointer, this.currentToolbarContext = ToolbarMenuContextGroup.none, this.interactionTarget, this.editingPatternId, this.horizontalZoomLevel = 100.0, this.horizontalClipShiftSizeDenom = MusicalBeatSize.none, this.gridSize = GridSize.quarter, this.snapToGrid = false, this.showExportPanel = false, this.sampleBrowserPanelisExpanded = false, this.floatingMidiKeyboardState = const FloatingMidiKeyboardFieldState()}): super._();
+  const _WorkspaceState({this.currentView = WorkspaceView.trackList, this.selectedTool = ToolSelection.pointer, this.currentToolbarContext = ToolbarMenuContextGroup.none, this.interactionTarget, this.editingPatternId, this.horizontalZoomLevel = 100.0, this.horizontalClipShiftSizeDenom = MusicalBeatSize.none, this.gridSize = GridSize.quarter, this.snapToGrid = false, this.showExportPanel = false, this.browserPanelState = const BrowserPanelState(), this.floatingMidiKeyboardState = const FloatingMidiKeyboardFieldState()}): super._();
   
 
 @override@JsonKey() final  WorkspaceView currentView;
@@ -505,7 +514,7 @@ class _WorkspaceState extends WorkspaceState {
 @override@JsonKey() final  GridSize gridSize;
 @override@JsonKey() final  bool snapToGrid;
 @override@JsonKey() final  bool showExportPanel;
-@override@JsonKey() final  bool sampleBrowserPanelisExpanded;
+@override@JsonKey() final  BrowserPanelState browserPanelState;
 @override@JsonKey() final  FloatingMidiKeyboardFieldState floatingMidiKeyboardState;
 
 /// Create a copy of WorkspaceState
@@ -518,16 +527,16 @@ _$WorkspaceStateCopyWith<_WorkspaceState> get copyWith => __$WorkspaceStateCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _WorkspaceState&&(identical(other.currentView, currentView) || other.currentView == currentView)&&(identical(other.selectedTool, selectedTool) || other.selectedTool == selectedTool)&&(identical(other.currentToolbarContext, currentToolbarContext) || other.currentToolbarContext == currentToolbarContext)&&(identical(other.interactionTarget, interactionTarget) || other.interactionTarget == interactionTarget)&&(identical(other.editingPatternId, editingPatternId) || other.editingPatternId == editingPatternId)&&(identical(other.horizontalZoomLevel, horizontalZoomLevel) || other.horizontalZoomLevel == horizontalZoomLevel)&&(identical(other.horizontalClipShiftSizeDenom, horizontalClipShiftSizeDenom) || other.horizontalClipShiftSizeDenom == horizontalClipShiftSizeDenom)&&(identical(other.gridSize, gridSize) || other.gridSize == gridSize)&&(identical(other.snapToGrid, snapToGrid) || other.snapToGrid == snapToGrid)&&(identical(other.showExportPanel, showExportPanel) || other.showExportPanel == showExportPanel)&&(identical(other.sampleBrowserPanelisExpanded, sampleBrowserPanelisExpanded) || other.sampleBrowserPanelisExpanded == sampleBrowserPanelisExpanded)&&(identical(other.floatingMidiKeyboardState, floatingMidiKeyboardState) || other.floatingMidiKeyboardState == floatingMidiKeyboardState));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _WorkspaceState&&(identical(other.currentView, currentView) || other.currentView == currentView)&&(identical(other.selectedTool, selectedTool) || other.selectedTool == selectedTool)&&(identical(other.currentToolbarContext, currentToolbarContext) || other.currentToolbarContext == currentToolbarContext)&&(identical(other.interactionTarget, interactionTarget) || other.interactionTarget == interactionTarget)&&(identical(other.editingPatternId, editingPatternId) || other.editingPatternId == editingPatternId)&&(identical(other.horizontalZoomLevel, horizontalZoomLevel) || other.horizontalZoomLevel == horizontalZoomLevel)&&(identical(other.horizontalClipShiftSizeDenom, horizontalClipShiftSizeDenom) || other.horizontalClipShiftSizeDenom == horizontalClipShiftSizeDenom)&&(identical(other.gridSize, gridSize) || other.gridSize == gridSize)&&(identical(other.snapToGrid, snapToGrid) || other.snapToGrid == snapToGrid)&&(identical(other.showExportPanel, showExportPanel) || other.showExportPanel == showExportPanel)&&(identical(other.browserPanelState, browserPanelState) || other.browserPanelState == browserPanelState)&&(identical(other.floatingMidiKeyboardState, floatingMidiKeyboardState) || other.floatingMidiKeyboardState == floatingMidiKeyboardState));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,currentView,selectedTool,currentToolbarContext,interactionTarget,editingPatternId,horizontalZoomLevel,horizontalClipShiftSizeDenom,gridSize,snapToGrid,showExportPanel,sampleBrowserPanelisExpanded,floatingMidiKeyboardState);
+int get hashCode => Object.hash(runtimeType,currentView,selectedTool,currentToolbarContext,interactionTarget,editingPatternId,horizontalZoomLevel,horizontalClipShiftSizeDenom,gridSize,snapToGrid,showExportPanel,browserPanelState,floatingMidiKeyboardState);
 
 @override
 String toString() {
-  return 'WorkspaceState(currentView: $currentView, selectedTool: $selectedTool, currentToolbarContext: $currentToolbarContext, interactionTarget: $interactionTarget, editingPatternId: $editingPatternId, horizontalZoomLevel: $horizontalZoomLevel, horizontalClipShiftSizeDenom: $horizontalClipShiftSizeDenom, gridSize: $gridSize, snapToGrid: $snapToGrid, showExportPanel: $showExportPanel, sampleBrowserPanelisExpanded: $sampleBrowserPanelisExpanded, floatingMidiKeyboardState: $floatingMidiKeyboardState)';
+  return 'WorkspaceState(currentView: $currentView, selectedTool: $selectedTool, currentToolbarContext: $currentToolbarContext, interactionTarget: $interactionTarget, editingPatternId: $editingPatternId, horizontalZoomLevel: $horizontalZoomLevel, horizontalClipShiftSizeDenom: $horizontalClipShiftSizeDenom, gridSize: $gridSize, snapToGrid: $snapToGrid, showExportPanel: $showExportPanel, browserPanelState: $browserPanelState, floatingMidiKeyboardState: $floatingMidiKeyboardState)';
 }
 
 
@@ -538,11 +547,11 @@ abstract mixin class _$WorkspaceStateCopyWith<$Res> implements $WorkspaceStateCo
   factory _$WorkspaceStateCopyWith(_WorkspaceState value, $Res Function(_WorkspaceState) _then) = __$WorkspaceStateCopyWithImpl;
 @override @useResult
 $Res call({
- WorkspaceView currentView, ToolSelection selectedTool, ToolbarMenuContextGroup currentToolbarContext, InteractionTarget? interactionTarget, int? editingPatternId, double horizontalZoomLevel, MusicalBeatSize horizontalClipShiftSizeDenom, GridSize gridSize, bool snapToGrid, bool showExportPanel, bool sampleBrowserPanelisExpanded, FloatingMidiKeyboardFieldState floatingMidiKeyboardState
+ WorkspaceView currentView, ToolSelection selectedTool, ToolbarMenuContextGroup currentToolbarContext, InteractionTarget? interactionTarget, int? editingPatternId, double horizontalZoomLevel, MusicalBeatSize horizontalClipShiftSizeDenom, GridSize gridSize, bool snapToGrid, bool showExportPanel, BrowserPanelState browserPanelState, FloatingMidiKeyboardFieldState floatingMidiKeyboardState
 });
 
 
-@override $FloatingMidiKeyboardFieldStateCopyWith<$Res> get floatingMidiKeyboardState;
+@override $BrowserPanelStateCopyWith<$Res> get browserPanelState;@override $FloatingMidiKeyboardFieldStateCopyWith<$Res> get floatingMidiKeyboardState;
 
 }
 /// @nodoc
@@ -555,7 +564,7 @@ class __$WorkspaceStateCopyWithImpl<$Res>
 
 /// Create a copy of WorkspaceState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? currentView = null,Object? selectedTool = null,Object? currentToolbarContext = null,Object? interactionTarget = freezed,Object? editingPatternId = freezed,Object? horizontalZoomLevel = null,Object? horizontalClipShiftSizeDenom = null,Object? gridSize = null,Object? snapToGrid = null,Object? showExportPanel = null,Object? sampleBrowserPanelisExpanded = null,Object? floatingMidiKeyboardState = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? currentView = null,Object? selectedTool = null,Object? currentToolbarContext = null,Object? interactionTarget = freezed,Object? editingPatternId = freezed,Object? horizontalZoomLevel = null,Object? horizontalClipShiftSizeDenom = null,Object? gridSize = null,Object? snapToGrid = null,Object? showExportPanel = null,Object? browserPanelState = null,Object? floatingMidiKeyboardState = null,}) {
   return _then(_WorkspaceState(
 currentView: null == currentView ? _self.currentView : currentView // ignore: cast_nullable_to_non_nullable
 as WorkspaceView,selectedTool: null == selectedTool ? _self.selectedTool : selectedTool // ignore: cast_nullable_to_non_nullable
@@ -567,13 +576,22 @@ as double,horizontalClipShiftSizeDenom: null == horizontalClipShiftSizeDenom ? _
 as MusicalBeatSize,gridSize: null == gridSize ? _self.gridSize : gridSize // ignore: cast_nullable_to_non_nullable
 as GridSize,snapToGrid: null == snapToGrid ? _self.snapToGrid : snapToGrid // ignore: cast_nullable_to_non_nullable
 as bool,showExportPanel: null == showExportPanel ? _self.showExportPanel : showExportPanel // ignore: cast_nullable_to_non_nullable
-as bool,sampleBrowserPanelisExpanded: null == sampleBrowserPanelisExpanded ? _self.sampleBrowserPanelisExpanded : sampleBrowserPanelisExpanded // ignore: cast_nullable_to_non_nullable
-as bool,floatingMidiKeyboardState: null == floatingMidiKeyboardState ? _self.floatingMidiKeyboardState : floatingMidiKeyboardState // ignore: cast_nullable_to_non_nullable
+as bool,browserPanelState: null == browserPanelState ? _self.browserPanelState : browserPanelState // ignore: cast_nullable_to_non_nullable
+as BrowserPanelState,floatingMidiKeyboardState: null == floatingMidiKeyboardState ? _self.floatingMidiKeyboardState : floatingMidiKeyboardState // ignore: cast_nullable_to_non_nullable
 as FloatingMidiKeyboardFieldState,
   ));
 }
 
 /// Create a copy of WorkspaceState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$BrowserPanelStateCopyWith<$Res> get browserPanelState {
+  
+  return $BrowserPanelStateCopyWith<$Res>(_self.browserPanelState, (value) {
+    return _then(_self.copyWith(browserPanelState: value));
+  });
+}/// Create a copy of WorkspaceState
 /// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')

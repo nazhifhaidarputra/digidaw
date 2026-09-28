@@ -153,6 +153,7 @@ final notificationProvider =
 
 /// Consistent error handling for APIs that expose the local [Result] type.
 extension NotificationResultRef on Ref {
+  /// notify the Result&lt;T&gt; result to notification provider
   Result<T> notifyErrorResult<T>(
     Object error, {
     String? title,
@@ -166,6 +167,7 @@ extension NotificationResultRef on Ref {
     );
   }
 
+  /// notify the caught error result to notification provider
   void notifyError(Object error, {String? title, StackTrace? stackTrace}) {
     read(
       notificationProvider.notifier,

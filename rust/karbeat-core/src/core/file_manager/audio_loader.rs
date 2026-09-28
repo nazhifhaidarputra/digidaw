@@ -10,12 +10,13 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use tempfile::tempfile;
+use tempfile::{tempfile, tempfile_in};
 
 use anyhow::{Context, Result, anyhow};
 use memmap2::MmapOptions;
 use rodio::Source;
 
+use crate::core::file_manager::app_cache_dir;
 use crate::core::project::{ApplicationState, AudioSourceId, track::audio_waveform::AudioWaveform};
 
 trait FileNameExt {
@@ -36,7 +37,10 @@ mod err {
 
     #[derive(Error, Debug)]
     #[error("Failed to load the audio: {message}")]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the typed loader error is retained for the planned file I/O boundary migration"
+    )]
     // TODO: Use this in Audio File I/O
     pub struct LoadAudioError<'a> {
         pub message: &'a str,
@@ -63,7 +67,7 @@ pub fn load_audio_file(
 
     // Cache the loaded audio file
     // let mut f32_decoder = decoder.into_iter();
-    let mut cache_file = tempfile().context("Failed to create temporary cache file")?;
+    let mut cache_file = decoded_cache_file()?;
 
     // Use a BufWriter. It handles disk I/O incredibly efficiently behind the scenes.
     let total_samples = {
@@ -97,6 +101,8 @@ pub fn load_audio_file(
     // let byte_slice: &[u8] = bytemuck::cast_slice(&all_samples);
     // cache_file.write_all(byte_slice)?;
 
+    // SAFETY: The temporary file remains open while the immutable mapping is created, and the
+    // returned mapping owns the mapped region independently of the file handle.
     let mmap = unsafe { MmapOptions::new().map(&cache_file)? };
 
     let duration_seconds = if sample_rate > 0 {
@@ -123,6 +129,23 @@ pub fn load_audio_file(
         trim_end: total_frames,
         ..Default::default()
     })
+}
+
+/// Creates the unnamed, self-deleting file that backs one decoded source's memory map.
+///
+/// It lives in the on-disk user cache so the kernel can evict its pages under memory
+/// pressure; the system temporary directory is often RAM-backed tmpfs.
+fn decoded_cache_file() -> Result<File> {
+    if let Some(directory) = app_cache_dir().map(|cache| cache.join("decoded-audio")) {
+        match std::fs::create_dir_all(&directory).and_then(|()| tempfile_in(&directory)) {
+            Ok(file) => return Ok(file),
+            Err(error) => log::warn!(
+                "Decoded audio cache unavailable in {}, using the temporary directory: {error}",
+                directory.display()
+            ),
+        }
+    }
+    tempfile().context("Failed to create temporary cache file")
 }
 
 /// Helper for the fast-path: Streams decoded audio directly to disk without resampling.

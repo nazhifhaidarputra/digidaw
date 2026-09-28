@@ -1,3 +1,8 @@
+#![allow(
+    clippy::as_conversions,
+    reason = "sidechain timing calculations intentionally convert bounded sample-domain values"
+)]
+
 use karbeat_dsp::{channel::StandardChannelMode, compressor::SidechainCompressor};
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
@@ -220,6 +225,10 @@ mod tests {
         }
     }
 
+    #[allow(
+        clippy::panic,
+        reason = "a missing declared parameter is a test fixture failure"
+    )]
     fn parameter_id(plugin: &DigidawSidechainCompressor, path: &str) -> u32 {
         plugin
             .get_parameter_specs()
@@ -339,6 +348,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::expect_used,
+        reason = "the test asserts that the statically declared parameter exists"
+    )]
     fn channel_mode_metadata_uses_choice_indices() {
         let plugin = DigidawSidechainCompressor::default();
         let spec = plugin
@@ -350,5 +363,17 @@ mod tests {
         assert_eq!(spec.default_value, 1.0);
         assert_eq!(spec.min, 0.0);
         assert_eq!(spec.max, 1.0);
+    }
+
+    #[test]
+    fn current_parameter_reports_the_automation_applied_value() {
+        let mut plugin = DigidawSidechainCompressor::default();
+        let wet_mix_id = parameter_id(&plugin, "compressor/wet_mix");
+
+        assert_eq!(plugin.get_parameter(wet_mix_id), 1.0);
+        plugin.apply_automation(wet_mix_id, 0.25);
+
+        assert_eq!(plugin.get_parameter(wet_mix_id), 1.0);
+        assert_eq!(plugin.get_current_parameter(wet_mix_id), 0.25);
     }
 }

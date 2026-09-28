@@ -50,21 +50,22 @@ class DigidawSidechainCompressorState
     );
   }
 
-  Widget _section(String title, List<Widget> children) {
+  Widget _section(BuildContext context, String title, List<Widget> children) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: const TextStyle(
-              color: Colors.cyanAccent,
+            style: TextStyle(
+              color: colors.primary,
               fontSize: 13,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.1,
@@ -86,7 +87,7 @@ class DigidawSidechainCompressorState
       return Center(
         child: Text(
           errorMessage!,
-          style: const TextStyle(color: Colors.redAccent),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       );
     }
@@ -97,7 +98,7 @@ class DigidawSidechainCompressorState
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 760;
         final routingPanel = SidechainSourcePanel(target: widget.target);
-        final dynamics = _section('DYNAMICS', [
+        final dynamics = _section(context, 'DYNAMICS', [
           _knob(
             DigidawSidechainCompressorSpecs.compressorThreshold,
             suffix: ' dB',
@@ -113,7 +114,7 @@ class DigidawSidechainCompressorState
           ),
           _knob(DigidawSidechainCompressorSpecs.compressorKnee, suffix: ' dB'),
         ]);
-        final output = _section('OUTPUT & TIMING', [
+        final output = _section(context, 'OUTPUT & TIMING', [
           _knob(
             DigidawSidechainCompressorSpecs.compressorMakeupGain,
             suffix: ' dB',

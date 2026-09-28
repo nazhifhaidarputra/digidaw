@@ -4,9 +4,13 @@ use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use crate::{
     commands::AudioCommand,
     context::DawContext,
-    core::project::{
-        AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView, ModulationSource,
-        automation::{AutomationLane, AutomationTarget},
+    core::{
+        history::actions::AutomationRecorder,
+        project::{
+            AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView,
+            ModulationSource,
+            automation::{AutomationLane, AutomationTarget},
+        },
     },
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
@@ -22,6 +26,7 @@ where
     app.automation_pool.values().map(|a| mapper(a)).collect()
 }
 
+/// Creates an automation lane targeting a parameter on a track-owned mixer or plugin object.
 pub fn add_automation_lane_for_track(
     ctx: &mut DawContext,
     track_id: TrackId,
@@ -29,11 +34,13 @@ pub fn add_automation_lane_for_track(
     label: impl Into<String>,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> anyhow::Result<AutomationLane> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     let (lane, link_id) =
-        app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?;
+        app.add_automation_lane_for_track(track_id, target, label, min, max, initial_value)?;
+    record(ctx, automation_before, "Add Automation Lane");
 
     broadcast_modulation(ctx, link_id)?;
 
@@ -45,16 +52,19 @@ pub fn add_automation_lane_for_track(
     Ok(lane)
 }
 
+/// Inserts a fully specified automation lane and broadcasts it to the audio thread.
 pub fn add_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTarget,
     label: impl Into<String>,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> anyhow::Result<(AutomationLane, ModulationLinkForOrderedLaneView)> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
-    let (lane, link_id) = app.add_automation_lane(target, label, min, max, default_value)?;
+    let (lane, link_id) = app.add_automation_lane(target, label, min, max, initial_value)?;
+    record(ctx, automation_before, "Add Automation Lane");
 
     broadcast_modulation(ctx, link_id)?;
 
@@ -71,6 +81,7 @@ pub fn add_automation_lane(
     Ok((lane, mod_link.clone()))
 }
 
+/// Creates an automation lane targeting a bus mixer or bus-effect parameter.
 pub fn add_automation_lane_for_bus(
     ctx: &mut DawContext,
     bus_id: BusId,
@@ -78,12 +89,14 @@ pub fn add_automation_lane_for_bus(
     label: impl Into<String>,
     min: f64,
     max: f64,
-    default_value: f64,
+    initial_value: f64,
 ) -> anyhow::Result<AutomationLane> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let (lane, link_id) = {
         let app = &mut ctx.app_state;
-        app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
+        app.add_automation_lane_for_bus(bus_id, target, label, min, max, initial_value)?
     };
+    record(ctx, automation_before, "Add Automation Lane");
 
     broadcast_modulation(ctx, link_id)?;
 
@@ -94,15 +107,18 @@ pub fn add_automation_lane_for_bus(
     Ok(lane)
 }
 
+/// Removes an automation lane from project state and the audio-thread graph.
 pub fn remove_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTarget,
 ) -> anyhow::Result<(AutomationId, Vec<ModulationId>, Vec<ModulationLinkId>)> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
 
     let (removed_lane, removed_sources, removed_links) = app
         .remove_automation_lane(target)
         .ok_or_else(|| anyhow::anyhow!("No automation lane found for this target"))?;
+    record(ctx, automation_before, "Remove Automation Lane");
 
     let mut commands = Vec::new();
 
@@ -127,14 +143,32 @@ pub fn remove_automation_lane(
     ))
 }
 
+/// Updates whether an automation lane is linked into playback and republishes it.
+pub fn set_automation_lane_enabled(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    enabled: bool,
+) -> anyhow::Result<AutomationLane> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
+    let lane = ctx
+        .app_state
+        .set_automation_lane_enabled(automation_id, enabled)?;
+    record(ctx, automation_before, "Toggle Automation Lane");
+    ctx.broadcast_automation_lane(automation_id, &lane);
+    Ok(lane)
+}
+
+/// Adds a point to a lane and publishes the rebuilt lane to the audio thread.
 pub fn add_new_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
     time_ticks: u32,
     value: NormalizedF64,
 ) -> anyhow::Result<(AutomationLane, u64)> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     let (auto_lane, point_id) = app.add_automation_point(automation_id, time_ticks, value)?;
+    record(ctx, automation_before, "Add Automation Point");
 
     ctx.broadcast_automation_lane(automation_id, &auto_lane);
 
@@ -142,18 +176,22 @@ pub fn add_new_automation_point(
     Ok((auto_lane, point_id))
 }
 
+/// Removes one point from a lane and republishes the lane snapshot.
 pub fn remove_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
     id: u64,
 ) -> anyhow::Result<AutomationLane> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     let lane = app.remove_automation_point(automation_id, id)?;
+    record(ctx, automation_before, "Remove Automation Point");
 
     ctx.broadcast_automation_lane(automation_id, &lane);
     Ok(lane)
 }
 
+/// Changes an automation point's position or value and republishes the lane snapshot.
 pub fn update_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
@@ -163,15 +201,18 @@ pub fn update_automation_point(
     tension: Option<BipolarF64>,
     curve_type: Option<AutomationCurveType>,
 ) -> anyhow::Result<usize> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
 
     let (lane, new_index) =
         app.update_automation_point(automation_id, id, time_ticks, value, tension, curve_type)?;
+    record(ctx, automation_before, "Edit Automation Point");
 
     ctx.broadcast_automation_lane(automation_id, &lane);
     Ok(new_index)
 }
 
+/// Returns cloned automation lanes whose targets belong to `track_id`.
 pub fn get_automation_lanes_for_track(
     ctx: &DawContext,
     track_id: TrackId,
@@ -180,6 +221,7 @@ pub fn get_automation_lanes_for_track(
     app.get_automation_lanes_for_track(track_id)
 }
 
+/// Returns cloned automation lanes whose targets belong to `bus_id`.
 pub fn get_automation_lanes_for_bus(
     ctx: &DawContext,
     bus_id: BusId,
@@ -188,6 +230,7 @@ pub fn get_automation_lanes_for_bus(
     app.get_automation_lanes_for_bus(bus_id)
 }
 
+/// Returns one automation lane by identifier, or `None` when it is absent.
 pub fn get_automation_lane<Id: Into<AutomationId>>(
     ctx: &DawContext,
     lane_id: Id,
@@ -202,6 +245,7 @@ pub fn get_automation_lane<Id: Into<AutomationId>>(
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
 
 /// Get all modulations in the project
+/// Maps every modulation link whose source matches the supplied modulation identifier.
 pub fn get_all_linked_modulation_params<Id, T, F>(
     ctx: &DawContext,
     f: F,
@@ -217,6 +261,7 @@ where
         .collect()
 }
 
+/// Returns a modulation link by identifier without cloning unrelated project state.
 pub fn get_modulation_link_by_id<Id>(
     ctx: &DawContext,
     id: Id,
@@ -230,16 +275,20 @@ where
 }
 
 /// Add generic modulation source
+/// Inserts a modulation source into project state and queues its audio-thread counterpart.
 pub fn add_modulation_source(ctx: &mut DawContext, source: ModulationSource) -> ModulationId {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let id = {
         let app = &mut ctx.app_state;
         app.add_modulation_source(source.clone())
     };
+    record(ctx, automation_before, "Add Modulation Source");
 
     let _ = ctx.send_audio_command(AudioCommand::AddModulationSource { id, source });
     id
 }
 
+/// Maps all project modulation sources into a caller-selected collection.
 pub fn get_modulation_sources_map<Id, S, C>(ctx: &DawContext) -> C
 where
     Id: From<ModulationId>,
@@ -254,6 +303,7 @@ where
 }
 
 /// Get modulation source based on its modulation id
+/// Returns one borrowed modulation source by a caller-convertible identifier.
 pub fn get_modulation_source<'a, Id, Siuuuu>(
     ctx: &'a DawContext,
     modulation_id: Id,
@@ -271,24 +321,31 @@ where
 
 /// Remove the modulation source. This function also cascade delete all link
 /// with this source
+/// Removes a modulation source, its dependent links, and their audio-thread state.
 pub fn remove_modulation_source(ctx: &mut DawContext, mod_id: ModulationId) {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     {
         let app = &mut ctx.app_state;
         let _ = app.remove_modulation_source(mod_id);
     }
+    record(ctx, automation_before, "Remove Modulation Source");
     let _ = ctx.send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
 }
 
+/// Removes one modulation link from project and audio-thread state.
 pub fn remove_modulation_link(ctx: &mut DawContext, mod_link_id: ModulationLinkId) {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     {
         let app = &mut ctx.app_state;
         let _ = app.remove_modulation_link(mod_link_id);
     }
+    record(ctx, automation_before, "Remove Modulation Link");
 
     let _ = ctx.send_audio_command(AudioCommand::RemoveModulationLink(mod_link_id));
 }
 
 /// Link the target param to a modulation source
+/// Creates a modulation link from a source to an automatable target parameter.
 pub fn link_this_param_to_controller(
     ctx: &mut DawContext,
     source_id: ModulationId,
@@ -296,6 +353,7 @@ pub fn link_this_param_to_controller(
     depth: f32,
     base_value: f32,
 ) -> anyhow::Result<ModulationLinkId> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let (id, link) = {
         let app = &mut ctx.app_state;
         let id = app.link_modulation(source_id, target, depth, base_value)?;
@@ -312,6 +370,7 @@ pub fn link_this_param_to_controller(
             .ok_or_else(|| anyhow::anyhow!("Link not found after insertion"))?;
         (id, link)
     };
+    record(ctx, automation_before, "Link Modulation");
 
     let _ = ctx.send_audio_command(AudioCommand::AddModulationLink { id, link });
     Ok(id)
@@ -342,4 +401,12 @@ fn broadcast_modulation(ctx: &mut DawContext, link_id: ModulationLinkId) -> anyh
 
     // Dispatch the accumulated commands
     ctx.try_send_audio_command_chain(commands)
+}
+
+/// Records what an automation edit changed as one undo step.
+fn record(ctx: &mut DawContext, before: AutomationRecorder, label: &'static str) {
+    let action = before.finish(&ctx.app_state, label);
+    if !action.is_empty() {
+        ctx.push_history(action);
+    }
 }

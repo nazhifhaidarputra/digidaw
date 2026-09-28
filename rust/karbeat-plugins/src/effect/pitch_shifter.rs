@@ -10,7 +10,7 @@ use karbeat_utils::hash::hash_str;
 /// For further information, see https://breakfastquay.com/rubberband/
 #[karbeat_plugin]
 #[derive(Clone, Debug)]
-pub struct Pitcher {
+pub struct PitchShifter {
     // ==========================
     // Pitch shift algorithm engine
     // ==========================
@@ -19,9 +19,11 @@ pub struct Pitcher {
 
     channels: usize,
     sample_rate: f32,
+    reported_latency_samples: u32,
+    latency_pitch_ratio: f32,
 }
 
-impl Default for Pitcher {
+impl Default for PitchShifter {
     fn default() -> Self {
         let mut def = Self::base_default();
         def.channels = 2; // Default to stereo
@@ -31,9 +33,9 @@ impl Default for Pitcher {
 }
 
 #[auto_param]
-impl AudioPlugin for Pitcher {
+impl AudioPlugin for PitchShifter {
     fn name(&self) -> &str {
-        "Digidaw Pitcher"
+        "Digidaw Pitch Shifter"
     }
 
     fn category(&self) -> PluginCategory {
@@ -47,6 +49,8 @@ impl AudioPlugin for Pitcher {
     fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
         self.sample_rate = sample_rate;
         self.pitch_shift_engine.prepare(sample_rate, self.channels);
+        self.reported_latency_samples = self.latency_samples();
+        self.latency_pitch_ratio = self.pitch_shift_engine.pitch_ratio.get();
     }
 
     fn set_io_layout(&mut self, inputs: &[BusConfig], _outputs: &[BusConfig]) {
@@ -74,7 +78,15 @@ impl AudioPlugin for Pitcher {
     }
 
     fn has_latency_changed(&mut self) -> bool {
-        false
+        let pitch_ratio = self.pitch_shift_engine.pitch_ratio.get();
+        if pitch_ratio == self.latency_pitch_ratio {
+            return false;
+        }
+        self.latency_pitch_ratio = pitch_ratio;
+        let current = self.latency_samples();
+        let changed = current != self.reported_latency_samples;
+        self.reported_latency_samples = current;
+        changed
     }
 
     fn process(&mut self, buffers: &mut AudioBuffers, _context: &ProcessContext) {
@@ -123,21 +135,42 @@ impl AudioPlugin for Pitcher {
     }
 }
 
-impl Manifestable for Pitcher {
+impl Manifestable for PitchShifter {
     fn build_manifest() -> PluginManifest {
         PluginManifest {
-            id: hash_str("effect_pitcher"),
-            id_string: "effect_pitcher".to_string(),
-            name: "Pitcher".to_string(),
-            internal_type: "Pitcher".to_string(),
+            id: hash_str("effect_pitch_shifter"),
+            id_string: "effect_pitch_shifter".to_string(),
+            name: "Pitch Shifter".to_string(),
+            internal_type: "PitchShifter".to_string(),
             is_synth: false,
             parameters: Self::static_parameter_specs(),
         }
     }
 }
 
-impl AudioPluginBuilder for Pitcher {
+impl AudioPluginBuilder for PitchShifter {
     fn build() -> Self {
         Self::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reports_pitch_dependent_latency_changes() {
+        let mut plugin = PitchShifter::default();
+        plugin.prepare(48000.0, 512);
+        let initial_latency = plugin.latency_samples();
+        assert!(!plugin.has_latency_changed());
+        plugin.pitch_shift_engine.pitch_ratio.set_base(0.5);
+        plugin
+            .pitch_shift_engine
+            .process_block(&mut [&mut [0.0; 512], &mut [0.0; 512]]);
+        assert_ne!(plugin.latency_samples(), initial_latency);
+        assert!(plugin.has_latency_changed());
+        assert!(!plugin.has_latency_changed());
+        assert_eq!(plugin.tail_samples(), plugin.latency_samples());
     }
 }

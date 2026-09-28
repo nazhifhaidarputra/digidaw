@@ -6,12 +6,16 @@ class AudioTrackSlot extends ConsumerStatefulWidget {
   final ScrollController horizontalScrollController;
   final int sampleRate;
 
+  /// Shrunk tracks render clips as solid blocks showing only their titles.
+  final bool collapsed;
+
   const AudioTrackSlot({
     super.key,
     required this.trackId,
     required this.height,
     required this.horizontalScrollController,
     required this.sampleRate,
+    this.collapsed = false,
   });
 
   @override
@@ -24,6 +28,18 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   List<int> _drawCopyStartTicks = const [];
   bool _isCommittingDrawCopies = false;
   int? _rangePointer;
+
+  int _browserDropTick(Offset globalOffset, double zoomLevel) {
+    final renderBox = context.findRenderObject() as RenderBox;
+    var ticks = (renderBox.globalToLocal(globalOffset).dx * zoomLevel)
+        .clamp(0.0, double.infinity)
+        .round();
+    final workspaceState = ref.read(workspaceStateProvider);
+    if (workspaceState.snapToGrid) {
+      ticks = _snapTick(ticks, workspaceState);
+    }
+    return ticks;
+  }
 
   void _handleEmptySpaceClick({
     required BuildContext context,
@@ -58,7 +74,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     // Clips later in the list are painted on top, so use the same ordering for
     // hit testing in the unlikely event that a project already has overlaps.
     for (final clip in clips.reversed) {
-      final start = clip.startTimeInTicks(tempo, sampleRate);
+      final start = clip.startTimeInTicks;
       final end = start + clip.loopLengthInTicks(tempo, sampleRate);
       if (tick >= start && tick < end) return clip;
     }
@@ -66,16 +82,11 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   }
 
   _ClipTickRange _clipRangeInTicks(UiClip clip, double tempo, int sampleRate) {
-    if (!clip.isSampleBased) {
-      return _ClipTickRange(clip.startTime, clip.startTime + clip.loopLength);
-    }
-
-    final samplesPerTimelineTick = samplesPerTick(tempo, sampleRate);
-    if (samplesPerTimelineTick <= 0) return const _ClipTickRange(0, 0);
-    final start = (clip.startTime / samplesPerTimelineTick).floor();
-    final end = ((clip.startTime + clip.loopLength) / samplesPerTimelineTick)
-        .ceil();
-    return _ClipTickRange(start, end);
+    final start = clip.startTimeInTicks;
+    return _ClipTickRange(
+      start,
+      start + clip.loopLengthInTicks(tempo, sampleRate),
+    );
   }
 
   void _startDrawSwipe({
@@ -193,47 +204,24 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     final sourceIdSet = sourceIds.toSet();
     final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
     final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
-    final snapToGrid = ref.read(workspaceStateProvider).snapToGrid;
-    final isSampleBased = sourceClips.every((clip) => clip.isSampleBased);
     final sourceStart = sourceClips
-        .map((clip) => clip.startTime)
+        .map((clip) => clip.startTimeInTicks)
         .reduce(math.min);
-    final sourceEnd = sourceClips
-        .map((clip) => clip.startTime + clip.loopLength)
-        .reduce(math.max);
-    final sourceLength = sourceEnd - sourceStart;
     final relativeSourceRanges = sourceClips
-        .map(
-          (clip) => _ClipTickRange(
-            clip.startTime - sourceStart,
-            clip.startTime + clip.loopLength - sourceStart,
-          ),
-        )
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
+        .map((range) => range.shifted(-sourceStart))
         .toList(growable: false);
     final occupiedRanges = track.clips
         .where((clip) => !sourceIdSet.contains(clip.id))
-        .map(
-          (clip) =>
-              _ClipTickRange(clip.startTime, clip.startTime + clip.loopLength),
-        )
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
         .toList(growable: false);
     final generatedRanges = sourceClips
-        .map(
-          (clip) =>
-              _ClipTickRange(clip.startTime, clip.startTime + clip.loopLength),
-        )
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
         .toList();
     final pasteStartTimes = <int>[];
 
     for (var index = 0; index < startsInTicks.length; index++) {
-      final pasteStartTime = isSampleBased
-          ? snapToGrid
-                ? ticksToSamples(startsInTicks[index], tempo, sampleRate)
-                // Sample-based clips must be adjacent at sample precision;
-                // round-tripping their length through ticks can otherwise
-                // introduce a one-sample overlap or gap.
-                : sourceEnd + (sourceLength * index)
-          : startsInTicks[index];
+      final pasteStartTime = startsInTicks[index];
       final copyRanges = relativeSourceRanges
           .map((range) => range.shifted(pasteStartTime))
           .toList(growable: false);
@@ -376,10 +364,28 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
     if (track == null) return const SizedBox();
 
-    final trackSlot = DragTarget<List<int>>(
-      onWillAcceptWithDetails: (details) => true,
-      onAcceptWithDetails: (details) {},
+    final trackSlot = DragTarget<Object>(
+      onWillAcceptWithDetails: (details) => switch (details.data) {
+        BrowserSample() => track.trackType == UiTrackType.audio,
+        List<int>() => true,
+        _ => false,
+      },
+      onAcceptWithDetails: (details) {
+        final data = details.data;
+        if (data is! BrowserSample) return;
+        final startTick = _browserDropTick(details.offset, zoomLevel);
+        unawaited(
+          ref
+              .read(trackListStateProvider.notifier)
+              .createAudioClipFromFile(
+                filePath: data.path,
+                trackId: widget.trackId,
+                startTick: startTick,
+              ),
+        );
+      },
       onMove: (details) {
+        if (details.data is BrowserSample) return;
         final renderBox = context.findRenderObject() as RenderBox;
         final localX = renderBox.globalToLocal(details.offset).dx;
 
@@ -396,16 +402,19 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
             .updatePlacementTarget(widget.trackId, ticks);
       },
       builder: (context, candidateData, rejectedData) {
+        final colors = Theme.of(context).colorScheme;
         return Container(
           height: widget.height,
           decoration: BoxDecoration(
             border: Border(
-              bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
-              right: BorderSide(color: Colors.white.withAlpha(16), width: 1),
+              bottom: BorderSide(color: colors.outlineVariant, width: 1),
+              right: BorderSide(color: colors.outlineVariant, width: 1),
             ),
-            color: candidateData.isNotEmpty
-                ? Colors.white.withAlpha(20)
-                : Colors.grey.shade900,
+            color: candidateData.any((data) => data is BrowserSample)
+                ? colors.primary.withValues(alpha: 0.12)
+                : candidateData.isNotEmpty
+                ? colors.onSurface.withValues(alpha: 0.08)
+                : colors.surface.withValues(alpha: 0.72),
           ),
           child: Stack(
             clipBehavior: Clip.none,
@@ -490,6 +499,12 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                               scrollController:
                                   widget.horizontalScrollController,
                               viewportWidth: constraints.maxWidth,
+                              lineColor: colors.onSurface.withValues(
+                                alpha: 0.08,
+                              ),
+                              barLineColor: colors.onSurface.withValues(
+                                alpha: 0.25,
+                              ),
                             ),
                           );
                         },
@@ -509,9 +524,10 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                   clip: clip,
                   trackId: widget.trackId,
                   trackType: track.trackType,
-                  color: track.color.toColor(),
+                  color: track.color.fromRGBorRGBAtoColor(),
                   zoomLevel: zoomLevel,
                   height: widget.height,
+                  compact: widget.collapsed,
                   selectedTool: selectedTool,
                   isSelected: isSelected,
                   selectedClipIds: selectedClipIds,
@@ -528,10 +544,10 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                 final sampleRate =
                     ref.read(transportProvider).value?.sampleRate ?? 48000;
                 final sourceStart = _drawSourceClips
-                    .map((clip) => clip.startTimeInTicks(tempo, sampleRate))
+                    .map((clip) => clip.startTimeInTicks)
                     .reduce(math.min);
                 return _drawSourceClips.map((clip) {
-                  final clipStart = clip.startTimeInTicks(tempo, sampleRate);
+                  final clipStart = clip.startTimeInTicks;
                   final clipLength = clip.loopLengthInTicks(tempo, sampleRate);
                   final previewLeft =
                       (copyStart + clipStart - sourceStart) / zoomLevel;
@@ -546,7 +562,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                         child: _ClipRenderer(
                           clip: clip,
                           trackType: track.trackType,
-                          color: track.color.toColor(),
+                          color: track.color.fromRGBorRGBAtoColor(),
                           zoomLevel: zoomLevel,
                           projectSampleRate: sampleRate,
                           overrideOffset: clip
@@ -556,6 +572,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                           scrollController: widget.horizontalScrollController,
                           clipLeftOffset: previewLeft,
                           waveformMap: waveformMap,
+                          compact: widget.collapsed,
                         ),
                       ),
                     ),

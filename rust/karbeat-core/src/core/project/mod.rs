@@ -1,10 +1,11 @@
-mod index;
 pub mod automation;
 pub mod clip;
 pub mod clipboard;
 pub mod generator;
+mod index;
 pub mod mixer;
 pub mod plugin;
+pub mod session;
 pub mod track;
 pub mod transport;
 
@@ -15,5 +16,6 @@ pub use generator::*;
 pub use index::*;
 pub use mixer::*;
 pub use plugin::*;
+pub use session::SessionState;
 pub use track::*;
 pub use transport::*;

@@ -4,9 +4,11 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
+import 'plugin.dart';
 import 'project.dart';
 import 'track.dart';
 part 'session.freezed.dart';
@@ -14,11 +16,11 @@ part 'session.freezed.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `from`
 
 /// Undo the last action.
-Future<void> undo({required DawContext ctx}) =>
+Future<UiApplicationState> undo({required DawContext ctx}) =>
     RustLib.instance.api.crateApiSessionUndo(ctx: ctx);
 
 /// Redo the last undone action.
-Future<void> redo({required DawContext ctx}) =>
+Future<UiApplicationState> redo({required DawContext ctx}) =>
     RustLib.instance.api.crateApiSessionRedo(ctx: ctx);
 
 /// Copy selected pattern notes to the clipboard.
@@ -90,7 +92,7 @@ Future<void> cutClips({
   clipIds: clipIds,
 );
 
-/// Paste clips from clipboard to a target track at a specified start time.
+/// Paste clips from clipboard to a target track at a specified start tick.
 /// Clips are offset relative to the earliest clip's start time.
 Future<List<UiClip>> pasteClips({
   required DawContext ctx,
@@ -115,7 +117,7 @@ Future<void> deleteClips({
   clipIds: clipIds,
 );
 
-/// Move a clip from one track to another (or within the same track) with a new start time.
+/// Move a clip to a new timeline start tick, optionally changing tracks.
 Future<void> moveClip({
   required DawContext ctx,
   required int oldTrackId,
@@ -130,7 +132,7 @@ Future<void> moveClip({
   newStartTime: newStartTime,
 );
 
-/// Resize a clip by updating its start_time, offset_start, and/or loop_length.
+/// Resize a clip at a timeline tick, updating sample dimensions for audio.
 /// Supports both left (slip edit) and right edge resizing with history support.
 Future<void> resizeClip({
   required DawContext ctx,

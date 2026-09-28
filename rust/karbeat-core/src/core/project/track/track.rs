@@ -1,6 +1,5 @@
 use itertools::Itertools;
-use karbeat_plugin_api::traits::AudioPlugin;
-use karbeat_plugins::registry::PluginRegistry;
+use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
@@ -19,14 +18,21 @@ use karbeat_utils::color::Color;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
+/// Serializable arrangement track and references to its globally owned clips and generator.
 pub struct AudioTrack {
+    /// Stable project track identity.
     pub id: TrackId,
+    /// Stable identity of this track in the routing graph.
     pub graph_node_id: GraphNodeId,
+    /// User-facing track name.
     pub name: String,
+    /// UI color assigned to the track.
     pub color: Color,
+    /// Content category accepted by this track.
     pub track_type: TrackType,
     /// Timeline order only; clip values live in `ApplicationState::clips_pool`.
     pub clips: Vec<ClipId>,
+    /// Optional sound generator used by MIDI clips on this track.
     pub generator: Option<GeneratorInstance>,
     /// ======================================
     /// Track Sorting Order
@@ -52,12 +58,17 @@ impl Default for AudioTrack {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// Content category and role of an arrangement track.
 pub enum TrackType {
+    /// Track containing imported audio clips.
     Audio,
+    /// Track containing MIDI pattern clips and normally a generator.
     Midi,
+    /// Track reserved for automation clip content.
     Automation,
 }
 
+/// Track category returned after a track is removed.
 pub type RemovedTrackType = TrackType;
 
 impl std::str::FromStr for TrackType {
@@ -74,6 +85,7 @@ impl std::str::FromStr for TrackType {
 }
 
 impl AudioTrack {
+    /// Creates an empty track with explicit identity, display properties, and content category.
     pub fn new(id: TrackId, name: &str, color: Color, track_type: TrackType) -> Self {
         Self {
             id,
@@ -95,10 +107,12 @@ impl AudioTrack {
         self.order_idx = new_idx;
     }
 
+    /// Borrows clip IDs in timeline order.
     pub fn clips(&self) -> &[ClipId] {
         &self.clips
     }
 
+    /// Clones this track's clips from the global pool, skipping stale IDs.
     pub fn clips_to_vec(&self, clips_pool: &SlotMap<ClipId, Clip>) -> Vec<Clip> {
         self.clips
             .iter()
@@ -106,10 +120,12 @@ impl AudioTrack {
             .collect()
     }
 
+    /// Borrows the track's content category.
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
 
+    /// Clones a pooled clip only when this track references its ID.
     pub fn get_clip(&self, clips_pool: &SlotMap<ClipId, Clip>, clip_id: &ClipId) -> Option<Clip> {
         self.clips
             .contains(clip_id)
@@ -117,6 +133,7 @@ impl AudioTrack {
             .flatten()
     }
 
+    /// Returns whether the clip source category exactly matches this track's category.
     pub fn accepts_clip(&self, clip: &Clip) -> bool {
         matches!(
             (&self.track_type, &clip.source),
@@ -132,16 +149,13 @@ impl AudioTrack {
         &mut self,
         clip_id: ClipId,
         clips_pool: &SlotMap<ClipId, Clip>,
-    ) -> anyhow::Result<u32> {
+    ) -> anyhow::Result<()> {
         let clip = clips_pool
             .get(clip_id)
             .ok_or_else(|| anyhow::anyhow!("Clip not found in global pool"))?;
         let is_valid = self.accepts_clip(clip);
 
         if is_valid {
-            // Calculate potential new max index BEFORE moving clip (in native units)
-            let clip_end = clip.time.start_time_raw() + clip.time.loop_length_raw();
-
             let start_time = clip.time.start_time_raw();
             let insert_pos = self
                 .clips
@@ -151,8 +165,7 @@ impl AudioTrack {
             // Insert directly at the sorted position (O(N) memory shift, highly cache-friendly)
             self.clips.insert(insert_pos, clip_id);
 
-            // Return the end sample of this new clip
-            return Ok(clip_end as u32);
+            return Ok(());
         } else {
             return Err(anyhow::anyhow!(
                 "Warning: Mismatched Clip Source for Track Type"
@@ -252,6 +265,7 @@ impl ApplicationState {
         }
     }
 
+    /// Creates an audio track after the current final UI order and adds its mixer routing.
     pub fn add_new_audio_track(&mut self) -> AudioTrack {
         let track_order = self
             .tracks
@@ -292,7 +306,7 @@ impl ApplicationState {
         &mut self,
         registry: &mut PluginRegistry,
         registry_id: u32,
-    ) -> anyhow::Result<(AudioTrack, GeneratorId, Box<dyn AudioPlugin + Send + Sync>)> {
+    ) -> anyhow::Result<(AudioTrack, GeneratorId, PluginFactory)> {
         // Create the plugin via registry using ID
         let (generator_plugin, generator_name) = {
             if let Some((generator_box, name)) = registry.create_plugin_by_id(registry_id) {
@@ -371,7 +385,8 @@ impl ApplicationState {
 
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
-            self.generator_pool.remove(gen_id);
+            self.remove_modulations_for_generator(gen_id);
+            self.generator_pool.detach(gen_id);
             deleted_track_type = RemovedTrackType::Midi;
         }
 
@@ -379,11 +394,11 @@ impl ApplicationState {
         self.remove_modulations_for_track(track_id);
 
         // Remove the track and its globally-owned clips.
-        let Some(track) = self.tracks.remove(track_id) else {
+        let Some(track) = self.tracks.detach(track_id) else {
             return Err(anyhow::anyhow!("Track {:?} not found", track_id));
         };
         for clip_id in track.clips {
-            self.clips_pool.remove(clip_id);
+            self.clips_pool.detach(clip_id);
         }
 
         self.normalize_track_orders();
@@ -392,6 +407,7 @@ impl ApplicationState {
     }
 
     // Get the track ordered by index
+    /// Returns cloned tracks sorted by their persisted UI order index.
     pub fn get_track_ordered_by_index(&self) -> Box<[AudioTrack]> {
         self.tracks
             .values()

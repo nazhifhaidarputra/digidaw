@@ -19,6 +19,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   late LinkedScrollControllerGroup _verticalControllers;
   late ScrollController _headerController;
   late ScrollController _timelineController;
+  late final ValueNotifier<List<int>> _trackOrderController;
+  List<int>? _trackOrderBeforeDrag;
+  int? _draggedTrackId;
 
   // Horizontal Scrolling (Ruler <-> Tracks)
   late LinkedScrollControllerGroup _horizontalControllers;
@@ -27,6 +30,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   // Sample Browser scroll controller (not linked with other scroll controller like the header and audio slot)
   late ScrollController _browserPanelController;
+  ProviderSubscription<bool>? _browserPanelSubscription;
+  late final DawContext _dawContext;
 
   late MultiSplitViewController _trackSplitViewController;
 
@@ -53,10 +58,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   @override
   void initState() {
     super.initState();
+    _dawContext = ref.read(projectProvider.notifier).dawContext;
+    _trackOrderController = ValueNotifier(List.unmodifiable(widget.trackIds));
+    final browserExpanded = ref.read(
+      workspaceStateProvider.select(
+        (state) => state.browserPanelState.isExpanded,
+      ),
+    );
     _trackSplitViewController = MultiSplitViewController(
       areas: [
-        Area(size: widget.headerWidth, min: 80, max: 240, data: 'header'),
+        Area(size: widget.headerWidth, min: 160, max: 300, data: 'header'),
         Area(min: 200, data: 'timeline'),
+        if (browserExpanded)
+          Area(size: 300, min: 220, max: 480, data: 'browser'),
       ],
     );
 
@@ -67,18 +81,64 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _horizontalControllers = LinkedScrollControllerGroup();
     _rulerController = _horizontalControllers.addAndGet();
     _trackContentController = _horizontalControllers.addAndGet();
+    _browserPanelController = ScrollController();
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
+    _browserPanelSubscription = ref.listenManual<bool>(
+      workspaceStateProvider.select(
+        (state) => state.browserPanelState.isExpanded,
+      ),
+      (_, isExpanded) => _setBrowserPanelExpanded(isExpanded),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _SplitTrackView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_draggedTrackId == null &&
+        !listEquals(_trackOrderController.value, widget.trackIds)) {
+      _trackOrderController.value = List.unmodifiable(widget.trackIds);
+    }
+  }
+
+  void _setBrowserPanelExpanded(bool isExpanded) {
+    final browserIndex = _trackSplitViewController.areas.indexWhere(
+      (area) => area.data == 'browser',
+    );
+    if (isExpanded && browserIndex == -1) {
+      _trackSplitViewController.addArea(
+        Area(size: 300, min: 220, max: 480, data: 'browser'),
+      );
+    } else if (!isExpanded && browserIndex != -1) {
+      _trackSplitViewController.removeAreaAt(browserIndex);
+    }
+  }
+
+  Future<void> _stopBrowserPreviews() async {
+    try {
+      await audio_api.stopAllPreviews(ctx: _dawContext);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to stop browser sample previews during track view teardown',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   @override
   void dispose() {
+    _browserPanelSubscription?.close();
+    _trackOrderController.dispose();
     _trackSplitViewController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
     _headerController.dispose();
     _timelineController.dispose();
     _rulerController.dispose();
     _trackContentController.dispose();
+    _browserPanelController.dispose();
+    unawaited(_stopBrowserPreviews());
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvents);
     super.dispose();
   }
 
@@ -138,8 +198,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     for (final track in tracks) {
       for (final clip in track.clips) {
         final endTick =
-            clip.startTimeInTicks(tempo, sampleRate) +
-            clip.loopLengthInTicks(tempo, sampleRate);
+            clip.startTimeInTicks + clip.loopLengthInTicks(tempo, sampleRate);
         if (endTick > maxContentTicks) {
           maxContentTicks = endTick.toDouble();
         }
@@ -199,6 +258,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   /// Helper method to build the cut helper line
   Widget _buildCutHelperLine(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final state = ref.watch(workspaceStateProvider);
     if (_mousePos == null || state.selectedTool != ToolSelection.slice) {
       return const SizedBox();
@@ -236,11 +296,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         child: Column(
           children: [
             const SizedBox(height: 10), // Padding above ruler
-            const Icon(Icons.content_cut, color: Colors.redAccent, size: 16),
+            Icon(Icons.content_cut, color: colors.error, size: 16),
             Expanded(
               child: Container(
                 width: 1.5,
-                color: Colors.redAccent.withAlpha(200),
+                color: colors.error.withValues(alpha: 0.8),
               ),
             ),
           ],
@@ -251,23 +311,24 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   Widget _buildToolbar() {
     final workspaceState = ref.watch(workspaceStateProvider);
+    final colors = Theme.of(context).colorScheme;
     return Container(
       height: 36,
-      color: Colors.grey.shade900,
+      color: colors.surfaceContainerLow,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            const Text(
+            Text(
               "Snap to Grid",
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(width: 8),
             DropdownButton<GridSize>(
               value: workspaceState.gridSize,
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: GridSize.values.map((size) {
                 final label = size.label;
@@ -283,15 +344,37 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               },
             ),
             const SizedBox(width: 16),
-            const Text(
+            TextButton.icon(
+              onPressed: () => ref
+                  .read(workspaceStateProvider.notifier)
+                  .toggleBrowserPanel(),
+              icon: Icon(
+                Icons.library_music,
+                size: 16,
+                color: workspaceState.browserPanelState.isExpanded
+                    ? colors.primary
+                    : colors.onSurfaceVariant,
+              ),
+              label: Text(
+                'Samples',
+                style: TextStyle(
+                  color: workspaceState.browserPanelState.isExpanded
+                      ? colors.primary
+                      : colors.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
               "Move Step",
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(width: 8),
             DropdownButton<MusicalBeatSize>(
               value: workspaceState.horizontalClipShiftSizeDenom,
-              dropdownColor: Colors.grey.shade800,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: MusicalBeatSize.values.map((size) {
                 return DropdownMenuItem<MusicalBeatSize>(
@@ -313,17 +396,128 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  /// Maps a Y offset (scroll offset included) to the index of the track
+  /// occupying it, taking per-track heights into account.
+  int _trackIndexAtY(double y) {
+    final trackListState = ref.read(trackListStateProvider);
+    final trackIds = _trackOrderController.value;
+    if (trackIds.isEmpty) return 0;
+    double top = 0;
+    for (var i = 0; i < trackIds.length; i++) {
+      final h = _trackHeightOf(trackListState, trackIds[i]);
+      if (y < top + h) return i;
+      top += h;
+    }
+    return trackIds.length - 1;
+  }
+
+  /// Effective arranger row height of a track, honoring shrunk tracks.
+  double _trackHeightOf(TrackListState state, int trackId) =>
+      state.collapsedTrackIds.contains(trackId)
+      ? TrackListNotifier.collapsedLaneHeight
+      : (state.trackIdHeightMap.get(trackId) ?? widget.itemHeight).toDouble();
+
+  /// Header side of one automation lane. Mirrors
+  /// [_buildAutomationLaneTimelineRow] so both sides share the same height.
+  Widget _buildAutomationLaneHeaderRow(
+    ChannelAutomationEntry entry,
+    Color trackColor,
+  ) {
+    return Consumer(
+      key: ValueKey(('automation-header', entry.laneId)),
+      builder: (context, ref, _) {
+        final layout = ref.watch(automationLaneLayoutProvider(entry.laneId));
+        final notifier = ref.read(automationProvider.notifier);
+        return Stack(
+          children: [
+            AutomationLaneContextMenu(
+              entry: entry,
+              child: AutomationLaneHeader(
+                lane: entry.lane,
+                itemHeight: layout.height,
+                trackColor: trackColor,
+                collapsed: layout.collapsed,
+                onToggleCollapsed: () => notifier.toggleAutomationLaneCollapsed(
+                  laneId: entry.laneId,
+                ),
+                onToggleEnabled: () => notifier.handleSetAutomationLaneEnabled(
+                  laneId: entry.laneId,
+                  enabled: !entry.lane.enabled,
+                ),
+              ),
+            ),
+            if (!layout.collapsed)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: HeaderResizeHandle(
+                  onDelta: (dy) => notifier.changeAutomationLaneHeight(
+                    laneId: entry.laneId,
+                    newHeight:
+                        (ref
+                                    .read(
+                                      automationLaneLayoutProvider(
+                                        entry.laneId,
+                                      ),
+                                    )
+                                    .height +
+                                dy)
+                            .round(),
+                  ),
+                  onReset: () =>
+                      notifier.resetAutomationLaneHeight(laneId: entry.laneId),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Timeline side of one automation lane; shrunk lanes show only a title.
+  Widget _buildAutomationLaneTimelineRow(
+    ChannelAutomationEntry entry,
+    Color trackColor,
+    int sampleRate,
+  ) {
+    return Consumer(
+      key: ValueKey(('automation-timeline', entry.laneId)),
+      builder: (context, ref, _) {
+        final layout = ref.watch(automationLaneLayoutProvider(entry.laneId));
+        return AutomationLaneContextMenu(
+          entry: entry,
+          child: layout.collapsed
+              ? AutomationLaneCollapsedSlot(
+                  lane: entry.lane,
+                  height: layout.height,
+                  horizontalScrollController: _trackContentController,
+                  trackColor: trackColor,
+                )
+              : AutomationLaneSlot(
+                  lane: entry.lane,
+                  height: layout.height,
+                  horizontalScrollController: _trackContentController,
+                  trackColor: trackColor,
+                  sampleRate: sampleRate,
+                ),
+        );
+      },
+    );
+  }
+
   Widget _buildHeaderArea() {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         Container(
           height: 30,
-          color: Colors.grey.shade800,
+          color: colors.surfaceContainer,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.only(left: 10),
-          child: const Text(
+          child: Text(
             "Tracks",
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: colors.onSurface, fontSize: 12),
           ),
         ),
         Expanded(
@@ -332,54 +526,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             slivers: [
               SliverToBoxAdapter(child: _buildMasterHeader()),
               _buildBusAutomationHeaderSection(),
-              SliverList.builder(
-                itemCount: widget.trackIds.length,
-                itemBuilder: (context, index) {
-                  final trackId = widget.trackIds[index];
-                  return Consumer(
-                    builder: (context, ref, _) {
-                      final isExpanded = ref.watch(
-                        trackAutomationExpandedProvider(trackId),
-                      );
-                      final lanes = ref.watch(
-                        trackAutomationProvider(trackId),
-                      ); // Using the API from previous steps
-                      final trackColor = ref.watch(
-                        projectProvider.select(
-                          (s) =>
-                              s.value?.tracks[trackId]?.color.toColor() ??
-                              Colors.grey,
-                        ),
-                      );
-
-                      return Column(
-                        children: [
-                          TrackHeader(
-                            trackId: trackId,
-                            itemHeight: widget.itemHeight,
-                          ),
-                          if (lanes.isNotEmpty)
-                            AutomationExpandBar(
-                              isExpanded: isExpanded,
-                              laneCount: lanes.length,
-                              trackColor: trackColor,
-                              onTap: () => ref
-                                  .read(automationProvider.notifier)
-                                  .toggleTrackAutomationExpanded(trackId),
-                            ),
-                          if (isExpanded)
-                            ...lanes.map(
-                              (entry) => AutomationLaneHeader(
-                                lane: entry.$3,
-                                itemHeight: 60,
-                                trackColor: trackColor,
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  );
-                },
+              ValueListenableBuilder<List<int>>(
+                valueListenable: _trackOrderController,
+                builder: (context, trackIds, _) => SliverList.builder(
+                  itemCount: trackIds.length,
+                  findChildIndexCallback: _findTrackIndex,
+                  itemBuilder: (context, index) =>
+                      _buildHeaderItem(context, trackIds, index),
+                ),
               ),
               SliverToBoxAdapter(child: _buildAddButton()),
             ],
@@ -389,14 +543,161 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  Widget _buildHeaderItem(BuildContext context, List<int> trackIds, int index) {
+    final trackId = trackIds[index];
+    final colors = Theme.of(context).colorScheme;
+
+    return DragTarget<int>(
+      key: ValueKey(trackId),
+      onWillAcceptWithDetails: (details) {
+        _previewTrackOrder(details.data, index);
+        return true;
+      },
+      onAcceptWithDetails: (details) {
+        unawaited(_commitTrackOrder(details.data));
+      },
+      builder: (context, _, _) => Consumer(
+        builder: (context, ref, _) {
+          final isExpanded = ref.watch(
+            trackAutomationExpandedProvider(trackId),
+          );
+          final lanes = ref.watch(trackAutomationProvider(trackId));
+          final trackColor = ref.watch(
+            projectProvider.select(
+              (s) =>
+                  s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
+                  colors.onSurfaceVariant,
+            ),
+          );
+
+          final height = ref.watch(
+            trackListStateProvider.select((s) => _trackHeightOf(s, trackId)),
+          );
+          final isCollapsed = ref.watch(
+            trackListStateProvider.select(
+              (s) => s.collapsedTrackIds.contains(trackId),
+            ),
+          );
+
+          return Column(
+            children: [
+              Stack(
+                children: [
+                  TrackHeader(
+                    trackId: trackId,
+                    itemHeight: height,
+                    onDragStarted: () => _startTrackDrag(trackId),
+                    onDragEnded: _endTrackDrag,
+                  ),
+                  if (!isCollapsed)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: HeaderResizeHandle(
+                        onDelta: (dy) => _onHeaderResize(trackId, dy),
+                        onReset: () => _onHeaderResizeReset(trackId),
+                      ),
+                    ),
+                ],
+              ),
+              if (lanes.isNotEmpty)
+                AutomationExpandBar(
+                  isExpanded: isExpanded,
+                  laneCount: lanes.length,
+                  trackColor: trackColor,
+                  onTap: () => ref
+                      .read(automationProvider.notifier)
+                      .toggleTrackAutomationExpanded(trackId),
+                ),
+              if (isExpanded)
+                ...lanes.map(
+                  (entry) => _buildAutomationLaneHeaderRow(entry, trackColor),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _onHeaderResize(int trackId, double dy) {
+    final current =
+        ref
+            .read(trackListStateProvider)
+            .trackIdHeightMap
+            .get(trackId)
+            ?.toDouble() ??
+        widget.itemHeight;
+    ref
+        .read(trackListStateProvider.notifier)
+        .changeHeight(trackId: trackId, newHeight: (current + dy).round());
+  }
+
+  void _onHeaderResizeReset(int trackId) {
+    ref
+        .read(trackListStateProvider.notifier)
+        .resetTrackHeight(trackId: trackId);
+  }
+
+  int? _findTrackIndex(Key key) {
+    if (key is! ValueKey<int>) return null;
+    final index = _trackOrderController.value.indexOf(key.value);
+    return index == -1 ? null : index;
+  }
+
+  void _startTrackDrag(int trackId) {
+    _draggedTrackId = trackId;
+    _trackOrderBeforeDrag = _trackOrderController.value;
+  }
+
+  void _previewTrackOrder(int trackId, int newIndex) {
+    if (_draggedTrackId != trackId) return;
+    final trackIds = _trackOrderController.value;
+    final oldIndex = trackIds.indexOf(trackId);
+    if (oldIndex == -1 || oldIndex == newIndex) return;
+
+    final reordered = List<int>.from(trackIds)
+      ..removeAt(oldIndex)
+      ..insert(newIndex, trackId);
+    _trackOrderController.value = List.unmodifiable(reordered);
+  }
+
+  Future<void> _commitTrackOrder(int trackId) async {
+    if (_draggedTrackId != trackId) return;
+    final newIndex = _trackOrderController.value.indexOf(trackId);
+    _draggedTrackId = null;
+    _trackOrderBeforeDrag = null;
+    if (newIndex == -1) return;
+
+    AppLogger.info("Update track order requested for track ID: $trackId");
+    final result = await ref
+        .read(trackListStateProvider.notifier)
+        .handleUpdateTrackOrder(trackId: trackId, newIdx: newIndex);
+    if (mounted && result.isErr()) {
+      _trackOrderController.value = List.unmodifiable(widget.trackIds);
+    }
+  }
+
+  void _endTrackDrag(bool wasAccepted) {
+    if (wasAccepted) return;
+    final previousOrder = _trackOrderBeforeDrag;
+    _draggedTrackId = null;
+    _trackOrderBeforeDrag = null;
+    if (previousOrder != null) {
+      _trackOrderController.value = previousOrder;
+    }
+  }
+
   Consumer _buildMasterHeader() {
     return Consumer(
       builder: (context, ref, _) {
+        final colors = Theme.of(context).colorScheme;
         final lanes = ref.watch(masterAutomationProvider).toIList();
         final isExpanded = ref
             .watch(automationProvider)
             .isMasterAutomationDrawerOpened;
-        final trackColor = const Color.fromRGBO(200, 100, 50, 1.0);
+        final trackColor = colors.tertiary;
 
         if (lanes.isEmpty) return const SizedBox();
 
@@ -407,11 +708,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               height: 30,
               alignment: Alignment.centerLeft,
               padding: const EdgeInsets.only(left: 10),
-              color: Colors.grey.shade900,
-              child: const Text(
+              color: colors.surfaceContainerLow,
+              child: Text(
                 "Master Track",
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colors.onSurface,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -429,17 +730,37 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ...lanes.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 4.0),
-                  child: AutomationLaneHeader(
-                    lane: entry.$3,
-                    itemHeight: 60,
-                    trackColor: trackColor,
-                  ),
+                  child: _buildAutomationLaneHeaderRow(entry, trackColor),
                 ),
               ),
           ],
         );
       },
     );
+  }
+
+  /// Seeks to the ruler position under [localX], snapped to the grid while
+  /// snap-to-grid is on.
+  void _seekFromRuler(double localX) {
+    final scrollX = _rulerController.hasClients ? _rulerController.offset : 0.0;
+    final workspaceState = ref.read(workspaceStateProvider);
+    final ticks = ((localX + scrollX) * workspaceState.horizontalZoomLevel)
+        .round();
+    _seekToTicks(_snapTick(ticks, workspaceState));
+  }
+
+  void _seekToTicks(int ticks) {
+    final pos = ref.read(transportPositionStreamProvider).value;
+    if (pos == null) return;
+    final tempo = pos.tempo;
+    final sampleRate = pos.sampleRate;
+    if (tempo <= 0 || sampleRate <= 0) return;
+    final safeTicks = ticks < 0 ? 0 : ticks;
+    final samples = (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
+    AppLogger.info(
+      "[UI Seek] safeTicks=$safeTicks, tempo=$tempo, sr=$sampleRate -> samples=$samples",
+    );
+    ref.read(transportProvider.notifier).seekTo(samples);
   }
 
   Widget _buildTimelineArea(BuildContext context) {
@@ -464,52 +785,18 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
 
     return Stack(
+      clipBehavior: Clip.none,
       children: [
         Column(
           children: [
             GestureDetector(
-              onTapDown: (details) {
-                double scrollX = _rulerController.hasClients
-                    ? _rulerController.offset
-                    : 0;
-                double absoluteX = details.localPosition.dx + scrollX;
-                final ticks = absoluteX * horizontalZoom;
-
-                final pos = ref.read(transportPositionStreamProvider).value;
-                if (pos == null) return;
-
-                final sr = pos.sampleRate;
-                final tempo = pos.tempo;
-
-                final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
-                AppLogger.info(
-                  "[UI Seek] onTapDown: absoluteX=$absoluteX, ticks=$ticks, tempo=$tempo, sr=$sr -> samples=$samples",
-                );
-                ref.read(transportProvider.notifier).seekTo(samples);
-              },
-              onPanUpdate: (details) {
-                // Throttled by the TransportNotifier's seekTo queue implementation
-                double scrollX = _rulerController.hasClients
-                    ? _rulerController.offset
-                    : 0;
-                double absoluteX = details.localPosition.dx + scrollX;
-                final ticks = absoluteX * horizontalZoom;
-
-                final pos = ref.read(transportPositionStreamProvider).value;
-                if (pos == null) return;
-
-                final sr = pos.sampleRate;
-                final tempo = pos.tempo;
-
-                final samples = (ticks * (60.0 / tempo) * (sr / 960.0)).round();
-                AppLogger.info(
-                  "[UI Seek] onPanUpdate: absoluteX=$absoluteX, ticks=$ticks, tempo=$tempo, sr=$sr -> samples=$samples",
-                );
-                ref.read(transportProvider.notifier).seekTo(samples);
-              },
+              onTapDown: (details) => _seekFromRuler(details.localPosition.dx),
+              // Throttled by the TransportNotifier's seekTo queue implementation
+              onPanUpdate: (details) =>
+                  _seekFromRuler(details.localPosition.dx),
               child: Container(
                 height: 30,
-                color: Colors.grey.shade800,
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 width: double.infinity,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -643,16 +930,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                           : 0;
                                       double absoluteY = targetPos.dy + scrollY;
 
-                                      if (widget.trackIds.isEmpty) return;
-                                      int trackIndex =
-                                          (absoluteY / widget.itemHeight)
-                                              .floor();
-                                      trackIndex = trackIndex.clamp(
-                                        0,
-                                        widget.trackIds.length - 1,
+                                      final trackIds =
+                                          _trackOrderController.value;
+                                      if (trackIds.isEmpty) return;
+                                      final trackIndex = _trackIndexAtY(
+                                        absoluteY,
                                       );
                                       final targetTrackId =
-                                          widget.trackIds[trackIndex];
+                                          trackIds[trackIndex];
                                       final track = ref
                                           .read(projectProvider)
                                           .value
@@ -677,30 +962,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                         ).toDouble();
                                       }
 
-                                      int pasteStartTime;
-                                      if (track.trackType ==
-                                          UiTrackType.audio) {
-                                        final sr =
-                                            ref
-                                                .read(transportProvider)
-                                                .value
-                                                ?.sampleRate ??
-                                            48000;
-                                        final tempo =
-                                            ref
-                                                .read(transportProvider)
-                                                .value
-                                                ?.state
-                                                ?.bpm ??
-                                            120.0;
-                                        pasteStartTime = ticksToSamples(
-                                          ticks.toInt(),
-                                          tempo,
-                                          sr,
-                                        );
-                                      } else {
-                                        pasteStartTime = ticks.toInt();
-                                      }
+                                      final pasteStartTime = ticks.toInt();
 
                                       final result = await ref
                                           .read(trackListStateProvider.notifier)
@@ -761,61 +1023,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               scrollController: _trackContentController,
               zoomLevel: horizontalZoom,
               sampleSelector: (pos) => pos.ticks,
-              onSeek: (int newTicks) {
-                final pos = ref.read(transportPositionStreamProvider).value;
-                if (pos == null) return;
-                final tempo = pos.tempo;
-                final sampleRate = pos.sampleRate;
-                if (tempo <= 0 || sampleRate <= 0) return;
-                final safeTicks = newTicks < 0 ? 0 : newTicks;
-                final samples =
-                    (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
-                AppLogger.info(
-                  "[UI Seek] onSeek: safeTicks=$safeTicks, tempo=$tempo, sr=$sampleRate -> samples=$samples",
-                );
-                ref.read(transportProvider.notifier).seekTo(samples);
-              },
+              snapPosition: (ticks) => _snapTick(ticks, workspaceState),
+              onSeek: _seekToTicks,
             ),
           ),
         ),
 
-        // if (isPlacing)
-        //   Positioned(
-        //     bottom: 30,
-        //     right: 30,
-        //     child: Row(
-        //       children: [
-        //         FloatingActionButton.extended(
-        //           heroTag: 'cancel_place',
-        //           label: const Text("Cancel"),
-        //           icon: const Icon(Icons.close),
-        //           backgroundColor: Colors.redAccent,
-        //           onPressed: () {
-        //             ref.read(clipPlacementProvider.notifier).cancelPlacement();
-        //           },
-        //         ),
-        //         const SizedBox(width: 16),
-        //         FloatingActionButton.extended(
-        //           heroTag: 'confirm_place',
-        //           onPressed: () async {
-        //             final result = await ref
-        //                 .read(clipPlacementProvider.notifier)
-        //                 .confirmPlacement();
-        //             if (result.isErr() && context.mounted) {
-        //               ScaffoldMessenger.of(context).showSnackBar(
-        //                 SnackBar(
-        //                   content: Text((result as Error).toErrorMessage()),
-        //                 ),
-        //               );
-        //             }
-        //           },
-        //           label: const Text('Confirm'),
-        //           icon: const Icon(Icons.check),
-        //           backgroundColor: Colors.greenAccent,
-        //         ),
-        //       ],
-        //     ),
-        //   ),
         if (selectedClipIds.isNotEmpty)
           FloatingContextPanel(
             actions: [
@@ -874,56 +1087,73 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildTimelineTrackWidget() {
-    return SliverList.builder(
-      itemCount: widget.trackIds.length,
-      itemBuilder: (context, index) {
-        final trackId = widget.trackIds[index];
-        return Consumer(
-          builder: (context, ref, _) {
-            final isExpanded = ref.watch(
-              trackAutomationExpandedProvider(trackId),
-            );
-            final lanes = ref.watch(trackAutomationProvider(trackId));
-            final trackColor = ref.watch(
-              projectProvider.select(
-                (s) => s.value?.tracks[trackId]?.color.toColor() ?? Colors.grey,
-              ),
-            );
-
-            final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
-
-            return Column(
-              children: [
-                AudioTrackSlot(
-                  trackId: trackId,
-                  height: widget.itemHeight,
-                  horizontalScrollController: _trackContentController,
-                  sampleRate: sr,
+    return ValueListenableBuilder<List<int>>(
+      valueListenable: _trackOrderController,
+      builder: (context, trackIds, _) => SliverList.builder(
+        itemCount: trackIds.length,
+        findChildIndexCallback: _findTrackIndex,
+        itemBuilder: (context, index) {
+          final trackId = trackIds[index];
+          return Consumer(
+            key: ValueKey(trackId),
+            builder: (context, ref, _) {
+              final isExpanded = ref.watch(
+                trackAutomationExpandedProvider(trackId),
+              );
+              final lanes = ref.watch(trackAutomationProvider(trackId));
+              final trackColor = ref.watch(
+                projectProvider.select(
+                  (s) =>
+                      s.value?.tracks[trackId]?.color.fromRGBorRGBAtoColor() ??
+                      Theme.of(context).colorScheme.outline,
                 ),
-                if (lanes.isNotEmpty)
-                  AutomationExpandBar(
-                    isExpanded: isExpanded,
-                    laneCount: lanes.length,
-                    trackColor: trackColor,
-                    onTap: () => ref
-                        .read(automationProvider.notifier)
-                        .toggleTrackAutomationExpanded(trackId),
+              );
+
+              final height = ref.watch(
+                trackListStateProvider.select(
+                  (s) => _trackHeightOf(s, trackId),
+                ),
+              );
+              final isCollapsed = ref.watch(
+                trackListStateProvider.select(
+                  (s) => s.collapsedTrackIds.contains(trackId),
+                ),
+              );
+
+              final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
+
+              return Column(
+                children: [
+                  AudioTrackSlot(
+                    trackId: trackId,
+                    height: height,
+                    collapsed: isCollapsed,
+                    horizontalScrollController: _trackContentController,
+                    sampleRate: sr,
                   ),
-                if (isExpanded)
-                  ...lanes.map(
-                    (entry) => AutomationLaneSlot(
-                      lane: entry.$3,
-                      height: 60,
-                      horizontalScrollController: _trackContentController,
+                  if (lanes.isNotEmpty)
+                    AutomationExpandBar(
+                      isExpanded: isExpanded,
+                      laneCount: lanes.length,
                       trackColor: trackColor,
-                      sampleRate: sr,
+                      onTap: () => ref
+                          .read(automationProvider.notifier)
+                          .toggleTrackAutomationExpanded(trackId),
                     ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
+                  if (isExpanded)
+                    ...lanes.map(
+                      (entry) => _buildAutomationLaneTimelineRow(
+                        entry,
+                        trackColor,
+                        sr,
+                      ),
+                    ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -934,7 +1164,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         final isExpanded = ref
             .watch(automationProvider)
             .isMasterAutomationDrawerOpened;
-        final trackColor = const Color.fromRGBO(200, 100, 50, 1.0);
+        final trackColor = Theme.of(context).colorScheme.tertiary;
         final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
         if (lanes.isEmpty) return const SizedBox();
@@ -956,13 +1186,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ...lanes.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(top: 4.0),
-                  child: AutomationLaneSlot(
-                    lane: entry.$3,
-                    height: 60,
-                    horizontalScrollController: _trackContentController,
-                    trackColor: trackColor,
-                    sampleRate: sr,
-                  ),
+                  child: _buildAutomationLaneTimelineRow(entry, trackColor, sr),
                 ),
               ),
           ],
@@ -972,16 +1196,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildAddButton() {
+    final colors = Theme.of(context).colorScheme;
     return SizedBox(
       height: 60,
       child: Center(
         child: TextButton.icon(
           onPressed: () => _showAddTrackDialog(context),
-          icon: const Icon(Icons.add, color: Colors.white54),
-          label: const Text(
-            "Add New Track",
-            style: TextStyle(color: Colors.white54),
-          ),
+          icon: Icon(Icons.add, color: colors.primary),
+          label: Text("Add New Track", style: TextStyle(color: colors.primary)),
         ),
       ),
     );
@@ -1007,11 +1229,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 },
               );
             },
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.graphic_eq, color: Colors.cyanAccent),
-                SizedBox(width: 10),
-                Text("Audio Track"),
+                Icon(
+                  Icons.graphic_eq,
+                  color: Theme.of(ctx).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                const Text("Audio Track"),
               ],
             ),
           ),
@@ -1021,11 +1246,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               Navigator.pop(ctx);
               _showGeneratorBrowser(context);
             },
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.piano, color: Colors.orangeAccent),
-                SizedBox(width: 10),
-                Text("Add generator..."),
+                Icon(Icons.piano, color: Theme.of(ctx).colorScheme.tertiary),
+                const SizedBox(width: 10),
+                const Text("Add generator..."),
               ],
             ),
           ),
@@ -1035,124 +1260,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   void _showGeneratorBrowser(BuildContext context) async {
-    final availablePlugins = await ref
-        .read(audioPluginProvider.notifier)
-        .getAvailableGenerators();
-
-    if (!context.mounted) return;
-
-    showDialog(
+    await showPluginBrowserDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Generator Browser"),
-        contentPadding: const EdgeInsets.only(top: 12, bottom: 24),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Category header: Karbeat Native
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.extension,
-                      size: 16,
-                      color: Colors.deepOrangeAccent,
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.deepOrangeAccent.withAlpha(30),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: Colors.deepOrangeAccent.withAlpha(80),
-                        ),
-                      ),
-                      child: const Text(
-                        "Karbeat Native",
-                        style: TextStyle(
-                          color: Colors.deepOrangeAccent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              // Plugin list
-              if (availablePlugins.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Text(
-                    "No generators found",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                )
-              else
-                ...availablePlugins.map(
-                  (plugin) => _buildGeneratorBrowserItem(ctx, plugin),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGeneratorBrowserItem(BuildContext ctx, UiPluginInfo plugin) {
-    return InkWell(
-      onTap: () {
-        Navigator.pop(ctx);
-        ref
-            .read(trackListStateProvider.notifier)
-            .addMidiTrackWithGeneratorId(plugin.id);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-        child: Row(
-          children: [
-            const Icon(Icons.piano, color: Colors.orangeAccent, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    plugin.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    "Karbeat Native",
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      pluginType: KarbeatPluginType.generator,
+      onAdd: (plugin) => ref
+          .read(trackListStateProvider.notifier)
+          .addMidiTrackWithGeneratorId(plugin.registryId),
     );
   }
 
@@ -1180,25 +1293,37 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
-                final trackColor =
-                    Colors.teal.shade400; // Distinct color for Buses
+                final trackColor = bus.color.fromRGBorRGBAtoColor();
 
                 if (lanes.isEmpty) return const SizedBox.shrink();
 
                 return Column(
                   children: [
                     // Bus Title Header
-                    Container(
-                      height: 30,
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.only(left: 10),
-                      color: Colors.grey.shade800,
-                      child: Text(
-                        bus.name,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                    ContextMenuWrapper(
+                      title: 'Bus $busId',
+                      header: Column(children: [Text(bus.name)]),
+                      actions: busIdentityActions(
+                        context: context,
+                        ref: ref,
+                        busId: busId,
+                        name: bus.name,
+                        color: trackColor,
+                      ),
+                      child: Container(
+                        height: 30,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.only(left: 10),
+                        color: trackColor,
+                        child: Text(
+                          bus.name,
+                          style: TextStyle(
+                            color: trackColor.computeLuminance() > 0.5
+                                ? Colors.black
+                                : Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -1214,10 +1339,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       ...lanes.map(
                         (entry) => Padding(
                           padding: const EdgeInsets.only(top: 4.0),
-                          child: AutomationLaneHeader(
-                            lane: entry.$3,
-                            itemHeight: 60,
-                            trackColor: trackColor,
+                          child: _buildAutomationLaneHeaderRow(
+                            entry,
+                            trackColor,
                           ),
                         ),
                       ),
@@ -1248,6 +1372,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           itemCount: busIds.length,
           itemBuilder: (context, index) {
             final busId = busIds[index];
+            final trackColor = buses[busId]!.color.fromRGBorRGBAtoColor();
 
             return Consumer(
               builder: (context, ref, _) {
@@ -1255,7 +1380,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
-                final trackColor = Colors.teal.shade400;
 
                 if (lanes.isEmpty) return const SizedBox.shrink();
 
@@ -1276,12 +1400,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       ...lanes.map(
                         (entry) => Padding(
                           padding: const EdgeInsets.only(top: 4.0),
-                          child: AutomationLaneSlot(
-                            lane: entry.$3,
-                            height: 60,
-                            horizontalScrollController: _trackContentController,
-                            trackColor: trackColor,
-                            sampleRate: sr,
+                          child: _buildAutomationLaneTimelineRow(
+                            entry,
+                            trackColor,
+                            sr,
                           ),
                         ),
                       ),
@@ -1297,6 +1419,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         _buildToolbar(),
@@ -1304,19 +1427,26 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           child: MultiSplitViewTheme(
             data: MultiSplitViewThemeData(
               dividerPainter: DividerPainters.grooved1(
-                color: Colors.grey.shade800,
-                highlightedColor: Colors.cyanAccent,
+                color: colors.outlineVariant,
+                highlightedColor: colors.primary,
                 thickness: 1,
               ),
             ),
             child: MultiSplitView(
               controller: _trackSplitViewController,
+              areaClipBehavior: Clip.none,
               builder: (context, area) {
                 switch (area.data) {
                   case 'header':
                     return _buildHeaderArea();
                   case 'timeline':
-                    return _buildTimelineArea(context);
+                    // Areas paint in reverse order, so without a clip the
+                    // playhead and cut line overflow onto the browser panel.
+                    return ClipRect(child: _buildTimelineArea(context));
+                  case 'browser':
+                    return SampleBrowserPanel(
+                      scrollController: _browserPanelController,
+                    );
                   default:
                     return const SizedBox();
                 }
@@ -1345,14 +1475,15 @@ class AutomationExpandBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       height: 24,
       margin: const EdgeInsets.only(bottom: 2),
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade800,
+        color: colors.surfaceContainer,
         border: Border(
-          right: BorderSide(color: Colors.grey.shade400, width: 1),
+          right: BorderSide(color: colors.outlineVariant, width: 1),
         ),
       ),
       child: InkWell(
@@ -1381,7 +1512,7 @@ class AutomationExpandBar extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               '$laneCount automation lane${laneCount == 1 ? '' : 's'}',
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
             ),
           ],
         ),

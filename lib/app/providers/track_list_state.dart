@@ -2,12 +2,16 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
@@ -44,6 +48,10 @@ abstract class TrackListState with _$TrackListState {
 
     /// Per-track pixel heights for the arranger rows, keyed by track ID.
     @Default(IMapConst<int, int>({})) IMap<int, int> trackIdHeightMap,
+
+    /// Tracks shrunk to a title-only row. Their stored height is kept so
+    /// expanding restores it.
+    @Default(ISetConst<int>({})) ISet<int> collapsedTrackIds,
   }) = _TrackListState;
 }
 
@@ -71,9 +79,47 @@ class TrackListNotifier extends Notifier<TrackListState> {
     );
     return ref.read(projectProvider.notifier).dawContext;
   }
-  // ------------------------------------------------------------------
+
+  // ==================================================================
+  // CLIENT-SIDE REACTIVITY
+  // ==================================================================
+
+  static const int minTrackHeight = 48;
+  static const int maxTrackHeight = 400;
+
+  /// Height of a shrunk track or automation lane: title row only.
+  static const double collapsedLaneHeight = 24;
+
+  /// Sets (upserts) the pixel height of [trackId].
+  void changeHeight({required int trackId, required int newHeight}) {
+    final clamped = newHeight.clamp(minTrackHeight, maxTrackHeight).toInt();
+    // Skip no-op notifications (e.g. when pinned at min/max during a drag).
+    if (state.trackIdHeightMap.get(trackId) == clamped) return;
+
+    final builder = state.trackIdHeightMap.unlock..[trackId] = clamped;
+    state = state.copyWith(trackIdHeightMap: builder.lock);
+  }
+
+  /// Removes the override so the track falls back to the default height.
+  void resetTrackHeight({required int trackId}) {
+    if (state.trackIdHeightMap.get(trackId) == null) return;
+    final builder = state.trackIdHeightMap.unlock..remove(trackId);
+    state = state.copyWith(trackIdHeightMap: builder.lock);
+  }
+
+  /// Shrinks a track to its title row, or expands it back to its height.
+  void toggleTrackCollapsed({required int trackId}) {
+    final collapsed = state.collapsedTrackIds;
+    state = state.copyWith(
+      collapsedTrackIds: collapsed.contains(trackId)
+          ? collapsed.remove(trackId)
+          : collapsed.add(trackId),
+    );
+  }
+
+  // ==================================================================
   // Synchronisation
-  // ------------------------------------------------------------------
+  // ==================================================================
 
   /// Sync a single track by its backend [trackId].
   Future<void> syncTracks() async {
@@ -273,43 +319,58 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return createRes;
   }
 
-  Future<void> addMidiTrackWithGeneratorId(int id) async {
-    final result = await ref.guardApi(() async {
-      final newTrack = await track_api.addMidiTrackWithGeneratorId(
-        ctx: _ctx,
-        registryId: id,
-      );
-      _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
-      if (newTrack.generatorId != null) {
-        final generator = await plugin_api.getGenerator(
+  Future<Result<void>> addMidiTrackWithGeneratorId(int id) async {
+    return (() async {
+      final result = await ref.guardApi(() async {
+        final newTrack = await track_api.addMidiTrackWithGeneratorId(
           ctx: _ctx,
-          generatorId: newTrack.generatorId!,
+          registryId: id,
         );
-        _projectNotifierRead.upsertGenerator(newTrack.generatorId!, generator);
+        _projectNotifierRead.upsertTrack(newTrack.id, newTrack);
+        if (newTrack.generatorId != null) {
+          final generator = await plugin_api.getGenerator(
+            ctx: _ctx,
+            generatorId: newTrack.generatorId!,
+          );
+          _projectNotifierRead.upsertGenerator(
+            newTrack.generatorId!,
+            generator,
+          );
+        }
+
+        await ref
+            .read(mixerStateProvider.notifier)
+            .syncMixerChannel(newTrack.id);
+        await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
+      });
+
+      if (result.hasError) {
+        AppLogger.error("Error adding MIDI track: ${result.error}");
+        return Result.error(Exception(result.error.toString()));
       }
-
-      await ref.read(mixerStateProvider.notifier).syncMixerChannel(newTrack.id);
-      await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
-    });
-
-    if (result.hasError) {
-      AppLogger.error("Error adding MIDI track: ${result.error}");
-    }
+      return Result.ok(null);
+    }).suppressesTelemetryPolling(
+      ref.read(telemetryPollingSuppressionProvider.notifier),
+    )();
   }
 
-  Future<void> deleteTrack({required int trackId}) async {
-    final result = await ref.guardApi(() async {
-      await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
-      _projectNotifierRead.removeTrack(trackId);
+  Future<void> deleteTrack({required int trackId}) {
+    return (() async {
+      final result = await ref.guardApi(() async {
+        await track_api.deleteTrack(ctx: _ctx, trackId: trackId);
+        _projectNotifierRead.removeTrack(trackId);
 
-      await ref.read(mixerStateProvider.notifier).syncMixerState();
-    });
+        await ref.read(mixerStateProvider.notifier).syncMixerState();
+      });
 
-    if (result.hasError) {
-      AppLogger.error(
-        'TrackListNotifier: failed to delete track: ${result.error}',
-      );
-    }
+      if (result.hasError) {
+        AppLogger.error(
+          'TrackListNotifier: failed to delete track: ${result.error}',
+        );
+      }
+    }).suppressesTelemetryPolling(
+      ref.read(telemetryPollingSuppressionProvider.notifier),
+    )();
   }
   // ------------------------------------------------------------------
   // Clip CRUD
@@ -354,6 +415,101 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
+  /// Import [filePath] into the project and place it on an audio track.
+  ///
+  /// The Rust source import and the central project-state merge stay paired so
+  /// the arranger cannot drift from the audio engine after a browser drop.
+  Future<Result<void>> createAudioClipFromFile({
+    required String filePath,
+    required int trackId,
+    required int startTick,
+  }) async {
+    final track = ref.read(projectProvider).value?.tracks[trackId];
+    if (track == null) {
+      return ref.notifyErrorResult(Exception('Target track not found'));
+    }
+    if (track.trackType != UiTrackType.audio) {
+      return ref.notifyErrorResult(
+        Exception('Audio samples can only be dropped on audio tracks'),
+      );
+    }
+
+    final sourceResult = await _projectNotifierRead.loadAudioSource(filePath);
+    if (sourceResult.isErr()) return Result.error(sourceResult.err());
+
+    final result = await AsyncValue.guard(() async {
+      final sourceId = sourceResult.ok();
+      final newClip = await createClip(
+        ctx: _ctx,
+        sourceId: sourceId,
+        sourceType: UiSourceType.audio,
+        trackId: trackId,
+        startTime: startTick,
+      );
+
+      final currentTrack = ref.read(projectProvider).value?.tracks[trackId];
+      if (currentTrack == null) {
+        await syncTrack(trackId);
+      } else {
+        _projectNotifierRead.upsertTrack(
+          trackId,
+          currentTrack.copyWith(clips: [...currentTrack.clips, newClip]),
+        );
+      }
+
+      state = state.copyWith(
+        selectedTrackId: trackId,
+        selectedClipIds: IList([newClip.id]),
+        focusClipId: newClip.id,
+      );
+      ref.invalidate(audioSourcesProvider);
+    });
+
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: failed to create browser sample clip: ${result.error}',
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  Future<Result<void>> renameClip(
+    int trackId,
+    int clipId,
+    String newName,
+  ) async {
+    final result = await AsyncValue.guard(() async {
+      await track_api.renameClip(ctx: _ctx, clipId: clipId, newName: newName);
+    });
+
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: error renaming clip: ${result.error}',
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+
+    final currentTrack = ref.read(projectProvider).value?.tracks[trackId];
+    if (currentTrack == null) {
+      await syncTrack(trackId);
+    } else {
+      _projectNotifierRead.upsertTrack(
+        trackId,
+        currentTrack.copyWith(
+          clips: currentTrack.clips
+              .map(
+                (clip) =>
+                    clip.id == clipId ? clip.copyWith(name: newName) : clip,
+              )
+              .toList(),
+        ),
+      );
+    }
+
+    return Result.ok(null);
+  }
+
   /// Delete a single clip, with an optimistic local removal.
   Future<Result<void>> deleteClip(int trackId, int clipId) async {
     _optimisticDeleteClips(trackId, {clipId});
@@ -371,7 +527,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
-  /// Slice a clip at [cutPoint] (sample position).
+  /// Slice a clip at the timeline tick [cutPoint].
   Future<Result<void>> sliceClip(int trackId, int clipId, int cutPoint) async {
     final result = await AsyncValue.guard(() async {
       await track_api.sliceClip(
@@ -539,8 +695,8 @@ class TrackListNotifier extends Notifier<TrackListState> {
   }
 
   /// Atomically duplicate a selected clip group at predetermined start times.
-  /// Start times are in the clips' native unit (samples or ticks). Unlike the
-  /// clipboard APIs below, this operation never changes ClipboardContent.
+  /// Start times are timeline ticks. Unlike the clipboard APIs below, this
+  /// operation never changes ClipboardContent.
   Future<Result<List<UiClip>>> duplicateClipGroups({
     required int trackId,
     required List<int> clipIds,
@@ -697,11 +853,68 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
-  Future<void> handleUpdateTrackOrder({
-    required WidgetRef ref,
+  /// Reorder [trackId] to [newIdx] within the track list.
+  ///
+  /// Updates the project tracks before calling the backend so the header and
+  /// timeline rows move together immediately. Restores the previous order if
+  /// the backend rejects the change.
+  Future<Result<void>> handleUpdateTrackOrder({
     required int trackId,
     required int newIdx,
-  }) async {}
+  }) async {
+    final tracks = ref.read(projectProvider).value?.tracks;
+    if (tracks == null || !tracks.containsKey(trackId)) {
+      return ref.notifyErrorResult(Exception('Track not found'));
+    }
+
+    final sortedEntries = tracks.entries.toList()
+      ..sort((a, b) => a.value.orderIdx.compareTo(b.value.orderIdx));
+    final orderedIds = sortedEntries.map((e) => e.key).toList();
+
+    final oldIdx = orderedIds.indexOf(trackId);
+    final clampedIdx = newIdx.clamp(0, orderedIds.length - 1);
+    if (oldIdx == -1 || oldIdx == clampedIdx) return Result.ok(null);
+
+    final reorderedIds = List<int>.from(orderedIds)
+      ..removeAt(oldIdx)
+      ..insert(clampedIdx, trackId);
+
+    // Snapshot the original order fields for rollback.
+    final originalTracksById = {for (final id in reorderedIds) id: tracks[id]!};
+
+    // Optimistic update: reassign contiguous order values 0..n-1 to match the
+    // new sequence. Only tracks whose order actually shifted get pushed.
+    final updates = <int, UiTrack>{};
+    for (var i = 0; i < reorderedIds.length; i++) {
+      final id = reorderedIds[i];
+      final track = tracks[id]!;
+      if (track.orderIdx != i) {
+        updates[id] = track.copyWith(orderIdx: i);
+      }
+    }
+    _projectNotifierRead.upsertTracksBulk(updates);
+
+    final result = await ref.guardApi(
+      () => track_api.updateTrackOrder(
+        ctx: _ctx,
+        trackId: trackId,
+        newIdx: clampedIdx,
+      ),
+    );
+
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: error updating track order: ${result.error}',
+      );
+      _projectNotifierRead.upsertTracksBulk(originalTracksById); // rollback
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+
+    // Resync in case the backend's order values don't exactly match our
+    // contiguous 0..n-1 guess (e.g. it leaves gaps or uses a different scheme).
+    await syncTracks();
+    return Result.ok(null);
+  }
 
   // ------------------------------------------------------------------
   // View metadata (non-backend)
@@ -754,7 +967,29 @@ class TrackListNotifier extends Notifier<TrackListState> {
     int newLength = clip.loopLength.toInt();
     int newOffset = clip.offsetStart.toInt();
 
-    if (edge == UiResizeEdge.right) {
+    if (clip.isSampleBased) {
+      final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+      final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+      final oldEndTick =
+          clip.startTime + samplesToTicks(clip.loopLength, bpm, sampleRate);
+      if (edge == UiResizeEdge.right) {
+        if (newTime > clip.startTime) {
+          newLength = ticksToSamples(newTime - clip.startTime, bpm, sampleRate);
+        }
+      } else if (newTime < oldEndTick) {
+        final deltaSamples = ticksToSamples(
+          newTime - clip.startTime,
+          bpm,
+          sampleRate,
+        );
+        final potentialOffset = clip.offsetStart + deltaSamples;
+        if (potentialOffset >= 0 && clip.loopLength - deltaSamples > 0) {
+          newStart = newTime;
+          newLength = clip.loopLength - deltaSamples;
+          newOffset = potentialOffset;
+        }
+      }
+    } else if (edge == UiResizeEdge.right) {
       if (newTime > clip.startTime) newLength = newTime - clip.startTime;
     } else {
       final oldEnd = clip.startTime + clip.loopLength;
@@ -873,7 +1108,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   void _applyOptimisticMoveBatch(
     int trackId,
     List<int> clipIds,
-    int deltaSamples,
+    int deltaTicks,
     int? newTrackId,
   ) {
     final tracks = ref.read(projectProvider).value?.tracks;
@@ -895,7 +1130,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
           .toList();
       final targetClips = List<UiClip>.from(targetTrack.clips);
       for (final clip in clipsToMove) {
-        final newStart = (clip.startTime + deltaSamples).clamp(0, 1 << 62);
+        final newStart = (clip.startTime + deltaTicks).clamp(0, 1 << 62);
         targetClips.add(clip.copyWith(startTime: newStart.toInt()));
       }
       ref.read(projectProvider.notifier).upsertTracksBulk({
@@ -905,7 +1140,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     } else {
       final updatedClips = track.clips.map((clip) {
         if (clipIdSet.contains(clip.id)) {
-          final newStart = (clip.startTime + deltaSamples).clamp(0, 1 << 62);
+          final newStart = (clip.startTime + deltaTicks).clamp(0, 1 << 62);
           return clip.copyWith(startTime: newStart.toInt());
         }
         return clip;
@@ -920,12 +1155,14 @@ class TrackListNotifier extends Notifier<TrackListState> {
     int trackId,
     List<int> clipIds,
     UiResizeEdge edge,
-    int deltaSamples,
+    int deltaTicks,
   ) {
     final track = ref.read(projectProvider).value?.tracks[trackId];
     if (track == null) return;
 
     final clipIdSet = clipIds.toSet();
+    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
     final updatedClips = track.clips.map((clip) {
       if (!clipIdSet.contains(clip.id)) return clip;
@@ -933,16 +1170,46 @@ class TrackListNotifier extends Notifier<TrackListState> {
       int newLength = clip.loopLength.toInt();
       int newOffset = clip.offsetStart.toInt();
 
-      if (edge == UiResizeEdge.right) {
-        final newEnd = (clip.startTime + clip.loopLength + deltaSamples).clamp(
-          clip.startTime + 100,
+      if (clip.isSampleBased) {
+        final oldLengthTicks = samplesToTicks(clip.loopLength, bpm, sampleRate);
+        final oldEndTick = clip.startTime + oldLengthTicks;
+        if (edge == UiResizeEdge.right) {
+          final newEndTick = (oldEndTick + deltaTicks).clamp(
+            clip.startTime + 10,
+            1 << 62,
+          );
+          newLength = ticksToSamples(
+            newEndTick - clip.startTime,
+            bpm,
+            sampleRate,
+          );
+        } else {
+          final newStartTick = (clip.startTime + deltaTicks)
+              .clamp(0, oldEndTick - 10)
+              .toInt();
+          final deltaSamples = ticksToSamples(
+            newStartTick - clip.startTime,
+            bpm,
+            sampleRate,
+          );
+          newStart = newStartTick;
+          newLength = (clip.loopLength - deltaSamples)
+              .clamp(1, 1 << 62)
+              .toInt();
+          newOffset = (clip.offsetStart + deltaSamples)
+              .clamp(0, 1 << 62)
+              .toInt();
+        }
+      } else if (edge == UiResizeEdge.right) {
+        final newEnd = (clip.startTime + clip.loopLength + deltaTicks).clamp(
+          clip.startTime + 10,
           1 << 62,
         );
         newLength = newEnd.toInt() - clip.startTime.toInt();
       } else {
         final oldEnd = clip.startTime + clip.loopLength;
-        int newStartProposed = (clip.startTime + deltaSamples)
-            .clamp(0, oldEnd - 100)
+        int newStartProposed = (clip.startTime + deltaTicks)
+            .clamp(0, oldEnd - 10)
             .toInt();
         final delta = newStartProposed - clip.startTime;
         final newOffsetProposed = (clip.offsetStart + delta).clamp(0, 1 << 62);
@@ -974,9 +1241,27 @@ class TrackListNotifier extends Notifier<TrackListState> {
 final trackListStateProvider =
     NotifierProvider<TrackListNotifier, TrackListState>(TrackListNotifier.new);
 
-final trackWaveformProvider =
-    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
-      ref.watch(projectProvider.select((s) => s.value?.tracks[arg.trackId]));
+/// Each handle keeps its whole decoded audio buffer alive in Rust, so stale
+/// handles must be released: entries dispose with their last listener and
+/// refresh when a full backend fetch may have replaced the buffers.
+final trackWaveformProvider = Provider.autoDispose
+    .family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+      ref.watch(
+        projectProvider.select(
+          (s) => (s.value?.tracks[arg.trackId], s.value?.fullStateRevision),
+        ),
+      );
       final ctx = ref.read(projectProvider.notifier).dawContext;
-      return getWaveformHandlesForTrack(ctx: ctx, trackId: arg.trackId);
+      final handles = getWaveformHandlesForTrack(
+        ctx: ctx,
+        trackId: arg.trackId,
+      );
+      // Unmounted widget closures (e.g. kept by stale semantics) can outlive
+      // this state, so release the buffers now instead of waiting for GC.
+      ref.onDispose(() {
+        for (final handle in handles.values) {
+          handle.dispose();
+        }
+      });
+      return handles;
     });

@@ -6,8 +6,6 @@ mod tests {
     use crate::shared::id::TrackId;
     use crate::test::helpers::{karbeatzer_v2_registry_id, make_ctx};
 
-    // ─── get_track ───────────────────────────────────────────────────────────
-
     #[test]
     fn get_track_returns_none_for_missing_id() {
         let ctx = make_ctx();
@@ -24,8 +22,6 @@ mod tests {
         assert!(name.is_some());
         assert_eq!(name.unwrap(), track.name);
     }
-
-    // ─── add_new_audio_track ─────────────────────────────────────────────────
 
     #[test]
     fn add_new_audio_track_increments_count() {
@@ -46,8 +42,6 @@ mod tests {
         assert_eq!(track.name, "Audio track");
     }
 
-    // ─── add_midi_track_with_generator_id ────────────────────────────────────
-
     #[test]
     fn add_midi_track_with_generator_id_happy_path() {
         let mut ctx = make_ctx();
@@ -67,8 +61,6 @@ mod tests {
         let result = track_api::add_midi_track_with_generator_id(&mut ctx, 0xDEADBEEF);
         assert!(result.is_err(), "Should error on unknown registry ID");
     }
-
-    // ─── change_track_name ───────────────────────────────────────────────────
 
     #[test]
     fn change_track_name_happy_path() {
@@ -118,8 +110,6 @@ mod tests {
         assert!(msg.contains("Track not found"), "Got: {}", msg);
     }
 
-    // ─── change_track_color ──────────────────────────────────────────────────
-
     #[test]
     fn change_track_color_valid_hex6() {
         let mut ctx = make_ctx();
@@ -152,8 +142,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ─── get_tracks ──────────────────────────────────────────────────────────
-
     #[test]
     fn get_tracks_returns_all() {
         let mut ctx = make_ctx();
@@ -162,8 +150,6 @@ mod tests {
         let names: Vec<String> = track_api::get_tracks(&ctx, |_id, t| t.name.clone());
         assert_eq!(names.len(), 2);
     }
-
-    // ─── get_tracks_ordered ──────────────────────────────────────────────────
 
     #[test]
     fn get_tracks_ordered_respects_index() {
@@ -180,8 +166,6 @@ mod tests {
             "Tracks should be in ascending order_idx order"
         );
     }
-
-    // ─── delete_track ────────────────────────────────────────────────────────
 
     #[test]
     fn delete_track_removes_it() {
@@ -200,8 +184,6 @@ mod tests {
         let result = track_api::delete_track(&mut ctx, bogus_id);
         assert!(result.is_err());
     }
-
-    // ─── update_track_order ──────────────────────────────────────────────────
 
     #[test]
     fn update_track_order_valid() {

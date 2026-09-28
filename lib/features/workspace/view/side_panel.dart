@@ -15,28 +15,33 @@ class ContextPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       width: 240,
-      color: Colors.white,
+      color: colors.surfaceContainerLow,
       child: Column(
         children: [
           // Header
           Container(
             height: 50,
-            color: Colors.purple.shade700,
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            color: colors.primaryContainer,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 Text(
                   group.title,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: colors.onPrimaryContainer,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Spacer(),
+                const Spacer(),
                 IconButton(
-                  icon: Icon(Icons.close, color: Colors.white, size: 18),
+                  icon: Icon(
+                    Icons.close,
+                    color: colors.onPrimaryContainer,
+                    size: 18,
+                  ),
                   onPressed: onClose,
                 ),
               ],
@@ -46,7 +51,7 @@ class ContextPanel extends StatelessWidget {
           // Simple text list
           Expanded(
             child: ListView(
-              padding: EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8),
               children: group.actions.map((action) {
                 return Material(
                   color: Colors.transparent,
@@ -54,7 +59,7 @@ class ContextPanel extends StatelessWidget {
                     onTap: () => onAction(action),
                     borderRadius: BorderRadius.circular(4),
                     child: Container(
-                      padding: EdgeInsets.symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
                       ),
@@ -66,28 +71,27 @@ class ContextPanel extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 14,
                                 color: action.isDestructive
-                                    ? Colors.red
-                                    : Colors.grey.shade800,
+                                    ? colors.error
+                                    : colors.onSurface,
                               ),
                             ),
                           ),
                           if (action.shortcut != null)
                             Container(
-                              margin: EdgeInsets.only(left: 8),
-                              padding: EdgeInsets.symmetric(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 6,
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
+                                color: colors.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(3),
                               ),
                               child: Text(
                                 action.shortcut!,
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: Colors.grey.shade700,
-                                  fontFamily: 'Monospace',
+                                  color: colors.onSurfaceVariant,
                                 ),
                               ),
                             ),

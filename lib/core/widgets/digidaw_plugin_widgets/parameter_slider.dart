@@ -5,16 +5,21 @@ import 'package:flutter/material.dart';
 class DigidawParameterSlider extends StatelessWidget {
   final Slider slider;
 
-  const DigidawParameterSlider({super.key, required this.slider});
+  /// Fill and fader cap indicator color; the theme primary when null.
+  final Color? color;
+
+  const DigidawParameterSlider({super.key, required this.slider, this.color});
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final accent = color ?? colors.primary;
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
         trackHeight: 14.0, // Thick, boxy track gauge
-        activeTrackColor: Colors.cyanAccent.withAlpha(200),
-        inactiveTrackColor: Colors.black87,
-        thumbColor: Colors.cyanAccent,
+        activeTrackColor: accent.withValues(alpha: 0.8),
+        inactiveTrackColor: colors.surfaceContainerHighest,
+        thumbColor: accent,
         overlayShape: const _StudioFaderOverlayShape(
           thumbWidth: 26.0,
           thumbHeight: 46.0,

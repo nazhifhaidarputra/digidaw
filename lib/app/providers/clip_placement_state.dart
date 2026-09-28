@@ -22,7 +22,7 @@ abstract class ClipPlacementState with _$ClipPlacementState {
     UiSourceType? sourceType,
     @Default(-1)
     int trackId, // Used as target track for both new placement and moving
-    @Default(0.0) double timeSamples,
+    @Default(0.0) double startTick,
 
     // Existing clip batch drag
     @Default([]) List<int> draggedClipIds,
@@ -62,15 +62,15 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
       sourceId: sourceId,
       sourceType: type,
       trackId: initialTrackId ?? -1, // Spawns on the actual track!
-      timeSamples: 0.0, // Spawns exactly at the start of the timeline
+      startTick: 0.0,
     );
     ref
         .read(workspaceStateProvider.notifier)
         .navigateTo(WorkspaceView.trackList);
   }
 
-  void updatePlacementTarget(int trackId, double timeSamples) {
-    state = state.copyWith(trackId: trackId, timeSamples: timeSamples);
+  void updatePlacementTarget(int trackId, double startTick) {
+    state = state.copyWith(trackId: trackId, startTick: startTick);
   }
 
   void cancelPlacement() {
@@ -87,7 +87,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
           sourceId: s.sourceId!,
           sourceType: s.sourceType!,
           trackId: s.trackId,
-          startTime: s.timeSamples.toInt(),
+          startTime: s.startTick.toInt(),
         );
         await ref.read(trackListStateProvider.notifier).syncTrack(s.trackId);
         cancelPlacement();

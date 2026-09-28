@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/core/utils/formatter.dart';
+import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 
 /// A horizontally scrollable virtual piano keyboard that supports all 128 MIDI notes.
 /// Used for playing notes live in plugin screens and piano roll.
@@ -102,7 +103,7 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
 
   // Handle PC keyboard key events
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent) {
+    if (event is KeyDownEvent && !isShortcutModifierPressed) {
       final note = keyMap[event.physicalKey];
       if (note != null && !_keyboardActiveNotes.contains(note)) {
         setState(() => _keyboardActiveNotes.add(note));
@@ -123,7 +124,9 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
   // Handle horizontal scroll wheel
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is PointerScrollEvent) {
-      // Use vertical scroll delta for horizontal scrolling
+      // Native horizontal trackpad deltas are handled by the Scrollable.
+      // Translate a mouse wheel's vertical delta to horizontal.
+      if (event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs()) return;
       final scrollDelta = event.scrollDelta.dy;
       if (_scrollController.hasClients) {
         final newOffset = _scrollController.offset + scrollDelta;
@@ -139,9 +142,8 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
     // Combine external active notes with keyboard-triggered notes
     final allActiveNotes = {...widget.activeNotes, ..._keyboardActiveNotes};
 
-    return Focus(
+    return KeyboardFocusRegion(
       focusNode: _focusNode,
-      autofocus: false,
       onKeyEvent: _handleKeyEvent,
       child: GestureDetector(
         onTap: () => _focusNode.requestFocus(),
@@ -164,26 +166,43 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
                 double blackKeyHeight = keyHeight * 0.6;
                 double blackKeyWidth = _whiteKeyWidth * 0.7;
 
-                return SingleChildScrollView(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: SizedBox(
-                    width: totalWidth,
-                    height: keyHeight,
-                    child: Stack(
-                      children: [
-                        // White keys
-                        Row(
-                          children: _buildWhiteKeys(keyHeight, allActiveNotes),
+                return ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.trackpad,
+                    },
+                  ),
+                  child: Scrollbar(
+                    controller: _scrollController,
+                    thumbVisibility: true,
+                    scrollbarOrientation: ScrollbarOrientation.bottom,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: SizedBox(
+                        width: totalWidth,
+                        height: keyHeight,
+                        child: Stack(
+                          children: [
+                            // White keys
+                            Row(
+                              children: _buildWhiteKeys(
+                                keyHeight,
+                                allActiveNotes,
+                              ),
+                            ),
+                            // Black keys (positioned)
+                            ..._buildBlackKeys(
+                              blackKeyWidth,
+                              blackKeyHeight,
+                              allActiveNotes,
+                            ),
+                          ],
                         ),
-                        // Black keys (positioned)
-                        ..._buildBlackKeys(
-                          blackKeyWidth,
-                          blackKeyHeight,
-                          allActiveNotes,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -285,6 +304,7 @@ class _KeyWidgetState extends State<_KeyWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final isActive = widget.isPressed || _touchActive;
 
     return Listener(
@@ -305,7 +325,7 @@ class _KeyWidgetState extends State<_KeyWidget> {
         height: widget.height,
         decoration: BoxDecoration(
           color: isActive
-              ? Colors.cyanAccent
+              ? colors.primary
               : (widget.isBlack ? Colors.black : Colors.white),
           border: Border.all(color: Colors.black54, width: 0.5),
           borderRadius: const BorderRadius.only(

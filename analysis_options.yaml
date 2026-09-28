@@ -29,6 +29,12 @@ analyzer:
     - "lib/src/rust/**"   # Ignores all flutter_rust_bridge generated files
     - "**/*.g.dart"       # Ignores riverpod/json_serializable generated files (if applicable)
     - "**/*.freezed.dart"
+    - build/**
+    - android/**
+    - ios/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

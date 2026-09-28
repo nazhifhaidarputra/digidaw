@@ -1,3 +1,8 @@
+#![allow(
+    clippy::as_conversions,
+    reason = "window coefficient generation intentionally maps discrete sample indices into f32"
+)]
+
 use std::f32::consts::PI;
 use wide::f32x4;
 

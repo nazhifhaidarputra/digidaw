@@ -1,28 +1,50 @@
-use karbeat_core::{context::DawContext, init::init_engine};
+use karbeat_core::{api, context::DawContext as CoreDawContext, init::init_engine};
 #[cfg(target_os = "android")]
 use once_cell::sync::OnceCell;
 
 #[cfg(target_os = "android")]
 use jni::{objects::JObject, refs::Global};
 
+use crate::api::context::DawContext;
 use crate::init_logger;
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
     init_logger();
+    karbeat_core::core::mitigation::crash::install_panic_hook();
     log::info!("FRB Base Utilities Initialized");
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn create_daw_context() -> DawContext {
-    let mut context = DawContext::new();
+    let external_plugins = karbeat_host::PluginHostService::start(
+        karbeat_vst3::Vst3Executor,
+        karbeat_clap::ClapExecutor,
+        karbeat_lv2::Lv2Executor,
+    )
+    .unwrap_or_else(|error| {
+        log::error!("External plugin host failed to start: {error}");
+        karbeat_host::HostClient::unavailable()
+    });
+    let mut context = CoreDawContext::with_external_plugins(external_plugins);
 
     // Start the audio thread and connect the ring buffers
     init_engine(&mut context);
 
     log::info!("DAW Engine System Started. Yielding Context to Flutter.");
-    context
+    DawContext::new(context)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_history_limit(ctx: &DawContext) -> u32 {
+    api::history_limit(&ctx.read()) as u32
+}
+
+pub fn set_history_limit(ctx: &DawContext, limit: u32) -> Result<u32, String> {
+    api::set_history_limit(&mut ctx.project_write(), limit as usize)
+        .map(|applied| applied as u32)
+        .map_err(|error| error.to_string())
 }
 
 // ============================================================================

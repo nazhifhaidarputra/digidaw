@@ -1,5 +1,12 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(dead_code)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "procedural macro inputs are validated while constructing compile-time diagnostics"
+)]
+#![allow(
+    dead_code,
+    reason = "shared macro parsing structures contain fields used by different macro expansions"
+)]
 
 use std::{collections::HashMap, fs, path::PathBuf};
 
@@ -14,7 +21,9 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
     let name = input.ident;
 
     let Data::Enum(data_enum) = input.data else {
-        panic!("EnumParam can only be derived for enums");
+        return syn::Error::new_spanned(name, "EnumParam can only be derived for enums")
+            .to_compile_error()
+            .into();
     };
 
     let variants: Vec<_> = data_enum.variants.into_iter().collect();
@@ -142,6 +151,10 @@ fn parse_numeric_expr(expr: &syn::Expr) -> Result<f64, syn::Error> {
 /// For nested value, your custom type should also implement AutoParams. you can achieve
 /// the same result by using the `#[karbeat_plugin]` macro again in your custom type
 #[proc_macro_attribute]
+#[allow(
+    clippy::as_conversions,
+    reason = "validated parameter literals must be narrowed to their declared generated types"
+)]
 pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(item as DeriveInput);
     let struct_name = &ast.ident;
@@ -183,9 +196,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                         syn::Error::new_spanned(
                                             &lit_str,
                                             format!(
-                                                "Parameter ID collision! Local ID `{}` is already used by field `{}`.",
-                                                p_id_str,
-                                                existing_field
+                                                "Parameter ID collision! Local ID `{p_id_str}` is already used by field `{existing_field}`.",
                                             )
                                         )
                                     );
@@ -217,19 +228,20 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             let value_expr: syn::Expr = meta.value()?.parse()?;
                             if let Ok(num) = parse_numeric_expr(&value_expr) {
                                 p_default = ParamDefault::Float(num);
-                            } 
-                            else if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Bool(b), .. }) = &value_expr {
+                            } else if let syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Bool(b),
+                                ..
+                            }) = &value_expr
+                            {
                                 p_default = ParamDefault::Float(if b.value { 1.0 } else { 0.0 });
-                            } 
-                            else if let syn::Expr::Path(_) = &value_expr {
+                            } else if let syn::Expr::Path(_) = &value_expr {
                                 p_default = ParamDefault::EnumPath(value_expr.clone());
-                            } 
-                            else {
+                            } else {
                                 return Err(syn::Error::new_spanned(
                                     &value_expr,
                                     "`default` must be a numeric literal (e.g. `0.0`, `-6.0`), a boolean (`true`/`false`), or an enum variant path (e.g. `Waveform::Sine`)",
                                 ));
-                            }                    
+                            }
                         } else if meta.path.is_ident("step") {
                             let value_expr: syn::Expr = meta.value()?.parse()?;
                             if let Ok(num) = parse_numeric_expr(&value_expr) {
@@ -239,7 +251,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             return Err(
                                 syn::Error::new_spanned(
                                     &meta.path,
-                                    format!("{:?} is not a valid parameter", &meta.path)
+                                    format!("{:?} is not a valid parameter", meta.path)
                                 )
                             );
                         }
@@ -266,14 +278,16 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let mut n_prefix = String::new();
 
                     // Parse prefix attribute if provided
-                    let _ = attr.parse_nested_meta(|meta| {
+                    if let Err(error) = attr.parse_nested_meta(|meta| {
                         if meta.path.is_ident("prefix")
                             && let Lit::Str(lit_str) = meta.value()?.parse::<Lit>()?
                         {
                             n_prefix = lit_str.value();
                         }
                         Ok(())
-                    });
+                    }) {
+                        macro_error = Some(error);
+                    }
 
                     let is_iterable = match &field.ty {
                         Type::Array(_) | Type::Slice(_) => true,
@@ -290,12 +304,14 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     nested_fields.push((field_ident.clone(), is_iterable, n_prefix));
                 } else if attr.path().is_ident("serde") {
                     // Check if the user manually added #[serde(skip)]
-                    let _ = attr.parse_nested_meta(|meta| {
+                    if let Err(error) = attr.parse_nested_meta(|meta| {
                         if meta.path.is_ident("skip") {
                             has_serde_skip = true;
                         }
                         Ok(())
-                    });
+                    }) {
+                        macro_error = Some(error);
+                    }
                 }
             }
 
@@ -396,6 +412,44 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {
                 let child_hash = ::karbeat_utils::hash::hash_str_from(prefix_hash, #prefix);
                 if let Some(v) = self.#f.auto_get_parameter(child_hash, id) {
+                    return Some(v);
+                }
+            }
+        }
+    });
+
+    let get_current_match_arms = params.iter().map(|p| {
+        let field = &p.field_name;
+        let id_str = &p.id_str;
+
+        quote! {
+            if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
+                let val = self.#field.get();
+                let any_val = &val as &dyn ::std::any::Any;
+                if let ::core::option::Option::Some(v) = any_val.downcast_ref::<V>() {
+                    return ::core::option::Option::Some(*v);
+                } else {
+                    return ::core::option::Option::Some(V::from_f64(val.to_f64()));
+                }
+            }
+        }
+    });
+
+    let nested_get_current_stmts = nested_fields.iter().map(|(f, is_iterable, prefix)| {
+        if *is_iterable {
+            quote! {
+                for (i, item) in self.#f.iter().enumerate() {
+                    let child_prefix = format!("{}{}/", #prefix, i);
+                    let child_hash = ::karbeat_utils::hash::hash_str_from(prefix_hash, &child_prefix);
+                    if let Some(v) = item.auto_get_current_parameter(child_hash, id) {
+                        return Some(v);
+                    }
+                }
+            }
+        } else {
+            quote! {
+                let child_hash = ::karbeat_utils::hash::hash_str_from(prefix_hash, #prefix);
+                if let Some(v) = self.#f.auto_get_current_parameter(child_hash, id) {
                     return Some(v);
                 }
             }
@@ -705,6 +759,12 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     None
                 }
 
+                fn auto_get_current_parameter<V: ::karbeat_plugin_types::parameter::ParamType>(&self, prefix_hash: u32, id: u32) -> Option<V> {
+                    #(#get_current_match_arms)*
+                    #(#nested_get_current_stmts)*
+                    None
+                }
+
                 fn auto_apply_automation<V: ::karbeat_plugin_types::parameter::ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool {
                     #(#apply_auto_arms)*
                     #(#nested_apply_stmts)*
@@ -739,14 +799,28 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
     let fields = match &input_derive.data {
         Data::Struct(data_struct) => match &data_struct.fields {
             Fields::Named(fields_named) => &fields_named.named,
-            _ => panic!("AutoParams can only be derived on structs with named fields"),
+            _ => {
+                return syn::Error::new_spanned(
+                    &input_derive,
+                    "AutoParams can only be derived on structs with named fields",
+                )
+                .to_compile_error()
+                .into();
+            }
         },
-        _ => panic!("AutoParams can only be derived on structs"),
+        _ => {
+            return syn::Error::new_spanned(
+                &input_derive,
+                "AutoParams can only be derived on structs",
+            )
+            .to_compile_error()
+            .into();
+        }
     };
 
     let mut param_fields = Vec::new();
 
-    for field in fields.iter() {
+    for field in fields {
         let is_nested = field.attrs.iter().any(|attr| attr.path().is_ident("skip"));
 
         if !is_nested {
@@ -758,10 +832,10 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                 && segment.ident == "Param"
             {
                 is_valid_param = true;
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(ty)) = args.args.first() {
-                        inner_ty = Some(ty.clone());
-                    }
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                    && let Some(syn::GenericArgument::Type(ty)) = args.args.first()
+                {
+                    inner_ty = Some(ty.clone());
                 }
             }
 
@@ -783,7 +857,7 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
             // Check if the user overrode the ID with #[param(id = "custom_id")]
             for attr in &field.attrs {
                 if attr.path().is_ident("param") {
-                    let _ = attr.parse_nested_meta(|meta| {
+                    if let Err(error) = attr.parse_nested_meta(|meta| {
                         if meta.path.is_ident("id")
                             && let Ok(syn::Lit::Str(lit_str)) =
                                 meta.value().and_then(|v| v.parse::<syn::Lit>())
@@ -791,7 +865,9 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                             id_str = lit_str.value();
                         }
                         Ok(())
-                    });
+                    }) {
+                        return error.to_compile_error().into();
+                    }
                 }
             }
 
@@ -907,6 +983,11 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+#[allow(
+    clippy::as_conversions,
+    clippy::panic,
+    reason = "invalid build-time manifest data must stop expansion, and validated JSON numbers are narrowed for generated API fields"
+)]
 pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
     let dir_lit = parse_macro_input!(input as LitStr);
     let rel_dir = dir_lit.value();
@@ -982,6 +1063,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
                                 step: #step,
                                 value_type: karbeat_plugin_types::ParamType::#val_type_ident,
                                 choices: #choices_tokens,
+                                automatable: true,
                             }
                         });
                     }
@@ -1067,6 +1149,7 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
     // Check if methods are already implemented
     let mut has_set_parameter = false;
     let mut has_get_parameter = false;
+    let mut has_get_current_parameter = false;
     let mut has_apply_automation = false;
     let mut has_clear_automation = false;
     let mut has_default_parameters = false;
@@ -1082,6 +1165,9 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
             }
             if name == "get_parameter" {
                 has_get_parameter = true;
+            }
+            if name == "get_current_parameter" {
+                has_get_current_parameter = true;
             }
             if name == "apply_automation" {
                 has_apply_automation = true;
@@ -1125,6 +1211,16 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
         let method: syn::ImplItemFn = syn::parse_quote! {
             fn get_parameter(&self, id: u32) -> f32 {
                 self.auto_get_parameter(::karbeat_utils::hash::FNV_OFFSET, id).unwrap_or(0.0)
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_get_current_parameter {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn get_current_parameter(&self, id: u32) -> f32 {
+                self.auto_get_current_parameter(::karbeat_utils::hash::FNV_OFFSET, id)
+                    .unwrap_or_else(|| self.get_parameter(id))
             }
         };
         item_impl.items.push(syn::ImplItem::Fn(method));

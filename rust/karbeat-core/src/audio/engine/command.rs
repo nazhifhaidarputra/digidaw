@@ -1,0 +1,1286 @@
+use super::{
+    engine::{AudioEngine, RetiredGraphState},
+    helper::*,
+    telemetry::PluginTelemetrySnapshot,
+    transport::PlaybackMode,
+    types::*,
+    voices::{GraphView, PreviewVoice},
+};
+use crate::{
+    audio::{
+        event::PluginTarget,
+        render_state::{AudioEffectInstance, AudioGeneratorInstance},
+    },
+    commands::{
+        AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
+        GeneratorParameterSnapshot, TelemetryRegistration,
+    },
+    core::project::*,
+    shared::id::*,
+};
+use hashbrown::{HashMap, HashSet};
+
+impl AudioEngine {
+    /// Process incoming commands from command queue buffer
+    pub fn process_command(&mut self, cmd: AudioCommand) {
+        // Commands that change routing or a chain's latency replan delay compensation once
+        // before the next block renders.
+        if matches!(
+            cmd,
+            AudioCommand::InstallHostedProject(_)
+                | AudioCommand::RemoveHostedPlugins(_)
+                | AudioCommand::InstallHostedPlugin(_)
+                | AudioCommand::InstallGenerator { .. }
+                | AudioCommand::RemoveGenerator { .. }
+                | AudioCommand::InstallEffect { .. }
+                | AudioCommand::RemoveEffect { .. }
+                | AudioCommand::MoveEffect { .. }
+                | AudioCommand::AddBus { .. }
+                | AudioCommand::RemoveBus { .. }
+                | AudioCommand::UpdateRouting { .. }
+                | AudioCommand::UpdateTrackGraph { .. }
+                | AudioCommand::ReplaceFullGraph { .. }
+        ) {
+            self.routing.latency_dirty = true;
+        }
+        match cmd {
+            AudioCommand::InstallHostedProject(mut transfer) => {
+                use crate::audio::hosted_plugin::HostedInstallResult;
+                let Some(project) = transfer.get_mut() else {
+                    return;
+                };
+                if self.config.sample_rate != project.sample_rate
+                    || self.config.num_channels != 2
+                    || self.processing_mode != karbeat_plugin_api::types::ProcessingMode::Realtime
+                {
+                    project.complete(HostedInstallResult::InvalidConfiguration);
+                    return;
+                }
+                for command in &mut project.commands {
+                    if let Some(command) = command.take() {
+                        self.process_command(command);
+                    }
+                }
+                project.complete(HostedInstallResult::Installed);
+            }
+
+            AudioCommand::ReconfigureHostedPlugins(reconfiguration) => {
+                self.reconfigure_hosted_plugins(reconfiguration);
+            }
+
+            AudioCommand::RemoveHostedPlugins(removal) => self.remove_hosted_plugins(removal),
+            AudioCommand::InstallHostedPlugin(install) => self.install_hosted_plugin(install),
+            AudioCommand::PlayOneShot(waveform) => {
+                self.voices.preview_voices.clear();
+                self.voices
+                    .preview_voices
+                    .push(PreviewVoice::new(waveform, 1.0));
+            }
+            AudioCommand::PlayPreview {
+                waveform,
+                max_frames,
+            } => {
+                self.voices.preview_voices.clear();
+                self.voices
+                    .preview_voices
+                    .push(PreviewVoice::with_frame_limit(waveform, 1.0, max_frames));
+            }
+            AudioCommand::StopAllPreviews => self.voices.preview_voices.clear(),
+            AudioCommand::SetPlaying(val) => {
+                let was_playing = match self.transport.mode {
+                    PlaybackMode::Song => self.transport.song.is_playing,
+                    PlaybackMode::Pattern { .. } => self.transport.pattern.is_playing,
+                };
+
+                if was_playing && !val {
+                    // Stopping: silence all active generators
+                    self.stop_all_active_generators();
+                }
+
+                match self.transport.mode {
+                    PlaybackMode::Song => {
+                        self.transport.song.is_playing = val;
+                    }
+                    PlaybackMode::Pattern { .. } => {
+                        self.transport.pattern.is_playing = val;
+                    }
+                }
+
+                self.emit_current_playback_position();
+            }
+            AudioCommand::SetLooping(val) => {
+                self.transport.song.is_looping = val;
+                self.emit_current_playback_position();
+            }
+            AudioCommand::StopAndReset => {
+                self.stop_playback();
+            }
+            AudioCommand::SetPlayhead(samples) => {
+                log::debug!(
+                    "[AudioEngine Seek] Received SetPlayhead(samples: {})",
+                    samples
+                );
+                self.stop_all_active_generators();
+                self.transport.song.playhead_samples = samples;
+                self.recalculate_beat_bar();
+                self.transport.song.last_emitted_samples = self.transport.song.playhead_samples;
+                self.evaluate_pre_block_modulations(0);
+                self.emit_current_playback_position();
+            }
+            AudioCommand::PlayPreviewNote {
+                note_key,
+                generator_id,
+                velocity,
+                is_note_on,
+            } => {
+                // this should push preview voice in the shape of note pressed connected to generator.
+                // e.g Note placing on piano roll, hold press from a keyboard,
+                // or a press at the piano tile on the left of piano roll screen
+                // it also requires the logic to handle input based on the ADSR of the voice generator
+                self.trigger_live_note(generator_id, note_key, velocity, is_note_on);
+            }
+            AudioCommand::SendMidiEvent {
+                generator_id,
+                event,
+            } => {
+                if !self
+                    .voices
+                    .queue_generator_event(&self.plugin_state, generator_id, event)
+                {
+                    log::warn!("MIDI event target {:?} was not found", generator_id);
+                }
+            }
+            AudioCommand::SetBPM(bpm) => {
+                self.transport.bpm = bpm;
+                self.emit_current_playback_position();
+                self.recalculate_max_sample_index();
+            }
+            AudioCommand::SetPlaybackMode(playback_mode) => {
+                // Silence everything to prevent hanging notes from the previous mode
+                self.stop_all_active_generators();
+
+                // Reset the specific playhead for the new mode
+                match (self.transport.mode, playback_mode) {
+                    (PlaybackMode::Song, PlaybackMode::Pattern { .. }) => {
+                        self.transport.pattern.playhead_samples = 0;
+                        self.transport.pattern.last_emitted_samples = 0;
+                        self.recalculate_pattern_beat_bar();
+                        self.transport.pattern.is_playing = true;
+                    }
+                    (PlaybackMode::Pattern { .. }, PlaybackMode::Song) => {
+                        self.transport.pattern.playhead_samples = 0;
+                        self.transport.pattern.last_emitted_samples = 0;
+                        self.recalculate_pattern_beat_bar();
+                        self.transport.pattern.is_playing = false;
+                    }
+                    _ => {}
+                }
+
+                self.transport.mode = playback_mode;
+
+                // Snap UI to the beginning immediately
+                self.emit_current_playback_position();
+            }
+            AudioCommand::AddGenerator {
+                generator_id,
+                track_id,
+                registry_id,
+                plugin_factory,
+            } => {
+                let mut plugin = plugin_factory();
+                // Prepare the plugin with current sample rate and buffer size
+                let buf_size = self.current_state.graph.buffer_size.max(512);
+                plugin.prepare(self.config.sample_rate as f32, buf_size);
+
+                let bus_cfg = BusConfig {
+                    name: "Main".into(),
+                    channel_count: self.config.num_channels as usize,
+                    is_optional: false,
+                };
+                plugin.set_io_layout(&[bus_cfg.clone()], &[bus_cfg]);
+
+                self.process_command(AudioCommand::InstallGenerator {
+                    generator_id,
+                    track_id,
+                    registry_id,
+                    plugin,
+                    telemetry: None,
+                });
+            }
+            AudioCommand::InstallGenerator {
+                generator_id,
+                track_id,
+                registry_id,
+                plugin,
+                telemetry,
+            } => {
+                self.plugin_state.insert_generator(AudioGeneratorInstance {
+                    id: generator_id,
+                    track_id,
+                    registry_id,
+                    plugin,
+                });
+
+                // Register a new triple-buffer pair for this generator's telemetry.
+                let target = PluginTarget::Generator(generator_id);
+                let telemetry = telemetry.unwrap_or_else(|| {
+                    let plugin = self.get_plugin(&target);
+                    let initial_snapshot = plugin
+                        .map(PluginTelemetrySnapshot::from_plugin)
+                        .unwrap_or_default();
+                    let (producer, consumer) = triple_buffer::triple_buffer(&initial_snapshot);
+                    crate::commands::PreparedPluginTelemetry {
+                        producer,
+                        consumer: Box::new(consumer),
+                    }
+                });
+                self.telemetry
+                    .param_telemetry_producers
+                    .insert(target.clone(), telemetry.producer);
+                let _ = self
+                    .io
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Registered {
+                        target,
+                        consumer: telemetry.consumer,
+                    });
+
+                log::info!(
+                    "[AudioEngine] Added generator {:?} for track {:?}",
+                    generator_id,
+                    track_id
+                );
+            }
+            AudioCommand::RemoveGenerator { generator_id } => {
+                self.plugin_state.remove_generator(generator_id);
+                // Also remove any active voice referencing it
+                self.voices
+                    .active_generators
+                    .retain(|v| v.id != generator_id);
+
+                // Remove the telemetry producer and notify DawContext.
+                let target = PluginTarget::Generator(generator_id);
+                if let Some(producer) = self.telemetry.param_telemetry_producers.remove(&target) {
+                    self.retire_graph_state(RetiredGraphState::TelemetryProducer(producer));
+                }
+                if let Some(subscription) = self
+                    .telemetry
+                    .active_telemetry_subscriptions
+                    .remove(&target)
+                {
+                    self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
+                }
+                let _ = self
+                    .io
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Removed { target });
+
+                log::info!("[AudioEngine] Removed generator {:?}", generator_id);
+            }
+            AudioCommand::SetParameter {
+                target,
+                param_id,
+                value,
+            } => {
+                match target {
+                    PluginTarget::Generator(generator_id) => {
+                        if let Some(gen_instance) =
+                            self.plugin_state.get_generator_mut(generator_id)
+                        {
+                            gen_instance.plugin.set_parameter(param_id, value);
+                        }
+                    }
+                    PluginTarget::TrackEffect(track_id, effect_id) => {
+                        if let Some(effects) =
+                            self.get_effect_list_mut(&EffectTarget::Track(track_id))
+                        {
+                            if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                                effect.plugin.set_parameter(param_id, value);
+                            }
+                        }
+                    }
+                    PluginTarget::BusEffect(bus_id, effect_id) => {
+                        if let Some(effects) = self.get_effect_list_mut(&EffectTarget::Bus(bus_id))
+                        {
+                            if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                                effect.plugin.set_parameter(param_id, value);
+                            }
+                        }
+                    }
+                    PluginTarget::MasterEffect(effect_id) => {
+                        if let Some(effects) = self.get_effect_list_mut(&EffectTarget::Master) {
+                            if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                                effect.plugin.set_parameter(param_id, value);
+                            }
+                        }
+                    }
+                }
+
+                self.modulation
+                    .block_param_changes
+                    .entry(target.clone())
+                    .or_default()
+                    .push(ParamChange {
+                        param_id: param_id,
+                        normalized_value: value,
+                        sample_offset: 0,
+                    });
+
+                let our_target = target.to_automation_target(param_id);
+
+                self.modulation.suspended_targets.insert(our_target.clone());
+
+                if let Some(link) = self
+                    .modulation
+                    .active_links
+                    .iter_mut()
+                    .find(|l| l.target == our_target)
+                {
+                    link.base_value = value;
+                }
+            }
+            AudioCommand::UpdateGeneratorTrack {
+                generator_id,
+                track_id,
+            } => {
+                if let Some(gen_instance) = self.plugin_state.get_generator_mut(generator_id) {
+                    gen_instance.track_id = track_id;
+                }
+                // Update active voice track association
+                for voice in &mut self.voices.active_generators {
+                    if voice.id == generator_id {
+                        voice.track_id = track_id;
+                    }
+                }
+            }
+            AudioCommand::AddEffect {
+                target,
+                effect_id,
+                registry_id,
+                effect_factory,
+            } => {
+                let mut effect = effect_factory();
+                let buf_size = self.current_state.graph.buffer_size.max(512);
+                effect.prepare(self.config.sample_rate as f32, buf_size);
+                let bus_cfg = BusConfig {
+                    name: "Main".into(),
+                    channel_count: self.config.num_channels as usize,
+                    is_optional: false,
+                };
+                effect.set_io_layout(&[bus_cfg.clone()], &[bus_cfg]);
+
+                self.process_command(AudioCommand::InstallEffect {
+                    target,
+                    effect_id,
+                    registry_id,
+                    plugin: effect,
+                    telemetry: None,
+                });
+            }
+            AudioCommand::InstallEffect {
+                target,
+                effect_id,
+                registry_id,
+                plugin: effect,
+                telemetry,
+            } => {
+                let instance = AudioEffectInstance {
+                    id: effect_id,
+                    registry_id,
+                    plugin: effect,
+                    bypass: false,
+                };
+
+                // Derive the PluginTarget for this effect.
+                let plugin_target = match &target {
+                    EffectTarget::Track(track_id) => {
+                        PluginTarget::TrackEffect(*track_id, effect_id)
+                    }
+                    EffectTarget::Bus(bus_id) => PluginTarget::BusEffect(*bus_id, effect_id),
+                    EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
+                };
+
+                match target {
+                    EffectTarget::Track(track_id) => {
+                        self.plugin_state
+                            .add_track_effect(track_id.to_u32() as usize, instance);
+                        log::info!("[AudioEngine] Added effect to track {:?}", track_id);
+                    }
+                    EffectTarget::Bus(bus_id) => {
+                        self.plugin_state
+                            .add_bus_effect(bus_id.to_u32() as usize, instance);
+                        log::info!(
+                            "[AudioEngine] Added effect {:?} to bus {:?}",
+                            effect_id,
+                            bus_id
+                        );
+                    }
+                    EffectTarget::Master => {
+                        self.plugin_state.master_effects.push(instance);
+                        log::info!("[AudioEngine] Added effect {:?} to master", effect_id);
+                    }
+                }
+
+                // Register a new triple-buffer pair for this effect's telemetry.
+                let telemetry = telemetry.unwrap_or_else(|| {
+                    let plugin = self.get_plugin(&plugin_target);
+                    let initial_snapshot = plugin
+                        .map(PluginTelemetrySnapshot::from_plugin)
+                        .unwrap_or_default();
+                    let (producer, consumer) = triple_buffer::triple_buffer(&initial_snapshot);
+                    crate::commands::PreparedPluginTelemetry {
+                        producer,
+                        consumer: Box::new(consumer),
+                    }
+                });
+                self.telemetry
+                    .param_telemetry_producers
+                    .insert(plugin_target.clone(), telemetry.producer);
+                let _ = self
+                    .io
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Registered {
+                        target: plugin_target,
+                        consumer: telemetry.consumer,
+                    });
+            }
+            AudioCommand::RemoveEffect { target, effect_id } => {
+                if let Some(effects) = self.get_effect_list_mut(&target) {
+                    if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
+                        let plugin = effects.remove(pos).plugin;
+                        self.plugin_state.retire_plugin(plugin);
+                    }
+                }
+
+                // Remove telemetry pair and notify DawContext.
+                let plugin_target = match &target {
+                    EffectTarget::Track(track_id) => {
+                        PluginTarget::TrackEffect(*track_id, effect_id)
+                    }
+                    EffectTarget::Bus(bus_id) => PluginTarget::BusEffect(*bus_id, effect_id),
+                    EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
+                };
+                // Same command as the effect removal, so no block ever sees one without the other.
+                self.remove_plugin_modulations(plugin_target);
+                if let Some(producer) = self
+                    .telemetry
+                    .param_telemetry_producers
+                    .remove(&plugin_target)
+                {
+                    self.retire_graph_state(RetiredGraphState::TelemetryProducer(producer));
+                }
+                if let Some(subscription) = self
+                    .telemetry
+                    .active_telemetry_subscriptions
+                    .remove(&plugin_target)
+                {
+                    self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
+                }
+                let _ = self
+                    .io
+                    .telemetry_reg_sender
+                    .try_send(TelemetryRegistration::Removed {
+                        target: plugin_target,
+                    });
+            }
+            AudioCommand::MoveEffect {
+                target,
+                effect_id,
+                new_position,
+            } => {
+                if let Some(effects) = self.get_effect_list_mut(&target)
+                    && let Some(old_position) =
+                        effects.iter().position(|effect| effect.id == effect_id)
+                {
+                    let effect = effects.remove(old_position);
+                    effects.insert(new_position.min(effects.len()), effect);
+                }
+            }
+            AudioCommand::SetEffectBypass {
+                target,
+                effect_id,
+                bypass,
+            } => {
+                let changed = self
+                    .get_effect_list_mut(&target)
+                    .and_then(|effects| effects.iter_mut().find(|effect| effect.id == effect_id))
+                    .is_some_and(|effect| {
+                        if effect.bypass == bypass {
+                            return false;
+                        }
+                        effect.bypass = bypass;
+                        effect.plugin.set_bypass(bypass);
+                        if !bypass {
+                            // Drop tails captured before the bypass so re-enabling starts clean.
+                            effect.plugin.reset();
+                        }
+                        true
+                    });
+                if changed {
+                    self.recalculate_latencies();
+                }
+            }
+
+            AudioCommand::QueryGeneratorParameters { generator_id } => {
+                // Get all parameter values from the generator and send back
+                if let Some(gen_instance) = self.plugin_state.get_generator(generator_id) {
+                    let specs = gen_instance.plugin.get_parameter_specs();
+                    let parameters: Vec<(u32, f32)> = specs
+                        .iter()
+                        .map(|spec| (spec.id, gen_instance.plugin.get_parameter(spec.id)))
+                        .collect();
+
+                    let snapshot = GeneratorParameterSnapshot {
+                        generator_id,
+                        parameters,
+                    };
+
+                    let _ = self
+                        .io
+                        .feedback_producer
+                        .push(AudioFeedback::GeneratorParameterSnapshot(snapshot));
+                }
+            }
+            AudioCommand::SetMixerChannelParameter { target, param } => {
+                // Audio thread is sole owner of mixer channel DSP values
+                self.mixer_state.apply(&target, &param);
+
+                let (our_target, norm_value) = resolve_target_mixer_param(&target, &param);
+
+                if let Some(our_target) = our_target {
+                    if let Some(link) = self
+                        .modulation
+                        .active_links
+                        .iter_mut()
+                        .find(|l| l.target == our_target)
+                    {
+                        link.base_value = norm_value;
+                    }
+                }
+
+                log::debug!(
+                    "[AudioEngine] SetMixerChannelParameter: {:?} — {:?}",
+                    target,
+                    param
+                );
+            }
+            AudioCommand::QueryMixerChannel { target, request_id } => {
+                let mut snapshot = self.mixer_state.snapshot(target);
+                snapshot.request_id = request_id;
+                let _ = self
+                    .io
+                    .feedback_producer
+                    .push(AudioFeedback::MixerChannelSnapshot(snapshot));
+            }
+            AudioCommand::AddBus { bus_id, name } => {
+                // Initialize bus buffer and effects chain
+                let id_index = bus_id.to_u32() as usize;
+                self.plugin_state.add_bus(id_index);
+                self.workspace.prepare_bus(bus_id);
+
+                // Initialize the missing bus mixer channel
+                self.mixer_state.bus_channels.entry(bus_id).or_default();
+
+                let bus_ids = self.workspace.bus_buffers.keys().copied();
+                self.routing.cached_order = compute_routing_order(
+                    &self.current_state.graph.tracks,
+                    bus_ids,
+                    &self.current_state.graph.routing,
+                );
+
+                log::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
+            }
+            AudioCommand::RemoveBus { bus_id } => {
+                let id_index = bus_id.to_u32() as usize;
+                self.plugin_state.remove_bus(id_index);
+                self.current_state.graph.bus_ids.retain(|id| *id != bus_id);
+                if let Some(buffer) = self.workspace.bus_buffers.remove(&bus_id) {
+                    self.retire_graph_state(RetiredGraphState::AudioBuffer(buffer));
+                }
+                self.mixer_state.bus_channels.remove(&bus_id);
+                let bus_ids = self.workspace.bus_buffers.keys().copied();
+                self.routing.cached_order = compute_routing_order(
+                    &self.current_state.graph.tracks,
+                    bus_ids,
+                    &self.current_state.graph.routing,
+                );
+
+                log::info!("[AudioEngine] Removed bus {:?}", bus_id);
+            }
+            AudioCommand::UpdateRouting { routing } => {
+                // Routing is now directly owned by the audio thread — update and
+                // recompute the cached order immediately.
+                let bus_ids = self.workspace.bus_buffers.keys().copied();
+                self.routing.cached_order =
+                    compute_routing_order(&self.current_state.graph.tracks, bus_ids, &routing);
+                self.routing.set_routes(&routing);
+                let previous = std::mem::replace(&mut self.current_state.graph.routing, routing);
+                self.retire_graph_state(RetiredGraphState::Routing(previous));
+                self.sync_sidechain_buffers();
+                log::info!(
+                    "[AudioEngine] UpdateRouting: {} connections",
+                    self.current_state.graph.routing.len()
+                );
+            }
+            AudioCommand::QueryEffectParameters { target, effect_id } => {
+                let effect_instance_opt = self
+                    .get_effect_list(&target)
+                    .and_then(|effects| effects.iter().find(|e| e.id == effect_id));
+
+                if let Some(effect_instance) = effect_instance_opt {
+                    let specs = effect_instance.plugin.get_parameter_specs();
+                    let parameters: Vec<(u32, f32)> = specs
+                        .iter()
+                        .map(|spec| (spec.id, effect_instance.plugin.get_parameter(spec.id)))
+                        .collect();
+
+                    let snapshot = EffectParameterSnapshot {
+                        target,
+                        effect_id,
+                        parameters,
+                    };
+
+                    let _ = self
+                        .io
+                        .feedback_producer
+                        .push(AudioFeedback::EffectParameterSnapshot(snapshot));
+                }
+            }
+            AudioCommand::HydratePlugin {
+                track_effects,
+                master_effects,
+                bus_effects,
+                generators,
+                track_channels,
+                bus_channels,
+                master_channel,
+            } => {
+                // Completely clear the previous project's plugin state, voices, and tails
+                self.plugin_state.clear_generators();
+                self.plugin_state.clear_effects();
+                self.voices.active_generators.clear();
+                self.workspace.bus_buffers.clear();
+                self.routing.track_tails.clear();
+                self.routing.bus_tails.clear();
+                self.routing.master_tail = 0;
+
+                // Clear all previous telemetry state.
+                let mut producers = std::mem::take(&mut self.telemetry.param_telemetry_producers);
+                for (_, producer) in producers.drain() {
+                    self.retire_graph_state(RetiredGraphState::TelemetryProducer(producer));
+                }
+                self.telemetry.param_telemetry_producers = producers;
+                let mut subscriptions =
+                    std::mem::take(&mut self.telemetry.active_telemetry_subscriptions);
+                for (_, subscription) in subscriptions.drain() {
+                    self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
+                }
+                self.telemetry.active_telemetry_subscriptions = subscriptions;
+
+                self.modulation
+                    .replace_from_graph(&self.current_state.graph);
+
+                // =========================================================
+                // Seed audio-thread mixer channel state from project values
+                // =========================================================
+                self.mixer_state = AudioMixerState::default();
+
+                for (track_id, seed) in &track_channels {
+                    self.mixer_state.track_channels.insert(
+                        *track_id,
+                        AudioMixerChannelValues::new(
+                            seed.volume,
+                            seed.pan,
+                            seed.mute,
+                            seed.solo,
+                            seed.inverted_phase,
+                        ),
+                    );
+                }
+                for (bus_id, seed) in &bus_channels {
+                    self.mixer_state.bus_channels.insert(
+                        *bus_id,
+                        AudioMixerChannelValues::new(
+                            seed.volume,
+                            seed.pan,
+                            seed.mute,
+                            seed.solo,
+                            seed.inverted_phase,
+                        ),
+                    );
+                }
+                self.mixer_state.master = AudioMixerChannelValues::new(
+                    master_channel.volume,
+                    master_channel.pan,
+                    master_channel.mute,
+                    master_channel.solo,
+                    master_channel.inverted_phase,
+                );
+
+                // Accumulate all new consumers to send in one batch.
+                let mut new_consumers: HashMap<
+                    PluginTarget,
+                    Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
+                > = HashMap::new();
+
+                for (gen_id, (registry_id, plugin, telemetry)) in generators.into_iter() {
+                    // Since PreparePlugin doesn't pass track_ids directly, we find the
+                    // associated track from the newly synced current_state graph.
+                    let track_id = self
+                        .current_state
+                        .graph
+                        .tracks
+                        .iter()
+                        .find(|t| t.generator.as_ref().map_or(false, |g| g.id == gen_id))
+                        .map(|t| t.id)
+                        .unwrap_or_else(|| TrackId::from(0));
+
+                    self.plugin_state.insert_generator(AudioGeneratorInstance {
+                        id: gen_id,
+                        track_id,
+                        registry_id,
+                        plugin,
+                    });
+
+                    let target = PluginTarget::Generator(gen_id);
+                    self.telemetry
+                        .param_telemetry_producers
+                        .insert(target.clone(), telemetry.producer);
+                    new_consumers.insert(target, telemetry.consumer);
+                }
+
+                // Batch load Track Effects
+                for (track_id, effects_map) in track_effects.into_iter() {
+                    for (effect_id, (registry_id, plugin, telemetry)) in effects_map.into_iter() {
+                        self.plugin_state.add_track_effect(
+                            track_id.to_u32() as usize,
+                            AudioEffectInstance {
+                                id: effect_id,
+                                registry_id,
+                                plugin,
+                                bypass: false,
+                            },
+                        );
+
+                        let target = PluginTarget::TrackEffect(track_id, effect_id);
+                        self.telemetry
+                            .param_telemetry_producers
+                            .insert(target.clone(), telemetry.producer);
+                        new_consumers.insert(target, telemetry.consumer);
+                    }
+                }
+
+                // Batch load Bus Effects & Initialize Bus Buffers
+                for (bus_id, effects_map) in bus_effects.into_iter() {
+                    let bus_id_index = bus_id.to_u32() as usize;
+                    self.plugin_state.add_bus(bus_id_index);
+                    self.workspace.prepare_bus(bus_id);
+
+                    for (effect_id, (registry_id, plugin, telemetry)) in effects_map.into_iter() {
+                        self.plugin_state.add_bus_effect(
+                            bus_id_index,
+                            AudioEffectInstance {
+                                id: effect_id,
+                                registry_id,
+                                plugin,
+                                bypass: false,
+                            },
+                        );
+
+                        let target = PluginTarget::BusEffect(bus_id, effect_id);
+                        self.telemetry
+                            .param_telemetry_producers
+                            .insert(target.clone(), telemetry.producer);
+                        new_consumers.insert(target, telemetry.consumer);
+                    }
+                }
+
+                // Ensure all buses present in the graph have buffers allocated,
+                // even if they don't have any effects loaded on them yet.
+                for &bus_id in &self.current_state.graph.bus_ids {
+                    if !self.workspace.bus_buffers.contains_key(&bus_id) {
+                        self.plugin_state.add_bus(bus_id.to_u32() as usize);
+                        self.workspace.prepare_bus(bus_id);
+                    }
+                }
+
+                // Batch load Master Effects
+                for (effect_id, (registry_id, plugin, telemetry)) in master_effects.into_iter() {
+                    self.plugin_state.master_effects.push(AudioEffectInstance {
+                        id: effect_id,
+                        registry_id,
+                        plugin,
+                        bypass: false,
+                    });
+
+                    let target = PluginTarget::MasterEffect(effect_id);
+                    self.telemetry
+                        .param_telemetry_producers
+                        .insert(target.clone(), telemetry.producer);
+                    new_consumers.insert(target, telemetry.consumer);
+                }
+
+                // Send all new consumers to DawContext in one batch via the dedicated channel.
+                let _ =
+                    self.io
+                        .telemetry_reg_sender
+                        .try_send(TelemetryRegistration::BatchRegistered {
+                            consumers: new_consumers,
+                        });
+
+                log::info!("[AudioEngine] Prepared all plugins for the newly loaded project.");
+            }
+            AudioCommand::SetMetronomeActive(active) => {
+                self.metronome_state.set_active(active);
+                log::info!("[AudioEngine] Metronome Active: {}", active);
+            }
+            AudioCommand::TogglePlayingWithPlaybackMode(playback_mode) => {
+                if self.transport.mode == playback_mode {
+                    let is_playing = match self.transport.mode {
+                        PlaybackMode::Song => &mut self.transport.song.is_playing,
+                        PlaybackMode::Pattern { .. } => &mut self.transport.pattern.is_playing,
+                    };
+                    if *is_playing {
+                        *is_playing = false;
+                        self.stop_all_active_generators();
+                    } else {
+                        *is_playing = true;
+                    }
+                } else {
+                    self.stop_all_active_generators();
+                    self.transport.song.is_playing = false;
+                    self.transport.pattern.is_playing = false;
+                    self.transport.mode = playback_mode;
+                    match self.transport.mode {
+                        PlaybackMode::Song => {
+                            self.transport.song.is_playing = true;
+                        }
+                        PlaybackMode::Pattern { .. } => {
+                            self.reset_pattern_state();
+                            self.transport.pattern.is_playing = true;
+                        }
+                    }
+                }
+                self.emit_current_playback_position();
+            }
+            AudioCommand::TogglePatternPlayback {
+                pattern_id,
+                generator_id,
+            } => {
+                let target = PlaybackMode::Pattern {
+                    pattern_id,
+                    generator_id,
+                };
+                match self.transport.mode {
+                    PlaybackMode::Pattern {
+                        pattern_id: current,
+                        ..
+                    } if current == pattern_id => {
+                        // Same pattern: play/pause from the current (possibly seeked) position.
+                        self.transport.mode = target;
+                        if self.transport.pattern.is_playing {
+                            self.transport.pattern.is_playing = false;
+                            self.stop_all_active_generators();
+                        } else {
+                            self.transport.pattern.is_playing = true;
+                        }
+                    }
+                    PlaybackMode::Pattern { .. } => {
+                        // Another pattern: start the new one from its beginning.
+                        self.stop_all_active_generators();
+                        self.transport.mode = target;
+                        self.reset_pattern_state();
+                        self.transport.pattern.is_playing = true;
+                    }
+                    PlaybackMode::Song => {
+                        // Leaving song mode keeps a pattern position seeked while stopped.
+                        self.transport.song.is_playing = false;
+                        self.stop_all_active_generators();
+                        self.transport.mode = target;
+                        self.transport.pattern.is_playing = true;
+                    }
+                }
+
+                self.emit_current_playback_position();
+            }
+            AudioCommand::StopPatternPlayback => {
+                self.transport.pattern.is_playing = false;
+                self.stop_all_active_generators();
+                self.reset_pattern_state();
+                self.emit_current_playback_position();
+            }
+            AudioCommand::SetPatternPlayhead(samples) => {
+                self.stop_all_active_generators();
+                self.transport.pattern.playhead_samples = samples;
+                self.transport.pattern.last_emitted_samples = samples;
+                self.recalculate_pattern_beat_bar();
+                self.emit_current_playback_position();
+            }
+            AudioCommand::SetPatternLoop(region) => {
+                self.transport.pattern.loop_region = region.filter(|(start, end)| end > start);
+            }
+            AudioCommand::SwitchPatternGenerator(new_gen_id) => {
+                if let PlaybackMode::Pattern { generator_id, .. } = &mut self.transport.mode {
+                    if *generator_id != new_gen_id {
+                        // Silence the old generator so ADSR tails/notes don't hang forever
+                        if let Some(old_voice) = self
+                            .voices
+                            .active_generators
+                            .iter_mut()
+                            .find(|g| g.id == *generator_id)
+                        {
+                            // Release held notes explicitly, keeping tracking in step.
+                            old_voice.midi_events.clear();
+                            old_voice.release_all();
+                            if let Some(gen_instance) =
+                                self.plugin_state.get_generator_mut(old_voice.id)
+                            {
+                                gen_instance.plugin.reset();
+                            }
+                        }
+
+                        // Hot-swap the ID. The `process_pattern_mode` function will
+                        // automatically route the next batch of MIDI notes to the new generator.
+                        *generator_id = new_gen_id;
+                    }
+                }
+            }
+            AudioCommand::ExecutePluginCommand {
+                target,
+                command,
+                payload,
+                request_id,
+            } => {
+                if let Some(plugin) = self.get_plugin_mut(&target) {
+                    if let Some(res) = plugin.execute_custom_command(&command, &payload) {
+                        let _ =
+                            self.io
+                                .feedback_producer
+                                .push(AudioFeedback::PluginCommandResponse {
+                                    request_id,
+                                    response: res,
+                                });
+                    }
+                }
+            }
+            AudioCommand::SetPluginState { target, state } => {
+                if let Some(plugin) = self.get_plugin_mut(&target) {
+                    plugin.set_state(&state);
+                }
+            }
+            AudioCommand::QueryPluginState { target, request_id } => {
+                if let Some(plugin) = self.get_plugin(&target) {
+                    let host_instance = plugin
+                        .as_any()
+                        .downcast_ref::<karbeat_host::HostedProcessor>()
+                        .map(|hosted| hosted.instance);
+                    let state = if host_instance.is_some() {
+                        Vec::new()
+                    } else {
+                        plugin.get_state()
+                    };
+                    let _ = self
+                        .io
+                        .feedback_producer
+                        .push(AudioFeedback::PluginStateSnapshot {
+                            target,
+                            state,
+                            request_id,
+                            host_instance,
+                        });
+                }
+            }
+            AudioCommand::QueryZeroCopyBuffer {
+                target,
+                name,
+                request_id,
+            } => {
+                let buffer_opt = self
+                    .get_plugin(&target)
+                    .and_then(|p| p.get_zero_copy_buffer(&name));
+                let _ = self
+                    .io
+                    .feedback_producer
+                    .push(AudioFeedback::ZeroCopyBufferResponse {
+                        request_id,
+                        buffer: buffer_opt,
+                    });
+            }
+            AudioCommand::QueryAudioExportSnapshot { response_tx } => {
+                let _ = response_tx.send(self.export_snapshot());
+            }
+            AudioCommand::AddModulationSource { id, source } => {
+                self.modulation.add_source(id, &source);
+                log::info!("[AudioEngine] Added Modulation Source {:?}", id);
+            }
+            AudioCommand::RemoveModulationSource(modulation_id) => {
+                self.modulation.active_sources.remove(&modulation_id);
+                log::info!(
+                    "[AudioEngine] Removed Modulation Source {:?}",
+                    modulation_id
+                );
+            }
+            AudioCommand::AddModulationLink { link, .. } => {
+                self.modulation.active_links.push(link);
+            }
+            AudioCommand::UpdateModulationLinkDepth { id, depth } => {
+                if let Some(link) = self.modulation.active_links.iter_mut().find(|l| l.id == id) {
+                    link.depth = depth;
+                }
+            }
+            AudioCommand::RemoveModulationLink(modulation_link_id) => {
+                self.modulation
+                    .active_links
+                    .retain(|l| l.id != modulation_link_id);
+                log::info!(
+                    "[AudioEngine] Removed Modulation Link {:?}",
+                    modulation_link_id
+                );
+            }
+            AudioCommand::UpdateTrackGraph {
+                tracks,
+                clips,
+                patterns,
+            } => {
+                // Update only the track/pattern/sample-index portion of the local graph.
+                // Routing and automation lanes are untouched by this command.
+                let old_tracks = std::mem::replace(&mut self.current_state.graph.tracks, tracks);
+                let old_clips = std::mem::replace(&mut self.current_state.graph.clips, clips);
+                let old_patterns =
+                    std::mem::replace(&mut self.current_state.graph.patterns, patterns);
+                // Notes sounding from a note or clip that just changed are released now;
+                // their scheduled note-offs would use the edited key and position.
+                let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
+                self.voices.release_changed_notes(
+                    GraphView {
+                        tracks: &old_tracks,
+                        clips: &old_clips,
+                        patterns: &old_patterns,
+                    },
+                    GraphView {
+                        tracks: &self.current_state.graph.tracks,
+                        clips: &self.current_state.graph.clips,
+                        patterns: &self.current_state.graph.patterns,
+                    },
+                    clips_matter,
+                );
+                self.retire_graph_state(RetiredGraphState::Tracks {
+                    tracks: old_tracks,
+                    clips: old_clips,
+                    patterns: old_patterns,
+                });
+
+                let valid_track_ids: HashSet<_> = self
+                    .current_state
+                    .graph
+                    .tracks
+                    .iter()
+                    .map(|t| t.id)
+                    .collect();
+
+                self.mixer_state
+                    .track_channels
+                    .retain(|track_id, _| valid_track_ids.contains(track_id));
+
+                // Guarantee every track in the new graph has an initialized mixer channel!
+                for track in self.current_state.graph.tracks.iter() {
+                    self.mixer_state.track_channels.entry(track.id).or_default();
+                }
+
+                // Recompute routing order so new tracks are included in the DSP loop!
+                let bus_ids = self.workspace.bus_buffers.keys().copied();
+                self.routing.cached_order = compute_routing_order(
+                    &self.current_state.graph.tracks,
+                    bus_ids,
+                    &self.current_state.graph.routing,
+                );
+                self.recalculate_max_sample_index();
+            }
+            AudioCommand::UpdateAutomationLane { id, lane } => {
+                log::info!("Receive update automation lane of Id {}", id);
+                if let Some(previous) = self.current_state.graph.automation_lanes.insert(id, lane) {
+                    self.retire_graph_state(RetiredGraphState::Automation(previous));
+                }
+            }
+            AudioCommand::RemoveAutomationLane { id } => {
+                if let Some(previous) = self.current_state.graph.automation_lanes.remove(&id) {
+                    self.retire_graph_state(RetiredGraphState::Automation(previous));
+                }
+            }
+            AudioCommand::UpdateAudioConfig {
+                sample_rate,
+                buffer_size,
+            } => {
+                let sr_changed = match sample_rate {
+                    Some(val) => val != self.current_state.graph.sample_rate,
+                    None => false,
+                };
+                let buf_changed = match buffer_size {
+                    Some(val) => val != self.current_state.graph.buffer_size,
+                    None => false,
+                };
+
+                if sr_changed || buf_changed {
+                    if let Some(sample_rate) = sample_rate.filter(|_| sr_changed) {
+                        let ratio = sample_rate as f64 / self.config.sample_rate as f64;
+                        self.transport.song.playhead_samples =
+                            (self.transport.song.playhead_samples as f64 * ratio) as u32;
+                        self.transport.song.last_emitted_samples =
+                            (self.transport.song.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.transport.pattern.playhead_samples =
+                            (self.transport.pattern.playhead_samples as f64 * ratio) as u32;
+                        self.transport.pattern.last_emitted_samples =
+                            (self.transport.pattern.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.current_state.graph.max_sample_index =
+                            (self.current_state.graph.max_sample_index as f64 * ratio) as u32;
+
+                        // Scale sample-domain audio clip values while preserving tick placement.
+                        for clip in self.current_state.graph.clips.values_mut() {
+                            match &mut clip.time {
+                                crate::core::project::clip::ClipTimeUnit::Samples {
+                                    start_time,
+                                    loop_length,
+                                    offset_start,
+                                } => {
+                                    *start_time = (*start_time as f64 * ratio) as u64;
+                                    *loop_length = (*loop_length as f64 * ratio) as u64;
+                                    *offset_start = (*offset_start as f64 * ratio) as u64;
+                                }
+                                crate::core::project::clip::ClipTimeUnit::Audio {
+                                    loop_length,
+                                    offset_start,
+                                    ..
+                                } => {
+                                    *loop_length = (*loop_length as f64 * ratio) as u64;
+                                    *offset_start = (*offset_start as f64 * ratio) as u64;
+                                }
+                                crate::core::project::clip::ClipTimeUnit::Ticks { .. } => {}
+                            }
+                        }
+
+                        self.config.sample_rate = sample_rate;
+                    }
+
+                    let sr = sample_rate.unwrap_or(self.current_state.graph.sample_rate);
+                    let buf_size = buffer_size.unwrap_or(self.current_state.graph.buffer_size);
+                    self.current_state.graph.sample_rate = sr;
+                    self.current_state.graph.buffer_size = buf_size;
+
+                    self.reprepare_plugins_and_clear_delays(sr, buf_size);
+                    self.recalculate_latencies();
+
+                    log::info!(
+                        "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                        sr,
+                        buf_size
+                    );
+
+                    self.recalculate_max_sample_index();
+                }
+            }
+            AudioCommand::ReplaceFullGraph { graph } => {
+                let sr_changed = graph.sample_rate != self.config.sample_rate;
+                let buf_changed = graph.buffer_size != self.current_state.graph.buffer_size;
+
+                if sr_changed || buf_changed {
+                    let sr = graph.sample_rate;
+                    let buf_size = graph.buffer_size;
+
+                    if sr_changed {
+                        let ratio = sr as f64 / self.config.sample_rate as f64;
+                        self.transport.song.playhead_samples =
+                            (self.transport.song.playhead_samples as f64 * ratio) as u32;
+                        self.transport.song.last_emitted_samples =
+                            (self.transport.song.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.transport.pattern.playhead_samples =
+                            (self.transport.pattern.playhead_samples as f64 * ratio) as u32;
+                        self.transport.pattern.last_emitted_samples =
+                            (self.transport.pattern.last_emitted_samples as f64 * ratio) as u32;
+
+                        self.config.sample_rate = sr;
+                    }
+
+                    self.reprepare_plugins_and_clear_delays(sr, buf_size);
+
+                    log::info!(
+                        "[AudioEngine] ReplaceFullGraph sync: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
+                        sr,
+                        buf_size
+                    );
+                }
+
+                // Used for undo/redo. Atomically replace the full graph snapshot
+                // and recompute the cached routing order.
+                let bus_ids = graph.bus_ids.iter().copied();
+                self.routing.cached_order =
+                    compute_routing_order(&graph.tracks, bus_ids, &graph.routing);
+                self.routing.set_routes(&graph.routing);
+
+                let previous = std::mem::replace(&mut self.current_state.graph, graph);
+                let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
+                self.voices.release_changed_notes(
+                    GraphView {
+                        tracks: &previous.tracks,
+                        clips: &previous.clips,
+                        patterns: &previous.patterns,
+                    },
+                    GraphView {
+                        tracks: &self.current_state.graph.tracks,
+                        clips: &self.current_state.graph.clips,
+                        patterns: &self.current_state.graph.patterns,
+                    },
+                    clips_matter,
+                );
+                self.retire_graph_state(RetiredGraphState::Full(previous));
+                self.sync_sidechain_buffers();
+
+                self.modulation
+                    .replace_from_graph(&self.current_state.graph);
+
+                log::debug!("[AudioEngine] ReplaceFullGraph applied");
+                self.recalculate_max_sample_index();
+            }
+            AudioCommand::BeginEdit { target } => {
+                self.handle_parameter_edit(&target, true);
+            }
+            AudioCommand::EndEdit { target } => {
+                self.handle_parameter_edit(&target, false);
+            }
+            AudioCommand::SetPluginTelemetrySubscription {
+                target,
+                buffers,
+                active,
+            } => {
+                if active {
+                    let entry = self
+                        .telemetry
+                        .active_telemetry_subscriptions
+                        .entry(target)
+                        .or_default();
+                    for buf in buffers {
+                        entry.insert(buf);
+                    }
+                } else {
+                    if let Some(subscription) = self
+                        .telemetry
+                        .active_telemetry_subscriptions
+                        .remove(&target)
+                    {
+                        self.retire_graph_state(RetiredGraphState::TelemetrySubscription(
+                            subscription,
+                        ));
+                    }
+                }
+            }
+            AudioCommand::SetMixerTelemetrySubscription { active } => {
+                self.telemetry.mixer_snapshot_active = active
+            }
+            AudioCommand::ResumeAutomation { target } => {
+                self.modulation.suspended_targets.remove(&target);
+            }
+        }
+    }
+}

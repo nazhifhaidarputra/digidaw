@@ -6,7 +6,18 @@ part 'global.freezed.dart';
 enum ToolSelection { pointer, slice, draw, move, delete, zoom, select, resize }
 
 /// Piano roll specific tool selection (independent from main toolbar)
-enum PianoRollToolSelection { grab, draw, delete, select, slice, pan, zoom }
+enum PianoRollToolSelection {
+  grab,
+  draw,
+  delete,
+  select,
+
+  /// Drags a loop region on the ruler.
+  selectRegion,
+  slice,
+  pan,
+  zoom,
+}
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 

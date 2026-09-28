@@ -2508,6 +2508,281 @@ as double,
 }
 
 /// @nodoc
+mixin _$RemovedAutomationDto {
+
+ List<int> get automationLaneIds; List<int> get modulationSourceIds; List<int> get modulationLinkIds;
+/// Create a copy of RemovedAutomationDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$RemovedAutomationDtoCopyWith<RemovedAutomationDto> get copyWith => _$RemovedAutomationDtoCopyWithImpl<RemovedAutomationDto>(this as RemovedAutomationDto, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RemovedAutomationDto&&const DeepCollectionEquality().equals(other.automationLaneIds, automationLaneIds)&&const DeepCollectionEquality().equals(other.modulationSourceIds, modulationSourceIds)&&const DeepCollectionEquality().equals(other.modulationLinkIds, modulationLinkIds));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(automationLaneIds),const DeepCollectionEquality().hash(modulationSourceIds),const DeepCollectionEquality().hash(modulationLinkIds));
+
+@override
+String toString() {
+  return 'RemovedAutomationDto(automationLaneIds: $automationLaneIds, modulationSourceIds: $modulationSourceIds, modulationLinkIds: $modulationLinkIds)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $RemovedAutomationDtoCopyWith<$Res>  {
+  factory $RemovedAutomationDtoCopyWith(RemovedAutomationDto value, $Res Function(RemovedAutomationDto) _then) = _$RemovedAutomationDtoCopyWithImpl;
+@useResult
+$Res call({
+ List<int> automationLaneIds, List<int> modulationSourceIds, List<int> modulationLinkIds
+});
+
+
+
+
+}
+/// @nodoc
+class _$RemovedAutomationDtoCopyWithImpl<$Res>
+    implements $RemovedAutomationDtoCopyWith<$Res> {
+  _$RemovedAutomationDtoCopyWithImpl(this._self, this._then);
+
+  final RemovedAutomationDto _self;
+  final $Res Function(RemovedAutomationDto) _then;
+
+/// Create a copy of RemovedAutomationDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? automationLaneIds = null,Object? modulationSourceIds = null,Object? modulationLinkIds = null,}) {
+  return _then(_self.copyWith(
+automationLaneIds: null == automationLaneIds ? _self.automationLaneIds : automationLaneIds // ignore: cast_nullable_to_non_nullable
+as List<int>,modulationSourceIds: null == modulationSourceIds ? _self.modulationSourceIds : modulationSourceIds // ignore: cast_nullable_to_non_nullable
+as List<int>,modulationLinkIds: null == modulationLinkIds ? _self.modulationLinkIds : modulationLinkIds // ignore: cast_nullable_to_non_nullable
+as List<int>,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [RemovedAutomationDto].
+extension RemovedAutomationDtoPatterns on RemovedAutomationDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _RemovedAutomationDto value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _RemovedAutomationDto() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _RemovedAutomationDto value)  $default,){
+final _that = this;
+switch (_that) {
+case _RemovedAutomationDto():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _RemovedAutomationDto value)?  $default,){
+final _that = this;
+switch (_that) {
+case _RemovedAutomationDto() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<int> automationLaneIds,  List<int> modulationSourceIds,  List<int> modulationLinkIds)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _RemovedAutomationDto() when $default != null:
+return $default(_that.automationLaneIds,_that.modulationSourceIds,_that.modulationLinkIds);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<int> automationLaneIds,  List<int> modulationSourceIds,  List<int> modulationLinkIds)  $default,) {final _that = this;
+switch (_that) {
+case _RemovedAutomationDto():
+return $default(_that.automationLaneIds,_that.modulationSourceIds,_that.modulationLinkIds);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<int> automationLaneIds,  List<int> modulationSourceIds,  List<int> modulationLinkIds)?  $default,) {final _that = this;
+switch (_that) {
+case _RemovedAutomationDto() when $default != null:
+return $default(_that.automationLaneIds,_that.modulationSourceIds,_that.modulationLinkIds);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _RemovedAutomationDto implements RemovedAutomationDto {
+  const _RemovedAutomationDto({required final  List<int> automationLaneIds, required final  List<int> modulationSourceIds, required final  List<int> modulationLinkIds}): _automationLaneIds = automationLaneIds,_modulationSourceIds = modulationSourceIds,_modulationLinkIds = modulationLinkIds;
+  
+
+ final  List<int> _automationLaneIds;
+@override List<int> get automationLaneIds {
+  if (_automationLaneIds is EqualUnmodifiableListView) return _automationLaneIds;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_automationLaneIds);
+}
+
+ final  List<int> _modulationSourceIds;
+@override List<int> get modulationSourceIds {
+  if (_modulationSourceIds is EqualUnmodifiableListView) return _modulationSourceIds;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_modulationSourceIds);
+}
+
+ final  List<int> _modulationLinkIds;
+@override List<int> get modulationLinkIds {
+  if (_modulationLinkIds is EqualUnmodifiableListView) return _modulationLinkIds;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_modulationLinkIds);
+}
+
+
+/// Create a copy of RemovedAutomationDto
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$RemovedAutomationDtoCopyWith<_RemovedAutomationDto> get copyWith => __$RemovedAutomationDtoCopyWithImpl<_RemovedAutomationDto>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RemovedAutomationDto&&const DeepCollectionEquality().equals(other._automationLaneIds, _automationLaneIds)&&const DeepCollectionEquality().equals(other._modulationSourceIds, _modulationSourceIds)&&const DeepCollectionEquality().equals(other._modulationLinkIds, _modulationLinkIds));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_automationLaneIds),const DeepCollectionEquality().hash(_modulationSourceIds),const DeepCollectionEquality().hash(_modulationLinkIds));
+
+@override
+String toString() {
+  return 'RemovedAutomationDto(automationLaneIds: $automationLaneIds, modulationSourceIds: $modulationSourceIds, modulationLinkIds: $modulationLinkIds)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$RemovedAutomationDtoCopyWith<$Res> implements $RemovedAutomationDtoCopyWith<$Res> {
+  factory _$RemovedAutomationDtoCopyWith(_RemovedAutomationDto value, $Res Function(_RemovedAutomationDto) _then) = __$RemovedAutomationDtoCopyWithImpl;
+@override @useResult
+$Res call({
+ List<int> automationLaneIds, List<int> modulationSourceIds, List<int> modulationLinkIds
+});
+
+
+
+
+}
+/// @nodoc
+class __$RemovedAutomationDtoCopyWithImpl<$Res>
+    implements _$RemovedAutomationDtoCopyWith<$Res> {
+  __$RemovedAutomationDtoCopyWithImpl(this._self, this._then);
+
+  final _RemovedAutomationDto _self;
+  final $Res Function(_RemovedAutomationDto) _then;
+
+/// Create a copy of RemovedAutomationDto
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? automationLaneIds = null,Object? modulationSourceIds = null,Object? modulationLinkIds = null,}) {
+  return _then(_RemovedAutomationDto(
+automationLaneIds: null == automationLaneIds ? _self._automationLaneIds : automationLaneIds // ignore: cast_nullable_to_non_nullable
+as List<int>,modulationSourceIds: null == modulationSourceIds ? _self._modulationSourceIds : modulationSourceIds // ignore: cast_nullable_to_non_nullable
+as List<int>,modulationLinkIds: null == modulationLinkIds ? _self._modulationLinkIds : modulationLinkIds // ignore: cast_nullable_to_non_nullable
+as List<int>,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$TrackAutomationTargetDto {
 
  MixerChannelParamTargetDto get field0;

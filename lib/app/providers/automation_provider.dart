@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/project.dart';
 
 part 'automation_provider.freezed.dart';
@@ -24,14 +26,65 @@ abstract class AutomationDataState with _$AutomationDataState {
 
     /// Optional: Tracks the currently selected/highlighted automation lane in the UI
     int? selectedAutomationLaneId,
+
+    /// Per-lane pixel heights, keyed by automation lane ID.
+    @Default(IMapConst<int, int>({})) IMap<int, int> automationLaneHeights,
+
+    /// Automation lanes shrunk to a title-only row.
+    @Default(ISetConst<int>({})) ISet<int> collapsedAutomationLaneIds,
   }) = _AutomationDataState;
 }
 
-typedef ChannelAutomationEntry = (
+typedef ChannelAutomationEntry = ({
   int laneId,
   int linkId,
+  AutomationTargetDto target,
   AutomationLaneDto lane,
-);
+});
+
+/// A plugin parameter paired with its current automation availability.
+final class PluginAutomationCandidate {
+  /// The unified parameter metadata exposed by the plugin.
+  final plugin_api.UiPluginParameter parameter;
+
+  /// Whether an automation source already controls this exact parameter.
+  final bool alreadyAutomated;
+
+  const PluginAutomationCandidate({
+    required this.parameter,
+    required this.alreadyAutomated,
+  });
+}
+
+/// Maps a plugin parameter to the automation target the engine applies it to.
+AutomationTargetDto automationTargetForPluginParameter(
+  plugin_api.UiPluginTarget target,
+  int paramId,
+) {
+  MixerChannelParamTargetDto effectParam(int effectId) =>
+      MixerChannelParamTargetDto.plugin(
+        effectId: effectId,
+        target: EffectAutomationTargetDto.pluginParam(paramId: paramId),
+      );
+
+  return switch (target) {
+    plugin_api.UiPluginTarget_Generator(:final field0) =>
+      AutomationTargetDto.generator(generatorId: field0, paramId: paramId),
+    plugin_api.UiPluginTarget_TrackEffect(:final trackId, :final effectId) =>
+      AutomationTargetDto.track(
+        trackId: trackId,
+        trackTarget: TrackAutomationTargetDto.mixerChannel(
+          effectParam(effectId),
+        ),
+      ),
+    plugin_api.UiPluginTarget_BusEffect(:final busId, :final effectId) =>
+      AutomationTargetDto.bus(busId: busId, mixTarget: effectParam(effectId)),
+    plugin_api.UiPluginTarget_MasterEffect(:final field0) =>
+      AutomationTargetDto.master(
+        MasterAutomationTargetDto.mixerChannel(effectParam(field0)),
+      ),
+  };
+}
 
 class AutomationNotifier extends Notifier<AutomationDataState> {
   DawContext get _ctx => ref.read(projectProvider.notifier).dawContext;
@@ -62,6 +115,15 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     }
   }
 
+  /// Expands a track automation drawer without collapsing an open drawer.
+  void ensureTrackAutomationExpanded(int trackId) {
+    final collapsed = state.collapsedTrackAutomations;
+    if (!collapsed.contains(trackId)) return;
+    state = state.copyWith(
+      collapsedTrackAutomations: collapsed.remove(trackId),
+    );
+  }
+
   void toggleBusAutomationExpanded(int busId) {
     final collapsed = state.collapsedBusAutomations;
     if (collapsed.contains(busId)) {
@@ -75,6 +137,53 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     state = state.copyWith(selectedAutomationLaneId: laneId);
   }
 
+  static const int defaultLaneHeight = 60;
+  static const int minLaneHeight = 36;
+  static const int maxLaneHeight = 300;
+
+  /// Sets (upserts) the pixel height of an automation lane.
+  void changeAutomationLaneHeight({
+    required int laneId,
+    required int newHeight,
+  }) {
+    final clamped = newHeight.clamp(minLaneHeight, maxLaneHeight).toInt();
+    if (state.automationLaneHeights.get(laneId) == clamped) return;
+    state = state.copyWith(
+      automationLaneHeights: state.automationLaneHeights.add(laneId, clamped),
+    );
+  }
+
+  /// Removes the override so the lane falls back to the default height.
+  void resetAutomationLaneHeight({required int laneId}) {
+    if (state.automationLaneHeights.get(laneId) == null) return;
+    state = state.copyWith(
+      automationLaneHeights: state.automationLaneHeights.remove(laneId),
+    );
+  }
+
+  /// Shrinks an automation lane to its title row, or expands it back.
+  void toggleAutomationLaneCollapsed({required int laneId}) {
+    final collapsed = state.collapsedAutomationLaneIds;
+    state = state.copyWith(
+      collapsedAutomationLaneIds: collapsed.contains(laneId)
+          ? collapsed.remove(laneId)
+          : collapsed.add(laneId),
+    );
+  }
+
+  /// Expands a bus automation drawer without collapsing an open drawer.
+  void ensureBusAutomationExpanded(int busId) {
+    final collapsed = state.collapsedBusAutomations;
+    if (!collapsed.contains(busId)) return;
+    state = state.copyWith(collapsedBusAutomations: collapsed.remove(busId));
+  }
+
+  /// Opens the master automation drawer without closing it.
+  void ensureMasterAutomationDrawerOpened() {
+    if (state.isMasterAutomationDrawerOpened) return;
+    state = state.copyWith(isMasterAutomationDrawerOpened: true);
+  }
+
   // =========================================================================
   // BACKEND INTERACTION
   // =========================================================================
@@ -84,7 +193,7 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     required String label,
     required double min,
     required double max,
-    required double defaultValue,
+    required double initialValue,
   }) async {
     final projectData = ref.read(projectProvider).value;
 
@@ -106,11 +215,11 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
         label: label,
         min: min,
         max: max,
-        defaultValue: defaultValue,
+        initialValue: initialValue,
       );
 
       AppLogger.debug(
-        "Add automation lane for $target with $min - $max default: $defaultValue",
+        "Add automation lane for $target with $min - $max initial value: $initialValue",
       );
 
       // Fetch the generated source based on the new link
@@ -151,6 +260,72 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
       }
       return AsyncError(e, s);
     }
+  }
+
+  /// Creates automation for one generator or effect parameter through the
+  /// generic path, then reveals the drawer that shows the new lane.
+  Future<AsyncValue<void>> handleAddPluginParameterAutomation({
+    required plugin_api.UiPluginTarget target,
+    required plugin_api.UiPluginParameter parameter,
+  }) async {
+    final result = await handleAddAutomationForTarget(
+      target: automationTargetForPluginParameter(target, parameter.id),
+      label: parameter.name,
+      min: parameter.min,
+      max: parameter.max,
+      initialValue: parameter.value.clamp(parameter.min, parameter.max),
+    );
+    if (result.hasValue) _revealDrawerFor(target);
+    return result;
+  }
+
+  void _revealDrawerFor(plugin_api.UiPluginTarget target) {
+    switch (target) {
+      case plugin_api.UiPluginTarget_Generator(:final field0):
+        final track = ref
+            .read(projectProvider)
+            .value
+            ?.tracks
+            .values
+            .where((track) => track.generatorId == field0)
+            .firstOrNull;
+        if (track != null) ensureTrackAutomationExpanded(track.id);
+      case plugin_api.UiPluginTarget_TrackEffect(:final trackId):
+        ensureTrackAutomationExpanded(trackId);
+      case plugin_api.UiPluginTarget_BusEffect(:final busId):
+        ensureBusAutomationExpanded(busId);
+      case plugin_api.UiPluginTarget_MasterEffect():
+        ensureMasterAutomationDrawerOpened();
+    }
+  }
+
+  /// Enables or disables a lane while retaining its source, link, and points.
+  Future<void> handleSetAutomationLaneEnabled({
+    required int laneId,
+    required bool enabled,
+  }) async {
+    final projectData = ref.read(projectProvider).value;
+    if (projectData == null) {
+      ref.notifyError('Project state is missing');
+      return;
+    }
+
+    final result = await ref.guardApi(
+      () => setAutomationLaneEnabled(
+        ctx: _ctx,
+        automationId: laneId,
+        enabled: enabled,
+      ),
+    );
+    if (!result.hasValue) return;
+
+    final latestProjectData = ref.read(projectProvider).value;
+    if (latestProjectData == null) return;
+    ref
+        .read(projectProvider.notifier)
+        .updateAutomations(
+          pool: latestProjectData.automationPool.add(laneId, result.value!),
+        );
   }
 
   Future<void> handleRemoveAutomationForTarget({
@@ -410,6 +585,32 @@ final trackAutomationExpandedProvider = Provider.family<bool, int>((
   return !collapsed.contains(trackId);
 });
 
+/// Layout of one automation lane row: whether it is shrunk, and its height.
+typedef AutomationLaneLayout = ({bool collapsed, double height});
+
+/// Effective layout for an automation lane, shared by its header and slot so
+/// both sides of the arranger stay aligned.
+final automationLaneLayoutProvider = Provider.family<AutomationLaneLayout, int>(
+  (ref, laneId) {
+    final collapsed = ref.watch(
+      automationProvider.select(
+        (s) => s.collapsedAutomationLaneIds.contains(laneId),
+      ),
+    );
+    if (collapsed) {
+      return (collapsed: true, height: TrackListNotifier.collapsedLaneHeight);
+    }
+    final height = ref.watch(
+      automationProvider.select(
+        (s) =>
+            s.automationLaneHeights.get(laneId) ??
+            AutomationNotifier.defaultLaneHeight,
+      ),
+    );
+    return (collapsed: false, height: height.toDouble());
+  },
+);
+
 /// Tracks whether a bus's automation accordion is expanded.
 /// Defaults to true unless explicitly collapsed in the AutomationDataState.
 final busAutomationExpandedProvider = Provider.family<bool, int>((ref, busId) {
@@ -439,7 +640,12 @@ final busAutomationProvider =
             final lane = projectData.automationPool[laneId];
 
             if (lane != null) {
-              lanes.add((laneId, link.id, lane));
+              lanes.add((
+                laneId: laneId,
+                linkId: link.id,
+                target: target,
+                lane: lane,
+              ));
             }
           }
         }
@@ -447,8 +653,8 @@ final busAutomationProvider =
 
       // Sort visually based on the UI order index
       lanes.sort((a, b) {
-        final linkA = projectData.modulationLinks[a.$2]!;
-        final linkB = projectData.modulationLinks[b.$2]!;
+        final linkA = projectData.modulationLinks[a.linkId]!;
+        final linkB = projectData.modulationLinks[b.linkId]!;
         return linkA.orderIdx.compareTo(linkB.orderIdx);
       });
 
@@ -466,25 +672,62 @@ final trackAutomationProvider =
 
       for (final link in projectData.modulationLinks.values) {
         final target = link.target;
+        target.when(
+          generator: (generatorId, paramId) {
+            // find the track associated with this generator
+            final findTrackRes = attempt(() {
+              return projectData.tracks.toValueIList().firstWhere((track) {
+                return track.generatorId != null &&
+                    track.generatorId == generatorId;
+              });
+            });
 
-        if (target is AutomationTargetDto_Track && target.trackId == trackId) {
-          final source = projectData.modulationSources[link.sourceId];
+            if (findTrackRes.isOk()) {
+              if (findTrackRes.ok().id == trackId) {
+                final source = projectData.modulationSources[link.sourceId];
+                if (source is ModulationSourceDto_Automation) {
+                  final laneId = source.laneId;
+                  final lane = projectData.automationPool[laneId];
 
-          if (source is ModulationSourceDto_Automation) {
-            final laneId = source.laneId;
-            final lane = projectData.automationPool[laneId];
-
-            if (lane != null) {
-              lanes.add((laneId, link.id, lane));
+                  if (lane != null) {
+                    lanes.add((
+                      laneId: laneId,
+                      linkId: link.id,
+                      target: target,
+                      lane: lane,
+                    ));
+                  }
+                }
+              }
             }
-          }
-        }
+          },
+          track: (trackTargetId, trackTarget) {
+            if (trackTargetId == trackId) {
+              final source = projectData.modulationSources[link.sourceId];
+              if (source is ModulationSourceDto_Automation) {
+                final laneId = source.laneId;
+                final lane = projectData.automationPool[laneId];
+
+                if (lane != null) {
+                  lanes.add((
+                    laneId: laneId,
+                    linkId: link.id,
+                    target: target,
+                    lane: lane,
+                  ));
+                }
+              }
+            }
+          },
+          bus: (_, _) {},
+          master: (_) {},
+        );
       }
 
       // Sort visually based on the UI order index
       lanes.sort((a, b) {
-        final linkA = projectData.modulationLinks[a.$2]!;
-        final linkB = projectData.modulationLinks[b.$2]!;
+        final linkA = projectData.modulationLinks[a.linkId]!;
+        final linkB = projectData.modulationLinks[b.linkId]!;
         return linkA.orderIdx.compareTo(linkB.orderIdx);
       });
 
@@ -512,7 +755,12 @@ final allBusesAutomationProvider =
             final lane = projectData.automationPool[laneId];
 
             if (lane != null) {
-              map.putIfAbsent(busId, () => []).add((laneId, link.id, lane));
+              map.putIfAbsent(busId, () => []).add((
+                laneId: laneId,
+                linkId: link.id,
+                target: target,
+                lane: lane,
+              ));
             }
           }
         }
@@ -520,8 +768,8 @@ final allBusesAutomationProvider =
 
       for (final busLanes in map.values) {
         busLanes.sort((a, b) {
-          final linkA = projectData.modulationLinks[a.$2]!;
-          final linkB = projectData.modulationLinks[b.$2]!;
+          final linkA = projectData.modulationLinks[a.linkId]!;
+          final linkB = projectData.modulationLinks[b.linkId]!;
           return linkA.orderIdx.compareTo(linkB.orderIdx);
         });
       }
@@ -546,20 +794,78 @@ final masterAutomationProvider = Provider<List<ChannelAutomationEntry>>((ref) {
         final lane = projectData.automationPool[laneId];
 
         if (lane != null) {
-          lanes.add((laneId, link.id, lane));
+          lanes.add((
+            laneId: laneId,
+            linkId: link.id,
+            target: target,
+            lane: lane,
+          ));
         }
       }
     }
   }
 
   lanes.sort((a, b) {
-    final linkA = projectData.modulationLinks[a.$2]!;
-    final linkB = projectData.modulationLinks[b.$2]!;
+    final linkA = projectData.modulationLinks[a.linkId]!;
+    final linkB = projectData.modulationLinks[b.linkId]!;
     return linkA.orderIdx.compareTo(linkB.orderIdx);
   });
 
   return lanes;
 });
+
+/// Loads a plugin's automatable parameters and marks those that already have
+/// an automation lane.
+final pluginAutomationCandidatesProvider = FutureProvider.autoDispose
+    .family<List<PluginAutomationCandidate>, plugin_api.UiPluginTarget>((
+      ref,
+      target,
+    ) async {
+      final projectData = ref.watch(projectProvider).value;
+      if (projectData == null) {
+        throw StateError('Project state is missing');
+      }
+
+      final ctx = ref.read(projectProvider.notifier).dawContext;
+      final parameters = await plugin_api.getAutomatablePluginParameterSpecs(
+        ctx: ctx,
+        target: target,
+      );
+      final automatedTargets = <AutomationTargetDto>{
+        for (final link in projectData.modulationLinks.values)
+          if (projectData.modulationSources[link.sourceId]
+              is ModulationSourceDto_Automation)
+            link.target,
+      };
+
+      final candidates = parameters
+          .map(
+            (parameter) => PluginAutomationCandidate(
+              parameter: parameter,
+              alreadyAutomated: automatedTargets.contains(
+                automationTargetForPluginParameter(target, parameter.id),
+              ),
+            ),
+          )
+          .toList();
+      String groupName(plugin_api.UiPluginParameter parameter) {
+        final group = parameter.group.trim();
+        return group.isEmpty ? 'Other' : group;
+      }
+
+      candidates.sort((a, b) {
+        final groupComparison = groupName(
+          a.parameter,
+        ).toLowerCase().compareTo(groupName(b.parameter).toLowerCase());
+        if (groupComparison != 0) return groupComparison;
+        final nameComparison = a.parameter.name.toLowerCase().compareTo(
+          b.parameter.name.toLowerCase(),
+        );
+        if (nameComparison != 0) return nameComparison;
+        return a.parameter.id.compareTo(b.parameter.id);
+      });
+      return candidates;
+    });
 
 final automationProvider =
     NotifierProvider<AutomationNotifier, AutomationDataState>(

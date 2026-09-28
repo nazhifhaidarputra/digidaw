@@ -1,19 +1,33 @@
 use slotmap::{Key, KeyData, new_key_type};
 
 new_key_type! {
+    /// Generation-aware key for a project track.
     pub struct TrackId;
+    /// Generation-aware key for a clip in the project clip pool.
     pub struct ClipId;
+    /// Generation-aware key for an automation lane.
     pub struct AutomationId;
+    /// Lane-local key for an automation point.
     pub struct AutomationPointId;
+    /// Generation-aware key for an effect instance.
     pub struct EffectId;
+    /// Generation-aware key for an auxiliary mixer bus.
     pub struct BusId;
+    /// Generation-aware key for a MIDI pattern.
     pub struct PatternId;
+    /// Generation-aware key for an imported audio source.
     pub struct AudioSourceId;
+    /// Generation-aware key for a generator instance.
     pub struct GeneratorId;
+    /// Generation-aware key for a project source object.
     pub struct SourceId;
+    /// Pattern-local note key encoded through the shared key representation.
     pub struct NoteId;
+    /// Generation-aware key for a modulation source.
     pub struct ModulationId;
+    /// Generation-aware key for a modulation connection.
     pub struct ModulationLinkId;
+    /// Generation-aware key for a render-graph node.
     pub struct GraphNodeId;
 }
 
@@ -116,5 +130,44 @@ impl AutomationPointId {
         let id = Self::from(*counter);
         *counter = counter.saturating_add(1);
         id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt::Debug;
+
+    fn assert_reused_slot_round_trip<K>()
+    where
+        K: Key + Copy + Debug + Eq + From<u64> + From<u32> + Into<u64> + Into<u32>,
+    {
+        let mut arena = slotmap::SlotMap::<K, ()>::with_key();
+        let removed = arena.insert(());
+        arena.remove(removed);
+        let replacement = arena.insert(());
+        let removed_index: u32 = removed.into();
+        let replacement_index: u32 = replacement.into();
+        let replacement_handle: u64 = replacement.into();
+
+        assert_eq!(removed_index, replacement_index);
+        assert_ne!(removed, replacement);
+        assert_eq!(K::from(replacement_handle), replacement);
+        assert_ne!(K::from(replacement_index), replacement);
+    }
+
+    #[test]
+    fn slot_map_ids_preserve_their_generation_in_u64_handles() {
+        assert_reused_slot_round_trip::<TrackId>();
+        assert_reused_slot_round_trip::<ClipId>();
+        assert_reused_slot_round_trip::<AutomationId>();
+        assert_reused_slot_round_trip::<EffectId>();
+        assert_reused_slot_round_trip::<BusId>();
+        assert_reused_slot_round_trip::<PatternId>();
+        assert_reused_slot_round_trip::<AudioSourceId>();
+        assert_reused_slot_round_trip::<GeneratorId>();
+        assert_reused_slot_round_trip::<ModulationId>();
+        assert_reused_slot_round_trip::<ModulationLinkId>();
+        assert_reused_slot_round_trip::<GraphNodeId>();
     }
 }

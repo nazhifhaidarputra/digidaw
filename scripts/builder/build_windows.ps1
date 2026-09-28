@@ -9,6 +9,41 @@ if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Error "Rust/Cargo is not installed or not in PATH. Aborting."
 }
+if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+    Write-Error "rustup is required to verify the Windows MSVC target. Install rustup and add it to PATH."
+}
+
+$vswherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+$hasMsvc = [bool](Get-Command cl.exe -ErrorAction SilentlyContinue)
+if (-not $hasMsvc -and (Test-Path -LiteralPath $vswherePath)) {
+    $visualStudioPath = & $vswherePath -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    $hasMsvc = -not [string]::IsNullOrWhiteSpace($visualStudioPath)
+}
+if (-not $hasMsvc) {
+    Write-Error "MSVC x64 build tools are required. Install Visual Studio Build Tools with 'Desktop development with C++'."
+}
+
+if (-not (Get-Command clang.exe -ErrorAction SilentlyContinue)) {
+    Write-Error "LLVM/Clang is required by CPAL's ASIO bindings. Install LLVM and add clang.exe to PATH."
+}
+
+$libclangCandidates = @()
+if ($env:LIBCLANG_PATH) {
+    $libclangCandidates += (Join-Path $env:LIBCLANG_PATH "libclang.dll")
+}
+$clangCommand = Get-Command clang.exe -ErrorAction SilentlyContinue
+if ($clangCommand) {
+    $libclangCandidates += (Join-Path (Split-Path -Parent $clangCommand.Source) "libclang.dll")
+    $libclangCandidates += (Join-Path (Split-Path -Parent (Split-Path -Parent $clangCommand.Source)) "bin\libclang.dll")
+}
+if (-not ($libclangCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1)) {
+    Write-Error "libclang.dll was not found. Set LIBCLANG_PATH to the LLVM bin directory before building ASIO support."
+}
+
+$installedRustTargets = rustup target list --installed
+if ($LASTEXITCODE -ne 0 -or $installedRustTargets -notcontains "x86_64-pc-windows-msvc") {
+    Write-Error "Rust target x86_64-pc-windows-msvc is required. Run: rustup target add x86_64-pc-windows-msvc"
+}
 
 # Check for vcpkg (common way to manage C++ libs like rubberband on Windows)
 $VCPKG_ROOT = $env:VCPKG_ROOT

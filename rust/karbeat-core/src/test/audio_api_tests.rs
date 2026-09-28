@@ -4,8 +4,10 @@
 mod tests {
     use crate::api::audio_api;
     use crate::api::track_api;
+    use crate::commands::AudioCommand;
     use crate::shared::id::{AudioSourceId, TrackId};
     use crate::test::helpers::make_ctx;
+    use rtrb::RingBuffer;
 
     #[test]
     fn get_audio_source_missing_returns_none() {
@@ -30,6 +32,37 @@ mod tests {
         // Should not panic even though ring buffer is None
         let mut ctx = make_ctx();
         audio_api::stop_all_previews(&mut ctx);
+    }
+
+    #[test]
+    fn play_file_preview_queues_a_fifteen_second_limit_without_importing() {
+        let mut ctx = make_ctx();
+        ctx.active_audio_config.write().sample_rate = Some(48_000);
+        let (producer, mut consumer) = RingBuffer::<AudioCommand>::new(4);
+        *ctx.command_sender.lock() = Some(producer);
+
+        let file = tempfile::NamedTempFile::new().expect("audio fixture file");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::new(file.reopen().expect("fixture handle"), spec)
+            .expect("fixture writer");
+        writer.write_sample(0_i16).expect("fixture sample");
+        writer.finalize().expect("finalize fixture");
+
+        audio_api::play_file_preview(&mut ctx, file.path().to_str().expect("fixture path"))
+            .expect("file preview should queue");
+
+        match consumer.pop().expect("preview command") {
+            AudioCommand::PlayPreview { max_frames, .. } => {
+                assert_eq!(max_frames, 48_000 * 15);
+            }
+            _ => panic!("expected a browser preview command"),
+        }
+        assert!(ctx.app_state.asset_library.source_map.is_empty());
     }
 
     #[test]
@@ -77,15 +110,15 @@ mod tests {
     }
 
     #[test]
-    fn play_preview_note_generator_always_ok() {
+    fn play_preview_note_generator_without_audio_stream_returns_err() {
         let mut ctx = make_ctx();
-        // Generator ID directly (no lookup)
         use crate::shared::id::GeneratorId;
         let gen_id = GeneratorId::from(1);
         let result = audio_api::play_preview_note_generator(&mut ctx, gen_id, 60, 100, true);
+        assert!(result.is_err(), "An unavailable audio queue should fail");
         assert!(
-            result.is_ok(),
-            "Direct generator path should always succeed"
+            result.unwrap_err().to_string().contains("not initialized"),
+            "The error should identify the unavailable audio stream"
         );
     }
 }

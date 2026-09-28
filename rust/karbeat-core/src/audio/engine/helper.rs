@@ -8,18 +8,23 @@ use rodio::math::db_to_linear;
 use wide::f32x16;
 
 use crate::{
+    audio::engine::runtime::consts::MAX_ENGINE_CHANNELS,
     commands::MixerChannelTarget,
     core::project::{
-        AutomationTarget, MixerChannelParamTarget, MixerChannelParams, RoutingConnection,
-        RoutingNode, TrackAutomationTarget, audio_waveform::AudioSampleMode,
+        AudioTrack, AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
+        RoutingConnection, RoutingNode, SidechainRoute, TrackAutomationTarget,
+        audio_waveform::AudioSampleMode,
     },
-    shared::{BusId, TrackId},
+    shared::BusId,
 };
 
 /// Unified entry point to render an audio waveform slice.
 /// Safely delegates to the correct DSP algorithm based on the chosen sample mode.
 #[inline(always)]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the real-time render path passes independent preallocated state explicitly"
+)]
 pub fn render_audio_waveform(
     mode: &AudioSampleMode,
     source_buffer: &[f32],
@@ -315,6 +320,23 @@ pub fn apply_volume_and_pan_simd(
     pan_param: &mut Param<f32>,
 ) {
     if channels == 2 {
+        if vol_param.smoother.is_settled() && pan_param.smoother.is_settled() {
+            let vol_db = vol_param.smoother.current();
+            let vol = if vol_db <= -100.0 {
+                0.0
+            } else {
+                db_to_linear(vol_db as f32)
+            };
+            let p = (pan_param.smoother.current() as f32 + 1.0) * 0.5;
+            let left_gain = (1.0 - p).sqrt() * vol;
+            let right_gain = p.sqrt() * vol;
+            for (left, right) in buffer.iter_mut().tuples::<(_, _)>() {
+                *left *= left_gain;
+                *right *= right_gain;
+            }
+            return;
+        }
+
         for (left, right) in buffer.iter_mut().tuples::<(_, _)>() {
             let vol_db = vol_param.next_smoothed();
             let pan = pan_param.next_smoothed();
@@ -348,7 +370,6 @@ pub fn apply_volume_and_pan_simd(
     }
 }
 
-#[inline(always)]
 pub fn process_plugin_wrapper(
     plugin: &mut dyn crate::core::project::plugin::AudioPlugin,
     interleaved_io: &mut [f32],
@@ -359,82 +380,150 @@ pub fn process_plugin_wrapper(
     channel_buffers_out: &mut [Vec<f32>],
     aux_channel_buffers: &mut [Vec<f32>],
 ) {
-    let frames = interleaved_io.len() / channels;
-
-    // Resize all necessary buffers upfront
-    channel_buffers_in
-        .iter_mut()
-        .take(channels)
-        .chain(channel_buffers_out.iter_mut().take(channels))
-        .for_each(|buffer| {
-            if buffer.len() < frames {
-                buffer.resize(frames, 0.0);
-            }
-        });
-    if aux_interleaved.is_some() {
-        aux_channel_buffers
-            .iter_mut()
-            .take(channels)
-            .for_each(|buffer| {
-                if buffer.len() < frames {
-                    buffer.resize(frames, 0.0);
-                }
-            });
-    }
-
-    // Deinterleave Main & Aux Buses
-    deinterleave_buffer(interleaved_io, channel_buffers_in, channels, frames);
-    if let Some(aux) = aux_interleaved {
-        deinterleave_buffer(aux, aux_channel_buffers, channels, frames);
-    }
-
-    // Setup Pointers for the Plugin API
-    let mut in_ptrs: Vec<&mut [f32]> = channel_buffers_in
-        .iter_mut()
-        .take(channels)
-        .map(|v| &mut v[..frames])
-        .collect();
-
-    let mut out_ptrs: Vec<&mut [f32]> = channel_buffers_out
-        .iter_mut()
-        .take(channels)
-        .map(|v| &mut v[..frames])
-        .collect();
-
-    let mut main_in = [AudioBusBuffer {
-        channel_data: &mut in_ptrs,
-        is_silent: false,
-    }];
-    let mut main_out = [AudioBusBuffer {
-        channel_data: &mut out_ptrs,
-        is_silent: false,
-    }];
-
-    let mut aux_in_bus = vec![];
-    let mut aux_in_ptrs: Vec<&mut [f32]>;
-    if aux_interleaved.is_some() {
-        aux_in_ptrs = aux_channel_buffers
-            .iter_mut()
-            .take(channels)
-            .map(|v| &mut v[..frames])
-            .collect();
-        aux_in_bus.push(AudioBusBuffer {
-            channel_data: &mut aux_in_ptrs,
-            is_silent: false,
-        });
-    }
-
-    let mut buffers = AudioBuffers {
-        main_inputs: &mut main_in,
-        main_outputs: &mut main_out,
-        aux_inputs: &mut aux_in_bus,
-        aux_outputs: &mut [],
+    let Some(frames) = prepare_planar_input(
+        interleaved_io,
+        channels,
+        channel_buffers_in,
+        channel_buffers_out,
+    ) else {
+        interleaved_io.fill(0.0);
+        return;
     };
 
-    // Execute Plugin DSP
-    plugin.process(&mut buffers, ctx);
+    if !process_plugin_planar(
+        plugin,
+        aux_interleaved,
+        channels,
+        frames,
+        ctx,
+        channel_buffers_in,
+        channel_buffers_out,
+        aux_channel_buffers,
+    ) {
+        interleaved_io.fill(0.0);
+        return;
+    }
+    finish_planar_output(interleaved_io, channel_buffers_in, channels, frames);
+}
 
-    interleave_buffer(interleaved_io, channel_buffers_out, channels, frames);
+pub fn prepare_planar_input(
+    interleaved: &[f32],
+    channels: usize,
+    channel_buffers_in: &mut [Vec<f32>],
+    channel_buffers_out: &[Vec<f32>],
+) -> Option<usize> {
+    if channels == 0
+        || channels > MAX_ENGINE_CHANNELS as usize
+        || !interleaved.len().is_multiple_of(channels)
+        || channel_buffers_in.len() < channels
+        || channel_buffers_out.len() < channels
+    {
+        return None;
+    }
+    let frames = interleaved.len() / channels;
+    if channel_buffers_in[..channels]
+        .iter()
+        .chain(&channel_buffers_out[..channels])
+        .any(|buffer| buffer.len() < frames)
+    {
+        return None;
+    }
+    deinterleave_buffer(interleaved, channel_buffers_in, channels, frames);
+    Some(frames)
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the render path passes preallocated channel storage explicitly"
+)]
+pub fn process_plugin_planar(
+    plugin: &mut dyn crate::core::project::plugin::AudioPlugin,
+    aux_interleaved: Option<&[f32]>,
+    channels: usize,
+    frames: usize,
+    ctx: &ProcessContext,
+    channel_buffers_in: &mut [Vec<f32>],
+    channel_buffers_out: &mut [Vec<f32>],
+    aux_channel_buffers: &mut [Vec<f32>],
+) -> bool {
+    let has_aux = aux_interleaved.is_some();
+    if has_aux
+        && (aux_channel_buffers.len() < channels
+            || aux_channel_buffers[..channels]
+                .iter()
+                .any(|buffer| buffer.len() < frames))
+    {
+        return false;
+    }
+    if let Some(aux) = aux_interleaved {
+        if aux.len() < frames * channels {
+            for buffer in aux_channel_buffers.iter_mut().take(channels) {
+                buffer[..frames].fill(0.0);
+            }
+        } else {
+            deinterleave_buffer(aux, aux_channel_buffers, channels, frames);
+        }
+    }
+
+    {
+        let mut in_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+            std::array::from_fn(|_| &mut [][..]);
+        for (i, buffer) in channel_buffers_in.iter_mut().take(channels).enumerate() {
+            in_ptrs[i] = &mut buffer[..frames];
+        }
+
+        let mut out_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+            std::array::from_fn(|_| &mut [][..]);
+        for (i, buffer) in channel_buffers_out.iter_mut().take(channels).enumerate() {
+            out_ptrs[i] = &mut buffer[..frames];
+        }
+
+        let mut aux_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
+            std::array::from_fn(|_| &mut [][..]);
+        for (i, buffer) in aux_channel_buffers.iter_mut().take(channels).enumerate() {
+            aux_ptrs[i] = &mut buffer[..frames];
+        }
+
+        let mut main_in = [AudioBusBuffer {
+            channel_data: &mut in_ptrs[..channels],
+            is_silent: false,
+        }];
+        let mut main_out = [AudioBusBuffer {
+            channel_data: &mut out_ptrs[..channels],
+            is_silent: false,
+        }];
+        let mut aux_in = [AudioBusBuffer {
+            channel_data: &mut aux_ptrs[..channels],
+            is_silent: false,
+        }];
+        let aux_len = has_aux as usize;
+
+        let mut buffers = AudioBuffers {
+            main_inputs: &mut main_in,
+            main_outputs: &mut main_out,
+            aux_inputs: &mut aux_in[..aux_len],
+            aux_outputs: &mut [],
+        };
+
+        plugin.process(&mut buffers, ctx);
+    }
+
+    for (input, output) in channel_buffers_in[..channels]
+        .iter_mut()
+        .zip(&mut channel_buffers_out[..channels])
+    {
+        std::mem::swap(input, output);
+    }
+    true
+}
+
+pub fn finish_planar_output(
+    interleaved: &mut [f32],
+    channel_buffers: &[Vec<f32>],
+    channels: usize,
+    frames: usize,
+) {
+    interleave_buffer(interleaved, channel_buffers, channels, frames);
 }
 
 #[inline]
@@ -499,59 +588,96 @@ fn interleave_buffer(
 // Routing Order Helper
 // =============================================================================
 
-/// Compute a topologically sorted routing order (sources → buses → master)
-/// from plain routing data and known track/bus IDs.
+/// Compute a topologically sorted routing order over tracks, buses, and master.
 ///
-/// This replicates MixerState::get_routing_order without needing the full
-/// MixerState on the audio thread.
+/// A connection into a plugin sidechain orders its source before the channel that owns the
+/// plugin, so the aux buffer is filled before that channel's effects run. Nodes without a
+/// dependency between them keep their input order (tracks, then buses, then master), and master
+/// is always last. `MixerState` rejects cycles; any node left unscheduled by one is appended in
+/// input order so the audio thread still renders it.
+///
+/// This mirrors `MixerState::get_routing_order` without needing the full `MixerState` on the
+/// audio thread.
 pub fn compute_routing_order(
-    track_ids: impl Iterator<Item = TrackId>,
+    tracks: &[AudioTrack],
     bus_ids: impl Iterator<Item = BusId>,
     routing: &[RoutingConnection],
 ) -> Vec<RoutingNode> {
-
-    let bus_ids_vec: Vec<BusId> = bus_ids.collect();
-
-    // All tracks come first
-    let mut order: Vec<RoutingNode> = track_ids.map(RoutingNode::Track).collect();
-
-    // Kahn's topological sort for buses
-    let mut in_degree: HashMap<BusId, usize> = bus_ids_vec.iter().map(|&id| (id, 0)).collect();
-    let mut adj: HashMap<BusId, Vec<BusId>> = bus_ids_vec.iter().map(|&id| (id, vec![])).collect();
-
-    for conn in routing {
-        if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination) {
-            if let Some(neighbors) = adj.get_mut(&src) {
-                neighbors.push(dst);
-            }
-            if let Some(deg) = in_degree.get_mut(&dst) {
-                *deg += 1;
-            }
-        }
-    }
-
-    let mut queue: std::collections::VecDeque<BusId> = in_degree
+    let nodes: Vec<RoutingNode> = tracks
         .iter()
-        .filter(|(_, deg)| **deg == 0)
-        .map(|(&id, _)| id)
+        .map(|track| RoutingNode::Track(track.id))
+        .chain(bus_ids.map(RoutingNode::Bus))
+        .chain(std::iter::once(RoutingNode::Master))
+        .collect();
+    let index: HashMap<RoutingNode, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(index, &node)| (node, index))
         .collect();
 
-    while let Some(bus_id) = queue.pop_front() {
-        order.push(RoutingNode::Bus(bus_id));
-        if let Some(neighbors) = adj.get(&bus_id) {
-            for &neighbor in neighbors {
-                if let Some(deg) = in_degree.get_mut(&neighbor) {
-                    *deg -= 1;
-                    if *deg == 0 {
-                        queue.push_back(neighbor);
-                    }
-                }
-            }
+    let mut in_degree = vec![0_usize; nodes.len()];
+    let mut adjacency = vec![Vec::new(); nodes.len()];
+    for connection in routing {
+        let destination = match connection.destination {
+            RoutingNode::PluginSidechain(route) => sidechain_owner(tracks, route),
+            other => Some(other),
+        };
+        let (Some(&source), Some(&destination)) = (
+            index.get(&connection.source),
+            destination.and_then(|node| index.get(&node)),
+        ) else {
+            continue;
+        };
+        if source != destination {
+            adjacency[source].push(destination);
+            in_degree[destination] += 1;
         }
     }
 
-    order.push(RoutingNode::Master);
+    let mut ready: std::collections::BinaryHeap<std::cmp::Reverse<usize>> = in_degree
+        .iter()
+        .enumerate()
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(index, _)| std::cmp::Reverse(index))
+        .collect();
+    let mut scheduled = vec![false; nodes.len()];
+    let mut order = Vec::with_capacity(nodes.len());
+    while let Some(std::cmp::Reverse(index)) = ready.pop() {
+        scheduled[index] = true;
+        order.push(nodes[index]);
+        for &next in &adjacency[index] {
+            in_degree[next] -= 1;
+            if in_degree[next] == 0 {
+                ready.push(std::cmp::Reverse(next));
+            }
+        }
+    }
+    order.extend(
+        nodes
+            .iter()
+            .zip(&scheduled)
+            .filter(|(_, scheduled)| !**scheduled)
+            .map(|(node, _)| *node),
+    );
     order
+}
+
+/// Channel that owns the plugin fed by `route`, resolved from the audio thread's track list.
+pub fn sidechain_owner(tracks: &[AudioTrack], route: SidechainRoute) -> Option<RoutingNode> {
+    match route {
+        SidechainRoute::Generator(generator_id) => tracks
+            .iter()
+            .find(|track| {
+                track
+                    .generator
+                    .as_ref()
+                    .is_some_and(|generator| generator.id == generator_id)
+            })
+            .map(|track| RoutingNode::Track(track.id)),
+        SidechainRoute::TrackEffect(track_id, _) => Some(RoutingNode::Track(track_id)),
+        SidechainRoute::BusEffect(bus_id, _) => Some(RoutingNode::Bus(bus_id)),
+        SidechainRoute::MasterEffect(_) => Some(RoutingNode::Master),
+    }
 }
 
 pub fn resolve_target_mixer_param(
@@ -593,7 +719,31 @@ pub fn resolve_target_mixer_param(
 
 #[cfg(test)]
 mod buffer_iteration_tests {
-    use super::{apply_phase_inversion_simd, deinterleave_buffer, interleave_buffer};
+    use super::{
+        apply_phase_inversion_simd, deinterleave_buffer, finish_planar_output, interleave_buffer,
+        prepare_planar_input, process_plugin_planar,
+    };
+    use crate::audio::missing_plugin::MissingPlugin;
+    use karbeat_plugin_api::types::{ProcessContext, ProcessingMode};
+
+    fn process_context() -> ProcessContext<'static> {
+        ProcessContext {
+            bpm: 120.0,
+            time_sig_numerator: 4,
+            time_sig_denominator: 4,
+            is_playing: true,
+            is_recording: false,
+            mode: ProcessingMode::Realtime,
+            project_time_seconds: 0.0,
+            project_time_samples: 0,
+            beat_position: 1.0,
+            bar_position: 1.0,
+            loop_start_beat: None,
+            loop_end_beat: None,
+            midi_events: &[],
+            param_changes: &[],
+        }
+    }
 
     #[test]
     fn stereo_deinterleave_round_trip_leaves_incomplete_frame_untouched() {
@@ -635,5 +785,32 @@ mod buffer_iteration_tests {
             buffer,
             (1..=19).map(|sample| -(sample as f32)).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn planar_effect_chain_converts_only_at_chain_boundaries() {
+        let input = [1.0, -1.0, 0.5, -0.5];
+        let mut output = input;
+        let mut channel_inputs = vec![vec![0.0; 2], vec![0.0; 2]];
+        let mut channel_outputs = vec![vec![0.0; 2], vec![0.0; 2]];
+        let mut aux = vec![vec![0.0; 2], vec![0.0; 2]];
+        let frames = prepare_planar_input(&output, 2, &mut channel_inputs, &channel_outputs)
+            .expect("valid stereo buffers");
+        let mut first = MissingPlugin::effect();
+        let mut second = MissingPlugin::effect();
+        for plugin in [&mut first, &mut second] {
+            assert!(process_plugin_planar(
+                plugin.as_mut(),
+                None,
+                2,
+                frames,
+                &process_context(),
+                &mut channel_inputs,
+                &mut channel_outputs,
+                &mut aux,
+            ));
+        }
+        finish_planar_output(&mut output, &channel_inputs, 2, frames);
+        assert_eq!(output, input);
     }
 }

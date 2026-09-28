@@ -1,7 +1,7 @@
 [package]
 name = "karbeat-vst3"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Package which handles VST3 Host implementation"
 exclude = ["/vst3sdk"]
 license = "GPL 3.0"
@@ -9,6 +9,29 @@ license = "GPL 3.0"
 [dependencies]
 vst3 = "0.3.0"
 karbeat-plugin-api.workspace = true
+karbeat-host-api.workspace = true
+libloading.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+raw-window-handle.workspace = true
+rtrb.workspace = true
+futures-lite.workspace = true
+tokio.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+glib.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "vital"
+harness = false
+
+[[test]]
+name = "lsp"
+harness = false

@@ -1,6 +1,7 @@
 use hashbrown::{HashMap, HashSet};
 use karbeat_plugin_types::{Param, ParameterSpec};
-use karbeat_plugins::registry::PluginRegistry;
+use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
+use karbeat_utils::{color::Color, move_element};
 use smallvec::SmallVec;
 
 use serde::{Deserialize, Serialize};
@@ -9,20 +10,28 @@ use thiserror::Error;
 
 use crate::{
     audio::event::PluginTarget,
-    commands::EffectTarget,
+    commands::{EffectTarget, MixerChannelTarget},
     core::project::{ApplicationState, AudioTrack, PluginInstance, TrackId, plugin::AudioPlugin},
     shared::{BusId, EffectId, GeneratorId, GraphNodeId},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Identifies the plugin input represented by a sidechain routing destination.
 pub enum SidechainRoute {
+    /// Generator sidechain, owned for routing purposes by the track hosting it.
     Generator(GeneratorId),
+    /// Sidechain input of an effect on a track.
     TrackEffect(TrackId, EffectId),
+    /// Sidechain input of an effect on a bus.
     BusEffect(BusId, EffectId),
+    /// Sidechain input of an effect on the master channel.
     MasterEffect(EffectId),
 }
 
 impl SidechainRoute {
+    /// Resolves the mixer node that owns this plugin and must consume its sidechain data.
+    ///
+    /// Generator ownership requires a track lookup and returns `None` for an orphaned generator.
     pub fn owner_node(&self, tracks: &SlotMap<TrackId, AudioTrack>) -> Option<RoutingNode> {
         match self {
             SidechainRoute::TrackEffect(track_id, _) => Some(RoutingNode::Track(*track_id)),
@@ -45,19 +54,29 @@ impl SidechainRoute {
 /// A node in the routing graph
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum RoutingNode {
+    /// Track output node.
     Track(TrackId),
+    /// Mixer bus node.
     Bus(BusId),
+    /// Final master output node.
     Master,
+    /// Auxiliary input of one plugin; valid only as a send destination.
     PluginSidechain(SidechainRoute),
 }
 
 #[derive(Error, Debug)]
 #[error("Error happened during MixerError processing")]
+/// Failure to map a higher-level target into the mixer routing graph.
 pub enum MixerError {
+    /// The target has no live routing owner, such as an orphaned generator.
     TypeConversionError,
 }
 
 impl RoutingNode {
+    /// Resolves the mixer node that owns a plugin target.
+    ///
+    /// Effects map directly to their channel; generators require a hosting track and fail when no
+    /// such track exists.
     pub fn try_from_plugin_target(
         plugin_target: PluginTarget,
         tracks: &SlotMap<TrackId, AudioTrack>,
@@ -90,35 +109,56 @@ impl From<PluginTarget> for SidechainRoute {
     }
 }
 
+/// Point in a source channel strip where a routing connection takes its signal.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum RoutingTap {
+    /// After the effects, fader, and pan; the channel's normal output.
+    #[default]
+    PostFader,
+    /// After the effects but before the fader and pan, so the level is independent of the
+    /// source fader. Mute still silences the connection.
+    PreFader,
+}
+
 /// A routing connection in the matrix
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoutingConnection {
+    /// Node whose post-processing audio supplies this connection.
     pub source: RoutingNode,
+    /// Node receiving the signal.
     pub destination: RoutingNode,
     /// Send level (0.0 = no signal, 1.0 = full signal)
     pub send_level: f32,
-    /// If true, this is a "send" (post-fader tap) not the main output
+    /// If true, this is an auxiliary send rather than the main output
     pub is_send: bool,
     // TODO here: Add is_bypassed bool flag to indicate whether
     // we bypass this connection during the DSP
+    /// Where the source strip is tapped. Kept last with a default because projects are saved
+    /// as positional MessagePack, so connections saved before it existed load as post-fader.
+    #[serde(default)]
+    pub tap: RoutingTap,
 }
 
 impl RoutingConnection {
+    /// Creates a unity-gain main-output connection.
     pub fn new(source: RoutingNode, destination: RoutingNode) -> Self {
         Self {
             source,
             destination,
             send_level: 1.0,
             is_send: false,
+            tap: RoutingTap::PostFader,
         }
     }
 
+    /// Creates an auxiliary send with the supplied gain; validation occurs when it is added.
     pub fn new_send(source: RoutingNode, destination: RoutingNode, send_level: f32) -> Self {
         Self {
             source,
             destination,
             send_level,
             is_send: true,
+            tap: RoutingTap::PostFader,
         }
     }
 }
@@ -127,18 +167,36 @@ impl RoutingConnection {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct BusMixerChannel {
+    /// Stable bus identity.
     pub id: BusId,
+    /// Stable key for this bus in the serialized routing-node arena.
     pub graph_node_id: GraphNodeId,
+    /// User-facing bus name.
     pub name: String,
+    /// Bus fader, flags, and ordered effects.
     pub channel: MixerChannel,
+    /// UI color assigned to the bus. Kept last because projects are saved as
+    /// positional MessagePack, so buses saved before it existed load as grey.
+    #[serde(default = "default_bus_color")]
+    pub color: Color,
+}
+
+/// Neutral grey given to buses until the user picks a color.
+pub fn default_bus_color() -> Color {
+    Color::new_from_rgb(0x9E, 0x9E, 0x9E)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
+/// Mixer channel associated one-to-one with a project track.
 pub struct TrackMixerChannel {
+    /// Track owning this channel.
     pub id: TrackId,
+    /// Stable key for this track in the serialized routing-node arena.
     pub graph_node_id: GraphNodeId,
+    /// Display name mirrored from the track.
     pub name: String,
+    /// Track fader, flags, and ordered effects.
     pub channel: MixerChannel,
 }
 
@@ -149,6 +207,7 @@ impl Default for BusMixerChannel {
             graph_node_id: GraphNodeId::default(),
             name: String::new(),
             channel: MixerChannel::default(),
+            color: default_bus_color(),
         }
     }
 }
@@ -165,12 +224,14 @@ impl Default for TrackMixerChannel {
 }
 
 impl BusMixerChannel {
+    /// Creates a named bus with a default channel strip and an unassigned graph-node key.
     pub fn new(id: BusId, name: &str) -> Self {
         Self {
             id,
             graph_node_id: GraphNodeId::default(),
             name: name.to_string(),
             channel: MixerChannel::default(),
+            color: default_bus_color(),
         }
     }
 }
@@ -181,17 +242,21 @@ impl BusMixerChannel {
 #[derive(Error, Debug, Clone)]
 #[error("Mixer param error for track {track_id}: {message}")]
 pub struct MixerSetParamError {
+    /// Human-readable reason the parameter could not be changed.
     pub message: String,
+    /// Track whose mixer channel was targeted.
     pub track_id: TrackId,
 }
 
 #[derive(Error, Debug, Clone)]
 #[error("Effect creation error: {message}")]
 pub struct EffectCreationError {
+    /// Human-readable reason effect construction failed.
     pub message: String,
 }
 
 impl MixerSetParamError {
+    /// Creates a track-scoped mixer parameter error.
     pub fn new(track_id: TrackId, message: &str) -> Self {
         Self {
             track_id,
@@ -202,12 +267,16 @@ impl MixerSetParamError {
 
 #[derive(Error, Debug)]
 #[error("Mixer not found for track {track_id}: {message}")]
+/// Error returned when a track has no corresponding mixer channel.
 pub struct MixerNotFoundError {
+    /// Human-readable lookup context.
     pub message: String,
+    /// Track whose channel was requested.
     pub track_id: TrackId,
 }
 
 impl MixerNotFoundError {
+    /// Creates a missing-channel error for `track_id`.
     pub fn new(track_id: TrackId, message: &str) -> Self {
         Self {
             track_id,
@@ -217,22 +286,32 @@ impl MixerNotFoundError {
 }
 
 #[derive(Clone, Copy, Debug)]
+/// One mutable control on a mixer channel.
 pub enum MixerChannelParams {
+    /// Fader gain in decibels.
     Volume(f32),
+    /// Stereo pan in the inclusive range -1.0 to 1.0.
     Pan(f32),
+    /// Mute state.
     Mute(bool),
+    /// Polarity-inversion state.
     InvertedPhase(bool),
+    /// Solo state.
     Solo(bool),
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(default)]
+/// One plugin instance occupying an identified effect-chain slot.
 pub struct EffectInstance {
+    /// Stable slot identifier within the owning effect chain.
     pub id: EffectId,
+    /// Serializable plugin metadata and state.
     pub instance: PluginInstance,
 }
 
 impl EffectInstance {
+    /// Associates an existing plugin instance with an effect slot ID.
     pub fn new(id: EffectId, instance: PluginInstance) -> Self {
         Self {
             id,
@@ -251,6 +330,7 @@ pub struct EffectChain {
 }
 
 impl EffectChain {
+    /// Appends a plugin instance and returns its newly allocated stable slot ID.
     pub fn insert(&mut self, instance: PluginInstance) -> EffectId {
         let id = self
             .arena
@@ -259,39 +339,79 @@ impl EffectChain {
         id
     }
 
+    /// Removes an effect from both the arena and processing order. The arena key stays reserved
+    /// so undo can [`restore`](Self::restore) the effect under the same ID.
     pub fn remove(&mut self, id: EffectId) -> Option<EffectInstance> {
         self.order.retain(|candidate| *candidate != id);
-        self.arena.remove(id)
+        self.arena.detach(id)
     }
 
+    /// Zero-based processing position of an effect.
+    pub fn position(&self, id: EffectId) -> Option<usize> {
+        self.order.iter().position(|candidate| *candidate == id)
+    }
+
+    /// Puts a removed effect back under its original ID at `index` in the processing order.
+    pub fn restore(
+        &mut self,
+        id: EffectId,
+        index: usize,
+        effect: EffectInstance,
+    ) -> anyhow::Result<()> {
+        if self.arena.contains_key(id) {
+            anyhow::bail!("Effect {id:?} is already in the chain");
+        }
+        self.arena.reattach(id, effect);
+        self.order.insert(index.min(self.order.len()), id);
+        Ok(())
+    }
+
+    /// Moves an effect to `index` in the processing order and returns its previous position.
+    pub fn move_to(&mut self, id: EffectId, index: usize) -> anyhow::Result<usize> {
+        let current = self
+            .position(id)
+            .ok_or_else(|| anyhow::anyhow!("Effect {id:?} not found"))?;
+        self.order.remove(current);
+        self.order.insert(index.min(self.order.len()), id);
+        Ok(current)
+    }
+
+    /// Borrows an effect by stable slot ID.
     pub fn get(&self, id: EffectId) -> Option<&EffectInstance> {
         self.arena.get(id)
     }
 
+    /// Mutably borrows an effect by stable slot ID.
     pub fn get_mut(&mut self, id: EffectId) -> Option<&mut EffectInstance> {
         self.arena.get_mut(id)
     }
 
+    /// Iterates effects in DSP processing order, skipping any inconsistent stale keys.
     pub fn iter(&self) -> impl Iterator<Item = &EffectInstance> {
         self.order.iter().filter_map(|id| self.arena.get(*id))
     }
 
+    /// Iterates mutable arena values; unlike [`Self::iter`], order is not guaranteed.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut EffectInstance> {
         self.arena.values_mut()
     }
 
+    /// Returns the final effect in processing order.
     pub fn last(&self) -> Option<&EffectInstance> {
         self.order.last().and_then(|id| self.arena.get(*id))
     }
 
+    /// Returns the number of IDs in the processing order.
     pub fn len(&self) -> usize {
         self.order.len()
     }
 
+    /// Returns whether the processing order contains no effects.
     pub fn is_empty(&self) -> bool {
         self.order.is_empty()
     }
 
+    /// Clones effects into a vector in DSP processing order.
     pub fn to_vec(&self) -> Vec<EffectInstance> {
         self.iter().cloned().collect()
     }
@@ -320,6 +440,7 @@ pub struct MixerState {
     /// Persistent graph-node arena. Routing keeps the semantic node kind as
     /// well, while these keys provide stable serialized identities.
     pub graph_nodes: SlotMap<GraphNodeId, RoutingNode>,
+    /// Stable key of the master node in `graph_nodes`.
     pub master_node_id: GraphNodeId,
 }
 
@@ -340,14 +461,20 @@ impl Default for MixerState {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
+/// Serializable controls and effect chain for one mixer signal path.
 pub struct MixerChannel {
-    pub volume: Param<f32>, //dB
-    pub pan: Param<f32>,    // -1.0 to 1.0
+    /// Fader gain in decibels.
+    pub volume: Param<f32>,
+    /// Stereo pan in the inclusive range -1.0 to 1.0.
+    pub pan: Param<f32>,
+    /// Whether channel output is suppressed.
     pub mute: bool,
+    /// Whether the channel participates in solo filtering.
     pub solo: bool,
+    /// Whether channel output polarity is inverted.
     pub inverted_phase: bool,
 
-    // The effects chain (EQ, Compressor) comes AFTER the generator
+    /// Post-generator effects in DSP processing order.
     pub effects: EffectChain,
 }
 
@@ -365,15 +492,19 @@ impl Default for MixerChannel {
 }
 
 impl MixerChannel {
+    /// Creates plugin metadata for a registry effect and appends it to this channel.
+    ///
+    /// The returned factory is not invoked for audio processing here; the caller prepares and
+    /// transfers the runtime instance separately.
     pub fn add_effect(
         &mut self,
         registry: &mut PluginRegistry,
         effect_registry_id: u32,
-    ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
-        let (effect_plugin, effect_name, _default_params) = {
-            if let Some((effect_box, name)) = registry.create_plugin_by_id(effect_registry_id) {
-                let default_params = effect_box.default_parameters();
-                (effect_box, name, default_params)
+    ) -> anyhow::Result<(PluginFactory, String, EffectId)> {
+        let (effect_factory, effect_name, _default_params) = {
+            if let Some((effect_factory, name)) = registry.create_plugin_by_id(effect_registry_id) {
+                let default_params = effect_factory().default_parameters();
+                (effect_factory, name, default_params)
             } else {
                 let message = format!(
                     "Effect with ID {} not found in registry",
@@ -388,9 +519,10 @@ impl MixerChannel {
 
         let effect_id = self.effects.insert(plugin_instance);
 
-        Ok((effect_plugin, effect_name, effect_id))
+        Ok((effect_factory, effect_name, effect_id))
     }
 
+    /// Removes an effect slot or returns an error when the ID is absent.
     pub fn remove_effect(&mut self, effect_id: EffectId) -> anyhow::Result<()> {
         self.effects
             .remove(effect_id)
@@ -406,6 +538,27 @@ impl MixerChannel {
             // Note: maybe I will change the bool parameter to Param<bool> too
         ]
     }
+
+    /// Moves an existing effect to `new_pos`, clamped to the last valid chain position.
+    pub fn move_and_shift_effect_chain(
+        &mut self,
+        effect_id: EffectId,
+        new_pos: usize,
+    ) -> anyhow::Result<()> {
+        let Some(old_pos) = self
+            .effects
+            .order
+            .iter()
+            .position(|eff_id| *eff_id == effect_id)
+        else {
+            anyhow::bail!("Effect {:?} not found", effect_id)
+        };
+        let new_pos_clamped = new_pos.min(self.effects.len().saturating_sub(1));
+
+        move_element(&mut self.effects.order, old_pos, new_pos_clamped);
+
+        Ok(())
+    }
 }
 
 impl MixerState {
@@ -415,14 +568,14 @@ impl MixerState {
         registry: &mut PluginRegistry,
         track_id: &TrackId,
         registry_id: u32,
-    ) -> anyhow::Result<(EffectTarget, EffectId, Box<dyn AudioPlugin + Send + Sync>)> {
+    ) -> anyhow::Result<(EffectTarget, EffectId, PluginFactory)> {
         let mixer_channel = self
             .channels
             .get_mut(*track_id)
             .ok_or_else(|| MixerNotFoundError::new(*track_id, "Cannot find the mixer channel"))
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        let (effect_plugin, effect_name, effect_id) =
+        let (effect_factory, effect_name, effect_id) =
             mixer_channel.channel.add_effect(registry, registry_id)?;
 
         log::info!(
@@ -432,9 +585,10 @@ impl MixerState {
             track_id
         );
 
-        Ok((EffectTarget::Track(*track_id), effect_id, effect_plugin))
+        Ok((EffectTarget::Track(*track_id), effect_id, effect_factory))
     }
 
+    /// Removes a track effect and any routing aimed at that effect's sidechain.
     pub fn remove_effect_by_id(
         &mut self,
         track_id: &TrackId,
@@ -469,22 +623,24 @@ impl MixerState {
         Ok(mixer_channel.channel.effects.to_vec())
     }
 
+    /// Appends a registry effect descriptor to the master channel.
     pub fn add_effect_to_master_bus(
         &mut self,
         registry: &mut PluginRegistry,
         registry_id: u32,
-    ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
+    ) -> anyhow::Result<(PluginFactory, String, EffectId)> {
         let channel = &mut self.master_bus;
-        let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
+        let (effect_factory, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
 
         log::info!(
             "Effect {} (registry_id={}) added to master bus",
             effect_name,
             registry_id
         );
-        Ok((effect_plugin, effect_name, effect_id))
+        Ok((effect_factory, effect_name, effect_id))
     }
 
+    /// Removes a master effect and all sends aimed at its sidechain.
     pub fn remove_effect_from_master_bus(&mut self, effect_id: EffectId) -> anyhow::Result<()> {
         let channel = &mut self.master_bus;
         channel.remove_effect(effect_id)?;
@@ -521,16 +677,26 @@ impl MixerState {
         }
 
         // Remove the bus
-        if let Some(bus) = self.buses.remove(bus_id) {
-            self.graph_nodes.remove(bus.graph_node_id);
+        if let Some(bus) = self.buses.detach(bus_id) {
+            self.graph_nodes.detach(bus.graph_node_id);
         }
-        self.graph_nodes.retain(|_, node| {
+        crate::core::project::detach_unless(&mut self.graph_nodes, |_, node| {
             !matches!(
                 node,
                 RoutingNode::PluginSidechain(SidechainRoute::BusEffect(id, _))
                     if *id == bus_id
             )
         });
+
+        // Channels whose main output fed this bus fall back to master rather
+        // than going silent.
+        let orphaned_outputs: Vec<RoutingNode> = self
+            .routing
+            .iter()
+            .filter(|conn| !conn.is_send && conn.destination == RoutingNode::Bus(bus_id))
+            .map(|conn| conn.source)
+            .filter(|source| *source != RoutingNode::Bus(bus_id))
+            .collect();
 
         // Remove all routing connections involving this bus
         self.routing.retain(|conn| {
@@ -542,6 +708,11 @@ impl MixerState {
             );
             !(touches_bus_directly || touches_bus_via_sidechain)
         });
+        for source in orphaned_outputs {
+            let connection = RoutingConnection::new(source, RoutingNode::Master);
+            self.register_connection_nodes(&connection);
+            self.routing.push(connection);
+        }
 
         Ok(())
     }
@@ -551,6 +722,7 @@ impl MixerState {
         self.buses.get_mut(*bus_id)
     }
 
+    /// Renames an existing bus without changing routing or channel state.
     pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
         let bus = self
             .buses
@@ -564,18 +736,29 @@ impl MixerState {
         Ok(())
     }
 
+    /// Assigns the UI color shown for a bus in the mixer and track list.
+    pub fn change_bus_color(&mut self, bus_id: BusId, color: Color) -> anyhow::Result<()> {
+        let bus = self
+            .buses
+            .get_mut(bus_id)
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
+        bus.color = color;
+        Ok(())
+    }
+
+    /// Appends a registry effect descriptor to a bus channel.
     pub fn add_effect_to_bus(
         &mut self,
         registry: &mut PluginRegistry,
         bus_id: BusId,
         registry_id: u32,
-    ) -> anyhow::Result<(EffectTarget, EffectId, Box<dyn AudioPlugin + Send + Sync>)> {
+    ) -> anyhow::Result<(EffectTarget, EffectId, PluginFactory)> {
         let bus = self
             .buses
             .get_mut(bus_id)
             .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
-        let (effect_plugin, effect_name, effect_id) =
+        let (effect_factory, effect_name, effect_id) =
             bus.channel.add_effect(registry, registry_id)?;
 
         log::info!(
@@ -585,9 +768,10 @@ impl MixerState {
             bus_id
         );
 
-        Ok((EffectTarget::Bus(bus_id), effect_id, effect_plugin))
+        Ok((EffectTarget::Bus(bus_id), effect_id, effect_factory))
     }
 
+    /// Removes a bus effect and all sends aimed at its sidechain.
     pub fn remove_effect_from_bus(
         &mut self,
         bus_id: BusId,
@@ -624,16 +808,22 @@ impl MixerState {
         self.ensure_graph_node(connection.destination);
     }
 
+    /// Resolves a stable graph-node key to its semantic routing node.
     pub fn graph_node(&self, id: GraphNodeId) -> Option<RoutingNode> {
         self.graph_nodes.get(id).copied()
     }
 
+    /// Finds the stable graph-node key assigned to a semantic routing node.
     pub fn graph_node_id(&self, node: RoutingNode) -> Option<GraphNodeId> {
         self.graph_nodes
             .iter()
             .find_map(|(id, stored)| (*stored == node).then_some(id))
     }
 
+    /// Validates and inserts a unique acyclic routing connection.
+    ///
+    /// Master and sidechain nodes cannot be sources, tracks cannot be destinations, sidechains
+    /// require send connections with live owners, and any connection creating feedback is rejected.
     pub fn add_routing(
         &mut self,
         connection: RoutingConnection,
@@ -869,7 +1059,7 @@ impl MixerState {
             !(is_source || is_effect_dest || is_generator_dest)
         });
 
-        self.graph_nodes.retain(|_, node| {
+        crate::core::project::detach_unless(&mut self.graph_nodes, |_, node| {
             let is_track = *node == RoutingNode::Track(track_id);
             let is_track_effect = matches!(
                 node,
@@ -887,6 +1077,9 @@ impl MixerState {
         });
     }
 
+    /// Replaces a source's main route or one matching send while preserving acyclic routing.
+    ///
+    /// If validation or cycle detection fails, the prior matching connection is restored.
     pub fn update_routing(
         &mut self,
         connection: RoutingConnection,
@@ -960,7 +1153,43 @@ impl MixerState {
         let node = RoutingNode::PluginSidechain(route);
         self.routing.retain(|c| c.destination != node);
         if let Some(node_id) = self.graph_node_id(node) {
-            self.graph_nodes.remove(node_id);
+            self.graph_nodes.detach(node_id);
+        }
+    }
+
+    /// Borrows the channel identified by a track, bus, or master target.
+    pub fn get_mixer_channel_from_target(
+        &self,
+        target: MixerChannelTarget,
+    ) -> Option<&MixerChannel> {
+        match target {
+            MixerChannelTarget::Track(track_id) => self
+                .channels
+                .get(track_id)
+                .map(|track_channel| &track_channel.channel),
+            MixerChannelTarget::Bus(bus_id) => self
+                .buses
+                .get(bus_id)
+                .map(|bus_channel| &bus_channel.channel),
+            MixerChannelTarget::Master => Some(&self.master_bus),
+        }
+    }
+
+    /// Mutably borrows the channel identified by a track, bus, or master target.
+    pub fn get_mixer_channel_from_target_mut(
+        &mut self,
+        target: MixerChannelTarget,
+    ) -> Option<&mut MixerChannel> {
+        match target {
+            MixerChannelTarget::Track(track_id) => self
+                .channels
+                .get_mut(track_id)
+                .map(|track_channel| &mut track_channel.channel),
+            MixerChannelTarget::Bus(bus_id) => self
+                .buses
+                .get_mut(bus_id)
+                .map(|bus_channel| &mut bus_channel.channel),
+            MixerChannelTarget::Master => Some(&mut self.master_bus),
         }
     }
 }
@@ -979,6 +1208,22 @@ impl ApplicationState {
     /// Get the entire mixer state
     pub fn get_mixer_state(&self) -> &MixerState {
         return &self.mixer;
+    }
+
+    /// Borrows a mixer channel through the project's mixer state.
+    pub fn get_mixer_channel_from_target(
+        &self,
+        target: MixerChannelTarget,
+    ) -> Option<&MixerChannel> {
+        self.mixer.get_mixer_channel_from_target(target)
+    }
+
+    /// Mutably borrows a mixer channel through the project's mixer state.
+    pub fn get_mixer_channel_from_target_mut(
+        &mut self,
+        target: MixerChannelTarget,
+    ) -> Option<&mut MixerChannel> {
+        self.mixer.get_mixer_channel_from_target_mut(target)
     }
 }
 /// Helper to find cycle using DFS over the full RoutingNode graph
@@ -1020,4 +1265,72 @@ fn find_track_hosting_generator(
                 .is_some_and(|g| g.id == generator_id)
         })
         .map(|(id, _)| id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bus_saved_without_color_loads_grey() {
+        let legacy = (
+            BusId::from(0),
+            GraphNodeId::default(),
+            "Legacy".to_string(),
+            MixerChannel::default(),
+        );
+        let bytes = rmp_serde::to_vec(&legacy).expect("serialize legacy bus");
+
+        let bus: BusMixerChannel = rmp_serde::from_slice(&bytes).expect("deserialize legacy bus");
+
+        assert_eq!(bus.name, "Legacy");
+        assert_eq!(bus.color, default_bus_color());
+    }
+
+    #[test]
+    fn bus_color_round_trips() {
+        let mut bus = BusMixerChannel::new(BusId::from(0), "Drums");
+        assert_eq!(bus.color, default_bus_color());
+        bus.color = Color::new_from_rgb(0xFF, 0x8A, 0x65);
+
+        let bytes = rmp_serde::to_vec(&bus).expect("serialize bus");
+        let decoded: BusMixerChannel = rmp_serde::from_slice(&bytes).expect("deserialize bus");
+
+        assert_eq!(decoded.color, bus.color);
+    }
+
+    #[test]
+    fn routing_saved_without_tap_loads_post_fader() {
+        let legacy = (
+            RoutingNode::Bus(BusId::from(1)),
+            RoutingNode::Master,
+            0.5_f32,
+            true,
+        );
+        let bytes = rmp_serde::to_vec(&legacy).expect("serialize legacy routing");
+
+        let connection: RoutingConnection =
+            rmp_serde::from_slice(&bytes).expect("deserialize legacy routing");
+
+        assert_eq!(connection.destination, RoutingNode::Master);
+        assert!(connection.is_send);
+        assert_eq!(connection.tap, RoutingTap::PostFader);
+    }
+
+    #[test]
+    fn pre_fader_sidechain_routing_round_trips() {
+        let mut connection = RoutingConnection::new_send(
+            RoutingNode::Bus(BusId::from(1)),
+            RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(EffectId::from(3))),
+            0.75,
+        );
+        connection.tap = RoutingTap::PreFader;
+
+        let bytes = rmp_serde::to_vec(&connection).expect("serialize routing");
+        let decoded: RoutingConnection =
+            rmp_serde::from_slice(&bytes).expect("deserialize routing");
+
+        assert_eq!(decoded.destination, connection.destination);
+        assert_eq!(decoded.tap, RoutingTap::PreFader);
+    }
 }

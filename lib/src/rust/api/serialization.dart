@@ -7,7 +7,10 @@ import '../frb_generated.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pattern.dart';
+import 'plugin.dart';
 import 'project.dart';
+
+// These functions are ignored because they are not marked as `pub`: `restore_loaded_project`
 
 /// Save the currrent project to path_name
 Future<void> saveProject({required DawContext ctx, required String pathName}) =>
@@ -27,3 +30,8 @@ Future<UiApplicationState> loadProject({
 
 Future<UiApplicationState> newBlankProject({required DawContext ctx}) =>
     RustLib.instance.api.crateApiSerializationNewBlankProject(ctx: ctx);
+
+/// Whether the current project has no unsaved changes. Read it when the answer is needed, such
+/// as before closing the window or replacing the project; it is not meant for polling.
+bool isProjectSaved({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiSerializationIsProjectSaved(ctx: ctx);

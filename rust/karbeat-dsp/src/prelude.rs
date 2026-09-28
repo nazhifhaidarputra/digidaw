@@ -1,7 +1,10 @@
 //! importing prelude means bringing all building blocks
 //! for building audio plugin
 
-#![allow(unused_imports)]
+#![allow(
+    unused_imports,
+    reason = "the prelude intentionally re-exports the complete public DSP building-block set"
+)]
 
 pub use crate::bit_crush::*;
 pub use crate::chorus::*;

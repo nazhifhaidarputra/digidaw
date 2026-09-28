@@ -1,8 +1,8 @@
-pub mod delay;
-pub mod channel;
 pub mod bit_crush;
+pub mod channel;
 pub mod chorus;
 pub mod compressor;
+pub mod delay;
 pub mod distortion;
 pub mod envelope;
 pub mod filter;

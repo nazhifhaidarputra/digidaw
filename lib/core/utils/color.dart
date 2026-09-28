@@ -10,7 +10,7 @@ final List<Color> dawColors = [
 
 extension HexColorParsing on String {
   /// Converts a Rust/Web hex color string (#RRGGBB or #RRGGBBAA) to a Flutter Color
-  Color toColor() {
+  Color fromRGBorRGBAtoColor() {
     // 1. Remove the '#' if it exists
     String hex = replaceAll('#', '');
 

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -10,11 +11,16 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 typedef SidechainSourceLoader =
     Future<List<mixer_api.UiSidechainSource>> Function();
 typedef SidechainSourceSetter =
-    Future<void> Function(mixer_api.UiRoutingNode source, double? sendLevel);
+    Future<void> Function(
+      mixer_api.UiRoutingNode source,
+      double? sendLevel,
+      mixer_api.UiRoutingTap tap,
+    );
 
 /// Reusable editor for a plugin's auxiliary-input routing.
 ///
-/// A null send level removes the route. A non-null value adds or updates it.
+/// A null send level removes the route. A non-null value adds or updates it,
+/// tapping the source before or after its fader.
 class SidechainSourcePanel extends ConsumerStatefulWidget {
   const SidechainSourcePanel({
     super.key,
@@ -63,14 +69,18 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
   Future<void> _setOnBackend(
     mixer_api.UiRoutingNode source,
     double? sendLevel,
-  ) {
+    mixer_api.UiRoutingTap tap,
+  ) async {
     final ctx = ref.read(projectProvider.notifier).dawContext;
-    return mixer_api.setSidechainSource(
+    await mixer_api.setSidechainSource(
       ctx: ctx,
       plugin: widget.target,
       from: source,
       sendLevel: sendLevel,
+      tap: tap,
     );
+    // Keep the mixer's routing view (wires, output chips) in step.
+    await ref.read(mixerStateProvider.notifier).syncRoutingConnection();
   }
 
   Future<void> _load() async {
@@ -116,7 +126,23 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
     _sources = updated;
   }
 
-  Future<void> _toggleSource(int index, bool enabled) async {
+  Future<void> _toggleSource(int index, bool enabled) =>
+      _applySource(index, _sources[index].copyWith(enabled: enabled));
+
+  Future<void> _setTap(int index, bool preFader) => _applySource(
+    index,
+    _sources[index].copyWith(
+      tap: preFader
+          ? mixer_api.UiRoutingTap.preFader
+          : mixer_api.UiRoutingTap.postFader,
+    ),
+  );
+
+  /// Shows [updated] immediately and rolls it back if the backend rejects it.
+  Future<void> _applySource(
+    int index,
+    mixer_api.UiSidechainSource updated,
+  ) async {
     final previous = _sources[index];
     final key = _sourceKey(previous.source);
     if (_busySources.contains(key)) return;
@@ -124,12 +150,16 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
     setState(() {
       _error = null;
       _busySources.add(key);
-      _replaceSource(index, previous.copyWith(enabled: enabled));
+      _replaceSource(index, updated);
     });
 
     try {
       final setter = widget.setSource ?? _setOnBackend;
-      await setter(previous.source, enabled ? previous.sendLevel : null);
+      await setter(
+        updated.source,
+        updated.enabled ? updated.sendLevel : null,
+        updated.tap,
+      );
     } catch (error) {
       ref.read(notificationProvider.notifier).error(error);
       if (!mounted) return;
@@ -162,7 +192,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
     });
     try {
       final setter = widget.setSource ?? _setOnBackend;
-      await setter(source.source, value);
+      await setter(source.source, value, source.tap);
     } catch (error) {
       ref.read(notificationProvider.notifier).error(error);
       if (!mounted) return;
@@ -183,25 +213,26 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.alt_route, color: Colors.cyanAccent, size: 18),
+              Icon(Icons.alt_route, color: colors.primary, size: 18),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'SIDECHAIN SOURCES',
                   style: TextStyle(
-                    color: Colors.cyanAccent,
+                    color: colors.primary,
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.1,
@@ -217,10 +248,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-            ),
+            Text(_error!, style: TextStyle(color: colors.error, fontSize: 12)),
           ],
           const SizedBox(height: 8),
           if (_loading)
@@ -231,11 +259,11 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
               ),
             )
           else if (_sources.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 'No valid track or bus sources are available.',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: colors.onSurfaceVariant),
               ),
             )
           else
@@ -249,7 +277,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
                   decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(40),
+                    color: colors.surfaceContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -263,18 +291,32 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                                 Text(
                                   source.name,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white),
+                                  style: TextStyle(color: colors.onSurface),
                                 ),
                                 Text(
                                   _sourceType(source.source),
-                                  style: const TextStyle(
-                                    color: Colors.white38,
+                                  style: TextStyle(
+                                    color: colors.onSurfaceVariant,
                                     fontSize: 11,
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                          Tooltip(
+                            message: 'Tap the source before its fader',
+                            child: FilterChip(
+                              label: const Text('PRE'),
+                              labelStyle: const TextStyle(fontSize: 10),
+                              visualDensity: VisualDensity.compact,
+                              selected:
+                                  source.tap == mixer_api.UiRoutingTap.preFader,
+                              onSelected: source.enabled && !busy
+                                  ? (value) => _setTap(index, value)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
                           if (busy)
                             const Padding(
                               padding: EdgeInsets.only(right: 10),
@@ -287,7 +329,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                             ),
                           Switch(
                             value: source.enabled,
-                            activeThumbColor: Colors.cyanAccent,
+                            activeThumbColor: colors.primary,
                             onChanged: busy
                                 ? null
                                 : (value) => _toggleSource(index, value),
@@ -299,9 +341,10 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                           Expanded(
                             child: SliderTheme(
                               data: SliderTheme.of(context).copyWith(
-                                activeTrackColor: Colors.cyanAccent,
-                                thumbColor: Colors.cyanAccent,
-                                inactiveTrackColor: Colors.white12,
+                                activeTrackColor: colors.primary,
+                                thumbColor: colors.primary,
+                                inactiveTrackColor:
+                                    colors.surfaceContainerHighest,
                               ),
                               child: Slider(
                                 value: source.sendLevel.clamp(0.0, 1.0),
@@ -321,8 +364,8 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                             child: Text(
                               _formatLevel(source.sendLevel),
                               textAlign: TextAlign.end,
-                              style: const TextStyle(
-                                color: Colors.white70,
+                              style: TextStyle(
+                                color: colors.onSurfaceVariant,
                                 fontSize: 11,
                               ),
                             ),

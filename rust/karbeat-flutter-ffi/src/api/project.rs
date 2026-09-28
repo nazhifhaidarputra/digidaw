@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
+use jiff::Timestamp;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
 use karbeat_core::audio::writer::{AudioExportConfig, BitDepth, WavAudioWriterConfig};
-pub use karbeat_core::context::DawContext;
+use karbeat_core::context::DawContext as CoreDawContext;
+use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
@@ -16,8 +17,16 @@ use karbeat_core::core::project::{
 };
 use serde::Serialize;
 
-use crate::api::waveform::{WaveformHandle, get_waveform_handle};
+use crate::api::context::DawSessionInner;
+use crate::api::waveform::WaveformHandle;
 use crate::frb_generated::StreamSink;
+
+/// Shared bridge handle whose inner guards control access to the core DAW state.
+#[frb(opaque)]
+#[derive(Clone)]
+pub struct DawContext {
+    pub(crate) inner: Arc<DawSessionInner>,
+}
 
 pub enum UiTrackType {
     Audio,
@@ -29,40 +38,40 @@ pub struct UiApplicationState {
     pub metadata: UiProjectMetadata,
     pub transport: UiTransportState,
     pub hardware_config: UiAudioHardwareConfig,
-    pub tracks: HashMap<u32, UiTrack>,
-    pub generators: HashMap<u32, UiGeneratorInstance>,
-    pub patterns: HashMap<u32, crate::api::pattern::UiPattern>,
+    pub tracks: HashMap<u64, UiTrack>,
+    pub generators: HashMap<u64, UiGeneratorInstance>,
+    pub patterns: HashMap<u64, crate::api::pattern::UiPattern>,
     pub mixer: crate::api::mixer::UiMixerState,
-    pub audio_sources: HashMap<u32, AudioWaveformUiForSourceList>,
+    pub audio_sources: HashMap<u64, AudioWaveformUiForSourceList>,
 }
 
 impl From<ApplicationState> for UiApplicationState {
     fn from(value: ApplicationState) -> Self {
-        let tracks: HashMap<u32, UiTrack> = value
+        let tracks: HashMap<u64, UiTrack> = value
             .tracks
             .iter()
-            .map(|(id, track)| (id.to_u32(), UiTrack::from_track(track, &value)))
+            .map(|(id, track)| (id.to_u64(), UiTrack::from_track(track, &value)))
             .collect();
 
-        let generators: HashMap<u32, UiGeneratorInstance> = value
+        let generators: HashMap<u64, UiGeneratorInstance> = value
             .generator_pool
             .iter()
-            .map(|(id, generator)| (id.to_u32(), UiGeneratorInstance::from(generator)))
+            .map(|(id, generator)| (id.to_u64(), UiGeneratorInstance::from(generator)))
             .collect();
 
-        let patterns: HashMap<u32, crate::api::pattern::UiPattern> = value
+        let patterns: HashMap<u64, crate::api::pattern::UiPattern> = value
             .pattern_pool
             .iter()
-            .map(|(id, pat)| (id.to_u32(), crate::api::pattern::UiPattern::from(pat)))
+            .map(|(id, pat)| (id.to_u64(), crate::api::pattern::UiPattern::from(pat)))
             .collect();
 
-        let audio_sources: HashMap<u32, AudioWaveformUiForSourceList> = value
+        let audio_sources: HashMap<u64, AudioWaveformUiForSourceList> = value
             .asset_library
             .source_map
             .iter()
             .map(|(id, source)| {
                 (
-                    id.to_u32(),
+                    id.to_u64(),
                     AudioWaveformUiForSourceList::from(source.as_ref()),
                 )
             })
@@ -103,12 +112,12 @@ impl From<TrackType> for UiTrackType {
 
 #[frb(dart_metadata=("freezed"))]
 pub struct UiTrack {
-    pub id: u32,
+    pub id: u64,
     pub name: String,
     pub color: String,
     pub track_type: UiTrackType,
     pub clips: Vec<UiClip>,
-    pub generator_id: Option<u32>,
+    pub generator_id: Option<u64>,
     pub order_idx: usize,
 }
 
@@ -117,6 +126,8 @@ pub struct UiTrack {
 pub struct UiProjectMetadata {
     pub name: String,
     pub author: String,
+    pub description: String,
+    pub genre: String,
     pub version: String,
     pub created_at: String,
 }
@@ -126,8 +137,10 @@ impl From<ProjectMetadata> for UiProjectMetadata {
         Self {
             name: m.name,
             author: m.author,
+            description: m.description,
+            genre: m.genre,
             version: m.version,
-            created_at: m.created_at.to_rfc3339(),
+            created_at: m.created_at.to_string(),
         }
     }
 }
@@ -137,8 +150,13 @@ impl From<UiProjectMetadata> for ProjectMetadata {
         Self {
             name: m.name,
             author: m.author,
+            description: m.description,
+            genre: m.genre,
             version: m.version,
-            created_at: m.created_at.parse::<DateTime<Utc>>().unwrap_or(Utc::now()),
+            created_at: m
+                .created_at
+                .parse::<Timestamp>()
+                .unwrap_or_else(|_| Timestamp::now()),
         }
     }
 }
@@ -207,9 +225,9 @@ impl UiTrack {
         let generator_id = value
             .generator
             .as_ref()
-            .map(|gen_instance| gen_instance.id.to_u32());
+            .map(|gen_instance| gen_instance.id.to_u64());
         Self {
-            id: value.id.to_u32(),
+            id: value.id.to_u64(),
             name: value.name.clone(),
             color: value.color.to_string(),
             track_type: value.track_type.clone().into(),
@@ -268,22 +286,22 @@ pub fn transport_state_new_with_param(bpm: f32, time_signature: (u8, u8)) -> UiT
 #[frb(dart_metadata=("freezed"))]
 pub struct UiClip {
     pub name: String,
-    pub id: u32,
-    /// Start time in native units (samples if is_sample_based, ticks otherwise)
+    pub id: u64,
+    /// Timeline placement in ticks.
     pub start_time: u64,
     pub source: UiClipSource,
-    /// Offset from start of source content in native units
+    /// Offset from source content in samples for audio, ticks otherwise.
     pub offset_start: u64,
-    /// Loop length in native units
+    /// Loop length in samples for audio, ticks otherwise.
     pub loop_length: u64,
-    /// True if units are raw samples (audio clips), false if ticks (MIDI/automation)
+    /// True when loop length and source offset are raw samples.
     pub is_sample_based: bool,
 }
 
 #[derive(Clone)]
 pub enum UiClipSource {
-    Audio { source_id: u32 },
-    Midi { pattern_id: u32 },
+    Audio { source_id: u64 },
+    Midi { pattern_id: u64 },
     None, // represent clip with empty source, this is placeholder, as this will be removed when I already implement MIDI Pattern and automation
 }
 
@@ -292,16 +310,16 @@ impl From<&Clip> for UiClip {
         // Map source to either AudioWaveform, midi
         let source = match value.source.as_ref() {
             Some(DawSource::Audio(source_id)) => UiClipSource::Audio {
-                source_id: source_id.to_u32(),
+                source_id: source_id.to_u64(),
             },
             Some(DawSource::Midi(pattern_id)) => UiClipSource::Midi {
-                pattern_id: pattern_id.to_u32(),
+                pattern_id: pattern_id.to_u64(),
             },
             _ => UiClipSource::None,
         };
         Self {
             name: value.name.clone(),
-            id: value.id.to_u32(),
+            id: value.id.to_u64(),
             start_time: value.time.start_time_raw(),
             source,
             offset_start: value.time.offset_start_raw(),
@@ -322,7 +340,7 @@ pub struct AudioWaveformUiForSourceList {
 #[derive(Clone, Debug, Serialize)]
 #[frb(dart_metadata=("freezed"))]
 pub struct AudioWaveformUiForAudioProperties {
-    pub id: Option<u32>,
+    pub id: Option<u64>,
     pub buffer_handle: WaveformHandle,
     pub file_path: String,
     pub name: String,
@@ -349,14 +367,21 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
 }
 
 impl AudioWaveformUiForAudioProperties {
-    pub fn try_from_with_context(ctx: &DawContext, value: &AudioWaveform) -> Result<Self, String> {
+    #[frb(ignore)]
+    pub fn try_from_with_context(
+        ctx: &CoreDawContext,
+        value: &AudioWaveform,
+    ) -> Result<Self, String> {
         let Some(id) = value.id else {
             return Err(String::from("This audio waveform does not have an ID"));
         };
-        let waveform_handle =
-            get_waveform_handle(ctx, id.to_u32()).ok_or("Cannot get this waveform handle")?;
+        let waveform = ctx
+            .app_state
+            .get_audio_source(&id)
+            .ok_or("Cannot get this waveform handle")?;
+        let waveform_handle = WaveformHandle::from_waveform(waveform.clone());
         Ok(Self {
-            id: Some(id.to_u32()),
+            id: Some(id.to_u64()),
             buffer_handle: waveform_handle,
             file_path: value.file_path.display().to_string(),
             name: value.name.clone(),
@@ -380,7 +405,7 @@ impl AudioWaveformUiForAudioProperties {
 
 #[frb(dart_metadata=("freezed"))]
 pub struct UiGeneratorInstance {
-    pub id: u32,
+    pub id: u64,
     pub instance_type: UiGeneratorInstanceType,
 }
 
@@ -430,7 +455,7 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
     fn from(generator_instance: &GeneratorInstance) -> Self {
         match &generator_instance.instance_type {
             GeneratorInstanceType::Plugin(plugin_instance) => Self {
-                id: generator_instance.id.to_u32(),
+                id: generator_instance.id.to_u64(),
                 instance_type: UiGeneratorInstanceType::Plugin(UiPluginInstance::from(
                     plugin_instance.to_owned(),
                 )),
@@ -439,7 +464,7 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
                 asset_id,
                 root_note,
             } => Self {
-                id: generator_instance.id.to_u32(),
+                id: generator_instance.id.to_u64(),
                 instance_type: UiGeneratorInstanceType::Sampler {
                     asset_id: *asset_id,
                     root_note: *root_note,
@@ -513,29 +538,42 @@ pub enum AudioExportConfigDTO {
 
 /// Get the current project metadata state from the backend
 pub fn get_project_metadata(ctx: &DawContext) -> Result<UiProjectMetadata, String> {
-    project_api::get_project_metadata(ctx, |m| UiProjectMetadata::from(m.clone()))
+    project_api::get_project_metadata(&ctx.read(), |m| UiProjectMetadata::from(m.clone()))
         .map_err(|e| e.to_string())
+}
+
+pub fn update_project_metadata(
+    ctx: &DawContext,
+    metadata: UiProjectMetadata,
+) -> Result<UiProjectMetadata, String> {
+    let mut ctx = ctx.project_write();
+    let created_at = ctx.app_state.metadata.created_at;
+    let mut metadata = ProjectMetadata::from(metadata);
+    metadata.created_at = created_at;
+    project_api::update_project_metadata(&mut ctx, metadata)
+        .map(UiProjectMetadata::from)
+        .map_err(|error| error.to_string())
 }
 
 /// Get the transport state from the backend
 pub fn get_transport_state(ctx: &DawContext) -> Result<UiTransportState, String> {
-    project_api::get_transport_state(ctx, |t| UiTransportState::from(t.clone()))
+    project_api::get_transport_state(&ctx.read(), |t| UiTransportState::from(t.clone()))
         .map_err(|e| e.to_string())
 }
 
 /// Get all audio waveform source list from the backend
 pub fn get_audio_source_list(
     ctx: &DawContext,
-) -> Option<HashMap<u32, AudioWaveformUiForSourceList>> {
-    audio_waveform_api::get_audio_source_list(ctx, |id, wf| {
+) -> Option<HashMap<u64, AudioWaveformUiForSourceList>> {
+    audio_waveform_api::get_audio_source_list(&ctx.read(), |id, wf| {
         (id, AudioWaveformUiForSourceList::from(wf))
     })
     .ok()
 }
 
 /// Get generator list used in the project
-pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u32, UiGeneratorInstance>, String> {
-    project_api::get_generator_list(ctx, |id, generator| {
+pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u64, UiGeneratorInstance>, String> {
+    project_api::get_generator_list(&ctx.read(), |id, generator| {
         (id, UiGeneratorInstance::from(generator))
     })
     .map_err(|e| e.to_string())
@@ -545,15 +583,16 @@ pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u32, UiGeneratorIn
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-pub fn add_audio_source(ctx: &mut DawContext, file_path: &str) -> Result<u32, String> {
-    let source_id =
-        audio_waveform_api::add_audio_source(ctx, file_path).map_err(|e| e.to_string())?;
-    Ok(source_id.to_u32())
+pub fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, String> {
+    let source_id = audio_waveform_api::add_audio_source(&mut ctx.project_write(), file_path)
+        .map_err(|e| e.to_string())?;
+    Ok(source_id.to_u64())
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-pub fn add_new_audio_track(ctx: &mut DawContext) -> UiTrack {
-    let track = { track_api::add_new_audio_track(ctx) };
+pub fn add_new_audio_track(ctx: &DawContext) -> UiTrack {
+    let mut ctx = ctx.project_write();
+    let track = track_api::add_new_audio_track(&mut ctx);
     log::info!("[add_new_track] successfully added new track");
     UiTrack::from_track(&track, &ctx.app_state)
 }
@@ -561,8 +600,9 @@ pub fn add_new_audio_track(ctx: &mut DawContext) -> UiTrack {
 /// Get all tracks on the session/project.
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
-pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u32, UiTrack>, String> {
-    track_api::get_tracks_ordered(ctx, |id, track| {
+pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u64, UiTrack>, String> {
+    let ctx = ctx.read();
+    track_api::get_tracks_ordered(&ctx, |id, track| {
         (id, UiTrack::from_track(track, &ctx.app_state))
     })
     .map_err(|e| e.to_string())
@@ -571,7 +611,7 @@ pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u32, UiTrack>, String> {
 /// Export project to flutter. also report progress via StreamSink
 #[frb]
 pub fn export_project_flutter(
-    ctx: &mut DawContext,
+    ctx: &DawContext,
     output_path: String,
     config: AudioExportConfigDTO,
     tail_handling: TailHandlingDTO,
@@ -601,8 +641,10 @@ pub fn export_project_flutter(
         }
     };
 
-    project_api::export_project(
-        ctx,
+    let operation = ctx.begin_project_operation();
+    let pending = project_api::begin_project_export(&operation.read_core());
+    project_api::execute_project_export(
+        pending,
         &output_path,
         core_config,
         tail_handling.into(),

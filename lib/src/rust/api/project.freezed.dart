@@ -2598,7 +2598,7 @@ as bool,
 /// @nodoc
 mixin _$UiProjectMetadata {
 
- String get name; String get author; String get version; String get createdAt;
+ String get name; String get author; String get description; String get genre; String get version; String get createdAt;
 /// Create a copy of UiProjectMetadata
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -2609,16 +2609,16 @@ $UiProjectMetadataCopyWith<UiProjectMetadata> get copyWith => _$UiProjectMetadat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiProjectMetadata&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.version, version) || other.version == version)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiProjectMetadata&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.description, description) || other.description == description)&&(identical(other.genre, genre) || other.genre == genre)&&(identical(other.version, version) || other.version == version)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,name,author,version,createdAt);
+int get hashCode => Object.hash(runtimeType,name,author,description,genre,version,createdAt);
 
 @override
 String toString() {
-  return 'UiProjectMetadata(name: $name, author: $author, version: $version, createdAt: $createdAt)';
+  return 'UiProjectMetadata(name: $name, author: $author, description: $description, genre: $genre, version: $version, createdAt: $createdAt)';
 }
 
 
@@ -2629,7 +2629,7 @@ abstract mixin class $UiProjectMetadataCopyWith<$Res>  {
   factory $UiProjectMetadataCopyWith(UiProjectMetadata value, $Res Function(UiProjectMetadata) _then) = _$UiProjectMetadataCopyWithImpl;
 @useResult
 $Res call({
- String name, String author, String version, String createdAt
+ String name, String author, String description, String genre, String version, String createdAt
 });
 
 
@@ -2646,10 +2646,12 @@ class _$UiProjectMetadataCopyWithImpl<$Res>
 
 /// Create a copy of UiProjectMetadata
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? author = null,Object? version = null,Object? createdAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? author = null,Object? description = null,Object? genre = null,Object? version = null,Object? createdAt = null,}) {
   return _then(_self.copyWith(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,author: null == author ? _self.author : author // ignore: cast_nullable_to_non_nullable
+as String,description: null == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
+as String,genre: null == genre ? _self.genre : genre // ignore: cast_nullable_to_non_nullable
 as String,version: null == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as String,
@@ -2734,10 +2736,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String author,  String version,  String createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String author,  String description,  String genre,  String version,  String createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiProjectMetadata() when $default != null:
-return $default(_that.name,_that.author,_that.version,_that.createdAt);case _:
+return $default(_that.name,_that.author,_that.description,_that.genre,_that.version,_that.createdAt);case _:
   return orElse();
 
 }
@@ -2755,10 +2757,10 @@ return $default(_that.name,_that.author,_that.version,_that.createdAt);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String author,  String version,  String createdAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String author,  String description,  String genre,  String version,  String createdAt)  $default,) {final _that = this;
 switch (_that) {
 case _UiProjectMetadata():
-return $default(_that.name,_that.author,_that.version,_that.createdAt);}
+return $default(_that.name,_that.author,_that.description,_that.genre,_that.version,_that.createdAt);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -2772,10 +2774,10 @@ return $default(_that.name,_that.author,_that.version,_that.createdAt);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String author,  String version,  String createdAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String author,  String description,  String genre,  String version,  String createdAt)?  $default,) {final _that = this;
 switch (_that) {
 case _UiProjectMetadata() when $default != null:
-return $default(_that.name,_that.author,_that.version,_that.createdAt);case _:
+return $default(_that.name,_that.author,_that.description,_that.genre,_that.version,_that.createdAt);case _:
   return null;
 
 }
@@ -2787,11 +2789,13 @@ return $default(_that.name,_that.author,_that.version,_that.createdAt);case _:
 
 
 class _UiProjectMetadata extends UiProjectMetadata {
-  const _UiProjectMetadata({required this.name, required this.author, required this.version, required this.createdAt}): super._();
+  const _UiProjectMetadata({required this.name, required this.author, required this.description, required this.genre, required this.version, required this.createdAt}): super._();
   
 
 @override final  String name;
 @override final  String author;
+@override final  String description;
+@override final  String genre;
 @override final  String version;
 @override final  String createdAt;
 
@@ -2805,16 +2809,16 @@ _$UiProjectMetadataCopyWith<_UiProjectMetadata> get copyWith => __$UiProjectMeta
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiProjectMetadata&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.version, version) || other.version == version)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiProjectMetadata&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.description, description) || other.description == description)&&(identical(other.genre, genre) || other.genre == genre)&&(identical(other.version, version) || other.version == version)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,name,author,version,createdAt);
+int get hashCode => Object.hash(runtimeType,name,author,description,genre,version,createdAt);
 
 @override
 String toString() {
-  return 'UiProjectMetadata(name: $name, author: $author, version: $version, createdAt: $createdAt)';
+  return 'UiProjectMetadata(name: $name, author: $author, description: $description, genre: $genre, version: $version, createdAt: $createdAt)';
 }
 
 
@@ -2825,7 +2829,7 @@ abstract mixin class _$UiProjectMetadataCopyWith<$Res> implements $UiProjectMeta
   factory _$UiProjectMetadataCopyWith(_UiProjectMetadata value, $Res Function(_UiProjectMetadata) _then) = __$UiProjectMetadataCopyWithImpl;
 @override @useResult
 $Res call({
- String name, String author, String version, String createdAt
+ String name, String author, String description, String genre, String version, String createdAt
 });
 
 
@@ -2842,10 +2846,12 @@ class __$UiProjectMetadataCopyWithImpl<$Res>
 
 /// Create a copy of UiProjectMetadata
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? author = null,Object? version = null,Object? createdAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? author = null,Object? description = null,Object? genre = null,Object? version = null,Object? createdAt = null,}) {
   return _then(_UiProjectMetadata(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,author: null == author ? _self.author : author // ignore: cast_nullable_to_non_nullable
+as String,description: null == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
+as String,genre: null == genre ? _self.genre : genre // ignore: cast_nullable_to_non_nullable
 as String,version: null == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as String,
