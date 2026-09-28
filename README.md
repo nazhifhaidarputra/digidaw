@@ -50,11 +50,10 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Third-party supports for native audio plugin (In form of Asset Workshop)
 - [x] Settings/configuration for user
 - [x] Logging for end-user
-- [x] VST3 Host support (Done for Linux and Windows)
+- [x] VST3 Host (Done for Linux and Windows)
 - [ ] AU Host support
 - [ ] CLAP Host support
 - [ ] LV2 Host support
-- [ ] Plugin Scanner
 - [ ] MacOS version
 - [ ] iOS version
 - [ ] Export audio to FLAC and OGG
