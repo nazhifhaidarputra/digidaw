@@ -16,6 +16,7 @@ import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 // Rust FFI Imports
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/src/rust/api/simple.dart';
@@ -66,6 +67,9 @@ abstract class ApplicationDataStore with _$ApplicationDataStore {
     required IMap<int, ModulationLinkDto> modulationLinks,
     required IMap<int, AutomationLaneDto> automationPool,
     required IMap<int, ModulationSourceDto> modulationSources,
+
+    /// Waveform envelope of every audio source, keyed by source ID.
+    @Default(IMapConst({})) IMap<int, UiGainEnvelope> sourceEnvelopes,
 
     /// Increments on every full backend fetch (boot, new, load, undo/redo).
     ///
@@ -505,6 +509,33 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     );
   }
 
+  /// Adds or updates waveform envelopes of audio sources.
+  void upsertSourceEnvelopes(Map<int, UiGainEnvelope> envelopes) {
+    if (!state.hasValue || envelopes.isEmpty) return;
+    final current = state.requireValue;
+    state = AsyncValue.data(
+      current.copyWith(
+        sourceEnvelopes: current.sourceEnvelopes.addAll(envelopes.lock),
+      ),
+    );
+  }
+
+  /// Replaces an audio source's waveform envelope in the backend, then stores
+  /// the envelope it kept (points sorted, gains clamped).
+  Future<void> setSourceEnvelope(int sourceId, UiGainEnvelope envelope) async {
+    final result = await ref.guardApi(
+      () => audio_api.setAudioSourceEnvelope(
+        ctx: dawContext,
+        sourceId: sourceId,
+        envelope: envelope,
+      ),
+      title: 'Could not edit the waveform envelope',
+    );
+    if (result case AsyncData(:final value)) {
+      upsertSourceEnvelopes({sourceId: value});
+    }
+  }
+
   /// Adds or updates a single track in O(1) time
   void upsertTrack(int trackId, UiTrack updatedTrack) {
     if (state.hasValue) {
@@ -532,10 +563,11 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   ) async {
     // Modulations might not be deeply nested in UiApplicationState,
     // so we fetch them alongside the main state load to ensure consistency.
-    final (links, lanes, sources) = await (
+    final (links, lanes, sources, envelopes) = await (
       getAllLinkedModulationParams(ctx: dawContext),
       getAutomationsLanesAll(ctx: dawContext),
       getAllModulationSources(ctx: dawContext),
+      audio_api.getAudioSourceEnvelopes(ctx: dawContext),
     ).wait;
 
     return ApplicationDataStore(
@@ -550,6 +582,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
       modulationLinks: links.lock,
       automationPool: lanes.lock,
       modulationSources: sources.lock,
+      sourceEnvelopes: envelopes.lock,
       fullStateRevision: ++_fullStateRevision,
     );
   }

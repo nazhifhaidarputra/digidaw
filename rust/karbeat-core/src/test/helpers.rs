@@ -101,5 +101,34 @@ pub fn make_midi_clip_at(start_ticks: u32, length_ticks: u32, pattern_id: Patter
             loop_length: length_ticks,
             offset_start: 0,
         },
+        envelope: None,
     }
+}
+
+/// Adds a one-second stereo audio source of constant samples to the project's asset library.
+pub fn add_dc_audio_source(ctx: &mut DawContext) -> crate::shared::AudioSourceId {
+    use std::sync::Arc;
+
+    let samples = vec![0.5_f32; 48_000 * 2];
+    let bytes: &[u8] = bytemuck::cast_slice(&samples);
+    let mut map = memmap2::MmapOptions::new()
+        .len(bytes.len())
+        .map_anon()
+        .expect("anonymous map");
+    map.copy_from_slice(bytes);
+    let buffer = Arc::new(map.make_read_only().expect("read-only map"));
+    ctx.app_state
+        .asset_library
+        .source_map
+        .insert_with_key(|id| {
+            Arc::new(crate::core::project::AudioWaveform {
+                id: Some(id),
+                name: "dc".into(),
+                buffer: Some(buffer),
+                sample_rate: 48_000,
+                channels: 2,
+                duration: 1.0,
+                ..Default::default()
+            })
+        })
 }

@@ -1037,6 +1037,23 @@ impl AudioEngine {
                     modulation_link_id
                 );
             }
+            AudioCommand::UpdateAudioSource { id, waveform } => {
+                // Swapping an existing slot never allocates; the old waveform is freed off the
+                // audio thread.
+                let retired = if let Some(slot) = self
+                    .current_state
+                    .graph
+                    .asset_library
+                    .source_map
+                    .get_mut(id)
+                {
+                    std::mem::replace(slot, waveform)
+                } else {
+                    log::debug!("[AudioEngine] Ignored update for unknown audio source {id}");
+                    waveform
+                };
+                self.retire_graph_state(RetiredGraphState::AudioSource(retired));
+            }
             AudioCommand::UpdateTrackGraph {
                 tracks,
                 clips,

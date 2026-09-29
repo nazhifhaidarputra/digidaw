@@ -3,6 +3,7 @@ pub mod helpers;
 pub mod audio_api_tests;
 pub mod audio_waveform_api_tests;
 pub mod clip_api_tests;
+pub mod clip_envelope_tests;
 pub mod clipboard_api_tests;
 pub mod history_tests;
 pub mod mixer_api_tests;

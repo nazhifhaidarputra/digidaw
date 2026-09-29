@@ -1172,3 +1172,75 @@ fn releases_queued_while_a_track_is_muted_reach_the_generator_later() {
     rig.render(1);
     assert!(rig.held().is_empty(), "note hung: {:?}", rig.held());
 }
+
+#[test]
+fn update_audio_source_swaps_only_that_waveform() {
+    use crate::core::project::{AudioWaveform, Fade, GainEnvelope};
+    use std::sync::Arc;
+
+    let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        cmd_consumer,
+        pos_producer,
+        fb_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_tx,
+    );
+
+    let mut app = ApplicationState::default();
+    let id = app.asset_library.source_map.insert_with_key(|id| {
+        Arc::new(AudioWaveform {
+            id: Some(id),
+            ..AudioWaveform::default()
+        })
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app),
+    });
+
+    app.set_audio_source_envelope(
+        id,
+        GainEnvelope {
+            fade_out: Fade {
+                length: 32,
+                ..Fade::default()
+            },
+            ..GainEnvelope::default()
+        },
+    )
+    .expect("set envelope");
+    let updated = Arc::clone(&app.asset_library.source_map[id]);
+    engine.process_command(AudioCommand::UpdateAudioSource {
+        id,
+        waveform: Arc::clone(&updated),
+    });
+
+    let rendered = &engine.current_state.graph.asset_library.source_map[id];
+    assert!(Arc::ptr_eq(rendered, &updated));
+    assert_eq!(rendered.envelope.fade_out.length, 32);
+
+    // Sources the render graph does not know are ignored rather than inserted.
+    let unknown = app
+        .asset_library
+        .source_map
+        .insert(Arc::new(AudioWaveform::default()));
+    engine.process_command(AudioCommand::UpdateAudioSource {
+        id: unknown,
+        waveform: Arc::new(AudioWaveform::default()),
+    });
+    assert!(
+        !engine
+            .current_state
+            .graph
+            .asset_library
+            .source_map
+            .contains_key(unknown)
+    );
+}

@@ -1,11 +1,16 @@
 use karbeat_plugin_api::types::{MidiEvent, MidiMessage, NoteExpressionType};
-use memmap2::Mmap;
 use smallvec::SmallVec;
 use std::sync::Arc;
 
 use crate::{
-    audio::{engine::helper::render_audio_waveform, render_state::AudioPluginState},
-    core::project::{AudioWaveform, GeneratorInstance, Note, Pattern},
+    audio::{
+        engine::helper::{LoopBounds, calc_fade, render_audio_waveform},
+        render_state::AudioPluginState,
+    },
+    core::project::{
+        AudioWaveform, EnvelopeCursor, GainEnvelope, GeneratorInstance, Note, Pattern,
+        audio_waveform::AudioSampleMode, equal_power,
+    },
     shared::constants::f64::PPQ,
     shared::{GeneratorId, TrackId},
 };
@@ -403,26 +408,148 @@ impl VoiceState {
 }
 
 /// Scheduled audio clip playback state.
+///
+/// Voices are built and cleared within one block while the render graph keeps its own references,
+/// so a voice never drops the last reference to a waveform or envelope on the audio thread.
 pub struct AudioVoice {
     pub track_id: TrackId,
-    pub source: Arc<Mmap>,
-    pub source_channels: usize,
-    pub source_sample_rate: u32,
-    pub sample_mode: crate::core::project::audio_waveform::AudioSampleMode,
-    pub original_bpm: f32,
-    pub is_looping: bool,
-    pub source_start_sample: usize,
-    pub source_end_sample: usize,
+    /// Waveform being played; keeps its sample buffer alive.
+    pub waveform: Arc<AudioWaveform>,
+    /// Envelope of the clip, stacked on top of the waveform envelope.
+    pub clip_envelope: Option<Arc<GainEnvelope>>,
     /// Frame offset at which rendering starts in the current block.
     pub output_offset_samples: usize,
     /// Fractional source frame position.
     pub source_read_index: f64,
-    /// First readable source frame.
-    pub start_boundary: f64,
-    /// Exclusive source-frame boundary.
-    pub end_boundary: f64,
     pub clip_elapsed_samples: u32,
     pub clip_loop_length: u32,
+    /// Clip content position of the clip's first frame (its source offset, project samples).
+    pub clip_content_offset: u64,
+    /// Equal-power crossfades with overlapping neighbour clips.
+    pub crossfade: NeighbourCrossfade,
+}
+
+/// Equal-power crossfades of an audio clip with the clips overlapping its edges on its track.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NeighbourCrossfade {
+    /// Fade-in length from the clip start, in project samples.
+    pub fade_in: u32,
+    /// Clip-relative sample where the fade-out toward the next clip starts.
+    pub fade_out_start: u32,
+    /// Fade-out length. The clip is silent after the fade-out while the next clip plays.
+    pub fade_out: u32,
+}
+
+/// Timeline span of a clip in project samples, with its crossfade length.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClipSpan {
+    /// Timeline start.
+    pub start: u32,
+    /// Timeline length.
+    pub length: u32,
+    /// Crossfade length set on the clip envelope.
+    pub crossfade: u32,
+}
+
+impl ClipSpan {
+    fn end(self) -> u32 {
+        self.start.saturating_add(self.length)
+    }
+}
+
+impl NeighbourCrossfade {
+    /// Crossfade length where `later` starts inside `earlier`: the overlap, capped by the larger
+    /// of the two clips' crossfade lengths. Zero when they do not overlap.
+    pub fn boundary(earlier: ClipSpan, later: ClipSpan) -> u32 {
+        if later.start < earlier.start || later.start >= earlier.end() {
+            return 0;
+        }
+        let overlap = earlier.end().min(later.end()) - later.start;
+        overlap.min(earlier.crossfade.max(later.crossfade))
+    }
+
+    /// Crossfades of `clip` with the clips just before and after it in track order.
+    pub fn for_clip(clip: ClipSpan, previous: Option<ClipSpan>, next: Option<ClipSpan>) -> Self {
+        let fade_in = previous.map_or(0, |previous| Self::boundary(previous, clip));
+        let (fade_out_start, fade_out) = next.map_or((0, 0), |next| {
+            (
+                next.start.saturating_sub(clip.start),
+                Self::boundary(clip, next),
+            )
+        });
+        Self {
+            fade_in,
+            fade_out_start,
+            fade_out,
+        }
+    }
+
+    /// Whether the clip plays without neighbour crossfades.
+    #[inline]
+    pub fn is_none(&self) -> bool {
+        self.fade_in == 0 && self.fade_out == 0
+    }
+
+    /// Whether the clip is silent from `elapsed` samples on: past its fade-out.
+    #[inline]
+    pub fn is_silent_from(&self, elapsed: u32) -> bool {
+        self.fade_out > 0 && elapsed >= self.fade_out_start.saturating_add(self.fade_out)
+    }
+
+    /// Crossfade gain `elapsed` samples into the clip.
+    #[inline]
+    pub fn gain(&self, elapsed: u32) -> f32 {
+        let mut gain = 1.0;
+        if elapsed < self.fade_in {
+            gain *= equal_power(elapsed as f32 / self.fade_in as f32).1;
+        }
+        if self.fade_out > 0 && elapsed >= self.fade_out_start {
+            let into = elapsed - self.fade_out_start;
+            gain *= if into < self.fade_out {
+                equal_power(into as f32 / self.fade_out as f32).0
+            } else {
+                0.0
+            };
+        }
+        gain
+    }
+}
+
+/// Gain of one clip voice for each rendered frame: the anti-click ramp, the clip envelope, the
+/// waveform envelope, and the neighbour crossfade multiplied together.
+struct ClipGain<'a> {
+    start_elapsed: u32,
+    clip_length: u32,
+    declick_samples: u32,
+    clip_envelope: Option<&'a GainEnvelope>,
+    clip_cursor: EnvelopeCursor,
+    content_offset: u64,
+    waveform_envelope: Option<&'a GainEnvelope>,
+    waveform_cursor: EnvelopeCursor,
+    waveform_frames: u64,
+    crossfade: NeighbourCrossfade,
+}
+
+impl ClipGain<'_> {
+    #[inline(always)]
+    fn at(&mut self, frame: u32, read_pos: f64) -> f32 {
+        let elapsed = self.start_elapsed + frame;
+        let mut gain = calc_fade(elapsed, self.declick_samples, self.clip_length);
+        if let Some(envelope) = self.clip_envelope {
+            let elapsed = u64::from(elapsed);
+            gain *= envelope.fade_gain(elapsed, u64::from(self.clip_length))
+                * envelope.point_gain(self.content_offset + elapsed, &mut self.clip_cursor);
+        }
+        if let Some(envelope) = self.waveform_envelope {
+            let pos = read_pos as u64;
+            gain *= envelope.fade_gain(pos, self.waveform_frames)
+                * envelope.point_gain(pos, &mut self.waveform_cursor);
+        }
+        if !self.crossfade.is_none() {
+            gain *= self.crossfade.gain(elapsed);
+        }
+        gain
+    }
 }
 
 /// Playback state for a browser or other temporary preview.
@@ -598,7 +725,7 @@ impl VoiceState {
     ) -> bool {
         let mut did_render = false;
         let buffer_frames = output.len() / channels;
-        let fade_samples = (sample_rate as f32 * 0.002) as u32;
+        let declick_samples = (sample_rate as f32 * 0.002) as u32;
 
         for voice in self
             .active_oneshots
@@ -606,23 +733,27 @@ impl VoiceState {
             .filter(|voice| voice.track_id == track_id)
         {
             did_render = true;
-            let raw_source: &[f32] = bytemuck::cast_slice(&voice.source[..]);
-            let Some(source) = raw_source.get(voice.source_start_sample..voice.source_end_sample)
-            else {
+            let waveform = &*voice.waveform;
+            let Some(source) = waveform.get_playable_buffer() else {
                 continue;
             };
+            let source_channels = waveform.channels as usize;
 
-            let playback_rate = match voice.sample_mode {
-                crate::core::project::audio_waveform::AudioSampleMode::Default => 1.0,
-                crate::core::project::audio_waveform::AudioSampleMode::Stretch
-                | crate::core::project::audio_waveform::AudioSampleMode::Resampled => {
-                    (bpm / voice.original_bpm.max(1.0)) as f64
+            let playback_rate = match waveform.sample_mode {
+                AudioSampleMode::Default => 1.0,
+                AudioSampleMode::Stretch | AudioSampleMode::Resampled => {
+                    (bpm / waveform.original_bpm.max(1.0)) as f64
                 }
             };
 
-            let step = voice.source_sample_rate as f64 / sample_rate as f64 * playback_rate;
-            let source_frames = (source.len() / voice.source_channels) as f64;
-            let is_looping = voice.is_looping && source_frames > 0.0;
+            let step = waveform.sample_rate as f64 / sample_rate as f64 * playback_rate;
+            let source_frames = (source.len() / source_channels) as f64;
+            let is_looping = waveform.is_looping && source_frames > 0.0;
+            let loop_crossfade = if is_looping {
+                waveform.envelope.loop_crossfade(source_frames as u64) as f64
+            } else {
+                0.0
+            };
             let mut frames_to_process = buffer_frames.saturating_sub(voice.output_offset_samples);
 
             if !is_looping {
@@ -637,23 +768,46 @@ impl VoiceState {
                 continue;
             }
 
+            let clip_envelope = voice
+                .clip_envelope
+                .as_deref()
+                .filter(|envelope| envelope.shapes_gain());
+            let waveform_envelope = Some(&waveform.envelope).filter(|e| e.shapes_gain());
+            let content_start = voice.clip_content_offset + u64::from(voice.clip_elapsed_samples);
+            let mut gain = ClipGain {
+                start_elapsed: voice.clip_elapsed_samples,
+                clip_length: voice.clip_loop_length,
+                declick_samples,
+                clip_envelope,
+                clip_cursor: clip_envelope
+                    .map(|envelope| EnvelopeCursor::seek(envelope, content_start))
+                    .unwrap_or_default(),
+                content_offset: voice.clip_content_offset,
+                waveform_envelope,
+                waveform_cursor: waveform_envelope
+                    .map(|envelope| EnvelopeCursor::seek(envelope, voice.source_read_index as u64))
+                    .unwrap_or_default(),
+                waveform_frames: source_frames as u64,
+                crossfade: voice.crossfade,
+            };
+
             let start = voice.output_offset_samples * channels;
             let end = start + frames_to_process * channels;
             render_audio_waveform(
-                &voice.sample_mode,
+                &waveform.sample_mode,
                 source,
-                voice.source_channels,
+                source_channels,
                 &mut output[start..end],
                 channels,
                 &mut voice.source_read_index,
                 step,
                 is_looping,
                 source_frames,
+                loop_crossfade,
                 1.0,
-                Some(&mut voice.clip_elapsed_samples),
-                fade_samples,
-                voice.clip_loop_length,
+                |frame, read_pos| gain.at(frame, read_pos),
             );
+            voice.clip_elapsed_samples += frames_to_process as u32;
             voice.output_offset_samples = 0;
         }
 
@@ -695,6 +849,16 @@ impl VoiceState {
                 continue;
             }
 
+            // Previews play the waveform envelope so edits can be auditioned.
+            let envelope = &voice.waveform.envelope;
+            let loop_crossfade = if is_looping {
+                envelope.loop_crossfade(source_frames as u64) as f64
+            } else {
+                0.0
+            };
+            let shapes_gain = envelope.shapes_gain();
+            let waveform_frames = source_frames as u64;
+            let mut cursor = EnvelopeCursor::seek(envelope, voice.current_frame as u64);
             render_audio_waveform(
                 &voice.waveform.sample_mode,
                 source,
@@ -705,10 +869,15 @@ impl VoiceState {
                 step,
                 is_looping,
                 source_frames,
+                loop_crossfade,
                 voice.volume,
-                None,
-                0,
-                0,
+                |_, read_pos| {
+                    if !shapes_gain {
+                        return 1.0;
+                    }
+                    let pos = read_pos as u64;
+                    envelope.fade_gain(pos, waveform_frames) * envelope.point_gain(pos, &mut cursor)
+                },
             );
             voice.rendered_frames = voice
                 .rendered_frames
@@ -727,13 +896,19 @@ impl VoiceState {
         self.preview_voices.retain(|voice| !voice.is_finished);
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "clip placement, content, and block bounds are independent inputs"
+    )]
     pub fn prepare_audio_voice(
         &mut self,
         track_id: TrackId,
         clip_start: u32,
         clip_loop_length: u32,
         clip_offset: u32,
-        waveform: &AudioWaveform,
+        waveform: &Arc<AudioWaveform>,
+        clip_envelope: Option<&Arc<GainEnvelope>>,
+        crossfade: NeighbourCrossfade,
         buffer_start: u32,
         buffer_end: u32,
         sample_rate: u32,
@@ -746,23 +921,19 @@ impl VoiceState {
 
         let output_offset_samples = (render_start - buffer_start) as usize;
         let clip_elapsed_samples = render_start - clip_start;
+        if crossfade.is_silent_from(clip_elapsed_samples) {
+            return;
+        }
         let effective_position = clip_elapsed_samples + clip_offset;
         let source_position =
             effective_position as f64 * waveform.sample_rate as f64 / sample_rate as f64;
         let Some(source) = waveform.get_playable_buffer() else {
             return;
         };
-        let Some(mapped_source) = waveform.buffer.as_ref() else {
-            return;
-        };
-        let raw_source: &[f32] = bytemuck::cast_slice(&mapped_source[..]);
-        let source_start_sample = source.as_ptr() as usize - raw_source.as_ptr() as usize;
-        let source_start_sample = source_start_sample / std::mem::size_of::<f32>();
-        let source_end_sample = source_start_sample + source.len();
-        let source_channels = waveform.channels as usize;
-        let source_frames = (source.len() / source_channels) as f64;
+        let source_frames = (source.len() / waveform.channels as usize) as f64;
         let source_read_index = if waveform.is_looping && source_frames > 0.0 {
-            source_position % source_frames
+            let loop_crossfade = waveform.envelope.loop_crossfade(source_frames as u64) as f64;
+            LoopBounds::new(true, source_frames, loop_crossfade).read_pos(0.0, source_position)
         } else {
             if source_position >= source_frames {
                 return;
@@ -772,20 +943,14 @@ impl VoiceState {
 
         self.active_oneshots.push(AudioVoice {
             track_id,
-            source: Arc::clone(mapped_source),
-            source_channels,
-            source_sample_rate: waveform.sample_rate,
-            sample_mode: waveform.sample_mode,
-            original_bpm: waveform.original_bpm,
-            is_looping: waveform.is_looping,
-            source_start_sample,
-            source_end_sample,
+            waveform: Arc::clone(waveform),
+            clip_envelope: clip_envelope.cloned(),
             output_offset_samples,
             source_read_index,
-            start_boundary: 0.0,
-            end_boundary: source_frames,
             clip_elapsed_samples,
             clip_loop_length,
+            clip_content_offset: u64::from(clip_offset),
+            crossfade,
         });
     }
 
@@ -925,5 +1090,174 @@ impl VoiceState {
 
     fn note_event_id(pattern_id: crate::shared::PatternId, note_id: crate::shared::NoteId) -> u64 {
         (u64::from(pattern_id.to_u32()) << 32) | u64::from(note_id.to_u32())
+    }
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "clip gain tests fail immediately when fixture buffers cannot be mapped"
+)]
+mod clip_gain_tests {
+    use std::sync::Arc;
+
+    use memmap2::MmapOptions;
+
+    use super::{ClipSpan, NeighbourCrossfade, VoiceState};
+    use crate::core::project::{AudioWaveform, EnvelopePoint, Fade, GainEnvelope};
+    use crate::shared::TrackId;
+
+    const SAMPLE_RATE: u32 = 48_000;
+    const BLOCK: usize = 256;
+
+    /// A stereo waveform of constant 1.0 samples.
+    fn dc_waveform(frames: usize, envelope: GainEnvelope) -> Arc<AudioWaveform> {
+        let samples = vec![1.0_f32; frames * 2];
+        let bytes: &[u8] = bytemuck::cast_slice(&samples);
+        let mut map = MmapOptions::new()
+            .len(bytes.len())
+            .map_anon()
+            .expect("anonymous map");
+        map.copy_from_slice(bytes);
+        Arc::new(AudioWaveform {
+            buffer: Some(Arc::new(map.make_read_only().expect("read-only map"))),
+            sample_rate: SAMPLE_RATE,
+            channels: 2,
+            envelope,
+            ..AudioWaveform::default()
+        })
+    }
+
+    fn constant(gain: f32) -> GainEnvelope {
+        GainEnvelope {
+            points: vec![EnvelopePoint {
+                gain,
+                ..EnvelopePoint::default()
+            }],
+            ..GainEnvelope::default()
+        }
+    }
+
+    /// Renders the first block of a 10_000-sample clip and returns its left channel.
+    fn render(
+        waveform: &Arc<AudioWaveform>,
+        clip: Option<GainEnvelope>,
+        crossfade: NeighbourCrossfade,
+    ) -> Vec<f32> {
+        let clip = clip.map(Arc::new);
+        let track = TrackId::default();
+        let mut voices = VoiceState::new();
+        voices.prepare_audio_voice(
+            track,
+            0,
+            10_000,
+            0,
+            waveform,
+            clip.as_ref(),
+            crossfade,
+            0,
+            BLOCK as u32,
+            SAMPLE_RATE,
+        );
+        let mut output = vec![0.0; BLOCK * 2];
+        voices.render_oneshots(SAMPLE_RATE, track, &mut output, 2, 120.0);
+        output.chunks(2).map(|frame| frame[0]).collect()
+    }
+
+    #[test]
+    fn clip_fade_in_ramps_up_from_silence() {
+        let waveform = dc_waveform(20_000, GainEnvelope::default());
+        let fade = GainEnvelope {
+            fade_in: Fade {
+                length: 200,
+                ..Fade::default()
+            },
+            ..GainEnvelope::default()
+        };
+        let left = render(&waveform, Some(fade), NeighbourCrossfade::default());
+        assert_eq!(left[0], 0.0);
+        // Past the 2 ms declick, only the fade shapes the gain.
+        assert!((left[150] - 0.75).abs() < 1e-4, "{}", left[150]);
+        assert!((left[220] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn clip_envelope_stacks_on_waveform_envelope() {
+        let waveform = dc_waveform(20_000, constant(0.5));
+        let left = render(
+            &waveform,
+            Some(constant(0.5)),
+            NeighbourCrossfade::default(),
+        );
+        assert!((left[200] - 0.25).abs() < 1e-6, "{}", left[200]);
+
+        let waveform_only = render(&waveform, None, NeighbourCrossfade::default());
+        assert!((waveform_only[200] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn neighbour_crossfade_keeps_equal_power() {
+        let earlier = ClipSpan {
+            start: 0,
+            length: 1_000,
+            crossfade: 400,
+        };
+        let later = ClipSpan {
+            start: 800,
+            length: 1_000,
+            crossfade: 0,
+        };
+        let fading_out = NeighbourCrossfade::for_clip(earlier, None, Some(later));
+        let fading_in = NeighbourCrossfade::for_clip(later, Some(earlier), None);
+        assert_eq!(
+            fading_out,
+            NeighbourCrossfade {
+                fade_in: 0,
+                fade_out_start: 800,
+                fade_out: 200,
+            }
+        );
+        assert_eq!(fading_in.fade_in, 200);
+
+        let out = fading_out.gain(900);
+        let fade_in = fading_in.gain(100);
+        assert!((out - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6);
+        assert!((out * out + fade_in * fade_in - 1.0).abs() < 1e-6);
+        assert!(fading_out.gain(999) < 0.01);
+        assert_eq!(fading_out.gain(1_000), 0.0);
+        assert!(fading_out.is_silent_from(1_000));
+    }
+
+    #[test]
+    fn clips_without_crossfade_length_do_not_crossfade() {
+        let earlier = ClipSpan {
+            start: 0,
+            length: 1_000,
+            crossfade: 0,
+        };
+        let later = ClipSpan {
+            start: 800,
+            length: 1_000,
+            crossfade: 0,
+        };
+        assert!(NeighbourCrossfade::for_clip(earlier, None, Some(later)).is_none());
+        let apart = ClipSpan {
+            start: 1_000,
+            crossfade: 500,
+            ..later
+        };
+        assert_eq!(NeighbourCrossfade::boundary(earlier, apart), 0);
+    }
+
+    #[test]
+    fn a_clip_past_its_crossfade_is_not_scheduled() {
+        let waveform = dc_waveform(20_000, GainEnvelope::default());
+        let crossfade = NeighbourCrossfade {
+            fade_in: 0,
+            fade_out_start: 0,
+            fade_out: 1,
+        };
+        let left = render(&waveform, None, crossfade);
+        assert!(left.iter().all(|sample| *sample == 0.0));
     }
 }

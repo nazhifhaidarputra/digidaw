@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'plugins/opaque.dart';
@@ -36,6 +37,23 @@ Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
   required DawContext ctx,
   required int id,
 }) => RustLib.instance.api.crateApiAudioGetAudioProperties(ctx: ctx, id: id);
+
+/// Waveform envelopes of every audio source, keyed by source ID.
+Future<Map<int, UiGainEnvelope>> getAudioSourceEnvelopes({
+  required DawContext ctx,
+}) => RustLib.instance.api.crateApiAudioGetAudioSourceEnvelopes(ctx: ctx);
+
+/// Replaces an audio source's waveform envelope, shared by every clip referencing the source.
+/// Returns the stored envelope, with points sorted and gains clamped.
+Future<UiGainEnvelope> setAudioSourceEnvelope({
+  required DawContext ctx,
+  required int sourceId,
+  required UiGainEnvelope envelope,
+}) => RustLib.instance.api.crateApiAudioSetAudioSourceEnvelope(
+  ctx: ctx,
+  sourceId: sourceId,
+  envelope: envelope,
+);
 
 /// ACTION: Play the sound via the Engine
 Future<void> playSourcePreview({required DawContext ctx, required int id}) =>

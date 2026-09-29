@@ -4,8 +4,12 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'pattern.dart';
 import 'project.dart';
+part 'track.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
@@ -209,6 +213,39 @@ Future<void> renameClip({
   clipId: clipId,
   newName: newName,
 );
+
+/// Gives the selected clips their own copies of the waveforms or patterns they share with other
+/// clips (hard copy). Clips whose content is already unique are left unchanged.
+Future<UiMadeUnique> makeClipsUnique({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiTrackMakeClipsUnique(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+);
+
+/// Replaces an audio clip's own gain envelope, stacked on top of its waveform envelope.
+Future<UiClip> setClipEnvelope({
+  required DawContext ctx,
+  required int clipId,
+  required UiGainEnvelope envelope,
+}) => RustLib.instance.api.crateApiTrackSetClipEnvelope(
+  ctx: ctx,
+  clipId: clipId,
+  envelope: envelope,
+);
+
+/// Result of making clips unique: the changed clips and the content created for them.
+@freezed
+sealed class UiMadeUnique with _$UiMadeUnique {
+  const factory UiMadeUnique({
+    required List<UiClip> clips,
+    required Map<int, UiPattern> patterns,
+    required Map<int, UiGainEnvelope> sourceEnvelopes,
+  }) = _UiMadeUnique;
+}
 
 enum UiResizeEdge { left, right }
 

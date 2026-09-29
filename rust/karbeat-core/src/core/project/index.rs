@@ -14,7 +14,7 @@ pub use super::track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern}
 pub use super::transport::TransportState;
 
 use crate::core::project::{
-    CoverArtError, CoverImage, ModulationLinkForOrderedLaneView, ModulationSource,
+    CoverArtError, CoverImage, GainEnvelope, ModulationLinkForOrderedLaneView, ModulationSource,
 };
 use crate::core::project::{automation::AutomationLane, mixer::MixerState, session::SessionState};
 
@@ -381,6 +381,25 @@ impl ApplicationState {
         }
 
         Ok(source_id)
+    }
+
+    /// Replaces an audio source's waveform envelope and returns the previous one.
+    ///
+    /// Copy-on-write: the engine or UI may still hold the old waveform.
+    pub fn set_audio_source_envelope(
+        &mut self,
+        source_id: AudioSourceId,
+        envelope: GainEnvelope,
+    ) -> anyhow::Result<GainEnvelope> {
+        let entry = self
+            .asset_library
+            .source_map
+            .get_mut(source_id)
+            .ok_or_else(|| anyhow!("Audio source {source_id} not found"))?;
+        Ok(std::mem::replace(
+            &mut Arc::make_mut(entry).envelope,
+            envelope.normalized(),
+        ))
     }
 
     /// reset current application state to default

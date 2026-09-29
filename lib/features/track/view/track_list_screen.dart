@@ -12,6 +12,8 @@ import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
 import 'package:karbeat/features/track/view/automation_lane_context_menu.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_lane_slot.dart';
+import 'package:karbeat/features/track/services/gain_envelope_evaluator.dart';
+import 'package:karbeat/features/track/view/gain_envelope_editor.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
 import 'package:karbeat/features/track/view/track_header.dart';
 import 'package:karbeat/shared/enums/global.dart';

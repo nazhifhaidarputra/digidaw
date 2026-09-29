@@ -21,6 +21,17 @@ enum PianoRollToolSelection {
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
+/// Which gain envelope audio clips show and edit on the timeline.
+enum ClipEnvelopeView {
+  none,
+
+  /// The waveform envelope, shared by every clip referencing the waveform.
+  waveform,
+
+  /// The clip's own envelope, stacked on top of the waveform envelope.
+  clip,
+}
+
 enum ToolbarMenuContextGroup { none, project, edit, view }
 
 /// Events that trigger a state refresh

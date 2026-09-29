@@ -1,7 +1,11 @@
 // rust\src\api\track.rs
 
+use std::collections::HashMap;
+
 use crate::api::context::DawContext;
-use crate::api::project::{UiClip, UiTrack};
+use crate::api::pattern::UiPattern;
+use crate::api::project::{UiClip, UiGainEnvelope, UiTrack};
+use flutter_rust_bridge::frb;
 use karbeat_core::api::{clip_api, track_api};
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::shared::id::*;
@@ -346,4 +350,58 @@ pub fn update_track_order(ctx: &DawContext, track_id: u64, new_idx: usize) -> Re
 pub fn rename_clip(ctx: &DawContext, clip_id: u64, new_name: &str) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     clip_api::rename_clip(ctx, ClipId::from_u64(clip_id), new_name).map_err(|e| e.to_string())
+}
+
+/// Result of making clips unique: the changed clips and the content created for them.
+#[frb(dart_metadata=("freezed"))]
+pub struct UiMadeUnique {
+    /// Clips now referencing their own content.
+    pub clips: Vec<UiClip>,
+    /// Patterns created for MIDI clips, keyed by pattern ID.
+    pub patterns: HashMap<u64, UiPattern>,
+    /// Waveform envelopes of the audio sources created for audio clips, keyed by source ID.
+    pub source_envelopes: HashMap<u64, UiGainEnvelope>,
+}
+
+/// Gives the selected clips their own copies of the waveforms or patterns they share with other
+/// clips (hard copy). Clips whose content is already unique are left unchanged.
+pub fn make_clips_unique(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+) -> Result<UiMadeUnique, String> {
+    crate::api::context::project_ctx!(ctx);
+    let clip_ids = clip_ids.into_iter().map(ClipId::from_u64).collect();
+    let made = clip_api::make_clips_unique(ctx, TrackId::from_u64(track_id), clip_ids)
+        .map_err(|error| error.to_string())?;
+
+    let app = &ctx.app_state;
+    Ok(UiMadeUnique {
+        clips: made.clips.iter().map(UiClip::from).collect(),
+        patterns: made
+            .patterns
+            .iter()
+            .filter_map(|id| Some((id.to_u64(), UiPattern::from(app.pattern_pool.get(*id)?))))
+            .collect(),
+        source_envelopes: made
+            .sources
+            .iter()
+            .filter_map(|id| {
+                let waveform = app.asset_library.source_map.get(*id)?;
+                Some((id.to_u64(), UiGainEnvelope::from(&waveform.envelope)))
+            })
+            .collect(),
+    })
+}
+
+/// Replaces an audio clip's own gain envelope, stacked on top of its waveform envelope.
+pub fn set_clip_envelope(
+    ctx: &DawContext,
+    clip_id: u64,
+    envelope: UiGainEnvelope,
+) -> Result<UiClip, String> {
+    crate::api::context::project_ctx!(ctx);
+    let clip = clip_api::set_clip_envelope(ctx, ClipId::from_u64(clip_id), envelope.into())
+        .map_err(|error| error.to_string())?;
+    Ok(UiClip::from(&clip))
 }

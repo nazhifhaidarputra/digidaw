@@ -31,21 +31,38 @@ double evaluateAutomationSegment(
   double toValue,
   double t,
 ) {
-  final clampedT = t.clamp(0.0, 1.0);
-  final v1 = from.value.clamp(0.0, 1.0);
-  final v2 = toValue.clamp(0.0, 1.0);
+  return shapeAutomationSegment(
+    from.curveType,
+    from.tension,
+    from.value.clamp(0.0, 1.0),
+    toValue.clamp(0.0, 1.0),
+    t,
+  ).clamp(0.0, 1.0);
+}
 
-  return switch (from.curveType) {
+/// Shapes a segment from [v1] to [v2] at normalized position [t]; the mirror
+/// of `shape_segment`. Shared by automation lanes and gain envelopes, whose
+/// values may exceed 1.0.
+double shapeAutomationSegment(
+  AutomationCurveTypeDto curveType,
+  double tension,
+  double v1,
+  double v2,
+  double t,
+) {
+  final clampedT = t.clamp(0.0, 1.0);
+
+  return switch (curveType) {
     AutomationCurveTypeDto.linear => _lerp(
-      applyAutomationTension(clampedT, from.tension),
+      applyAutomationTension(clampedT, tension),
       v1,
       v2,
     ),
     AutomationCurveTypeDto.exponential => () {
       final start = math.max(v1, _exponentialFloor);
       final end = math.max(v2, _exponentialFloor);
-      final shaped = applyAutomationTension(clampedT, -from.tension);
-      return (start * math.pow(end / start, shaped)).clamp(0.0, 1.0);
+      final shaped = applyAutomationTension(clampedT, -tension);
+      return start * math.pow(end / start, shaped);
     }(),
     AutomationCurveTypeDto.step => clampedT < 1.0 ? v1 : v2,
   };

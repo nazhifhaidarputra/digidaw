@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs::File,
     io::{BufReader, Read, Seek, Write},
     path::{Path, PathBuf},
@@ -11,7 +12,7 @@ use zip::{CompressionMethod, ZipWriter, read::ZipArchive, write::SimpleFileOptio
 
 use crate::core::{
     file_manager::{app_cache_dir, audio_loader::load_audio_file},
-    project::{ApplicationState, AudioSourceId, CoverImage, ProjectMetadata},
+    project::{ApplicationState, AudioSourceId, AudioWaveform, CoverImage, ProjectMetadata},
 };
 
 /// Archive folder holding the embedded cover image.
@@ -35,11 +36,16 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
         .cover
         .as_ref()
         .map(|cover| -> anyhow::Result<_> {
-            let art = cover.load().context("Failed to read the project cover image")?;
+            let art = cover
+                .load()
+                .context("Failed to read the project cover image")?;
             let archive_path = format!("{COVER_ARCHIVE_DIR}/cover.{}", art.format().extension());
             // Point future loads at the file on this machine; a cover that was already
             // a fallback extraction keeps the link it came with
-            let linked_path = cover.linked_path.clone().or_else(|| Some(cover.path.clone()));
+            let linked_path = cover
+                .linked_path
+                .clone()
+                .or_else(|| Some(cover.path.clone()));
             Ok((art, archive_path, linked_path))
         })
         .transpose()?;
@@ -69,16 +75,25 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
 
     zip.add_directory("audio/", stored_options)?;
 
-    // Pre-filter and pre-allocate paths to keep the zip write loop as tight as possible
+    // Pre-filter and pre-allocate paths to keep the zip write loop as tight as possible.
+    // Sources sharing a file (hard copies) embed it once and point at the first entry.
     let mut valid_sources = Vec::new();
+    let mut shared_sources = Vec::new();
+    let mut embedded_by_path: HashMap<PathBuf, String> = HashMap::new();
     for (id, audio_arc) in app_state.asset_library.source_map.iter() {
         let path = &audio_arc.file_path;
         if !path.as_os_str().is_empty() && path.is_file() {
+            let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+            if let Some(internal_name) = embedded_by_path.get(&canonical) {
+                shared_sources.push((id, internal_name.clone()));
+                continue;
+            }
             let file_name = path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("sample.bin");
             let internal_name = format!("audio/{}_{}", id.to_u64(), file_name);
+            embedded_by_path.insert(canonical, internal_name.clone());
             valid_sources.push((id, path.clone(), internal_name));
         }
     }
@@ -98,6 +113,11 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
         if let Some(entry) = library.source_map.get_mut(id) {
             let waveform = Arc::make_mut(entry);
             waveform.file_path = internal_name.into();
+        }
+    }
+    for (id, internal_name) in shared_sources {
+        if let Some(entry) = library.source_map.get_mut(id) {
+            Arc::make_mut(entry).file_path = internal_name.into();
         }
     }
 
@@ -180,13 +200,13 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
         })?;
 
         // Queue for parallel decoding
-        audio_tasks.push((id, file_name, dest_path));
+        audio_tasks.push((id, name, file_name, dest_path));
     }
 
     // PHASE 2: Decode all audio files in parallel (CPU Bound)
     let decoded_waveforms: anyhow::Result<Vec<_>> = audio_tasks
         .into_par_iter()
-        .map(|(id, file_name, dest_path)| {
+        .map(|(id, entry_name, file_name, dest_path)| {
             let dest_path_str = dest_path.to_str().with_context(|| {
                 format!(
                     "Embedded audio path is not valid UTF-8: {}",
@@ -194,28 +214,44 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
                 )
             })?;
 
-            let mut waveform = load_audio_file(dest_path_str, Some(&file_name), sample_rate)
+            let waveform = load_audio_file(dest_path_str, Some(&file_name), sample_rate)
                 .with_context(|| {
                     format!("Failed to decode embedded audio for source id {id} ({file_name})")
                 })?;
 
-            waveform
-                .try_assign_id(AudioSourceId::from_u64(id))
-                .with_context(|| format!("Duplicate or invalid audio source id {id}"))?;
-
-            Ok((id, waveform))
+            Ok((id, entry_name, waveform))
         })
         .collect();
 
-    // Replace the deserialized metadata entries while retaining the exact
-    // serialized slot and generation for every audio source key.
-    for (id, waveform) in decoded_waveforms? {
+    // Fill the decoded audio into the deserialized entries, which keep their saved settings
+    // (envelope, sample mode, trim, ...) and their exact serialized slot and generation.
+    let mut decoded_by_entry = HashMap::new();
+    for (id, entry_name, decoded) in decoded_waveforms? {
         let source_id = AudioSourceId::from_u64(id);
         let entry = library
             .source_map
             .get_mut(source_id)
             .with_context(|| format!("Audio source key {id} missing from project arena"))?;
-        *entry = Arc::new(waveform);
+        let waveform = Arc::make_mut(entry);
+        waveform.id = Some(source_id);
+        adopt_decoded_audio(waveform, &decoded);
+        decoded_by_entry.insert(entry_name, decoded);
+    }
+    // Sources that shared an embedded file (hard copies) share its decoded buffer.
+    for (source_id, entry) in &mut library.source_map {
+        if entry.buffer.is_some() {
+            continue;
+        }
+        let Some(decoded) = entry
+            .file_path
+            .to_str()
+            .and_then(|path| decoded_by_entry.get(path))
+        else {
+            continue;
+        };
+        let waveform = Arc::make_mut(entry);
+        waveform.id = Some(source_id);
+        adopt_decoded_audio(waveform, decoded);
     }
     library.session_dir = Some(Arc::new(session_dir));
 
@@ -244,7 +280,10 @@ fn resolve_cover<R: Read + Seek>(
             Ok(()) => local_path,
             // Symlinks can need extra privileges (Windows); reading in place is equivalent
             Err(error) => {
-                log::debug!("Cover symlink unavailable, using {}: {error}", linked.display());
+                log::debug!(
+                    "Cover symlink unavailable, using {}: {error}",
+                    linked.display()
+                );
                 linked.clone()
             }
         };
@@ -329,6 +368,16 @@ pub fn peek_project_metadata(path: &Path) -> anyhow::Result<ProjectMetadata> {
     let metadata: ProjectMetadata = toml::from_str(&buf)?;
 
     Ok(metadata)
+}
+
+/// Copies the fields decoding determines into a waveform loaded from the project file.
+fn adopt_decoded_audio(waveform: &mut AudioWaveform, decoded: &AudioWaveform) {
+    waveform.buffer.clone_from(&decoded.buffer);
+    waveform.file_path.clone_from(&decoded.file_path);
+    waveform.sample_rate = decoded.sample_rate;
+    waveform.original_sample_rate = decoded.original_sample_rate;
+    waveform.channels = decoded.channels;
+    waveform.duration = decoded.duration;
 }
 
 /// Parses `audio/{id}_{file_name}` as produced by [`save_karbeat_project`].
@@ -608,6 +657,140 @@ mod test {
         let project = dir.path().join("plain.dgdaw");
         save_daw_project(&project, &ApplicationState::default()).unwrap();
         assert!(archive_entry(&project, "cover/cover.jpg").is_none());
-        assert!(load_daw_project(&project, 48_000).unwrap().metadata.cover.is_none());
+        assert!(
+            load_daw_project(&project, 48_000)
+                .unwrap()
+                .metadata
+                .cover
+                .is_none()
+        );
+    }
+
+    fn audio_entry_names(project: &Path) -> Vec<String> {
+        let mut file = File::open(project).unwrap();
+        file.read_exact(&mut [0; 8]).unwrap();
+        let archive = ZipArchive::new(file).unwrap();
+        archive
+            .file_names()
+            .filter(|name| name.starts_with("audio/") && !name.ends_with('/'))
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn envelopes_edits_and_hard_copies_survive_save_and_load() {
+        use crate::core::file_manager::audio_loader::AudioLoader;
+        use crate::core::project::{
+            EnvelopePoint, Fade, GainEnvelope,
+            audio_waveform::{AudioSampleMode, EditedWaveform, WaveformEdits},
+            clip::ClipSourceType,
+        };
+
+        let dir = tempdir().unwrap();
+        let wav = dir.path().join("tone.wav");
+        write_mono_wav(&wav);
+        let mut state = ApplicationState::default();
+        let source = state
+            .load_audio(wav.to_str().unwrap(), None, SAMPLE_RATE)
+            .unwrap();
+        let track = state.add_new_audio_track().id;
+        let clip = state
+            .create_new_clip(Some(source.to_u64()), ClipSourceType::Audio, track, 0)
+            .unwrap();
+        let duplicate = state
+            .duplicate_clip_groups(track, &[clip.id], &[1_920])
+            .unwrap()
+            .remove(0);
+
+        let waveform_envelope = GainEnvelope {
+            fade_in: Fade {
+                length: 64,
+                ..Fade::default()
+            },
+            crossfade: 32,
+            ..GainEnvelope::default()
+        };
+        state
+            .set_audio_source_envelope(source, waveform_envelope.clone())
+            .unwrap();
+        {
+            let waveform = Arc::make_mut(&mut state.asset_library.source_map[source]);
+            waveform.sample_mode = AudioSampleMode::Resampled;
+            waveform.edited = Some(EditedWaveform {
+                edits: WaveformEdits {
+                    reverse: true,
+                    pitch_semitones: 3.0,
+                    ..WaveformEdits::default()
+                },
+                buffer: None,
+            });
+        }
+        let clip_envelope = GainEnvelope {
+            points: vec![EnvelopePoint {
+                position: 100,
+                gain: 0.5,
+                ..EnvelopePoint::default()
+            }],
+            ..GainEnvelope::default()
+        };
+        state
+            .set_clip_envelope(clip.id, clip_envelope.clone())
+            .unwrap();
+        let made = state.make_clips_unique(track, &[duplicate.id]).unwrap();
+        let copy = made.sources[0];
+
+        let project = dir.path().join("envelopes.karbeat");
+        save_daw_project(&project, &state).unwrap();
+        assert_eq!(
+            audio_entry_names(&project).len(),
+            1,
+            "a hard copy shares its original's embedded file"
+        );
+
+        let loaded = load_daw_project(&project, SAMPLE_RATE).unwrap();
+        let sources = &loaded.asset_library.source_map;
+        let original = &sources[source];
+        assert_eq!(original.envelope, waveform_envelope);
+        assert_eq!(original.sample_mode, AudioSampleMode::Resampled);
+        let edits = &original.edited.as_ref().unwrap().edits;
+        assert!(edits.reverse);
+        assert_eq!(edits.pitch_semitones, 3.0);
+        assert_eq!(sources[copy].name, "tone.wav (copy)");
+        assert_eq!(sources[copy].id, Some(copy));
+        assert!(Arc::ptr_eq(
+            original.buffer.as_ref().unwrap(),
+            sources[copy].buffer.as_ref().unwrap(),
+        ));
+        assert_eq!(
+            loaded.clips_pool[clip.id].envelope.as_deref(),
+            Some(&clip_envelope)
+        );
+        assert!(loaded.clips_pool[duplicate.id].envelope.is_none());
+    }
+
+    #[test]
+    fn clips_saved_before_envelopes_still_load() {
+        use crate::core::project::{Clip, ClipTimeUnit, DawSource};
+        use crate::shared::id::ClipId;
+
+        /// The clip layout projects were saved with before clip envelopes existed.
+        #[derive(serde::Serialize)]
+        struct LegacyClip {
+            name: String,
+            id: ClipId,
+            source: Option<DawSource>,
+            time: ClipTimeUnit,
+        }
+
+        let bytes = rmp_serde::to_vec(&LegacyClip {
+            name: "old".into(),
+            id: ClipId::default(),
+            source: None,
+            time: ClipTimeUnit::default(),
+        })
+        .unwrap();
+        let clip: Clip = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(clip.name, "old");
+        assert!(clip.envelope.is_none());
     }
 }

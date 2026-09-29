@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, collections::HashSet};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
@@ -12,9 +16,10 @@ pub enum ResizeEdge {
     Right,
 }
 
-use crate::core::project::ClipboardContent;
+use crate::core::project::envelope::GainEnvelope;
 use crate::core::project::track::midi::Pattern;
 use crate::core::project::{ApplicationState, DawSource, track::TrackType};
+use crate::core::project::{AudioWaveform, ClipboardContent};
 use crate::shared::id::{ClipId, TrackId};
 use crate::shared::{AudioSourceId, PatternId};
 
@@ -194,6 +199,37 @@ pub struct Clip {
     pub source: Option<DawSource>,
     /// Timeline position and length — explicit units via enum
     pub time: ClipTimeUnit,
+    /// Per-clip gain envelope for audio clips, stacked on top of the waveform envelope.
+    /// `None` leaves the audio untouched. Shared behind an `Arc` so clip copies stay cheap.
+    pub envelope: Option<Arc<GainEnvelope>>,
+}
+
+/// Result of [`ApplicationState::make_clips_unique`].
+#[derive(Debug, Default)]
+pub struct MadeUnique {
+    /// Clips that now reference their own content, as they are after the edit.
+    pub clips: Vec<Clip>,
+    /// Patterns created for MIDI clips.
+    pub patterns: Vec<PatternId>,
+    /// Audio sources created for audio clips.
+    pub sources: Vec<AudioSourceId>,
+}
+
+/// Shared content a clip references.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum SharedContent {
+    Audio(AudioSourceId),
+    Midi(PatternId),
+}
+
+impl SharedContent {
+    fn of(clip: &Clip) -> Option<Self> {
+        match clip.source {
+            Some(DawSource::Audio(id)) => Some(Self::Audio(id)),
+            Some(DawSource::Midi(id)) => Some(Self::Midi(id)),
+            _ => None,
+        }
+    }
 }
 
 fn clip_type_name(clip: &Clip) -> &'static str {
@@ -680,6 +716,7 @@ impl ApplicationState {
                         loop_length: timeline_length_samples,
                         offset_start: 0,
                     },
+                    envelope: None,
                 });
                 if let Err(error) = self
                     .tracks
@@ -734,6 +771,7 @@ impl ApplicationState {
                         loop_length: timeline_length,
                         offset_start: 0,
                     },
+                    envelope: None,
                 });
                 if let Err(error) = self
                     .tracks
@@ -1153,5 +1191,118 @@ impl ApplicationState {
         }
 
         deleted_clips
+    }
+
+    /// Gives each requested clip its own copy of the waveform or pattern it references (a hard
+    /// copy), so later content edits no longer reach the clips it was shared with.
+    ///
+    /// A clip whose content no other track clip references is already unique and is skipped.
+    /// Audio copies share the original's immutable sample buffer, so no sample memory is copied.
+    /// Everything is validated before the project is changed.
+    pub fn make_clips_unique(
+        &mut self,
+        track_id: TrackId,
+        clip_ids: &[ClipId],
+    ) -> anyhow::Result<MadeUnique> {
+        let track = self.tracks.get(track_id).context("Track not found")?;
+        let requested: HashSet<ClipId> = clip_ids.iter().copied().collect();
+        for clip_id in &requested {
+            anyhow::ensure!(
+                track.clips.contains(clip_id),
+                "Clip {clip_id:?} not found in track"
+            );
+        }
+
+        let mut references: HashMap<SharedContent, usize> = HashMap::new();
+        for clip in self
+            .tracks
+            .values()
+            .flat_map(|track| track.clips.iter())
+            .filter_map(|id| self.clips_pool.get(*id))
+        {
+            if let Some(content) = SharedContent::of(clip) {
+                *references.entry(content).or_default() += 1;
+            }
+        }
+
+        // Follow track order so the created names are deterministic.
+        let mut to_copy = Vec::new();
+        for clip_id in track.clips.iter().filter(|id| requested.contains(id)) {
+            let clip = self
+                .clips_pool
+                .get(*clip_id)
+                .with_context(|| format!("Clip {clip_id:?} not found in global pool"))?;
+            let content = SharedContent::of(clip)
+                .with_context(|| format!("Clip {clip_id:?} has no content to copy"))?;
+            match content {
+                SharedContent::Audio(id) => anyhow::ensure!(
+                    self.asset_library.source_map.contains_key(id),
+                    "Audio source {id} not found"
+                ),
+                SharedContent::Midi(id) => {
+                    anyhow::ensure!(self.pattern_pool.contains_key(id), "Pattern {id} not found");
+                }
+            }
+            let Some(count) = references.get_mut(&content) else {
+                continue;
+            };
+            if *count > 1 {
+                *count -= 1;
+                to_copy.push((*clip_id, content));
+            }
+        }
+
+        let mut made = MadeUnique::default();
+        for (clip_id, content) in to_copy {
+            let (source, name) = match content {
+                SharedContent::Audio(id) => {
+                    let mut copy = AudioWaveform::clone(&self.asset_library.source_map[id]);
+                    copy.name = format!("{} (copy)", copy.name);
+                    let name = copy.name.clone();
+                    let new_id = self.asset_library.source_map.insert_with_key(|new_id| {
+                        copy.id = Some(new_id);
+                        Arc::new(copy)
+                    });
+                    made.sources.push(new_id);
+                    (DawSource::Audio(new_id), name)
+                }
+                SharedContent::Midi(id) => {
+                    let name = format!("Pattern {}", self.pattern_pool.len() + 1);
+                    let copy = Pattern {
+                        name: name.clone(),
+                        ..self.pattern_pool[id].clone()
+                    };
+                    let new_id = self
+                        .pattern_pool
+                        .insert_with_key(|new_id| Pattern { id: new_id, ..copy });
+                    made.patterns.push(new_id);
+                    (DawSource::Midi(new_id), name)
+                }
+            };
+            let clip = &mut self.clips_pool[clip_id];
+            clip.source = Some(source);
+            clip.name = name;
+            made.clips.push(clip.clone());
+        }
+
+        Ok(made)
+    }
+
+    /// Replaces an audio clip's own gain envelope. An identity envelope removes it.
+    pub fn set_clip_envelope(
+        &mut self,
+        clip_id: ClipId,
+        envelope: GainEnvelope,
+    ) -> anyhow::Result<Clip> {
+        let clip = self
+            .clips_pool
+            .get_mut(clip_id)
+            .context("Clip not found in global pool")?;
+        anyhow::ensure!(
+            matches!(clip.source, Some(DawSource::Audio(_))),
+            "Only audio clips have gain envelopes"
+        );
+        clip.envelope = (!envelope.is_identity()).then(|| Arc::new(envelope.normalized()));
+        Ok(clip.clone())
     }
 }

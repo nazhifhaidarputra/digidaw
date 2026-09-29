@@ -13,13 +13,18 @@ use crate::{
     core::project::{
         AudioTrack, AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
         RoutingConnection, RoutingNode, SidechainRoute, TrackAutomationTarget,
-        audio_waveform::AudioSampleMode,
+        audio_waveform::AudioSampleMode, equal_power,
     },
     shared::BusId,
 };
 
 /// Unified entry point to render an audio waveform slice.
 /// Safely delegates to the correct DSP algorithm based on the chosen sample mode.
+///
+/// `gain(frame, read_pos)` is the gain of the `frame`-th frame rendered by this call, read from
+/// source frame `read_pos`. When looping with a `loop_crossfade` of X frames, the last X frames of
+/// the loop are equal-power blended into its first X frames and every repeat after the first
+/// starts X frames in, so the loop plays with no jump at the wrap.
 #[inline(always)]
 #[allow(
     clippy::too_many_arguments,
@@ -35,21 +40,17 @@ pub fn render_audio_waveform(
     step: f64,
     is_looping: bool,
     loop_len: f64,
+    loop_crossfade: f64,
     base_volume: f32,
-    current_elapsed_samples: Option<&mut u32>,
-    fade_samples: u32,
-    clip_loop_length: u32,
+    mut gain: impl FnMut(u32, f64) -> f32,
 ) {
     match mode {
         // For default and resampled mode, we use pointer
         // calculation and hermite interpolation
         // to read the scratch buffer
         AudioSampleMode::Default | AudioSampleMode::Resampled => {
-            let mut frames_written = 0;
-            let trim_end = loop_len;
-            let start_bound = 0.0;
-
-            let start_elapsed = current_elapsed_samples.as_ref().map(|v| **v).unwrap_or(0);
+            let mut frames_written: u32 = 0;
+            let bounds = LoopBounds::new(is_looping, loop_len, loop_crossfade);
 
             if target_channels == 2 {
                 let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
@@ -60,27 +61,15 @@ pub fn render_audio_waveform(
 
                     // Let LLVM pipeline the scalar interpolations
                     for i in 0..8 {
-                        let elapsed = start_elapsed + frames_written + i;
-                        let rp = get_read_pos(
-                            *source_read_index,
-                            ((frames_written + i) as f64) * step,
-                            is_looping,
-                            trim_end,
-                            start_bound,
-                            loop_len,
-                        );
-
-                        let s_frame = sample_waveform_dasp(source_buffer, rp, src_channels);
-                        let fade = if current_elapsed_samples.is_some() {
-                            calc_fade(elapsed, fade_samples, clip_loop_length)
-                        } else {
-                            1.0
-                        } * base_volume;
+                        let rp = bounds
+                            .read_pos(*source_read_index, f64::from(frames_written + i) * step);
+                        let s_frame = bounds.sample(source_buffer, rp, src_channels);
+                        let frame_gain = gain(frames_written + i, rp) * base_volume;
 
                         s[i as usize * 2] = s_frame[0];
                         s[i as usize * 2 + 1] = s_frame[1];
-                        f[i as usize * 2] = fade;
-                        f[i as usize * 2 + 1] = fade;
+                        f[i as usize * 2] = frame_gain;
+                        f[i as usize * 2 + 1] = frame_gain;
                     }
 
                     let samples = f32x16::new(s);
@@ -94,24 +83,12 @@ pub fn render_audio_waveform(
                 }
 
                 for (left, right) in remaining_samples.iter_mut().tuples::<(_, _)>() {
-                    let elapsed0 = start_elapsed + frames_written;
-                    let rp0 = get_read_pos(
-                        *source_read_index,
-                        (frames_written as f64) * step,
-                        is_looping,
-                        trim_end,
-                        start_bound,
-                        loop_len,
-                    );
-                    let s0 = sample_waveform_dasp(source_buffer, rp0, src_channels);
-                    let fade0 = if current_elapsed_samples.is_some() {
-                        calc_fade(elapsed0, fade_samples, clip_loop_length)
-                    } else {
-                        1.0
-                    } * base_volume;
+                    let rp0 = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
+                    let s0 = bounds.sample(source_buffer, rp0, src_channels);
+                    let gain0 = gain(frames_written, rp0) * base_volume;
 
-                    *left += s0[0] * fade0;
-                    *right += s0[1] * fade0;
+                    *left += s0[0] * gain0;
+                    *right += s0[1] * gain0;
                     frames_written += 1;
                 }
             } else {
@@ -122,22 +99,11 @@ pub fn render_audio_waveform(
                     let mut f = [0.0; 16];
 
                     for i in 0..16 {
-                        let elapsed = start_elapsed + frames_written + i;
-                        let rp = get_read_pos(
-                            *source_read_index,
-                            ((frames_written + i) as f64) * step,
-                            is_looping,
-                            trim_end,
-                            start_bound,
-                            loop_len,
-                        );
+                        let rp = bounds
+                            .read_pos(*source_read_index, f64::from(frames_written + i) * step);
 
-                        s[i as usize] = sample_waveform_dasp(source_buffer, rp, src_channels)[0];
-                        f[i as usize] = if current_elapsed_samples.is_some() {
-                            calc_fade(elapsed, fade_samples, clip_loop_length)
-                        } else {
-                            1.0
-                        } * base_volume;
+                        s[i as usize] = bounds.sample(source_buffer, rp, src_channels)[0];
+                        f[i as usize] = gain(frames_written + i, rp) * base_volume;
                     }
 
                     let samples = f32x16::new(s);
@@ -151,44 +117,78 @@ pub fn render_audio_waveform(
                 }
 
                 for sample in remaining_samples {
-                    let elapsed = start_elapsed + frames_written;
-                    let rp = get_read_pos(
-                        *source_read_index,
-                        (frames_written as f64) * step,
-                        is_looping,
-                        trim_end,
-                        start_bound,
-                        loop_len,
-                    );
+                    let rp = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
 
-                    let s0 = sample_waveform_dasp(source_buffer, rp, src_channels);
-                    let fade0 = if current_elapsed_samples.is_some() {
-                        calc_fade(elapsed, fade_samples, clip_loop_length)
-                    } else {
-                        1.0
-                    } * base_volume;
+                    let s0 = bounds.sample(source_buffer, rp, src_channels);
+                    let gain0 = gain(frames_written, rp) * base_volume;
 
-                    *sample += s0[0] * fade0;
+                    *sample += s0[0] * gain0;
                     frames_written += 1;
                 }
             }
 
             // Advance the read pointer safely
-            *source_read_index = get_read_pos(
-                *source_read_index,
-                (frames_written as f64) * step,
-                is_looping,
-                trim_end,
-                start_bound,
-                loop_len,
-            );
-            if let Some(elapsed) = current_elapsed_samples {
-                *elapsed += frames_written;
-            }
+            *source_read_index =
+                bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
         }
         AudioSampleMode::Stretch => {
             // TODO: Implement WSOLA or Granular Engine logic
         }
+    }
+}
+
+/// Read-position wrapping and loop-crossfade sampling for one waveform render.
+#[derive(Clone, Copy, Debug)]
+pub struct LoopBounds {
+    is_looping: bool,
+    loop_end: f64,
+    crossfade: f64,
+}
+
+impl LoopBounds {
+    /// Bounds for a waveform of `loop_len` frames. The crossfade is capped at half the loop and
+    /// ignored when not looping.
+    #[inline(always)]
+    pub fn new(is_looping: bool, loop_len: f64, crossfade: f64) -> Self {
+        let crossfade = if is_looping {
+            crossfade.clamp(0.0, loop_len / 2.0)
+        } else {
+            0.0
+        };
+        Self {
+            is_looping,
+            loop_end: loop_len,
+            crossfade,
+        }
+    }
+
+    /// Source frame `offset` frames after `base`, wrapped into the loop.
+    #[inline(always)]
+    pub fn read_pos(&self, base: f64, offset: f64) -> f64 {
+        get_read_pos(
+            base,
+            offset,
+            self.is_looping,
+            self.loop_end,
+            self.crossfade,
+            self.loop_end - self.crossfade,
+        )
+    }
+
+    /// Samples the frame at `rp`, blending in the loop start inside the loop-crossfade region.
+    #[inline(always)]
+    fn sample(&self, buffer: &[f32], rp: f64, channels: usize) -> [f32; 2] {
+        let frame = sample_waveform_dasp(buffer, rp, channels);
+        let fade_start = self.loop_end - self.crossfade;
+        if self.crossfade <= 0.0 || rp < fade_start {
+            return frame;
+        }
+        let head = sample_waveform_dasp(buffer, rp - fade_start, channels);
+        let (fading_out, fading_in) = equal_power(((rp - fade_start) / self.crossfade) as f32);
+        [
+            frame[0] * fading_out + head[0] * fading_in,
+            frame[1] * fading_out + head[1] * fading_in,
+        ]
     }
 }
 
@@ -812,5 +812,51 @@ mod buffer_iteration_tests {
         }
         finish_planar_output(&mut output, &channel_inputs, 2, frames);
         assert_eq!(output, input);
+    }
+}
+
+#[cfg(test)]
+mod loop_crossfade_tests {
+    use super::LoopBounds;
+
+    /// Mono buffer whose sample value is its frame index.
+    fn ramp(frames: usize) -> Vec<f32> {
+        (0..frames).map(|frame| frame as f32).collect()
+    }
+
+    #[test]
+    fn repeats_start_after_the_crossfade() {
+        let bounds = LoopBounds::new(true, 100.0, 20.0);
+        assert_eq!(bounds.read_pos(0.0, 50.0), 50.0);
+        assert_eq!(bounds.read_pos(0.0, 100.0), 20.0);
+        assert_eq!(bounds.read_pos(0.0, 180.0), 20.0);
+    }
+
+    #[test]
+    fn loop_end_blends_into_the_loop_start_without_a_jump() {
+        let buffer = ramp(100);
+        let bounds = LoopBounds::new(true, 100.0, 20.0);
+        // Before the crossfade region the loop plays untouched.
+        assert_eq!(bounds.sample(&buffer, 70.0, 1)[0], 70.0);
+        // At the region start only the tail sounds.
+        assert_eq!(bounds.sample(&buffer, 80.0, 1)[0], 80.0);
+        // Approaching the loop end the head takes over, meeting the wrap target.
+        let near_end = bounds.sample(&buffer, 99.999, 1)[0];
+        let after_wrap = bounds.sample(&buffer, bounds.read_pos(0.0, 100.0), 1)[0];
+        assert!(
+            (near_end - after_wrap).abs() < 0.05,
+            "{near_end} vs {after_wrap}"
+        );
+    }
+
+    #[test]
+    fn crossfade_is_ignored_without_looping_and_capped_at_half_the_loop() {
+        let buffer = ramp(100);
+        let one_shot = LoopBounds::new(false, 100.0, 20.0);
+        assert_eq!(one_shot.sample(&buffer, 90.0, 1)[0], 90.0);
+        assert_eq!(one_shot.read_pos(0.0, 150.0), 150.0);
+
+        let capped = LoopBounds::new(true, 100.0, 80.0);
+        assert_eq!(capped.read_pos(0.0, 100.0), 50.0);
     }
 }

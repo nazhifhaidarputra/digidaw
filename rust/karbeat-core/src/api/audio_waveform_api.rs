@@ -6,7 +6,8 @@ use crate::{
     context::DawContext,
     core::{
         file_manager::audio_loader::AudioLoader,
-        project::{AudioSourceId, AudioWaveform, DawSource, TrackId, TrackType},
+        history::actions::SourceEnvelopeChanged,
+        project::{AudioSourceId, AudioWaveform, DawSource, GainEnvelope, TrackId, TrackType},
     },
 };
 
@@ -174,4 +175,39 @@ where
         .get_audio_source(&AudioSourceId::from_u64(source_id))
         .ok_or_else(|| anyhow::anyhow!("Cannot find audio source"))?;
     Ok(mapper(waveform.as_ref()))
+}
+
+/// Maps every audio source's waveform envelope into a caller-selected collection.
+pub fn get_audio_source_envelopes<C, U, M>(ctx: &DawContext, mapper: M) -> C
+where
+    M: Fn(u64, &GainEnvelope) -> U,
+    C: FromIterator<U>,
+{
+    ctx.app_state
+        .asset_library
+        .source_map
+        .iter()
+        .map(|(id, waveform)| mapper(id.to_u64(), &waveform.envelope))
+        .collect()
+}
+
+/// Replaces an audio source's waveform envelope as one reversible operation and republishes only
+/// that source to the audio engine. Returns the stored (normalized) envelope.
+pub fn set_audio_source_envelope(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    envelope: GainEnvelope,
+) -> anyhow::Result<GainEnvelope> {
+    let previous = ctx
+        .app_state
+        .set_audio_source_envelope(source_id, envelope)?;
+    ctx.push_history(SourceEnvelopeChanged::new(source_id, previous));
+    ctx.broadcast_audio_source(source_id);
+
+    let stored = ctx
+        .app_state
+        .get_audio_source(&source_id)
+        .map(|waveform| waveform.envelope.clone())
+        .unwrap_or_default();
+    Ok(stored)
 }

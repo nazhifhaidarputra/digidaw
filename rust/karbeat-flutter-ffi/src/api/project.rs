@@ -10,7 +10,10 @@ use karbeat_core::audio::writer::{
 };
 use karbeat_core::context::DawContext as CoreDawContext;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
-use karbeat_core::core::project::{ApplicationState, CoverArt, CoverImage, PluginInstance};
+use karbeat_core::core::project::{
+    ApplicationState, CoverArt, CoverImage, EnvelopePoint, Fade, GainEnvelope, PluginInstance,
+    audio_waveform::AudioSampleMode,
+};
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
     clip::Clip,
@@ -18,8 +21,10 @@ use karbeat_core::core::project::{
     track::{AudioTrack, TrackType, audio_waveform::AudioWaveform},
     transport::TransportState,
 };
+use karbeat_utils::types::BipolarF64;
 use serde::Serialize;
 
+use crate::api::automation::AutomationCurveTypeDto;
 use crate::api::context::DawSessionInner;
 use crate::api::waveform::WaveformHandle;
 use crate::frb_generated::StreamSink;
@@ -305,6 +310,125 @@ pub struct UiClip {
     pub loop_length: u64,
     /// True when loop length and source offset are raw samples.
     pub is_sample_based: bool,
+    /// Audio clip gain envelope stacked on the waveform envelope; `None` leaves audio untouched.
+    pub envelope: Option<UiGainEnvelope>,
+}
+
+/// A fade at one edge of a waveform or clip.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiFade {
+    /// Length in samples; zero disables the fade.
+    pub length: u32,
+    pub curve_type: AutomationCurveTypeDto,
+    /// Bipolar tension, -1.0 to 1.0.
+    pub tension: f64,
+}
+
+/// One gain breakpoint of a gain envelope.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiEnvelopePoint {
+    /// Source frames from the trim start (waveform envelope) or clip content samples in the unit
+    /// of `offset_start` (clip envelope).
+    pub position: u64,
+    /// Linear gain, 0.0 to 2.0.
+    pub gain: f32,
+    /// Curve toward the next point.
+    pub curve_type: AutomationCurveTypeDto,
+    /// Bipolar tension of the curve toward the next point.
+    pub tension: f64,
+}
+
+/// Fades, crossfade, and gain points of a waveform or audio clip.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiGainEnvelope {
+    pub fade_in: UiFade,
+    pub fade_out: UiFade,
+    /// Equal-power crossfade length in samples: the loop crossfade on a waveform, the crossfade
+    /// with overlapping neighbours on a clip.
+    pub crossfade: u32,
+    /// Gain points sorted by position.
+    pub points: Vec<UiEnvelopePoint>,
+}
+
+/// How a waveform's playback responds to tempo.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub enum UiAudioSampleMode {
+    Default,
+    Stretch,
+    Resampled,
+}
+
+impl From<AudioSampleMode> for UiAudioSampleMode {
+    fn from(value: AudioSampleMode) -> Self {
+        match value {
+            AudioSampleMode::Default => Self::Default,
+            AudioSampleMode::Stretch => Self::Stretch,
+            AudioSampleMode::Resampled => Self::Resampled,
+        }
+    }
+}
+
+impl From<&Fade> for UiFade {
+    fn from(value: &Fade) -> Self {
+        Self {
+            length: value.length,
+            curve_type: value.curve_type.into(),
+            tension: value.tension.get(),
+        }
+    }
+}
+
+impl From<UiFade> for Fade {
+    fn from(value: UiFade) -> Self {
+        Self {
+            length: value.length,
+            curve_type: value.curve_type.into(),
+            tension: BipolarF64::new(value.tension),
+        }
+    }
+}
+
+impl From<&GainEnvelope> for UiGainEnvelope {
+    fn from(value: &GainEnvelope) -> Self {
+        Self {
+            fade_in: UiFade::from(&value.fade_in),
+            fade_out: UiFade::from(&value.fade_out),
+            crossfade: value.crossfade,
+            points: value
+                .points
+                .iter()
+                .map(|point| UiEnvelopePoint {
+                    position: point.position,
+                    gain: point.gain,
+                    curve_type: point.curve_type.into(),
+                    tension: point.tension.get(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<UiGainEnvelope> for GainEnvelope {
+    fn from(value: UiGainEnvelope) -> Self {
+        Self {
+            fade_in: value.fade_in.into(),
+            fade_out: value.fade_out.into(),
+            crossfade: value.crossfade,
+            points: value
+                .points
+                .into_iter()
+                .map(|point| EnvelopePoint {
+                    position: point.position,
+                    gain: point.gain,
+                    curve_type: point.curve_type.into(),
+                    tension: BipolarF64::new(point.tension),
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -334,6 +458,7 @@ impl From<&Clip> for UiClip {
             offset_start: value.time.offset_start_raw(),
             loop_length: value.time.loop_length_raw(),
             is_sample_based: value.time.is_samples(),
+            envelope: value.envelope.as_deref().map(UiGainEnvelope::from),
         }
     }
 }
@@ -363,6 +488,7 @@ pub struct AudioWaveformUiForAudioProperties {
     pub is_looping: bool,
     pub normalized: bool,
     pub muted: bool, // this only affects when play stream, not when doing preview sound
+    pub sample_mode: UiAudioSampleMode,
 }
 
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
@@ -404,6 +530,7 @@ impl AudioWaveformUiForAudioProperties {
             is_looping: value.is_looping,
             normalized: value.normalized,
             muted: value.muted,
+            sample_mode: value.sample_mode.into(),
         })
     }
 }

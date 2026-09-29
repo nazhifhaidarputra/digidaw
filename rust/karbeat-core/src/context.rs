@@ -24,7 +24,7 @@ use crate::{
         project::{ApplicationState, AudioTrack, AutomationLane, Clip, Pattern},
     },
     message::TelemetryRegistry,
-    shared::{AutomationId, ClipId, PatternId},
+    shared::{AudioSourceId, AutomationId, ClipId, PatternId},
 };
 
 /// Application-owned coordination point for project state, history, audio queues, and telemetry.
@@ -260,6 +260,14 @@ impl DawContext {
         );
     }
 
+    /// Best-effort publishes one audio source's current waveform to the audio thread.
+    pub fn broadcast_audio_source(&mut self, id: AudioSourceId) {
+        let Some(waveform) = self.app_state.asset_library.source_map.get(id).cloned() else {
+            return;
+        };
+        let _ = self.send_audio_command(AudioCommand::UpdateAudioSource { id, waveform });
+    }
+
     /// Builds a complete render graph snapshot and best-effort replaces audio-thread graph state.
     pub fn broadcast_full_graph(&mut self) {
         let graph = AudioGraphState::from(&self.app_state);
@@ -314,6 +322,11 @@ impl DawContext {
                 if let Some(lane) = self.app_state.automation_pool.get(*id).cloned() {
                     self.broadcast_automation_lane(*id, &lane);
                 }
+            }
+        }
+        if !sync.full_graph {
+            for id in &sync.sources {
+                self.broadcast_audio_source(*id);
             }
         }
         if sync.full_graph {

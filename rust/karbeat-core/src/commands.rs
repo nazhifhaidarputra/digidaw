@@ -373,6 +373,15 @@ pub enum AudioCommand {
         patterns: HashMap<PatternId, Pattern>,
     },
 
+    /// Replaces one audio source's waveform in the render graph, e.g. after its envelope changed.
+    /// Sources missing from the render graph are ignored; new sources need a full graph.
+    UpdateAudioSource {
+        /// Source whose waveform is replaced.
+        id: AudioSourceId,
+        /// Waveform snapshot to render from.
+        waveform: std::sync::Arc<AudioWaveform>,
+    },
+
     /// Add or replace a single automation lane on the audio thread.
     /// Sent on add/remove automation point, lane enable toggle, or lane metadata update.
     UpdateAutomationLane {

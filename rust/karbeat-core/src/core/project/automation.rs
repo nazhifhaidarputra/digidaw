@@ -432,12 +432,31 @@ pub fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> Option
 /// - Step: holds the first value until the next point, tension is ignored.
 #[inline]
 pub fn interpolate_segment(from: &AutomationPoint, to_value: NormalizedF64, t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    let tension = from.tension.get();
-    let v1 = from.value.get();
-    let v2 = to_value.get();
+    shape_segment(
+        from.curve_type,
+        from.tension.get(),
+        from.value.get(),
+        to_value.get(),
+        t,
+    )
+}
 
-    match from.curve_type {
+/// Shapes a segment from `v1` to `v2` at normalized position `t`.
+///
+/// Shared by automation lanes and gain envelopes so both draw and play the same curves.
+/// Values may exceed 1.0 (envelope gain boosts); exponential segments floor them at a small
+/// positive value to keep the ratio finite. Allocation-free and real-time safe.
+#[inline]
+pub fn shape_segment(
+    curve_type: AutomationCurveType,
+    tension: f64,
+    v1: f64,
+    v2: f64,
+    t: f64,
+) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+
+    match curve_type {
         AutomationCurveType::Linear => lerp(apply_tension_to_t(t, tension), v1, v2),
         AutomationCurveType::Exponential => {
             let v1 = v1.max(EXPONENTIAL_FLOOR);

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::core::project::envelope::GainEnvelope;
 use crate::shared::id::AudioSourceId;
 
 pub type AudioFrame = [f32; 2];
@@ -24,6 +25,50 @@ pub enum AudioSampleMode {
     Stretch,
     /// ticks (BPM-dependent, for time-stretched audio, do not preserve pitch)
     Resampled,
+}
+
+/// Offline processing recipe for a waveform.
+///
+/// Placeholder: the processing itself is not implemented yet, so nothing produces a buffer.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[serde(default)]
+pub struct WaveformEdits {
+    /// Scale the peak to full scale.
+    pub normalize: bool,
+    /// Invert the polarity.
+    pub invert: bool,
+    /// Play the audio backwards.
+    pub reverse: bool,
+    /// Pitch shift in semitones.
+    pub pitch_semitones: f32,
+    /// Time-stretch ratio; 1.0 keeps the original length.
+    pub time_ratio: f32,
+}
+
+impl Default for WaveformEdits {
+    fn default() -> Self {
+        Self {
+            normalize: false,
+            invert: false,
+            reverse: false,
+            pitch_semitones: 0.0,
+            time_ratio: 1.0,
+        }
+    }
+}
+
+/// An offline-processed render of a waveform.
+///
+/// Only the recipe is saved. The rendered buffer is a cache rebuilt from the original audio, has
+/// the same channel count and sample rate as the original, and replaces it for playback.
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct EditedWaveform {
+    /// Edits applied to the original audio.
+    pub edits: WaveformEdits,
+    /// Rendered result; `None` until an offline render produces it.
+    #[serde(skip)]
+    pub buffer: Option<Arc<Mmap>>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -63,6 +108,10 @@ pub struct AudioWaveform {
     pub muted: bool,
     /// How source duration and playback rate respond to tempo.
     pub sample_mode: AudioSampleMode,
+    /// Fades, loop crossfade, and gain points shared by every clip referencing this waveform.
+    pub envelope: GainEnvelope,
+    /// Offline-processed version of the audio, when edits have been applied.
+    pub edited: Option<EditedWaveform>,
 }
 
 impl PartialEq for AudioWaveform {
@@ -82,6 +131,9 @@ impl PartialEq for AudioWaveform {
             && self.muted == other.muted
             && self.sample_mode == other.sample_mode
             && self.original_bpm == other.original_bpm
+            && self.envelope == other.envelope
+            && self.edited.as_ref().map(|edited| &edited.edits)
+                == other.edited.as_ref().map(|edited| &edited.edits)
     }
 }
 
@@ -105,6 +157,8 @@ impl Default for AudioWaveform {
             muted: false,
             sample_mode: AudioSampleMode::Default,
             original_bpm: 120.0,
+            envelope: GainEnvelope::default(),
+            edited: None,
         }
     }
 }
@@ -132,10 +186,19 @@ impl AudioWaveform {
         Ok(())
     }
 
+    /// The buffer playback reads: the offline-processed render when one exists, else the
+    /// original audio.
+    pub fn active_buffer(&self) -> Option<&Arc<Mmap>> {
+        self.edited
+            .as_ref()
+            .and_then(|edited| edited.buffer.as_ref())
+            .or(self.buffer.as_ref())
+    }
+
     /// Returns a strictly valid slice of the audio buffer, cropped exactly to
     /// the trim_start and trim_end boundaries.
     pub fn get_playable_buffer<'a>(&'a self) -> Option<&'a [f32]> {
-        let raw_buffer = crate::utils::get_waveform_buffer(&self.buffer)?;
+        let raw_buffer: &[f32] = bytemuck::try_cast_slice(&self.active_buffer()?[..]).ok()?;
         let channels = self.channels as usize;
 
         if channels == 0 || raw_buffer.is_empty() {

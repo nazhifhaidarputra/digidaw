@@ -1,12 +1,15 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::api::context::DawContext;
 use crate::api::plugins::opaque::ZeroCopyHandle;
-use crate::api::project::{AudioWaveformUiForAudioProperties, UiAudioHardwareConfig};
+use crate::api::project::{
+    AudioWaveformUiForAudioProperties, UiAudioHardwareConfig, UiGainEnvelope,
+};
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
-use karbeat_core::api::audio_api;
+use karbeat_core::api::{audio_api, audio_waveform_api};
 use karbeat_core::audio::event::{PluginTarget, TransportFeedback};
 use karbeat_core::commands::{AudioFeedback, EffectTarget, MixerChannelTarget};
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
@@ -387,6 +390,31 @@ pub fn get_audio_properties(
     audio_api::get_audio_source(&ctx, AudioSourceId::from_u64(id), |waveform| {
         AudioWaveformUiForAudioProperties::try_from_with_context(&ctx, waveform).ok()
     })?
+}
+
+/// Waveform envelopes of every audio source, keyed by source ID.
+pub fn get_audio_source_envelopes(ctx: &DawContext) -> HashMap<u64, UiGainEnvelope> {
+    crate::api::context::read_ctx!(ctx);
+    audio_waveform_api::get_audio_source_envelopes(ctx, |id, envelope| {
+        (id, UiGainEnvelope::from(envelope))
+    })
+}
+
+/// Replaces an audio source's waveform envelope, shared by every clip referencing the source.
+/// Returns the stored envelope, with points sorted and gains clamped.
+pub fn set_audio_source_envelope(
+    ctx: &DawContext,
+    source_id: u64,
+    envelope: UiGainEnvelope,
+) -> Result<UiGainEnvelope, String> {
+    crate::api::context::project_ctx!(ctx);
+    let stored = audio_waveform_api::set_audio_source_envelope(
+        ctx,
+        AudioSourceId::from_u64(source_id),
+        envelope.into(),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(UiGainEnvelope::from(&stored))
 }
 
 /// ACTION: Play the sound via the Engine

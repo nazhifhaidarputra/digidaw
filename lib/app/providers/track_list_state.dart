@@ -734,6 +734,57 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
+  /// Gives the clips their own copies of the waveforms or patterns they share
+  /// with other clips (hard copy). Clips whose content is already unique are
+  /// left unchanged.
+  Future<Result<List<UiClip>>> makeClipsUnique({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    if (clipIds.isEmpty) return Result.ok(const []);
+
+    try {
+      final made = await track_api.makeClipsUnique(
+        ctx: _ctx,
+        trackId: trackId,
+        clipIds: clipIds,
+      );
+      if (made.clips.isEmpty) return Result.ok(const []);
+
+      _projectNotifierRead
+        ..upsertPatternBulk(made.patterns)
+        ..upsertSourceEnvelopes(made.sourceEnvelopes);
+      _replaceClips(trackId, made.clips);
+      if (made.sourceEnvelopes.isNotEmpty) {
+        ref.invalidate(audioSourcesProvider);
+      }
+      return Result.ok(made.clips);
+    } catch (error) {
+      AppLogger.error('TrackListNotifier: error making clips unique: $error');
+      return ref.notifyErrorResult(Exception(error.toString()));
+    }
+  }
+
+  /// Replaces an audio clip's own gain envelope.
+  Future<Result<void>> setClipEnvelope({
+    required int trackId,
+    required int clipId,
+    required UiGainEnvelope envelope,
+  }) async {
+    try {
+      final clip = await track_api.setClipEnvelope(
+        ctx: _ctx,
+        clipId: clipId,
+        envelope: envelope,
+      );
+      _replaceClips(trackId, [clip]);
+      return Result.ok(null);
+    } catch (error) {
+      AppLogger.error('TrackListNotifier: error editing clip envelope: $error');
+      return ref.notifyErrorResult(Exception(error.toString()));
+    }
+  }
+
   /// Delete multiple clips at once, with an optimistic local removal.
   Future<Result<void>> deleteClipBatch(int trackId, List<int> clipIds) async {
     _optimisticDeleteClips(trackId, clipIds.toSet());
@@ -1149,6 +1200,19 @@ class TrackListNotifier extends Notifier<TrackListState> {
           .read(projectProvider.notifier)
           .upsertTrack(trackId, track.copyWith(clips: updatedClips));
     }
+  }
+
+  /// Replaces clips of [trackId] with the backend's versions, matched by ID.
+  void _replaceClips(int trackId, List<UiClip> clips) {
+    final track = ref.read(projectProvider).value?.tracks[trackId];
+    if (track == null) return;
+    final byId = {for (final clip in clips) clip.id: clip};
+    _projectNotifierRead.upsertTrack(
+      trackId,
+      track.copyWith(
+        clips: [for (final clip in track.clips) byId[clip.id] ?? clip],
+      ),
+    );
   }
 
   void _applyOptimisticResizeBatch(

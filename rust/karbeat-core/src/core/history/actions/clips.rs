@@ -1,11 +1,11 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
-use super::swap_slot;
+use super::{pools::PoolSwap, swap_slot};
 use crate::core::{
     history::{EngineSync, HistoryAction, HistoryError},
-    project::{ApplicationState, Clip},
+    project::{ApplicationState, AudioWaveform, Clip, MadeUnique, Pattern},
 };
-use crate::shared::id::{ClipId, TrackId};
+use crate::shared::id::{AudioSourceId, ClipId, PatternId, TrackId};
 
 /// Clips created, deleted, moved, resized, or renamed on one or more tracks.
 ///
@@ -49,6 +49,42 @@ impl HistoryAction for ClipsChanged {
         self.label
     }
 }
+
+/// Clips given their own copies of the patterns and audio sources they shared (hard copies).
+///
+/// Holds the clip changes plus the created pattern and source keys. Undo detaches the copies and
+/// points the clips back at the shared content; redo reattaches them under the same keys.
+#[derive(Debug)]
+pub struct ClipsMadeUnique {
+    clips: ClipsChanged,
+    patterns: PoolSwap<PatternId, Pattern>,
+    sources: PoolSwap<AudioSourceId, Arc<AudioWaveform>>,
+}
+
+impl ClipsMadeUnique {
+    /// Records the edit from the clip changes and the content it created.
+    pub fn new(clips: ClipsChanged, made: &MadeUnique) -> Self {
+        Self {
+            clips,
+            patterns: PoolSwap::from_entries(made.patterns.iter().map(|id| (*id, None)).collect()),
+            sources: PoolSwap::from_entries(made.sources.iter().map(|id| (*id, None)).collect()),
+        }
+    }
+
+    fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
+        let mut sync = self.clips.swap(app)?;
+        self.patterns.swap(&mut app.pattern_pool, "Pattern")?;
+        self.sources
+            .swap(&mut app.asset_library.source_map, "Audio source")?;
+        if !self.sources.is_empty() {
+            // New audio sources only reach the engine with a full graph.
+            sync.merge(EngineSync::full_graph());
+        }
+        Ok(sync)
+    }
+}
+
+swap_action!(ClipsMadeUnique, "Make Clips Unique");
 
 /// Captures the tracks and clips a clip edit is about to touch, then builds the
 /// [`ClipsChanged`] record once the edit has run.

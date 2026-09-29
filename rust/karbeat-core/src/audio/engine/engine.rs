@@ -11,7 +11,7 @@ use crate::{
             telemetry::{AudioEngineTelemetry, PluginTelemetrySnapshot},
             transport::{PlaybackMode, TransportState},
             types::*,
-            voices::{GeneratorVoice, VoiceState},
+            voices::{ClipSpan, GeneratorVoice, NeighbourCrossfade, VoiceState},
             workspace::RenderWorkspace,
         },
         event::{PluginTarget, TransportFeedback},
@@ -77,6 +77,7 @@ pub(super) enum RetiredGraphState {
     Routing(Box<[RoutingConnection]>),
     Automation(AudioAutomationLane),
     AudioBuffer(Vec<f32>),
+    AudioSource(std::sync::Arc<AudioWaveform>),
     TelemetryProducer(triple_buffer::Input<PluginTelemetrySnapshot>),
     TelemetrySubscription(HashSet<String>),
 }
@@ -98,6 +99,7 @@ fn graph_retirement_queue() -> Producer<RetiredGraphState> {
                     RetiredGraphState::Routing(routes) => drop(routes),
                     RetiredGraphState::Automation(lane) => drop(lane),
                     RetiredGraphState::AudioBuffer(buffer) => drop(buffer),
+                    RetiredGraphState::AudioSource(waveform) => drop(waveform),
                     RetiredGraphState::TelemetryProducer(producer) => drop(producer),
                     RetiredGraphState::TelemetrySubscription(subscription) => drop(subscription),
                 },
@@ -1783,40 +1785,13 @@ impl AudioEngine {
             ((60.0 / self.transport.bpm) * (self.config.sample_rate as f32)) as f64;
         let samples_per_tick = samples_per_beat / PPQ;
 
-        for clip_id in track.clips() {
+        let clip_ids = track.clips();
+        for (index, clip_id) in clip_ids.iter().enumerate() {
             let Some(clip_data) = self.current_state.graph.clips.get(clip_id) else {
                 continue;
             };
-            let (clip_start, clip_length, clip_offset) = match &clip_data.time {
-                ClipTimeUnit::Samples {
-                    start_time,
-                    loop_length,
-                    offset_start,
-                } => (
-                    *start_time as u32,
-                    *loop_length as u32,
-                    *offset_start as u32,
-                ),
-                ClipTimeUnit::Ticks {
-                    start_time,
-                    loop_length,
-                    offset_start,
-                } => {
-                    let st = ((*start_time as f64) * samples_per_tick) as u32;
-                    let ll = ((*loop_length as f64) * samples_per_tick) as u32;
-                    let os = ((*offset_start as f64) * samples_per_tick) as u32;
-                    (st, ll, os)
-                }
-                ClipTimeUnit::Audio {
-                    start_tick,
-                    loop_length,
-                    offset_start,
-                } => (
-                    ((*start_tick as f64) * samples_per_tick).round() as u32,
-                    *loop_length as u32,
-                    *offset_start as u32,
-                ),
-            };
+            let (clip_start, clip_length, clip_offset) =
+                clip_span_samples(&clip_data.time, samples_per_tick);
 
             if clip_start > end_time {
                 break;
@@ -1835,12 +1810,25 @@ impl AudioEngine {
                         .source_map
                         .get(*source_id);
                     if let Some(waveform) = waveform_opt {
+                        let graph_clips = &self.current_state.graph.clips;
+                        let span_at = |neighbour: usize| {
+                            let clip = graph_clips.get(clip_ids.get(neighbour)?)?;
+                            matches!(clip.source, Some(DawSource::Audio(_)))
+                                .then(|| audio_clip_span(clip, samples_per_tick))
+                        };
+                        let crossfade = NeighbourCrossfade::for_clip(
+                            audio_clip_span(clip_data, samples_per_tick),
+                            index.checked_sub(1).and_then(span_at),
+                            span_at(index + 1),
+                        );
                         self.voices.prepare_audio_voice(
                             track.id,
                             clip_start,
                             clip_length,
                             clip_offset,
                             waveform,
+                            clip_data.envelope.as_ref(),
+                            crossfade,
                             start_time,
                             end_time,
                             self.config.sample_rate,
@@ -2354,5 +2342,52 @@ impl AudioEngine {
             producer.publish();
         }
         self.telemetry.param_telemetry_producers = producers;
+    }
+}
+
+/// Timeline start, length, and source offset of a clip in project samples.
+fn clip_span_samples(time: &ClipTimeUnit, samples_per_tick: f64) -> (u32, u32, u32) {
+    match time {
+        ClipTimeUnit::Samples {
+            start_time,
+            loop_length,
+            offset_start,
+        } => (
+            *start_time as u32,
+            *loop_length as u32,
+            *offset_start as u32,
+        ),
+        ClipTimeUnit::Ticks {
+            start_time,
+            loop_length,
+            offset_start,
+        } => {
+            let st = ((*start_time as f64) * samples_per_tick) as u32;
+            let ll = ((*loop_length as f64) * samples_per_tick) as u32;
+            let os = ((*offset_start as f64) * samples_per_tick) as u32;
+            (st, ll, os)
+        }
+        ClipTimeUnit::Audio {
+            start_tick,
+            loop_length,
+            offset_start,
+        } => (
+            ((*start_tick as f64) * samples_per_tick).round() as u32,
+            *loop_length as u32,
+            *offset_start as u32,
+        ),
+    }
+}
+
+/// Timeline span and crossfade length of an audio clip, for neighbour crossfades.
+fn audio_clip_span(clip: &Clip, samples_per_tick: f64) -> ClipSpan {
+    let (start, length, _) = clip_span_samples(&clip.time, samples_per_tick);
+    ClipSpan {
+        start,
+        length,
+        crossfade: clip
+            .envelope
+            .as_ref()
+            .map_or(0, |envelope| envelope.crossfade),
     }
 }

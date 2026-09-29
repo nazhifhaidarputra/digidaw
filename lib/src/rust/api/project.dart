@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
@@ -12,7 +13,7 @@ import 'plugin.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -137,6 +138,8 @@ abstract class AudioWaveformUiForAudioProperties
 
   int get rootNote;
 
+  UiAudioSampleMode get sampleMode;
+
   int get sampleRate;
 
   int get trimEnd;
@@ -164,6 +167,8 @@ abstract class AudioWaveformUiForAudioProperties
   set normalized(bool normalized);
 
   set rootNote(int rootNote);
+
+  set sampleMode(UiAudioSampleMode sampleMode);
 
   set sampleRate(int sampleRate);
 
@@ -335,6 +340,9 @@ sealed class UiAudioHardwareConfig with _$UiAudioHardwareConfig {
   }) = _UiAudioHardwareConfig;
 }
 
+/// How a waveform's playback responds to tempo.
+enum UiAudioSampleMode { default_, stretch, resampled }
+
 @freezed
 sealed class UiClip with _$UiClip {
   const factory UiClip({
@@ -345,6 +353,7 @@ sealed class UiClip with _$UiClip {
     required int offsetStart,
     required int loopLength,
     required bool isSampleBased,
+    UiGainEnvelope? envelope,
   }) = _UiClip;
 }
 
@@ -356,6 +365,38 @@ sealed class UiClipSource with _$UiClipSource {
       UiClipSource_Audio;
   const factory UiClipSource.midi({required int patternId}) = UiClipSource_Midi;
   const factory UiClipSource.none() = UiClipSource_None;
+}
+
+/// One gain breakpoint of a gain envelope.
+@freezed
+sealed class UiEnvelopePoint with _$UiEnvelopePoint {
+  const factory UiEnvelopePoint({
+    required int position,
+    required double gain,
+    required AutomationCurveTypeDto curveType,
+    required double tension,
+  }) = _UiEnvelopePoint;
+}
+
+/// A fade at one edge of a waveform or clip.
+@freezed
+sealed class UiFade with _$UiFade {
+  const factory UiFade({
+    required int length,
+    required AutomationCurveTypeDto curveType,
+    required double tension,
+  }) = _UiFade;
+}
+
+/// Fades, crossfade, and gain points of a waveform or audio clip.
+@freezed
+sealed class UiGainEnvelope with _$UiGainEnvelope {
+  const factory UiGainEnvelope({
+    required UiFade fadeIn,
+    required UiFade fadeOut,
+    required int crossfade,
+    required List<UiEnvelopePoint> points,
+  }) = _UiGainEnvelope;
 }
 
 @freezed

@@ -31,6 +31,7 @@ mod tests {
                 loop_length: 48_000,
                 offset_start: 0,
             },
+            envelope: None,
         });
         app.tracks
             .get_mut(track_id)
@@ -497,6 +498,7 @@ mod tests {
                 loop_length: 48_000,
                 offset_start: 120,
             },
+            envelope: None,
         });
         app.tracks[audio_id].clips.push(clip_id);
 

@@ -6,13 +6,16 @@ import 'package:karbeat/features/track/services/automation_editor_service.dart';
 import 'package:karbeat/features/track/view/automation_point_value_dialog.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
-String _curveTypeLabel(AutomationCurveTypeDto curveType) => switch (curveType) {
-  AutomationCurveTypeDto.linear => 'Linear',
-  AutomationCurveTypeDto.exponential => 'Exponential',
-  AutomationCurveTypeDto.step => 'Step',
-};
+/// Display name of an automation or envelope curve type.
+String automationCurveTypeLabel(AutomationCurveTypeDto curveType) =>
+    switch (curveType) {
+      AutomationCurveTypeDto.linear => 'Linear',
+      AutomationCurveTypeDto.exponential => 'Exponential',
+      AutomationCurveTypeDto.step => 'Step',
+    };
 
-IconData _curveTypeIcon(AutomationCurveTypeDto curveType) =>
+/// Icon of an automation or envelope curve type.
+IconData automationCurveTypeIcon(AutomationCurveTypeDto curveType) =>
     switch (curveType) {
       AutomationCurveTypeDto.linear => Icons.show_chart,
       AutomationCurveTypeDto.exponential => Icons.trending_up,
@@ -72,15 +75,15 @@ Future<void> showAutomationPointContextMenu({
         ),
       DawContextAction.submenu(
         title: 'Curve type',
-        subtitle: _curveTypeLabel(point.curveType),
-        icon: _curveTypeIcon(point.curveType),
+        subtitle: automationCurveTypeLabel(point.curveType),
+        icon: automationCurveTypeIcon(point.curveType),
         children: [
           for (final curveType in AutomationCurveTypeDto.values)
             DawContextAction(
-              title: _curveTypeLabel(curveType),
+              title: automationCurveTypeLabel(curveType),
               icon: point.curveType == curveType
                   ? Icons.check
-                  : _curveTypeIcon(curveType),
+                  : automationCurveTypeIcon(curveType),
               color: point.curveType == curveType ? colors.primary : null,
               onTap: () => editor.setPointCurveType(
                 laneId: laneId,

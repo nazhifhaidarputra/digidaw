@@ -100,6 +100,17 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     ref.read(workspaceStateProvider.notifier).openPattern(patternId);
   }
 
+  /// Gives the selection (or just this clip) its own copies of the content it
+  /// shares with other clips.
+  Future<void> _makeUnique() async {
+    final clipIds = widget.isSelected && widget.selectedClipIds.isNotEmpty
+        ? widget.selectedClipIds
+        : [widget.clip.id];
+    await ref
+        .read(trackListStateProvider.notifier)
+        .makeClipsUnique(trackId: widget.trackId, clipIds: clipIds);
+  }
+
   Future<void> _renameClip() async {
     var pendingName = widget.clip.name;
     final newName = await showDialog<String>(
@@ -252,6 +263,13 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       clipLeftOffset: left,
       waveformMap: widget.waveformMap,
       compact: widget.compact,
+      trackId: widget.trackId,
+      envelopeInteractive: switch (widget.selectedTool) {
+        ToolSelection.pointer ||
+        ToolSelection.draw ||
+        ToolSelection.select => true,
+        _ => false,
+      },
     );
 
     final gestureDetector = GestureDetector(
@@ -485,6 +503,26 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       child: clipRenderer,
     );
 
+    final envelopeView = ref.watch(
+      workspaceStateProvider.select((s) => s.clipEnvelopeView),
+    );
+    final colors = Theme.of(context).colorScheme;
+    DawContextAction envelopeViewAction(
+      ClipEnvelopeView view,
+      String title,
+      IconData icon,
+    ) {
+      final shown = envelopeView == view;
+      return DawContextAction(
+        title: title,
+        icon: shown ? Icons.check : icon,
+        color: shown ? colors.primary : null,
+        onTap: () => ref
+            .read(workspaceStateProvider.notifier)
+            .toggleClipEnvelopeView(view),
+      );
+    }
+
     final interactiveChild = ContextMenuWrapper(
       title: widget.clip.name,
       actions: [
@@ -495,6 +533,24 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             icon: Icons.piano,
             onTap: () => _openInPianoRoll(patternId),
           ),
+        if (widget.clip.source is! UiClipSource_None)
+          DawContextAction(
+            title: "Make unique",
+            icon: Icons.call_split,
+            onTap: _makeUnique,
+          ),
+        if (widget.clip.source is UiClipSource_Audio) ...[
+          envelopeViewAction(
+            ClipEnvelopeView.waveform,
+            "Show waveform envelope",
+            Icons.graphic_eq,
+          ),
+          envelopeViewAction(
+            ClipEnvelopeView.clip,
+            "Show clip envelope",
+            Icons.show_chart,
+          ),
+        ],
       ],
       child: gestureDetector,
     );

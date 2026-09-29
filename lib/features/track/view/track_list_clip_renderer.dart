@@ -15,6 +15,12 @@ class _ClipRenderer extends ConsumerWidget {
   /// Renders a solid block with only the clip title, for shrunk tracks.
   final bool compact;
 
+  /// Track owning the clip; set when the clip's envelopes can be edited.
+  final int? trackId;
+
+  /// Whether the shown gain envelope reacts to pointer input.
+  final bool envelopeInteractive;
+
   const _ClipRenderer({
     required this.clip,
     required this.trackType,
@@ -27,6 +33,8 @@ class _ClipRenderer extends ConsumerWidget {
     required this.clipLeftOffset,
     required this.waveformMap,
     this.compact = false,
+    this.trackId,
+    this.envelopeInteractive = false,
   });
 
   static const double _headerHeight = 16;
@@ -113,6 +121,69 @@ class _ClipRenderer extends ConsumerWidget {
     );
   }
 
+  /// The clip's own envelope, in clip content samples at the project rate.
+  Widget _buildClipEnvelope(
+    BuildContext context,
+    WidgetRef ref, {
+    required double tempo,
+    required double offsetTicks,
+  }) {
+    final projectSamplesPerTick = samplesPerTick(tempo, projectSampleRate);
+    final trackId = this.trackId;
+    return GainEnvelopeEditor(
+      envelope: clip.envelope ?? identityEnvelope,
+      axis: EnvelopeAxis(
+        pixelsPerSample: 1 / (projectSamplesPerTick * zoomLevel),
+        originPosition: offsetTicks * projectSamplesPerTick,
+      ),
+      contentStart: clip.offsetStart,
+      contentLength: clip.loopLength,
+      maxCrossfade: clip.loopLength,
+      color: Theme.of(context).colorScheme.primary,
+      interactive: envelopeInteractive && trackId != null,
+      onCommit: (envelope) async {
+        if (trackId == null) return;
+        await ref
+            .read(trackListStateProvider.notifier)
+            .setClipEnvelope(
+              trackId: trackId,
+              clipId: clip.id,
+              envelope: envelope,
+            );
+      },
+    );
+  }
+
+  /// The waveform envelope shared by every clip of the source, in source
+  /// frames.
+  Widget _buildWaveformEnvelope(
+    WidgetRef ref, {
+    required int sourceId,
+    required WaveformHandle handle,
+    required double sourceSamplesPerTick,
+    required double offsetTicks,
+  }) {
+    final envelope = ref.watch(
+      projectProvider.select((s) => s.value?.sourceEnvelopes[sourceId]),
+    );
+    final frames = handle.getLen() ~/ math.max(1, handle.getChannels());
+    return GainEnvelopeEditor(
+      envelope: envelope ?? identityEnvelope,
+      axis: EnvelopeAxis(
+        pixelsPerSample: 1 / (sourceSamplesPerTick * zoomLevel),
+        originPosition: offsetTicks * sourceSamplesPerTick,
+      ),
+      contentStart: 0,
+      contentLength: frames,
+      maxCrossfade: frames ~/ 2,
+      color: Colors.amber,
+      interactive: envelopeInteractive,
+      onCommit: (envelope) => ref
+          .read(projectProvider.notifier)
+          .setSourceEnvelope(sourceId, envelope),
+    );
+  }
+
   Widget _buildContent(BuildContext context, WidgetRef ref) {
     final transportState = ref.watch(transportProvider).value?.state;
     final projectState = ref.watch(projectProvider).value;
@@ -133,14 +204,14 @@ class _ClipRenderer extends ConsumerWidget {
             clip.offsetStartInTicks(tempo, projectSampleRate).toDouble();
 
         // getSampleRate() is a sync opaque call — zero FFI overhead
-        final samplesPerTick =
+        final sourceSamplesPerTick =
             (60.0 / tempo) * (handle.getSampleRate() / 960.0);
 
         final waveformColor = color.computeLuminance() > 0.5
             ? Colors.black.withAlpha(180) // Dark waveform for light tracks
             : Colors.white.withAlpha(200);
 
-        return RepaintBoundary(
+        final waveform = RepaintBoundary(
           child: CustomPaint(
             size: Size.infinite,
             painter: StereoWaveformClipPainter(
@@ -150,11 +221,40 @@ class _ClipRenderer extends ConsumerWidget {
               zoomLevel: zoomLevel,
               offsetTicks: effectiveOffsetTicks,
               strokeWidth: 1.0,
-              samplesPerTick: samplesPerTick,
+              samplesPerTick: sourceSamplesPerTick,
               scrollController: scrollController,
               clipLeftOffset: clipLeftOffset,
             ),
           ),
+        );
+
+        final envelopeView = ref.watch(
+          workspaceStateProvider.select((s) => s.clipEnvelopeView),
+        );
+        if (envelopeView == ClipEnvelopeView.none) return waveform;
+
+        return Stack(
+          children: [
+            Positioned.fill(child: waveform),
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: envelopeView == ClipEnvelopeView.clip
+                    ? _buildClipEnvelope(
+                        context,
+                        ref,
+                        tempo: tempo,
+                        offsetTicks: effectiveOffsetTicks,
+                      )
+                    : _buildWaveformEnvelope(
+                        ref,
+                        sourceId: sourceId,
+                        handle: handle,
+                        sourceSamplesPerTick: sourceSamplesPerTick,
+                        offsetTicks: effectiveOffsetTicks,
+                      ),
+              ),
+            ),
+          ],
         );
       case UiClipSource_Midi(:final patternId):
         final pattern = projectState.patterns[patternId];

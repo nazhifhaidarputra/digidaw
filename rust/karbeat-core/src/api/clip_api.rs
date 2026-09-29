@@ -1,6 +1,7 @@
 use crate::context::DawContext;
-use crate::core::history::actions::ClipEditRecorder;
-use crate::core::project::clip::{Clip, ClipSourceType, ResizeEdge};
+use crate::core::history::actions::{ClipEditRecorder, ClipsMadeUnique};
+use crate::core::project::clip::{Clip, ClipSourceType, MadeUnique, ResizeEdge};
+use crate::core::project::envelope::GainEnvelope;
 use crate::shared::id::*;
 
 /// Resolves a clip through its track and maps the borrowed clip value.
@@ -239,4 +240,42 @@ pub fn batch_duplicate_clip_groups(
     ctx.broadcast_track_graph();
 
     Ok(duplicated)
+}
+
+/// Gives selected clips their own copies of the waveforms or patterns they share (hard copy),
+/// as one reversible operation. Clips whose content is already unique are left unchanged.
+pub fn make_clips_unique(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    clip_ids: Vec<ClipId>,
+) -> anyhow::Result<MadeUnique> {
+    let recorder = ClipEditRecorder::begin(&ctx.app_state, "Make Clips Unique", &[], &clip_ids);
+    let made = ctx.app_state.make_clips_unique(track_id, &clip_ids)?;
+    if made.clips.is_empty() {
+        return Ok(made);
+    }
+    let clips = recorder.finish(&mut ctx.app_state);
+    ctx.push_history(ClipsMadeUnique::new(clips, &made));
+
+    if made.sources.is_empty() {
+        ctx.broadcast_track_graph();
+    } else {
+        ctx.broadcast_full_graph();
+    }
+    Ok(made)
+}
+
+/// Replaces an audio clip's own gain envelope as one reversible operation.
+pub fn set_clip_envelope(
+    ctx: &mut DawContext,
+    clip_id: ClipId,
+    envelope: GainEnvelope,
+) -> anyhow::Result<Clip> {
+    let recorder = ClipEditRecorder::begin(&ctx.app_state, "Edit Clip Envelope", &[], &[clip_id]);
+    let clip = ctx.app_state.set_clip_envelope(clip_id, envelope)?;
+    let action = recorder.finish(&mut ctx.app_state);
+    ctx.push_history(action);
+
+    ctx.broadcast_track_graph();
+    Ok(clip)
 }

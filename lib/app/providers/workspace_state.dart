@@ -80,6 +80,9 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(false) bool snapToGrid,
 
+    /// Gain envelope shown and edited on audio clips in the timeline.
+    @Default(ClipEnvelopeView.none) ClipEnvelopeView clipEnvelopeView,
+
     @Default(false) bool showExportPanel,
 
     @Default(BrowserPanelState()) BrowserPanelState browserPanelState,
@@ -190,6 +193,15 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     if (state.gridSize != newSize) {
       state = state.copyWith(gridSize: newSize);
     }
+  }
+
+  /// Show [view] on audio clips, or hide envelopes when [view] is already shown.
+  void toggleClipEnvelopeView(ClipEnvelopeView view) {
+    state = state.copyWith(
+      clipEnvelopeView: state.clipEnvelopeView == view
+          ? ClipEnvelopeView.none
+          : view,
+    );
   }
 
   /// Toggle snap-to-grid on or off.
