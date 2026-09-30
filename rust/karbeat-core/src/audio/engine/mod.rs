@@ -9,6 +9,7 @@ mod metronome;
 mod modulation;
 mod routing;
 mod runtime;
+mod stretch_pool;
 mod telemetry;
 pub mod tests;
 mod transport;

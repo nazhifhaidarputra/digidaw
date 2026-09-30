@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/widgets/background_jobs_indicator.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/track/view/performance_monitor.dart';
 import 'package:karbeat/shared/enums/global.dart';
@@ -398,6 +399,9 @@ class DefaultControlPanel extends ConsumerWidget {
     // AspectRatio bounds constraint injection!
     builder.addWidget(
       SizedBox(height: itemHeight, child: const DawPerformanceMonitor()),
+    );
+    builder.addWidget(
+      SizedBox(height: itemHeight, child: const BackgroundJobsIndicator()),
     );
 
     builder.addDivider();

@@ -68,3 +68,8 @@ GUIDELINE.md
 
 # Local implementation handoff plans
 .phases/
+
+# Tempo detection model, fetched by scripts/fetch_beat_models.sh
+/assets/models/beat_this_small.onnx
+# The FP32 model is no longer used; keep a leftover copy out of git.
+/assets/models/beat_this.onnx

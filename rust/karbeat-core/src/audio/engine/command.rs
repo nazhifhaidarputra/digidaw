@@ -1128,6 +1128,10 @@ impl AudioEngine {
                 sample_rate,
                 buffer_size,
             } => {
+                // Stretchers run at the DSP rate; rebuilt only when it changes.
+                if let Some(rate) = sample_rate {
+                    self.voices.stretch_pool.prepare(rate);
+                }
                 let sr_changed = match sample_rate {
                     Some(val) => val != self.current_state.graph.sample_rate,
                     None => false,

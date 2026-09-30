@@ -11,7 +11,7 @@ import 'pattern.dart';
 import 'plugin.dart';
 import 'project.dart';
 
-// These functions are ignored because they are not marked as `pub`: `restore_loaded_project`
+// These functions are ignored because they are not marked as `pub`: `load_project_blocking`, `new_blank_project_blocking`, `restore_loaded_project`, `save_project_blocking`
 
 /// Save the currrent project to path_name
 Future<void> saveProject({required DawContext ctx, required String pathName}) =>

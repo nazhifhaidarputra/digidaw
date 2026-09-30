@@ -444,7 +444,7 @@ mod tests {
         ));
         let (endpoint, retirement) = endpoint.prepare_transfer().unwrap();
         // The production layout, including its stereo sidechain request.
-        let config = crate::api::external_plugin_api::hosted_processing_config(
+        let config = crate::audio::hosted_plugin::hosted_processing_config(
             karbeat_host::PluginKind::Effect,
             rate,
         );

@@ -472,6 +472,9 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
               final state = ref.read(trackListStateProvider);
               final currentSelectedIds = state.selectedClipIds;
+              // The track list's stretch mode stretches audio clips instead
+              // of trimming them.
+              final stretch = ref.read(workspaceStateProvider).resizeStretches;
 
               if (_currentAction == _DragAction.resizeRight) {
                 ref
@@ -481,6 +484,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       currentSelectedIds.toList(),
                       UiResizeEdge.right,
                       _previousSnappedDelta,
+                      stretch: stretch,
                     );
               } else if (_currentAction == _DragAction.resizeLeft) {
                 ref
@@ -490,6 +494,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       currentSelectedIds.toList(),
                       UiResizeEdge.left,
                       _previousSnappedDelta,
+                      stretch: stretch,
                     );
               }
 

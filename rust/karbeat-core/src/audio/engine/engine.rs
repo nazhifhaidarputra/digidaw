@@ -247,6 +247,8 @@ impl AudioEngine {
         let mut initial_state = AudioRenderState::default();
         initial_state.graph.sample_rate = sample_rate;
         initial_state.graph.buffer_size = buffer_size;
+        let mut voices = VoiceState::new();
+        voices.stretch_pool.prepare(sample_rate);
 
         Self {
             io: EngineIo {
@@ -259,7 +261,7 @@ impl AudioEngine {
             config: AudioEngineConfig::new(sample_rate, num_channels),
             processing_mode: ProcessingMode::Realtime,
             transport: TransportState::new(initial_bpm),
-            voices: VoiceState::new(),
+            voices,
             plugin_state: AudioPluginState::default(),
             mixer_state: AudioMixerState::default(),
             workspace: RenderWorkspace::new(buffer_size, num_channels),
@@ -383,6 +385,8 @@ impl AudioEngine {
             channels,
         )?;
 
+        let mut voices = VoiceState::for_export();
+        voices.stretch_pool.prepare(config.sample_rate);
         let mut engine = Self {
             io: EngineIo {
                 command_consumer,
@@ -394,7 +398,7 @@ impl AudioEngine {
             config,
             processing_mode: ProcessingMode::Offline,
             transport,
-            voices: VoiceState::for_export(),
+            voices,
             plugin_state,
             mixer_state,
             workspace,
@@ -937,6 +941,7 @@ impl AudioEngine {
         }
 
         self.voices.active_oneshots.clear();
+        self.voices.stretch_pool.end_block();
     }
 
     pub(super) fn trigger_live_note(
@@ -1823,6 +1828,7 @@ impl AudioEngine {
                         );
                         self.voices.prepare_audio_voice(
                             track.id,
+                            *clip_id,
                             clip_start,
                             clip_length,
                             clip_offset,
@@ -1832,6 +1838,7 @@ impl AudioEngine {
                             start_time,
                             end_time,
                             self.config.sample_rate,
+                            self.transport.bpm,
                         );
                     }
                 }

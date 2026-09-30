@@ -11,6 +11,7 @@ import 'pattern.dart';
 import 'project.dart';
 part 'track.freezed.dart';
 
+// These functions are ignored because they are not marked as `pub`: `add_midi_track_with_generator_id_blocking`, `delete_track_blocking`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
 Future<UiClip> createClip({
@@ -37,18 +38,22 @@ Future<void> deleteClip({
   clipId: clipId,
 );
 
+/// Resizes a clip edge to `new_time_val`. With `stretch` (the timeline's stretch mode), an
+/// audio clip's audio is stretched to the new length instead of trimmed.
 Future<UiClip> resizeClip({
   required DawContext ctx,
   required int trackId,
   required int clipId,
   required UiResizeEdge edge,
   required int newTimeVal,
+  required bool stretch,
 }) => RustLib.instance.api.crateApiTrackResizeClip(
   ctx: ctx,
   trackId: trackId,
   clipId: clipId,
   edge: edge,
   newTimeVal: newTimeVal,
+  stretch: stretch,
 );
 
 Future<UiClip> moveClip({
@@ -124,19 +129,22 @@ Future<List<UiClip>> moveClipBatch({
   newTrackId: newTrackId,
 );
 
-/// Resize clips in batch by a delta amount
+/// Resize clips in batch by a delta amount. With `stretch` (the timeline's stretch mode),
+/// audio clips stretch their audio to the new length instead of trimming it.
 Future<List<UiClip>> resizeClipBatch({
   required DawContext ctx,
   required int trackId,
   required List<int> clipIds,
   required UiResizeEdge edge,
   required int deltaTicks,
+  required bool stretch,
 }) => RustLib.instance.api.crateApiTrackResizeClipBatch(
   ctx: ctx,
   trackId: trackId,
   clipIds: clipIds,
   edge: edge,
   deltaTicks: deltaTicks,
+  stretch: stretch,
 );
 
 /// Atomically duplicate a selected clip group at predetermined start times.

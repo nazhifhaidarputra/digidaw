@@ -12,14 +12,14 @@ use crate::{
     commands::MixerChannelTarget,
     core::project::{
         AudioTrack, AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
-        RoutingConnection, RoutingNode, SidechainRoute, TrackAutomationTarget,
-        audio_waveform::AudioSampleMode, equal_power,
+        RoutingConnection, RoutingNode, SidechainRoute, TrackAutomationTarget, equal_power,
     },
     shared::BusId,
 };
 
-/// Unified entry point to render an audio waveform slice.
-/// Safely delegates to the correct DSP algorithm based on the chosen sample mode.
+/// Renders an audio waveform slice by reading the source directly at `step` source frames per
+/// output frame, with Hermite interpolation. Pitch follows the speed; pitch-preserving stretch
+/// runs through a realtime stretcher before this point.
 ///
 /// `gain(frame, read_pos)` is the gain of the `frame`-th frame rendered by this call, read from
 /// source frame `read_pos`. When looping with a `loop_crossfade` of X frames, the last X frames of
@@ -31,7 +31,6 @@ use crate::{
     reason = "the real-time render path passes independent preallocated state explicitly"
 )]
 pub fn render_audio_waveform(
-    mode: &AudioSampleMode,
     source_buffer: &[f32],
     src_channels: usize,
     target_slice: &mut [f32],
@@ -44,96 +43,87 @@ pub fn render_audio_waveform(
     base_volume: f32,
     mut gain: impl FnMut(u32, f64) -> f32,
 ) {
-    match mode {
-        // For default and resampled mode, we use pointer
-        // calculation and hermite interpolation
-        // to read the scratch buffer
-        AudioSampleMode::Default | AudioSampleMode::Resampled => {
-            let mut frames_written: u32 = 0;
-            let bounds = LoopBounds::new(is_looping, loop_len, loop_crossfade);
+    {
+        let mut frames_written: u32 = 0;
+        let bounds = LoopBounds::new(is_looping, loop_len, loop_crossfade);
 
-            if target_channels == 2 {
-                let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
+        if target_channels == 2 {
+            let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
 
-                for chunk in simd_chunks {
-                    let mut s = [0.0; 16];
-                    let mut f = [0.0; 16];
+            for chunk in simd_chunks {
+                let mut s = [0.0; 16];
+                let mut f = [0.0; 16];
 
-                    // Let LLVM pipeline the scalar interpolations
-                    for i in 0..8 {
-                        let rp = bounds
-                            .read_pos(*source_read_index, f64::from(frames_written + i) * step);
-                        let s_frame = bounds.sample(source_buffer, rp, src_channels);
-                        let frame_gain = gain(frames_written + i, rp) * base_volume;
+                // Let LLVM pipeline the scalar interpolations
+                for i in 0..8 {
+                    let rp =
+                        bounds.read_pos(*source_read_index, f64::from(frames_written + i) * step);
+                    let s_frame = bounds.sample(source_buffer, rp, src_channels);
+                    let frame_gain = gain(frames_written + i, rp) * base_volume;
 
-                        s[i as usize * 2] = s_frame[0];
-                        s[i as usize * 2 + 1] = s_frame[1];
-                        f[i as usize * 2] = frame_gain;
-                        f[i as usize * 2 + 1] = frame_gain;
-                    }
-
-                    let samples = f32x16::new(s);
-                    let fades = f32x16::new(f);
-                    let mut out_v = f32x16::new(*chunk);
-
-                    out_v += samples * fades;
-                    *chunk = out_v.to_array();
-
-                    frames_written += 8;
+                    s[i as usize * 2] = s_frame[0];
+                    s[i as usize * 2 + 1] = s_frame[1];
+                    f[i as usize * 2] = frame_gain;
+                    f[i as usize * 2 + 1] = frame_gain;
                 }
 
-                for (left, right) in remaining_samples.iter_mut().tuples::<(_, _)>() {
-                    let rp0 = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
-                    let s0 = bounds.sample(source_buffer, rp0, src_channels);
-                    let gain0 = gain(frames_written, rp0) * base_volume;
+                let samples = f32x16::new(s);
+                let fades = f32x16::new(f);
+                let mut out_v = f32x16::new(*chunk);
 
-                    *left += s0[0] * gain0;
-                    *right += s0[1] * gain0;
-                    frames_written += 1;
-                }
-            } else {
-                // Non-stereo fallback processing 16 mono frames at a time
-                let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
-                for chunk in simd_chunks {
-                    let mut s = [0.0; 16];
-                    let mut f = [0.0; 16];
+                out_v += samples * fades;
+                *chunk = out_v.to_array();
 
-                    for i in 0..16 {
-                        let rp = bounds
-                            .read_pos(*source_read_index, f64::from(frames_written + i) * step);
-
-                        s[i as usize] = bounds.sample(source_buffer, rp, src_channels)[0];
-                        f[i as usize] = gain(frames_written + i, rp) * base_volume;
-                    }
-
-                    let samples = f32x16::new(s);
-                    let fades = f32x16::new(f);
-                    let mut out_v = f32x16::new(*chunk);
-
-                    out_v += samples * fades;
-                    *chunk = out_v.to_array();
-
-                    frames_written += 16;
-                }
-
-                for sample in remaining_samples {
-                    let rp = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
-
-                    let s0 = bounds.sample(source_buffer, rp, src_channels);
-                    let gain0 = gain(frames_written, rp) * base_volume;
-
-                    *sample += s0[0] * gain0;
-                    frames_written += 1;
-                }
+                frames_written += 8;
             }
 
-            // Advance the read pointer safely
-            *source_read_index =
-                bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
+            for (left, right) in remaining_samples.iter_mut().tuples::<(_, _)>() {
+                let rp0 = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
+                let s0 = bounds.sample(source_buffer, rp0, src_channels);
+                let gain0 = gain(frames_written, rp0) * base_volume;
+
+                *left += s0[0] * gain0;
+                *right += s0[1] * gain0;
+                frames_written += 1;
+            }
+        } else {
+            // Non-stereo fallback processing 16 mono frames at a time
+            let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
+            for chunk in simd_chunks {
+                let mut s = [0.0; 16];
+                let mut f = [0.0; 16];
+
+                for i in 0..16 {
+                    let rp =
+                        bounds.read_pos(*source_read_index, f64::from(frames_written + i) * step);
+
+                    s[i as usize] = bounds.sample(source_buffer, rp, src_channels)[0];
+                    f[i as usize] = gain(frames_written + i, rp) * base_volume;
+                }
+
+                let samples = f32x16::new(s);
+                let fades = f32x16::new(f);
+                let mut out_v = f32x16::new(*chunk);
+
+                out_v += samples * fades;
+                *chunk = out_v.to_array();
+
+                frames_written += 16;
+            }
+
+            for sample in remaining_samples {
+                let rp = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
+
+                let s0 = bounds.sample(source_buffer, rp, src_channels);
+                let gain0 = gain(frames_written, rp) * base_volume;
+
+                *sample += s0[0] * gain0;
+                frames_written += 1;
+            }
         }
-        AudioSampleMode::Stretch => {
-            // TODO: Implement WSOLA or Granular Engine logic
-        }
+
+        // Advance the read pointer safely
+        *source_read_index = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
     }
 }
 
@@ -177,7 +167,7 @@ impl LoopBounds {
 
     /// Samples the frame at `rp`, blending in the loop start inside the loop-crossfade region.
     #[inline(always)]
-    fn sample(&self, buffer: &[f32], rp: f64, channels: usize) -> [f32; 2] {
+    pub fn sample(&self, buffer: &[f32], rp: f64, channels: usize) -> [f32; 2] {
         let frame = sample_waveform_dasp(buffer, rp, channels);
         let fade_start = self.loop_end - self.crossfade;
         if self.crossfade <= 0.0 || rp < fade_start {

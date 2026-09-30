@@ -1,18 +1,31 @@
-use karbeat_host::{ControlRetirement, PreparedProcessor, ProcessingConfig};
+use karbeat_host::{ControlRetirement, PluginKind, PreparedProcessor, ProcessingConfig};
 
 use crate::{audio::event::PluginTarget, shared::TrackId};
 
 /// Upper bound for DSP to release a control transfer after its receipt resolved.
 const CONTROL_RETIREMENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
 
+/// Realtime layout used to prepare a hosted plugin for the engine's stereo graph.
+///
+/// Every hosted plugin requests a stereo sidechain so that routes added after preparation reach
+/// its aux input without re-preparing it. Backends ignore the request when the plugin has no
+/// auxiliary input bus.
+pub fn hosted_processing_config(kind: PluginKind, sample_rate: f64) -> ProcessingConfig {
+    ProcessingConfig {
+        sample_rate,
+        max_block_size: 65_536,
+        main_input_channels: if kind == PluginKind::Instrument { 0 } else { 2 },
+        main_output_channels: 2,
+        sidechain_channels: 2,
+        offline: false,
+    }
+}
+
 /// Destroys a control transfer's payload on this worker once its receipt has resolved.
 ///
 /// Call after the receipt resolves, whatever its result. A retirement dropped before DSP releases
 /// the transfer must leak the payload, including any rejected processor endpoint.
-pub(crate) fn retire_control_transfer<T: Send>(
-    retirement: &mut ControlRetirement<T>,
-    operation: &str,
-) {
+pub fn retire_control_transfer<T: Send>(retirement: &mut ControlRetirement<T>, operation: &str) {
     if !retirement.collect_within(CONTROL_RETIREMENT_TIMEOUT) {
         log::warn!("{operation} control transfer was not returned after acknowledgement");
     }
@@ -58,7 +71,7 @@ impl HostedInstallReceipt {
 }
 
 pub struct HostedPluginInstall {
-    pub(crate) target: PluginTarget,
+    pub target: PluginTarget,
     pub(crate) generator_track: Option<TrackId>,
     pub(crate) registry_id: u32,
     pub(crate) config: ProcessingConfig,
@@ -106,7 +119,7 @@ impl HostedPluginInstall {
         )
     }
 
-    pub(crate) fn replacing_missing(mut self) -> Self {
+    pub fn replacing_missing(mut self) -> Self {
         self.replace_missing = true;
         self
     }
@@ -277,7 +290,7 @@ impl HostedPluginRemoval {
         )
     }
 
-    pub(crate) fn with_bus(mut self, bus: Option<crate::shared::BusId>) -> Self {
+    pub fn with_bus(mut self, bus: Option<crate::shared::BusId>) -> Self {
         self.bus = bus;
         self
     }

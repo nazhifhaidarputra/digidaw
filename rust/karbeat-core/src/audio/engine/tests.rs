@@ -1244,3 +1244,92 @@ fn update_audio_source_swaps_only_that_waveform() {
             .contains_key(unknown)
     );
 }
+
+/// An audio clip sounds both in live song playback and in an export built from its snapshot.
+#[test]
+fn audio_clip_plays_live_and_in_export() {
+    use crate::core::project::{AudioWaveform, clip::ClipSourceType};
+    use std::sync::Arc;
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(64);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(64);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+
+    let mut app = ApplicationState::default();
+    let samples = vec![0.5_f32; 96_000 * 2];
+    let bytes: &[u8] = bytemuck::cast_slice(&samples);
+    let mut map = memmap2::MmapOptions::new()
+        .len(bytes.len())
+        .map_anon()
+        .expect("map");
+    map.copy_from_slice(bytes);
+    let buffer = Arc::new(map.make_read_only().expect("ro"));
+    let source = app.asset_library.source_map.insert_with_key(|id| {
+        Arc::new(AudioWaveform {
+            id: Some(id),
+            buffer: Some(buffer),
+            sample_rate: 48_000,
+            channels: 2,
+            duration: 2.0,
+            trim_end: 96_000,
+            ..AudioWaveform::default()
+        })
+    });
+    let track = app.add_new_audio_track().id;
+    app.create_new_clip(Some(source.to_u64()), ClipSourceType::Audio, track, 0)
+        .expect("clip");
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app),
+    });
+    engine.process_command(AudioCommand::SetPlaybackMode(
+        crate::audio::engine::PlaybackMode::Song,
+    ));
+    engine.process_command(AudioCommand::SetPlayhead(0));
+    engine.process_command(AudioCommand::SetPlaying(true));
+    let mut live = vec![0.0_f32; 4_096 * 2];
+    for chunk in live.chunks_mut(1_024) {
+        engine.process(chunk);
+    }
+    let rms = |x: &[f32]| (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
+    assert!(rms(&live) > 0.2, "live rms {}", rms(&live));
+
+    let (mut producer, consumer) = RingBuffer::<AudioCommand>::new(16);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let mut offline = AudioEngine::from_export_snapshot(
+        engine.export_snapshot(),
+        &PluginRegistry::new_with_defaults(),
+        2,
+        consumer,
+        position_producer,
+        feedback_producer,
+    )
+    .expect("snapshot");
+    for command in [
+        AudioCommand::UpdateAudioConfig {
+            sample_rate: Some(44_100),
+            buffer_size: Some(4_096),
+        },
+        AudioCommand::SetPlaybackMode(crate::audio::engine::PlaybackMode::Song),
+        AudioCommand::SetPlayhead(0),
+        AudioCommand::SetPlaying(true),
+    ] {
+        assert!(producer.push(command).is_ok());
+    }
+    offline.process(&mut []);
+    let mut exported = vec![0.0_f32; 4_096 * 2];
+    offline.process(&mut exported);
+    assert!(rms(&exported) > 0.2, "export rms {}", rms(&exported));
+}

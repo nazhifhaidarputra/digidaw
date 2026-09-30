@@ -1,0 +1,54 @@
+[package]
+name = "karbeat-core-api"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-only"
+description = "UI-independent API layer between Karbeat's core modules and its UI bridges"
+
+[dependencies]
+karbeat-analysis.workspace = true
+karbeat-core.workspace = true
+karbeat-dsp.workspace = true
+karbeat-host.workspace = true
+karbeat-plugins.workspace = true
+karbeat-plugin-api.workspace = true
+karbeat-plugin-types.workspace = true
+karbeat-utils.workspace = true
+
+anyhow.workspace = true
+bytemuck.workspace = true
+futures-lite.workspace = true
+hashbrown.workspace = true
+indexmap.workspace = true
+jiff.workspace = true
+log.workspace = true
+memmap2.workspace = true
+parking_lot.workspace = true
+rtrb.workspace = true
+serde_json.workspace = true
+sysinfo = "0.38.4"
+rayon.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+triple_buffer.workspace = true
+
+[dev-dependencies]
+hound.workspace = true
+slotmap.workspace = true
+karbeat-vst3.workspace = true
+rmp-serde.workspace = true
+shuttle.workspace = true
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+glib.workspace = true
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+karbeat-host-api.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "vst3_core"
+harness = false

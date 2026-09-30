@@ -80,6 +80,9 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(false) bool snapToGrid,
 
+    /// Resizing an audio clip in the timeline stretches its audio instead of trimming it.
+    @Default(false) bool resizeStretches,
+
     /// Gain envelope shown and edited on audio clips in the timeline.
     @Default(ClipEnvelopeView.none) ClipEnvelopeView clipEnvelopeView,
 
@@ -207,6 +210,11 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   /// Toggle snap-to-grid on or off.
   void toggleSnapToGrid() {
     state = state.copyWith(snapToGrid: !state.snapToGrid);
+  }
+
+  /// Toggle whether resizing audio clips stretches their audio.
+  void toggleResizeStretches() {
+    state = state.copyWith(resizeStretches: !state.resizeStretches);
   }
 
   // ------------------------------------------------------------------

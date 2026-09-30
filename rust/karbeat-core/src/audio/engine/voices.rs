@@ -4,7 +4,10 @@ use std::sync::Arc;
 
 use crate::{
     audio::{
-        engine::helper::{LoopBounds, calc_fade, render_audio_waveform},
+        engine::{
+            helper::{LoopBounds, calc_fade, render_audio_waveform},
+            stretch_pool::{StretchPool, StretchRate, StretchSource},
+        },
         render_state::AudioPluginState,
     },
     core::project::{
@@ -12,7 +15,7 @@ use crate::{
         audio_waveform::AudioSampleMode, equal_power,
     },
     shared::constants::f64::PPQ,
-    shared::{GeneratorId, TrackId},
+    shared::{ClipId, GeneratorId, TrackId},
 };
 
 /// Borrowed parts of an audio graph used to decide which sounding notes changed.
@@ -413,6 +416,8 @@ impl VoiceState {
 /// so a voice never drops the last reference to a waveform or envelope on the audio thread.
 pub struct AudioVoice {
     pub track_id: TrackId,
+    /// Clip being played; with the track, it identifies the voice across blocks.
+    pub clip_id: ClipId,
     /// Waveform being played; keeps its sample buffer alive.
     pub waveform: Arc<AudioWaveform>,
     /// Envelope of the clip, stacked on top of the waveform envelope.
@@ -586,6 +591,8 @@ pub(super) struct VoiceState {
     pub active_generators: Vec<GeneratorVoice>,
     pub active_oneshots: Vec<AudioVoice>,
     pub preview_voices: Vec<PreviewVoice>,
+    /// Realtime stretchers for Stretch-mode clips; prepared with the engine sample rate.
+    pub stretch_pool: StretchPool,
 }
 
 impl VoiceState {
@@ -631,6 +638,7 @@ impl VoiceState {
             active_generators: Vec::with_capacity(32),
             active_oneshots: Vec::with_capacity(16),
             preview_voices: Vec::with_capacity(4),
+            stretch_pool: StretchPool::empty(),
         }
     }
 
@@ -639,6 +647,7 @@ impl VoiceState {
             active_generators: Vec::with_capacity(64),
             active_oneshots: Vec::with_capacity(32),
             preview_voices: Vec::with_capacity(4),
+            stretch_pool: StretchPool::empty(),
         }
     }
 
@@ -726,9 +735,13 @@ impl VoiceState {
         let mut did_render = false;
         let buffer_frames = output.len() / channels;
         let declick_samples = (sample_rate as f32 * 0.002) as u32;
+        let Self {
+            active_oneshots,
+            stretch_pool,
+            ..
+        } = self;
 
-        for voice in self
-            .active_oneshots
+        for voice in active_oneshots
             .iter_mut()
             .filter(|voice| voice.track_id == track_id)
         {
@@ -739,14 +752,10 @@ impl VoiceState {
             };
             let source_channels = waveform.channels as usize;
 
-            let playback_rate = match waveform.sample_mode {
-                AudioSampleMode::Default => 1.0,
-                AudioSampleMode::Stretch | AudioSampleMode::Resampled => {
-                    (bpm / waveform.original_bpm.max(1.0)) as f64
-                }
-            };
+            let playback_rate = waveform.tempo_rate(bpm);
 
-            let step = waveform.sample_rate as f64 / sample_rate as f64 * playback_rate;
+            let pitch_step = waveform.sample_rate as f64 / sample_rate as f64;
+            let step = pitch_step * playback_rate;
             let source_frames = (source.len() / source_channels) as f64;
             let is_looping = waveform.is_looping && source_frames > 0.0;
             let loop_crossfade = if is_looping {
@@ -793,20 +802,57 @@ impl VoiceState {
 
             let start = voice.output_offset_samples * channels;
             let end = start + frames_to_process * channels;
-            render_audio_waveform(
-                &waveform.sample_mode,
-                source,
-                source_channels,
-                &mut output[start..end],
-                channels,
-                &mut voice.source_read_index,
-                step,
-                is_looping,
-                source_frames,
-                loop_crossfade,
-                1.0,
-                |frame, read_pos| gain.at(frame, read_pos),
-            );
+            let level = waveform.playback_gain();
+            let bounds = LoopBounds::new(is_looping, source_frames, loop_crossfade);
+            // Stretch mode off its own tempo keeps the pitch through a realtime stretcher;
+            // when every stretcher is busy it falls back to resampling below.
+            let stretched = waveform.sample_mode == AudioSampleMode::Stretch
+                && (playback_rate - 1.0).abs() > 1e-9
+                && stretch_pool.render(
+                    (voice.track_id, voice.clip_id),
+                    content_start,
+                    StretchRate { step, pitch_step },
+                    &StretchSource {
+                        buffer: source,
+                        channels: source_channels,
+                        bounds,
+                        frames: source_frames,
+                        is_looping,
+                    },
+                    frames_to_process,
+                    |index, frame| {
+                        let read_pos =
+                            bounds.read_pos(0.0, (content_start + index as u64) as f64 * step);
+                        let frame_gain = gain.at(index as u32, read_pos) * level;
+                        let at = start + index * channels;
+                        match output.get_mut(at..at + channels) {
+                            Some([left, right, ..]) => {
+                                *left += frame[0] * frame_gain;
+                                *right += frame[1] * frame_gain;
+                            }
+                            Some([mono]) => *mono += frame[0] * frame_gain,
+                            _ => {}
+                        }
+                    },
+                );
+            if stretched {
+                voice.source_read_index =
+                    bounds.read_pos(voice.source_read_index, frames_to_process as f64 * step);
+            } else {
+                render_audio_waveform(
+                    source,
+                    source_channels,
+                    &mut output[start..end],
+                    channels,
+                    &mut voice.source_read_index,
+                    step,
+                    is_looping,
+                    source_frames,
+                    loop_crossfade,
+                    level,
+                    |frame, read_pos| gain.at(frame, read_pos),
+                );
+            }
             voice.clip_elapsed_samples += frames_to_process as u32;
             voice.output_offset_samples = 0;
         }
@@ -860,7 +906,6 @@ impl VoiceState {
             let waveform_frames = source_frames as u64;
             let mut cursor = EnvelopeCursor::seek(envelope, voice.current_frame as u64);
             render_audio_waveform(
-                &voice.waveform.sample_mode,
                 source,
                 source_channels,
                 &mut output[..frames_to_process * channels],
@@ -870,7 +915,7 @@ impl VoiceState {
                 is_looping,
                 source_frames,
                 loop_crossfade,
-                voice.volume,
+                voice.volume * voice.waveform.playback_gain(),
                 |_, read_pos| {
                     if !shapes_gain {
                         return 1.0;
@@ -903,6 +948,7 @@ impl VoiceState {
     pub fn prepare_audio_voice(
         &mut self,
         track_id: TrackId,
+        clip_id: ClipId,
         clip_start: u32,
         clip_loop_length: u32,
         clip_offset: u32,
@@ -912,6 +958,7 @@ impl VoiceState {
         buffer_start: u32,
         buffer_end: u32,
         sample_rate: u32,
+        bpm: f32,
     ) {
         let render_start = buffer_start.max(clip_start);
         let render_end = buffer_end.min(clip_start + clip_loop_length);
@@ -925,8 +972,10 @@ impl VoiceState {
             return;
         }
         let effective_position = clip_elapsed_samples + clip_offset;
-        let source_position =
-            effective_position as f64 * waveform.sample_rate as f64 / sample_rate as f64;
+        // Same rate the render advances at, so consecutive blocks continue seamlessly.
+        let source_position = effective_position as f64 * waveform.sample_rate as f64
+            / sample_rate as f64
+            * waveform.tempo_rate(bpm);
         let Some(source) = waveform.get_playable_buffer() else {
             return;
         };
@@ -943,6 +992,7 @@ impl VoiceState {
 
         self.active_oneshots.push(AudioVoice {
             track_id,
+            clip_id,
             waveform: Arc::clone(waveform),
             clip_envelope: clip_envelope.cloned(),
             output_offset_samples,
@@ -1105,7 +1155,7 @@ mod clip_gain_tests {
 
     use super::{ClipSpan, NeighbourCrossfade, VoiceState};
     use crate::core::project::{AudioWaveform, EnvelopePoint, Fade, GainEnvelope};
-    use crate::shared::TrackId;
+    use crate::shared::{ClipId, TrackId};
 
     const SAMPLE_RATE: u32 = 48_000;
     const BLOCK: usize = 256;
@@ -1149,6 +1199,7 @@ mod clip_gain_tests {
         let mut voices = VoiceState::new();
         voices.prepare_audio_voice(
             track,
+            ClipId::default(),
             0,
             10_000,
             0,
@@ -1158,6 +1209,7 @@ mod clip_gain_tests {
             0,
             BLOCK as u32,
             SAMPLE_RATE,
+            120.0,
         );
         let mut output = vec![0.0; BLOCK * 2];
         voices.render_oneshots(SAMPLE_RATE, track, &mut output, 2, 120.0);
@@ -1259,5 +1311,160 @@ mod clip_gain_tests {
         };
         let left = render(&waveform, None, crossfade);
         assert!(left.iter().all(|sample| *sample == 0.0));
+    }
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "tempo playback tests fail immediately on fixture errors"
+)]
+mod tempo_playback_tests {
+    use std::sync::Arc;
+
+    use memmap2::MmapOptions;
+
+    use super::{NeighbourCrossfade, VoiceState};
+    use crate::core::project::{AudioWaveform, audio_waveform::AudioSampleMode};
+    use crate::shared::{ClipId, TrackId};
+
+    const ENGINE_RATE: u32 = 48_000;
+
+    /// A stereo `frames`-frame source recorded at `rate` and 100 BPM, played in `mode`.
+    fn waveform(
+        mode: AudioSampleMode,
+        rate: u32,
+        frames: usize,
+        sample: impl Fn(usize) -> f32,
+    ) -> Arc<AudioWaveform> {
+        let samples: Vec<f32> = (0..frames).flat_map(|frame| [sample(frame); 2]).collect();
+        let bytes: &[u8] = bytemuck::cast_slice(&samples);
+        let mut map = MmapOptions::new()
+            .len(bytes.len())
+            .map_anon()
+            .expect("anonymous map");
+        map.copy_from_slice(bytes);
+        Arc::new(AudioWaveform {
+            buffer: Some(Arc::new(map.make_read_only().expect("read-only map"))),
+            sample_rate: rate,
+            channels: 2,
+            original_bpm: Some(100.0),
+            sample_mode: mode,
+            ..AudioWaveform::default()
+        })
+    }
+
+    fn sine(mode: AudioSampleMode, frequency: f32) -> Arc<AudioWaveform> {
+        waveform(mode, ENGINE_RATE, ENGINE_RATE as usize * 2, |frame| {
+            (frame as f32 * frequency * std::f32::consts::TAU / ENGINE_RATE as f32).sin() * 0.5
+        })
+    }
+
+    /// Plays a clip at the project start at `bpm`, one engine block per `blocks` entry,
+    /// keeping voice state across blocks as the engine does. Returns the left channel.
+    fn play(waveform: &Arc<AudioWaveform>, bpm: f32, blocks: &[u32]) -> Vec<f32> {
+        let track = TrackId::default();
+        let mut voices = VoiceState::new();
+        voices.stretch_pool.prepare(ENGINE_RATE);
+        let mut output = Vec::new();
+        let mut start = 0;
+        for &frames in blocks {
+            voices.prepare_audio_voice(
+                track,
+                ClipId::default(),
+                0,
+                200_000,
+                0,
+                waveform,
+                None,
+                NeighbourCrossfade::default(),
+                start,
+                start + frames,
+                ENGINE_RATE,
+                bpm,
+            );
+            let mut block = vec![0.0; frames as usize * 2];
+            voices.render_oneshots(ENGINE_RATE, track, &mut block, 2, bpm);
+            output.extend(block.chunks(2).map(|frame| frame[0]));
+            voices.active_oneshots.clear();
+            voices.stretch_pool.end_block();
+            start += frames;
+        }
+        output
+    }
+
+    /// Lag, in frames, of the strongest periodicity between 40 and 400 frames.
+    fn period(samples: &[f32]) -> usize {
+        (40..400)
+            .max_by(|a, b| {
+                let correlation = |lag: usize| -> f32 {
+                    samples
+                        .iter()
+                        .zip(&samples[lag..])
+                        .map(|(x, y)| x * y)
+                        .sum()
+                };
+                correlation(*a).total_cmp(&correlation(*b))
+            })
+            .unwrap_or(0)
+    }
+
+    fn rms(samples: &[f32]) -> f32 {
+        (samples.iter().map(|x| x * x).sum::<f32>() / samples.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn tempo_following_playback_continues_across_blocks() {
+        for mode in [AudioSampleMode::Resampled, AudioSampleMode::Stretch] {
+            let waveform = sine(mode, 220.0);
+            let whole = play(&waveform, 150.0, &[4_096, 4_096]);
+            let split = play(&waveform, 150.0, &[1_000, 1_000, 2_096, 4_096]);
+            for (index, (a, b)) in whole.iter().zip(&split).enumerate() {
+                assert!((a - b).abs() < 1e-4, "{mode:?} frame {index}: {a} vs {b}");
+            }
+        }
+    }
+
+    #[test]
+    fn stretch_keeps_the_pitch_and_level() {
+        // 100 BPM source in a 150 BPM project: 1.5x speed.
+        let output = play(&sine(AudioSampleMode::Stretch, 440.0), 150.0, &[4_096; 6]);
+        let body = &output[2_048..];
+        // 440 Hz keeps its period of about 109 frames; resampling would make it 73.
+        let period = period(body);
+        assert!(period.abs_diff(109) <= 1, "period {period}");
+        assert!(rms(body) > 0.3, "rms {}", rms(body));
+    }
+
+    /// Frame of the first loud sample, if any.
+    fn onset(samples: &[f32]) -> Option<usize> {
+        samples.iter().position(|sample| sample.abs() > 0.25)
+    }
+
+    #[test]
+    fn stretch_speed_is_the_tempo_ratio_regardless_of_sample_rates() {
+        // Recorded at 44.1 kHz and played by a 48 kHz engine: a click half a second in.
+        let click = |mode| {
+            waveform(mode, 44_100, 44_100, |frame| {
+                if (22_050..22_150).contains(&frame) {
+                    0.9
+                } else {
+                    0.0
+                }
+            })
+        };
+        let blocks = [2_048; 16];
+        let default = onset(&play(&click(AudioSampleMode::Default), 100.0, &blocks));
+        let at_own_tempo = onset(&play(&click(AudioSampleMode::Stretch), 100.0, &blocks));
+        let faster = onset(&play(&click(AudioSampleMode::Stretch), 150.0, &blocks));
+
+        // Half a second at 48 kHz, in both modes at the source's own tempo.
+        assert_eq!(default, Some(24_000));
+        assert_eq!(at_own_tempo, default);
+        // At 1.5x the tempo the click comes 1.5x sooner, within Rubber Band's transient
+        // smearing.
+        let faster = faster.expect("stretched click");
+        assert!(faster.abs_diff(16_000) < 256, "click at {faster}");
     }
 }

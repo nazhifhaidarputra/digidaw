@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'audio_analysis.dart';
 import 'automation.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -13,7 +14,8 @@ import 'plugin.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
+// These functions are ignored because they are not marked as `pub`: `export_project_blocking`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -82,6 +84,7 @@ Future<Map<int, UiGeneratorInstance>> getGeneratorList({
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
+/// Decoding runs without holding the project lock; only the final insert takes it.
 Future<int> addAudioSource({
   required DawContext ctx,
   required String filePath,
@@ -116,6 +119,8 @@ Stream<double> exportProjectFlutter({
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>>
 abstract class AudioWaveformUiForAudioProperties
     implements RustOpaqueInterface {
+  UiBeatGrid? get beatGrid;
+
   WaveformHandle get bufferHandle;
 
   int get channels;
@@ -126,7 +131,11 @@ abstract class AudioWaveformUiForAudioProperties
 
   int get fineTune;
 
+  bool get fitted;
+
   int? get id;
+
+  bool get invert;
 
   bool get isLooping;
 
@@ -135,6 +144,12 @@ abstract class AudioWaveformUiForAudioProperties
   String get name;
 
   bool get normalized;
+
+  double? get originalBpm;
+
+  bool get renderReady;
+
+  bool get reverse;
 
   int get rootNote;
 
@@ -146,6 +161,10 @@ abstract class AudioWaveformUiForAudioProperties
 
   int get trimStart;
 
+  bool get warp;
+
+  set beatGrid(UiBeatGrid? beatGrid);
+
   set bufferHandle(WaveformHandle bufferHandle);
 
   set channels(int channels);
@@ -156,7 +175,11 @@ abstract class AudioWaveformUiForAudioProperties
 
   set fineTune(int fineTune);
 
+  set fitted(bool fitted);
+
   set id(int? id);
+
+  set invert(bool invert);
 
   set isLooping(bool isLooping);
 
@@ -165,6 +188,12 @@ abstract class AudioWaveformUiForAudioProperties
   set name(String name);
 
   set normalized(bool normalized);
+
+  set originalBpm(double? originalBpm);
+
+  set renderReady(bool renderReady);
+
+  set reverse(bool reverse);
 
   set rootNote(int rootNote);
 
@@ -175,6 +204,8 @@ abstract class AudioWaveformUiForAudioProperties
   set trimEnd(int trimEnd);
 
   set trimStart(int trimStart);
+
+  set warp(bool warp);
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>

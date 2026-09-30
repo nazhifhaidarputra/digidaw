@@ -39,7 +39,8 @@ DigiDAW follows a feature-driven modular structure. Keep domain logic, UI screen
 
 | Crate | Purpose |
 | --- | --- |
-| `karbeat-core` | Project model, commands, high-level APIs, file management, and audio engine ownership. |
+| `karbeat-core` | Project model, commands, file management, and audio engine ownership. |
+| `karbeat-core-api` | UI-independent API layer between the core modules and UI bridges: modules → core API → FFI. |
 | `karbeat-dsp` | DSP primitives. Keep this crate generic and reusable. |
 | `karbeat-flutter-ffi` | Flutter-facing DTOs and bridge functions. |
 | `karbeat-plugins` | First-party plugin implementations and manifest export. |
@@ -50,7 +51,7 @@ DigiDAW follows a feature-driven modular structure. Keep domain logic, UI screen
 
 Within the Rust workspace, respect crate boundaries:
 
-* User and project API behavior goes in `karbeat-core/src/api`.
+* User and project API behavior goes in `karbeat-core-api`. Core modules never depend on it.
 * Project domain state goes in `karbeat-core/src/core/project`.
 * Audio callback logic goes in `karbeat-core/src/audio`.
 * Generic DSP goes in `karbeat-dsp`.

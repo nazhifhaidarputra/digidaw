@@ -63,7 +63,7 @@ pub use names::{
     BusRecolored, BusRenamed, PatternRenamed, TrackRecolored, TrackRenamed, TracksReordered,
 };
 pub use notes::{NoteMove, NotesChanged, NotesMoved, NotesResized};
-pub use sources::SourceEnvelopeChanged;
+pub use sources::{SourceEnvelopeChanged, SourceTempo, SourceTempoChanged};
 pub use structure::{
     EffectBypassed, EffectMoved, EffectToggled, RoutingChanged, RoutingRecorder, StructureChanged,
     StructureRecorder,

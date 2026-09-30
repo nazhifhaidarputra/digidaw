@@ -4,9 +4,11 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/audio.dart';
+import 'api/audio_analysis.dart';
 import 'api/audio_settings.dart';
 import 'api/automation.dart';
 import 'api/external_plugins.dart';
+import 'api/jobs.dart';
 import 'api/logging.dart';
 import 'api/mitigation.dart';
 import 'api/mixer.dart';
@@ -221,6 +223,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<UiJobEvent> dco_decode_StreamSink_ui_job_event_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<UiPluginScanEvent>
   dco_decode_StreamSink_ui_plugin_scan_event_Sse(dynamic raw);
 
@@ -360,6 +367,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAutoSaveSettings dco_decode_box_autoadd_ui_auto_save_settings(dynamic raw);
 
   @protected
+  UiBeatGrid dco_decode_box_autoadd_ui_beat_grid(dynamic raw);
+
+  @protected
   UiExternalPluginDescriptor
   dco_decode_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
 
@@ -454,6 +464,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
@@ -721,6 +734,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_box_autoadd_ui_actual_device_stream_config(dynamic raw);
 
   @protected
+  UiBeatGrid? dco_decode_opt_box_autoadd_ui_beat_grid(dynamic raw);
+
+  @protected
   UiExternalPluginDescriptor?
   dco_decode_opt_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
 
@@ -909,6 +925,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAutoSaveSettings dco_decode_ui_auto_save_settings(dynamic raw);
 
   @protected
+  UiBeatGrid dco_decode_ui_beat_grid(dynamic raw);
+
+  @protected
   UiBus dco_decode_ui_bus(dynamic raw);
 
   @protected
@@ -965,6 +984,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw);
+
+  @protected
+  UiJobEvent dco_decode_ui_job_event(dynamic raw);
+
+  @protected
+  UiJobKind dco_decode_ui_job_kind(dynamic raw);
+
+  @protected
+  UiJobState dco_decode_ui_job_state(dynamic raw);
+
+  @protected
+  UiJobTarget dco_decode_ui_job_target(dynamic raw);
 
   @protected
   UiMadeUnique dco_decode_ui_made_unique(dynamic raw);
@@ -1274,6 +1305,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<UiJobEvent> sse_decode_StreamSink_ui_job_event_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<UiPluginScanEvent>
   sse_decode_StreamSink_ui_plugin_scan_event_Sse(SseDeserializer deserializer);
 
@@ -1447,6 +1483,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiBeatGrid sse_decode_box_autoadd_ui_beat_grid(SseDeserializer deserializer);
+
+  @protected
   UiExternalPluginDescriptor
   sse_decode_box_autoadd_ui_external_plugin_descriptor(
     SseDeserializer deserializer,
@@ -1571,6 +1610,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
 
   @protected
   List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
@@ -1886,6 +1928,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiBeatGrid? sse_decode_opt_box_autoadd_ui_beat_grid(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiExternalPluginDescriptor?
   sse_decode_opt_box_autoadd_ui_external_plugin_descriptor(
     SseDeserializer deserializer,
@@ -2124,6 +2171,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiBeatGrid sse_decode_ui_beat_grid(SseDeserializer deserializer);
+
+  @protected
   UiBus sse_decode_ui_bus(SseDeserializer deserializer);
 
   @protected
@@ -2196,6 +2246,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGeneratorInstanceType sse_decode_ui_generator_instance_type(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiJobEvent sse_decode_ui_job_event(SseDeserializer deserializer);
+
+  @protected
+  UiJobKind sse_decode_ui_job_kind(SseDeserializer deserializer);
+
+  @protected
+  UiJobState sse_decode_ui_job_state(SseDeserializer deserializer);
+
+  @protected
+  UiJobTarget sse_decode_ui_job_target(SseDeserializer deserializer);
 
   @protected
   UiMadeUnique sse_decode_ui_made_unique(SseDeserializer deserializer);
@@ -2567,6 +2629,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_job_event_Sse(
+    RustStreamSink<UiJobEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_ui_plugin_scan_event_Sse(
     RustStreamSink<UiPluginScanEvent> self,
     SseSerializer serializer,
@@ -2768,6 +2836,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_beat_grid(
+    UiBeatGrid self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_external_plugin_descriptor(
     UiExternalPluginDescriptor self,
     SseSerializer serializer,
@@ -2914,6 +2988,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_parameter_spec_dto(
     List<ParameterSpecDTO> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
     SseSerializer serializer,
   );
 
@@ -3284,6 +3364,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_ui_beat_grid(
+    UiBeatGrid? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_ui_external_plugin_descriptor(
     UiExternalPluginDescriptor? self,
     SseSerializer serializer,
@@ -3571,6 +3657,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_beat_grid(UiBeatGrid self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_bus(UiBus self, SseSerializer serializer);
 
   @protected
@@ -3665,6 +3754,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UiGeneratorInstanceType self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_ui_job_event(UiJobEvent self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_job_kind(UiJobKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_job_state(UiJobState self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_job_target(UiJobTarget self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_made_unique(UiMadeUnique self, SseSerializer serializer);

@@ -203,9 +203,13 @@ class _ClipRenderer extends ConsumerWidget {
             overrideOffset ??
             clip.offsetStartInTicks(tempo, projectSampleRate).toDouble();
 
-        // getSampleRate() is a sync opaque call — zero FFI overhead
+        // getSampleRate() and tempoRate() are sync opaque calls — zero FFI
+        // overhead. A tempo-following source plays faster or slower than 1:1, so
+        // a stretched clip shows its whole stretched audio.
         final sourceSamplesPerTick =
-            (60.0 / tempo) * (handle.getSampleRate() / 960.0);
+            (60.0 / tempo) *
+            (handle.getSampleRate() / 960.0) *
+            handle.tempoRate(projectBpm: tempo);
 
         final waveformColor = color.computeLuminance() > 0.5
             ? Colors.black.withAlpha(180) // Dark waveform for light tracks

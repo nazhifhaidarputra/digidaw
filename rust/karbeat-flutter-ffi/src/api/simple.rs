@@ -1,4 +1,5 @@
-use karbeat_core::{api, context::DawContext as CoreDawContext, init::init_engine};
+use karbeat_core::{context::DawContext as CoreDawContext, init::init_engine};
+use karbeat_core_api as api;
 #[cfg(target_os = "android")]
 use once_cell::sync::OnceCell;
 
@@ -13,6 +14,7 @@ pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
     init_logger();
     karbeat_core::core::mitigation::crash::install_panic_hook();
+    karbeat_core_api::jobs::set_runtime_provider(crate::api::jobs::frb_runtime_handle);
     log::info!("FRB Base Utilities Initialized");
 }
 

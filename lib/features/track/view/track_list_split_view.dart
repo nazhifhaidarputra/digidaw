@@ -366,6 +366,31 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ),
             ),
             const SizedBox(width: 8),
+            Tooltip(
+              message: 'Resizing audio clips stretches their audio',
+              child: TextButton.icon(
+                onPressed: () => ref
+                    .read(workspaceStateProvider.notifier)
+                    .toggleResizeStretches(),
+                icon: Icon(
+                  Icons.open_in_full,
+                  size: 16,
+                  color: workspaceState.resizeStretches
+                      ? colors.primary
+                      : colors.onSurfaceVariant,
+                ),
+                label: Text(
+                  'Stretch',
+                  style: TextStyle(
+                    color: workspaceState.resizeStretches
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
               "Move Step",
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),

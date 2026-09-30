@@ -3,6 +3,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/src/rust/api/jobs.dart';
+import 'package:karbeat/src/rust/api/audio_analysis.dart';
+import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/parameter_knob.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/track/services/gain_envelope_evaluator.dart';
@@ -104,7 +110,9 @@ class AudioPropertiesScreen extends ConsumerWidget {
                 sampleRate: props.sampleRate,
               ),
 
-              _OfflineEditControls(sampleMode: props.sampleMode),
+              _OfflineEditControls(sourceId: sourceId, props: props),
+
+              _TempoControls(sourceId: sourceId, props: props),
 
               // CONTROLS
               Container(
@@ -258,12 +266,13 @@ class _EnvelopeReadout extends StatelessWidget {
   }
 }
 
-/// Offline edit controls. Placeholders: offline processing is not
-/// implemented yet, so every control is disabled.
-class _OfflineEditControls extends StatelessWidget {
-  const _OfflineEditControls({required this.sampleMode});
+/// Sample mode and offline edits. Edits render in the background; the
+/// original audio plays until the render is ready.
+class _OfflineEditControls extends ConsumerWidget {
+  const _OfflineEditControls({required this.sourceId, required this.props});
 
-  final UiAudioSampleMode sampleMode;
+  final int sourceId;
+  final AudioWaveformUiForAudioProperties props;
 
   static const _comingSoon = 'Coming soon';
 
@@ -273,16 +282,55 @@ class _OfflineEditControls extends StatelessWidget {
     UiAudioSampleMode.stretch => 'Stretch',
   };
 
+  String _modeHint(UiAudioSampleMode mode) => switch (mode) {
+    UiAudioSampleMode.default_ => 'Plays at its own speed',
+    UiAudioSampleMode.resampled => 'Follows the tempo, pitch bends with it',
+    UiAudioSampleMode.stretch => 'Follows the tempo, keeps its pitch',
+  };
+
+  Future<void> _apply(
+    WidgetRef ref,
+    Future<void> Function(DawContext ctx) change,
+  ) async {
+    final ctx = ref.read(projectProvider.notifier).dawContext;
+    final result = await attemptAsync(() => change(ctx));
+    if (result case Error<void>(:final error)) {
+      ref.read(notificationProvider.notifier).error(error, title: 'Audio edit');
+    }
+    ref.invalidate(audioPropertiesProvider(sourceId));
+    // Clips on the timeline draw with the source's playback rate.
+    ref.invalidate(trackWaveformProvider);
+  }
+
+  Future<void> _setEdits(
+    WidgetRef ref, {
+    bool? normalize,
+    bool? invert,
+    bool? reverse,
+  }) => _apply(
+    ref,
+    (ctx) => setWaveformEdits(
+      ctx: ctx,
+      sourceId: sourceId,
+      normalize: normalize ?? props.normalized,
+      invert: invert ?? props.invert,
+      reverse: reverse ?? props.reverse,
+    ),
+  );
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    Widget stubButton(String label, IconData icon) => Tooltip(
-      message: _comingSoon,
-      child: OutlinedButton.icon(
-        onPressed: null,
-        icon: Icon(icon, size: 16),
-        label: Text(label),
-      ),
+    Widget toggle(
+      String label,
+      IconData icon,
+      bool selected,
+      ValueChanged<bool> onSelected,
+    ) => FilterChip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      selected: selected,
+      onSelected: onSelected,
     );
 
     return Padding(
@@ -292,14 +340,39 @@ class _OfflineEditControls extends StatelessWidget {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          stubButton('Normalize', Icons.vertical_align_center),
-          stubButton('Invert', Icons.swap_vert),
-          stubButton('Reverse', Icons.swap_horiz),
+          toggle(
+            'Normalize',
+            Icons.vertical_align_center,
+            props.normalized,
+            (value) => _setEdits(ref, normalize: value),
+          ),
+          toggle(
+            'Invert',
+            Icons.swap_vert,
+            props.invert,
+            (value) => _setEdits(ref, invert: value),
+          ),
+          toggle(
+            'Reverse',
+            Icons.swap_horiz,
+            props.reverse,
+            (value) => _setEdits(ref, reverse: value),
+          ),
           Tooltip(
-            message: _comingSoon,
+            message: _modeHint(props.sampleMode),
             child: DropdownButton<UiAudioSampleMode>(
-              value: sampleMode,
-              onChanged: null,
+              value: props.sampleMode,
+              onChanged: (mode) {
+                if (mode == null || mode == props.sampleMode) return;
+                _apply(
+                  ref,
+                  (ctx) => setAudioSourceSampleMode(
+                    ctx: ctx,
+                    sourceId: sourceId,
+                    mode: mode,
+                  ),
+                );
+              },
               items: [
                 for (final mode in UiAudioSampleMode.values)
                   DropdownMenuItem(value: mode, child: Text(_modeLabel(mode))),
@@ -336,6 +409,117 @@ class _OfflineEditControls extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tempo detection and fit-to-tempo for one source. Both run as background
+/// jobs; the properties refetch when they complete.
+class _TempoControls extends ConsumerStatefulWidget {
+  const _TempoControls({required this.sourceId, required this.props});
+
+  final int sourceId;
+  final AudioWaveformUiForAudioProperties props;
+
+  @override
+  ConsumerState<_TempoControls> createState() => _TempoControlsState();
+}
+
+class _TempoControlsState extends ConsumerState<_TempoControls> {
+  bool _warp = false;
+
+  Future<void> _start(Future<int> Function(DawContext ctx) start) async {
+    final ctx = ref.read(projectProvider.notifier).dawContext;
+    final result = await attemptAsync(() => start(ctx));
+    if (!mounted) return;
+    if (result case Error<int>(:final error)) {
+      ref.read(notificationProvider.notifier).error(error, title: 'Tempo');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final props = widget.props;
+    final sourceId = widget.sourceId;
+    final detecting = ref.watch(
+      backgroundJobsProvider.select(
+        (s) => s.isRunningFor(sourceId, UiJobKind.tempoDetection),
+      ),
+    );
+    final rendering = ref.watch(
+      backgroundJobsProvider.select(
+        (s) => s.isRunningFor(sourceId, UiJobKind.waveformRender),
+      ),
+    );
+    final grid = props.beatGrid;
+    final tempo = switch ((grid, props.originalBpm)) {
+      (final grid?, _) =>
+        '${grid.bpm.toStringAsFixed(1)} BPM · '
+            '${(grid.confidence * 100).round()}% steady',
+      (null, final bpm?) => '${bpm.toStringAsFixed(1)} BPM (as placed)',
+      (null, null) => 'Tempo unknown',
+    };
+    final status = rendering || (props.fitted && !props.renderReady)
+        ? 'Rendering…'
+        : props.fitted
+        ? (props.warp ? 'Fitted beat by beat' : 'Fitted to project tempo')
+        : null;
+    Widget busy() => const SizedBox.square(
+      dimension: 14,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Icon(Icons.speed, size: 16, color: colors.onSurfaceVariant),
+          Text(tempo, style: TextStyle(color: colors.onSurfaceVariant)),
+          OutlinedButton.icon(
+            onPressed: detecting
+                ? null
+                : () => _start(
+                    (ctx) => startTempoDetection(ctx: ctx, sourceId: sourceId),
+                  ),
+            icon: detecting ? busy() : const Icon(Icons.graphic_eq, size: 16),
+            label: const Text('Detect tempo'),
+          ),
+          OutlinedButton.icon(
+            onPressed: rendering
+                ? null
+                : () => _start(
+                    (ctx) => startFitToTempo(
+                      ctx: ctx,
+                      sourceId: sourceId,
+                      warp: _warp && grid != null,
+                    ),
+                  ),
+            icon: rendering ? busy() : const Icon(Icons.timer, size: 16),
+            label: const Text('Fit to tempo'),
+          ),
+          Tooltip(
+            message: grid == null
+                ? 'Detect the tempo first'
+                : 'Stretch beat by beat so every beat lands on the grid',
+            child: FilterChip(
+              label: const Text('Beat by beat'),
+              selected: _warp && grid != null,
+              onSelected: grid == null
+                  ? null
+                  : (selected) => setState(() => _warp = selected),
+            ),
+          ),
+          if (status != null)
+            Text(
+              status,
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+            ),
         ],
       ),
     );

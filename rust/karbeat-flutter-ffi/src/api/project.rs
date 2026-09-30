@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use jiff::Timestamp;
-use karbeat_core::api::{audio_waveform_api, project_api, track_api};
 use karbeat_core::audio::exporter::TailHandling;
 use karbeat_core::audio::writer::{
     AudioExportConfig, BitDepth, flac::FlacAudioWriterConfig, ogg::OggOpusAudioWriterConfig,
@@ -21,11 +20,17 @@ use karbeat_core::core::project::{
     track::{AudioTrack, TrackType, audio_waveform::AudioWaveform},
     transport::TransportState,
 };
+use karbeat_core_api::{
+    audio_waveform_api,
+    jobs::{JobClass, JobContext, JobKind, JobSpec, JobTarget},
+    project_api, track_api,
+};
 use karbeat_utils::types::BipolarF64;
 use serde::Serialize;
 
 use crate::api::automation::AutomationCurveTypeDto;
 use crate::api::context::DawSessionInner;
+use crate::api::jobs::run_job;
 use crate::api::waveform::WaveformHandle;
 use crate::frb_generated::StreamSink;
 
@@ -361,6 +366,16 @@ pub enum UiAudioSampleMode {
     Resampled,
 }
 
+impl From<UiAudioSampleMode> for AudioSampleMode {
+    fn from(value: UiAudioSampleMode) -> Self {
+        match value {
+            UiAudioSampleMode::Default => Self::Default,
+            UiAudioSampleMode::Stretch => Self::Stretch,
+            UiAudioSampleMode::Resampled => Self::Resampled,
+        }
+    }
+}
+
 impl From<AudioSampleMode> for UiAudioSampleMode {
     fn from(value: AudioSampleMode) -> Self {
         match value {
@@ -489,6 +504,21 @@ pub struct AudioWaveformUiForAudioProperties {
     pub normalized: bool,
     pub muted: bool, // this only affects when play stream, not when doing preview sound
     pub sample_mode: UiAudioSampleMode,
+    /// Tempo of the original audio: detected, or anchored to the project tempo when a
+    /// tempo-following mode was entered. `None` when unknown.
+    pub original_bpm: Option<f32>,
+    /// Beats found by tempo detection, if it ran.
+    pub beat_grid: Option<crate::api::audio_analysis::UiBeatGrid>,
+    /// Whether the source is stretched to the project tempo.
+    pub fitted: bool,
+    /// Whether the stretch follows each detected beat.
+    pub warp: bool,
+    /// Whether the audio plays with inverted polarity.
+    pub invert: bool,
+    /// Whether the audio plays backwards.
+    pub reverse: bool,
+    /// Whether the stretched audio is rendered; playback uses the original until it is.
+    pub render_ready: bool,
 }
 
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
@@ -528,9 +558,34 @@ impl AudioWaveformUiForAudioProperties {
             trim_start: value.trim_start,
             trim_end: value.trim_end,
             is_looping: value.is_looping,
-            normalized: value.normalized,
+            normalized: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.normalize),
             muted: value.muted,
             sample_mode: value.sample_mode.into(),
+            original_bpm: value.original_bpm,
+            beat_grid: value.beat_grid.as_ref().map(Into::into),
+            fitted: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.stretches()),
+            warp: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.warp),
+            invert: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.invert),
+            reverse: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.reverse),
+            render_ready: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.buffer.is_some()),
         })
     }
 }
@@ -779,10 +834,23 @@ pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u64, UiGeneratorIn
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-pub fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, String> {
-    let source_id = audio_waveform_api::add_audio_source(&mut ctx.project_write(), file_path)
-        .map_err(|e| e.to_string())?;
-    Ok(source_id.to_u64())
+/// Decoding runs without holding the project lock; only the final insert takes it.
+pub async fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, String> {
+    let ctx = ctx.clone();
+    let file_path = file_path.to_owned();
+    run_job(
+        JobSpec::new(JobKind::AudioImport, JobClass::Heavy),
+        move |_| -> Result<u64, String> {
+            let pending = audio_waveform_api::begin_audio_import(&ctx.read(), &file_path)
+                .map_err(|e| e.to_string())?;
+            let completed =
+                audio_waveform_api::execute_audio_import(pending).map_err(|e| e.to_string())?;
+            let source_id =
+                audio_waveform_api::commit_audio_import(&mut ctx.project_write(), completed);
+            Ok(source_id.to_u64())
+        },
+    )
+    .await
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
@@ -806,12 +874,37 @@ pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u64, UiTrack>, String> {
 
 /// Export project to flutter. also report progress via StreamSink
 #[frb]
-pub fn export_project_flutter(
+pub async fn export_project_flutter(
     ctx: &DawContext,
     output_path: String,
     config: AudioExportConfigDTO,
     tail_handling: TailHandlingDTO,
     progress_sink: StreamSink<f32>,
+) -> Result<(), String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::ProjectExport, JobClass::Heavy).with_target(JobTarget::Project),
+        move |job| {
+            export_project_blocking(
+                &ctx,
+                output_path,
+                config,
+                tail_handling,
+                &progress_sink,
+                job,
+            )
+        },
+    )
+    .await
+}
+
+fn export_project_blocking(
+    ctx: &DawContext,
+    output_path: String,
+    config: AudioExportConfigDTO,
+    tail_handling: TailHandlingDTO,
+    progress_sink: &StreamSink<f32>,
+    job: &JobContext,
 ) -> Result<(), String> {
     // Map the FFI DTO to the Core Configuration Enum
     let core_config = match config {
@@ -847,9 +940,10 @@ pub fn export_project_flutter(
         core_config,
         tail_handling.into(),
         |progress| {
+            job.progress("render", progress);
             // If the sink successfully adds the value, return true to keep rendering.
             // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
-            progress_sink.add(progress).is_ok()
+            !job.is_cancelled() && progress_sink.add(progress).is_ok()
         },
     )
     .map_err(|e| e.to_string())

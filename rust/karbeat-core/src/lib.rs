@@ -1,16 +1,8 @@
 //! # Overview
 //!
 //! Core Package of Karbeat. Handles the Audio Thread and Business Logic of the App.
-//! This package also includes the Core API that is generic and reusable
-//! for any kind of UI implementation usage.
+//! The UI-facing API layer lives in the `karbeat-core-api` crate.
 
-#[allow(
-    clippy::as_conversions,
-    clippy::let_underscore_must_use,
-    reason = "the API boundary converts validated UI identifiers and intentionally emits best-effort engine notifications"
-)]
-/// UI-independent project and engine mutation APIs.
-pub mod api;
 #[allow(
     clippy::as_conversions,
     clippy::let_underscore_must_use,
@@ -52,14 +44,6 @@ pub mod plugin_types;
 )]
 /// Shared typed identifiers, constants, enums, and bounded scalar types.
 pub mod shared;
-#[allow(
-    clippy::expect_used,
-    clippy::panic,
-    clippy::unwrap_used,
-    reason = "test fixtures use immediate failures to keep invariant violations visible"
-)]
-/// Test fixtures shared by this crate's unit and integration-style tests.
-pub mod test;
 /// Audio-buffer utility functions shared by render paths.
 pub mod utils;
 

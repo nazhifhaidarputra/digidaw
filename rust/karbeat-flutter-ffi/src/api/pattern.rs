@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::api::context::DawContext;
 use flutter_rust_bridge::frb;
-use karbeat_core::shared::id::*;
-use karbeat_core::{
-    api::{note_api, pattern_api},
-    core::project::{GeneratorId, Note, NoteId, track::midi::Pattern, track::note_transform},
+use karbeat_core::core::project::{
+    GeneratorId, Note, NoteId, track::midi::Pattern, track::note_transform,
 };
+use karbeat_core::shared::id::*;
+use karbeat_core_api::{note_api, pattern_api};
 
 #[derive(Clone)]
 #[frb(dart_metadata=("freezed"))]

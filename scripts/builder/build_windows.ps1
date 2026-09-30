@@ -76,6 +76,20 @@ flutter_rust_bridge_codegen generate
 Write-Host "==> [Windows Build] Fetching Flutter dependencies..." -ForegroundColor Cyan
 flutter pub get
 
+Write-Host "==> [Windows Build] Fetching tempo detection models..." -ForegroundColor Cyan
+# Pinned to the same files as scripts/fetch_beat_models.sh; mel_spectrogram.onnx is committed.
+# The small beat model; the FP32 model is no longer used.
+$SmallModel = Join-Path $PSScriptRoot "..\..\assets\models\beat_this_small.onnx"
+$SmallSha256 = "a5f8d39d989f31859454ba27afe61c5317ca95e4d9373e6853e5361b8937172f"
+if (-not (Test-Path $SmallModel) -or (Get-FileHash $SmallModel -Algorithm SHA256).Hash.ToLower() -ne $SmallSha256) {
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/danigb/beat-this-rs/089b509247e6fdcec666511c0dcf0d5f39c21e73/models/beat_this_small.onnx" -OutFile $SmallModel
+    if ((Get-FileHash $SmallModel -Algorithm SHA256).Hash.ToLower() -ne $SmallSha256) {
+        Remove-Item $SmallModel
+        Write-Host "ERROR: beat_this_small.onnx checksum mismatch." -ForegroundColor Red
+        exit 1
+    }
+}
+
 Write-Host "==> [Windows Build] Compiling Flutter Windows Release..." -ForegroundColor Cyan
 flutter build windows --release
 

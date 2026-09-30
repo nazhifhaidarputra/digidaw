@@ -63,6 +63,9 @@ fi
 echo -e "\033[1;36m==> [Linux Build] Running Flutter Rust Bridge Codegen...\033[0m"
 flutter_rust_bridge_codegen generate
 
+echo -e "\033[1;36m==> [Linux Build] Fetching tempo detection models...\033[0m"
+"$(dirname "$0")/../fetch_beat_models.sh"
+
 echo -e "\033[1;36m==> [Linux Build] Fetching Flutter dependencies...\033[0m"
 flutter pub get
 

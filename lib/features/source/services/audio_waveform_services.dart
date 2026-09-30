@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -16,7 +17,10 @@ final audioSourcesProvider = FutureProvider.autoDispose<Map<int, AudioWaveformUi
 
   final audioPropertiesProvider = FutureProvider.autoDispose
       .family<AudioWaveformUiForAudioProperties, int>((ref, sourceId) async {
-        
+        // Refetch when a background job (tempo detection, render) changes it.
+        ref.watch(
+          backgroundJobsProvider.select((s) => s.sourceRevisions[sourceId]),
+        );
         final ctx = ref.read(projectProvider.notifier).dawContext;
         final result = await getAudioProperties(ctx: ctx, id: sourceId);
 

@@ -682,7 +682,7 @@ mod test {
         use crate::core::file_manager::audio_loader::AudioLoader;
         use crate::core::project::{
             EnvelopePoint, Fade, GainEnvelope,
-            audio_waveform::{AudioSampleMode, EditedWaveform, WaveformEdits},
+            audio_waveform::{AudioSampleMode, BeatGrid, EditedWaveform, WaveformEdits},
             clip::ClipSourceType,
         };
 
@@ -720,9 +720,16 @@ mod test {
                 edits: WaveformEdits {
                     reverse: true,
                     pitch_semitones: 3.0,
+                    warp: true,
                     ..WaveformEdits::default()
                 },
-                buffer: None,
+                ..EditedWaveform::default()
+            });
+            waveform.beat_grid = Some(BeatGrid {
+                bpm: 124.0,
+                confidence: 0.9,
+                beats: vec![0.1, 0.58, 1.07],
+                downbeats: vec![0.1],
             });
         }
         let clip_envelope = GainEnvelope {
@@ -755,6 +762,11 @@ mod test {
         let edits = &original.edited.as_ref().unwrap().edits;
         assert!(edits.reverse);
         assert_eq!(edits.pitch_semitones, 3.0);
+        assert!(edits.warp);
+        let grid = original.beat_grid.as_ref().unwrap();
+        assert_eq!(grid.bpm, 124.0);
+        assert_eq!(grid.beats, vec![0.1, 0.58, 1.07]);
+        assert_eq!(grid.downbeats, vec![0.1]);
         assert_eq!(sources[copy].name, "tone.wav (copy)");
         assert_eq!(sources[copy].id, Some(copy));
         assert!(Arc::ptr_eq(

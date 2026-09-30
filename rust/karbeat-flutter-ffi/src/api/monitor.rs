@@ -2,7 +2,7 @@ use std::thread;
 use std::time::Duration;
 
 use flutter_rust_bridge::frb;
-pub use karbeat_core::api::monitor_api::*;
+pub use karbeat_core_api::monitor_api::*;
 
 use crate::frb_generated::StreamSink;
 

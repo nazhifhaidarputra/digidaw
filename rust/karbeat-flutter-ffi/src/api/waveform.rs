@@ -34,6 +34,14 @@ impl WaveformHandle {
         bytemuck::try_cast_slice(&self.0.active_buffer()?[..]).ok()
     }
 
+    /// Source frames played per project frame at `project_bpm`, from the source's sample mode
+    /// and tempo: the same rate the engine plays these samples at. Draw clips with it so a
+    /// stretched clip shows its whole stretched audio.
+    #[frb(sync)]
+    pub fn tempo_rate(&self, project_bpm: f32) -> f64 {
+        self.0.tempo_rate(project_bpm)
+    }
+
     /// Returns the raw memory address of the f32 interleaved sample buffer.
     /// Returns 0 if the waveform has no loaded buffer (e.g. not yet mmap-ed).
     #[frb(sync)]

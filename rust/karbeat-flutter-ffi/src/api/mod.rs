@@ -1,8 +1,10 @@
 pub mod audio;
+pub mod audio_analysis;
 pub mod audio_settings;
 pub mod automation;
 pub(crate) mod context;
 pub mod external_plugins;
+pub mod jobs;
 pub mod logging;
 pub mod mitigation;
 pub mod mixer;

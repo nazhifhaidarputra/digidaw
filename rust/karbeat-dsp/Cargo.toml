@@ -22,6 +22,8 @@ wide.workspace = true
 smallvec.workspace = true
 fundsp.workspace = true
 realfft = "3.5.0"
+rayon.workspace = true
+crossfire.workspace = true
 
 [build-dependencies]
 vcpkg.workspace = true

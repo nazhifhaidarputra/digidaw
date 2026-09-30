@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
 use karbeat_core::{
-    api::automation_api,
     core::project::{
         AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
         EffectAutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
@@ -11,6 +10,7 @@ use karbeat_core::{
     },
     shared::{BusId, EffectId, TrackId},
 };
+use karbeat_core_api::automation_api;
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
 use crate::api::{context::DawContext, plugin::UiPluginTarget};

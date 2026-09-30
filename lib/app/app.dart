@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/crash_recovery_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/app_theme.dart';
@@ -12,6 +13,7 @@ import 'package:karbeat/core/input/input.dart';
 import 'package:karbeat/core/input/text_input_shortcut_manager.dart';
 import 'package:karbeat/core/services/crash_report_service.dart';
 import 'package:karbeat/core/services/rust_log_bridge.dart';
+import 'package:karbeat/core/services/tempo_model_installer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/core/widgets/blocking_task_overlay.dart';
@@ -128,6 +130,15 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
       ]);
 
       if (!mounted) return;
+      // Subscribe before any project work so every job's events are seen.
+      ref.read(backgroundJobsProvider);
+      unawaited(
+        TempoModelInstaller.install().then((result) {
+          if (result case Error<void>(:final error)) {
+            AppLogger.warn('Tempo detection is unavailable: $error');
+          }
+        }),
+      );
       final rustLogs = ref.read(rustLogBridgeProvider).start();
       if (rustLogs.isErr()) {
         AppLogger.warn(
