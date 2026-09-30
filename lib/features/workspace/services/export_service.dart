@@ -11,6 +11,7 @@ Stream<double> exportProject({
     numberOfChannels = 2,
     int? bitrate,
     required TailHandling tailHandling,
+    ExportRangeDTO range = const ExportRangeDTO.song(),
   }) async* {
     // Construct final file path based on selected format
     final ext = format.name.toLowerCase();
@@ -45,16 +46,29 @@ Stream<double> exportProject({
         );
         break;
       case SupportedAudioFormat.ogg:
-        // TODO: Handle this case.
-        return;
+        // Opus always renders at 48 kHz, so the sample rate is not forwarded
+        config = AudioExportConfigDTO.ogg(
+          OggExportConfigDTO(
+            channels: numberOfChannels,
+            bitRate: bitDepthProper,
+          ),
+        );
+        break;
       case SupportedAudioFormat.flac:
-        // TODO: Handle this case.
-        return;
+        config = AudioExportConfigDTO.flac(
+          FlacExportConfigDTO(
+            sampleRate: sampleRate.value,
+            channels: numberOfChannels,
+            bitDepth: bitDepthProper,
+          ),
+        );
+        break;
     }
     yield* exportProjectFlutter(
       ctx: ctx,
       outputPath: fullPath,
       config: config,
       tailHandling: tailHandlingDto,
+      range: range,
     );
   }

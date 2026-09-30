@@ -1,7 +1,10 @@
 //! VST3 editor attachment to windows owned by DigiDAW's native window service.
 #![allow(non_snake_case, reason = "VST3 interface method names are ABI-defined")]
 
-use crate::{instance::check, run_loop::RunLoop};
+use crate::{
+    instance::{check, plugin_call_error},
+    run_loop::RunLoop,
+};
 use karbeat_host_api::{HostError, NativeParentHandle, NativeSurfaceKind};
 use raw_window_handle::RawWindowHandle;
 use std::{
@@ -126,10 +129,7 @@ impl Vst3Editor {
         } else if code == kResultFalse || code == kNotImplemented {
             Ok(false)
         } else {
-            Err(HostError::PluginCall {
-                operation: "editor.canResize",
-                code,
-            })
+            Err(plugin_call_error("editor.canResize", code))
         }
     }
     pub fn open(&mut self, parent_handle: &NativeParentHandle) -> Result<(), HostError> {

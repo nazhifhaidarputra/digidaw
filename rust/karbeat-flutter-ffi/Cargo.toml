@@ -10,6 +10,7 @@ crate-type = ["cdylib", "staticlib"]
 
 
 [dependencies]
+karbeat-core-api.workspace = true
 karbeat-vst3.workspace = true
 karbeat-clap.workspace = true
 karbeat-lv2.workspace = true
@@ -23,11 +24,9 @@ flutter_rust_bridge = "=2.12.0"
 log.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-rtrb.workspace = true
+tokio.workspace = true
 
 karbeat-plugins.workspace = true
-smallvec.workspace = true
-memmap2.workspace = true
 bytemuck.workspace = true
 jiff.workspace = true
 cpal.workspace = true

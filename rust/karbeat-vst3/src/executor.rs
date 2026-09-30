@@ -36,22 +36,11 @@ impl Vst3Executor {
             processor: value.processor,
         }
     }
-}
 
-impl PluginFormatExecutor for Vst3Executor {
-    fn format(&self) -> PluginFormat {
-        PluginFormat::Vst3
-    }
-
-    fn default_scan_paths(&self) -> Vec<std::path::PathBuf> {
-        crate::module::default_scan_paths()
-    }
-
-    async fn scan(
-        &self,
-        mut request: ScanRequest,
+    /// Runs one blocking scan, including cache load and save.
+    fn scan_blocking(
+        request: ScanRequest,
     ) -> Result<karbeat_host_api::scanner::ScanResult, HostError> {
-        request.directories.extend(self.default_scan_paths());
         let settings = karbeat_host_api::scanner::ScanSettings {
             directories: request.directories,
             timeout_seconds: request.timeout_seconds,
@@ -79,6 +68,32 @@ impl PluginFormatExecutor for Vst3Executor {
             cache.save(path)?;
         }
         Ok(result)
+    }
+}
+
+impl PluginFormatExecutor for Vst3Executor {
+    fn format(&self) -> PluginFormat {
+        PluginFormat::Vst3
+    }
+
+    fn default_scan_paths(&self) -> Vec<std::path::PathBuf> {
+        crate::module::default_scan_paths()
+    }
+
+    async fn scan(
+        &self,
+        mut request: ScanRequest,
+    ) -> Result<karbeat_host_api::scanner::ScanResult, HostError> {
+        request.directories.extend(self.default_scan_paths());
+        // The scanner waits on helper processes. Running it on its own thread keeps this
+        // executor serving prepare, parameter and editor requests during a scan.
+        let (reply, result) = tokio::sync::oneshot::channel();
+        std::thread::Builder::new()
+            .name("vst3-scan".into())
+            .spawn(move || drop(reply.send(Self::scan_blocking(request))))?;
+        result
+            .await
+            .map_err(|_| HostError::Scanner("scan thread stopped without a result".into()))?
     }
 
     async fn prepare(&self, request: PrepareRequest) -> Result<PreparedExternalPlugin, HostError> {

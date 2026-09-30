@@ -7,9 +7,11 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/audio.dart';
+import 'api/audio_analysis.dart';
 import 'api/audio_settings.dart';
 import 'api/automation.dart';
 import 'api/external_plugins.dart';
+import 'api/jobs.dart';
 import 'api/logging.dart';
 import 'api/mitigation.dart';
 import 'api/mixer.dart';
@@ -22,6 +24,7 @@ import 'api/project.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
 import 'api/simple.dart';
+import 'api/timeline.dart';
 import 'api/track.dart';
 import 'api/transport.dart';
 import 'api/utils.dart';
@@ -149,6 +152,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Map<int, UiBus> dco_decode_Map_CastedPrimitive_u_64_ui_bus_None(dynamic raw);
 
   @protected
+  Map<int, UiGainEnvelope>
+  dco_decode_Map_CastedPrimitive_u_64_ui_gain_envelope_None(dynamic raw);
+
+  @protected
   Map<int, UiGeneratorInstance>
   dco_decode_Map_CastedPrimitive_u_64_ui_generator_instance_None(dynamic raw);
 
@@ -215,6 +222,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<UiAudioFeedback> dco_decode_StreamSink_ui_audio_feedback_Sse(
+    dynamic raw,
+  );
+
+  @protected
+  RustStreamSink<UiJobEvent> dco_decode_StreamSink_ui_job_event_Sse(
     dynamic raw,
   );
 
@@ -298,10 +310,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExportRangeDTO dco_decode_box_autoadd_export_range_dto(dynamic raw);
+
+  @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
 
   @protected
   double dco_decode_box_autoadd_f_64(dynamic raw);
+
+  @protected
+  FlacExportConfigDTO dco_decode_box_autoadd_flac_export_config_dto(
+    dynamic raw,
+  );
 
   @protected
   MasterAutomationTargetDto dco_decode_box_autoadd_master_automation_target_dto(
@@ -320,6 +340,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Mp3ExportConfigDTO dco_decode_box_autoadd_mp_3_export_config_dto(dynamic raw);
+
+  @protected
+  OggExportConfigDTO dco_decode_box_autoadd_ogg_export_config_dto(dynamic raw);
 
   @protected
   PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw);
@@ -350,8 +373,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAutoSaveSettings dco_decode_box_autoadd_ui_auto_save_settings(dynamic raw);
 
   @protected
+  UiBeatGrid dco_decode_box_autoadd_ui_beat_grid(dynamic raw);
+
+  @protected
   UiExternalPluginDescriptor
   dco_decode_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
+
+  @protected
+  UiGainEnvelope dco_decode_box_autoadd_ui_gain_envelope(dynamic raw);
+
+  @protected
+  UiLoopRegion dco_decode_box_autoadd_ui_loop_region(dynamic raw);
 
   @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
@@ -407,10 +439,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExportRangeDTO dco_decode_export_range_dto(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  FlacExportConfigDTO dco_decode_flac_export_config_dto(dynamic raw);
 
   @protected
   int dco_decode_i_16(dynamic raw);
@@ -440,10 +478,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
 
   @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
+
+  @protected
   List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -484,6 +528,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(int, UiBus)> dco_decode_list_record_casted_primitive_u_64_ui_bus(
     dynamic raw,
   );
+
+  @protected
+  List<(int, UiGainEnvelope)>
+  dco_decode_list_record_casted_primitive_u_64_ui_gain_envelope(dynamic raw);
 
   @protected
   List<(int, UiGeneratorInstance)>
@@ -550,10 +598,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiCueMarker> dco_decode_list_ui_cue_marker(dynamic raw);
+
+  @protected
   List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
 
   @protected
   List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw);
+
+  @protected
+  List<UiEnvelopePoint> dco_decode_list_ui_envelope_point(dynamic raw);
 
   @protected
   List<UiExternalPluginDescriptor>
@@ -614,6 +668,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Mp3ExportConfigDTO dco_decode_mp_3_export_config_dto(dynamic raw);
+
+  @protected
+  OggExportConfigDTO dco_decode_ogg_export_config_dto(dynamic raw);
 
   @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
@@ -692,8 +749,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_box_autoadd_ui_actual_device_stream_config(dynamic raw);
 
   @protected
+  UiBeatGrid? dco_decode_opt_box_autoadd_ui_beat_grid(dynamic raw);
+
+  @protected
   UiExternalPluginDescriptor?
   dco_decode_opt_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
+
+  @protected
+  UiGainEnvelope? dco_decode_opt_box_autoadd_ui_gain_envelope(dynamic raw);
+
+  @protected
+  UiLoopRegion? dco_decode_opt_box_autoadd_ui_loop_region(dynamic raw);
 
   @protected
   UiMixerChannelSnapshot? dco_decode_opt_box_autoadd_ui_mixer_channel_snapshot(
@@ -768,6 +834,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, UiBus) dco_decode_record_casted_primitive_u_64_ui_bus(dynamic raw);
+
+  @protected
+  (int, UiGainEnvelope)
+  dco_decode_record_casted_primitive_u_64_ui_gain_envelope(dynamic raw);
 
   @protected
   (int, UiGeneratorInstance)
@@ -867,7 +937,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAudioRuntimeSettings dco_decode_ui_audio_runtime_settings(dynamic raw);
 
   @protected
+  UiAudioSampleMode dco_decode_ui_audio_sample_mode(dynamic raw);
+
+  @protected
   UiAutoSaveSettings dco_decode_ui_auto_save_settings(dynamic raw);
+
+  @protected
+  UiBeatGrid dco_decode_ui_beat_grid(dynamic raw);
 
   @protected
   UiBus dco_decode_ui_bus(dynamic raw);
@@ -885,6 +961,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiCrashReportSummary dco_decode_ui_crash_report_summary(dynamic raw);
 
   @protected
+  UiCueMarker dco_decode_ui_cue_marker(dynamic raw);
+
+  @protected
   UiDeviceStreamStatus dco_decode_ui_device_stream_status(dynamic raw);
 
   @protected
@@ -892,6 +971,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiEffectSummary dco_decode_ui_effect_summary(dynamic raw);
+
+  @protected
+  UiEnvelopePoint dco_decode_ui_envelope_point(dynamic raw);
 
   @protected
   UiExternalPluginCapabilities dco_decode_ui_external_plugin_capabilities(
@@ -910,13 +992,37 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiExternalPluginFormat dco_decode_ui_external_plugin_format(dynamic raw);
 
   @protected
+  UiFade dco_decode_ui_fade(dynamic raw);
+
+  @protected
   UiFlutterCrashKind dco_decode_ui_flutter_crash_kind(dynamic raw);
+
+  @protected
+  UiGainEnvelope dco_decode_ui_gain_envelope(dynamic raw);
 
   @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
   UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw);
+
+  @protected
+  UiJobEvent dco_decode_ui_job_event(dynamic raw);
+
+  @protected
+  UiJobKind dco_decode_ui_job_kind(dynamic raw);
+
+  @protected
+  UiJobState dco_decode_ui_job_state(dynamic raw);
+
+  @protected
+  UiJobTarget dco_decode_ui_job_target(dynamic raw);
+
+  @protected
+  UiLoopRegion dco_decode_ui_loop_region(dynamic raw);
+
+  @protected
+  UiMadeUnique dco_decode_ui_made_unique(dynamic raw);
 
   @protected
   UiMixerChannel dco_decode_ui_mixer_channel(dynamic raw);
@@ -1013,6 +1119,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiStartupRecovery dco_decode_ui_startup_recovery(dynamic raw);
+
+  @protected
+  UiTimelineState dco_decode_ui_timeline_state(dynamic raw);
 
   @protected
   UiTrack dco_decode_ui_track(dynamic raw);
@@ -1137,6 +1246,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Map<int, UiGainEnvelope>
+  sse_decode_Map_CastedPrimitive_u_64_ui_gain_envelope_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Map<int, UiGeneratorInstance>
   sse_decode_Map_CastedPrimitive_u_64_ui_generator_instance_None(
     SseDeserializer deserializer,
@@ -1213,6 +1328,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<UiAudioFeedback> sse_decode_StreamSink_ui_audio_feedback_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<UiJobEvent> sse_decode_StreamSink_ui_job_event_Sse(
     SseDeserializer deserializer,
   );
 
@@ -1310,10 +1430,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExportRangeDTO sse_decode_box_autoadd_export_range_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
+  FlacExportConfigDTO sse_decode_box_autoadd_flac_export_config_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   MasterAutomationTargetDto sse_decode_box_autoadd_master_automation_target_dto(
@@ -1338,6 +1468,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Mp3ExportConfigDTO sse_decode_box_autoadd_mp_3_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  OggExportConfigDTO sse_decode_box_autoadd_ogg_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -1380,8 +1515,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiBeatGrid sse_decode_box_autoadd_ui_beat_grid(SseDeserializer deserializer);
+
+  @protected
   UiExternalPluginDescriptor
   sse_decode_box_autoadd_ui_external_plugin_descriptor(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiGainEnvelope sse_decode_box_autoadd_ui_gain_envelope(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiLoopRegion sse_decode_box_autoadd_ui_loop_region(
     SseDeserializer deserializer,
   );
 
@@ -1457,10 +1605,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExportRangeDTO sse_decode_export_range_dto(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  FlacExportConfigDTO sse_decode_flac_export_config_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_i_16(SseDeserializer deserializer);
@@ -1496,10 +1652,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+
+  @protected
   List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -1542,6 +1704,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, UiBus)> sse_decode_list_record_casted_primitive_u_64_ui_bus(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<(int, UiGainEnvelope)>
+  sse_decode_list_record_casted_primitive_u_64_ui_gain_envelope(
     SseDeserializer deserializer,
   );
 
@@ -1620,12 +1788,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiCueMarker> sse_decode_list_ui_cue_marker(SseDeserializer deserializer);
+
+  @protected
   List<UiEffectInstance> sse_decode_list_ui_effect_instance(
     SseDeserializer deserializer,
   );
 
   @protected
   List<UiEffectSummary> sse_decode_list_ui_effect_summary(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiEnvelopePoint> sse_decode_list_ui_envelope_point(
     SseDeserializer deserializer,
   );
 
@@ -1710,6 +1886,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  OggExportConfigDTO sse_decode_ogg_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer);
 
   @protected
@@ -1790,8 +1971,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiBeatGrid? sse_decode_opt_box_autoadd_ui_beat_grid(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiExternalPluginDescriptor?
   sse_decode_opt_box_autoadd_ui_external_plugin_descriptor(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiGainEnvelope? sse_decode_opt_box_autoadd_ui_gain_envelope(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiLoopRegion? sse_decode_opt_box_autoadd_ui_loop_region(
     SseDeserializer deserializer,
   );
 
@@ -1884,6 +2080,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, UiBus) sse_decode_record_casted_primitive_u_64_ui_bus(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, UiGainEnvelope)
+  sse_decode_record_casted_primitive_u_64_ui_gain_envelope(
     SseDeserializer deserializer,
   );
 
@@ -2007,9 +2209,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiAudioSampleMode sse_decode_ui_audio_sample_mode(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiAutoSaveSettings sse_decode_ui_auto_save_settings(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiBeatGrid sse_decode_ui_beat_grid(SseDeserializer deserializer);
 
   @protected
   UiBus sse_decode_ui_bus(SseDeserializer deserializer);
@@ -2031,6 +2241,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiCueMarker sse_decode_ui_cue_marker(SseDeserializer deserializer);
+
+  @protected
   UiDeviceStreamStatus sse_decode_ui_device_stream_status(
     SseDeserializer deserializer,
   );
@@ -2040,6 +2253,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer);
+
+  @protected
+  UiEnvelopePoint sse_decode_ui_envelope_point(SseDeserializer deserializer);
 
   @protected
   UiExternalPluginCapabilities sse_decode_ui_external_plugin_capabilities(
@@ -2062,9 +2278,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiFade sse_decode_ui_fade(SseDeserializer deserializer);
+
+  @protected
   UiFlutterCrashKind sse_decode_ui_flutter_crash_kind(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiGainEnvelope sse_decode_ui_gain_envelope(SseDeserializer deserializer);
 
   @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
@@ -2075,6 +2297,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGeneratorInstanceType sse_decode_ui_generator_instance_type(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiJobEvent sse_decode_ui_job_event(SseDeserializer deserializer);
+
+  @protected
+  UiJobKind sse_decode_ui_job_kind(SseDeserializer deserializer);
+
+  @protected
+  UiJobState sse_decode_ui_job_state(SseDeserializer deserializer);
+
+  @protected
+  UiJobTarget sse_decode_ui_job_target(SseDeserializer deserializer);
+
+  @protected
+  UiLoopRegion sse_decode_ui_loop_region(SseDeserializer deserializer);
+
+  @protected
+  UiMadeUnique sse_decode_ui_made_unique(SseDeserializer deserializer);
 
   @protected
   UiMixerChannel sse_decode_ui_mixer_channel(SseDeserializer deserializer);
@@ -2205,6 +2445,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiStartupRecovery sse_decode_ui_startup_recovery(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiTimelineState sse_decode_ui_timeline_state(SseDeserializer deserializer);
 
   @protected
   UiTrack sse_decode_ui_track(SseDeserializer deserializer);
@@ -2348,6 +2591,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_Map_CastedPrimitive_u_64_ui_gain_envelope_None(
+    Map<int, UiGainEnvelope> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_Map_CastedPrimitive_u_64_ui_generator_instance_None(
     Map<int, UiGeneratorInstance> self,
     SseSerializer serializer,
@@ -2433,6 +2682,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_ui_audio_feedback_Sse(
     RustStreamSink<UiAudioFeedback> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_ui_job_event_Sse(
+    RustStreamSink<UiJobEvent> self,
     SseSerializer serializer,
   );
 
@@ -2548,10 +2803,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_export_range_dto(
+    ExportRangeDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_flac_export_config_dto(
+    FlacExportConfigDTO self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_master_automation_target_dto(
@@ -2580,6 +2847,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_mp_3_export_config_dto(
     Mp3ExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ogg_export_config_dto(
+    OggExportConfigDTO self,
     SseSerializer serializer,
   );
 
@@ -2626,8 +2899,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_beat_grid(
+    UiBeatGrid self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_external_plugin_descriptor(
     UiExternalPluginDescriptor self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_gain_envelope(
+    UiGainEnvelope self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_loop_region(
+    UiLoopRegion self,
     SseSerializer serializer,
   );
 
@@ -2719,10 +3010,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_export_range_dto(
+    ExportRangeDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_flac_export_config_dto(
+    FlacExportConfigDTO self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_i_16(int self, SseSerializer serializer);
@@ -2764,6 +3067,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_32_loose(
     List<int> self,
     SseSerializer serializer,
@@ -2774,6 +3083,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     Uint32List self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -2823,6 +3135,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_casted_primitive_u_64_ui_bus(
     List<(int, UiBus)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_casted_primitive_u_64_ui_gain_envelope(
+    List<(int, UiGainEnvelope)> self,
     SseSerializer serializer,
   );
 
@@ -2910,6 +3228,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_cue_marker(
+    List<UiCueMarker> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_effect_instance(
     List<UiEffectInstance> self,
     SseSerializer serializer,
@@ -2918,6 +3242,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_effect_summary(
     List<UiEffectSummary> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_envelope_point(
+    List<UiEnvelopePoint> self,
     SseSerializer serializer,
   );
 
@@ -3021,6 +3351,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ogg_export_config_dto(
+    OggExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_CastedPrimitive_i_64(int? self, SseSerializer serializer);
 
   @protected
@@ -3109,8 +3445,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_ui_beat_grid(
+    UiBeatGrid? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_ui_external_plugin_descriptor(
     UiExternalPluginDescriptor? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_gain_envelope(
+    UiGainEnvelope? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_loop_region(
+    UiLoopRegion? self,
     SseSerializer serializer,
   );
 
@@ -3223,6 +3577,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_casted_primitive_u_64_ui_bus(
     (int, UiBus) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_casted_primitive_u_64_ui_gain_envelope(
+    (int, UiGainEnvelope) self,
     SseSerializer serializer,
   );
 
@@ -3372,10 +3732,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_audio_sample_mode(
+    UiAudioSampleMode self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_auto_save_settings(
     UiAutoSaveSettings self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_ui_beat_grid(UiBeatGrid self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_bus(UiBus self, SseSerializer serializer);
@@ -3399,6 +3768,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_cue_marker(UiCueMarker self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_device_stream_status(
     UiDeviceStreamStatus self,
     SseSerializer serializer,
@@ -3413,6 +3785,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_effect_summary(
     UiEffectSummary self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_envelope_point(
+    UiEnvelopePoint self,
     SseSerializer serializer,
   );
 
@@ -3441,8 +3819,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_fade(UiFade self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_flutter_crash_kind(
     UiFlutterCrashKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_gain_envelope(
+    UiGainEnvelope self,
     SseSerializer serializer,
   );
 
@@ -3457,6 +3844,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UiGeneratorInstanceType self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_ui_job_event(UiJobEvent self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_job_kind(UiJobKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_job_state(UiJobState self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_job_target(UiJobTarget self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_loop_region(UiLoopRegion self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_made_unique(UiMadeUnique self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_mixer_channel(
@@ -3617,6 +4022,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_startup_recovery(
     UiStartupRecovery self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_timeline_state(
+    UiTimelineState self,
     SseSerializer serializer,
   );
 

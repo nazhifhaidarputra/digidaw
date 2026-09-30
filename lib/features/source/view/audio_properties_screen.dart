@@ -3,7 +3,16 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/src/rust/api/jobs.dart';
+import 'package:karbeat/src/rust/api/audio_analysis.dart';
+import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/background_jobs_provider.dart';
+import 'package:karbeat/core/widgets/digidaw_plugin_widgets/parameter_knob.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/features/track/services/gain_envelope_evaluator.dart';
+import 'package:karbeat/features/track/view/gain_envelope_editor.dart';
 import 'package:karbeat/features/track/view/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -38,6 +47,13 @@ class AudioPropertiesScreen extends ConsumerWidget {
           final handle = props.id != null
               ? ref.watch(audioWaveformHandleProvider(props.id!))
               : null;
+          final envelope =
+              ref.watch(
+                projectProvider.select(
+                  (s) => s.value?.sourceEnvelopes[sourceId],
+                ),
+              ) ??
+              identityEnvelope;
           return Column(
             children: [
               // HEADER
@@ -58,18 +74,45 @@ class AudioPropertiesScreen extends ConsumerWidget {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: CustomPaint(
-                        painter: StereoWaveformPainter(
-                          samples: handle != null
-                              ? createZeroCopyWaveformView(handle)
-                              : Float32List(0),
-                          color: colors.primary,
-                        ),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: StereoWaveformPainter(
+                                samples: handle != null
+                                    ? createZeroCopyWaveformView(handle)
+                                    : Float32List(0),
+                                color: colors.primary,
+                              ),
+                            ),
+                          ),
+                          if (handle != null)
+                            Positioned.fill(
+                              child: _WaveformEnvelopeEditor(
+                                sourceId: sourceId,
+                                envelope: envelope,
+                                frames:
+                                    handle.getLen() ~/
+                                    (handle.getChannels() == 0
+                                        ? 1
+                                        : handle.getChannels()),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
+
+              _EnvelopeReadout(
+                envelope: envelope,
+                sampleRate: props.sampleRate,
+              ),
+
+              _OfflineEditControls(sourceId: sourceId, props: props),
+
+              _TempoControls(sourceId: sourceId, props: props),
 
               // CONTROLS
               Container(
@@ -152,6 +195,331 @@ class AudioPropertiesScreen extends ConsumerWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Edits the waveform envelope shared by every clip of the source; the
+/// envelope's positions are source frames spread across the full width.
+class _WaveformEnvelopeEditor extends ConsumerWidget {
+  const _WaveformEnvelopeEditor({
+    required this.sourceId,
+    required this.envelope,
+    required this.frames,
+  });
+
+  final int sourceId;
+  final UiGainEnvelope envelope;
+  final int frames;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (frames <= 0) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) => GainEnvelopeEditor(
+        envelope: envelope,
+        axis: EnvelopeAxis(
+          pixelsPerSample: constraints.maxWidth / frames,
+          originPosition: 0,
+        ),
+        contentStart: 0,
+        contentLength: frames,
+        maxCrossfade: frames ~/ 2,
+        color: Colors.amber,
+        onCommit: (next) => ref
+            .read(projectProvider.notifier)
+            .setSourceEnvelope(sourceId, next),
+      ),
+    );
+  }
+}
+
+/// Fade, loop crossfade, and point count of the waveform envelope.
+class _EnvelopeReadout extends StatelessWidget {
+  const _EnvelopeReadout({required this.envelope, required this.sampleRate});
+
+  final UiGainEnvelope envelope;
+  final int sampleRate;
+
+  String _ms(int samples) => sampleRate > 0
+      ? '${(samples * 1000 / sampleRate).toStringAsFixed(0)} ms'
+      : '$samples smp';
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final style = TextStyle(color: colors.onSurfaceVariant, fontSize: 12);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Wrap(
+        spacing: 16,
+        children: [
+          Text('Fade in ${_ms(envelope.fadeIn.length)}', style: style),
+          Text('Fade out ${_ms(envelope.fadeOut.length)}', style: style),
+          Text('Loop crossfade ${_ms(envelope.crossfade)}', style: style),
+          Text('Points ${envelope.points.length}', style: style),
+        ],
+      ),
+    );
+  }
+}
+
+/// Sample mode and offline edits. Edits render in the background; the
+/// original audio plays until the render is ready.
+class _OfflineEditControls extends ConsumerWidget {
+  const _OfflineEditControls({required this.sourceId, required this.props});
+
+  final int sourceId;
+  final AudioWaveformUiForAudioProperties props;
+
+  static const _comingSoon = 'Coming soon';
+
+  String _modeLabel(UiAudioSampleMode mode) => switch (mode) {
+    UiAudioSampleMode.default_ => 'Default',
+    UiAudioSampleMode.resampled => 'Resampled',
+    UiAudioSampleMode.stretch => 'Stretch',
+  };
+
+  String _modeHint(UiAudioSampleMode mode) => switch (mode) {
+    UiAudioSampleMode.default_ => 'Plays at its own speed',
+    UiAudioSampleMode.resampled => 'Follows the tempo, pitch bends with it',
+    UiAudioSampleMode.stretch => 'Follows the tempo, keeps its pitch',
+  };
+
+  Future<void> _apply(
+    WidgetRef ref,
+    Future<void> Function(DawContext ctx) change,
+  ) async {
+    final ctx = ref.read(projectProvider.notifier).dawContext;
+    final result = await attemptAsync(() => change(ctx));
+    if (result case Error<void>(:final error)) {
+      ref.read(notificationProvider.notifier).error(error, title: 'Audio edit');
+    }
+    ref.invalidate(audioPropertiesProvider(sourceId));
+    // Clips on the timeline draw with the source's playback rate.
+    ref.invalidate(trackWaveformProvider);
+  }
+
+  Future<void> _setEdits(
+    WidgetRef ref, {
+    bool? normalize,
+    bool? invert,
+    bool? reverse,
+  }) => _apply(
+    ref,
+    (ctx) => setWaveformEdits(
+      ctx: ctx,
+      sourceId: sourceId,
+      normalize: normalize ?? props.normalized,
+      invert: invert ?? props.invert,
+      reverse: reverse ?? props.reverse,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    Widget toggle(
+      String label,
+      IconData icon,
+      bool selected,
+      ValueChanged<bool> onSelected,
+    ) => FilterChip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      selected: selected,
+      onSelected: onSelected,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          toggle(
+            'Normalize',
+            Icons.vertical_align_center,
+            props.normalized,
+            (value) => _setEdits(ref, normalize: value),
+          ),
+          toggle(
+            'Invert',
+            Icons.swap_vert,
+            props.invert,
+            (value) => _setEdits(ref, invert: value),
+          ),
+          toggle(
+            'Reverse',
+            Icons.swap_horiz,
+            props.reverse,
+            (value) => _setEdits(ref, reverse: value),
+          ),
+          Tooltip(
+            message: _modeHint(props.sampleMode),
+            child: DropdownButton<UiAudioSampleMode>(
+              value: props.sampleMode,
+              onChanged: (mode) {
+                if (mode == null || mode == props.sampleMode) return;
+                _apply(
+                  ref,
+                  (ctx) => setAudioSourceSampleMode(
+                    ctx: ctx,
+                    sourceId: sourceId,
+                    mode: mode,
+                  ),
+                );
+              },
+              items: [
+                for (final mode in UiAudioSampleMode.values)
+                  DropdownMenuItem(value: mode, child: Text(_modeLabel(mode))),
+              ],
+            ),
+          ),
+          Tooltip(
+            message: _comingSoon,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.4,
+                    child: DigidawParameterKnob(
+                      value: 0,
+                      min: -24,
+                      max: 24,
+                      defaultValue: 0,
+                      step: 1,
+                      diameter: 32,
+                      onChanged: (_) {},
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Pitch',
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tempo detection and fit-to-tempo for one source. Both run as background
+/// jobs; the properties refetch when they complete.
+class _TempoControls extends ConsumerStatefulWidget {
+  const _TempoControls({required this.sourceId, required this.props});
+
+  final int sourceId;
+  final AudioWaveformUiForAudioProperties props;
+
+  @override
+  ConsumerState<_TempoControls> createState() => _TempoControlsState();
+}
+
+class _TempoControlsState extends ConsumerState<_TempoControls> {
+  bool _warp = false;
+
+  Future<void> _start(Future<int> Function(DawContext ctx) start) async {
+    final ctx = ref.read(projectProvider.notifier).dawContext;
+    final result = await attemptAsync(() => start(ctx));
+    if (!mounted) return;
+    if (result case Error<int>(:final error)) {
+      ref.read(notificationProvider.notifier).error(error, title: 'Tempo');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final props = widget.props;
+    final sourceId = widget.sourceId;
+    final detecting = ref.watch(
+      backgroundJobsProvider.select(
+        (s) => s.isRunningFor(sourceId, UiJobKind.tempoDetection),
+      ),
+    );
+    final rendering = ref.watch(
+      backgroundJobsProvider.select(
+        (s) => s.isRunningFor(sourceId, UiJobKind.waveformRender),
+      ),
+    );
+    final grid = props.beatGrid;
+    final tempo = switch ((grid, props.originalBpm)) {
+      (final grid?, _) =>
+        '${grid.bpm.toStringAsFixed(1)} BPM · '
+            '${(grid.confidence * 100).round()}% steady',
+      (null, final bpm?) => '${bpm.toStringAsFixed(1)} BPM (as placed)',
+      (null, null) => 'Tempo unknown',
+    };
+    final status = rendering || (props.fitted && !props.renderReady)
+        ? 'Rendering…'
+        : props.fitted
+        ? (props.warp ? 'Fitted beat by beat' : 'Fitted to project tempo')
+        : null;
+    Widget busy() => const SizedBox.square(
+      dimension: 14,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Icon(Icons.speed, size: 16, color: colors.onSurfaceVariant),
+          Text(tempo, style: TextStyle(color: colors.onSurfaceVariant)),
+          OutlinedButton.icon(
+            onPressed: detecting
+                ? null
+                : () => _start(
+                    (ctx) => startTempoDetection(ctx: ctx, sourceId: sourceId),
+                  ),
+            icon: detecting ? busy() : const Icon(Icons.graphic_eq, size: 16),
+            label: const Text('Detect tempo'),
+          ),
+          OutlinedButton.icon(
+            onPressed: rendering
+                ? null
+                : () => _start(
+                    (ctx) => startFitToTempo(
+                      ctx: ctx,
+                      sourceId: sourceId,
+                      warp: _warp && grid != null,
+                    ),
+                  ),
+            icon: rendering ? busy() : const Icon(Icons.timer, size: 16),
+            label: const Text('Fit to tempo'),
+          ),
+          Tooltip(
+            message: grid == null
+                ? 'Detect the tempo first'
+                : 'Stretch beat by beat so every beat lands on the grid',
+            child: FilterChip(
+              label: const Text('Beat by beat'),
+              selected: _warp && grid != null,
+              onSelected: grid == null
+                  ? null
+                  : (selected) => setState(() => _warp = selected),
+            ),
+          ),
+          if (status != null)
+            Text(
+              status,
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+            ),
         ],
       ),
     );

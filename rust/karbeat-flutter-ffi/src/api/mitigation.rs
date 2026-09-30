@@ -8,12 +8,16 @@ use std::{
 };
 
 use flutter_rust_bridge::frb;
-use karbeat_core::api::mitigation_api::{self, StartupRecovery};
 use karbeat_core::core::mitigation::{
     AutoSaveSettings, FlutterCrashSource, RecoveryInfo, StoredCrashReport,
 };
+use karbeat_core_api::{
+    jobs::{JobClass, JobKind, JobSpec, JobTarget},
+    mitigation_api::{self, StartupRecovery},
+};
 
 use crate::api::context::{DawContext, DawSessionInner};
+use crate::api::jobs::run_job;
 use crate::api::project::UiApplicationState;
 use crate::api::serialization::restore_loaded_project;
 
@@ -105,6 +109,7 @@ impl From<StoredCrashReport> for UiCrashReportSummary {
 #[frb(dart_metadata=("freezed"))]
 pub struct UiStartupRecovery {
     pub previous_session_unclean: bool,
+    pub previous_session_forced: bool,
     pub recovery: Option<UiRecoveryInfo>,
     pub crash_reports: Vec<UiCrashReportSummary>,
 }
@@ -113,6 +118,7 @@ impl From<StartupRecovery> for UiStartupRecovery {
     fn from(startup: StartupRecovery) -> Self {
         Self {
             previous_session_unclean: startup.previous_session_unclean,
+            previous_session_forced: startup.previous_session_forced,
             recovery: startup.recovery.map(UiRecoveryInfo::from),
             crash_reports: startup
                 .crash_reports
@@ -136,18 +142,21 @@ pub enum UiFlutterCrashKind {
 // APIs
 // =======================================
 
-/// Configures crash reporting and auto save recovery under `support_dir`, then starts the auto
-/// save worker. Call once after the project is initialized; later calls return the current state.
+/// Configures crash reporting and auto save recovery under `support_dir`, records Ctrl+C as a
+/// forced shutdown, then starts the auto save worker. Call once after the project is initialized;
+/// later calls return the current state.
 pub fn configure_mitigation(
     ctx: &DawContext,
     support_dir: String,
     app_version: String,
 ) -> anyhow::Result<UiStartupRecovery> {
-    let startup = mitigation_api::configure(
-        &mut ctx.runtime_write(),
-        Path::new(&support_dir),
-        &app_version,
-    )?;
+    let startup = {
+        let mut runtime = ctx.runtime_write();
+        let startup =
+            mitigation_api::configure(&mut runtime, Path::new(&support_dir), &app_version)?;
+        mitigation_api::watch_shutdown_signals(&runtime);
+        startup
+    };
     start_auto_save_worker(ctx)?;
     Ok(startup.into())
 }
@@ -208,7 +217,17 @@ pub fn export_crash_report(id: String, destination: String) -> anyhow::Result<()
 
 /// Replaces the live project with the auto saved copy. The recovered project is marked unsaved
 /// and keeps the file path of the project it was auto saved from.
-pub fn load_recovered_project(ctx: &DawContext) -> anyhow::Result<UiApplicationState> {
+pub async fn load_recovered_project(ctx: &DawContext) -> anyhow::Result<UiApplicationState> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::ProjectRestore, JobClass::Control).with_target(JobTarget::Project),
+        move |_| load_recovered_project_blocking(&ctx),
+    )
+    .await
+    .map_err(anyhow::Error::msg)
+}
+
+fn load_recovered_project_blocking(ctx: &DawContext) -> anyhow::Result<UiApplicationState> {
     let operation = ctx.begin_project_operation();
     let recovered = {
         let core = operation.read_core();
@@ -216,6 +235,8 @@ pub fn load_recovered_project(ctx: &DawContext) -> anyhow::Result<UiApplicationS
         mitigation_api::load_recovery_file(&core, sample_rate)?
     };
     let ui_state = restore_loaded_project(&operation, recovered)?;
+    drop(operation);
+    crate::api::audio_analysis::schedule_source_renders(ctx, false);
     log::info!("Recovered the auto saved project");
     Ok(ui_state)
 }
@@ -234,8 +255,15 @@ pub fn set_session_suspended(ctx: &DawContext, suspended: bool) -> anyhow::Resul
     )?)
 }
 
+/// Upper bound for background jobs to stop when the app closes.
+const JOB_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// Ends the session cleanly so the next launch does not report a crash or offer recovery.
-pub fn mark_clean_shutdown(ctx: &DawContext) -> anyhow::Result<()> {
+///
+/// Stops background jobs first so none of them touches the project after this point.
+pub async fn mark_clean_shutdown(ctx: &DawContext) -> anyhow::Result<()> {
+    tokio::task::spawn_blocking(|| karbeat_core_api::jobs::global().shutdown(JOB_SHUTDOWN_TIMEOUT))
+        .await?;
     Ok(mitigation_api::mark_clean_shutdown(&ctx.read())?)
 }
 
@@ -324,7 +352,7 @@ mod tests {
     use super::{AutoSaveOutcome, auto_save_once};
     use crate::api::context::DawContext;
     use crate::sync::check_random;
-    use karbeat_core::api::{mitigation_api, track_api};
+    use karbeat_core_api::{mitigation_api, track_api};
 
     #[test]
     fn auto_save_skips_busy_and_idle_sessions_and_writes_dirty_ones() {

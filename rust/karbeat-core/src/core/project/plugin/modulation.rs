@@ -140,6 +140,10 @@ impl ApplicationState {
         depth: f32,
         base_value: f32,
     ) -> anyhow::Result<ModulationLinkId> {
+        anyhow::ensure!(
+            depth.is_finite() && base_value.is_finite(),
+            "Modulation depth and base value must be finite numbers"
+        );
         // Ensure the source actually exists
         if !self.modulation_sources.contains_key(source_id) {
             return Err(anyhow::anyhow!("Modulation source not found"));
@@ -185,6 +189,10 @@ impl ApplicationState {
 
     /// Change the depth/amount of a specific connection
     pub fn update_link_depth(&mut self, link_id: ModulationLinkId, new_depth: f32) {
+        if !new_depth.is_finite() {
+            log::warn!("Ignoring non-finite modulation depth for link {link_id:?}");
+            return;
+        }
         if let Some(link) = self.modulation_links.get_mut(link_id) {
             link.prop.depth = new_depth;
         }

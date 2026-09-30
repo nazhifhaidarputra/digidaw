@@ -7,6 +7,7 @@ import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/project.dart';
 
@@ -40,7 +41,62 @@ typedef ChannelAutomationEntry = ({
   int linkId,
   AutomationTargetDto target,
   AutomationLaneDto lane,
+
+  /// What owns the automated parameter, from [automationSourceName].
+  String sourceName,
 });
+
+/// Names what owns an automated parameter: the plugin for plugin parameters,
+/// otherwise the mixer channel or transport. Keeps lanes for parameters with
+/// the same name, such as two plugins' "Mix", distinguishable.
+String automationSourceName(
+  ApplicationDataStore project,
+  AutomationTargetDto target,
+) {
+  String channelSource(
+    mixer_api.UiMixerChannel? channel,
+    String channelName,
+    MixerChannelParamTargetDto param,
+  ) => switch (param) {
+    MixerChannelParamTargetDto_Volume() ||
+    MixerChannelParamTargetDto_Pan() => channelName,
+    MixerChannelParamTargetDto_Plugin(:final effectId) =>
+      channel?.effects
+              .where((effect) => effect.id == effectId)
+              .firstOrNull
+              ?.name ??
+          'Missing effect',
+  };
+
+  return switch (target) {
+    AutomationTargetDto_Generator(:final generatorId) =>
+      switch (project.generators[generatorId]?.instanceType) {
+        UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
+        UiGeneratorInstanceType_Sampler() => 'Sampler',
+        null => 'Missing instrument',
+      },
+    AutomationTargetDto_Track(
+      :final trackId,
+      trackTarget: TrackAutomationTargetDto_MixerChannel(:final field0),
+    ) =>
+      channelSource(
+        project.mixer.channels[trackId],
+        project.tracks[trackId]?.name ?? 'Track',
+        field0,
+      ),
+    AutomationTargetDto_Bus(:final busId, :final mixTarget) => channelSource(
+      project.mixer.buses[busId]?.channel,
+      project.mixer.buses[busId]?.name ?? 'Bus',
+      mixTarget,
+    ),
+    AutomationTargetDto_Master(
+      field0: MasterAutomationTargetDto_MixerChannel(:final field0),
+    ) =>
+      channelSource(project.mixer.masterBus, 'Master', field0),
+    AutomationTargetDto_Master(field0: MasterAutomationTargetDto_TempoBpm()) =>
+      'Transport',
+  };
+}
 
 /// A plugin parameter paired with its current automation availability.
 final class PluginAutomationCandidate {
@@ -645,6 +701,7 @@ final busAutomationProvider =
                 linkId: link.id,
                 target: target,
                 lane: lane,
+                sourceName: automationSourceName(projectData, target),
               ));
             }
           }
@@ -695,6 +752,7 @@ final trackAutomationProvider =
                       linkId: link.id,
                       target: target,
                       lane: lane,
+                      sourceName: automationSourceName(projectData, target),
                     ));
                   }
                 }
@@ -714,6 +772,7 @@ final trackAutomationProvider =
                     linkId: link.id,
                     target: target,
                     lane: lane,
+                    sourceName: automationSourceName(projectData, target),
                   ));
                 }
               }
@@ -760,6 +819,7 @@ final allBusesAutomationProvider =
                 linkId: link.id,
                 target: target,
                 lane: lane,
+                sourceName: automationSourceName(projectData, target),
               ));
             }
           }
@@ -799,6 +859,7 @@ final masterAutomationProvider = Provider<List<ChannelAutomationEntry>>((ref) {
             linkId: link.id,
             target: target,
             lane: lane,
+            sourceName: automationSourceName(projectData, target),
           ));
         }
       }

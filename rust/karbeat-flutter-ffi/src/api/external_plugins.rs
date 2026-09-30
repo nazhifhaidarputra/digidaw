@@ -1,12 +1,13 @@
 use flutter_rust_bridge::frb;
-use karbeat_core::api::{
+use karbeat_core_api::{
     external_plugin_api,
+    jobs::{JobClass, JobKind, JobSpec},
     plugin_discovery_api::{self, PluginScanEvent},
 };
 use karbeat_host::{PluginDescriptor, PluginFormat, PluginKind, scanner::ScanSettings};
 
 use crate::{
-    api::{context::DawContext, plugin::UiPluginTarget},
+    api::{context::DawContext, jobs::run_job, plugin::UiPluginTarget},
     frb_generated::StreamSink,
 };
 
@@ -332,7 +333,17 @@ pub fn external_plugin_failure(ctx: &DawContext, target: UiPluginTarget) -> Opti
     external_plugin_api::failure(ctx, target.into())
 }
 
-pub fn retry_external_plugin(ctx: &DawContext, target: UiPluginTarget) -> anyhow::Result<()> {
+pub async fn retry_external_plugin(ctx: &DawContext, target: UiPluginTarget) -> anyhow::Result<()> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::PluginRetry, JobClass::Control),
+        move |_| retry_external_plugin_blocking(&ctx, target),
+    )
+    .await
+    .map_err(anyhow::Error::msg)
+}
+
+fn retry_external_plugin_blocking(ctx: &DawContext, target: UiPluginTarget) -> anyhow::Result<()> {
     let operation = ctx.begin_project_operation();
     let pending = {
         let core = operation.read_core();

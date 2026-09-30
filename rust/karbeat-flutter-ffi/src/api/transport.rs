@@ -3,7 +3,8 @@
 //! BPM is also persisted in ApplicationState for project serialization.
 
 use flutter_rust_bridge::frb;
-use karbeat_core::{api::transport_api, audio::engine::PlaybackMode};
+use karbeat_core::audio::engine::PlaybackMode;
+use karbeat_core_api::transport_api;
 
 use crate::api::context::DawContext;
 
@@ -62,7 +63,8 @@ pub fn set_looping(ctx: &DawContext, val: bool) -> Result<(), String> {
 /// set the BPM of the transport.
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
 pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<(), String> {
-    transport_api::set_bpm(&mut ctx.project_write(), val);
+    transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
+    crate::api::audio_analysis::schedule_source_renders(ctx, true);
     Ok(())
 }
 

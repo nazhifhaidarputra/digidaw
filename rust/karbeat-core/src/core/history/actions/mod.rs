@@ -52,21 +52,23 @@ mod clips;
 mod names;
 mod notes;
 mod pools;
+mod sources;
 mod structure;
 mod transport;
 
 pub use automation::{AutomationChanged, AutomationRecorder};
 pub use batch::Batch;
-pub use clips::{ClipEditRecorder, ClipsChanged};
+pub use clips::{ClipEditRecorder, ClipsChanged, ClipsMadeUnique};
 pub use names::{
     BusRecolored, BusRenamed, PatternRenamed, TrackRecolored, TrackRenamed, TracksReordered,
 };
 pub use notes::{NoteMove, NotesChanged, NotesMoved, NotesResized};
+pub use sources::{SourceEnvelopeChanged, SourceTempo, SourceTempoChanged};
 pub use structure::{
     EffectBypassed, EffectMoved, EffectToggled, RoutingChanged, RoutingRecorder, StructureChanged,
     StructureRecorder,
 };
-pub use transport::{MetadataChanged, TempoChanged};
+pub use transport::{CueMarkersChanged, LoopRegionChanged, MetadataChanged, TempoChanged};
 
 /// Swaps one pool slot with the value history holds for the other side of an edit.
 ///

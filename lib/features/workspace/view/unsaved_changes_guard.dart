@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' show AppExitType;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -186,7 +187,14 @@ class _UnsavedChangesGuardState extends ConsumerState<UnsavedChangesGuard>
     if (shutdown case Error<void>(error: final error)) {
       AppLogger.warn('Could not record a clean shutdown: $error');
     }
-    await windowManager.destroy();
+    if (Platform.isLinux) {
+      // Destroying the GTK window under a running engine segfaults once the
+      // engine's pending task timers fire; the engine's own exit path quits
+      // the application in order instead.
+      await WidgetsBinding.instance.exitApplication(AppExitType.required);
+    } else {
+      await windowManager.destroy();
+    }
   }
 
   @override

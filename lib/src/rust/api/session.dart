@@ -4,12 +4,14 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 import 'plugin.dart';
 import 'project.dart';
+import 'timeline.dart';
 import 'track.dart';
 part 'session.freezed.dart';
 

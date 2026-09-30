@@ -11,7 +11,7 @@ use crate::{
             telemetry::{AudioEngineTelemetry, PluginTelemetrySnapshot},
             transport::{PlaybackMode, TransportState},
             types::*,
-            voices::{GeneratorVoice, VoiceState},
+            voices::{ClipSpan, GeneratorVoice, NeighbourCrossfade, VoiceState},
             workspace::RenderWorkspace,
         },
         event::{PluginTarget, TransportFeedback},
@@ -65,6 +65,9 @@ pub struct AudioEngine {
 
     pub(super) telemetry: AudioEngineTelemetry,
     pub(super) graph_retirement: Producer<RetiredGraphState>,
+
+    /// Offline bounces render what feeds the master bus, skipping its effects and fader.
+    pub(super) bypass_master: bool,
 }
 
 pub(super) enum RetiredGraphState {
@@ -77,6 +80,7 @@ pub(super) enum RetiredGraphState {
     Routing(Box<[RoutingConnection]>),
     Automation(AudioAutomationLane),
     AudioBuffer(Vec<f32>),
+    AudioSource(std::sync::Arc<AudioWaveform>),
     TelemetryProducer(triple_buffer::Input<PluginTelemetrySnapshot>),
     TelemetrySubscription(HashSet<String>),
 }
@@ -98,6 +102,7 @@ fn graph_retirement_queue() -> Producer<RetiredGraphState> {
                     RetiredGraphState::Routing(routes) => drop(routes),
                     RetiredGraphState::Automation(lane) => drop(lane),
                     RetiredGraphState::AudioBuffer(buffer) => drop(buffer),
+                    RetiredGraphState::AudioSource(waveform) => drop(waveform),
                     RetiredGraphState::TelemetryProducer(producer) => drop(producer),
                     RetiredGraphState::TelemetrySubscription(subscription) => drop(subscription),
                 },
@@ -123,6 +128,7 @@ pub struct AudioExportSnapshot {
     mixer_state: AudioMixerState,
     modulation: ModulationState,
     hosted_processors: HashMap<HostInstanceId, PreparedProcessor>,
+    bypass_master: bool,
 }
 
 #[derive(Debug, Error)]
@@ -138,6 +144,21 @@ pub enum AudioExportSnapshotError {
 }
 
 impl AudioExportSnapshot {
+    /// Renders what feeds the master bus instead of its output: master effects, fader, pan,
+    /// and master automation are skipped. Tracks and buses play as they do live.
+    ///
+    /// The render is compensated for the centre pan law of the channel it will play back on,
+    /// so it sounds like the original on a new track at 0 dB and centre pan.
+    pub fn without_master(mut self) -> Self {
+        self.bypass_master = true;
+        self
+    }
+
+    /// Project tempo the snapshot renders at.
+    pub fn bpm(&self) -> f32 {
+        self.bpm
+    }
+
     pub fn hosted_instance(&self, target: PluginTarget) -> Option<HostInstanceId> {
         match target {
             PluginTarget::Generator(id) => self
@@ -245,6 +266,8 @@ impl AudioEngine {
         let mut initial_state = AudioRenderState::default();
         initial_state.graph.sample_rate = sample_rate;
         initial_state.graph.buffer_size = buffer_size;
+        let mut voices = VoiceState::new();
+        voices.stretch_pool.prepare(sample_rate);
 
         Self {
             io: EngineIo {
@@ -257,7 +280,7 @@ impl AudioEngine {
             config: AudioEngineConfig::new(sample_rate, num_channels),
             processing_mode: ProcessingMode::Realtime,
             transport: TransportState::new(initial_bpm),
-            voices: VoiceState::new(),
+            voices,
             plugin_state: AudioPluginState::default(),
             mixer_state: AudioMixerState::default(),
             workspace: RenderWorkspace::new(buffer_size, num_channels),
@@ -266,6 +289,7 @@ impl AudioEngine {
             metronome_state: MetronomeState::default(),
             telemetry,
             graph_retirement: graph_retirement_queue(),
+            bypass_master: false,
         }
     }
 
@@ -282,6 +306,7 @@ impl AudioEngine {
             mixer_state: self.mixer_state.clone(),
             modulation: self.modulation.for_export(),
             hosted_processors: HashMap::new(),
+            bypass_master: false,
         }
     }
 
@@ -305,6 +330,7 @@ impl AudioEngine {
             mixer_state,
             modulation,
             mut hosted_processors,
+            bypass_master,
         } = snapshot;
         config.num_channels = num_channels;
 
@@ -381,6 +407,8 @@ impl AudioEngine {
             channels,
         )?;
 
+        let mut voices = VoiceState::for_export();
+        voices.stretch_pool.prepare(config.sample_rate);
         let mut engine = Self {
             io: EngineIo {
                 command_consumer,
@@ -392,7 +420,7 @@ impl AudioEngine {
             config,
             processing_mode: ProcessingMode::Offline,
             transport,
-            voices: VoiceState::for_export(),
+            voices,
             plugin_state,
             mixer_state,
             workspace,
@@ -401,6 +429,7 @@ impl AudioEngine {
             metronome_state: MetronomeState::default(),
             telemetry: AudioEngineTelemetry::new_for_export(),
             graph_retirement: graph_retirement_queue(),
+            bypass_master,
         };
         engine.recalculate_latencies();
         Ok(engine)
@@ -617,6 +646,21 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
+        // A playhead at or past the loop end plays on; only crossing the end wraps
+        if self.transport.song.is_looping
+            && let Some((loop_start, loop_end)) = self.song_loop_samples()
+            && self.transport.song.playhead_samples < loop_end
+        {
+            self.process_song_loop_block(
+                loop_start,
+                loop_end,
+                frame_count,
+                output_buffer,
+                channels,
+            );
+            return;
+        }
+
         let song_end = self.current_state.graph.max_sample_index;
 
         // Only enforce the auto-stop/loop boundary if the project actually has content (song_end > 0)
@@ -642,6 +686,60 @@ impl AudioEngine {
         } else {
             self.process_block_song_mode(frame_count, output_buffer, channels);
         }
+    }
+
+    /// Song loop region in samples at the current tempo, when one is set.
+    ///
+    /// Converted every block like the pattern loop, so tempo changes and automation move the
+    /// loop points with the music.
+    pub(super) fn song_loop_samples(&self) -> Option<(u32, u32)> {
+        let (start_tick, end_tick) = self.transport.song.loop_region?;
+        let bpm = self.transport.bpm;
+        let sample_rate = self.config.sample_rate;
+        let to_samples = |ticks: u64| {
+            u32::try_from(ClipTimeUnit::ticks_to_samples(ticks, bpm, sample_rate))
+                .unwrap_or(u32::MAX)
+        };
+        let (start, end) = (to_samples(start_tick), to_samples(end_tick));
+        (end > start).then_some((start, end))
+    }
+
+    /// Renders a song block before the loop end. A block that reaches the end is split there,
+    /// so the jump back to the loop start lands on the exact sample.
+    fn process_song_loop_block(
+        &mut self,
+        loop_start: u32,
+        loop_end: u32,
+        frame_count: usize,
+        output_buffer: &mut [f32],
+        channels: usize,
+    ) {
+        let frames_to_end = loop_end.saturating_sub(self.transport.song.playhead_samples) as usize;
+        if frames_to_end > frame_count {
+            self.process_block_song_mode(frame_count, output_buffer, channels);
+            return;
+        }
+
+        let split = frames_to_end
+            .saturating_mul(channels)
+            .min(output_buffer.len());
+        let (before_end, after_start) = output_buffer.split_at_mut(split);
+        if frames_to_end > 0 {
+            self.process_block_song_mode(frames_to_end, before_end, channels);
+        }
+
+        self.transport.song.playhead_samples = loop_start;
+        self.transport.song.last_emitted_samples = loop_start;
+        self.recalculate_beat_bar();
+        // Release held notes and one-shots so tails from the loop end do not pile up
+        self.stop_all_active_generators();
+        self.voices.active_oneshots.clear();
+
+        let remaining = frame_count.saturating_sub(frames_to_end);
+        if remaining > 0 {
+            self.process_block_song_mode(remaining, after_start, channels);
+        }
+        self.emit_current_playback_position();
     }
 
     // Process a block of frame rendering in SONG mode (normal playback)
@@ -935,6 +1033,7 @@ impl AudioEngine {
         }
 
         self.voices.active_oneshots.clear();
+        self.voices.stretch_pool.end_block();
     }
 
     pub(super) fn trigger_live_note(
@@ -1108,6 +1207,19 @@ impl AudioEngine {
             1.0
         };
 
+        // Plugins see the song loop in quarter notes from the song start, like VST3 cycle points
+        let (loop_start_beat, loop_end_beat) = match self.transport.mode {
+            PlaybackMode::Song if self.transport.song.is_looping => {
+                match self.transport.song.loop_region {
+                    Some((start, end)) if end > start => {
+                        (Some(start as f64 / PPQ), Some(end as f64 / PPQ))
+                    }
+                    _ => (None, None),
+                }
+            }
+            _ => (None, None),
+        };
+
         let base_ctx = ProcessContext {
             bpm,
             time_sig_numerator: self.transport.time_sig_numerator,
@@ -1119,8 +1231,8 @@ impl AudioEngine {
             project_time_samples: sample_position,
             beat_position,
             bar_position,
-            loop_start_beat: None,
-            loop_end_beat: None,
+            loop_start_beat,
+            loop_end_beat,
             midi_events: &[],
             param_changes: &[],
         };
@@ -1531,6 +1643,14 @@ impl AudioEngine {
                         },
                     );
                 }
+                // Everything routed to the master is already summed into the output. A bounce
+                // plays back through one more channel than the audio it replaces, whose centre
+                // pan passes 1/sqrt(2) per side, so it is rendered that much louder
+                RoutingNode::Master if self.bypass_master => {
+                    output
+                        .iter_mut()
+                        .for_each(|sample| *sample *= std::f32::consts::SQRT_2);
+                }
                 RoutingNode::Master => {
                     // TAIL HANDLING
                     let master_has_signal = self
@@ -1783,40 +1903,13 @@ impl AudioEngine {
             ((60.0 / self.transport.bpm) * (self.config.sample_rate as f32)) as f64;
         let samples_per_tick = samples_per_beat / PPQ;
 
-        for clip_id in track.clips() {
+        let clip_ids = track.clips();
+        for (index, clip_id) in clip_ids.iter().enumerate() {
             let Some(clip_data) = self.current_state.graph.clips.get(clip_id) else {
                 continue;
             };
-            let (clip_start, clip_length, clip_offset) = match &clip_data.time {
-                ClipTimeUnit::Samples {
-                    start_time,
-                    loop_length,
-                    offset_start,
-                } => (
-                    *start_time as u32,
-                    *loop_length as u32,
-                    *offset_start as u32,
-                ),
-                ClipTimeUnit::Ticks {
-                    start_time,
-                    loop_length,
-                    offset_start,
-                } => {
-                    let st = ((*start_time as f64) * samples_per_tick) as u32;
-                    let ll = ((*loop_length as f64) * samples_per_tick) as u32;
-                    let os = ((*offset_start as f64) * samples_per_tick) as u32;
-                    (st, ll, os)
-                }
-                ClipTimeUnit::Audio {
-                    start_tick,
-                    loop_length,
-                    offset_start,
-                } => (
-                    ((*start_tick as f64) * samples_per_tick).round() as u32,
-                    *loop_length as u32,
-                    *offset_start as u32,
-                ),
-            };
+            let (clip_start, clip_length, clip_offset) =
+                clip_span_samples(&clip_data.time, samples_per_tick);
 
             if clip_start > end_time {
                 break;
@@ -1835,15 +1928,30 @@ impl AudioEngine {
                         .source_map
                         .get(*source_id);
                     if let Some(waveform) = waveform_opt {
+                        let graph_clips = &self.current_state.graph.clips;
+                        let span_at = |neighbour: usize| {
+                            let clip = graph_clips.get(clip_ids.get(neighbour)?)?;
+                            matches!(clip.source, Some(DawSource::Audio(_)))
+                                .then(|| audio_clip_span(clip, samples_per_tick))
+                        };
+                        let crossfade = NeighbourCrossfade::for_clip(
+                            audio_clip_span(clip_data, samples_per_tick),
+                            index.checked_sub(1).and_then(span_at),
+                            span_at(index + 1),
+                        );
                         self.voices.prepare_audio_voice(
                             track.id,
+                            *clip_id,
                             clip_start,
                             clip_length,
                             clip_offset,
                             waveform,
+                            clip_data.envelope.as_ref(),
+                            crossfade,
                             start_time,
                             end_time,
                             self.config.sample_rate,
+                            self.transport.bpm,
                         );
                     }
                 }
@@ -2354,5 +2462,52 @@ impl AudioEngine {
             producer.publish();
         }
         self.telemetry.param_telemetry_producers = producers;
+    }
+}
+
+/// Timeline start, length, and source offset of a clip in project samples.
+fn clip_span_samples(time: &ClipTimeUnit, samples_per_tick: f64) -> (u32, u32, u32) {
+    match time {
+        ClipTimeUnit::Samples {
+            start_time,
+            loop_length,
+            offset_start,
+        } => (
+            *start_time as u32,
+            *loop_length as u32,
+            *offset_start as u32,
+        ),
+        ClipTimeUnit::Ticks {
+            start_time,
+            loop_length,
+            offset_start,
+        } => {
+            let st = ((*start_time as f64) * samples_per_tick) as u32;
+            let ll = ((*loop_length as f64) * samples_per_tick) as u32;
+            let os = ((*offset_start as f64) * samples_per_tick) as u32;
+            (st, ll, os)
+        }
+        ClipTimeUnit::Audio {
+            start_tick,
+            loop_length,
+            offset_start,
+        } => (
+            ((*start_tick as f64) * samples_per_tick).round() as u32,
+            *loop_length as u32,
+            *offset_start as u32,
+        ),
+    }
+}
+
+/// Timeline span and crossfade length of an audio clip, for neighbour crossfades.
+fn audio_clip_span(clip: &Clip, samples_per_tick: f64) -> ClipSpan {
+    let (start, length, _) = clip_span_samples(&clip.time, samples_per_tick);
+    ClipSpan {
+        start,
+        length,
+        crossfade: clip
+            .envelope
+            .as_ref()
+            .map_or(0, |envelope| envelope.crossfade),
     }
 }

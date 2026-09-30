@@ -2,7 +2,7 @@ use smallvec::SmallVec;
 
 use crate::{
     commands::EffectTarget,
-    shared::id::{AutomationId, BusId, EffectId, GeneratorId, TrackId},
+    shared::id::{AudioSourceId, AutomationId, BusId, EffectId, GeneratorId, TrackId},
 };
 
 /// Audio-engine updates required after an undo or redo changed the project.
@@ -18,10 +18,14 @@ pub struct EngineSync {
     pub full_graph: bool,
     /// Republish the project tempo.
     pub tempo: bool,
+    /// Republish the song loop region.
+    pub loop_region: bool,
     /// Republish the routing matrix.
     pub routing: bool,
     /// Republish these automation lanes.
     pub lanes: SmallVec<[AutomationId; 2]>,
+    /// Republish these audio sources.
+    pub sources: SmallVec<[AudioSourceId; 1]>,
     /// Install or remove built-in plugin processors and buses.
     pub plugins: Vec<PluginSync>,
 }
@@ -109,6 +113,14 @@ impl EngineSync {
         }
     }
 
+    /// Republish the song loop region.
+    pub fn loop_region() -> Self {
+        Self {
+            loop_region: true,
+            ..Self::default()
+        }
+    }
+
     /// Republish the routing matrix.
     pub fn routing() -> Self {
         Self {
@@ -121,6 +133,14 @@ impl EngineSync {
     pub fn lane(id: AutomationId) -> Self {
         Self {
             lanes: smallvec::smallvec![id],
+            ..Self::default()
+        }
+    }
+
+    /// Republish one audio source.
+    pub fn source(id: AudioSourceId) -> Self {
+        Self {
+            sources: smallvec::smallvec![id],
             ..Self::default()
         }
     }
@@ -138,10 +158,16 @@ impl EngineSync {
         self.track_graph |= other.track_graph;
         self.full_graph |= other.full_graph;
         self.tempo |= other.tempo;
+        self.loop_region |= other.loop_region;
         self.routing |= other.routing;
         for lane in other.lanes {
             if !self.lanes.contains(&lane) {
                 self.lanes.push(lane);
+            }
+        }
+        for source in other.sources {
+            if !self.sources.contains(&source) {
+                self.sources.push(source);
             }
         }
         self.plugins.extend(other.plugins);

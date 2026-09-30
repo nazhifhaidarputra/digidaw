@@ -4,15 +4,19 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'audio_analysis.dart';
+import 'automation.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 import 'plugin.dart';
+import 'timeline.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These functions are ignored because they are not marked as `pub`: `export_project_blocking`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -58,6 +62,11 @@ Future<UiProjectMetadata> updateProjectMetadata({
   metadata: metadata,
 );
 
+/// Encodes a square RGBA crop from the cover editor as a JPEG in the app cache
+/// and returns its path, ready to be set as the project's `cover_path`.
+Future<String> encodeCoverArt({required int size, required List<int> rgba}) =>
+    RustLib.instance.api.crateApiProjectEncodeCoverArt(size: size, rgba: rgba);
+
 /// Get the transport state from the backend
 Future<UiTransportState> getTransportState({required DawContext ctx}) =>
     RustLib.instance.api.crateApiProjectGetTransportState(ctx: ctx);
@@ -72,10 +81,16 @@ Future<Map<int, UiGeneratorInstance>> getGeneratorList({
   required DawContext ctx,
 }) => RustLib.instance.api.crateApiProjectGetGeneratorList(ctx: ctx);
 
+/// Bounces the loop region, every track and bus without the master bus, to a new audio
+/// source and returns its ID. Rendering runs without holding the project lock.
+Future<int> bounceLoopRegion({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiProjectBounceLoopRegion(ctx: ctx);
+
 /// Add a new audio source to the project
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
+/// Decoding runs without holding the project lock; only the final insert takes it.
 Future<int> addAudioSource({
   required DawContext ctx,
   required String filePath,
@@ -100,16 +115,20 @@ Stream<double> exportProjectFlutter({
   required String outputPath,
   required AudioExportConfigDTO config,
   required TailHandlingDTO tailHandling,
+  required ExportRangeDTO range,
 }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
   ctx: ctx,
   outputPath: outputPath,
   config: config,
   tailHandling: tailHandling,
+  range: range,
 );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>>
 abstract class AudioWaveformUiForAudioProperties
     implements RustOpaqueInterface {
+  UiBeatGrid? get beatGrid;
+
   WaveformHandle get bufferHandle;
 
   int get channels;
@@ -120,7 +139,11 @@ abstract class AudioWaveformUiForAudioProperties
 
   int get fineTune;
 
+  bool get fitted;
+
   int? get id;
+
+  bool get invert;
 
   bool get isLooping;
 
@@ -130,13 +153,25 @@ abstract class AudioWaveformUiForAudioProperties
 
   bool get normalized;
 
+  double? get originalBpm;
+
+  bool get renderReady;
+
+  bool get reverse;
+
   int get rootNote;
+
+  UiAudioSampleMode get sampleMode;
 
   int get sampleRate;
 
   int get trimEnd;
 
   int get trimStart;
+
+  bool get warp;
+
+  set beatGrid(UiBeatGrid? beatGrid);
 
   set bufferHandle(WaveformHandle bufferHandle);
 
@@ -148,7 +183,11 @@ abstract class AudioWaveformUiForAudioProperties
 
   set fineTune(int fineTune);
 
+  set fitted(bool fitted);
+
   set id(int? id);
+
+  set invert(bool invert);
 
   set isLooping(bool isLooping);
 
@@ -158,13 +197,23 @@ abstract class AudioWaveformUiForAudioProperties
 
   set normalized(bool normalized);
 
+  set originalBpm(double? originalBpm);
+
+  set renderReady(bool renderReady);
+
+  set reverse(bool reverse);
+
   set rootNote(int rootNote);
+
+  set sampleMode(UiAudioSampleMode sampleMode);
 
   set sampleRate(int sampleRate);
 
   set trimEnd(int trimEnd);
 
   set trimStart(int trimStart);
+
+  set warp(bool warp);
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DawContext>>
@@ -178,6 +227,10 @@ sealed class AudioExportConfigDTO with _$AudioExportConfigDTO {
       AudioExportConfigDTO_Wav;
   const factory AudioExportConfigDTO.mp3(Mp3ExportConfigDTO field0) =
       AudioExportConfigDTO_Mp3;
+  const factory AudioExportConfigDTO.flac(FlacExportConfigDTO field0) =
+      AudioExportConfigDTO_Flac;
+  const factory AudioExportConfigDTO.ogg(OggExportConfigDTO field0) =
+      AudioExportConfigDTO_Ogg;
 }
 
 @freezed
@@ -195,6 +248,45 @@ sealed class BitDepthDTO with _$BitDepthDTO {
 
   const factory BitDepthDTO.bitPerSample(int field0) = BitDepthDTO_BitPerSample;
   const factory BitDepthDTO.bitPerSecond(int field0) = BitDepthDTO_BitPerSecond;
+}
+
+@freezed
+sealed class ExportRangeDTO with _$ExportRangeDTO {
+  const ExportRangeDTO._();
+
+  /// From the song start to the end of the last clip.
+  const factory ExportRangeDTO.song() = ExportRangeDTO_Song;
+
+  /// From `start_tick` up to `end_tick`, such as the loop region.
+  const factory ExportRangeDTO.ticks({
+    required int startTick,
+    required int endTick,
+  }) = ExportRangeDTO_Ticks;
+}
+
+class FlacExportConfigDTO {
+  final int sampleRate;
+  final int channels;
+  final BitDepthDTO bitDepth;
+
+  const FlacExportConfigDTO({
+    required this.sampleRate,
+    required this.channels,
+    required this.bitDepth,
+  });
+
+  @override
+  int get hashCode =>
+      sampleRate.hashCode ^ channels.hashCode ^ bitDepth.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FlacExportConfigDTO &&
+          runtimeType == other.runtimeType &&
+          sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          bitDepth == other.bitDepth;
 }
 
 class Mp3ExportConfigDTO {
@@ -222,6 +314,25 @@ class Mp3ExportConfigDTO {
           bitRate == other.bitRate;
 }
 
+/// OGG Opus always renders at 48 kHz, so no sample rate is configurable
+class OggExportConfigDTO {
+  final int channels;
+  final BitDepthDTO bitRate;
+
+  const OggExportConfigDTO({required this.channels, required this.bitRate});
+
+  @override
+  int get hashCode => channels.hashCode ^ bitRate.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OggExportConfigDTO &&
+          runtimeType == other.runtimeType &&
+          channels == other.channels &&
+          bitRate == other.bitRate;
+}
+
 enum TailHandlingDTO { cutRemaining, leaveRemaining, wrapRemaining }
 
 class UiApplicationState {
@@ -233,6 +344,7 @@ class UiApplicationState {
   final Map<int, UiPattern> patterns;
   final UiMixerState mixer;
   final Map<int, AudioWaveformUiForSourceList> audioSources;
+  final UiTimelineState timeline;
 
   const UiApplicationState({
     required this.metadata,
@@ -243,6 +355,7 @@ class UiApplicationState {
     required this.patterns,
     required this.mixer,
     required this.audioSources,
+    required this.timeline,
   });
 
   @override
@@ -254,7 +367,8 @@ class UiApplicationState {
       generators.hashCode ^
       patterns.hashCode ^
       mixer.hashCode ^
-      audioSources.hashCode;
+      audioSources.hashCode ^
+      timeline.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -268,7 +382,8 @@ class UiApplicationState {
           generators == other.generators &&
           patterns == other.patterns &&
           mixer == other.mixer &&
-          audioSources == other.audioSources;
+          audioSources == other.audioSources &&
+          timeline == other.timeline;
 }
 
 @freezed
@@ -282,6 +397,9 @@ sealed class UiAudioHardwareConfig with _$UiAudioHardwareConfig {
   }) = _UiAudioHardwareConfig;
 }
 
+/// How a waveform's playback responds to tempo.
+enum UiAudioSampleMode { default_, stretch, resampled }
+
 @freezed
 sealed class UiClip with _$UiClip {
   const factory UiClip({
@@ -292,6 +410,7 @@ sealed class UiClip with _$UiClip {
     required int offsetStart,
     required int loopLength,
     required bool isSampleBased,
+    UiGainEnvelope? envelope,
   }) = _UiClip;
 }
 
@@ -303,6 +422,38 @@ sealed class UiClipSource with _$UiClipSource {
       UiClipSource_Audio;
   const factory UiClipSource.midi({required int patternId}) = UiClipSource_Midi;
   const factory UiClipSource.none() = UiClipSource_None;
+}
+
+/// One gain breakpoint of a gain envelope.
+@freezed
+sealed class UiEnvelopePoint with _$UiEnvelopePoint {
+  const factory UiEnvelopePoint({
+    required int position,
+    required double gain,
+    required AutomationCurveTypeDto curveType,
+    required double tension,
+  }) = _UiEnvelopePoint;
+}
+
+/// A fade at one edge of a waveform or clip.
+@freezed
+sealed class UiFade with _$UiFade {
+  const factory UiFade({
+    required int length,
+    required AutomationCurveTypeDto curveType,
+    required double tension,
+  }) = _UiFade;
+}
+
+/// Fades, crossfade, and gain points of a waveform or audio clip.
+@freezed
+sealed class UiGainEnvelope with _$UiGainEnvelope {
+  const factory UiGainEnvelope({
+    required UiFade fadeIn,
+    required UiFade fadeOut,
+    required int crossfade,
+    required List<UiEnvelopePoint> points,
+  }) = _UiGainEnvelope;
 }
 
 @freezed
@@ -344,6 +495,7 @@ sealed class UiProjectMetadata with _$UiProjectMetadata {
     required String genre,
     required String version,
     required String createdAt,
+    String? coverPath,
   }) = _UiProjectMetadata;
   static Future<UiProjectMetadata> default_() =>
       RustLib.instance.api.crateApiProjectUiProjectMetadataDefault();

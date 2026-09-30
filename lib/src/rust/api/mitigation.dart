@@ -4,20 +4,23 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 import 'plugin.dart';
 import 'project.dart';
+import 'timeline.dart';
 part 'mitigation.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `auto_save_once`, `inner_context`, `run_auto_save_worker`, `start_auto_save_worker`
+// These functions are ignored because they are not marked as `pub`: `auto_save_once`, `inner_context`, `load_recovered_project_blocking`, `run_auto_save_worker`, `start_auto_save_worker`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AutoSaveOutcome`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`
 
-/// Configures crash reporting and auto save recovery under `support_dir`, then starts the auto
-/// save worker. Call once after the project is initialized; later calls return the current state.
+/// Configures crash reporting and auto save recovery under `support_dir`, records Ctrl+C as a
+/// forced shutdown, then starts the auto save worker. Call once after the project is initialized;
+/// later calls return the current state.
 Future<UiStartupRecovery> configureMitigation({
   required DawContext ctx,
   required String supportDir,
@@ -87,6 +90,8 @@ Future<void> setSessionSuspended({
 );
 
 /// Ends the session cleanly so the next launch does not report a crash or offer recovery.
+///
+/// Stops background jobs first so none of them touches the project after this point.
 Future<void> markCleanShutdown({required DawContext ctx}) =>
     RustLib.instance.api.crateApiMitigationMarkCleanShutdown(ctx: ctx);
 
@@ -135,6 +140,7 @@ sealed class UiRecoveryInfo with _$UiRecoveryInfo {
 sealed class UiStartupRecovery with _$UiStartupRecovery {
   const factory UiStartupRecovery({
     required bool previousSessionUnclean,
+    required bool previousSessionForced,
     UiRecoveryInfo? recovery,
     required List<UiCrashReportSummary> crashReports,
   }) = _UiStartupRecovery;

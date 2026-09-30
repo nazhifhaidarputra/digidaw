@@ -34,6 +34,8 @@ pub struct SongPlaybackState {
     pub current_bar: usize,
     /// Sample position at which transport feedback was last emitted.
     pub last_emitted_samples: u32,
+    /// Loop region as `(start_tick, end_tick)`; looping wraps at the song end when `None`.
+    pub loop_region: Option<(u64, u64)>,
 }
 
 impl Default for SongPlaybackState {
@@ -46,6 +48,7 @@ impl Default for SongPlaybackState {
             current_beat: 1,
             current_bar: 1,
             last_emitted_samples: 0,
+            loop_region: None,
         }
     }
 }

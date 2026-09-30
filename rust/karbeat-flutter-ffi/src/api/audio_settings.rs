@@ -1,11 +1,13 @@
 use crate::api::context::DawContext;
+use crate::api::jobs::run_job;
 use flutter_rust_bridge::frb;
-use karbeat_core::{
-    api::audio_settings_api,
-    audio::backend::{
-        ActualDeviceStreamConfig, AudioDeviceInfo, AudioRuntimeSettings, DeviceStreamStatus,
-        OutputDeviceSelection, OutputHostSelection, RequestedDspConfig, RequestedOutputConfig,
-    },
+use karbeat_core::audio::backend::{
+    ActualDeviceStreamConfig, AudioDeviceInfo, AudioRuntimeSettings, DeviceStreamStatus,
+    OutputDeviceSelection, OutputHostSelection, RequestedDspConfig, RequestedOutputConfig,
+};
+use karbeat_core_api::{
+    audio_settings_api,
+    jobs::{JobClass, JobKind, JobSpec},
 };
 
 #[derive(Clone, Debug)]
@@ -128,7 +130,20 @@ pub fn set_output_selection(
         .map_err(|error| error.to_string())
 }
 
-pub fn set_dsp_config(
+pub async fn set_dsp_config(
+    ctx: &DawContext,
+    sample_rate: u32,
+    block_size: u32,
+) -> Result<UiAudioRuntimeSettings, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::PluginReconfigure, JobClass::Control),
+        move |_| set_dsp_config_blocking(&ctx, sample_rate, block_size),
+    )
+    .await
+}
+
+fn set_dsp_config_blocking(
     ctx: &DawContext,
     sample_rate: u32,
     block_size: u32,
@@ -145,7 +160,7 @@ pub fn set_dsp_config(
     if current_sample_rate != sample_rate {
         let pending = {
             let core = operation.read_core();
-            karbeat_core::api::external_plugin_api::begin_reconfigure_for_audio_config(
+            karbeat_core_api::external_plugin_api::begin_reconfigure_for_audio_config(
                 &core,
                 sample_rate,
                 block_size as usize,
@@ -153,10 +168,9 @@ pub fn set_dsp_config(
             .map_err(|error| error.to_string())?
         };
         if let Some(pending) = pending {
-            let completed =
-                karbeat_core::api::external_plugin_api::execute_reconfiguration(pending)
-                    .map_err(|error| error.to_string())?;
-            karbeat_core::api::external_plugin_api::commit_reconfiguration(
+            let completed = karbeat_core_api::external_plugin_api::execute_reconfiguration(pending)
+                .map_err(|error| error.to_string())?;
+            karbeat_core_api::external_plugin_api::commit_reconfiguration(
                 &mut operation.write_core(),
                 completed,
             );

@@ -919,6 +919,9 @@ impl AudioEngine {
             AudioCommand::SetPatternLoop(region) => {
                 self.transport.pattern.loop_region = region.filter(|(start, end)| end > start);
             }
+            AudioCommand::SetSongLoopRegion(region) => {
+                self.transport.song.loop_region = region.filter(|(start, end)| end > start);
+            }
             AudioCommand::SwitchPatternGenerator(new_gen_id) => {
                 if let PlaybackMode::Pattern { generator_id, .. } = &mut self.transport.mode {
                     if *generator_id != new_gen_id {
@@ -1037,6 +1040,23 @@ impl AudioEngine {
                     modulation_link_id
                 );
             }
+            AudioCommand::UpdateAudioSource { id, waveform } => {
+                // Swapping an existing slot never allocates; the old waveform is freed off the
+                // audio thread.
+                let retired = if let Some(slot) = self
+                    .current_state
+                    .graph
+                    .asset_library
+                    .source_map
+                    .get_mut(id)
+                {
+                    std::mem::replace(slot, waveform)
+                } else {
+                    log::debug!("[AudioEngine] Ignored update for unknown audio source {id}");
+                    waveform
+                };
+                self.retire_graph_state(RetiredGraphState::AudioSource(retired));
+            }
             AudioCommand::UpdateTrackGraph {
                 tracks,
                 clips,
@@ -1111,6 +1131,10 @@ impl AudioEngine {
                 sample_rate,
                 buffer_size,
             } => {
+                // Stretchers run at the DSP rate; rebuilt only when it changes.
+                if let Some(rate) = sample_rate {
+                    self.voices.stretch_pool.prepare(rate);
+                }
                 let sr_changed = match sample_rate {
                     Some(val) => val != self.current_state.graph.sample_rate,
                     None => false,

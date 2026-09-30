@@ -2,12 +2,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use jiff::Timestamp;
-use karbeat_core::api::{audio_waveform_api, project_api, track_api};
-use karbeat_core::audio::exporter::TailHandling;
-use karbeat_core::audio::writer::{AudioExportConfig, BitDepth, WavAudioWriterConfig};
+use karbeat_core::audio::exporter::{ExportRange, RenderOptions, RenderPurpose, TailHandling};
+use karbeat_core::audio::writer::{
+    AudioExportConfig, BitDepth, flac::FlacAudioWriterConfig, ogg::OggOpusAudioWriterConfig,
+    wav::WavAudioWriterConfig,
+};
 use karbeat_core::context::DawContext as CoreDawContext;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
-use karbeat_core::core::project::{ApplicationState, PluginInstance};
+use karbeat_core::core::project::{
+    ApplicationState, CoverArt, CoverImage, EnvelopePoint, Fade, GainEnvelope, PluginInstance,
+    audio_waveform::AudioSampleMode,
+};
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
     clip::Clip,
@@ -15,9 +20,17 @@ use karbeat_core::core::project::{
     track::{AudioTrack, TrackType, audio_waveform::AudioWaveform},
     transport::TransportState,
 };
+use karbeat_core_api::{
+    audio_waveform_api, bounce_api,
+    jobs::{JobClass, JobContext, JobKind, JobSpec, JobTarget},
+    project_api, track_api,
+};
+use karbeat_utils::types::BipolarF64;
 use serde::Serialize;
 
+use crate::api::automation::AutomationCurveTypeDto;
 use crate::api::context::DawSessionInner;
+use crate::api::jobs::run_job;
 use crate::api::waveform::WaveformHandle;
 use crate::frb_generated::StreamSink;
 
@@ -43,6 +56,7 @@ pub struct UiApplicationState {
     pub patterns: HashMap<u64, crate::api::pattern::UiPattern>,
     pub mixer: crate::api::mixer::UiMixerState,
     pub audio_sources: HashMap<u64, AudioWaveformUiForSourceList>,
+    pub timeline: crate::api::timeline::UiTimelineState,
 }
 
 impl From<ApplicationState> for UiApplicationState {
@@ -86,6 +100,7 @@ impl From<ApplicationState> for UiApplicationState {
             patterns,
             mixer: crate::api::mixer::UiMixerState::from(&value.mixer),
             audio_sources,
+            timeline: crate::api::timeline::UiTimelineState::from(&value.timeline),
         }
     }
 }
@@ -130,6 +145,8 @@ pub struct UiProjectMetadata {
     pub genre: String,
     pub version: String,
     pub created_at: String,
+    /// Absolute path of the square cover image file, when the project has one
+    pub cover_path: Option<String>,
 }
 
 impl From<ProjectMetadata> for UiProjectMetadata {
@@ -141,6 +158,9 @@ impl From<ProjectMetadata> for UiProjectMetadata {
             genre: m.genre,
             version: m.version,
             created_at: m.created_at.to_string(),
+            cover_path: m
+                .cover
+                .map(|cover| cover.path.to_string_lossy().into_owned()),
         }
     }
 }
@@ -157,6 +177,7 @@ impl From<UiProjectMetadata> for ProjectMetadata {
                 .created_at
                 .parse::<Timestamp>()
                 .unwrap_or_else(|_| Timestamp::now()),
+            cover: m.cover_path.map(CoverImage::new),
         }
     }
 }
@@ -296,6 +317,135 @@ pub struct UiClip {
     pub loop_length: u64,
     /// True when loop length and source offset are raw samples.
     pub is_sample_based: bool,
+    /// Audio clip gain envelope stacked on the waveform envelope; `None` leaves audio untouched.
+    pub envelope: Option<UiGainEnvelope>,
+}
+
+/// A fade at one edge of a waveform or clip.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiFade {
+    /// Length in samples; zero disables the fade.
+    pub length: u32,
+    pub curve_type: AutomationCurveTypeDto,
+    /// Bipolar tension, -1.0 to 1.0.
+    pub tension: f64,
+}
+
+/// One gain breakpoint of a gain envelope.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiEnvelopePoint {
+    /// Source frames from the trim start (waveform envelope) or clip content samples in the unit
+    /// of `offset_start` (clip envelope).
+    pub position: u64,
+    /// Linear gain, 0.0 to 2.0.
+    pub gain: f32,
+    /// Curve toward the next point.
+    pub curve_type: AutomationCurveTypeDto,
+    /// Bipolar tension of the curve toward the next point.
+    pub tension: f64,
+}
+
+/// Fades, crossfade, and gain points of a waveform or audio clip.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiGainEnvelope {
+    pub fade_in: UiFade,
+    pub fade_out: UiFade,
+    /// Equal-power crossfade length in samples: the loop crossfade on a waveform, the crossfade
+    /// with overlapping neighbours on a clip.
+    pub crossfade: u32,
+    /// Gain points sorted by position.
+    pub points: Vec<UiEnvelopePoint>,
+}
+
+/// How a waveform's playback responds to tempo.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub enum UiAudioSampleMode {
+    Default,
+    Stretch,
+    Resampled,
+}
+
+impl From<UiAudioSampleMode> for AudioSampleMode {
+    fn from(value: UiAudioSampleMode) -> Self {
+        match value {
+            UiAudioSampleMode::Default => Self::Default,
+            UiAudioSampleMode::Stretch => Self::Stretch,
+            UiAudioSampleMode::Resampled => Self::Resampled,
+        }
+    }
+}
+
+impl From<AudioSampleMode> for UiAudioSampleMode {
+    fn from(value: AudioSampleMode) -> Self {
+        match value {
+            AudioSampleMode::Default => Self::Default,
+            AudioSampleMode::Stretch => Self::Stretch,
+            AudioSampleMode::Resampled => Self::Resampled,
+        }
+    }
+}
+
+impl From<&Fade> for UiFade {
+    fn from(value: &Fade) -> Self {
+        Self {
+            length: value.length,
+            curve_type: value.curve_type.into(),
+            tension: value.tension.get(),
+        }
+    }
+}
+
+impl From<UiFade> for Fade {
+    fn from(value: UiFade) -> Self {
+        Self {
+            length: value.length,
+            curve_type: value.curve_type.into(),
+            tension: BipolarF64::new(value.tension),
+        }
+    }
+}
+
+impl From<&GainEnvelope> for UiGainEnvelope {
+    fn from(value: &GainEnvelope) -> Self {
+        Self {
+            fade_in: UiFade::from(&value.fade_in),
+            fade_out: UiFade::from(&value.fade_out),
+            crossfade: value.crossfade,
+            points: value
+                .points
+                .iter()
+                .map(|point| UiEnvelopePoint {
+                    position: point.position,
+                    gain: point.gain,
+                    curve_type: point.curve_type.into(),
+                    tension: point.tension.get(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<UiGainEnvelope> for GainEnvelope {
+    fn from(value: UiGainEnvelope) -> Self {
+        Self {
+            fade_in: value.fade_in.into(),
+            fade_out: value.fade_out.into(),
+            crossfade: value.crossfade,
+            points: value
+                .points
+                .into_iter()
+                .map(|point| EnvelopePoint {
+                    position: point.position,
+                    gain: point.gain,
+                    curve_type: point.curve_type.into(),
+                    tension: BipolarF64::new(point.tension),
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -325,6 +475,7 @@ impl From<&Clip> for UiClip {
             offset_start: value.time.offset_start_raw(),
             loop_length: value.time.loop_length_raw(),
             is_sample_based: value.time.is_samples(),
+            envelope: value.envelope.as_deref().map(UiGainEnvelope::from),
         }
     }
 }
@@ -354,6 +505,22 @@ pub struct AudioWaveformUiForAudioProperties {
     pub is_looping: bool,
     pub normalized: bool,
     pub muted: bool, // this only affects when play stream, not when doing preview sound
+    pub sample_mode: UiAudioSampleMode,
+    /// Tempo of the original audio: detected, or anchored to the project tempo when a
+    /// tempo-following mode was entered. `None` when unknown.
+    pub original_bpm: Option<f32>,
+    /// Beats found by tempo detection, if it ran.
+    pub beat_grid: Option<crate::api::audio_analysis::UiBeatGrid>,
+    /// Whether the source is stretched to the project tempo.
+    pub fitted: bool,
+    /// Whether the stretch follows each detected beat.
+    pub warp: bool,
+    /// Whether the audio plays with inverted polarity.
+    pub invert: bool,
+    /// Whether the audio plays backwards.
+    pub reverse: bool,
+    /// Whether the stretched audio is rendered; playback uses the original until it is.
+    pub render_ready: bool,
 }
 
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
@@ -393,8 +560,34 @@ impl AudioWaveformUiForAudioProperties {
             trim_start: value.trim_start,
             trim_end: value.trim_end,
             is_looping: value.is_looping,
-            normalized: value.normalized,
+            normalized: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.normalize),
             muted: value.muted,
+            sample_mode: value.sample_mode.into(),
+            original_bpm: value.original_bpm,
+            beat_grid: value.beat_grid.as_ref().map(Into::into),
+            fitted: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.stretches()),
+            warp: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.warp),
+            invert: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.invert),
+            reverse: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.reverse),
+            render_ready: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.buffer.is_some()),
         })
     }
 }
@@ -481,6 +674,29 @@ pub enum TailHandlingDTO {
     WrapRemaining,
 }
 
+/// Part of the song to export.
+pub enum ExportRangeDTO {
+    /// From the song start to the end of the last clip.
+    Song,
+    /// From `start_tick` up to `end_tick`, such as the loop region.
+    Ticks { start_tick: u64, end_tick: u64 },
+}
+
+impl From<ExportRangeDTO> for ExportRange {
+    fn from(value: ExportRangeDTO) -> Self {
+        match value {
+            ExportRangeDTO::Song => ExportRange::Song,
+            ExportRangeDTO::Ticks {
+                start_tick,
+                end_tick,
+            } => ExportRange::Ticks {
+                start_tick,
+                end_tick,
+            },
+        }
+    }
+}
+
 impl From<TailHandlingDTO> for TailHandling {
     fn from(value: TailHandlingDTO) -> Self {
         match value {
@@ -529,9 +745,54 @@ pub struct Mp3ExportConfigDTO {
 }
 
 #[derive(Clone)]
+pub struct FlacExportConfigDTO {
+    pub sample_rate: u32,
+    pub channels: u8,
+    pub bit_depth: BitDepthDTO,
+}
+
+impl TryFrom<FlacExportConfigDTO> for FlacAudioWriterConfig {
+    type Error = String;
+
+    fn try_from(value: FlacExportConfigDTO) -> Result<Self, Self::Error> {
+        let BitDepth::BitPerSample(bits_per_sample) = value.bit_depth.try_into()? else {
+            return Err("FLAC export requires a bit depth in bits per sample".to_string());
+        };
+        Ok(Self {
+            sample_rate: value.sample_rate,
+            channels: u16::from(value.channels),
+            bits_per_sample,
+        })
+    }
+}
+
+/// OGG Opus always renders at 48 kHz, so no sample rate is configurable
+#[derive(Clone)]
+pub struct OggExportConfigDTO {
+    pub channels: u8,
+    pub bit_rate: BitDepthDTO,
+}
+
+impl TryFrom<OggExportConfigDTO> for OggOpusAudioWriterConfig {
+    type Error = String;
+
+    fn try_from(value: OggExportConfigDTO) -> Result<Self, Self::Error> {
+        let BitDepth::BitPerSecond(bitrate) = value.bit_rate.try_into()? else {
+            return Err("OGG Opus export requires a bitrate in kbps".to_string());
+        };
+        Ok(Self {
+            channels: value.channels,
+            bitrate,
+        })
+    }
+}
+
+#[derive(Clone)]
 pub enum AudioExportConfigDTO {
     Wav(WavExportConfigDTO),
     Mp3(Mp3ExportConfigDTO),
+    Flac(FlacExportConfigDTO),
+    Ogg(OggExportConfigDTO),
 }
 
 // ============================ APIs ==================================
@@ -550,8 +811,23 @@ pub fn update_project_metadata(
     let created_at = ctx.app_state.metadata.created_at;
     let mut metadata = ProjectMetadata::from(metadata);
     metadata.created_at = created_at;
+    // An unchanged cover keeps the link recorded when the project was loaded
+    if let (Some(cover), Some(current)) = (&mut metadata.cover, &ctx.app_state.metadata.cover)
+        && cover.path == current.path
+    {
+        *cover = current.clone();
+    }
     project_api::update_project_metadata(&mut ctx, metadata)
         .map(UiProjectMetadata::from)
+        .map_err(|error| error.to_string())
+}
+
+/// Encodes a square RGBA crop from the cover editor as a JPEG in the app cache
+/// and returns its path, ready to be set as the project's `cover_path`.
+pub fn encode_cover_art(size: u32, rgba: Vec<u8>) -> Result<String, String> {
+    CoverArt::encode_rgba(size, &rgba)
+        .and_then(|cover| cover.store_in_cache())
+        .map(|path| path.to_string_lossy().into_owned())
         .map_err(|error| error.to_string())
 }
 
@@ -579,14 +855,53 @@ pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u64, UiGeneratorIn
     .map_err(|e| e.to_string())
 }
 
+/// Bounces the loop region, every track and bus without the master bus, to a new audio
+/// source and returns its ID. Rendering runs without holding the project lock.
+pub async fn bounce_loop_region(ctx: &DawContext) -> Result<u64, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::Bounce, JobClass::Heavy).with_target(JobTarget::Project),
+        move |job| -> Result<u64, String> {
+            // Like an export, the render keeps plugin and project operations out until it
+            // ends; the guard must be gone before `project_write` takes the same lock
+            let completed = {
+                let operation = ctx.begin_project_operation();
+                let pending =
+                    bounce_api::begin_bounce(&operation.read_core()).map_err(|e| e.to_string())?;
+                bounce_api::execute_bounce(pending, |progress| {
+                    job.progress("render", progress);
+                    !job.is_cancelled()
+                })
+                .map_err(|e| e.to_string())?
+            };
+            let source_id = bounce_api::commit_bounce(&mut ctx.project_write(), completed);
+            Ok(source_id.to_u64())
+        },
+    )
+    .await
+}
+
 /// Add a new audio source to the project
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-pub fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, String> {
-    let source_id = audio_waveform_api::add_audio_source(&mut ctx.project_write(), file_path)
-        .map_err(|e| e.to_string())?;
-    Ok(source_id.to_u64())
+/// Decoding runs without holding the project lock; only the final insert takes it.
+pub async fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, String> {
+    let ctx = ctx.clone();
+    let file_path = file_path.to_owned();
+    run_job(
+        JobSpec::new(JobKind::AudioImport, JobClass::Heavy),
+        move |_| -> Result<u64, String> {
+            let pending = audio_waveform_api::begin_audio_import(&ctx.read(), &file_path)
+                .map_err(|e| e.to_string())?;
+            let completed =
+                audio_waveform_api::execute_audio_import(pending).map_err(|e| e.to_string())?;
+            let source_id =
+                audio_waveform_api::commit_audio_import(&mut ctx.project_write(), completed);
+            Ok(source_id.to_u64())
+        },
+    )
+    .await
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
@@ -610,12 +925,42 @@ pub fn get_tracks(ctx: &DawContext) -> Result<HashMap<u64, UiTrack>, String> {
 
 /// Export project to flutter. also report progress via StreamSink
 #[frb]
-pub fn export_project_flutter(
+pub async fn export_project_flutter(
     ctx: &DawContext,
     output_path: String,
     config: AudioExportConfigDTO,
     tail_handling: TailHandlingDTO,
+    range: ExportRangeDTO,
     progress_sink: StreamSink<f32>,
+) -> Result<(), String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::ProjectExport, JobClass::Heavy).with_target(JobTarget::Project),
+        move |job| {
+            export_project_blocking(
+                &ctx,
+                output_path,
+                config,
+                RenderOptions {
+                    tail_handling: tail_handling.into(),
+                    range: range.into(),
+                    purpose: RenderPurpose::Export,
+                },
+                &progress_sink,
+                job,
+            )
+        },
+    )
+    .await
+}
+
+fn export_project_blocking(
+    ctx: &DawContext,
+    output_path: String,
+    config: AudioExportConfigDTO,
+    options: RenderOptions,
+    progress_sink: &StreamSink<f32>,
+    job: &JobContext,
 ) -> Result<(), String> {
     // Map the FFI DTO to the Core Configuration Enum
     let core_config = match config {
@@ -639,20 +984,17 @@ pub fn export_project_flutter(
                 bit_depth,
             }
         }
+        AudioExportConfigDTO::Flac(flac_dto) => AudioExportConfig::Flac(flac_dto.try_into()?),
+        AudioExportConfigDTO::Ogg(ogg_dto) => AudioExportConfig::Ogg(ogg_dto.try_into()?),
     };
 
     let operation = ctx.begin_project_operation();
     let pending = project_api::begin_project_export(&operation.read_core());
-    project_api::execute_project_export(
-        pending,
-        &output_path,
-        core_config,
-        tail_handling.into(),
-        |progress| {
-            // If the sink successfully adds the value, return true to keep rendering.
-            // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
-            progress_sink.add(progress).is_ok()
-        },
-    )
+    project_api::execute_project_export(pending, &output_path, core_config, options, |progress| {
+        job.progress("render", progress);
+        // If the sink successfully adds the value, return true to keep rendering.
+        // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
+        !job.is_cancelled() && progress_sink.add(progress).is_ok()
+    })
     .map_err(|e| e.to_string())
 }

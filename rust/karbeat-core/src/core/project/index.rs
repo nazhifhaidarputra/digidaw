@@ -13,8 +13,12 @@ pub use super::plugin::AudioPlugin;
 pub use super::track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern};
 pub use super::transport::TransportState;
 
-use crate::core::project::{ModulationLinkForOrderedLaneView, ModulationSource};
-use crate::core::project::{automation::AutomationLane, mixer::MixerState, session::SessionState};
+use crate::core::project::{
+    CoverArtError, CoverImage, GainEnvelope, ModulationLinkForOrderedLaneView, ModulationSource,
+};
+use crate::core::project::{
+    automation::AutomationLane, mixer::MixerState, session::SessionState, timeline::TimelineState,
+};
 
 pub use crate::shared::*;
 
@@ -64,6 +68,11 @@ pub struct ApplicationState {
 
     /// Canonical clip storage. Tracks contain only ordered `ClipId` handles.
     pub clips_pool: SlotMap<ClipId, Clip>,
+
+    /// Song loop region and cue markers. Last and defaulted so v1 (positional MessagePack)
+    /// projects saved before it existed still load.
+    #[serde(default)]
+    pub timeline: TimelineState,
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
@@ -115,14 +124,21 @@ pub struct ProjectMetadata {
     pub version: String,
     /// UTC timestamp assigned when metadata is first created.
     pub created_at: Timestamp,
+    /// Optional square cover art, embedded into exported audio. Last so older
+    /// positional MessagePack projects still load.
+    #[serde(default)]
+    pub cover: Option<CoverImage>,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error)]
 /// Validation failure for user-editable project metadata.
 pub enum ProjectMetadataError {
     /// The trimmed project title is empty.
     #[error("Project title cannot be empty")]
     EmptyTitle,
+    /// The cover image is missing, unreadable, or not a square JPEG/PNG.
+    #[error(transparent)]
+    Cover(#[from] CoverArtError),
     /// A Unicode character count exceeds its field-specific maximum.
     #[error("Project metadata field '{field}' exceeds {maximum} characters")]
     FieldTooLong {
@@ -151,6 +167,9 @@ impl ProjectMetadata {
         Self::validate_length("description", &self.description, 4000)?;
         Self::validate_length("genre", &self.genre, 80)?;
         Self::validate_length("version", &self.version, 64)?;
+        if let Some(cover) = &self.cover {
+            cover.load()?;
+        }
         Ok(self)
     }
 
@@ -175,6 +194,7 @@ impl Default for ProjectMetadata {
             genre: Default::default(),
             version: Default::default(),
             created_at: Timestamp::now(),
+            cover: None,
         }
     }
 }
@@ -370,6 +390,25 @@ impl ApplicationState {
         Ok(source_id)
     }
 
+    /// Replaces an audio source's waveform envelope and returns the previous one.
+    ///
+    /// Copy-on-write: the engine or UI may still hold the old waveform.
+    pub fn set_audio_source_envelope(
+        &mut self,
+        source_id: AudioSourceId,
+        envelope: GainEnvelope,
+    ) -> anyhow::Result<GainEnvelope> {
+        let entry = self
+            .asset_library
+            .source_map
+            .get_mut(source_id)
+            .ok_or_else(|| anyhow!("Audio source {source_id} not found"))?;
+        Ok(std::mem::replace(
+            &mut Arc::make_mut(entry).envelope,
+            envelope.normalized(),
+        ))
+    }
+
     /// reset current application state to default
     pub fn new_blank_project(&mut self) {
         let current_audio_config = self.audio_config.clone();
@@ -395,7 +434,22 @@ mod slotmap_persistence_tests {
     use karbeat_utils::types::NormalizedF64;
 
     #[test]
-    fn entity_and_graph_keys_survive_project_serialization() {
+    fn entity_and_graph_keys_survive_msgpack_serialization() {
+        assert_keys_survive(|state| {
+            let bytes = rmp_serde::to_vec(state).expect("serialize application state");
+            rmp_serde::from_slice(&bytes).expect("deserialize application state")
+        });
+    }
+
+    #[test]
+    fn entity_and_graph_keys_survive_json_serialization() {
+        assert_keys_survive(|state| {
+            let bytes = serde_json::to_vec(state).expect("serialize application state");
+            serde_json::from_slice(&bytes).expect("deserialize application state")
+        });
+    }
+
+    fn assert_keys_survive(round_trip: impl Fn(&ApplicationState) -> ApplicationState) {
         let mut state = ApplicationState::default();
         let track = state.add_new_audio_track();
         let bus_id = state.mixer.create_bus("Reverb".into());
@@ -435,9 +489,7 @@ mod slotmap_persistence_tests {
         let bus_node_id = state.mixer.buses[bus_id].graph_node_id;
         let master_node_id = state.mixer.master_node_id;
 
-        let bytes = rmp_serde::to_vec(&state).expect("serialize application state");
-        let mut restored: ApplicationState =
-            rmp_serde::from_slice(&bytes).expect("deserialize application state");
+        let mut restored = round_trip(&state);
 
         assert_eq!(restored.tracks[track.id].id, track.id);
         assert_eq!(restored.pattern_pool[pattern_id].id, pattern_id);

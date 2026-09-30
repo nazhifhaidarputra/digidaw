@@ -18,6 +18,8 @@ abstract class ExportProjectStateData with _$ExportProjectStateData {
     TailHandling tailHandling,
     @Default(false)
     bool openFolderAfterExport,
+    @Default(ExportRangeMode.wholeSong)
+    ExportRangeMode rangeMode,
   }) = _ExportProjectStateData;
 }
 
@@ -47,6 +49,10 @@ class ExportProjectNotifier extends Notifier<ExportProjectStateData> {
     state = state.copyWith(
       selectedFormat: format,
       selectedBitDepth: newBitDepth,
+      // Opus only encodes at 48 kHz
+      selectedSampleRate: format == SupportedAudioFormat.ogg
+          ? SampleRate.hz48000
+          : state.selectedSampleRate,
     );
   }
 
@@ -60,6 +66,10 @@ class ExportProjectNotifier extends Notifier<ExportProjectStateData> {
 
   void updateTailHandling(TailHandling tailHandling) {
     state = state.copyWith(tailHandling: tailHandling);
+  }
+
+  void updateRangeMode(ExportRangeMode rangeMode) {
+    state = state.copyWith(rangeMode: rangeMode);
   }
 
   void setOpenFolderAfterExport(bool value) {

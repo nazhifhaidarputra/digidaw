@@ -1,0 +1,103 @@
+name: Release
+
+# Publishes a GitHub release for a version tag, e.g. `git tag v0.6.0 && git push github v0.6.0`.
+# Only Linux x64 is built: it is the only platform that has been tested so far.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v0.6.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.44.6"
+  CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  linux:
+    name: Linux x64 release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Check tag matches project version
+        id: version
+        run: |
+          version="$(sed -n 's/^version: *\([^ +]*\).*/\1/p' pubspec.yaml)"
+          if [ "v${version}" != "${RELEASE_TAG}" ]; then
+            echo "::error::Tag ${RELEASE_TAG} does not match pubspec.yaml version ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          case "${version}" in
+            0.*|*-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            libasound2-dev libjack-jackd2-dev librubberband-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Fetch tempo detection models
+        run: ./scripts/fetch_beat_models.sh
+
+      - name: Build Linux release bundle
+        run: |
+          flutter pub get
+          flutter build linux --release
+
+      - name: Package bundle
+        id: package
+        run: |
+          name="digidaw-${{ steps.version.outputs.version }}-linux-x64"
+          mkdir -p dist
+          cp -r build/linux/x64/release/bundle "dist/${name}"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          (cd dist && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256")
+          echo "archive=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        run: |
+          cat > dist/NOTES.md <<'EOF'
+          Linux x64 only — other platforms have not been tested yet.
+
+          ### Running
+          Extract the archive and run `./karbeat` from the extracted folder.
+
+          ### Runtime requirements
+          - GTK 3
+          - ALSA, plus JACK or PipeWire (with its JACK compatibility layer)
+          - Rubber Band library 3.3 or newer (e.g. Ubuntu 24.04+, current Fedora and Arch)
+          EOF
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: DigiDAW ${{ env.RELEASE_TAG }}
+          body_path: dist/NOTES.md
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256

@@ -105,6 +105,9 @@ flutter_rust_bridge_codegen generate
 echo -e "\033[1;36m==> [Android Build] Fetching Flutter dependencies...\033[0m"
 flutter pub get
 
+echo -e "\033[1;36m==> [Android Build] Fetching tempo detection models...\033[0m"
+"$(dirname "$0")/../fetch_beat_models.sh"
+
 echo -e "\033[1;36m==> [Android Build] Compiling Flutter Android Release (APK)...\033[0m"
 # You can also use --aab for App Bundle if publishing to Play Store
 flutter build apk --release --target-platform android-arm64

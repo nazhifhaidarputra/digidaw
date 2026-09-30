@@ -100,6 +100,29 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     ref.read(workspaceStateProvider.notifier).openPattern(patternId);
   }
 
+  /// Gives the selection (or just this clip) its own copies of the content it
+  /// shares with other clips.
+  Future<void> _makeUnique() async {
+    final clipIds = widget.isSelected && widget.selectedClipIds.isNotEmpty
+        ? widget.selectedClipIds
+        : [widget.clip.id];
+    await ref
+        .read(trackListStateProvider.notifier)
+        .makeClipsUnique(trackId: widget.trackId, clipIds: clipIds);
+  }
+
+  /// Sets the loop region to span the selection, or just this clip.
+  Future<void> _loopClips() async {
+    final clipIds = widget.isSelected && widget.selectedClipIds.isNotEmpty
+        ? widget.selectedClipIds
+        : [widget.clip.id];
+    final span = _clipsSpan(ref, clipIds.toSet());
+    if (span == null) return;
+    await ref
+        .read(timelineProvider.notifier)
+        .setLoopRegion(span.start, span.end);
+  }
+
   Future<void> _renameClip() async {
     var pendingName = widget.clip.name;
     final newName = await showDialog<String>(
@@ -252,6 +275,13 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       clipLeftOffset: left,
       waveformMap: widget.waveformMap,
       compact: widget.compact,
+      trackId: widget.trackId,
+      envelopeInteractive: switch (widget.selectedTool) {
+        ToolSelection.pointer ||
+        ToolSelection.draw ||
+        ToolSelection.select => true,
+        _ => false,
+      },
     );
 
     final gestureDetector = GestureDetector(
@@ -454,6 +484,9 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
               final state = ref.read(trackListStateProvider);
               final currentSelectedIds = state.selectedClipIds;
+              // The track list's stretch mode stretches audio clips instead
+              // of trimming them.
+              final stretch = ref.read(workspaceStateProvider).resizeStretches;
 
               if (_currentAction == _DragAction.resizeRight) {
                 ref
@@ -463,6 +496,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       currentSelectedIds.toList(),
                       UiResizeEdge.right,
                       _previousSnappedDelta,
+                      stretch: stretch,
                     );
               } else if (_currentAction == _DragAction.resizeLeft) {
                 ref
@@ -472,6 +506,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       currentSelectedIds.toList(),
                       UiResizeEdge.left,
                       _previousSnappedDelta,
+                      stretch: stretch,
                     );
               }
 
@@ -485,6 +520,26 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       child: clipRenderer,
     );
 
+    final envelopeView = ref.watch(
+      workspaceStateProvider.select((s) => s.clipEnvelopeView),
+    );
+    final colors = Theme.of(context).colorScheme;
+    DawContextAction envelopeViewAction(
+      ClipEnvelopeView view,
+      String title,
+      IconData icon,
+    ) {
+      final shown = envelopeView == view;
+      return DawContextAction(
+        title: title,
+        icon: shown ? Icons.check : icon,
+        color: shown ? colors.primary : null,
+        onTap: () => ref
+            .read(workspaceStateProvider.notifier)
+            .toggleClipEnvelopeView(view),
+      );
+    }
+
     final interactiveChild = ContextMenuWrapper(
       title: widget.clip.name,
       actions: [
@@ -495,6 +550,31 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             icon: Icons.piano,
             onTap: () => _openInPianoRoll(patternId),
           ),
+        DawContextAction(
+          title: widget.isSelected && widget.selectedClipIds.length > 1
+              ? "Set Loop Region to Selection"
+              : "Set Loop Region to Clip",
+          icon: Icons.loop,
+          onTap: _loopClips,
+        ),
+        if (widget.clip.source is! UiClipSource_None)
+          DawContextAction(
+            title: "Make unique",
+            icon: Icons.call_split,
+            onTap: _makeUnique,
+          ),
+        if (widget.clip.source is UiClipSource_Audio) ...[
+          envelopeViewAction(
+            ClipEnvelopeView.waveform,
+            "Show waveform envelope",
+            Icons.graphic_eq,
+          ),
+          envelopeViewAction(
+            ClipEnvelopeView.clip,
+            "Show clip envelope",
+            Icons.show_chart,
+          ),
+        ],
       ],
       child: gestureDetector,
     );

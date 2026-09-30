@@ -11,10 +11,14 @@ import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 class _FakeProjectNotifier extends ProjectNotifier {
+  _FakeProjectNotifier({UiProjectMetadata? initial})
+    : _initial = initial ?? _metadata();
+
+  final UiProjectMetadata _initial;
   UiProjectMetadata? lastSaved;
 
   @override
-  Future<ApplicationDataStore> build() async => _projectData();
+  Future<ApplicationDataStore> build() async => _projectData(_initial);
 
   @override
   Future<Result<void>> updateMetadata(UiProjectMetadata metadata) async {
@@ -90,6 +94,45 @@ void main() {
     expect(find.text('Title is required'), findsOneWidget);
   });
 
+  testWidgets('removing the cover is saved with the other fields', (
+    tester,
+  ) async {
+    late _FakeProjectNotifier notifier;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectProvider.overrideWith(() {
+            notifier = _FakeProjectNotifier(
+              initial: _metadata(coverPath: '/covers/ggez.jpg'),
+            );
+            return notifier;
+          }),
+        ],
+        child: MaterialApp(
+          theme: ThemeData.dark(),
+          home: const Scaffold(body: ProjectSettingsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('save-project-metadata'));
+    expect(tester.widget<FilledButton>(saveButton).onPressed, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('remove-project-cover')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('remove-project-cover')), findsNothing);
+    expect(find.text('Choose image…'), findsOneWidget);
+
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    expect(notifier.lastSaved, isNotNull);
+    expect(notifier.lastSaved!.coverPath, isNull);
+  });
+
   testWidgets('does not overwrite dirty fields when project changes', (
     tester,
   ) async {
@@ -130,7 +173,7 @@ void main() {
   });
 }
 
-ApplicationDataStore _projectData() {
+ApplicationDataStore _projectData(UiProjectMetadata metadata) {
   const master = UiMixerChannel(
     volume: 1,
     pan: 0,
@@ -140,7 +183,7 @@ ApplicationDataStore _projectData() {
     effects: [],
   );
   return ApplicationDataStore(
-    metadata: _metadata(),
+    metadata: metadata,
     transport: const UiTransportState(bpm: 120, timeSignature: (4, 4)),
     hardwareConfig: const UiAudioHardwareConfig(
       selectedInputDevice: '',
@@ -167,6 +210,7 @@ ApplicationDataStore _projectData() {
 UiProjectMetadata _metadata({
   String name = 'Original title',
   String description = 'Original description',
+  String? coverPath,
 }) {
   return UiProjectMetadata(
     name: name,
@@ -175,5 +219,6 @@ UiProjectMetadata _metadata({
     genre: 'Electronic',
     version: '1.0',
     createdAt: '2026-08-30T00:00:00Z',
+    coverPath: coverPath,
   );
 }

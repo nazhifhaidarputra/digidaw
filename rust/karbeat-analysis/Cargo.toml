@@ -1,0 +1,21 @@
+[package]
+name = "karbeat-analysis"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-only"
+description = "Music analysis for Karbeat: beat, downbeat and tempo detection with Beat This!"
+
+[dependencies]
+anyhow.workspace = true
+beat-this = "1.0"
+karbeat-utils.workspace = true
+rten = { version = "0.24", features = ["fft"] }
+rten-tensor = "0.24"
+log.workspace = true
+parking_lot.workspace = true
+sysinfo = "0.38.4"
+rayon.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

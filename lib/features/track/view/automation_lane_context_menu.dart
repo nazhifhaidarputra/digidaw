@@ -52,7 +52,7 @@ class AutomationLaneContextMenu extends ConsumerWidget {
       automationLaneLayoutProvider(entry.laneId).select((l) => l.collapsed),
     );
     return ContextMenuWrapper(
-      title: 'Automation: ${entry.lane.label}',
+      title: 'Automation: ${entry.sourceName} › ${entry.lane.label}',
       actions: [
         DawContextAction(
           title: collapsed ? 'Expand lane' : 'Shrink lane',

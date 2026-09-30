@@ -30,19 +30,19 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Clip level manipulation (Copy, Cut, Paste, Slice, resize, move, and its batch operation) for both audio waveform clip and MIDI clip
 - [x] Piano roll MIDI note drawing
 - [x] Simple Synthesizers
-- [x] Parametric EQ  
+- [x] Parametric EQ
 - [x] Mixer Routing
 - [x] Bus Automation lanes rack
 - [x] Real-time pitch shifting (Via Rubberband FFI binding). There is a plan to rewrite the pitch shifting entirely in Rust to remove reliability to an C++ library via FFI boundary
 - [x] Finishing and optimizing Bus Mixer Routing
 - [x] Action history (Undo/Redo).
-- [ ] Time-stretched audio waveform processing
+- [x] Time-stretched audio waveform processing
 - [x] Audio host selector (ASIO, JACK, or AudioCore)
 - [x] Automation for generator
 - [ ] Automation for global BPM parameters
 - [ ] Wavetable Synthesizer
 - [ ] Sample-based Synthesizer (for Real instrument)
-- [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Sidechain Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
+- [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
 - [x] Browser panel for easy drag-and-drop audio samples
 - [ ] Input channel for input recording
 - [x] Auxiliary input handler
@@ -50,16 +50,14 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Third-party supports for native audio plugin (In form of Asset Workshop)
 - [x] Settings/configuration for user
 - [x] Logging for end-user
-- [x] VST3 Host support (Done for Linux and Windows)
+- [x] VST3 Host (Done for Linux and Windows)
 - [ ] AU Host support
 - [ ] CLAP Host support
 - [ ] LV2 Host support
-- [ ] Plugin Scanner
 - [ ] MacOS version
 - [ ] iOS version
-- [ ] Export audio to FLAC and OGG
-- [ ] Tempo detector and Fit-to-tempo functionality
-- [ ] Version manager
+- [x] Export audio to FLAC and OGG
+- [x] Tempo detector and Fit-to-tempo functionality
 - [ ] Comprehensive Documentation for both User and Developer
 - [ ] Official logo and icon
 - [x] Auto-save
@@ -77,8 +75,8 @@ These are features which have been or have not been implemented. All unimplement
 A huge thanks to the developers who made this project possible:
 
 | <a href="https://codeberg.org/haidarptrw"><img src="https://codeberg.org/avatars/52b87e29a45aa11b374f02b83c5d6d42" width="80px;" alt=""/></a><br /><sub><b>[haidarptrw](https://codeberg.org/haidarptrw)</b></sub> |
-| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|                                                                    **Creator, Lead Developer & Audio Engineer**                                                                    |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                                                                                    **Creator, Lead Developer & Audio Engineer**                                                                                    |
 
 _(Want to contribute? Check out our developer notes below!)_
 
@@ -100,6 +98,7 @@ Thank you for your interest in Digidaw! Here are a few things to keep in mind:
 ## Licensing
 
 This project uses a split-licensing model to support both open-source collaboration and proprietary plugin development:
+
 - **Framework & API Crates (`karbeat-plugin-api`, `karbeat-plugin-types`, `karbeat-macros`, `karbeat-utils`, `karbeat-host`)**: Licensed under **Apache-2.0 OR MIT**. You can freely use these to build closed-source or proprietary audio plugins.
 - **DSP Library (`karbeat-dsp`)**: Licensed under **GPLv3**. If you decided to use this in your audio plugin implementation, you should also open-source your plugin
 - **Core Application (`karbeat-core`, `karbeat-flutter-ffi`, Flutter UI) & First-Party Plugins**: Licensed under **GPLv3 with a Linking Exception**. This allows you to dynamically link and run closed-source, proprietary plugins inside the Digidaw DAW engine.

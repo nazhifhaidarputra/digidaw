@@ -8,7 +8,6 @@ use karbeat_core::{
         project::{DawSource, TrackType},
     },
     shared::{AudioSourceId, TrackId},
-    utils::get_waveform_buffer,
 };
 
 pub use karbeat_core::core::project::AudioWaveform;
@@ -30,21 +29,30 @@ impl WaveformHandle {
         Self(waveform)
     }
 
+    /// Samples playback reads: the offline-processed render when one exists.
+    fn samples(&self) -> Option<&[f32]> {
+        bytemuck::try_cast_slice(&self.0.active_buffer()?[..]).ok()
+    }
+
+    /// Source frames played per project frame at `project_bpm`, from the source's sample mode
+    /// and tempo: the same rate the engine plays these samples at. Draw clips with it so a
+    /// stretched clip shows its whole stretched audio.
+    #[frb(sync)]
+    pub fn tempo_rate(&self, project_bpm: f32) -> f64 {
+        self.0.tempo_rate(project_bpm)
+    }
+
     /// Returns the raw memory address of the f32 interleaved sample buffer.
     /// Returns 0 if the waveform has no loaded buffer (e.g. not yet mmap-ed).
     #[frb(sync)]
     pub fn get_pointer(&self) -> usize {
-        get_waveform_buffer(&self.0.buffer)
-            .map(|s| s.as_ptr() as usize)
-            .unwrap_or(0)
+        self.samples().map(|s| s.as_ptr() as usize).unwrap_or(0)
     }
 
     /// Returns the total number of f32 samples in the buffer (frames × channels).
     #[frb(sync)]
     pub fn get_len(&self) -> usize {
-        get_waveform_buffer(&self.0.buffer)
-            .map(|s| s.len())
-            .unwrap_or(0)
+        self.samples().map(|s| s.len()).unwrap_or(0)
     }
 
     /// Returns the sample rate of the audio waveform (e.g. 44100, 48000).

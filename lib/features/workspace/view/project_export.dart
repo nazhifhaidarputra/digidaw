@@ -6,10 +6,13 @@ import 'package:karbeat/app/providers/export_project_state.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/timeline_state.dart';
 import 'package:karbeat/core/constants/audio_format.dart';
+import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/timeline.dart';
 import 'package:file_picker/file_picker.dart';
 
 class ProjectExportPanel extends ConsumerStatefulWidget {
@@ -25,6 +28,7 @@ class ProjectExportPanel extends ConsumerStatefulWidget {
 
 class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   late TextEditingController _nameController;
+  final FocusNode _panelFocus = FocusNode(debugLabel: 'ProjectExportPanel');
 
   bool _isExporting = false;
   double _exportProgress = 0.0;
@@ -41,11 +45,18 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     _nameController.addListener(() {
       setState(() {});
     });
+
+    // Pull focus out of the workspace, so no page region keeps serving keys
+    // while the panel is open.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _panelFocus.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _panelFocus.dispose();
     super.dispose();
   }
 
@@ -89,6 +100,19 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       return;
     }
 
+    // Without a loop region the panel shows, and exports, the whole song
+    final range = switch ((
+      exportState.rangeMode,
+      ref.read(loopRegionProvider),
+    )) {
+      (ExportRangeMode.loopRegion, final UiLoopRegion region) =>
+        ExportRangeDTO.ticks(
+          startTick: region.startTick,
+          endTick: region.endTick,
+        ),
+      _ => const ExportRangeDTO.song(),
+    };
+
     setState(() {
       _isExporting = true;
       _exportProgress = 0.0;
@@ -105,6 +129,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
           bitDepth: exportState.selectedBitDepth,
           sampleRate: exportState.selectedSampleRate,
           tailHandling: exportState.tailHandling,
+          range: range,
         );
 
         await for (final progress in progressStream) {
@@ -146,323 +171,355 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     final size = MediaQuery.of(context).size;
     final exportState = ref.watch(exportProjectProvider);
     final exportNotifier = ref.read(exportProjectProvider.notifier);
+    final hasLoopRegion = ref.watch(loopRegionProvider) != null;
 
-    return Center(
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          width: size.width * 0.5,
-          height: size.height * 0.65,
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: colors.shadow.withValues(alpha: 0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainer,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(8),
+    return KeyboardFocusRegion(
+      focusNode: _panelFocus,
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: size.width * 0.5,
+            height: size.height * 0.65,
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.shadow.withValues(alpha: 0.5),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+              border: Border.all(color: colors.outlineVariant),
+            ),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainer,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(8),
+                    ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Export Project",
-                      style: TextStyle(
-                        color: colors.onSurface,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.close, color: colors.onSurfaceVariant),
-                      onPressed: _isExporting ? null : widget.onClose,
-                      splashRadius: 20,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Body
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: ListView(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // File Name
-                      _buildSectionTitle("File Name"),
-                      TextField(
-                        controller: _nameController,
-                        style: TextStyle(color: colors.onSurface),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: colors.surfaceContainerHigh,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Directory
-                      _buildSectionTitle("Export Location"),
-                      TextField(
-                        readOnly: true,
+                      Text(
+                        "Export Project",
                         style: TextStyle(
-                          color: exportState.exportDirectory == null
-                              ? colors.onSurfaceVariant
-                              : colors.onSurface,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: "Select Directory...",
-                          hintStyle: TextStyle(color: colors.onSurfaceVariant),
-                          filled: true,
-                          fillColor: colors.surfaceContainerHigh,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(4),
-                            borderSide: BorderSide.none,
-                          ),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          // The three dots button
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              Icons.more_horiz,
-                              color: colors.onSurfaceVariant,
-                            ),
-                            onPressed: _isExporting ? null : _pickSavePath,
-                          ),
-                        ),
-                        controller: TextEditingController(
-                          text: exportState.exportDirectory == null
-                              ? ""
-                              : "${exportState.exportDirectory}${Platform.pathSeparator}${_nameController.text}.${exportState.selectedFormat.name.toLowerCase()}",
+                          color: colors.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      Divider(color: colors.outlineVariant),
-                      const SizedBox(height: 16),
-
-                      // Format Settings Row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildSectionTitle("Format"),
-                                _buildDropdown<SupportedAudioFormat>(
-                                  value: exportState.selectedFormat,
-                                  items: const [
-                                    SupportedAudioFormat.wav,
-                                    SupportedAudioFormat.mp3,
-                                  ],
-                                  itemLabel: (f) => f.name.toUpperCase(),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      exportNotifier.updateFormat(val);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildSectionTitle("Sample Rate"),
-                                _buildDropdown<SampleRate>(
-                                  value: exportState.selectedSampleRate,
-                                  items: SampleRate.values,
-                                  itemLabel: (s) => s.label,
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      exportNotifier.updateSampleRate(val);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      IconButton(
+                        icon: Icon(Icons.close, color: colors.onSurfaceVariant),
+                        onPressed: _isExporting ? null : widget.onClose,
+                        splashRadius: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Format Settings - Row 2 (Bit Depth/Rate & Tail Handling)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildSectionTitle("Bit Depth / Bitrate"),
-                                _buildDropdown<BitDepthDTO>(
-                                  value: exportState.selectedBitDepth,
-                                  items:
-                                      exportState.selectedFormat ==
-                                              SupportedAudioFormat.wav ||
-                                          exportState.selectedFormat ==
-                                              SupportedAudioFormat.flac
-                                      ? bitPerSampleOptions
-                                      : bitPerSecondOptions,
-                                  itemLabel: (b) => switch (b) {
-                                    BitDepthDTO_BitPerSample(:final field0) =>
-                                      field0.toString(),
-                                    BitDepthDTO_BitPerSecond(:final field0) =>
-                                      field0.toString(),
-                                  },
-                                  suffix:
-                                      exportState.selectedFormat ==
-                                              SupportedAudioFormat.wav ||
-                                          exportState.selectedFormat ==
-                                              SupportedAudioFormat.flac
-                                      ? "-bit"
-                                      : " kbps",
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      exportNotifier.updateBitDepth(val);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildSectionTitle("Tail Handling"),
-                                _buildDropdown<TailHandling>(
-                                  value: exportState.tailHandling,
-                                  items: TailHandling.values,
-                                  itemLabel: (t) => t.name.replaceAll(
-                                    RegExp(r'(?<!^)(?=[A-Z])'),
-                                    ' ',
-                                  ),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      exportNotifier.updateTailHandling(val);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      // Options
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: exportState.openFolderAfterExport,
-                            activeColor: colors.primary,
-                            onChanged: _isExporting
-                                ? null
-                                : (val) {
-                                    if (val != null) {
-                                      exportNotifier.setOpenFolderAfterExport(
-                                        val,
-                                      );
-                                    }
-                                  },
-                          ),
-                          Text(
-                            "Open folder after export",
-                            style: TextStyle(color: colors.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Progress Bar
-                      if (_isExporting) ...[
-                        Text(
-                          "Rendering: ${(_exportProgress * 100).toInt()}%",
-                          style: TextStyle(
-                            color: colors.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        LinearProgressIndicator(
-                          value: _exportProgress,
-                          backgroundColor: colors.surfaceContainerHighest,
-                          color: colors.primary,
-                        ),
-                      ],
                     ],
                   ),
                 ),
-              ),
 
-              // Footer / Actions
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: colors.outlineVariant)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _isExporting ? null : widget.onClose,
-                      child: const Text("Cancel"),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: _isExporting ? null : _handleExport,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colors.primary,
-                        foregroundColor: colors.onPrimary,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
+                // Body
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: ListView(
+                      children: [
+                        // File Name
+                        _buildSectionTitle("File Name"),
+                        TextField(
+                          controller: _nameController,
+                          style: TextStyle(color: colors.onSurface),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: colors.surfaceContainerHigh,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            isDense: true,
+                          ),
                         ),
-                      ),
-                      child: _isExporting
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: colors.onPrimary,
+                        const SizedBox(height: 16),
+
+                        // Directory
+                        _buildSectionTitle("Export Location"),
+                        TextField(
+                          readOnly: true,
+                          style: TextStyle(
+                            color: exportState.exportDirectory == null
+                                ? colors.onSurfaceVariant
+                                : colors.onSurface,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: "Select Directory...",
+                            hintStyle: TextStyle(
+                              color: colors.onSurfaceVariant,
+                            ),
+                            filled: true,
+                            fillColor: colors.surfaceContainerHigh,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(4),
+                              borderSide: BorderSide.none,
+                            ),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            // The three dots button
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                Icons.more_horiz,
+                                color: colors.onSurfaceVariant,
                               ),
-                            )
-                          : const Text("Export Audio"),
+                              onPressed: _isExporting ? null : _pickSavePath,
+                            ),
+                          ),
+                          controller: TextEditingController(
+                            text: exportState.exportDirectory == null
+                                ? ""
+                                : "${exportState.exportDirectory}${Platform.pathSeparator}${_nameController.text}.${exportState.selectedFormat.name.toLowerCase()}",
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Divider(color: colors.outlineVariant),
+                        const SizedBox(height: 16),
+
+                        // Format Settings Row
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildSectionTitle("Format"),
+                                  _buildDropdown<SupportedAudioFormat>(
+                                    value: exportState.selectedFormat,
+                                    items: SupportedAudioFormat.values,
+                                    itemLabel: (f) => f.name.toUpperCase(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        exportNotifier.updateFormat(val);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildSectionTitle("Sample Rate"),
+                                  _buildDropdown<SampleRate>(
+                                    value: exportState.selectedSampleRate,
+                                    items:
+                                        exportState.selectedFormat ==
+                                            SupportedAudioFormat.ogg
+                                        ? oggSampleRateOptions
+                                        : SampleRate.values,
+                                    itemLabel: (s) => s.label,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        exportNotifier.updateSampleRate(val);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Format Settings - Row 2 (Bit Depth/Rate & Tail Handling)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildSectionTitle("Bit Depth / Bitrate"),
+                                  _buildDropdown<BitDepthDTO>(
+                                    value: exportState.selectedBitDepth,
+                                    items: switch (exportState.selectedFormat) {
+                                      SupportedAudioFormat.wav =>
+                                        bitPerSampleOptions,
+                                      SupportedAudioFormat.flac =>
+                                        flacBitPerSampleOptions,
+                                      SupportedAudioFormat.mp3 ||
+                                      SupportedAudioFormat.ogg =>
+                                        bitPerSecondOptions,
+                                    },
+                                    itemLabel: (b) => switch (b) {
+                                      BitDepthDTO_BitPerSample(:final field0) =>
+                                        field0.toString(),
+                                      BitDepthDTO_BitPerSecond(:final field0) =>
+                                        field0.toString(),
+                                    },
+                                    suffix:
+                                        exportState.selectedFormat ==
+                                                SupportedAudioFormat.wav ||
+                                            exportState.selectedFormat ==
+                                                SupportedAudioFormat.flac
+                                        ? "-bit"
+                                        : " kbps",
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        exportNotifier.updateBitDepth(val);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildSectionTitle("Tail Handling"),
+                                  _buildDropdown<TailHandling>(
+                                    value: exportState.tailHandling,
+                                    items: TailHandling.values,
+                                    itemLabel: (t) => t.name.replaceAll(
+                                      RegExp(r'(?<!^)(?=[A-Z])'),
+                                      ' ',
+                                    ),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        exportNotifier.updateTailHandling(val);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionTitle("Range"),
+                        Tooltip(
+                          message:
+                              'A loop region export starts mid-song: notes '
+                              'that began before it stay silent.',
+                          child: _buildDropdown<ExportRangeMode>(
+                            value: hasLoopRegion
+                                ? exportState.rangeMode
+                                : ExportRangeMode.wholeSong,
+                            items: hasLoopRegion
+                                ? ExportRangeMode.values
+                                : const [ExportRangeMode.wholeSong],
+                            itemLabel: (mode) => mode.label,
+                            onChanged: (val) {
+                              if (val != null) {
+                                exportNotifier.updateRangeMode(val);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Options
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: exportState.openFolderAfterExport,
+                              activeColor: colors.primary,
+                              onChanged: _isExporting
+                                  ? null
+                                  : (val) {
+                                      if (val != null) {
+                                        exportNotifier.setOpenFolderAfterExport(
+                                          val,
+                                        );
+                                      }
+                                    },
+                            ),
+                            Text(
+                              "Open folder after export",
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Progress Bar
+                        if (_isExporting) ...[
+                          Text(
+                            "Rendering: ${(_exportProgress * 100).toInt()}%",
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          LinearProgressIndicator(
+                            value: _exportProgress,
+                            backgroundColor: colors.surfaceContainerHighest,
+                            color: colors.primary,
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+
+                // Footer / Actions
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: colors.outlineVariant),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: _isExporting ? null : widget.onClose,
+                        child: const Text("Cancel"),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: _isExporting ? null : _handleExport,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colors.primary,
+                          foregroundColor: colors.onPrimary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                        ),
+                        child: _isExporting
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colors.onPrimary,
+                                ),
+                              )
+                            : const Text("Export Audio"),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

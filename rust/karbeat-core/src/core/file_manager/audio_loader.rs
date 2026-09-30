@@ -131,6 +131,42 @@ pub fn load_audio_file(
     })
 }
 
+/// Streams rendered samples into a self-deleting cache file and maps it read-only, so large
+/// renders live in evictable page cache rather than on the heap.
+pub struct CachedSamplesWriter {
+    writer: BufWriter<File>,
+    samples: usize,
+}
+
+impl CachedSamplesWriter {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            writer: BufWriter::new(decoded_cache_file()?),
+            samples: 0,
+        })
+    }
+
+    /// Appends interleaved samples.
+    pub fn write(&mut self, samples: &[f32]) -> Result<()> {
+        self.writer.write_all(bytemuck::cast_slice(samples))?;
+        self.samples = self.samples.saturating_add(samples.len());
+        Ok(())
+    }
+
+    /// Flushes and maps everything written. Fails when nothing was written.
+    pub fn finish(self) -> Result<Arc<memmap2::Mmap>> {
+        anyhow::ensure!(self.samples > 0, "Render produced no audio");
+        let file = self
+            .writer
+            .into_inner()
+            .map_err(|error| error.into_error())?;
+        // SAFETY: The file is private to this process and never written again once mapped; the
+        // mapping keeps the region alive after the handle is dropped.
+        let mmap = unsafe { MmapOptions::new().map(&file)? };
+        Ok(Arc::new(mmap))
+    }
+}
+
 /// Creates the unnamed, self-deleting file that backs one decoded source's memory map.
 ///
 /// It lives in the on-disk user cache so the kernel can evict its pages under memory

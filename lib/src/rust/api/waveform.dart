@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
-// These functions are ignored because they are not marked as `pub`: `from_waveform`
+// These functions are ignored because they are not marked as `pub`: `from_waveform`, `samples`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// Get a WaveformHandle for a single audio source by its source ID.
@@ -48,4 +48,9 @@ abstract class WaveformHandle implements RustOpaqueInterface {
 
   /// Returns the sample rate of the audio waveform (e.g. 44100, 48000).
   int getSampleRate();
+
+  /// Source frames played per project frame at `project_bpm`, from the source's sample mode
+  /// and tempo: the same rate the engine plays these samples at. Draw clips with it so a
+  /// stretched clip shows its whole stretched audio.
+  double tempoRate({required double projectBpm});
 }

@@ -1172,3 +1172,290 @@ fn releases_queued_while_a_track_is_muted_reach_the_generator_later() {
     rig.render(1);
     assert!(rig.held().is_empty(), "note hung: {:?}", rig.held());
 }
+
+#[test]
+fn update_audio_source_swaps_only_that_waveform() {
+    use crate::core::project::{AudioWaveform, Fade, GainEnvelope};
+    use std::sync::Arc;
+
+    let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        cmd_consumer,
+        pos_producer,
+        fb_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_tx,
+    );
+
+    let mut app = ApplicationState::default();
+    let id = app.asset_library.source_map.insert_with_key(|id| {
+        Arc::new(AudioWaveform {
+            id: Some(id),
+            ..AudioWaveform::default()
+        })
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app),
+    });
+
+    app.set_audio_source_envelope(
+        id,
+        GainEnvelope {
+            fade_out: Fade {
+                length: 32,
+                ..Fade::default()
+            },
+            ..GainEnvelope::default()
+        },
+    )
+    .expect("set envelope");
+    let updated = Arc::clone(&app.asset_library.source_map[id]);
+    engine.process_command(AudioCommand::UpdateAudioSource {
+        id,
+        waveform: Arc::clone(&updated),
+    });
+
+    let rendered = &engine.current_state.graph.asset_library.source_map[id];
+    assert!(Arc::ptr_eq(rendered, &updated));
+    assert_eq!(rendered.envelope.fade_out.length, 32);
+
+    // Sources the render graph does not know are ignored rather than inserted.
+    let unknown = app
+        .asset_library
+        .source_map
+        .insert(Arc::new(AudioWaveform::default()));
+    engine.process_command(AudioCommand::UpdateAudioSource {
+        id: unknown,
+        waveform: Arc::new(AudioWaveform::default()),
+    });
+    assert!(
+        !engine
+            .current_state
+            .graph
+            .asset_library
+            .source_map
+            .contains_key(unknown)
+    );
+}
+
+/// An audio clip sounds both in live song playback and in an export built from its snapshot.
+#[test]
+fn audio_clip_plays_live_and_in_export() {
+    use crate::core::project::{AudioWaveform, clip::ClipSourceType};
+    use std::sync::Arc;
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(64);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(64);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+
+    let mut app = ApplicationState::default();
+    let samples = vec![0.5_f32; 96_000 * 2];
+    let bytes: &[u8] = bytemuck::cast_slice(&samples);
+    let mut map = memmap2::MmapOptions::new()
+        .len(bytes.len())
+        .map_anon()
+        .expect("map");
+    map.copy_from_slice(bytes);
+    let buffer = Arc::new(map.make_read_only().expect("ro"));
+    let source = app.asset_library.source_map.insert_with_key(|id| {
+        Arc::new(AudioWaveform {
+            id: Some(id),
+            buffer: Some(buffer),
+            sample_rate: 48_000,
+            channels: 2,
+            duration: 2.0,
+            trim_end: 96_000,
+            ..AudioWaveform::default()
+        })
+    });
+    let track = app.add_new_audio_track().id;
+    app.create_new_clip(Some(source.to_u64()), ClipSourceType::Audio, track, 0)
+        .expect("clip");
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app),
+    });
+    engine.process_command(AudioCommand::SetPlaybackMode(
+        crate::audio::engine::PlaybackMode::Song,
+    ));
+    engine.process_command(AudioCommand::SetPlayhead(0));
+    engine.process_command(AudioCommand::SetPlaying(true));
+    let mut live = vec![0.0_f32; 4_096 * 2];
+    for chunk in live.chunks_mut(1_024) {
+        engine.process(chunk);
+    }
+    let rms = |x: &[f32]| (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
+    assert!(rms(&live) > 0.2, "live rms {}", rms(&live));
+
+    let (mut producer, consumer) = RingBuffer::<AudioCommand>::new(16);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let mut offline = AudioEngine::from_export_snapshot(
+        engine.export_snapshot(),
+        &PluginRegistry::new_with_defaults(),
+        2,
+        consumer,
+        position_producer,
+        feedback_producer,
+    )
+    .expect("snapshot");
+    for command in [
+        AudioCommand::UpdateAudioConfig {
+            sample_rate: Some(44_100),
+            buffer_size: Some(4_096),
+        },
+        AudioCommand::SetPlaybackMode(crate::audio::engine::PlaybackMode::Song),
+        AudioCommand::SetPlayhead(0),
+        AudioCommand::SetPlaying(true),
+    ] {
+        assert!(producer.push(command).is_ok());
+    }
+    offline.process(&mut []);
+    let mut exported = vec![0.0_f32; 4_096 * 2];
+    offline.process(&mut exported);
+    assert!(rms(&exported) > 0.2, "export rms {}", rms(&exported));
+}
+
+/// Engine at 120 BPM and 48 kHz playing one song track whose audio is a ramp that repeats
+/// every 1,000 samples, so any offset in playback position shows up in the output. The clip
+/// spans two seconds (96,000 samples).
+pub(crate) fn song_engine_with_ramp_clip() -> AudioEngine {
+    use crate::core::project::{AudioWaveform, ClipSourceType};
+    use std::sync::Arc;
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        1_024,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app = ApplicationState::default();
+    app.transport.bpm = 120.0;
+    let samples: Vec<f32> = (0..96_000_u32)
+        .flat_map(|frame| {
+            let value = (frame % 1_000) as f32 / 1_000.0;
+            [value, value]
+        })
+        .collect();
+    let bytes: &[u8] = bytemuck::cast_slice(&samples);
+    let mut map = memmap2::MmapOptions::new()
+        .len(bytes.len())
+        .map_anon()
+        .expect("map");
+    map.copy_from_slice(bytes);
+    let buffer = Arc::new(map.make_read_only().expect("ro"));
+    let source = app.asset_library.source_map.insert_with_key(|id| {
+        Arc::new(AudioWaveform {
+            id: Some(id),
+            buffer: Some(buffer),
+            sample_rate: 48_000,
+            channels: 2,
+            duration: 2.0,
+            trim_end: 96_000,
+            ..AudioWaveform::default()
+        })
+    });
+    let track = app.add_new_audio_track().id;
+    app.create_new_clip(Some(source.to_u64()), ClipSourceType::Audio, track, 0)
+        .expect("clip");
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app),
+    });
+    engine.process_command(AudioCommand::SetPlaybackMode(
+        crate::audio::engine::PlaybackMode::Song,
+    ));
+    engine
+}
+
+fn play_song_from(engine: &mut AudioEngine, playhead: u32, frames: usize) -> Vec<f32> {
+    engine.process_command(AudioCommand::SetPlayhead(playhead));
+    engine.process_command(AudioCommand::SetPlaying(true));
+    let mut block = vec![0.0_f32; frames * 2];
+    engine.process(&mut block);
+    block
+}
+
+#[test]
+fn song_loop_region_wraps_on_the_exact_sample() {
+    // 960 ticks is one beat: 24,000 samples at 120 BPM and 48 kHz
+    let mut reference_engine = song_engine_with_ramp_clip();
+    let reference = play_song_from(&mut reference_engine, 12_000, 400);
+    assert!(
+        reference.iter().any(|sample| *sample > 0.1),
+        "the reference render must contain the clip's audio"
+    );
+
+    let mut engine = song_engine_with_ramp_clip();
+    engine.process_command(AudioCommand::SetLooping(true));
+    engine.process_command(AudioCommand::SetSongLoopRegion(Some((480, 960))));
+    let block = play_song_from(&mut engine, 23_700, 700);
+
+    // 300 frames reach the loop end, the remaining 400 continue from the loop start
+    assert_eq!(engine.transport.song.playhead_samples, 12_400);
+    let after_wrap = &block[300 * 2..];
+    for (index, (looped, straight)) in after_wrap.iter().zip(&reference).enumerate() {
+        assert!(
+            (looped - straight).abs() < 1e-5,
+            "sample {index} after the wrap: {looped} != {straight}"
+        );
+    }
+}
+
+#[test]
+fn song_loop_region_lets_a_playhead_past_its_end_play_on() {
+    let mut engine = song_engine_with_ramp_clip();
+    engine.process_command(AudioCommand::SetLooping(true));
+    engine.process_command(AudioCommand::SetSongLoopRegion(Some((0, 960))));
+    play_song_from(&mut engine, 30_000, 512);
+    assert_eq!(engine.transport.song.playhead_samples, 30_512);
+
+    // Turning looping off ignores the region
+    let mut engine = song_engine_with_ramp_clip();
+    engine.process_command(AudioCommand::SetSongLoopRegion(Some((0, 960))));
+    play_song_from(&mut engine, 23_900, 512);
+    assert_eq!(engine.transport.song.playhead_samples, 24_412);
+}
+
+#[test]
+fn song_loop_without_region_still_wraps_at_the_song_end() {
+    let mut engine = song_engine_with_ramp_clip();
+    engine.process_command(AudioCommand::SetLooping(true));
+    engine.process_command(AudioCommand::SetSongLoopRegion(Some((960, 960))));
+    assert!(
+        engine.transport.song.loop_region.is_none(),
+        "empty regions are dropped"
+    );
+
+    // The clip ends at 96,000 samples; the block after passing it restarts at 0
+    play_song_from(&mut engine, 95_900, 512);
+    let mut block = vec![0.0_f32; 512 * 2];
+    engine.process(&mut block);
+    assert_eq!(engine.transport.song.playhead_samples, 512);
+}

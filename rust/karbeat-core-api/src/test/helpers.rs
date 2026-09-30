@@ -1,0 +1,134 @@
+//! Shared test helpers and fixtures for karbeat-core API tests.
+//!
+//! The `DawContext::new()` used here intentionally has no audio thread —
+//! all ring-buffer fields are `None`, so `broadcast_*` and `send_audio_command`
+//! calls silently no-op, keeping tests fast and deterministic.
+
+use karbeat_utils::hash::hash_str;
+
+use crate::{clip_api, note_api, track_api};
+use karbeat_core::{
+    context::DawContext,
+    core::project::{
+        DawSource,
+        clip::{Clip, ClipSourceType, ClipTimeUnit},
+    },
+    shared::id::{ClipId, PatternId, TrackId},
+};
+
+/// Returns a per-test mitigation root inside one directory that lives for the whole test process.
+///
+/// Crash reporting is configured once per process, so the first test to configure it keeps using
+/// its directory; that directory must outlive every other test.
+pub fn mitigation_root(name: &str) -> std::path::PathBuf {
+    static ROOT: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| tempfile::tempdir().expect("mitigation test root"))
+        .path()
+        .join(name)
+}
+
+/// Returns a fresh, empty `DawContext` with no audio stream attached.
+pub fn make_ctx() -> DawContext {
+    DawContext::new()
+}
+
+/// Registry ID for "Karbeatzer V2" (synth generator built into karbeat-plugins).
+/// Computed as `hash_str("synth_karbeatzer_v2")`.
+pub fn karbeatzer_v2_registry_id() -> u32 {
+    hash_str("synth_karbeatzer_v2")
+}
+
+/// Registry ID for "My Retro" (synth generator).
+pub fn my_retro_registry_id() -> u32 {
+    hash_str("synth_my_retro")
+}
+
+/// Registry ID for "Parametric EQ" (effect plugin).
+pub fn param_eq_registry_id() -> u32 {
+    hash_str("effect_param_eq")
+}
+
+/// Registry ID for the built-in sidechain compressor effect.
+pub fn sidechain_compressor_registry_id() -> u32 {
+    hash_str("effect_digidaw_sidechain_comp")
+}
+
+/// A seeded context with:
+/// - 1 audio track
+/// - 1 MIDI track backed by Karbeatzer V2
+/// - 1 pattern (inside the MIDI track's clip) with 3 notes
+///
+/// Returns `(ctx, audio_track_id, midi_track_id, pattern_id)`.
+pub fn make_seeded_ctx() -> (DawContext, TrackId, TrackId, PatternId) {
+    let mut ctx = make_ctx();
+
+    // 1. Audio track
+    let audio_track = track_api::add_new_audio_track(&mut ctx);
+    let audio_track_id = audio_track.id;
+
+    // 2. MIDI track with Karbeatzer V2
+    let midi_track =
+        track_api::add_midi_track_with_generator_id(&mut ctx, karbeatzer_v2_registry_id())
+            .expect("Karbeatzer V2 should be in the default registry");
+    let midi_track_id = midi_track.id;
+
+    // 3. Add a MIDI clip to the MIDI track (creates a new pattern automatically)
+    let clip = clip_api::add_clip(&mut ctx, None, ClipSourceType::Midi, midi_track_id, 0)
+        .expect("Should add a MIDI clip");
+
+    // Extract the pattern ID from the clip source
+    let pattern_id = match clip.source {
+        Some(DawSource::Midi(pid)) => pid,
+        _ => panic!("Expected a MIDI source clip"),
+    };
+
+    // 4. Add 3 notes to the pattern
+    note_api::add_note(&mut ctx, pattern_id, 60, 0, Some(480)).expect("add note 1");
+    note_api::add_note(&mut ctx, pattern_id, 64, 480, Some(480)).expect("add note 2");
+    note_api::add_note(&mut ctx, pattern_id, 67, 960, Some(480)).expect("add note 3");
+
+    (ctx, audio_track_id, midi_track_id, pattern_id)
+}
+
+/// Build a minimal MIDI clip with tick-based time (for use in tests that need a clip directly).
+pub fn make_midi_clip_at(start_ticks: u32, length_ticks: u32, pattern_id: PatternId) -> Clip {
+    Clip {
+        name: "test clip".to_string(),
+        id: ClipId::from(9999),
+        source: Some(DawSource::Midi(pattern_id)),
+        time: ClipTimeUnit::Ticks {
+            start_time: start_ticks,
+            loop_length: length_ticks,
+            offset_start: 0,
+        },
+        envelope: None,
+    }
+}
+
+/// Adds a one-second stereo audio source of constant samples to the project's asset library.
+pub fn add_dc_audio_source(ctx: &mut DawContext) -> karbeat_core::shared::AudioSourceId {
+    use std::sync::Arc;
+
+    let samples = vec![0.5_f32; 48_000 * 2];
+    let bytes: &[u8] = bytemuck::cast_slice(&samples);
+    let mut map = memmap2::MmapOptions::new()
+        .len(bytes.len())
+        .map_anon()
+        .expect("anonymous map");
+    map.copy_from_slice(bytes);
+    let buffer = Arc::new(map.make_read_only().expect("read-only map"));
+    ctx.app_state
+        .asset_library
+        .source_map
+        .insert_with_key(|id| {
+            Arc::new(karbeat_core::core::project::AudioWaveform {
+                id: Some(id),
+                name: "dc".into(),
+                buffer: Some(buffer),
+                sample_rate: 48_000,
+                channels: 2,
+                duration: 1.0,
+                ..Default::default()
+            })
+        })
+}

@@ -1,5 +1,7 @@
 /// Audio decoding, resampling, caching, and waveform construction.
 pub mod audio_loader;
+/// Versioned project payloads and their migrations.
+pub mod format;
 /// Safe ownership wrapper for memory-mapped audio data.
 pub mod memmap;
 /// Project archive loading, migration, and extraction.

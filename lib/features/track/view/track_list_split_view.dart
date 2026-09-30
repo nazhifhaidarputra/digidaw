@@ -366,6 +366,31 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               ),
             ),
             const SizedBox(width: 8),
+            Tooltip(
+              message: 'Resizing audio clips stretches their audio',
+              child: TextButton.icon(
+                onPressed: () => ref
+                    .read(workspaceStateProvider.notifier)
+                    .toggleResizeStretches(),
+                icon: Icon(
+                  Icons.open_in_full,
+                  size: 16,
+                  color: workspaceState.resizeStretches
+                      ? colors.primary
+                      : colors.onSurfaceVariant,
+                ),
+                label: Text(
+                  'Stretch',
+                  style: TextStyle(
+                    color: workspaceState.resizeStretches
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
               "Move Step",
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
@@ -434,6 +459,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               entry: entry,
               child: AutomationLaneHeader(
                 lane: entry.lane,
+                sourceName: entry.sourceName,
                 itemHeight: layout.height,
                 trackColor: trackColor,
                 collapsed: layout.collapsed,
@@ -490,6 +516,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           child: layout.collapsed
               ? AutomationLaneCollapsedSlot(
                   lane: entry.lane,
+                  sourceName: entry.sourceName,
                   height: layout.height,
                   horizontalScrollController: _trackContentController,
                   trackColor: trackColor,
@@ -739,16 +766,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  /// Seeks to the ruler position under [localX], snapped to the grid while
-  /// snap-to-grid is on.
-  void _seekFromRuler(double localX) {
-    final scrollX = _rulerController.hasClients ? _rulerController.offset : 0.0;
-    final workspaceState = ref.read(workspaceStateProvider);
-    final ticks = ((localX + scrollX) * workspaceState.horizontalZoomLevel)
-        .round();
-    _seekToTicks(_snapTick(ticks, workspaceState));
-  }
-
   void _seekToTicks(int ticks) {
     final pos = ref.read(transportPositionStreamProvider).value;
     if (pos == null) return;
@@ -789,33 +806,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       children: [
         Column(
           children: [
-            GestureDetector(
-              onTapDown: (details) => _seekFromRuler(details.localPosition.dx),
-              // Throttled by the TransportNotifier's seekTo queue implementation
-              onPanUpdate: (details) =>
-                  _seekFromRuler(details.localPosition.dx),
-              child: Container(
-                height: 30,
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                width: double.infinity,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  controller: _rulerController,
-                  physics: isZooming
-                      ? const UnclampedNeverScrollableScrollPhysics()
-                      : const ClampingScrollPhysics(),
-                  child: SizedBox(
-                    width: _timelineWidth,
-                    height: 30,
-                    child: _TimelineRuler(
-                      scrollController: _rulerController,
-                      sampleRate:
-                          ref.read(transportProvider).value?.sampleRate ??
-                          48000,
-                    ),
-                  ),
-                ),
-              ),
+            _TimelineRulerBar(
+              scrollController: _rulerController,
+              timelineWidth: _timelineWidth,
+              physics: isZooming
+                  ? const UnclampedNeverScrollableScrollPhysics()
+                  : const ClampingScrollPhysics(),
+              onSeekTicks: _seekToTicks,
             ),
             Expanded(
               child: MouseRegion(
@@ -1013,6 +1010,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
         // Overlays inside the Timeline Stack
         // (Range selection rect is rendered per-track inside AudioTrackSlot via TrackRangeSelectOverlay)
+        Positioned.fill(
+          top: _rulerHeight,
+          child: _TimelineAnnotationLines(
+            scrollController: _trackContentController,
+          ),
+        ),
         _buildCutHelperLine(context),
 
         Positioned.fill(

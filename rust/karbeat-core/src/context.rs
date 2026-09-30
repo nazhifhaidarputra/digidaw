@@ -3,7 +3,11 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
-use std::sync::{Arc, Once, mpsc};
+use std::sync::{
+    Arc, Once,
+    atomic::{AtomicU64, Ordering},
+    mpsc,
+};
 
 use hashbrown::HashMap;
 use karbeat_host::{ExternalPluginInstanceHandle, HostClient, HostStateCapture};
@@ -21,10 +25,10 @@ use crate::{
     core::{
         history::{EngineSync, HistoryAction, HistoryManager, PluginSync},
         mitigation::{MitigationState, SessionSettings},
-        project::{ApplicationState, AudioTrack, AutomationLane, Clip, Pattern},
+        project::{ApplicationState, AudioTrack, AutomationLane, Clip, LoopRegion, Pattern},
     },
     message::TelemetryRegistry,
-    shared::{AutomationId, ClipId, PatternId},
+    shared::{AudioSourceId, AutomationId, ClipId, PatternId},
 };
 
 /// Application-owned coordination point for project state, history, audio queues, and telemetry.
@@ -32,6 +36,10 @@ use crate::{
 /// UI/control code mutates `app_state` through the API modules and explicitly broadcasts matching
 /// commands so the audio thread's private render state stays synchronized.
 pub struct DawContext {
+    /// Tells this context apart from others alive in the process, such as those of tests
+    /// running in parallel; unique for the life of the process.
+    pub instance_id: u64,
+
     /// Serialized project model used as the control-side source of truth.
     pub app_state: ApplicationState,
     /// Undo/redo history manager
@@ -117,7 +125,9 @@ impl DawContext {
     pub fn with_external_plugins(external_plugins: HostClient) -> Self {
         let plugin_registry = PluginRegistry::new_with_defaults();
         let plugin_catalog = crate::audio::plugin_catalog::PluginCatalog::new(&plugin_registry);
+        static NEXT_INSTANCE: AtomicU64 = AtomicU64::new(1);
         Self {
+            instance_id: NEXT_INSTANCE.fetch_add(1, Ordering::Relaxed),
             app_state: ApplicationState::default(),
             history: HistoryManager::new(),
             session_settings: SessionSettings::default(),
@@ -260,6 +270,33 @@ impl DawContext {
         );
     }
 
+    /// Best-effort publishes the project's routing connections to the audio thread.
+    ///
+    /// Track graph updates do not carry routing, so call this after adding or removing
+    /// tracks: a track without its route to the master is silent.
+    pub fn broadcast_routing(&mut self) {
+        let routing = self.app_state.mixer.routing.clone().into_boxed_slice();
+        let _ = self.send_audio_command(AudioCommand::UpdateRouting { routing });
+    }
+
+    /// Best-effort publishes one audio source's current waveform to the audio thread.
+    pub fn broadcast_audio_source(&mut self, id: AudioSourceId) {
+        let Some(waveform) = self.app_state.asset_library.source_map.get(id).cloned() else {
+            return;
+        };
+        let _ = self.send_audio_command(AudioCommand::UpdateAudioSource { id, waveform });
+    }
+
+    /// Best-effort publishes the project's song loop region to the audio thread.
+    pub fn broadcast_loop_region(&mut self) {
+        let region = self
+            .app_state
+            .timeline
+            .loop_region
+            .map(LoopRegion::as_ticks);
+        let _ = self.send_audio_command(AudioCommand::SetSongLoopRegion(region));
+    }
+
     /// Builds a complete render graph snapshot and best-effort replaces audio-thread graph state.
     pub fn broadcast_full_graph(&mut self) {
         let graph = AudioGraphState::from(&self.app_state);
@@ -306,14 +343,18 @@ impl DawContext {
             self.apply_plugin_sync(*change);
         }
         if sync.routing && !sync.full_graph {
-            let routing = self.app_state.mixer.routing.clone().into_boxed_slice();
-            let _ = self.send_audio_command(AudioCommand::UpdateRouting { routing });
+            self.broadcast_routing();
         }
         if !sync.full_graph {
             for id in &sync.lanes {
                 if let Some(lane) = self.app_state.automation_pool.get(*id).cloned() {
                     self.broadcast_automation_lane(*id, &lane);
                 }
+            }
+        }
+        if !sync.full_graph {
+            for id in &sync.sources {
+                self.broadcast_audio_source(*id);
             }
         }
         if sync.full_graph {
@@ -324,6 +365,9 @@ impl DawContext {
         if sync.tempo {
             let bpm = self.app_state.transport.bpm;
             let _ = self.send_audio_command(AudioCommand::SetBPM(bpm));
+        }
+        if sync.loop_region {
+            self.broadcast_loop_region();
         }
     }
 
@@ -446,7 +490,7 @@ impl DawContext {
             return None;
         };
         let dsp = self.audio_runtime_settings.read().requested_dsp;
-        Some(crate::api::project_api::prepare_builtin_plugin(
+        Some(crate::audio::builtin_plugin::prepare_builtin_plugin(
             factory,
             instance,
             dsp.sample_rate,

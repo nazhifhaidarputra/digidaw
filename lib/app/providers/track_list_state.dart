@@ -2,6 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
@@ -12,6 +13,7 @@ import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
@@ -546,13 +548,16 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
-  /// Resize a clip edge, with an optimistic local update.
+  /// Resize a clip edge, with an optimistic local update. With [stretch], an
+  /// audio clip's audio is stretched to the new length instead of trimmed.
   Future<Result<void>> resizeClip(
     int trackId,
     int clipId,
     UiResizeEdge edge,
-    int newTime,
-  ) async {
+    int newTime, {
+    bool stretch = false,
+  }) async {
+    final sourcesBefore = _clipSources(trackId);
     _applyOptimisticResize(trackId, clipId, edge, newTime);
     final result = await AsyncValue.guard(
       () => track_api.resizeClip(
@@ -561,6 +566,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
         clipId: clipId,
         edge: edge,
         newTimeVal: newTime,
+        stretch: stretch,
       ),
     );
 
@@ -570,6 +576,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
       );
       return ref.notifyErrorResult(Exception(result.error.toString()));
     }
+    final clip = result.requireValue;
+    _replaceClips(trackId, [clip]);
+    await _refreshSourcesIfChanged(sourcesBefore, [clip]);
     return Result.ok(null);
   }
 
@@ -667,13 +676,16 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
-  /// Resize multiple clips by [deltaTicks], with an optimistic update.
+  /// Resize multiple clips by [deltaTicks], with an optimistic update. With
+  /// [stretch], audio clips stretch their audio to the new length.
   Future<Result<void>> resizeClipBatch(
     int trackId,
     List<int> clipIds,
     UiResizeEdge edge,
-    int deltaTicks,
-  ) async {
+    int deltaTicks, {
+    bool stretch = false,
+  }) async {
+    final sourcesBefore = _clipSources(trackId);
     _applyOptimisticResizeBatch(trackId, clipIds, edge, deltaTicks);
     final result = await AsyncValue.guard(
       () => track_api.resizeClipBatch(
@@ -682,6 +694,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
         clipIds: clipIds,
         edge: edge,
         deltaTicks: deltaTicks,
+        stretch: stretch,
       ),
     );
 
@@ -691,6 +704,11 @@ class TrackListNotifier extends Notifier<TrackListState> {
       );
       return ref.notifyErrorResult(Exception(result.error.toString()));
     }
+    // Stretching resizes scale the content offset and may give a clip its own
+    // copy of its source, so adopt the backend's clips.
+    final clips = result.requireValue;
+    _replaceClips(trackId, clips);
+    await _refreshSourcesIfChanged(sourcesBefore, clips);
     return Result.ok(null);
   }
 
@@ -730,6 +748,57 @@ class TrackListNotifier extends Notifier<TrackListState> {
       AppLogger.error(
         'TrackListNotifier: error atomically duplicating clip groups: $error',
       );
+      return ref.notifyErrorResult(Exception(error.toString()));
+    }
+  }
+
+  /// Gives the clips their own copies of the waveforms or patterns they share
+  /// with other clips (hard copy). Clips whose content is already unique are
+  /// left unchanged.
+  Future<Result<List<UiClip>>> makeClipsUnique({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    if (clipIds.isEmpty) return Result.ok(const []);
+
+    try {
+      final made = await track_api.makeClipsUnique(
+        ctx: _ctx,
+        trackId: trackId,
+        clipIds: clipIds,
+      );
+      if (made.clips.isEmpty) return Result.ok(const []);
+
+      _projectNotifierRead
+        ..upsertPatternBulk(made.patterns)
+        ..upsertSourceEnvelopes(made.sourceEnvelopes);
+      _replaceClips(trackId, made.clips);
+      if (made.sourceEnvelopes.isNotEmpty) {
+        ref.invalidate(audioSourcesProvider);
+      }
+      return Result.ok(made.clips);
+    } catch (error) {
+      AppLogger.error('TrackListNotifier: error making clips unique: $error');
+      return ref.notifyErrorResult(Exception(error.toString()));
+    }
+  }
+
+  /// Replaces an audio clip's own gain envelope.
+  Future<Result<void>> setClipEnvelope({
+    required int trackId,
+    required int clipId,
+    required UiGainEnvelope envelope,
+  }) async {
+    try {
+      final clip = await track_api.setClipEnvelope(
+        ctx: _ctx,
+        clipId: clipId,
+        envelope: envelope,
+      );
+      _replaceClips(trackId, [clip]);
+      return Result.ok(null);
+    } catch (error) {
+      AppLogger.error('TrackListNotifier: error editing clip envelope: $error');
       return ref.notifyErrorResult(Exception(error.toString()));
     }
   }
@@ -1151,6 +1220,44 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
+  /// Replaces clips of [trackId] with the backend's versions, matched by ID.
+  /// Audio source of each clip on [trackId], by clip ID.
+  Map<int, UiClipSource?> _clipSources(int trackId) {
+    final track = ref.read(projectProvider).value?.tracks[trackId];
+    return {
+      for (final clip in track?.clips ?? const <UiClip>[]) clip.id: clip.source,
+    };
+  }
+
+  /// Reloads source data when [clips] moved to sources the UI has not seen, as
+  /// a stretching resize does when it makes a shared clip unique.
+  Future<void> _refreshSourcesIfChanged(
+    Map<int, UiClipSource?> before,
+    List<UiClip> clips,
+  ) async {
+    final changed = clips.any((clip) => before[clip.id] != clip.source);
+    if (!changed) return;
+    final envelopes = await attemptAsync(
+      () => audio_api.getAudioSourceEnvelopes(ctx: _ctx),
+    );
+    if (envelopes case Ok(:final value)) {
+      _projectNotifierRead.upsertSourceEnvelopes(value);
+    }
+    ref.invalidate(audioSourcesProvider);
+  }
+
+  void _replaceClips(int trackId, List<UiClip> clips) {
+    final track = ref.read(projectProvider).value?.tracks[trackId];
+    if (track == null) return;
+    final byId = {for (final clip in clips) clip.id: clip};
+    _projectNotifierRead.upsertTrack(
+      trackId,
+      track.copyWith(
+        clips: [for (final clip in track.clips) byId[clip.id] ?? clip],
+      ),
+    );
+  }
+
   void _applyOptimisticResizeBatch(
     int trackId,
     List<int> clipIds,
@@ -1251,6 +1358,8 @@ final trackWaveformProvider = Provider.autoDispose
           (s) => (s.value?.tracks[arg.trackId], s.value?.fullStateRevision),
         ),
       );
+      // A finished render or tempo edit replaces a source's playback state.
+      ref.watch(backgroundJobsProvider.select((s) => s.sourceRevisions));
       final ctx = ref.read(projectProvider.notifier).dawContext;
       final handles = getWaveformHandlesForTrack(
         ctx: ctx,

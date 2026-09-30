@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "karbeat-core",
+    "karbeat-core-api",
+    "karbeat-analysis",
     "karbeat-dsp",
     "karbeat-host",
     "karbeat-host-api",
@@ -14,12 +16,14 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 license = "GPL 3.0"
 
 [workspace.dependencies]
 karbeat-core = { path = "karbeat-core" }
+karbeat-core-api = { path = "karbeat-core-api" }
+karbeat-analysis = { path = "karbeat-analysis" }
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat_flutter_ffi = { path = "karbeat-flutter-ffi" }
 karbeat-host = { path = "karbeat-host" }
@@ -36,16 +40,14 @@ anyhow = "1.0.103"
 cpal = { version = "0.17.3"}
 env_logger = "0.11"
 fastrand = "2.4"
-flutter_rust_bridge = "=2.11.1"
 log = "0.4.28"
-minimp3 = "0.6.1"
 once_cell = "1.21"
 rodio = {version= "0.22.1", features=["symphonia-all"]}
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
-serde_json = "1.0.149"
+serde_json = { version = "1.0.149", features = ["float_roundtrip"] }
+base64 = "0.22.1"
 triple_buffer = "9.0.0"
-rustfft = "6.4.1"
 thiserror = "2.0"
 dasp = { version = "0.11.0", features = ["all"] }
 smallvec = { version = "1.15.1", features = ["serde"] }
@@ -54,27 +56,23 @@ indexmap = { version = "2.14.0", features = ["serde"] }
 itertools = { version = "^0.14" }
 num-complex = "0.4.6"
 parking_lot = "0.12.5"
-uuid = { version = "1.22.0", features = ["v4", "serde"] }
 memmap2 = "0.9.11"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
 rayon = "1.12.0"
+crossfire = "3.1.20"
 zip = "8.5"
 toml = "1.1.4"
 rmp-serde = "1.3.1"
 derive_builder = "0.20.2"
 hound = "3.5.1"
-strum = { version = "0.28.0", features = ["derive"] }
 num-traits = "0.2"
 wide = "1.6.0"
 heck = "0.5.0"
-fundsp = "0.23.0"
-rand = "0.10.1"
 vcpkg = "0.2.15"
 bindgen = "0.72.1"
 pkg-config = "0.3.33"
 rubato = "4.0.0"
-dyn-clone = "1.0.20"
 raw-window-handle = "0.6.2"
 libloading = "0.8.9"
 glib = "0.22"
@@ -85,7 +83,7 @@ slotmap = {version = "1.1.1", features=["serde"] }
 slab = {version = "0.4.12", features=["serde"]}
 async-executor = "1.14.0"
 futures-lite = "2.6.1"
-tokio = { version = "1.48.0", features = ["sync"] }
+tokio = { version = "1.48.0", features = ["sync", "rt-multi-thread", "time"] }
 windows-sys = "0.61.2"
 shuttle = "0.9.4"
 jiff = {version = "0.2.37", features=["serde"]}
@@ -108,7 +106,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -3 }
-pedantic = { level = "warn", priority = -3 }
+pedantic = { level = "allow", priority = -3 }
 cargo = { level = "warn", priority = -3 }
 
 correctness = { level = "deny", priority = -2 }
@@ -149,9 +147,3 @@ wildcard_dependencies = "deny"
 multiple_crate_versions = "allow"
 cargo_common_metadata = "allow"
 
-module_name_repetitions = "allow"
-must_use_candidate = "allow"
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
-similar_names = "allow"
-struct_excessive_bools = "allow"

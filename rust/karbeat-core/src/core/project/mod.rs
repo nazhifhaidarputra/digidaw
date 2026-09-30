@@ -1,21 +1,27 @@
 pub mod automation;
 pub mod clip;
 pub mod clipboard;
+pub mod cover;
+pub mod envelope;
 pub mod generator;
 mod index;
 pub mod mixer;
 pub mod plugin;
 pub mod session;
+pub mod timeline;
 pub mod track;
 pub mod transport;
 
 pub use automation::*;
 pub use clip::*;
 pub use clipboard::*;
+pub use cover::{CoverArt, CoverArtError, CoverFormat, CoverImage};
+pub use envelope::*;
 pub use generator::*;
 pub use index::*;
 pub use mixer::*;
 pub use plugin::*;
 pub use session::SessionState;
+pub use timeline::{CueMarker, LoopRegion, TimelineError, TimelineState};
 pub use track::*;
 pub use transport::*;

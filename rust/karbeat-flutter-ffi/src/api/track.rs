@@ -1,10 +1,19 @@
 // rust\src\api\track.rs
 
+use std::collections::HashMap;
+
 use crate::api::context::DawContext;
-use crate::api::project::{UiClip, UiTrack};
-use karbeat_core::api::{clip_api, track_api};
+use crate::api::jobs::run_job;
+use crate::api::pattern::UiPattern;
+use crate::api::project::{UiClip, UiGainEnvelope, UiTrack};
+use flutter_rust_bridge::frb;
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::shared::id::*;
+use karbeat_core_api::{
+    clip_api,
+    jobs::{JobClass, JobKind, JobSpec},
+    track_api,
+};
 
 pub enum UiSourceType {
     Audio,
@@ -75,20 +84,33 @@ pub fn delete_clip(ctx: &DawContext, track_id: u64, clip_id: u64) -> Result<(), 
     Ok(())
 }
 
+/// Resizes a clip edge to `new_time_val`. With `stretch` (the timeline's stretch mode), an
+/// audio clip's audio is stretched to the new length instead of trimmed.
 pub fn resize_clip(
     ctx: &DawContext,
     track_id: u64,
     clip_id: u64,
     edge: UiResizeEdge,
     new_time_val: u64,
+    stretch: bool,
 ) -> Result<UiClip, String> {
-    crate::api::context::project_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let clip_id = ClipId::from_u64(clip_id);
     let core_edge: ResizeEdge = edge.into();
 
-    let res = clip_api::resize_clip(ctx, track_id, clip_id, core_edge, new_time_val)
-        .map_err(|e| format!("{}", e))?;
+    let res = clip_api::resize_clip(
+        &mut ctx.project_write(),
+        track_id,
+        clip_id,
+        core_edge,
+        new_time_val,
+        stretch,
+    )
+    .map_err(|e| format!("{}", e))?;
+    if stretch {
+        // A stretching resize changes the source tempo; render it in the background.
+        crate::api::audio_analysis::schedule_source_renders(ctx, false);
+    }
 
     Ok(UiClip::from(&res))
 }
@@ -146,7 +168,19 @@ pub fn slice_clip(
 }
 
 /// Add a MIDI track with a generator by its registry ID (preferred method).
-pub fn add_midi_track_with_generator_id(
+pub async fn add_midi_track_with_generator_id(
+    ctx: &DawContext,
+    registry_id: u32,
+) -> Result<UiTrack, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::PluginInstall, JobClass::Control),
+        move |_| add_midi_track_with_generator_id_blocking(&ctx, registry_id),
+    )
+    .await
+}
+
+fn add_midi_track_with_generator_id_blocking(
     ctx: &DawContext,
     registry_id: u32,
 ) -> Result<UiTrack, String> {
@@ -165,17 +199,17 @@ pub fn add_midi_track_with_generator_id(
 
     let pending = {
         let core = operation.read_core();
-        karbeat_core::api::external_plugin_api::begin_add_instrument(&core, registry_id)
+        karbeat_core_api::external_plugin_api::begin_add_instrument(&core, registry_id)
             .map_err(|error| error.to_string())?
     };
-    let completed = karbeat_core::api::external_plugin_api::execute_install(pending)
+    let completed = karbeat_core_api::external_plugin_api::execute_install(pending)
         .map_err(|error| error.to_string())?;
     let mut core = operation.write_core();
-    match karbeat_core::api::external_plugin_api::commit_install(&mut core, completed) {
-        karbeat_core::api::external_plugin_api::InstalledPlugin::Instrument(track) => {
+    match karbeat_core_api::external_plugin_api::commit_install(&mut core, completed) {
+        karbeat_core_api::external_plugin_api::InstalledPlugin::Instrument(track) => {
             Ok(UiTrack::from_track(&track, &core.app_state))
         }
-        karbeat_core::api::external_plugin_api::InstalledPlugin::Effect(_) => {
+        karbeat_core_api::external_plugin_api::InstalledPlugin::Effect(_) => {
             Err("External instrument transaction returned an effect".into())
         }
     }
@@ -226,20 +260,32 @@ pub fn move_clip_batch(
     Ok(res.iter().map(UiClip::from).collect())
 }
 
-/// Resize clips in batch by a delta amount
+/// Resize clips in batch by a delta amount. With `stretch` (the timeline's stretch mode),
+/// audio clips stretch their audio to the new length instead of trimming it.
 pub fn resize_clip_batch(
     ctx: &DawContext,
     track_id: u64,
     clip_ids: Vec<u64>,
     edge: UiResizeEdge,
     delta_ticks: i64,
+    stretch: bool,
 ) -> Result<Vec<UiClip>, String> {
-    crate::api::context::project_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
     let core_edge: ResizeEdge = edge.into();
-    let res = clip_api::batch_resize_clips(ctx, track_id, clip_ids, core_edge, delta_ticks)
-        .map_err(|e| format!("{}", e))?;
+    let res = clip_api::batch_resize_clips(
+        &mut ctx.project_write(),
+        track_id,
+        clip_ids,
+        core_edge,
+        delta_ticks,
+        stretch,
+    )
+    .map_err(|e| format!("{}", e))?;
+    if stretch {
+        // A stretching resize changes the source tempo; render it in the background.
+        crate::api::audio_analysis::schedule_source_renders(ctx, false);
+    }
 
     Ok(res.iter().map(UiClip::from).collect())
 }
@@ -295,30 +341,39 @@ pub fn change_track_color(ctx: &DawContext, track_id: u64, new_color: &str) -> R
 
 /// Delete a track from the timeline. This function returns a string which will be
 /// "audio", "midi", or "automation"
-pub fn delete_track(ctx: &DawContext, track_id: u64) -> Result<String, String> {
+pub async fn delete_track(ctx: &DawContext, track_id: u64) -> Result<String, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::PluginRemoval, JobClass::Control),
+        move |_| delete_track_blocking(&ctx, track_id),
+    )
+    .await
+}
+
+fn delete_track_blocking(ctx: &DawContext, track_id: u64) -> Result<String, String> {
     let operation = ctx.begin_project_operation();
     let track_id = TrackId::from_u64(track_id);
     let external = {
         let core = operation.read_core();
-        karbeat_core::api::external_plugin_api::track_targets(&core, track_id)
+        karbeat_core_api::external_plugin_api::track_targets(&core, track_id)
             .iter()
             .any(|target| {
-                karbeat_core::api::external_plugin_api::descriptor(&core, *target).is_some()
+                karbeat_core_api::external_plugin_api::descriptor(&core, *target).is_some()
             })
     };
     let removed_track_type = if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core::api::external_plugin_api::begin_delete_track(&core, track_id)
+            karbeat_core_api::external_plugin_api::begin_delete_track(&core, track_id)
                 .map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core::api::external_plugin_api::execute_removal(pending)
+        let completed = karbeat_core_api::external_plugin_api::execute_removal(pending)
             .map_err(|error| error.to_string())?;
-        match karbeat_core::api::external_plugin_api::commit_removal(
+        match karbeat_core_api::external_plugin_api::commit_removal(
             &mut operation.write_core(),
             completed,
         ) {
-            karbeat_core::api::external_plugin_api::RemovedProjectItem::Track(removed) => removed,
+            karbeat_core_api::external_plugin_api::RemovedProjectItem::Track(removed) => removed,
             _ => return Err("Track removal transaction returned an incompatible result".into()),
         }
     } else {
@@ -346,4 +401,58 @@ pub fn update_track_order(ctx: &DawContext, track_id: u64, new_idx: usize) -> Re
 pub fn rename_clip(ctx: &DawContext, clip_id: u64, new_name: &str) -> Result<(), String> {
     crate::api::context::project_ctx!(ctx);
     clip_api::rename_clip(ctx, ClipId::from_u64(clip_id), new_name).map_err(|e| e.to_string())
+}
+
+/// Result of making clips unique: the changed clips and the content created for them.
+#[frb(dart_metadata=("freezed"))]
+pub struct UiMadeUnique {
+    /// Clips now referencing their own content.
+    pub clips: Vec<UiClip>,
+    /// Patterns created for MIDI clips, keyed by pattern ID.
+    pub patterns: HashMap<u64, UiPattern>,
+    /// Waveform envelopes of the audio sources created for audio clips, keyed by source ID.
+    pub source_envelopes: HashMap<u64, UiGainEnvelope>,
+}
+
+/// Gives the selected clips their own copies of the waveforms or patterns they share with other
+/// clips (hard copy). Clips whose content is already unique are left unchanged.
+pub fn make_clips_unique(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+) -> Result<UiMadeUnique, String> {
+    crate::api::context::project_ctx!(ctx);
+    let clip_ids = clip_ids.into_iter().map(ClipId::from_u64).collect();
+    let made = clip_api::make_clips_unique(ctx, TrackId::from_u64(track_id), clip_ids)
+        .map_err(|error| error.to_string())?;
+
+    let app = &ctx.app_state;
+    Ok(UiMadeUnique {
+        clips: made.clips.iter().map(UiClip::from).collect(),
+        patterns: made
+            .patterns
+            .iter()
+            .filter_map(|id| Some((id.to_u64(), UiPattern::from(app.pattern_pool.get(*id)?))))
+            .collect(),
+        source_envelopes: made
+            .sources
+            .iter()
+            .filter_map(|id| {
+                let waveform = app.asset_library.source_map.get(*id)?;
+                Some((id.to_u64(), UiGainEnvelope::from(&waveform.envelope)))
+            })
+            .collect(),
+    })
+}
+
+/// Replaces an audio clip's own gain envelope, stacked on top of its waveform envelope.
+pub fn set_clip_envelope(
+    ctx: &DawContext,
+    clip_id: u64,
+    envelope: UiGainEnvelope,
+) -> Result<UiClip, String> {
+    crate::api::context::project_ctx!(ctx);
+    let clip = clip_api::set_clip_envelope(ctx, ClipId::from_u64(clip_id), envelope.into())
+        .map_err(|error| error.to_string())?;
+    Ok(UiClip::from(&clip))
 }

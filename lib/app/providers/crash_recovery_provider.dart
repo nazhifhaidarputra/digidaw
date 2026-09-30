@@ -21,6 +21,10 @@ abstract class CrashRecoveryState with _$CrashRecoveryState {
 
   const factory CrashRecoveryState({
     @Default(false) bool previousSessionUnclean,
+
+    /// The previous run was ended on request, such as by Ctrl+C. Not a crash,
+    /// so it only needs attention when it left an auto saved copy behind.
+    @Default(false) bool previousSessionForced,
     UiRecoveryInfo? recovery,
     @Default(IListConst([])) IList<UiCrashReportSummary> crashReports,
     @Default(false) bool isBusy,
@@ -67,6 +71,7 @@ class CrashRecoveryNotifier extends Notifier<CrashRecoveryState> {
     final startup = configured.ok();
     state = CrashRecoveryState(
       previousSessionUnclean: startup.previousSessionUnclean,
+      previousSessionForced: startup.previousSessionForced,
       recovery: startup.recovery,
       crashReports: startup.crashReports.lock,
     );

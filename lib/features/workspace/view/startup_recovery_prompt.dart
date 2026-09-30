@@ -53,6 +53,8 @@ class CrashRecoveryDialog extends ConsumerWidget {
       title: Text(
         state.previousSessionUnclean
             ? 'DigiDAW did not close properly'
+            : state.previousSessionForced
+            ? 'DigiDAW was force closed'
             : 'Crash reports',
       ),
       content: SizedBox(

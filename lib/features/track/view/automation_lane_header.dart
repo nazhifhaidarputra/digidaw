@@ -5,6 +5,9 @@ import 'package:karbeat/src/rust/api/automation.dart';
 /// Compact header for an automation lane in a channel drawer.
 class AutomationLaneHeader extends StatelessWidget {
   final AutomationLaneDto lane;
+
+  /// What owns the automated parameter, such as the plugin or mixer channel.
+  final String sourceName;
   final double itemHeight;
   final Color trackColor;
 
@@ -20,6 +23,7 @@ class AutomationLaneHeader extends StatelessWidget {
   const AutomationLaneHeader({
     super.key,
     required this.lane,
+    required this.sourceName,
     required this.itemHeight,
     required this.trackColor,
     required this.onToggleEnabled,
@@ -67,17 +71,10 @@ class AutomationLaneHeader extends StatelessWidget {
           const SizedBox(width: 8),
           if (collapsed)
             Expanded(
-              child: Text(
-                lane.label,
-                style: TextStyle(
-                  color: lane.enabled
-                      ? colors.onSurface
-                      : colors.onSurfaceVariant,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: AutomationLaneTitle(
+                sourceName: sourceName,
+                lane: lane,
+                fontSize: 11,
               ),
             )
           else ...[
@@ -86,16 +83,10 @@ class AutomationLaneHeader extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    lane.label,
-                    style: TextStyle(
-                      color: lane.enabled
-                          ? colors.onSurface
-                          : colors.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                  AutomationLaneTitle(
+                    sourceName: sourceName,
+                    lane: lane,
+                    fontSize: 12,
                   ),
                   Text(
                     "Min: ${lane.min} | Max: ${lane.max}",
@@ -121,6 +112,51 @@ class AutomationLaneHeader extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// One-line automation lane title naming what owns the automated parameter
+/// and the parameter itself, such as "Vital › Cutoff".
+class AutomationLaneTitle extends StatelessWidget {
+  final String sourceName;
+  final AutomationLaneDto lane;
+  final double fontSize;
+
+  const AutomationLaneTitle({
+    super.key,
+    required this.sourceName,
+    required this.lane,
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: '$sourceName › ${lane.label}',
+      waitDuration: const Duration(milliseconds: 500),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$sourceName › ',
+              style: TextStyle(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            TextSpan(text: lane.label),
+          ],
+        ),
+        style: TextStyle(
+          color: lane.enabled ? colors.onSurface : colors.onSurfaceVariant,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w500,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

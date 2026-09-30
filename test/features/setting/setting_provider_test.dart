@@ -127,28 +127,31 @@ void main() {
     );
   });
 
-  test('initialize restores and applies persisted auto save settings', () async {
-    final service = _FakeSettingsService()
-      ..loadedAutoSave = const UiAutoSaveSettings(
-        isEnabled: false,
-        intervalSeconds: 600,
+  test(
+    'initialize restores and applies persisted auto save settings',
+    () async {
+      final service = _FakeSettingsService()
+        ..loadedAutoSave = const UiAutoSaveSettings(
+          isEnabled: false,
+          intervalSeconds: 600,
+        );
+      final container = ProviderContainer(
+        overrides: [settingsServiceProvider.overrideWithValue(service)],
       );
-    final container = ProviderContainer(
-      overrides: [settingsServiceProvider.overrideWithValue(service)],
-    );
-    addTearDown(container.dispose);
+      addTearDown(container.dispose);
 
-    final result = await container
-        .read(generalSettingsProvider.notifier)
-        .initialize(_MockDawContext());
+      final result = await container
+          .read(generalSettingsProvider.notifier)
+          .initialize(_MockDawContext());
 
-    final state = container.read(generalSettingsProvider);
-    expect(result.isOk(), isTrue);
-    expect(service.appliedAutoSave, service.loadedAutoSave);
-    expect(state.autoSaveEnabled, isFalse);
-    expect(state.autoSaveIntervalSeconds, 600);
-    expect(state.isApplyingAutoSave, isFalse);
-  });
+      final state = container.read(generalSettingsProvider);
+      expect(result.isOk(), isTrue);
+      expect(service.appliedAutoSave, service.loadedAutoSave);
+      expect(state.autoSaveEnabled, isFalse);
+      expect(state.autoSaveIntervalSeconds, 600);
+      expect(state.isApplyingAutoSave, isFalse);
+    },
+  );
 
   test('auto save changes are applied then persisted', () async {
     final service = _FakeSettingsService();

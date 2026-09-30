@@ -94,6 +94,8 @@ pub enum AudioCommand {
     SetPatternLoop(Option<(u64, u64)>),
     /// Set loop mode
     SetLooping(bool),
+    /// Loops song playback between two ticks, or at the song end when `None`.
+    SetSongLoopRegion(Option<(u64, u64)>),
     /// Stop playback and reset playhead to 0
     StopAndReset,
     /// Moves the transport playhead to an absolute sample index.
@@ -371,6 +373,15 @@ pub enum AudioCommand {
         clips: HashMap<ClipId, Clip>,
         /// MIDI pattern pool referenced by MIDI clips.
         patterns: HashMap<PatternId, Pattern>,
+    },
+
+    /// Replaces one audio source's waveform in the render graph, e.g. after its envelope changed.
+    /// Sources missing from the render graph are ignored; new sources need a full graph.
+    UpdateAudioSource {
+        /// Source whose waveform is replaced.
+        id: AudioSourceId,
+        /// Waveform snapshot to render from.
+        waveform: std::sync::Arc<AudioWaveform>,
     },
 
     /// Add or replace a single automation lane on the audio thread.

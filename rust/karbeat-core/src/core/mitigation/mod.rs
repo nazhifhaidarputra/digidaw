@@ -4,7 +4,8 @@
 //!
 //! ```text
 //! <root>/
-//!   session.lock          present while a session runs; a stale one means the last run crashed
+//!   session.lock          present while a session runs; a stale one means the last run crashed,
+//!                         unless it records a forced shutdown (Ctrl+C or another termination signal)
 //!   autosave/
 //!     recovery.dgdaw      latest auto saved copy of the open project
 //!     recovery.json       RecoveryInfo describing that copy
@@ -24,6 +25,9 @@ pub mod crash;
 pub mod device;
 /// Stale-session detection used to report crashes that no hook could observe.
 pub mod session_marker;
+/// Termination signal handling that records Ctrl+C as a forced shutdown instead of a crash.
+#[cfg(unix)]
+pub mod shutdown_signals;
 
 pub use auto_save::{
     AutoSaveSettings, AutoSaveSettingsError, MAX_AUTO_SAVE_INTERVAL, MIN_AUTO_SAVE_INTERVAL,

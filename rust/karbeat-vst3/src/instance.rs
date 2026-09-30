@@ -39,11 +39,36 @@ pub(crate) struct Vst3PrepareJob {
     next_mapping: usize,
 }
 
+/// Returns the SDK name and meaning of a VST3 `tresult` for diagnostics.
+///
+/// The numeric values are platform-specific: COM-compatible HRESULTs on Windows and small
+/// integers elsewhere, so always match against the `vst3` constants rather than literals.
+#[allow(non_upper_case_globals, reason = "VST3 result constants are SDK-named")]
+pub(crate) fn result_name(code: tresult) -> &'static str {
+    match code {
+        kResultOk => "kResultOk (success)",
+        kResultFalse => "kResultFalse (rejected or false)",
+        kNoInterface => "kNoInterface (interface not supported)",
+        kInvalidArgument => "kInvalidArgument (invalid argument)",
+        kNotImplemented => "kNotImplemented (not implemented by the plugin)",
+        kInternalError => "kInternalError (internal plugin error)",
+        kNotInitialized => "kNotInitialized (plugin not initialized)",
+        kOutOfMemory => "kOutOfMemory (out of memory)",
+        _ => "unknown result",
+    }
+}
+
+/// Logs a failed plugin call with its readable result name and converts it to a [`HostError`].
+pub(crate) fn plugin_call_error(operation: &'static str, code: tresult) -> HostError {
+    log::warn!("VST3 {operation} returned {} ({code})", result_name(code));
+    HostError::PluginCall { operation, code }
+}
+
 pub(crate) fn check(operation: &'static str, code: i32) -> Result<(), HostError> {
     if code == kResultOk {
         Ok(())
     } else {
-        Err(HostError::PluginCall { operation, code })
+        Err(plugin_call_error(operation, code))
     }
 }
 
@@ -355,8 +380,9 @@ impl Vst3Instance {
             // kResultFalse means the plugin adapted to its closest supported layout; read back
             // what it actually chose and map the engine's channels onto it.
             log::debug!(
-                "{}: setBusArrangements returned {code}; using the plugin's adapted layout",
-                self.descriptor.name
+                "{}: setBusArrangements returned {} ({code}); using the plugin's adapted layout",
+                self.descriptor.name,
+                result_name(code)
             );
             input_layouts = current_arrangements(component, processor, 0, inputs.len())?;
             output_layouts = current_arrangements(component, processor, 1, outputs.len())?;
@@ -424,8 +450,9 @@ impl Vst3Instance {
                     check("component.activateBus(audio)", code)?;
                 } else if code != kResultOk {
                     log::warn!(
-                        "{}: activateBus(audio, {direction}, {index}) returned {code}",
-                        self.descriptor.name
+                        "{}: activateBus(audio, {direction}, {index}) returned {} ({code})",
+                        self.descriptor.name,
+                        result_name(code)
                     );
                 }
             }
@@ -440,8 +467,9 @@ impl Vst3Instance {
                     unsafe { component.activateBus(1, direction, index, u8::from(index == 0)) };
                 if code != kResultOk {
                     log::warn!(
-                        "{}: activateBus(events, {direction}, {index}) returned {code}",
-                        self.descriptor.name
+                        "{}: activateBus(events, {direction}, {index}) returned {} ({code})",
+                        self.descriptor.name,
+                        result_name(code)
                     );
                 }
             }

@@ -2,10 +2,10 @@ use crate::api::context::DawContext;
 use crate::api::project::{UiApplicationState, UiTrackType};
 use crate::api::track::UiResizeEdge;
 use crate::api::{pattern::UiNote, project::UiClip};
-use karbeat_core::api::{self, clip_api, clipboard_api, note_api};
 use karbeat_core::core::project::clip::ClipTimeUnit;
 use karbeat_core::core::project::clipboard::ClipboardContent;
 use karbeat_core::core::project::{NoteId, PatternId};
+use karbeat_core_api::{self as api, clip_api, clipboard_api, note_api};
 
 use karbeat_core::shared::id::*;
 
@@ -44,16 +44,25 @@ impl From<&ClipboardContent> for UiClipboardContent {
 
 /// Undo the last action.
 pub fn undo(ctx: &DawContext) -> Result<UiApplicationState, String> {
-    crate::api::context::project_ctx!(ctx);
-    api::undo(ctx)?;
-    Ok(UiApplicationState::from(ctx.app_state.clone()))
+    let state = {
+        let mut core = ctx.project_write();
+        api::undo(&mut core)?;
+        UiApplicationState::from(core.app_state.clone())
+    };
+    // The step may have changed the tempo; stretched sources follow it.
+    crate::api::audio_analysis::schedule_source_renders(ctx, true);
+    Ok(state)
 }
 
 /// Redo the last undone action.
 pub fn redo(ctx: &DawContext) -> Result<UiApplicationState, String> {
-    crate::api::context::project_ctx!(ctx);
-    api::redo(ctx)?;
-    Ok(UiApplicationState::from(ctx.app_state.clone()))
+    let state = {
+        let mut core = ctx.project_write();
+        api::redo(&mut core)?;
+        UiApplicationState::from(core.app_state.clone())
+    };
+    crate::api::audio_analysis::schedule_source_renders(ctx, true);
+    Ok(state)
 }
 
 // =============================================
@@ -231,6 +240,7 @@ pub fn resize_clip(
         ClipId::from_u64(clip_id),
         edge.into(),
         new_time_val,
+        false,
     )
     .map_err(|e| format!("{}", e))?;
 
