@@ -25,7 +25,7 @@ use crate::{
     core::{
         history::{EngineSync, HistoryAction, HistoryManager, PluginSync},
         mitigation::{MitigationState, SessionSettings},
-        project::{ApplicationState, AudioTrack, AutomationLane, Clip, Pattern},
+        project::{ApplicationState, AudioTrack, AutomationLane, Clip, LoopRegion, Pattern},
     },
     message::TelemetryRegistry,
     shared::{AudioSourceId, AutomationId, ClipId, PatternId},
@@ -287,6 +287,16 @@ impl DawContext {
         let _ = self.send_audio_command(AudioCommand::UpdateAudioSource { id, waveform });
     }
 
+    /// Best-effort publishes the project's song loop region to the audio thread.
+    pub fn broadcast_loop_region(&mut self) {
+        let region = self
+            .app_state
+            .timeline
+            .loop_region
+            .map(LoopRegion::as_ticks);
+        let _ = self.send_audio_command(AudioCommand::SetSongLoopRegion(region));
+    }
+
     /// Builds a complete render graph snapshot and best-effort replaces audio-thread graph state.
     pub fn broadcast_full_graph(&mut self) {
         let graph = AudioGraphState::from(&self.app_state);
@@ -355,6 +365,9 @@ impl DawContext {
         if sync.tempo {
             let bpm = self.app_state.transport.bpm;
             let _ = self.send_audio_command(AudioCommand::SetBPM(bpm));
+        }
+        if sync.loop_region {
+            self.broadcast_loop_region();
         }
     }
 

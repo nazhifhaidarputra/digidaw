@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use zip::{CompressionMethod, ZipWriter, read::ZipArchive, write::SimpleFileOptions};
 
 use crate::core::{
-    file_manager::{app_cache_dir, audio_loader::load_audio_file},
+    file_manager::{app_cache_dir, audio_loader::load_audio_file, format::ProjectMigrator},
     project::{ApplicationState, AudioSourceId, AudioWaveform, CoverImage, ProjectMetadata},
 };
 
@@ -121,11 +121,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
         }
     }
 
-    // Serialize the modified state to MessagePack binary
-    let project_msgpack = rmp_serde::to_vec(&saveable_state)
-        .context("Failed to serialize project state to MessagePack")?;
-    zip.start_file("project.msgpack", deflated_options)?;
-    zip.write_all(&project_msgpack)?;
+    ProjectMigrator::write(&mut zip, &saveable_state, deflated_options)?;
 
     zip.finish()?.sync_all()?;
     temporary.persist(save_path).map_err(|error| error.error)?;
@@ -143,16 +139,7 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
     }
 
     let mut archive = ZipArchive::new(file)?;
-    let mut project_bytes = Vec::new();
-    {
-        let mut project_entry = archive
-            .by_name("project.msgpack")
-            .context("project.msgpack missing from .karbeat archive")?;
-        project_entry.read_to_end(&mut project_bytes)?;
-    }
-    let mut app_state: ApplicationState =
-        rmp_serde::from_slice(&project_bytes).context("Failed to deserialize project.msgpack")?;
-    app_state.migrate_legacy_audio_clip_placement();
+    let mut app_state = ProjectMigrator::detect(&mut archive)?.load(&mut archive)?;
 
     let library = &mut app_state.asset_library;
     // Extracted sources are re-read when the project is saved, so the directory lives as long
@@ -569,10 +556,115 @@ mod test {
         let loaded_state = load_result.unwrap();
 
         assert_eq!(
-            rmp_serde::to_vec(&original_state).unwrap(),
-            rmp_serde::to_vec(&loaded_state).unwrap(),
+            serde_json::to_value(&original_state).unwrap(),
+            serde_json::to_value(&loaded_state).unwrap(),
             "Loaded state did not match the saved state!"
         );
+    }
+
+    /// Writes a project the way builds before format versioning did: positional
+    /// MessagePack and no `format.json`.
+    fn write_v1_project(path: &Path, state: &ApplicationState) {
+        let mut file = File::create(path).unwrap();
+        file.write_all(KARBEAT_MAGIC_HEADER).unwrap();
+        let mut zip = ZipWriter::new(file);
+        let options = SimpleFileOptions::default();
+        zip.start_file("metadata.toml", options).unwrap();
+        zip.write_all(toml::to_string(&state.metadata).unwrap().as_bytes())
+            .unwrap();
+        zip.add_directory("audio/", options).unwrap();
+        zip.start_file("project.msgpack", options).unwrap();
+        zip.write_all(&rmp_serde::to_vec(state).unwrap()).unwrap();
+        zip.finish().unwrap();
+    }
+
+    #[test]
+    fn saved_projects_are_json_with_a_format_version() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().join("v2.dgdaw");
+        save_daw_project(&project, &ApplicationState::default()).unwrap();
+
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&archive_entry(&project, "format.json").unwrap()).unwrap();
+        assert_eq!(manifest["version"], 2);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&archive_entry(&project, "project.json").unwrap()).unwrap();
+        assert!(payload["transport"]["bpm"].is_number());
+        assert!(archive_entry(&project, "project.msgpack").is_none());
+    }
+
+    #[test]
+    fn v1_projects_load_and_resave_as_v2() {
+        use crate::core::file_manager::format::{ProjectFormatVersion, ProjectMigrator};
+        use crate::core::project::PluginInstance;
+
+        let mut state = ApplicationState::default();
+        state.transport.bpm = 132.0;
+        state.metadata.name = "Old project".into();
+        let track = state.add_new_audio_track().id;
+        let mut plugin = PluginInstance::new_with_id(7, "EQ");
+        plugin.plugin_state = vec![1, 2, 3, 250];
+        state.mixer.master_bus.effects.insert(plugin);
+
+        let dir = tempdir().unwrap();
+        let v1 = dir.path().join("v1.dgdaw");
+        write_v1_project(&v1, &state);
+        {
+            let mut file = File::open(&v1).unwrap();
+            file.read_exact(&mut [0; 8]).unwrap();
+            let mut archive = ZipArchive::new(file).unwrap();
+            assert_eq!(
+                ProjectMigrator::detect(&mut archive).unwrap().version(),
+                ProjectFormatVersion::V1
+            );
+        }
+
+        let loaded = load_daw_project(&v1, SAMPLE_RATE).unwrap();
+        assert_eq!(loaded.transport.bpm, 132.0);
+        assert_eq!(loaded.metadata.name, "Old project");
+        assert!(loaded.tracks.contains_key(track));
+        let effect = loaded.mixer.master_bus.effects.iter().next().unwrap();
+        assert_eq!(effect.instance.plugin_state, [1, 2, 3, 250]);
+
+        let v2 = dir.path().join("v2.dgdaw");
+        save_daw_project(&v2, &loaded).unwrap();
+        assert!(archive_entry(&v2, "format.json").is_some());
+        let reloaded = load_daw_project(&v2, SAMPLE_RATE).unwrap();
+        assert_eq!(
+            serde_json::to_value(&loaded).unwrap(),
+            serde_json::to_value(&reloaded).unwrap()
+        );
+    }
+
+    #[test]
+    fn newer_format_versions_are_rejected_with_a_clear_error() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().join("future.dgdaw");
+        let mut file = File::create(&project).unwrap();
+        file.write_all(KARBEAT_MAGIC_HEADER).unwrap();
+        let mut zip = ZipWriter::new(file);
+        zip.start_file("format.json", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"{"version":99}"#).unwrap();
+        zip.finish().unwrap();
+
+        let error = load_daw_project(&project, SAMPLE_RATE).unwrap_err();
+        assert!(error.to_string().contains("format version 99"), "{error}");
+    }
+
+    #[test]
+    fn non_finite_values_fail_the_save_and_keep_the_previous_file() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().join("keep.dgdaw");
+        save_daw_project(&project, &ApplicationState::default()).unwrap();
+        let before = std::fs::read(&project).unwrap();
+
+        let mut broken = ApplicationState::default();
+        broken.transport.bpm = f32::NAN;
+        let error = save_daw_project(&project, &broken).unwrap_err();
+        assert!(error.to_string().contains("not finite"), "{error}");
+        assert_eq!(std::fs::read(&project).unwrap(), before);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]

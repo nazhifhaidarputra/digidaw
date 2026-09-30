@@ -13,7 +13,8 @@ use karbeat_core::{
     commands::{AudioCommand, EffectTarget, MixerChannelSeed},
     context::DawContext,
     core::project::{
-        ApplicationState, GeneratorInstanceType, mixer::MixerChannel, plugin::PluginInstance,
+        ApplicationState, GeneratorInstanceType, LoopRegion, mixer::MixerChannel,
+        plugin::PluginInstance,
     },
 };
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
@@ -346,6 +347,13 @@ pub(super) fn execute_replace(
     );
     commands.extend(bypass_commands(&pending.staged));
     commands.push(AudioCommand::SetBPM(pending.staged.transport.bpm));
+    commands.push(AudioCommand::SetSongLoopRegion(
+        pending
+            .staged
+            .timeline
+            .loop_region
+            .map(LoopRegion::as_ticks),
+    ));
     let (project, mut receipt) = HostedProjectInstall::new(commands, pending.sample_rate);
     let (command, mut project_retirement) = karbeat_host::ControlTransfer::new(project);
     pending

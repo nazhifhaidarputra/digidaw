@@ -10,6 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pattern.dart';
 import 'plugin.dart';
 import 'project.dart';
+import 'timeline.dart';
 
 // These functions are ignored because they are not marked as `pub`: `load_project_blocking`, `new_blank_project_blocking`, `restore_loaded_project`, `save_project_blocking`
 

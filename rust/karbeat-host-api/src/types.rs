@@ -124,8 +124,10 @@ pub struct PluginState {
     /// Plugin identity the native bytes belong to.
     pub identity: PluginIdentity,
     /// Opaque processor/component state returned by the native ABI.
+    #[serde(with = "karbeat_utils::base64_bytes")]
     pub component: Vec<u8>,
     /// Optional opaque controller state when the format exposes it separately.
+    #[serde(default, with = "karbeat_utils::base64_bytes::option")]
     pub controller: Option<Vec<u8>>,
 }
 

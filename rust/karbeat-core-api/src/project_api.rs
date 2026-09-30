@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use karbeat_core::audio::exporter::{
-    PendingAudioExport, TailHandling, begin_export, execute_export,
+    PendingAudioExport, RenderOptions, begin_export, execute_export,
     export_project as export_project_internal,
 };
 
@@ -143,6 +143,7 @@ where
         ctx.broadcast_full_graph();
         if ctx.command_sender.lock().is_some() {
             ctx.send_audio_command(AudioCommand::SetBPM(ctx.app_state.transport.bpm))?;
+            ctx.broadcast_loop_region();
             hydrate_live_audio_engine(ctx)?;
         }
     }
@@ -155,13 +156,13 @@ pub fn export_project<F>(
     ctx: &mut DawContext,
     output_path: &str,
     config: AudioExportConfig,
-    tail_handling: TailHandling,
+    options: RenderOptions,
     progress_callback: F,
 ) -> anyhow::Result<()>
 where
     F: FnMut(f32) -> bool + Send,
 {
-    export_project_internal(ctx, output_path, config, tail_handling, progress_callback)
+    export_project_internal(ctx, output_path, config, options, progress_callback)
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     Ok(())
@@ -175,20 +176,14 @@ pub fn execute_project_export<F>(
     pending: PendingAudioExport,
     output_path: &str,
     config: AudioExportConfig,
-    tail_handling: TailHandling,
+    options: RenderOptions,
     progress_callback: F,
 ) -> anyhow::Result<()>
 where
     F: FnMut(f32) -> bool + Send,
 {
-    execute_export(
-        pending,
-        output_path,
-        config,
-        tail_handling,
-        progress_callback,
-    )
-    .map_err(|error| anyhow::anyhow!(error.to_string()))
+    execute_export(pending, output_path, config, options, progress_callback)
+        .map_err(|error| anyhow::anyhow!(error.to_string()))
 }
 
 /// Create a blank, new, default project.
@@ -203,6 +198,7 @@ pub fn new_blank_project(ctx: &mut DawContext) -> anyhow::Result<ApplicationStat
         ctx.broadcast_full_graph();
         if ctx.command_sender.lock().is_some() {
             ctx.send_audio_command(AudioCommand::SetBPM(ctx.app_state.transport.bpm))?;
+            ctx.broadcast_loop_region();
             hydrate_live_audio_engine(ctx)?;
         }
     }

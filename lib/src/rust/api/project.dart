@@ -11,11 +11,12 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 import 'plugin.dart';
+import 'timeline.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `export_project_blocking`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -80,6 +81,11 @@ Future<Map<int, UiGeneratorInstance>> getGeneratorList({
   required DawContext ctx,
 }) => RustLib.instance.api.crateApiProjectGetGeneratorList(ctx: ctx);
 
+/// Bounces the loop region, every track and bus without the master bus, to a new audio
+/// source and returns its ID. Rendering runs without holding the project lock.
+Future<int> bounceLoopRegion({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiProjectBounceLoopRegion(ctx: ctx);
+
 /// Add a new audio source to the project
 ///
 /// ## Parameters:
@@ -109,11 +115,13 @@ Stream<double> exportProjectFlutter({
   required String outputPath,
   required AudioExportConfigDTO config,
   required TailHandlingDTO tailHandling,
+  required ExportRangeDTO range,
 }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
   ctx: ctx,
   outputPath: outputPath,
   config: config,
   tailHandling: tailHandling,
+  range: range,
 );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>>
@@ -242,6 +250,20 @@ sealed class BitDepthDTO with _$BitDepthDTO {
   const factory BitDepthDTO.bitPerSecond(int field0) = BitDepthDTO_BitPerSecond;
 }
 
+@freezed
+sealed class ExportRangeDTO with _$ExportRangeDTO {
+  const ExportRangeDTO._();
+
+  /// From the song start to the end of the last clip.
+  const factory ExportRangeDTO.song() = ExportRangeDTO_Song;
+
+  /// From `start_tick` up to `end_tick`, such as the loop region.
+  const factory ExportRangeDTO.ticks({
+    required int startTick,
+    required int endTick,
+  }) = ExportRangeDTO_Ticks;
+}
+
 class FlacExportConfigDTO {
   final int sampleRate;
   final int channels;
@@ -322,6 +344,7 @@ class UiApplicationState {
   final Map<int, UiPattern> patterns;
   final UiMixerState mixer;
   final Map<int, AudioWaveformUiForSourceList> audioSources;
+  final UiTimelineState timeline;
 
   const UiApplicationState({
     required this.metadata,
@@ -332,6 +355,7 @@ class UiApplicationState {
     required this.patterns,
     required this.mixer,
     required this.audioSources,
+    required this.timeline,
   });
 
   @override
@@ -343,7 +367,8 @@ class UiApplicationState {
       generators.hashCode ^
       patterns.hashCode ^
       mixer.hashCode ^
-      audioSources.hashCode;
+      audioSources.hashCode ^
+      timeline.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -357,7 +382,8 @@ class UiApplicationState {
           generators == other.generators &&
           patterns == other.patterns &&
           mixer == other.mixer &&
-          audioSources == other.audioSources;
+          audioSources == other.audioSources &&
+          timeline == other.timeline;
 }
 
 @freezed

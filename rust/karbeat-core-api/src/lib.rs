@@ -20,6 +20,8 @@ pub mod audio_settings_api;
 pub mod audio_waveform_api;
 /// Automation lane, point, modulation source, and link APIs.
 pub mod automation_api;
+/// Bouncing the loop region to a new audio source.
+pub mod bounce_api;
 /// Clip creation, editing, slicing, duplication, and deletion APIs.
 pub mod clip_api;
 /// Note and clip clipboard APIs.
@@ -54,6 +56,8 @@ pub mod project_api;
 )]
 /// Test fixtures shared by this crate's unit and integration-style tests.
 pub mod test;
+/// Song loop region and cue marker APIs.
+pub mod timeline_api;
 /// Track lookup, creation, metadata, ordering, and deletion APIs.
 pub mod track_api;
 /// Playback, looping, tempo, playhead, and pattern transport APIs.

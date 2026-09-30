@@ -8,6 +8,7 @@ mod index;
 pub mod mixer;
 pub mod plugin;
 pub mod session;
+pub mod timeline;
 pub mod track;
 pub mod transport;
 
@@ -21,5 +22,6 @@ pub use index::*;
 pub use mixer::*;
 pub use plugin::*;
 pub use session::SessionState;
+pub use timeline::{CueMarker, LoopRegion, TimelineError, TimelineState};
 pub use track::*;
 pub use transport::*;

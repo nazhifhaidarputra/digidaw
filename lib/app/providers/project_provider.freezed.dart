@@ -14,7 +14,8 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ApplicationDataStore {
 
- String? get currentFilePath; UiProjectMetadata get metadata; UiTransportState get transport; UiAudioHardwareConfig get hardwareConfig; IMap<int, UiTrack> get tracks; IMap<int, UiGeneratorInstance> get generators; IMap<int, UiPattern> get patterns; mixer_api.UiMixerState get mixer; IMap<int, ModulationLinkDto> get modulationLinks; IMap<int, AutomationLaneDto> get automationPool; IMap<int, ModulationSourceDto> get modulationSources;/// Waveform envelope of every audio source, keyed by source ID.
+ String? get currentFilePath; UiProjectMetadata get metadata; UiTransportState get transport; UiAudioHardwareConfig get hardwareConfig; IMap<int, UiTrack> get tracks; IMap<int, UiGeneratorInstance> get generators; IMap<int, UiPattern> get patterns; mixer_api.UiMixerState get mixer; IMap<int, ModulationLinkDto> get modulationLinks; IMap<int, AutomationLaneDto> get automationPool; IMap<int, ModulationSourceDto> get modulationSources;/// Song loop region and cue markers.
+ UiTimelineState get timeline;/// Waveform envelope of every audio source, keyed by source ID.
  IMap<int, UiGainEnvelope> get sourceEnvelopes;/// Increments on every full backend fetch (boot, new, load, undo/redo).
 ///
 /// Backend-owned resources such as audio buffers can be replaced while the
@@ -30,16 +31,16 @@ $ApplicationDataStoreCopyWith<ApplicationDataStore> get copyWith => _$Applicatio
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ApplicationDataStore&&(identical(other.currentFilePath, currentFilePath) || other.currentFilePath == currentFilePath)&&(identical(other.metadata, metadata) || other.metadata == metadata)&&(identical(other.transport, transport) || other.transport == transport)&&(identical(other.hardwareConfig, hardwareConfig) || other.hardwareConfig == hardwareConfig)&&(identical(other.tracks, tracks) || other.tracks == tracks)&&(identical(other.generators, generators) || other.generators == generators)&&(identical(other.patterns, patterns) || other.patterns == patterns)&&(identical(other.mixer, mixer) || other.mixer == mixer)&&(identical(other.modulationLinks, modulationLinks) || other.modulationLinks == modulationLinks)&&(identical(other.automationPool, automationPool) || other.automationPool == automationPool)&&(identical(other.modulationSources, modulationSources) || other.modulationSources == modulationSources)&&(identical(other.sourceEnvelopes, sourceEnvelopes) || other.sourceEnvelopes == sourceEnvelopes)&&(identical(other.fullStateRevision, fullStateRevision) || other.fullStateRevision == fullStateRevision));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ApplicationDataStore&&(identical(other.currentFilePath, currentFilePath) || other.currentFilePath == currentFilePath)&&(identical(other.metadata, metadata) || other.metadata == metadata)&&(identical(other.transport, transport) || other.transport == transport)&&(identical(other.hardwareConfig, hardwareConfig) || other.hardwareConfig == hardwareConfig)&&(identical(other.tracks, tracks) || other.tracks == tracks)&&(identical(other.generators, generators) || other.generators == generators)&&(identical(other.patterns, patterns) || other.patterns == patterns)&&(identical(other.mixer, mixer) || other.mixer == mixer)&&(identical(other.modulationLinks, modulationLinks) || other.modulationLinks == modulationLinks)&&(identical(other.automationPool, automationPool) || other.automationPool == automationPool)&&(identical(other.modulationSources, modulationSources) || other.modulationSources == modulationSources)&&(identical(other.timeline, timeline) || other.timeline == timeline)&&(identical(other.sourceEnvelopes, sourceEnvelopes) || other.sourceEnvelopes == sourceEnvelopes)&&(identical(other.fullStateRevision, fullStateRevision) || other.fullStateRevision == fullStateRevision));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,currentFilePath,metadata,transport,hardwareConfig,tracks,generators,patterns,mixer,modulationLinks,automationPool,modulationSources,sourceEnvelopes,fullStateRevision);
+int get hashCode => Object.hash(runtimeType,currentFilePath,metadata,transport,hardwareConfig,tracks,generators,patterns,mixer,modulationLinks,automationPool,modulationSources,timeline,sourceEnvelopes,fullStateRevision);
 
 @override
 String toString() {
-  return 'ApplicationDataStore(currentFilePath: $currentFilePath, metadata: $metadata, transport: $transport, hardwareConfig: $hardwareConfig, tracks: $tracks, generators: $generators, patterns: $patterns, mixer: $mixer, modulationLinks: $modulationLinks, automationPool: $automationPool, modulationSources: $modulationSources, sourceEnvelopes: $sourceEnvelopes, fullStateRevision: $fullStateRevision)';
+  return 'ApplicationDataStore(currentFilePath: $currentFilePath, metadata: $metadata, transport: $transport, hardwareConfig: $hardwareConfig, tracks: $tracks, generators: $generators, patterns: $patterns, mixer: $mixer, modulationLinks: $modulationLinks, automationPool: $automationPool, modulationSources: $modulationSources, timeline: $timeline, sourceEnvelopes: $sourceEnvelopes, fullStateRevision: $fullStateRevision)';
 }
 
 
@@ -50,11 +51,11 @@ abstract mixin class $ApplicationDataStoreCopyWith<$Res>  {
   factory $ApplicationDataStoreCopyWith(ApplicationDataStore value, $Res Function(ApplicationDataStore) _then) = _$ApplicationDataStoreCopyWithImpl;
 @useResult
 $Res call({
- String? currentFilePath, UiProjectMetadata metadata, UiTransportState transport, UiAudioHardwareConfig hardwareConfig, IMap<int, UiTrack> tracks, IMap<int, UiGeneratorInstance> generators, IMap<int, UiPattern> patterns, mixer_api.UiMixerState mixer, IMap<int, ModulationLinkDto> modulationLinks, IMap<int, AutomationLaneDto> automationPool, IMap<int, ModulationSourceDto> modulationSources, IMap<int, UiGainEnvelope> sourceEnvelopes, int fullStateRevision
+ String? currentFilePath, UiProjectMetadata metadata, UiTransportState transport, UiAudioHardwareConfig hardwareConfig, IMap<int, UiTrack> tracks, IMap<int, UiGeneratorInstance> generators, IMap<int, UiPattern> patterns, mixer_api.UiMixerState mixer, IMap<int, ModulationLinkDto> modulationLinks, IMap<int, AutomationLaneDto> automationPool, IMap<int, ModulationSourceDto> modulationSources, UiTimelineState timeline, IMap<int, UiGainEnvelope> sourceEnvelopes, int fullStateRevision
 });
 
 
-$UiProjectMetadataCopyWith<$Res> get metadata;$UiTransportStateCopyWith<$Res> get transport;$UiAudioHardwareConfigCopyWith<$Res> get hardwareConfig;$UiMixerStateCopyWith<$Res> get mixer;
+$UiProjectMetadataCopyWith<$Res> get metadata;$UiTransportStateCopyWith<$Res> get transport;$UiAudioHardwareConfigCopyWith<$Res> get hardwareConfig;$UiMixerStateCopyWith<$Res> get mixer;$UiTimelineStateCopyWith<$Res> get timeline;
 
 }
 /// @nodoc
@@ -67,7 +68,7 @@ class _$ApplicationDataStoreCopyWithImpl<$Res>
 
 /// Create a copy of ApplicationDataStore
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? currentFilePath = freezed,Object? metadata = null,Object? transport = null,Object? hardwareConfig = null,Object? tracks = null,Object? generators = null,Object? patterns = null,Object? mixer = null,Object? modulationLinks = null,Object? automationPool = null,Object? modulationSources = null,Object? sourceEnvelopes = null,Object? fullStateRevision = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? currentFilePath = freezed,Object? metadata = null,Object? transport = null,Object? hardwareConfig = null,Object? tracks = null,Object? generators = null,Object? patterns = null,Object? mixer = null,Object? modulationLinks = null,Object? automationPool = null,Object? modulationSources = null,Object? timeline = null,Object? sourceEnvelopes = null,Object? fullStateRevision = null,}) {
   return _then(_self.copyWith(
 currentFilePath: freezed == currentFilePath ? _self.currentFilePath : currentFilePath // ignore: cast_nullable_to_non_nullable
 as String?,metadata: null == metadata ? _self.metadata : metadata // ignore: cast_nullable_to_non_nullable
@@ -80,7 +81,8 @@ as IMap<int, UiPattern>,mixer: null == mixer ? _self.mixer : mixer // ignore: ca
 as mixer_api.UiMixerState,modulationLinks: null == modulationLinks ? _self.modulationLinks : modulationLinks // ignore: cast_nullable_to_non_nullable
 as IMap<int, ModulationLinkDto>,automationPool: null == automationPool ? _self.automationPool : automationPool // ignore: cast_nullable_to_non_nullable
 as IMap<int, AutomationLaneDto>,modulationSources: null == modulationSources ? _self.modulationSources : modulationSources // ignore: cast_nullable_to_non_nullable
-as IMap<int, ModulationSourceDto>,sourceEnvelopes: null == sourceEnvelopes ? _self.sourceEnvelopes : sourceEnvelopes // ignore: cast_nullable_to_non_nullable
+as IMap<int, ModulationSourceDto>,timeline: null == timeline ? _self.timeline : timeline // ignore: cast_nullable_to_non_nullable
+as UiTimelineState,sourceEnvelopes: null == sourceEnvelopes ? _self.sourceEnvelopes : sourceEnvelopes // ignore: cast_nullable_to_non_nullable
 as IMap<int, UiGainEnvelope>,fullStateRevision: null == fullStateRevision ? _self.fullStateRevision : fullStateRevision // ignore: cast_nullable_to_non_nullable
 as int,
   ));
@@ -120,6 +122,15 @@ $UiMixerStateCopyWith<$Res> get mixer {
   
   return $UiMixerStateCopyWith<$Res>(_self.mixer, (value) {
     return _then(_self.copyWith(mixer: value));
+  });
+}/// Create a copy of ApplicationDataStore
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiTimelineStateCopyWith<$Res> get timeline {
+  
+  return $UiTimelineStateCopyWith<$Res>(_self.timeline, (value) {
+    return _then(_self.copyWith(timeline: value));
   });
 }
 }
@@ -203,10 +214,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? currentFilePath,  UiProjectMetadata metadata,  UiTransportState transport,  UiAudioHardwareConfig hardwareConfig,  IMap<int, UiTrack> tracks,  IMap<int, UiGeneratorInstance> generators,  IMap<int, UiPattern> patterns,  mixer_api.UiMixerState mixer,  IMap<int, ModulationLinkDto> modulationLinks,  IMap<int, AutomationLaneDto> automationPool,  IMap<int, ModulationSourceDto> modulationSources,  IMap<int, UiGainEnvelope> sourceEnvelopes,  int fullStateRevision)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? currentFilePath,  UiProjectMetadata metadata,  UiTransportState transport,  UiAudioHardwareConfig hardwareConfig,  IMap<int, UiTrack> tracks,  IMap<int, UiGeneratorInstance> generators,  IMap<int, UiPattern> patterns,  mixer_api.UiMixerState mixer,  IMap<int, ModulationLinkDto> modulationLinks,  IMap<int, AutomationLaneDto> automationPool,  IMap<int, ModulationSourceDto> modulationSources,  UiTimelineState timeline,  IMap<int, UiGainEnvelope> sourceEnvelopes,  int fullStateRevision)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ApplicationDataStore() when $default != null:
-return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardwareConfig,_that.tracks,_that.generators,_that.patterns,_that.mixer,_that.modulationLinks,_that.automationPool,_that.modulationSources,_that.sourceEnvelopes,_that.fullStateRevision);case _:
+return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardwareConfig,_that.tracks,_that.generators,_that.patterns,_that.mixer,_that.modulationLinks,_that.automationPool,_that.modulationSources,_that.timeline,_that.sourceEnvelopes,_that.fullStateRevision);case _:
   return orElse();
 
 }
@@ -224,10 +235,10 @@ return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardw
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? currentFilePath,  UiProjectMetadata metadata,  UiTransportState transport,  UiAudioHardwareConfig hardwareConfig,  IMap<int, UiTrack> tracks,  IMap<int, UiGeneratorInstance> generators,  IMap<int, UiPattern> patterns,  mixer_api.UiMixerState mixer,  IMap<int, ModulationLinkDto> modulationLinks,  IMap<int, AutomationLaneDto> automationPool,  IMap<int, ModulationSourceDto> modulationSources,  IMap<int, UiGainEnvelope> sourceEnvelopes,  int fullStateRevision)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? currentFilePath,  UiProjectMetadata metadata,  UiTransportState transport,  UiAudioHardwareConfig hardwareConfig,  IMap<int, UiTrack> tracks,  IMap<int, UiGeneratorInstance> generators,  IMap<int, UiPattern> patterns,  mixer_api.UiMixerState mixer,  IMap<int, ModulationLinkDto> modulationLinks,  IMap<int, AutomationLaneDto> automationPool,  IMap<int, ModulationSourceDto> modulationSources,  UiTimelineState timeline,  IMap<int, UiGainEnvelope> sourceEnvelopes,  int fullStateRevision)  $default,) {final _that = this;
 switch (_that) {
 case _ApplicationDataStore():
-return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardwareConfig,_that.tracks,_that.generators,_that.patterns,_that.mixer,_that.modulationLinks,_that.automationPool,_that.modulationSources,_that.sourceEnvelopes,_that.fullStateRevision);case _:
+return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardwareConfig,_that.tracks,_that.generators,_that.patterns,_that.mixer,_that.modulationLinks,_that.automationPool,_that.modulationSources,_that.timeline,_that.sourceEnvelopes,_that.fullStateRevision);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -244,10 +255,10 @@ return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardw
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? currentFilePath,  UiProjectMetadata metadata,  UiTransportState transport,  UiAudioHardwareConfig hardwareConfig,  IMap<int, UiTrack> tracks,  IMap<int, UiGeneratorInstance> generators,  IMap<int, UiPattern> patterns,  mixer_api.UiMixerState mixer,  IMap<int, ModulationLinkDto> modulationLinks,  IMap<int, AutomationLaneDto> automationPool,  IMap<int, ModulationSourceDto> modulationSources,  IMap<int, UiGainEnvelope> sourceEnvelopes,  int fullStateRevision)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? currentFilePath,  UiProjectMetadata metadata,  UiTransportState transport,  UiAudioHardwareConfig hardwareConfig,  IMap<int, UiTrack> tracks,  IMap<int, UiGeneratorInstance> generators,  IMap<int, UiPattern> patterns,  mixer_api.UiMixerState mixer,  IMap<int, ModulationLinkDto> modulationLinks,  IMap<int, AutomationLaneDto> automationPool,  IMap<int, ModulationSourceDto> modulationSources,  UiTimelineState timeline,  IMap<int, UiGainEnvelope> sourceEnvelopes,  int fullStateRevision)?  $default,) {final _that = this;
 switch (_that) {
 case _ApplicationDataStore() when $default != null:
-return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardwareConfig,_that.tracks,_that.generators,_that.patterns,_that.mixer,_that.modulationLinks,_that.automationPool,_that.modulationSources,_that.sourceEnvelopes,_that.fullStateRevision);case _:
+return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardwareConfig,_that.tracks,_that.generators,_that.patterns,_that.mixer,_that.modulationLinks,_that.automationPool,_that.modulationSources,_that.timeline,_that.sourceEnvelopes,_that.fullStateRevision);case _:
   return null;
 
 }
@@ -259,7 +270,7 @@ return $default(_that.currentFilePath,_that.metadata,_that.transport,_that.hardw
 
 
 class _ApplicationDataStore implements ApplicationDataStore {
-  const _ApplicationDataStore({this.currentFilePath, required this.metadata, required this.transport, required this.hardwareConfig, required this.tracks, required this.generators, required this.patterns, required this.mixer, required this.modulationLinks, required this.automationPool, required this.modulationSources, this.sourceEnvelopes = const IMapConst({}), this.fullStateRevision = 0});
+  const _ApplicationDataStore({this.currentFilePath, required this.metadata, required this.transport, required this.hardwareConfig, required this.tracks, required this.generators, required this.patterns, required this.mixer, required this.modulationLinks, required this.automationPool, required this.modulationSources, this.timeline = const UiTimelineState(markers: []), this.sourceEnvelopes = const IMapConst({}), this.fullStateRevision = 0});
   
 
 @override final  String? currentFilePath;
@@ -273,6 +284,8 @@ class _ApplicationDataStore implements ApplicationDataStore {
 @override final  IMap<int, ModulationLinkDto> modulationLinks;
 @override final  IMap<int, AutomationLaneDto> automationPool;
 @override final  IMap<int, ModulationSourceDto> modulationSources;
+/// Song loop region and cue markers.
+@override@JsonKey() final  UiTimelineState timeline;
 /// Waveform envelope of every audio source, keyed by source ID.
 @override@JsonKey() final  IMap<int, UiGainEnvelope> sourceEnvelopes;
 /// Increments on every full backend fetch (boot, new, load, undo/redo).
@@ -291,16 +304,16 @@ _$ApplicationDataStoreCopyWith<_ApplicationDataStore> get copyWith => __$Applica
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ApplicationDataStore&&(identical(other.currentFilePath, currentFilePath) || other.currentFilePath == currentFilePath)&&(identical(other.metadata, metadata) || other.metadata == metadata)&&(identical(other.transport, transport) || other.transport == transport)&&(identical(other.hardwareConfig, hardwareConfig) || other.hardwareConfig == hardwareConfig)&&(identical(other.tracks, tracks) || other.tracks == tracks)&&(identical(other.generators, generators) || other.generators == generators)&&(identical(other.patterns, patterns) || other.patterns == patterns)&&(identical(other.mixer, mixer) || other.mixer == mixer)&&(identical(other.modulationLinks, modulationLinks) || other.modulationLinks == modulationLinks)&&(identical(other.automationPool, automationPool) || other.automationPool == automationPool)&&(identical(other.modulationSources, modulationSources) || other.modulationSources == modulationSources)&&(identical(other.sourceEnvelopes, sourceEnvelopes) || other.sourceEnvelopes == sourceEnvelopes)&&(identical(other.fullStateRevision, fullStateRevision) || other.fullStateRevision == fullStateRevision));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ApplicationDataStore&&(identical(other.currentFilePath, currentFilePath) || other.currentFilePath == currentFilePath)&&(identical(other.metadata, metadata) || other.metadata == metadata)&&(identical(other.transport, transport) || other.transport == transport)&&(identical(other.hardwareConfig, hardwareConfig) || other.hardwareConfig == hardwareConfig)&&(identical(other.tracks, tracks) || other.tracks == tracks)&&(identical(other.generators, generators) || other.generators == generators)&&(identical(other.patterns, patterns) || other.patterns == patterns)&&(identical(other.mixer, mixer) || other.mixer == mixer)&&(identical(other.modulationLinks, modulationLinks) || other.modulationLinks == modulationLinks)&&(identical(other.automationPool, automationPool) || other.automationPool == automationPool)&&(identical(other.modulationSources, modulationSources) || other.modulationSources == modulationSources)&&(identical(other.timeline, timeline) || other.timeline == timeline)&&(identical(other.sourceEnvelopes, sourceEnvelopes) || other.sourceEnvelopes == sourceEnvelopes)&&(identical(other.fullStateRevision, fullStateRevision) || other.fullStateRevision == fullStateRevision));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,currentFilePath,metadata,transport,hardwareConfig,tracks,generators,patterns,mixer,modulationLinks,automationPool,modulationSources,sourceEnvelopes,fullStateRevision);
+int get hashCode => Object.hash(runtimeType,currentFilePath,metadata,transport,hardwareConfig,tracks,generators,patterns,mixer,modulationLinks,automationPool,modulationSources,timeline,sourceEnvelopes,fullStateRevision);
 
 @override
 String toString() {
-  return 'ApplicationDataStore(currentFilePath: $currentFilePath, metadata: $metadata, transport: $transport, hardwareConfig: $hardwareConfig, tracks: $tracks, generators: $generators, patterns: $patterns, mixer: $mixer, modulationLinks: $modulationLinks, automationPool: $automationPool, modulationSources: $modulationSources, sourceEnvelopes: $sourceEnvelopes, fullStateRevision: $fullStateRevision)';
+  return 'ApplicationDataStore(currentFilePath: $currentFilePath, metadata: $metadata, transport: $transport, hardwareConfig: $hardwareConfig, tracks: $tracks, generators: $generators, patterns: $patterns, mixer: $mixer, modulationLinks: $modulationLinks, automationPool: $automationPool, modulationSources: $modulationSources, timeline: $timeline, sourceEnvelopes: $sourceEnvelopes, fullStateRevision: $fullStateRevision)';
 }
 
 
@@ -311,11 +324,11 @@ abstract mixin class _$ApplicationDataStoreCopyWith<$Res> implements $Applicatio
   factory _$ApplicationDataStoreCopyWith(_ApplicationDataStore value, $Res Function(_ApplicationDataStore) _then) = __$ApplicationDataStoreCopyWithImpl;
 @override @useResult
 $Res call({
- String? currentFilePath, UiProjectMetadata metadata, UiTransportState transport, UiAudioHardwareConfig hardwareConfig, IMap<int, UiTrack> tracks, IMap<int, UiGeneratorInstance> generators, IMap<int, UiPattern> patterns, mixer_api.UiMixerState mixer, IMap<int, ModulationLinkDto> modulationLinks, IMap<int, AutomationLaneDto> automationPool, IMap<int, ModulationSourceDto> modulationSources, IMap<int, UiGainEnvelope> sourceEnvelopes, int fullStateRevision
+ String? currentFilePath, UiProjectMetadata metadata, UiTransportState transport, UiAudioHardwareConfig hardwareConfig, IMap<int, UiTrack> tracks, IMap<int, UiGeneratorInstance> generators, IMap<int, UiPattern> patterns, mixer_api.UiMixerState mixer, IMap<int, ModulationLinkDto> modulationLinks, IMap<int, AutomationLaneDto> automationPool, IMap<int, ModulationSourceDto> modulationSources, UiTimelineState timeline, IMap<int, UiGainEnvelope> sourceEnvelopes, int fullStateRevision
 });
 
 
-@override $UiProjectMetadataCopyWith<$Res> get metadata;@override $UiTransportStateCopyWith<$Res> get transport;@override $UiAudioHardwareConfigCopyWith<$Res> get hardwareConfig;@override $UiMixerStateCopyWith<$Res> get mixer;
+@override $UiProjectMetadataCopyWith<$Res> get metadata;@override $UiTransportStateCopyWith<$Res> get transport;@override $UiAudioHardwareConfigCopyWith<$Res> get hardwareConfig;@override $UiMixerStateCopyWith<$Res> get mixer;@override $UiTimelineStateCopyWith<$Res> get timeline;
 
 }
 /// @nodoc
@@ -328,7 +341,7 @@ class __$ApplicationDataStoreCopyWithImpl<$Res>
 
 /// Create a copy of ApplicationDataStore
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? currentFilePath = freezed,Object? metadata = null,Object? transport = null,Object? hardwareConfig = null,Object? tracks = null,Object? generators = null,Object? patterns = null,Object? mixer = null,Object? modulationLinks = null,Object? automationPool = null,Object? modulationSources = null,Object? sourceEnvelopes = null,Object? fullStateRevision = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? currentFilePath = freezed,Object? metadata = null,Object? transport = null,Object? hardwareConfig = null,Object? tracks = null,Object? generators = null,Object? patterns = null,Object? mixer = null,Object? modulationLinks = null,Object? automationPool = null,Object? modulationSources = null,Object? timeline = null,Object? sourceEnvelopes = null,Object? fullStateRevision = null,}) {
   return _then(_ApplicationDataStore(
 currentFilePath: freezed == currentFilePath ? _self.currentFilePath : currentFilePath // ignore: cast_nullable_to_non_nullable
 as String?,metadata: null == metadata ? _self.metadata : metadata // ignore: cast_nullable_to_non_nullable
@@ -341,7 +354,8 @@ as IMap<int, UiPattern>,mixer: null == mixer ? _self.mixer : mixer // ignore: ca
 as mixer_api.UiMixerState,modulationLinks: null == modulationLinks ? _self.modulationLinks : modulationLinks // ignore: cast_nullable_to_non_nullable
 as IMap<int, ModulationLinkDto>,automationPool: null == automationPool ? _self.automationPool : automationPool // ignore: cast_nullable_to_non_nullable
 as IMap<int, AutomationLaneDto>,modulationSources: null == modulationSources ? _self.modulationSources : modulationSources // ignore: cast_nullable_to_non_nullable
-as IMap<int, ModulationSourceDto>,sourceEnvelopes: null == sourceEnvelopes ? _self.sourceEnvelopes : sourceEnvelopes // ignore: cast_nullable_to_non_nullable
+as IMap<int, ModulationSourceDto>,timeline: null == timeline ? _self.timeline : timeline // ignore: cast_nullable_to_non_nullable
+as UiTimelineState,sourceEnvelopes: null == sourceEnvelopes ? _self.sourceEnvelopes : sourceEnvelopes // ignore: cast_nullable_to_non_nullable
 as IMap<int, UiGainEnvelope>,fullStateRevision: null == fullStateRevision ? _self.fullStateRevision : fullStateRevision // ignore: cast_nullable_to_non_nullable
 as int,
   ));
@@ -382,6 +396,15 @@ $UiMixerStateCopyWith<$Res> get mixer {
   
   return $UiMixerStateCopyWith<$Res>(_self.mixer, (value) {
     return _then(_self.copyWith(mixer: value));
+  });
+}/// Create a copy of ApplicationDataStore
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiTimelineStateCopyWith<$Res> get timeline {
+  
+  return $UiTimelineStateCopyWith<$Res>(_self.timeline, (value) {
+    return _then(_self.copyWith(timeline: value));
   });
 }
 }

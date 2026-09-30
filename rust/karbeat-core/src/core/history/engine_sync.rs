@@ -18,6 +18,8 @@ pub struct EngineSync {
     pub full_graph: bool,
     /// Republish the project tempo.
     pub tempo: bool,
+    /// Republish the song loop region.
+    pub loop_region: bool,
     /// Republish the routing matrix.
     pub routing: bool,
     /// Republish these automation lanes.
@@ -111,6 +113,14 @@ impl EngineSync {
         }
     }
 
+    /// Republish the song loop region.
+    pub fn loop_region() -> Self {
+        Self {
+            loop_region: true,
+            ..Self::default()
+        }
+    }
+
     /// Republish the routing matrix.
     pub fn routing() -> Self {
         Self {
@@ -148,6 +158,7 @@ impl EngineSync {
         self.track_graph |= other.track_graph;
         self.full_graph |= other.full_graph;
         self.tempo |= other.tempo;
+        self.loop_region |= other.loop_region;
         self.routing |= other.routing;
         for lane in other.lanes {
             if !self.lanes.contains(&lane) {

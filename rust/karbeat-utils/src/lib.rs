@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod audio_utils;
+pub mod base64_bytes;
 pub mod color;
 pub mod error;
 mod general;

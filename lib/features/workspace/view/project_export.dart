@@ -6,11 +6,13 @@ import 'package:karbeat/app/providers/export_project_state.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/timeline_state.dart';
 import 'package:karbeat/core/constants/audio_format.dart';
 import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/timeline.dart';
 import 'package:file_picker/file_picker.dart';
 
 class ProjectExportPanel extends ConsumerStatefulWidget {
@@ -98,6 +100,19 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       return;
     }
 
+    // Without a loop region the panel shows, and exports, the whole song
+    final range = switch ((
+      exportState.rangeMode,
+      ref.read(loopRegionProvider),
+    )) {
+      (ExportRangeMode.loopRegion, final UiLoopRegion region) =>
+        ExportRangeDTO.ticks(
+          startTick: region.startTick,
+          endTick: region.endTick,
+        ),
+      _ => const ExportRangeDTO.song(),
+    };
+
     setState(() {
       _isExporting = true;
       _exportProgress = 0.0;
@@ -114,6 +129,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
           bitDepth: exportState.selectedBitDepth,
           sampleRate: exportState.selectedSampleRate,
           tailHandling: exportState.tailHandling,
+          range: range,
         );
 
         await for (final progress in progressStream) {
@@ -155,6 +171,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     final size = MediaQuery.of(context).size;
     final exportState = ref.watch(exportProjectProvider);
     final exportNotifier = ref.read(exportProjectProvider.notifier);
+    final hasLoopRegion = ref.watch(loopRegionProvider) != null;
 
     return KeyboardFocusRegion(
       focusNode: _panelFocus,
@@ -389,6 +406,27 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionTitle("Range"),
+                        Tooltip(
+                          message:
+                              'A loop region export starts mid-song: notes '
+                              'that began before it stay silent.',
+                          child: _buildDropdown<ExportRangeMode>(
+                            value: hasLoopRegion
+                                ? exportState.rangeMode
+                                : ExportRangeMode.wholeSong,
+                            items: hasLoopRegion
+                                ? ExportRangeMode.values
+                                : const [ExportRangeMode.wholeSong],
+                            itemLabel: (mode) => mode.label,
+                            onChanged: (val) {
+                              if (val != null) {
+                                exportNotifier.updateRangeMode(val);
+                              }
+                            },
+                          ),
                         ),
                         const SizedBox(height: 16),
                         // Options

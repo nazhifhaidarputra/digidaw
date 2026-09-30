@@ -24,6 +24,7 @@ import 'api/project.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
 import 'api/simple.dart';
+import 'api/timeline.dart';
 import 'api/track.dart';
 import 'api/transport.dart';
 import 'api/utils.dart';
@@ -309,6 +310,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExportRangeDTO dco_decode_box_autoadd_export_range_dto(dynamic raw);
+
+  @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
 
   @protected
@@ -379,6 +383,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGainEnvelope dco_decode_box_autoadd_ui_gain_envelope(dynamic raw);
 
   @protected
+  UiLoopRegion dco_decode_box_autoadd_ui_loop_region(dynamic raw);
+
+  @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
   @protected
@@ -430,6 +437,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EffectAutomationTargetDto dco_decode_effect_automation_target_dto(
     dynamic raw,
   );
+
+  @protected
+  ExportRangeDTO dco_decode_export_range_dto(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -588,6 +598,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiCueMarker> dco_decode_list_ui_cue_marker(dynamic raw);
+
+  @protected
   List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
 
   @protected
@@ -744,6 +757,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiGainEnvelope? dco_decode_opt_box_autoadd_ui_gain_envelope(dynamic raw);
+
+  @protected
+  UiLoopRegion? dco_decode_opt_box_autoadd_ui_loop_region(dynamic raw);
 
   @protected
   UiMixerChannelSnapshot? dco_decode_opt_box_autoadd_ui_mixer_channel_snapshot(
@@ -945,6 +961,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiCrashReportSummary dco_decode_ui_crash_report_summary(dynamic raw);
 
   @protected
+  UiCueMarker dco_decode_ui_cue_marker(dynamic raw);
+
+  @protected
   UiDeviceStreamStatus dco_decode_ui_device_stream_status(dynamic raw);
 
   @protected
@@ -998,6 +1017,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiJobTarget dco_decode_ui_job_target(dynamic raw);
+
+  @protected
+  UiLoopRegion dco_decode_ui_loop_region(dynamic raw);
 
   @protected
   UiMadeUnique dco_decode_ui_made_unique(dynamic raw);
@@ -1097,6 +1119,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiStartupRecovery dco_decode_ui_startup_recovery(dynamic raw);
+
+  @protected
+  UiTimelineState dco_decode_ui_timeline_state(dynamic raw);
 
   @protected
   UiTrack dco_decode_ui_track(dynamic raw);
@@ -1405,6 +1430,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExportRangeDTO sse_decode_box_autoadd_export_range_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
@@ -1499,6 +1529,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiLoopRegion sse_decode_box_autoadd_ui_loop_region(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
     SseDeserializer deserializer,
   );
@@ -1568,6 +1603,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EffectAutomationTargetDto sse_decode_effect_automation_target_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ExportRangeDTO sse_decode_export_range_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -1748,6 +1786,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiCrashReportSummary> sse_decode_list_ui_crash_report_summary(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<UiCueMarker> sse_decode_list_ui_cue_marker(SseDeserializer deserializer);
 
   @protected
   List<UiEffectInstance> sse_decode_list_ui_effect_instance(
@@ -1942,6 +1983,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiGainEnvelope? sse_decode_opt_box_autoadd_ui_gain_envelope(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiLoopRegion? sse_decode_opt_box_autoadd_ui_loop_region(
     SseDeserializer deserializer,
   );
 
@@ -2195,6 +2241,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiCueMarker sse_decode_ui_cue_marker(SseDeserializer deserializer);
+
+  @protected
   UiDeviceStreamStatus sse_decode_ui_device_stream_status(
     SseDeserializer deserializer,
   );
@@ -2260,6 +2309,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiJobTarget sse_decode_ui_job_target(SseDeserializer deserializer);
+
+  @protected
+  UiLoopRegion sse_decode_ui_loop_region(SseDeserializer deserializer);
 
   @protected
   UiMadeUnique sse_decode_ui_made_unique(SseDeserializer deserializer);
@@ -2393,6 +2445,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiStartupRecovery sse_decode_ui_startup_recovery(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiTimelineState sse_decode_ui_timeline_state(SseDeserializer deserializer);
 
   @protected
   UiTrack sse_decode_ui_track(SseDeserializer deserializer);
@@ -2748,6 +2803,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_export_range_dto(
+    ExportRangeDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -2856,6 +2917,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_loop_region(
+    UiLoopRegion self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_mixer_channel(
     UiMixerChannel self,
     SseSerializer serializer,
@@ -2939,6 +3006,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_effect_automation_target_dto(
     EffectAutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_export_range_dto(
+    ExportRangeDTO self,
     SseSerializer serializer,
   );
 
@@ -3151,6 +3224,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_crash_report_summary(
     List<UiCrashReportSummary> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_cue_marker(
+    List<UiCueMarker> self,
     SseSerializer serializer,
   );
 
@@ -3380,6 +3459,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_ui_gain_envelope(
     UiGainEnvelope? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_loop_region(
+    UiLoopRegion? self,
     SseSerializer serializer,
   );
 
@@ -3683,6 +3768,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_cue_marker(UiCueMarker self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_device_stream_status(
     UiDeviceStreamStatus self,
     SseSerializer serializer,
@@ -3768,6 +3856,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_job_target(UiJobTarget self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_loop_region(UiLoopRegion self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_made_unique(UiMadeUnique self, SseSerializer serializer);
@@ -3931,6 +4022,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_startup_recovery(
     UiStartupRecovery self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_timeline_state(
+    UiTimelineState self,
     SseSerializer serializer,
   );
 

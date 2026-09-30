@@ -187,6 +187,10 @@ pub trait ParamType: Copy + Clone + Debug + PartialEq + std::any::Any {
     fn from_f64(val: f64) -> Self;
     fn to_f64(self) -> f64;
     fn clamp_value(self, bounds: &ParamBounds<Self>) -> Self;
+    /// Whether the value can be stored and processed; floats reject NaN and infinity.
+    fn is_valid(self) -> bool {
+        true
+    }
 }
 
 impl ParamType for f32 {
@@ -217,6 +221,9 @@ impl ParamType for f32 {
             _ => self,
         }
     }
+    fn is_valid(self) -> bool {
+        self.is_finite()
+    }
 }
 
 impl ParamType for f64 {
@@ -244,6 +251,9 @@ impl ParamType for f64 {
             ParamBounds::Continuous { min, max, .. } => self.clamp(*min, *max),
             _ => self,
         }
+    }
+    fn is_valid(self) -> bool {
+        self.is_finite()
     }
 }
 
@@ -419,7 +429,11 @@ impl<T: ParamType> Param<T> {
 
     /// Set the baseline value (e.g., when the user turns a knob in the UI).
     /// This automatically updates the `current_value` and clamps it to valid bounds.
+    /// Non-finite floats are ignored, since they cannot be saved or processed.
     pub fn set_base(&mut self, value: T) {
+        if !value.is_valid() {
+            return;
+        }
         let clamped = value.clamp_value(&self.bounds);
         self.base_value = clamped;
 

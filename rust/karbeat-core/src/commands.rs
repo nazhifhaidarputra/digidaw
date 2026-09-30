@@ -94,6 +94,8 @@ pub enum AudioCommand {
     SetPatternLoop(Option<(u64, u64)>),
     /// Set loop mode
     SetLooping(bool),
+    /// Loops song playback between two ticks, or at the song end when `None`.
+    SetSongLoopRegion(Option<(u64, u64)>),
     /// Stop playback and reset playhead to 0
     StopAndReset,
     /// Moves the transport playhead to an absolute sample index.

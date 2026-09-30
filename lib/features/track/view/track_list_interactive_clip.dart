@@ -111,6 +111,18 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
         .makeClipsUnique(trackId: widget.trackId, clipIds: clipIds);
   }
 
+  /// Sets the loop region to span the selection, or just this clip.
+  Future<void> _loopClips() async {
+    final clipIds = widget.isSelected && widget.selectedClipIds.isNotEmpty
+        ? widget.selectedClipIds
+        : [widget.clip.id];
+    final span = _clipsSpan(ref, clipIds.toSet());
+    if (span == null) return;
+    await ref
+        .read(timelineProvider.notifier)
+        .setLoopRegion(span.start, span.end);
+  }
+
   Future<void> _renameClip() async {
     var pendingName = widget.clip.name;
     final newName = await showDialog<String>(
@@ -538,6 +550,13 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             icon: Icons.piano,
             onTap: () => _openInPianoRoll(patternId),
           ),
+        DawContextAction(
+          title: widget.isSelected && widget.selectedClipIds.length > 1
+              ? "Set Loop Region to Selection"
+              : "Set Loop Region to Clip",
+          icon: Icons.loop,
+          onTap: _loopClips,
+        ),
         if (widget.clip.source is! UiClipSource_None)
           DawContextAction(
             title: "Make unique",

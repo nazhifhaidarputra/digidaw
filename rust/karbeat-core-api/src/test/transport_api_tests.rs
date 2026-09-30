@@ -33,7 +33,7 @@ mod tests {
     #[test]
     fn set_bpm_updates_transport_state() {
         let mut ctx = make_ctx();
-        transport_api::set_bpm(&mut ctx, 140.0);
+        transport_api::set_bpm(&mut ctx, 140.0).unwrap();
         // AppState should be updated immediately (independent of ring buffer)
         assert_eq!(ctx.app_state.transport.bpm, 140.0);
     }
@@ -41,7 +41,7 @@ mod tests {
     #[test]
     fn set_bpm_zero_is_accepted_no_panic() {
         let mut ctx = make_ctx();
-        transport_api::set_bpm(&mut ctx, 0.0);
+        transport_api::set_bpm(&mut ctx, 0.0).unwrap();
         assert_eq!(ctx.app_state.transport.bpm, 0.0);
     }
 
@@ -49,8 +49,17 @@ mod tests {
     fn set_bpm_negative_is_accepted_no_panic() {
         // No validation in the API layer — passes through
         let mut ctx = make_ctx();
-        transport_api::set_bpm(&mut ctx, -10.0);
+        transport_api::set_bpm(&mut ctx, -10.0).unwrap();
         assert_eq!(ctx.app_state.transport.bpm, -10.0);
+    }
+
+    #[test]
+    fn set_bpm_rejects_non_finite_values() {
+        let mut ctx = make_ctx();
+        transport_api::set_bpm(&mut ctx, 120.0).unwrap();
+        assert!(transport_api::set_bpm(&mut ctx, f32::NAN).is_err());
+        assert!(transport_api::set_bpm(&mut ctx, f32::INFINITY).is_err());
+        assert_eq!(ctx.app_state.transport.bpm, 120.0);
     }
 
     #[test]

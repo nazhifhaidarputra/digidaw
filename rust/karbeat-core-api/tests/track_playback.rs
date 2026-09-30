@@ -14,7 +14,8 @@ use karbeat_core::{
     shared::id::AudioSourceId,
 };
 use karbeat_core_api::{
-    audio_analysis_api, audio_waveform_api, clip_api, track_api, transport_api,
+    audio_analysis_api, audio_waveform_api, bounce_api, clip_api, timeline_api, track_api,
+    transport_api,
 };
 
 const RATE: u32 = 48_000;
@@ -100,12 +101,55 @@ fn clip_on_a_new_track_is_audible() {
 fn stretched_clip_is_audible_after_a_tempo_change() {
     let (mut ctx, mut engine) = session();
     let source = import_tone(&mut ctx, "karbeat_stretched_tone.wav");
-    transport_api::set_bpm(&mut ctx, 100.0);
+    transport_api::set_bpm(&mut ctx, 100.0).unwrap();
     // Entering Stretch at 100 BPM anchors the source tempo there.
     audio_analysis_api::set_sample_mode(&mut ctx, source, AudioSampleMode::Stretch).unwrap();
     // A new tempo before any re-render: the engine stretches by 110/100 in realtime.
-    transport_api::set_bpm(&mut ctx, 110.0);
+    transport_api::set_bpm(&mut ctx, 110.0).unwrap();
 
     let rms = play_on_new_track(&mut ctx, &mut engine, source);
     assert!(rms > 0.1, "rms {rms}");
+}
+
+#[test]
+fn bouncing_the_loop_region_adds_a_source_at_the_original_level() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (mut ctx, mut engine) = session();
+    let source = import_tone(&mut ctx, "karbeat_bounce_tone.wav");
+    assert!(play_on_new_track(&mut ctx, &mut engine, source) > 0.1);
+    // Two beats at 120 BPM: one second
+    timeline_api::set_loop_region(&mut ctx, Some((0, 1_920))).unwrap();
+
+    // The render asks the live engine for a snapshot, so the engine runs meanwhile
+    let running = AtomicBool::new(true);
+    let bounced = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while running.load(Ordering::Relaxed) {
+                engine.process(&mut [0.0_f32; 1_024][..]);
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        });
+        let bounced = bounce_api::bounce_loop_region(&mut ctx);
+        running.store(false, Ordering::Relaxed);
+        bounced
+    })
+    .unwrap();
+
+    let waveform = ctx.app_state.asset_library.source_map[bounced].clone();
+    assert_eq!(waveform.name, "Bounce bar 1");
+    let mut reader = hound::WavReader::open(&waveform.file_path).unwrap();
+    let samples: Vec<f32> = reader.samples::<f32>().map(Result::unwrap).collect();
+    std::fs::remove_file(&waveform.file_path).unwrap();
+
+    assert!(
+        samples.len() >= RATE as usize * 2,
+        "{} samples",
+        samples.len()
+    );
+    // The tone's own peak (16,000 / 32,768): the track's centre pan is compensated
+    let peak = samples
+        .iter()
+        .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+    assert!((peak - 0.488).abs() < 0.01, "peak {peak}");
 }

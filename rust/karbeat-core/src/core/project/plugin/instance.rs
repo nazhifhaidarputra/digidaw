@@ -33,7 +33,8 @@ pub struct PluginInstance {
     #[serde(default)]
     pub parameter_specs: Vec<karbeat_plugin_types::ParameterSpec>,
 
-    #[serde(default)]
+    /// Opaque built-in plugin state, stored as base64 in JSON project files.
+    #[serde(default, with = "karbeat_utils::base64_bytes")]
     pub plugin_state: Vec<u8>,
 
     /// Native state is captured by the control owner, independently of the audio snapshot.

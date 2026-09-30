@@ -11,6 +11,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 import 'plugin.dart';
 import 'project.dart';
+import 'timeline.dart';
 import 'track.dart';
 part 'session.freezed.dart';
 

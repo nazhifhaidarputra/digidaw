@@ -25,10 +25,14 @@ pub fn set_looping(ctx: &mut DawContext, val: bool) {
 }
 
 /// Updates tempo, rebuilds timing-dependent graph state, and queues the tempo change.
-pub fn set_bpm(ctx: &mut DawContext, val: f32) {
+///
+/// Rejects NaN and infinity, which a project file cannot store.
+pub fn set_bpm(ctx: &mut DawContext, val: f32) -> anyhow::Result<()> {
+    anyhow::ensure!(val.is_finite(), "Tempo must be a finite number");
     let previous = std::mem::replace(&mut ctx.app_state.transport.bpm, val);
     ctx.push_history(TempoChanged::new(previous));
     let _ = ctx.send_audio_command(AudioCommand::SetBPM(val));
+    Ok(())
 }
 
 /// Stops transport playback and resets the audio-thread playhead to zero.

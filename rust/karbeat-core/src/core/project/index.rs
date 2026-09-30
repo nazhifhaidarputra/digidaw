@@ -16,7 +16,9 @@ pub use super::transport::TransportState;
 use crate::core::project::{
     CoverArtError, CoverImage, GainEnvelope, ModulationLinkForOrderedLaneView, ModulationSource,
 };
-use crate::core::project::{automation::AutomationLane, mixer::MixerState, session::SessionState};
+use crate::core::project::{
+    automation::AutomationLane, mixer::MixerState, session::SessionState, timeline::TimelineState,
+};
 
 pub use crate::shared::*;
 
@@ -66,6 +68,11 @@ pub struct ApplicationState {
 
     /// Canonical clip storage. Tracks contain only ordered `ClipId` handles.
     pub clips_pool: SlotMap<ClipId, Clip>,
+
+    /// Song loop region and cue markers. Last and defaulted so v1 (positional MessagePack)
+    /// projects saved before it existed still load.
+    #[serde(default)]
+    pub timeline: TimelineState,
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
@@ -427,7 +434,22 @@ mod slotmap_persistence_tests {
     use karbeat_utils::types::NormalizedF64;
 
     #[test]
-    fn entity_and_graph_keys_survive_project_serialization() {
+    fn entity_and_graph_keys_survive_msgpack_serialization() {
+        assert_keys_survive(|state| {
+            let bytes = rmp_serde::to_vec(state).expect("serialize application state");
+            rmp_serde::from_slice(&bytes).expect("deserialize application state")
+        });
+    }
+
+    #[test]
+    fn entity_and_graph_keys_survive_json_serialization() {
+        assert_keys_survive(|state| {
+            let bytes = serde_json::to_vec(state).expect("serialize application state");
+            serde_json::from_slice(&bytes).expect("deserialize application state")
+        });
+    }
+
+    fn assert_keys_survive(round_trip: impl Fn(&ApplicationState) -> ApplicationState) {
         let mut state = ApplicationState::default();
         let track = state.add_new_audio_track();
         let bus_id = state.mixer.create_bus("Reverb".into());
@@ -467,9 +489,7 @@ mod slotmap_persistence_tests {
         let bus_node_id = state.mixer.buses[bus_id].graph_node_id;
         let master_node_id = state.mixer.master_node_id;
 
-        let bytes = rmp_serde::to_vec(&state).expect("serialize application state");
-        let mut restored: ApplicationState =
-            rmp_serde::from_slice(&bytes).expect("deserialize application state");
+        let mut restored = round_trip(&state);
 
         assert_eq!(restored.tracks[track.id].id, track.id);
         assert_eq!(restored.pattern_pool[pattern_id].id, pattern_id);

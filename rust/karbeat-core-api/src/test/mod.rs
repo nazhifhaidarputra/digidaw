@@ -13,6 +13,7 @@ pub mod note_api_tests;
 pub mod pattern_api_tests;
 pub mod project_api_tests;
 pub mod save_status_tests;
+pub mod timeline_api_tests;
 pub mod track_api_tests;
 pub mod transport_api_tests;
 pub mod undo_redo_tests;

@@ -4,6 +4,15 @@ enum BitPerSample { b8, b16, b24, b32 }
 
 enum TailHandling { cutRemainder, leaveRemainder, wrapRemainder }
 
+/// Part of the song an export renders.
+enum ExportRangeMode {
+  wholeSong('Whole song'),
+  loopRegion('Loop region');
+
+  final String label;
+  const ExportRangeMode(this.label);
+}
+
 enum SupportedAudioFormat { wav, mp3, ogg, flac }
 
 enum SampleRate {

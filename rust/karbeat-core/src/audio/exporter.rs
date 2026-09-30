@@ -6,6 +6,7 @@ use crate::{
     audio::writer::{AudioExportConfig, AudioWriter, create_writer, metadata::AudioMetadata},
     commands::AudioCommand,
     context::DawContext,
+    core::project::ClipTimeUnit,
 };
 use karbeat_plugins::registry::PluginRegistry;
 
@@ -31,6 +32,35 @@ pub enum TailHandling {
     CutRemainder,
     LeaveRemainder,
     WrapRemainder,
+}
+
+/// Part of the song a render covers. Tail handling applies after its end.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ExportRange {
+    /// From the song start to the end of the last clip.
+    #[default]
+    Song,
+    /// From `start_tick` up to `end_tick`, such as the loop region.
+    Ticks { start_tick: u64, end_tick: u64 },
+}
+
+/// What a render is for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RenderPurpose {
+    /// A mixdown of the master bus output, tagged with the project metadata.
+    #[default]
+    Export,
+    /// Audio to reuse in the project: the mix feeding the master bus, without the master
+    /// effects and fader so it is not processed twice when played back, and untagged.
+    Bounce,
+}
+
+/// How to render: the range, what happens after it, and what the render is for.
+#[derive(Debug, Clone, Default)]
+pub struct RenderOptions {
+    pub tail_handling: TailHandling,
+    pub range: ExportRange,
+    pub purpose: RenderPurpose,
 }
 
 pub struct PendingAudioExport {
@@ -66,7 +96,7 @@ pub fn export_project<F>(
     ctx: &mut DawContext,
     output_path: &str,
     config: AudioExportConfig,
-    tail_handling: TailHandling,
+    options: RenderOptions,
     progress_callback: F,
 ) -> Result<(), AudioExportError>
 where
@@ -76,7 +106,7 @@ where
         begin_export(ctx),
         output_path,
         config,
-        tail_handling,
+        options,
         progress_callback,
     )
 }
@@ -85,7 +115,7 @@ pub fn execute_export<F>(
     pending: PendingAudioExport,
     output_path: &str,
     config: AudioExportConfig,
-    tail_handling: TailHandling,
+    options: RenderOptions,
     mut progress_callback: F,
 ) -> Result<(), AudioExportError>
 where
@@ -115,8 +145,14 @@ where
             )
         })?;
     validate_external_plugins(&pending.app, &snapshot)?;
-    let metadata = AudioMetadata::from_project(&pending.app.metadata)
-        .map_err(|error| AudioExportError::new("Metadata", error.to_string()))?;
+    let (snapshot, metadata) = match options.purpose {
+        RenderPurpose::Export => (
+            snapshot,
+            AudioMetadata::from_project(&pending.app.metadata)
+                .map_err(|error| AudioExportError::new("Metadata", error.to_string()))?,
+        ),
+        RenderPurpose::Bounce => (snapshot, AudioMetadata::default()),
+    };
     let output_path = output_path.to_owned();
     let plugin_registry = pending.plugin_registry;
     let external_plugins = pending.handles.external_plugins;
@@ -130,7 +166,7 @@ where
                     &output_path,
                     config,
                     &metadata,
-                    tail_handling,
+                    options,
                     plugin_registry,
                     external_plugins,
                     hosted_formats,
@@ -196,11 +232,11 @@ fn validate_external_plugins(
 }
 
 fn render_snapshot<F>(
-    mut snapshot: AudioExportSnapshot,
+    snapshot: AudioExportSnapshot,
     output_path: &str,
     config: AudioExportConfig,
     metadata: &AudioMetadata,
-    tail_handling: TailHandling,
+    options: RenderOptions,
     plugin_registry: PluginRegistry,
     external_plugins: karbeat_host::HostClient,
     hosted_formats: hashbrown::HashMap<karbeat_host::HostInstanceId, karbeat_host::PluginFormat>,
@@ -209,9 +245,19 @@ fn render_snapshot<F>(
 where
     F: FnMut(f32) -> bool,
 {
+    let RenderOptions {
+        tail_handling,
+        range,
+        ..
+    } = options;
     let sample_rate = config.sample_rate();
     let channels = config.channels() as usize;
     let block_size = 4096;
+    let bpm = snapshot.bpm();
+    let mut snapshot = match options.purpose {
+        RenderPurpose::Export => snapshot,
+        RenderPurpose::Bounce => snapshot.without_master(),
+    };
     snapshot
         .prepare_hosted(|instance| {
             let format = hosted_formats
@@ -260,18 +306,32 @@ where
             crate::audio::engine::PlaybackMode::Song,
         ))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-    cmd_producer
-        .push(AudioCommand::SetPlayhead(0))
-        .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-    cmd_producer
-        .push(AudioCommand::SetPlaying(true))
-        .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-
+    // Apply the render sample rate first: the song length and the range depend on it
     offline_engine.process(&mut []);
     validate_rendered_block(&offline_engine, &[])?;
 
     let tail_samples = offline_engine.get_project_tail_length();
-    let song_length_samples = offline_engine.get_export_length() - tail_samples;
+    let (start_sample, song_length_samples) = match range {
+        ExportRange::Song => (
+            0,
+            offline_engine
+                .get_export_length()
+                .saturating_sub(tail_samples),
+        ),
+        ExportRange::Ticks {
+            start_tick,
+            end_tick,
+        } => range_in_samples(start_tick, end_tick, bpm, sample_rate)?,
+    };
+
+    cmd_producer
+        .push(AudioCommand::SetPlayhead(start_sample))
+        .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
+    cmd_producer
+        .push(AudioCommand::SetPlaying(true))
+        .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
+    offline_engine.process(&mut []);
+    validate_rendered_block(&offline_engine, &[])?;
     let mut mix_buffer = vec![0.0; block_size * channels];
     let throttle_limit = (sample_rate / block_size as u32 / 30).max(1);
     let mut loop_counter = 0;
@@ -294,7 +354,7 @@ where
         }
 
         cmd_producer
-            .push(AudioCommand::SetPlayhead(0))
+            .push(AudioCommand::SetPlayhead(start_sample))
             .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
     }
 
@@ -362,6 +422,27 @@ where
         .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))?;
     log::info!("Offline render successfully completed");
     Ok(())
+}
+
+/// Converts a tick range to `(start_sample, length_in_samples)` at the render sample rate.
+fn range_in_samples(
+    start_tick: u64,
+    end_tick: u64,
+    bpm: f32,
+    sample_rate: u32,
+) -> Result<(u32, u32), AudioExportError> {
+    let to_samples = |ticks: u64| {
+        u32::try_from(ClipTimeUnit::ticks_to_samples(ticks, bpm, sample_rate))
+            .map_err(|_| AudioExportError::new("Range", "The render range is too long"))
+    };
+    let (start, end) = (to_samples(start_tick)?, to_samples(end_tick)?);
+    if end <= start {
+        return Err(AudioExportError::new(
+            "Range",
+            "The render range must end after it starts",
+        ));
+    }
+    Ok((start, end.saturating_sub(start)))
 }
 
 fn drain_engine_feedback(
@@ -507,7 +588,7 @@ mod tests {
             path.to_str().unwrap(),
             config,
             &AudioMetadata::default(),
-            TailHandling::CutRemainder,
+            RenderOptions::default(),
             PluginRegistry::new_with_defaults(),
             karbeat_host::HostClient::unavailable(),
             hashbrown::HashMap::new(),
@@ -517,6 +598,125 @@ mod tests {
         assert_eq!(std::fs::read(path).unwrap(), b"previous export");
         drop(engine);
         assert!(retirement.take().is_some());
+    }
+
+    const RENDER_RATE: u32 = 48_000;
+
+    /// Renders the ramp fixture to a 32-bit float WAV and reads back the left channel.
+    fn render_ramp(
+        engine: &AudioEngine,
+        options: RenderOptions,
+    ) -> Result<Vec<f32>, AudioExportError> {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("render.wav");
+        render_snapshot(
+            engine.export_snapshot(),
+            path.to_str().unwrap(),
+            AudioExportConfig::Wav(WavAudioWriterConfig {
+                sample_rate: RENDER_RATE,
+                channels: 2,
+                bit_depth: BitDepth::BitPerSample(BitPerSample::B32),
+            }),
+            &AudioMetadata::default(),
+            options,
+            PluginRegistry::new_with_defaults(),
+            karbeat_host::HostClient::unavailable(),
+            hashbrown::HashMap::new(),
+            &mut |_| true,
+        )?;
+        let mut reader = hound::WavReader::open(&path).unwrap();
+        let samples: Vec<f32> = reader.samples::<f32>().map(Result::unwrap).collect();
+        Ok(samples.chunks(2).map(|frame| frame[0]).collect())
+    }
+
+    fn region(start_tick: u64, end_tick: u64, purpose: RenderPurpose) -> RenderOptions {
+        RenderOptions {
+            range: ExportRange::Ticks {
+                start_tick,
+                end_tick,
+            },
+            purpose,
+            ..RenderOptions::default()
+        }
+    }
+
+    #[test]
+    fn region_export_renders_exactly_the_region() {
+        use crate::audio::engine::tests::song_engine_with_ramp_clip;
+
+        let engine = song_engine_with_ramp_clip();
+        let whole_song = render_ramp(&engine, RenderOptions::default()).unwrap();
+        assert_eq!(whole_song.len(), 96_000);
+
+        // Ticks 480..1,440 are samples 12,000..36,000 at 120 BPM
+        let rendered = render_ramp(&engine, region(480, 1_440, RenderPurpose::Export)).unwrap();
+        assert_eq!(rendered.len(), 24_000);
+        assert!(rendered.iter().any(|sample| *sample > 0.1));
+        for (index, (region, song)) in rendered.iter().zip(&whole_song[12_000..]).enumerate() {
+            assert!(
+                (region - song).abs() < 1e-5,
+                "frame {index}: {region} != {song}"
+            );
+        }
+    }
+
+    #[test]
+    fn region_past_the_song_end_renders_silence_after_it() {
+        use crate::audio::engine::tests::song_engine_with_ramp_clip;
+
+        // Ticks 3,360..4,800 are samples 84,000..120,000; the clip ends at 96,000
+        let rendered = render_ramp(
+            &song_engine_with_ramp_clip(),
+            region(3_360, 4_800, RenderPurpose::Export),
+        )
+        .unwrap();
+        assert_eq!(rendered.len(), 36_000);
+        assert!(rendered[..11_000].iter().any(|sample| *sample > 0.1));
+        assert!(rendered[13_000..].iter().all(|sample| *sample == 0.0));
+    }
+
+    #[test]
+    fn empty_regions_are_rejected() {
+        use crate::audio::engine::tests::song_engine_with_ramp_clip;
+
+        let error = render_ramp(
+            &song_engine_with_ramp_clip(),
+            region(960, 960, RenderPurpose::Export),
+        )
+        .unwrap_err();
+        assert_eq!(error.error_source, "Range");
+    }
+
+    #[test]
+    fn bounces_skip_the_master_fader() {
+        use crate::audio::engine::tests::song_engine_with_ramp_clip;
+        use crate::commands::MixerChannelTarget;
+        use crate::core::project::MixerChannelParams;
+
+        let mut engine = song_engine_with_ramp_clip();
+        let unity = render_ramp(&engine, region(0, 960, RenderPurpose::Export)).unwrap();
+        engine.process_command(AudioCommand::SetMixerChannelParameter {
+            target: MixerChannelTarget::Master,
+            param: MixerChannelParams::Volume(-20.0),
+        });
+        let peak = |samples: &[f32]| samples.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()));
+
+        let exported = render_ramp(&engine, region(0, 960, RenderPurpose::Export)).unwrap();
+        let bounced = render_ramp(&engine, region(0, 960, RenderPurpose::Bounce)).unwrap();
+        assert!(
+            peak(&exported) < peak(&unity) * 0.2,
+            "the export goes through the master fader"
+        );
+        // The export passes the master's centre pan (1/sqrt(2)); the bounce skips it and is
+        // raised by sqrt(2) for the channel it will play back on
+        assert_eq!(bounced.len(), unity.len());
+        assert!(peak(&bounced) > 0.5);
+        for (bounce, reference) in bounced.iter().zip(&unity) {
+            assert!(
+                (bounce - reference * 2.0).abs() < 1e-4,
+                "{bounce} != 2 * {reference}"
+            );
+        }
     }
 
     #[test]

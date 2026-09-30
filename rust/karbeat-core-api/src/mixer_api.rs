@@ -776,6 +776,7 @@ pub fn set_sidechain_source(
 
     match send_level {
         Some(level) => {
+            anyhow::ensure!(level.is_finite(), "Send level must be a finite number");
             let mut connection =
                 RoutingConnection::new_send(from, routing_node_dest, level.clamp(0.0, 1.0));
             connection.tap = tap;

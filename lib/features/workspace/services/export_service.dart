@@ -11,6 +11,7 @@ Stream<double> exportProject({
     numberOfChannels = 2,
     int? bitrate,
     required TailHandling tailHandling,
+    ExportRangeDTO range = const ExportRangeDTO.song(),
   }) async* {
     // Construct final file path based on selected format
     final ext = format.name.toLowerCase();
@@ -68,5 +69,6 @@ Stream<double> exportProject({
       outputPath: fullPath,
       config: config,
       tailHandling: tailHandlingDto,
+      range: range,
     );
   }

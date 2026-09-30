@@ -63,7 +63,7 @@ pub fn set_looping(ctx: &DawContext, val: bool) -> Result<(), String> {
 /// set the BPM of the transport.
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
 pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<(), String> {
-    transport_api::set_bpm(&mut ctx.project_write(), val);
+    transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
     crate::api::audio_analysis::schedule_source_renders(ctx, true);
     Ok(())
 }

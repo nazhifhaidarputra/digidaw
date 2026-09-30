@@ -10,6 +10,7 @@ use crate::frb_generated::StreamSink;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiJobKind {
     ProjectExport,
+    Bounce,
     ProjectLoad,
     ProjectSave,
     ProjectRestore,
@@ -27,6 +28,7 @@ impl From<JobKind> for UiJobKind {
     fn from(value: JobKind) -> Self {
         match value {
             JobKind::ProjectExport => Self::ProjectExport,
+            JobKind::Bounce => Self::Bounce,
             JobKind::ProjectLoad => Self::ProjectLoad,
             JobKind::ProjectSave => Self::ProjectSave,
             JobKind::ProjectRestore => Self::ProjectRestore,

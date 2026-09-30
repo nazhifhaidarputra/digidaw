@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use jiff::Timestamp;
-use karbeat_core::audio::exporter::TailHandling;
+use karbeat_core::audio::exporter::{ExportRange, RenderOptions, RenderPurpose, TailHandling};
 use karbeat_core::audio::writer::{
     AudioExportConfig, BitDepth, flac::FlacAudioWriterConfig, ogg::OggOpusAudioWriterConfig,
     wav::WavAudioWriterConfig,
@@ -21,7 +21,7 @@ use karbeat_core::core::project::{
     transport::TransportState,
 };
 use karbeat_core_api::{
-    audio_waveform_api,
+    audio_waveform_api, bounce_api,
     jobs::{JobClass, JobContext, JobKind, JobSpec, JobTarget},
     project_api, track_api,
 };
@@ -56,6 +56,7 @@ pub struct UiApplicationState {
     pub patterns: HashMap<u64, crate::api::pattern::UiPattern>,
     pub mixer: crate::api::mixer::UiMixerState,
     pub audio_sources: HashMap<u64, AudioWaveformUiForSourceList>,
+    pub timeline: crate::api::timeline::UiTimelineState,
 }
 
 impl From<ApplicationState> for UiApplicationState {
@@ -99,6 +100,7 @@ impl From<ApplicationState> for UiApplicationState {
             patterns,
             mixer: crate::api::mixer::UiMixerState::from(&value.mixer),
             audio_sources,
+            timeline: crate::api::timeline::UiTimelineState::from(&value.timeline),
         }
     }
 }
@@ -672,6 +674,29 @@ pub enum TailHandlingDTO {
     WrapRemaining,
 }
 
+/// Part of the song to export.
+pub enum ExportRangeDTO {
+    /// From the song start to the end of the last clip.
+    Song,
+    /// From `start_tick` up to `end_tick`, such as the loop region.
+    Ticks { start_tick: u64, end_tick: u64 },
+}
+
+impl From<ExportRangeDTO> for ExportRange {
+    fn from(value: ExportRangeDTO) -> Self {
+        match value {
+            ExportRangeDTO::Song => ExportRange::Song,
+            ExportRangeDTO::Ticks {
+                start_tick,
+                end_tick,
+            } => ExportRange::Ticks {
+                start_tick,
+                end_tick,
+            },
+        }
+    }
+}
+
 impl From<TailHandlingDTO> for TailHandling {
     fn from(value: TailHandlingDTO) -> Self {
         match value {
@@ -830,6 +855,32 @@ pub fn get_generator_list(ctx: &DawContext) -> Result<HashMap<u64, UiGeneratorIn
     .map_err(|e| e.to_string())
 }
 
+/// Bounces the loop region, every track and bus without the master bus, to a new audio
+/// source and returns its ID. Rendering runs without holding the project lock.
+pub async fn bounce_loop_region(ctx: &DawContext) -> Result<u64, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::Bounce, JobClass::Heavy).with_target(JobTarget::Project),
+        move |job| -> Result<u64, String> {
+            // Like an export, the render keeps plugin and project operations out until it
+            // ends; the guard must be gone before `project_write` takes the same lock
+            let completed = {
+                let operation = ctx.begin_project_operation();
+                let pending =
+                    bounce_api::begin_bounce(&operation.read_core()).map_err(|e| e.to_string())?;
+                bounce_api::execute_bounce(pending, |progress| {
+                    job.progress("render", progress);
+                    !job.is_cancelled()
+                })
+                .map_err(|e| e.to_string())?
+            };
+            let source_id = bounce_api::commit_bounce(&mut ctx.project_write(), completed);
+            Ok(source_id.to_u64())
+        },
+    )
+    .await
+}
+
 /// Add a new audio source to the project
 ///
 /// ## Parameters:
@@ -879,6 +930,7 @@ pub async fn export_project_flutter(
     output_path: String,
     config: AudioExportConfigDTO,
     tail_handling: TailHandlingDTO,
+    range: ExportRangeDTO,
     progress_sink: StreamSink<f32>,
 ) -> Result<(), String> {
     let ctx = ctx.clone();
@@ -889,7 +941,11 @@ pub async fn export_project_flutter(
                 &ctx,
                 output_path,
                 config,
-                tail_handling,
+                RenderOptions {
+                    tail_handling: tail_handling.into(),
+                    range: range.into(),
+                    purpose: RenderPurpose::Export,
+                },
                 &progress_sink,
                 job,
             )
@@ -902,7 +958,7 @@ fn export_project_blocking(
     ctx: &DawContext,
     output_path: String,
     config: AudioExportConfigDTO,
-    tail_handling: TailHandlingDTO,
+    options: RenderOptions,
     progress_sink: &StreamSink<f32>,
     job: &JobContext,
 ) -> Result<(), String> {
@@ -934,17 +990,11 @@ fn export_project_blocking(
 
     let operation = ctx.begin_project_operation();
     let pending = project_api::begin_project_export(&operation.read_core());
-    project_api::execute_project_export(
-        pending,
-        &output_path,
-        core_config,
-        tail_handling.into(),
-        |progress| {
-            job.progress("render", progress);
-            // If the sink successfully adds the value, return true to keep rendering.
-            // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
-            !job.is_cancelled() && progress_sink.add(progress).is_ok()
-        },
-    )
+    project_api::execute_project_export(pending, &output_path, core_config, options, |progress| {
+        job.progress("render", progress);
+        // If the sink successfully adds the value, return true to keep rendering.
+        // If it fails (meaning the Dart UI unmounted/cancelled), return false to abort!
+        !job.is_cancelled() && progress_sink.add(progress).is_ok()
+    })
     .map_err(|e| e.to_string())
 }

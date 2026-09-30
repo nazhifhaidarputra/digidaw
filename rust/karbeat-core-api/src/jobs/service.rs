@@ -34,6 +34,7 @@ const SHUTDOWN_POLL: Duration = Duration::from_millis(10);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum JobKind {
     ProjectExport,
+    Bounce,
     ProjectLoad,
     ProjectSave,
     ProjectRestore,

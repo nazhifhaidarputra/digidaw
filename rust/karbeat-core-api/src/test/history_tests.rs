@@ -125,7 +125,7 @@ mod tests {
         let (mut ctx, ..) = make_seeded_ctx();
         let original = ctx.app_state.transport.bpm;
         for bpm in [121.0, 122.0, 123.0, 124.0] {
-            transport_api::set_bpm(&mut ctx, bpm);
+            transport_api::set_bpm(&mut ctx, bpm).unwrap();
         }
         let depth = ctx.history.undo_stack.len();
 

@@ -32,6 +32,7 @@ sealed class UiJobEvent with _$UiJobEvent {
 
 enum UiJobKind {
   projectExport,
+  bounce,
   projectLoad,
   projectSave,
   projectRestore,

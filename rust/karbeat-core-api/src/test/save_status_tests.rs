@@ -81,7 +81,9 @@ mod tests {
             let pattern = ctx.app_state.pattern_pool.keys().next().expect("pattern");
             pattern_api::rename_pattern(ctx, pattern, "Hook").expect("rename");
         });
-        assert_dirties("bpm", |ctx| transport_api::set_bpm(ctx, 128.0));
+        assert_dirties("bpm", |ctx| {
+            transport_api::set_bpm(ctx, 128.0).unwrap();
+        });
         assert_dirties("metadata", |ctx| {
             let mut metadata = ctx.app_state.metadata.clone();
             metadata.name = "Renamed".into();

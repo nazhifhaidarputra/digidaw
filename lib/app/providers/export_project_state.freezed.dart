@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ExportProjectStateData {
 
- String? get exportDirectory; SupportedAudioFormat get selectedFormat; BitDepthDTO get selectedBitDepth; SampleRate get selectedSampleRate; TailHandling get tailHandling; bool get openFolderAfterExport;
+ String? get exportDirectory; SupportedAudioFormat get selectedFormat; BitDepthDTO get selectedBitDepth; SampleRate get selectedSampleRate; TailHandling get tailHandling; bool get openFolderAfterExport; ExportRangeMode get rangeMode;
 /// Create a copy of ExportProjectStateData
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $ExportProjectStateDataCopyWith<ExportProjectStateData> get copyWith => _$Export
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportProjectStateData&&(identical(other.exportDirectory, exportDirectory) || other.exportDirectory == exportDirectory)&&(identical(other.selectedFormat, selectedFormat) || other.selectedFormat == selectedFormat)&&(identical(other.selectedBitDepth, selectedBitDepth) || other.selectedBitDepth == selectedBitDepth)&&(identical(other.selectedSampleRate, selectedSampleRate) || other.selectedSampleRate == selectedSampleRate)&&(identical(other.tailHandling, tailHandling) || other.tailHandling == tailHandling)&&(identical(other.openFolderAfterExport, openFolderAfterExport) || other.openFolderAfterExport == openFolderAfterExport));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportProjectStateData&&(identical(other.exportDirectory, exportDirectory) || other.exportDirectory == exportDirectory)&&(identical(other.selectedFormat, selectedFormat) || other.selectedFormat == selectedFormat)&&(identical(other.selectedBitDepth, selectedBitDepth) || other.selectedBitDepth == selectedBitDepth)&&(identical(other.selectedSampleRate, selectedSampleRate) || other.selectedSampleRate == selectedSampleRate)&&(identical(other.tailHandling, tailHandling) || other.tailHandling == tailHandling)&&(identical(other.openFolderAfterExport, openFolderAfterExport) || other.openFolderAfterExport == openFolderAfterExport)&&(identical(other.rangeMode, rangeMode) || other.rangeMode == rangeMode));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,exportDirectory,selectedFormat,selectedBitDepth,selectedSampleRate,tailHandling,openFolderAfterExport);
+int get hashCode => Object.hash(runtimeType,exportDirectory,selectedFormat,selectedBitDepth,selectedSampleRate,tailHandling,openFolderAfterExport,rangeMode);
 
 @override
 String toString() {
-  return 'ExportProjectStateData(exportDirectory: $exportDirectory, selectedFormat: $selectedFormat, selectedBitDepth: $selectedBitDepth, selectedSampleRate: $selectedSampleRate, tailHandling: $tailHandling, openFolderAfterExport: $openFolderAfterExport)';
+  return 'ExportProjectStateData(exportDirectory: $exportDirectory, selectedFormat: $selectedFormat, selectedBitDepth: $selectedBitDepth, selectedSampleRate: $selectedSampleRate, tailHandling: $tailHandling, openFolderAfterExport: $openFolderAfterExport, rangeMode: $rangeMode)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $ExportProjectStateDataCopyWith<$Res>  {
   factory $ExportProjectStateDataCopyWith(ExportProjectStateData value, $Res Function(ExportProjectStateData) _then) = _$ExportProjectStateDataCopyWithImpl;
 @useResult
 $Res call({
- String? exportDirectory, SupportedAudioFormat selectedFormat, BitDepthDTO selectedBitDepth, SampleRate selectedSampleRate, TailHandling tailHandling, bool openFolderAfterExport
+ String? exportDirectory, SupportedAudioFormat selectedFormat, BitDepthDTO selectedBitDepth, SampleRate selectedSampleRate, TailHandling tailHandling, bool openFolderAfterExport, ExportRangeMode rangeMode
 });
 
 
@@ -62,7 +62,7 @@ class _$ExportProjectStateDataCopyWithImpl<$Res>
 
 /// Create a copy of ExportProjectStateData
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? exportDirectory = freezed,Object? selectedFormat = null,Object? selectedBitDepth = null,Object? selectedSampleRate = null,Object? tailHandling = null,Object? openFolderAfterExport = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? exportDirectory = freezed,Object? selectedFormat = null,Object? selectedBitDepth = null,Object? selectedSampleRate = null,Object? tailHandling = null,Object? openFolderAfterExport = null,Object? rangeMode = null,}) {
   return _then(_self.copyWith(
 exportDirectory: freezed == exportDirectory ? _self.exportDirectory : exportDirectory // ignore: cast_nullable_to_non_nullable
 as String?,selectedFormat: null == selectedFormat ? _self.selectedFormat : selectedFormat // ignore: cast_nullable_to_non_nullable
@@ -70,7 +70,8 @@ as SupportedAudioFormat,selectedBitDepth: null == selectedBitDepth ? _self.selec
 as BitDepthDTO,selectedSampleRate: null == selectedSampleRate ? _self.selectedSampleRate : selectedSampleRate // ignore: cast_nullable_to_non_nullable
 as SampleRate,tailHandling: null == tailHandling ? _self.tailHandling : tailHandling // ignore: cast_nullable_to_non_nullable
 as TailHandling,openFolderAfterExport: null == openFolderAfterExport ? _self.openFolderAfterExport : openFolderAfterExport // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,rangeMode: null == rangeMode ? _self.rangeMode : rangeMode // ignore: cast_nullable_to_non_nullable
+as ExportRangeMode,
   ));
 }
 /// Create a copy of ExportProjectStateData
@@ -164,10 +165,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? exportDirectory,  SupportedAudioFormat selectedFormat,  BitDepthDTO selectedBitDepth,  SampleRate selectedSampleRate,  TailHandling tailHandling,  bool openFolderAfterExport)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? exportDirectory,  SupportedAudioFormat selectedFormat,  BitDepthDTO selectedBitDepth,  SampleRate selectedSampleRate,  TailHandling tailHandling,  bool openFolderAfterExport,  ExportRangeMode rangeMode)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ExportProjectStateData() when $default != null:
-return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDepth,_that.selectedSampleRate,_that.tailHandling,_that.openFolderAfterExport);case _:
+return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDepth,_that.selectedSampleRate,_that.tailHandling,_that.openFolderAfterExport,_that.rangeMode);case _:
   return orElse();
 
 }
@@ -185,10 +186,10 @@ return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDept
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? exportDirectory,  SupportedAudioFormat selectedFormat,  BitDepthDTO selectedBitDepth,  SampleRate selectedSampleRate,  TailHandling tailHandling,  bool openFolderAfterExport)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? exportDirectory,  SupportedAudioFormat selectedFormat,  BitDepthDTO selectedBitDepth,  SampleRate selectedSampleRate,  TailHandling tailHandling,  bool openFolderAfterExport,  ExportRangeMode rangeMode)  $default,) {final _that = this;
 switch (_that) {
 case _ExportProjectStateData():
-return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDepth,_that.selectedSampleRate,_that.tailHandling,_that.openFolderAfterExport);case _:
+return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDepth,_that.selectedSampleRate,_that.tailHandling,_that.openFolderAfterExport,_that.rangeMode);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -205,10 +206,10 @@ return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDept
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? exportDirectory,  SupportedAudioFormat selectedFormat,  BitDepthDTO selectedBitDepth,  SampleRate selectedSampleRate,  TailHandling tailHandling,  bool openFolderAfterExport)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? exportDirectory,  SupportedAudioFormat selectedFormat,  BitDepthDTO selectedBitDepth,  SampleRate selectedSampleRate,  TailHandling tailHandling,  bool openFolderAfterExport,  ExportRangeMode rangeMode)?  $default,) {final _that = this;
 switch (_that) {
 case _ExportProjectStateData() when $default != null:
-return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDepth,_that.selectedSampleRate,_that.tailHandling,_that.openFolderAfterExport);case _:
+return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDepth,_that.selectedSampleRate,_that.tailHandling,_that.openFolderAfterExport,_that.rangeMode);case _:
   return null;
 
 }
@@ -220,7 +221,7 @@ return $default(_that.exportDirectory,_that.selectedFormat,_that.selectedBitDept
 
 
 class _ExportProjectStateData implements ExportProjectStateData {
-  const _ExportProjectStateData({this.exportDirectory, this.selectedFormat = SupportedAudioFormat.wav, this.selectedBitDepth = const BitDepthDTO.bitPerSample(16), this.selectedSampleRate = SampleRate.hz44100, this.tailHandling = TailHandling.leaveRemainder, this.openFolderAfterExport = false});
+  const _ExportProjectStateData({this.exportDirectory, this.selectedFormat = SupportedAudioFormat.wav, this.selectedBitDepth = const BitDepthDTO.bitPerSample(16), this.selectedSampleRate = SampleRate.hz44100, this.tailHandling = TailHandling.leaveRemainder, this.openFolderAfterExport = false, this.rangeMode = ExportRangeMode.wholeSong});
   
 
 @override final  String? exportDirectory;
@@ -229,6 +230,7 @@ class _ExportProjectStateData implements ExportProjectStateData {
 @override@JsonKey() final  SampleRate selectedSampleRate;
 @override@JsonKey() final  TailHandling tailHandling;
 @override@JsonKey() final  bool openFolderAfterExport;
+@override@JsonKey() final  ExportRangeMode rangeMode;
 
 /// Create a copy of ExportProjectStateData
 /// with the given fields replaced by the non-null parameter values.
@@ -240,16 +242,16 @@ _$ExportProjectStateDataCopyWith<_ExportProjectStateData> get copyWith => __$Exp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ExportProjectStateData&&(identical(other.exportDirectory, exportDirectory) || other.exportDirectory == exportDirectory)&&(identical(other.selectedFormat, selectedFormat) || other.selectedFormat == selectedFormat)&&(identical(other.selectedBitDepth, selectedBitDepth) || other.selectedBitDepth == selectedBitDepth)&&(identical(other.selectedSampleRate, selectedSampleRate) || other.selectedSampleRate == selectedSampleRate)&&(identical(other.tailHandling, tailHandling) || other.tailHandling == tailHandling)&&(identical(other.openFolderAfterExport, openFolderAfterExport) || other.openFolderAfterExport == openFolderAfterExport));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ExportProjectStateData&&(identical(other.exportDirectory, exportDirectory) || other.exportDirectory == exportDirectory)&&(identical(other.selectedFormat, selectedFormat) || other.selectedFormat == selectedFormat)&&(identical(other.selectedBitDepth, selectedBitDepth) || other.selectedBitDepth == selectedBitDepth)&&(identical(other.selectedSampleRate, selectedSampleRate) || other.selectedSampleRate == selectedSampleRate)&&(identical(other.tailHandling, tailHandling) || other.tailHandling == tailHandling)&&(identical(other.openFolderAfterExport, openFolderAfterExport) || other.openFolderAfterExport == openFolderAfterExport)&&(identical(other.rangeMode, rangeMode) || other.rangeMode == rangeMode));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,exportDirectory,selectedFormat,selectedBitDepth,selectedSampleRate,tailHandling,openFolderAfterExport);
+int get hashCode => Object.hash(runtimeType,exportDirectory,selectedFormat,selectedBitDepth,selectedSampleRate,tailHandling,openFolderAfterExport,rangeMode);
 
 @override
 String toString() {
-  return 'ExportProjectStateData(exportDirectory: $exportDirectory, selectedFormat: $selectedFormat, selectedBitDepth: $selectedBitDepth, selectedSampleRate: $selectedSampleRate, tailHandling: $tailHandling, openFolderAfterExport: $openFolderAfterExport)';
+  return 'ExportProjectStateData(exportDirectory: $exportDirectory, selectedFormat: $selectedFormat, selectedBitDepth: $selectedBitDepth, selectedSampleRate: $selectedSampleRate, tailHandling: $tailHandling, openFolderAfterExport: $openFolderAfterExport, rangeMode: $rangeMode)';
 }
 
 
@@ -260,7 +262,7 @@ abstract mixin class _$ExportProjectStateDataCopyWith<$Res> implements $ExportPr
   factory _$ExportProjectStateDataCopyWith(_ExportProjectStateData value, $Res Function(_ExportProjectStateData) _then) = __$ExportProjectStateDataCopyWithImpl;
 @override @useResult
 $Res call({
- String? exportDirectory, SupportedAudioFormat selectedFormat, BitDepthDTO selectedBitDepth, SampleRate selectedSampleRate, TailHandling tailHandling, bool openFolderAfterExport
+ String? exportDirectory, SupportedAudioFormat selectedFormat, BitDepthDTO selectedBitDepth, SampleRate selectedSampleRate, TailHandling tailHandling, bool openFolderAfterExport, ExportRangeMode rangeMode
 });
 
 
@@ -277,7 +279,7 @@ class __$ExportProjectStateDataCopyWithImpl<$Res>
 
 /// Create a copy of ExportProjectStateData
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? exportDirectory = freezed,Object? selectedFormat = null,Object? selectedBitDepth = null,Object? selectedSampleRate = null,Object? tailHandling = null,Object? openFolderAfterExport = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? exportDirectory = freezed,Object? selectedFormat = null,Object? selectedBitDepth = null,Object? selectedSampleRate = null,Object? tailHandling = null,Object? openFolderAfterExport = null,Object? rangeMode = null,}) {
   return _then(_ExportProjectStateData(
 exportDirectory: freezed == exportDirectory ? _self.exportDirectory : exportDirectory // ignore: cast_nullable_to_non_nullable
 as String?,selectedFormat: null == selectedFormat ? _self.selectedFormat : selectedFormat // ignore: cast_nullable_to_non_nullable
@@ -285,7 +287,8 @@ as SupportedAudioFormat,selectedBitDepth: null == selectedBitDepth ? _self.selec
 as BitDepthDTO,selectedSampleRate: null == selectedSampleRate ? _self.selectedSampleRate : selectedSampleRate // ignore: cast_nullable_to_non_nullable
 as SampleRate,tailHandling: null == tailHandling ? _self.tailHandling : tailHandling // ignore: cast_nullable_to_non_nullable
 as TailHandling,openFolderAfterExport: null == openFolderAfterExport ? _self.openFolderAfterExport : openFolderAfterExport // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,rangeMode: null == rangeMode ? _self.rangeMode : rangeMode // ignore: cast_nullable_to_non_nullable
+as ExportRangeMode,
   ));
 }
 

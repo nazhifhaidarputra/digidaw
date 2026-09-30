@@ -919,6 +919,9 @@ impl AudioEngine {
             AudioCommand::SetPatternLoop(region) => {
                 self.transport.pattern.loop_region = region.filter(|(start, end)| end > start);
             }
+            AudioCommand::SetSongLoopRegion(region) => {
+                self.transport.song.loop_region = region.filter(|(start, end)| end > start);
+            }
             AudioCommand::SwitchPatternGenerator(new_gen_id) => {
                 if let PlaybackMode::Pattern { generator_id, .. } = &mut self.transport.mode {
                     if *generator_id != new_gen_id {

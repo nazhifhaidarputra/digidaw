@@ -20,6 +20,7 @@ import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/src/rust/api/simple.dart';
+import 'package:karbeat/src/rust/api/timeline.dart';
 
 part 'project_provider.freezed.dart';
 
@@ -67,6 +68,9 @@ abstract class ApplicationDataStore with _$ApplicationDataStore {
     required IMap<int, ModulationLinkDto> modulationLinks,
     required IMap<int, AutomationLaneDto> automationPool,
     required IMap<int, ModulationSourceDto> modulationSources,
+
+    /// Song loop region and cue markers.
+    @Default(UiTimelineState(markers: [])) UiTimelineState timeline,
 
     /// Waveform envelope of every audio source, keyed by source ID.
     @Default(IMapConst({})) IMap<int, UiGainEnvelope> sourceEnvelopes,
@@ -406,6 +410,12 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     );
   }
 
+  /// Publishes the timeline the backend returned after an edit.
+  void updateTimeline(UiTimelineState timeline) {
+    if (!state.hasValue) return;
+    state = AsyncValue.data(state.requireValue.copyWith(timeline: timeline));
+  }
+
   void updateTransport(UiTransportState transport) {
     if (state.hasValue) {
       state = AsyncValue.data(
@@ -583,6 +593,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
       automationPool: lanes.lock,
       modulationSources: sources.lock,
       sourceEnvelopes: envelopes.lock,
+      timeline: state.timeline,
       fullStateRevision: ++_fullStateRevision,
     );
   }

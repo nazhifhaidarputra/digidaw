@@ -68,7 +68,7 @@ pub use structure::{
     EffectBypassed, EffectMoved, EffectToggled, RoutingChanged, RoutingRecorder, StructureChanged,
     StructureRecorder,
 };
-pub use transport::{MetadataChanged, TempoChanged};
+pub use transport::{CueMarkersChanged, LoopRegionChanged, MetadataChanged, TempoChanged};
 
 /// Swaps one pool slot with the value history holds for the other side of an edit.
 ///

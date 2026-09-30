@@ -29,6 +29,8 @@ new_key_type! {
     pub struct ModulationLinkId;
     /// Generation-aware key for a render-graph node.
     pub struct GraphNodeId;
+    /// Generation-aware key for a song timeline cue marker.
+    pub struct CueMarkerId;
 }
 
 macro_rules! impl_key_handle {
@@ -112,6 +114,7 @@ impl_key_handle!(
     ModulationId,
     ModulationLinkId,
     GraphNodeId,
+    CueMarkerId,
 );
 
 impl NoteId {

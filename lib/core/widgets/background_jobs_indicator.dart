@@ -83,6 +83,7 @@ class _JobRow extends StatelessWidget {
 /// Short user-facing name of a job kind.
 String jobLabel(UiJobKind kind) => switch (kind) {
   UiJobKind.projectExport => 'Exporting',
+  UiJobKind.bounce => 'Bouncing loop region',
   UiJobKind.projectLoad => 'Loading project',
   UiJobKind.projectSave => 'Saving project',
   UiJobKind.projectRestore => 'Restoring project',

@@ -249,6 +249,7 @@ void main() {
               ),
             ),
             tailHandling: project_api.TailHandlingDTO.cutRemaining,
+            range: const project_api.ExportRangeDTO.song(),
           )
           .drain<void>(),
     );

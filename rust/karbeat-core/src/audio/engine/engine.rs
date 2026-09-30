@@ -65,6 +65,9 @@ pub struct AudioEngine {
 
     pub(super) telemetry: AudioEngineTelemetry,
     pub(super) graph_retirement: Producer<RetiredGraphState>,
+
+    /// Offline bounces render what feeds the master bus, skipping its effects and fader.
+    pub(super) bypass_master: bool,
 }
 
 pub(super) enum RetiredGraphState {
@@ -125,6 +128,7 @@ pub struct AudioExportSnapshot {
     mixer_state: AudioMixerState,
     modulation: ModulationState,
     hosted_processors: HashMap<HostInstanceId, PreparedProcessor>,
+    bypass_master: bool,
 }
 
 #[derive(Debug, Error)]
@@ -140,6 +144,21 @@ pub enum AudioExportSnapshotError {
 }
 
 impl AudioExportSnapshot {
+    /// Renders what feeds the master bus instead of its output: master effects, fader, pan,
+    /// and master automation are skipped. Tracks and buses play as they do live.
+    ///
+    /// The render is compensated for the centre pan law of the channel it will play back on,
+    /// so it sounds like the original on a new track at 0 dB and centre pan.
+    pub fn without_master(mut self) -> Self {
+        self.bypass_master = true;
+        self
+    }
+
+    /// Project tempo the snapshot renders at.
+    pub fn bpm(&self) -> f32 {
+        self.bpm
+    }
+
     pub fn hosted_instance(&self, target: PluginTarget) -> Option<HostInstanceId> {
         match target {
             PluginTarget::Generator(id) => self
@@ -270,6 +289,7 @@ impl AudioEngine {
             metronome_state: MetronomeState::default(),
             telemetry,
             graph_retirement: graph_retirement_queue(),
+            bypass_master: false,
         }
     }
 
@@ -286,6 +306,7 @@ impl AudioEngine {
             mixer_state: self.mixer_state.clone(),
             modulation: self.modulation.for_export(),
             hosted_processors: HashMap::new(),
+            bypass_master: false,
         }
     }
 
@@ -309,6 +330,7 @@ impl AudioEngine {
             mixer_state,
             modulation,
             mut hosted_processors,
+            bypass_master,
         } = snapshot;
         config.num_channels = num_channels;
 
@@ -407,6 +429,7 @@ impl AudioEngine {
             metronome_state: MetronomeState::default(),
             telemetry: AudioEngineTelemetry::new_for_export(),
             graph_retirement: graph_retirement_queue(),
+            bypass_master,
         };
         engine.recalculate_latencies();
         Ok(engine)
@@ -623,6 +646,21 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
+        // A playhead at or past the loop end plays on; only crossing the end wraps
+        if self.transport.song.is_looping
+            && let Some((loop_start, loop_end)) = self.song_loop_samples()
+            && self.transport.song.playhead_samples < loop_end
+        {
+            self.process_song_loop_block(
+                loop_start,
+                loop_end,
+                frame_count,
+                output_buffer,
+                channels,
+            );
+            return;
+        }
+
         let song_end = self.current_state.graph.max_sample_index;
 
         // Only enforce the auto-stop/loop boundary if the project actually has content (song_end > 0)
@@ -648,6 +686,60 @@ impl AudioEngine {
         } else {
             self.process_block_song_mode(frame_count, output_buffer, channels);
         }
+    }
+
+    /// Song loop region in samples at the current tempo, when one is set.
+    ///
+    /// Converted every block like the pattern loop, so tempo changes and automation move the
+    /// loop points with the music.
+    pub(super) fn song_loop_samples(&self) -> Option<(u32, u32)> {
+        let (start_tick, end_tick) = self.transport.song.loop_region?;
+        let bpm = self.transport.bpm;
+        let sample_rate = self.config.sample_rate;
+        let to_samples = |ticks: u64| {
+            u32::try_from(ClipTimeUnit::ticks_to_samples(ticks, bpm, sample_rate))
+                .unwrap_or(u32::MAX)
+        };
+        let (start, end) = (to_samples(start_tick), to_samples(end_tick));
+        (end > start).then_some((start, end))
+    }
+
+    /// Renders a song block before the loop end. A block that reaches the end is split there,
+    /// so the jump back to the loop start lands on the exact sample.
+    fn process_song_loop_block(
+        &mut self,
+        loop_start: u32,
+        loop_end: u32,
+        frame_count: usize,
+        output_buffer: &mut [f32],
+        channels: usize,
+    ) {
+        let frames_to_end = loop_end.saturating_sub(self.transport.song.playhead_samples) as usize;
+        if frames_to_end > frame_count {
+            self.process_block_song_mode(frame_count, output_buffer, channels);
+            return;
+        }
+
+        let split = frames_to_end
+            .saturating_mul(channels)
+            .min(output_buffer.len());
+        let (before_end, after_start) = output_buffer.split_at_mut(split);
+        if frames_to_end > 0 {
+            self.process_block_song_mode(frames_to_end, before_end, channels);
+        }
+
+        self.transport.song.playhead_samples = loop_start;
+        self.transport.song.last_emitted_samples = loop_start;
+        self.recalculate_beat_bar();
+        // Release held notes and one-shots so tails from the loop end do not pile up
+        self.stop_all_active_generators();
+        self.voices.active_oneshots.clear();
+
+        let remaining = frame_count.saturating_sub(frames_to_end);
+        if remaining > 0 {
+            self.process_block_song_mode(remaining, after_start, channels);
+        }
+        self.emit_current_playback_position();
     }
 
     // Process a block of frame rendering in SONG mode (normal playback)
@@ -1115,6 +1207,19 @@ impl AudioEngine {
             1.0
         };
 
+        // Plugins see the song loop in quarter notes from the song start, like VST3 cycle points
+        let (loop_start_beat, loop_end_beat) = match self.transport.mode {
+            PlaybackMode::Song if self.transport.song.is_looping => {
+                match self.transport.song.loop_region {
+                    Some((start, end)) if end > start => {
+                        (Some(start as f64 / PPQ), Some(end as f64 / PPQ))
+                    }
+                    _ => (None, None),
+                }
+            }
+            _ => (None, None),
+        };
+
         let base_ctx = ProcessContext {
             bpm,
             time_sig_numerator: self.transport.time_sig_numerator,
@@ -1126,8 +1231,8 @@ impl AudioEngine {
             project_time_samples: sample_position,
             beat_position,
             bar_position,
-            loop_start_beat: None,
-            loop_end_beat: None,
+            loop_start_beat,
+            loop_end_beat,
             midi_events: &[],
             param_changes: &[],
         };
@@ -1537,6 +1642,14 @@ impl AudioEngine {
                             edge_buffer: &mut workspace.edge_buffer,
                         },
                     );
+                }
+                // Everything routed to the master is already summed into the output. A bounce
+                // plays back through one more channel than the audio it replaces, whose centre
+                // pan passes 1/sqrt(2) per side, so it is rendered that much louder
+                RoutingNode::Master if self.bypass_master => {
+                    output
+                        .iter_mut()
+                        .for_each(|sample| *sample *= std::f32::consts::SQRT_2);
                 }
                 RoutingNode::Master => {
                     // TAIL HANDLING

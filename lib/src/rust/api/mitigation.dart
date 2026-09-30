@@ -11,6 +11,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 import 'plugin.dart';
 import 'project.dart';
+import 'timeline.dart';
 part 'mitigation.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `auto_save_once`, `inner_context`, `load_recovered_project_blocking`, `run_auto_save_worker`, `start_auto_save_worker`

@@ -1028,6 +1028,266 @@ as int,
 }
 
 /// @nodoc
+mixin _$ExportRangeDTO {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportRangeDTO);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'ExportRangeDTO()';
+}
+
+
+}
+
+/// @nodoc
+class $ExportRangeDTOCopyWith<$Res>  {
+$ExportRangeDTOCopyWith(ExportRangeDTO _, $Res Function(ExportRangeDTO) __);
+}
+
+
+/// Adds pattern-matching-related methods to [ExportRangeDTO].
+extension ExportRangeDTOPatterns on ExportRangeDTO {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ExportRangeDTO_Song value)?  song,TResult Function( ExportRangeDTO_Ticks value)?  ticks,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case ExportRangeDTO_Song() when song != null:
+return song(_that);case ExportRangeDTO_Ticks() when ticks != null:
+return ticks(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ExportRangeDTO_Song value)  song,required TResult Function( ExportRangeDTO_Ticks value)  ticks,}){
+final _that = this;
+switch (_that) {
+case ExportRangeDTO_Song():
+return song(_that);case ExportRangeDTO_Ticks():
+return ticks(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ExportRangeDTO_Song value)?  song,TResult? Function( ExportRangeDTO_Ticks value)?  ticks,}){
+final _that = this;
+switch (_that) {
+case ExportRangeDTO_Song() when song != null:
+return song(_that);case ExportRangeDTO_Ticks() when ticks != null:
+return ticks(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  song,TResult Function( int startTick,  int endTick)?  ticks,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case ExportRangeDTO_Song() when song != null:
+return song();case ExportRangeDTO_Ticks() when ticks != null:
+return ticks(_that.startTick,_that.endTick);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  song,required TResult Function( int startTick,  int endTick)  ticks,}) {final _that = this;
+switch (_that) {
+case ExportRangeDTO_Song():
+return song();case ExportRangeDTO_Ticks():
+return ticks(_that.startTick,_that.endTick);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  song,TResult? Function( int startTick,  int endTick)?  ticks,}) {final _that = this;
+switch (_that) {
+case ExportRangeDTO_Song() when song != null:
+return song();case ExportRangeDTO_Ticks() when ticks != null:
+return ticks(_that.startTick,_that.endTick);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class ExportRangeDTO_Song extends ExportRangeDTO {
+  const ExportRangeDTO_Song(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportRangeDTO_Song);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'ExportRangeDTO.song()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class ExportRangeDTO_Ticks extends ExportRangeDTO {
+  const ExportRangeDTO_Ticks({required this.startTick, required this.endTick}): super._();
+  
+
+ final  int startTick;
+ final  int endTick;
+
+/// Create a copy of ExportRangeDTO
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ExportRangeDTO_TicksCopyWith<ExportRangeDTO_Ticks> get copyWith => _$ExportRangeDTO_TicksCopyWithImpl<ExportRangeDTO_Ticks>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ExportRangeDTO_Ticks&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.endTick, endTick) || other.endTick == endTick));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,startTick,endTick);
+
+@override
+String toString() {
+  return 'ExportRangeDTO.ticks(startTick: $startTick, endTick: $endTick)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ExportRangeDTO_TicksCopyWith<$Res> implements $ExportRangeDTOCopyWith<$Res> {
+  factory $ExportRangeDTO_TicksCopyWith(ExportRangeDTO_Ticks value, $Res Function(ExportRangeDTO_Ticks) _then) = _$ExportRangeDTO_TicksCopyWithImpl;
+@useResult
+$Res call({
+ int startTick, int endTick
+});
+
+
+
+
+}
+/// @nodoc
+class _$ExportRangeDTO_TicksCopyWithImpl<$Res>
+    implements $ExportRangeDTO_TicksCopyWith<$Res> {
+  _$ExportRangeDTO_TicksCopyWithImpl(this._self, this._then);
+
+  final ExportRangeDTO_Ticks _self;
+  final $Res Function(ExportRangeDTO_Ticks) _then;
+
+/// Create a copy of ExportRangeDTO
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? startTick = null,Object? endTick = null,}) {
+  return _then(ExportRangeDTO_Ticks(
+startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
+as int,endTick: null == endTick ? _self.endTick : endTick // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$UiAudioHardwareConfig {
 
  String get selectedInputDevice; String get selectedOutputDevice; int get sampleRate; int get bufferSize; double get cpuLoad;
