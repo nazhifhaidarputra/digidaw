@@ -31,15 +31,10 @@ fn main() {
             header_path = Some(include_dir.join("rubberband").join("rubberband-c.h"));
         }
 
-        // A static librubberband (build_linux.sh builds one) is C++ and does not carry
-        // its runtime, so link it explicitly. A shared library already depends on it.
-        let has_file = |name: &str| lib.link_paths.iter().any(|dir| dir.join(name).exists());
-        let shared_name = if target_os == "macos" {
-            "librubberband.dylib"
-        } else {
-            "librubberband.so"
-        };
-        if has_file("librubberband.a") && !has_file(shared_name) {
+        // RUBBERBAND_STATIC (set by build_linux.sh) makes pkg-config link librubberband.a
+        // from a non-system prefix. That archive is C++ and does not carry its runtime, so
+        // link it explicitly. A shared librubberband already depends on it.
+        if env::var_os("RUBBERBAND_STATIC").is_some() {
             let cxx_runtime = if target_os == "macos" {
                 "c++"
             } else {

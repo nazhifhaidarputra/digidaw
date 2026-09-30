@@ -85,6 +85,9 @@ if [ ! -f "$RUBBERBAND_PREFIX/lib/librubberband.a" ]; then
     ninja -C "$RUBBERBAND_DIR/build" install
 fi
 export PKG_CONFIG_PATH="$RUBBERBAND_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+# Ask for the static archive explicitly: the system library folder also ends up on the link
+# line (for FFTW and libsamplerate), and a distro librubberband.so there would otherwise win.
+export RUBBERBAND_STATIC=1
 
 echo -e "\033[1;36m==> [Linux Build] Running Flutter Rust Bridge Codegen...\033[0m"
 flutter_rust_bridge_codegen generate
