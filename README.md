@@ -42,7 +42,7 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] Automation for global BPM parameters
 - [ ] Wavetable Synthesizer
 - [ ] Sample-based Synthesizer (for Real instrument)
-- [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Sidechain Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
+- [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
 - [x] Browser panel for easy drag-and-drop audio samples
 - [ ] Input channel for input recording
 - [x] Auxiliary input handler
@@ -58,7 +58,6 @@ These are features which have been or have not been implemented. All unimplement
 - [ ] iOS version
 - [x] Export audio to FLAC and OGG
 - [x] Tempo detector and Fit-to-tempo functionality
-- [ ] Version manager
 - [ ] Comprehensive Documentation for both User and Developer
 - [ ] Official logo and icon
 - [x] Auto-save

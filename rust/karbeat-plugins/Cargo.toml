@@ -14,18 +14,13 @@ karbeat-macros.workspace = true
 
 log.workspace = true
 serde.workspace = true
-dasp.workspace = true
 fastrand.workspace = true
 hashbrown.workspace = true
 smallvec.workspace = true
 serde_json.workspace = true
-indexmap.workspace = true
-rustfft.workspace = true
 num-complex.workspace = true
 rmp-serde.workspace = true
-parking_lot.workspace = true
 realfft = "3.5.0"
-arc-swap = "1.9.2"
 
 [lints]
 workspace = true

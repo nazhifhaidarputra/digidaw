@@ -7,21 +7,14 @@ description = "DSP algorithms and utilities for Karbeat"
 
 [dependencies]
 dasp.workspace = true
-bindgen.workspace = true
-rustfft.workspace = true
-num-complex.workspace = true
-log.workspace = true
 serde.workspace = true
 fastrand.workspace = true
-derive_builder.workspace = true
 karbeat-macros.workspace = true
 karbeat-plugin-types.workspace = true
 karbeat-utils.workspace = true
 num-traits.workspace = true
 wide.workspace = true
 smallvec.workspace = true
-fundsp.workspace = true
-realfft = "3.5.0"
 rayon.workspace = true
 crossfire.workspace = true
 

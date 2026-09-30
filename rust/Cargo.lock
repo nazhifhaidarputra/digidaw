@@ -29,18 +29,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ahash"
-version = "0.8.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
-dependencies = [
- "cfg-if",
- "once_cell",
- "version_check",
- "zerocopy",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -160,15 +148,6 @@ name = "anyhow"
 version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
-
-[[package]]
-name = "arc-swap"
-version = "1.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c049c0be4daef0b145cb3555416b3b8ef5b7888a38aea1a3a155801fe7b0810b"
-dependencies = [
- "rustversion",
-]
 
 [[package]]
 name = "arrayvec"
@@ -394,7 +373,7 @@ version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
- "generic-array 0.14.7",
+ "generic-array",
 ]
 
 [[package]]
@@ -801,7 +780,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
- "generic-array 0.14.7",
+ "generic-array",
  "typenum",
 ]
 
@@ -1142,12 +1121,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
-name = "dyn-clone"
-version = "1.0.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
-
-[[package]]
 name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1222,17 +1195,6 @@ name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
-
-[[package]]
-name = "fft-convolver"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecb4fbed063c755ecaa4cd1356cd82cc48e9d5c7edd5c30cd144656833fc0661"
-dependencies = [
- "realfft",
- "rtsan-standalone",
- "thiserror 2.0.18",
-]
 
 [[package]]
 name = "find-msvc-tools"
@@ -1339,44 +1301,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
-name = "fundsp"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6969e5c9d5c5c704723f547237494fde9b1addf16f718f65cd786b3b6e320a4f"
-dependencies = [
- "dyn-clone",
- "fft-convolver",
- "funutd",
- "hashbrown 0.16.1",
- "libm",
- "microfft",
- "num-complex",
- "numeric-array",
- "once_cell",
- "resampler",
- "symphonia 0.5.5",
- "thingbuf",
- "tinyvec",
- "wide",
-]
-
-[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
-
-[[package]]
-name = "funutd"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30f658de1fbeca3b70faf090e33d1ecf32b0efd1805bede4a8fd6ef562b7ab83"
-dependencies = [
- "dyn-clone",
- "glam",
- "hashbrown 0.14.5",
- "libm",
-]
 
 [[package]]
 name = "futures"
@@ -1490,16 +1418,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generic-array"
-version = "1.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e55f16dcf0e9c00efbe2e655ffe45fc98e7066b52bc92f8a79e64060a79351"
-dependencies = [
- "rustversion",
- "typenum",
-]
-
-[[package]]
 name = "gethostname"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1565,15 +1483,6 @@ dependencies = [
  "libc",
  "system-deps",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "glam"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "779ae4bf7e8421cf91c0b3b64e7e8b40b862fba4d393f59150042de7c4965a94"
-dependencies = [
- "libm",
 ]
 
 [[package]]
@@ -1650,10 +1559,6 @@ name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
-dependencies = [
- "ahash",
- "allocator-api2",
-]
 
 [[package]]
 name = "hashbrown"
@@ -1662,17 +1567,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
  "foldhash 0.1.5",
-]
-
-[[package]]
-name = "hashbrown"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
-dependencies = [
- "allocator-api2",
- "equivalent",
- "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -1988,7 +1882,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-analysis"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "beat-this",
@@ -2004,14 +1898,14 @@ dependencies = [
 
 [[package]]
 name = "karbeat-clap"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "karbeat-host-api",
 ]
 
 [[package]]
 name = "karbeat-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2062,7 +1956,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-core-api"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2100,24 +1994,18 @@ dependencies = [
 
 [[package]]
 name = "karbeat-dsp"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bindgen",
  "crossfire",
  "dasp",
- "derive_builder",
  "fastrand",
- "fundsp",
  "karbeat-macros",
  "karbeat-plugin-types",
  "karbeat-utils",
- "log",
- "num-complex",
  "num-traits",
  "pkg-config",
  "rayon",
- "realfft",
- "rustfft",
  "serde",
  "smallvec",
  "vcpkg",
@@ -2126,7 +2014,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-host"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-executor",
  "futures-lite",
@@ -2136,12 +2024,11 @@ dependencies = [
 
 [[package]]
 name = "karbeat-host-api"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-executor",
  "futures-lite",
  "glib",
- "hashbrown 0.17.1",
  "karbeat-plugin-api",
  "karbeat-utils",
  "log",
@@ -2162,14 +2049,14 @@ dependencies = [
 
 [[package]]
 name = "karbeat-lv2"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "karbeat-host-api",
 ]
 
 [[package]]
 name = "karbeat-macros"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2180,28 +2067,21 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugin-api"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
- "anyhow",
  "hashbrown 0.17.1",
  "heck",
- "indexmap",
- "karbeat-dsp",
- "karbeat-macros",
  "karbeat-plugin-types",
- "karbeat-utils",
  "log",
- "parking_lot",
  "raw-window-handle",
  "rmp-serde",
  "serde",
  "serde_json",
- "smallvec",
 ]
 
 [[package]]
 name = "karbeat-plugin-types"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "karbeat-utils",
  "num-traits",
@@ -2211,13 +2091,10 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugins"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
- "arc-swap",
- "dasp",
  "fastrand",
  "hashbrown 0.17.1",
- "indexmap",
  "karbeat-dsp",
  "karbeat-macros",
  "karbeat-plugin-api",
@@ -2225,10 +2102,8 @@ dependencies = [
  "karbeat-utils",
  "log",
  "num-complex",
- "parking_lot",
  "realfft",
  "rmp-serde",
- "rustfft",
  "serde",
  "serde_json",
  "smallvec",
@@ -2236,14 +2111,12 @@ dependencies = [
 
 [[package]]
 name = "karbeat-utils"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64",
  "bytemuck",
  "dasp",
  "hashbrown 0.17.1",
- "indexmap",
- "log",
  "num-traits",
  "rubato 4.0.0",
  "serde",
@@ -2253,7 +2126,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-vst3"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "futures-lite",
  "glib",
@@ -2262,8 +2135,6 @@ dependencies = [
  "libloading 0.8.9",
  "log",
  "raw-window-handle",
- "rtrb",
- "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -2272,7 +2143,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat_flutter_ffi"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2292,15 +2163,12 @@ dependencies = [
  "karbeat-utils",
  "karbeat-vst3",
  "log",
- "memmap2",
  "ndk-context",
  "once_cell",
  "parking_lot",
- "rtrb",
  "serde",
  "serde_json",
  "shuttle",
- "smallvec",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -2418,17 +2286,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "microfft"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b6673eb0cc536241d6734c2ca45abfdbf90e9e7791c66a36a7ba3c315b76cf"
-dependencies = [
- "cfg-if",
- "num-complex",
- "static_assertions",
 ]
 
 [[package]]
@@ -2611,16 +2468,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "numeric-array"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a6096447d657bfba01c49d38338b6c8e68e0e34d595360345375b798a4a765"
-dependencies = [
- "generic-array 1.4.3",
- "num-traits",
 ]
 
 [[package]]
@@ -2833,26 +2680,6 @@ checksum = "112d82ceb8c5bf524d9af484d4e4970c9fd5a0cc15ba14ad93dccd28873b0629"
 dependencies = [
  "digest 0.11.3",
  "hmac",
-]
-
-[[package]]
-name = "pin-project"
-version = "1.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2466b2336ed02bcdca6b294417127b90ec92038d1d5c4fbeac971a922e0e0924"
-dependencies = [
- "pin-project-internal",
-]
-
-[[package]]
-name = "pin-project-internal"
-version = "1.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c96395f0a926bc13b1c17622aaddda1ecb55d49c8f1bf9777e4d877800a43f8b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -3128,15 +2955,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
-name = "resampler"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80f5ab61459422b1a350caae1aadef48ebae234b12e80248e9ba9557018ef060"
-dependencies = [
- "libm",
-]
-
-[[package]]
 name = "rmp"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3275,36 +3093,6 @@ name = "rtrb"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ade083ccbb4bf536df69d1f6432cc23deb7acccff86b183f3923a6fd56a1153"
-
-[[package]]
-name = "rtsan-standalone"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fd1b6d61d69481a68e555916d3a52213846f5c2d2140bdc74ebc308e2338fc3"
-dependencies = [
- "rtsan-standalone-macros",
- "rtsan-standalone-sys",
-]
-
-[[package]]
-name = "rtsan-standalone-macros"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8320af894782374141c8e0d4521ee613a8f24d7ab08b6ad359881311e37b9ef"
-dependencies = [
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "rtsan-standalone-sys"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "362a9c531f731e574a870cdb28ee7d81178ba7a87ed54380eb9b8d8f0c3b5301"
-dependencies = [
- "num_cpus",
- "tempfile",
-]
 
 [[package]]
 name = "rubato"
@@ -3687,12 +3475,6 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
-
-[[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strength_reduce"
@@ -4174,15 +3956,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thingbuf"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "662b54ef6f7b4e71f683dadc787bbb2d8e8ef2f91b682ebed3164a5a7abca905"
-dependencies = [
- "pin-project",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4250,21 +4023,6 @@ name = "time-core"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7694e1cfe791f8d31026952abf09c69ca6f6fa4e1a1229e18988f06a04a12dca"
-
-[[package]]
-name = "tinyvec"
-version = "1.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e61e67053d25a4e82c844e8424039d9745781b3fc4f32b8d55ed50f5f667ef3"
-dependencies = [
- "tinyvec_macros",
-]
-
-[[package]]
-name = "tinyvec_macros"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
