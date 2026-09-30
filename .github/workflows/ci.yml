@@ -18,17 +18,15 @@ env:
 jobs:
   linux:
     name: Linux build and test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      # build_linux.sh installs the build packages itself but refuses to run without an audio server.
+      - name: Install PipeWire
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            clang cmake ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libstdc++-12-dev \
-            libasound2-dev libjack-jackd2-dev librubberband-dev
+          sudo apt-get install -y --no-install-recommends pipewire
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -42,6 +40,10 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
+      # Also installs the apt packages the tests below link against.
+      - name: Build Linux release bundle
+        run: ./scripts/builder/build_linux.sh
+
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-machete
@@ -54,13 +56,5 @@ jobs:
         working-directory: rust
         run: cargo test --workspace --locked
 
-      - name: Fetch tempo detection models
-        run: ./scripts/fetch_beat_models.sh
-
       - name: Flutter tests
-        run: |
-          flutter pub get
-          flutter test
-
-      - name: Build Linux release bundle
-        run: flutter build linux --release
+        run: flutter test

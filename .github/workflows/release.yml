@@ -22,7 +22,7 @@ env:
 jobs:
   linux:
     name: Linux x64 release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,13 +42,11 @@ jobs:
             *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
-      - name: Install system dependencies
+      # build_linux.sh installs the build packages itself but refuses to run without an audio server.
+      - name: Install PipeWire
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            clang cmake ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libstdc++-12-dev \
-            libasound2-dev libjack-jackd2-dev librubberband-dev
+          sudo apt-get install -y --no-install-recommends pipewire
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -58,36 +56,33 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - name: Fetch tempo detection models
-        run: ./scripts/fetch_beat_models.sh
-
       - name: Build Linux release bundle
-        run: |
-          flutter pub get
-          flutter build linux --release
+        run: ./scripts/builder/build_linux.sh
 
-      - name: Package bundle
+      - name: Name and checksum archive
         id: package
         run: |
-          name="digidaw-${{ steps.version.outputs.version }}-linux-x64"
-          mkdir -p dist
-          cp -r build/linux/x64/release/bundle "dist/${name}"
-          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
-          (cd dist && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256")
-          echo "archive=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
+          archive="dist/digidaw-${{ steps.version.outputs.version }}-linux-x64.tar.gz"
+          mv dist/Digidaw-linux-x64.tar.gz "${archive}"
+          (cd dist && sha256sum "$(basename "${archive}")" > "$(basename "${archive}").sha256")
+          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
 
       - name: Write release notes
         run: |
           cat > dist/NOTES.md <<'EOF'
           Linux x64 only — other platforms have not been tested yet.
 
-          ### Running
-          Extract the archive and run `./karbeat` from the extracted folder.
+          ### Installing
+          Extract the archive into a folder and run `./install.sh` from it. It installs the
+          libraries DigiDAW needs (GTK 3, ALSA, FFTW, libsamplerate) with your package manager,
+          then adds DigiDAW to your app menu and a `digidaw` command.
 
-          ### Runtime requirements
-          - GTK 3
-          - ALSA, plus JACK or PipeWire (with its JACK compatibility layer)
-          - Rubber Band library 3.3 or newer (e.g. Ubuntu 24.04+, current Fedora and Arch)
+          To remove it, run `~/.local/share/digidaw/uninstall.sh` (or `./uninstall.sh` from the
+          archive). Add `--purge` to also delete settings and crash recovery data.
+
+          PipeWire (with its JACK compatibility layer) or JACK is recommended for low-latency audio.
+
+          Built on Ubuntu 26.04, so older distributions may not be able to run it.
           EOF
 
       - name: Publish GitHub release

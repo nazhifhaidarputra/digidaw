@@ -30,6 +30,23 @@ fn main() {
         if let Some(include_dir) = lib.include_paths.first() {
             header_path = Some(include_dir.join("rubberband").join("rubberband-c.h"));
         }
+
+        // A static librubberband (build_linux.sh builds one) is C++ and does not carry
+        // its runtime, so link it explicitly. A shared library already depends on it.
+        let has_file = |name: &str| lib.link_paths.iter().any(|dir| dir.join(name).exists());
+        let shared_name = if target_os == "macos" {
+            "librubberband.dylib"
+        } else {
+            "librubberband.so"
+        };
+        if has_file("librubberband.a") && !has_file(shared_name) {
+            let cxx_runtime = if target_os == "macos" {
+                "c++"
+            } else {
+                "stdc++"
+            };
+            println!("cargo:rustc-link-lib={cxx_runtime}");
+        }
     } else if target_os == "android" {
         // Android: Manual linking to the JNI libs folder
         let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();

@@ -18,6 +18,10 @@ By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio pr
 
 More features are currently in active development.
 
+## Installation
+
+For the setup and installation, you can read more at [INSTALLATION.md](INSTALLATION.md).
+
 ## Roadmap
 
 These are features which have been or have not been implemented. All unimplemented features will be implemented in the future
