@@ -149,8 +149,6 @@ AutomationLaneDto _lane(int id) => AutomationLaneDto(
   label: 'Lane $id',
   points: const [],
   enabled: true,
-  min: 0,
-  max: 1,
   defaultValue: 0.5,
 );
 

@@ -19,8 +19,8 @@ mod tests {
     use karbeat_core::core::project::{
         AutomationLane, ModulationSource,
         automation::{
-            AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget,
-            TrackAutomationTarget,
+            AutomationTarget, EffectAutomationTarget, MasterAutomationTarget,
+            MixerChannelParamTarget, TrackAutomationTarget,
         },
         mixer::{RoutingConnection, RoutingNode},
     };
@@ -200,6 +200,106 @@ mod tests {
     );
 
     #[test]
+    fn automation_range_edits_are_single_undo_steps() {
+        let (mut ctx, audio, ..) = make_seeded_ctx();
+        let lane = automation_api::add_automation_lane_for_track(
+            &mut ctx,
+            audio,
+            volume_target(audio),
+            "Volume",
+            None,
+        )
+        .expect("add lane")
+        .id;
+        for (tick, value) in [(480, 0.2), (960, 0.9)] {
+            automation_api::add_new_automation_point(
+                &mut ctx,
+                lane,
+                tick,
+                NormalizedF64::new(value),
+            )
+            .expect("add point");
+        }
+        let copied = automation_api::copy_automation_range(&ctx, lane, 240, 960).expect("copy");
+        assert_eq!(copied.len(), 3, "the cut start edge adds one point");
+
+        assert_round_trip(
+            &mut ctx,
+            "Paste Automation Curve",
+            |ctx| {
+                automation_api::paste_automation_points(ctx, lane, 1920, &copied, 720, Some(1440))
+                    .expect("paste");
+            },
+            automation_state,
+        );
+        let pasted: Vec<_> = ctx.app_state.automation_pool[lane]
+            .points
+            .iter()
+            .map(|point| point.time_ticks)
+            .filter(|tick| *tick >= 1920)
+            .collect();
+        assert_eq!(
+            pasted,
+            [1920, 2400, 3360],
+            "the curve is stretched to twice its length"
+        );
+
+        assert_round_trip(
+            &mut ctx,
+            "Delete Automation Range",
+            |ctx| {
+                automation_api::delete_automation_range(ctx, lane, 1920, 3360).expect("delete");
+            },
+            automation_state,
+        );
+    }
+
+    #[test]
+    fn automation_values_are_mapped_by_the_target_parameter() {
+        let (mut ctx, audio, ..) = make_seeded_ctx();
+
+        // The fader sits at 0 dB in a -100 dB to +6 dB range.
+        let lane = automation_api::add_automation_lane_for_track(
+            &mut ctx,
+            audio,
+            volume_target(audio),
+            "Volume",
+            None,
+        )
+        .expect("add lane");
+        let start = lane.points[0].value;
+        assert!((start.get() - 100.0 / 106.0).abs() < 1e-9);
+        assert_eq!(lane.default_value, start);
+
+        let text = |ctx: &DawContext, value: f64| {
+            automation_api::automation_value_text(ctx, lane.id, NormalizedF64::new(value))
+                .expect("text")
+        };
+        assert_eq!(text(&ctx, start.get()), "0.00");
+        assert_eq!(text(&ctx, 0.0), "-100.00");
+        assert_eq!(text(&ctx, 1.0), "6.00");
+
+        let parsed = automation_api::parse_automation_value(&ctx, lane.id, " -47 ").expect("parse");
+        assert_eq!(text(&ctx, parsed.get()), "-47.00");
+        assert!(automation_api::parse_automation_value(&ctx, lane.id, "loud").is_err());
+
+        // A value supplied by the caller is normalized by the same parameter.
+        let tempo = automation_api::add_automation_lane(
+            &mut ctx,
+            AutomationTarget::Master(MasterAutomationTarget::TempoBpm),
+            "Tempo",
+            Some(504.5),
+        )
+        .expect("tempo lane")
+        .0;
+        assert!((tempo.points[0].value.get() - 0.5).abs() < 1e-9);
+        assert_eq!(
+            automation_api::automation_value_text(&ctx, tempo.id, NormalizedF64::new(0.5)).ok(),
+            Some("504.50".to_owned())
+        );
+    }
+
+    #[test]
     fn automation_lane_lifecycle_round_trips_with_stable_keys() {
         let (mut ctx, audio, ..) = make_seeded_ctx();
 
@@ -212,9 +312,7 @@ mod tests {
                     audio,
                     volume_target(audio),
                     "Volume",
-                    0.0,
-                    1.0,
-                    0.5,
+                    None,
                 )
                 .expect("add lane");
             },
@@ -255,6 +353,7 @@ mod tests {
                     point,
                     Some(960),
                     Some(NormalizedF64::new(0.2)),
+                    None,
                     None,
                     None,
                 )
@@ -439,9 +538,7 @@ mod tests {
             midi,
             volume_target(midi),
             "Volume",
-            0.0,
-            1.0,
-            0.5,
+            None,
         )
         .expect("lane");
         let bus = mixer_api::create_bus(&mut ctx, "Reverb".into());
@@ -589,9 +686,7 @@ mod tests {
                 ),
             },
             "Gain",
-            0.0,
-            1.0,
-            0.5,
+            None,
         )
         .expect("effect lane");
         assert_round_trip(

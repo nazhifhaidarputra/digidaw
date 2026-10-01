@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::api::context::DawContext;
 use crate::api::plugins::opaque::ZeroCopyHandle;
 use crate::api::project::{
-    AudioWaveformUiForAudioProperties, UiAudioHardwareConfig, UiGainEnvelope,
+    AudioWaveformUiForAudioProperties, UiApplicationState, UiAudioHardwareConfig, UiGainEnvelope,
 };
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
@@ -390,6 +390,15 @@ pub fn get_audio_properties(
     audio_api::get_audio_source(&ctx, AudioSourceId::from_u64(id), |waveform| {
         AudioWaveformUiForAudioProperties::try_from_with_context(&ctx, waveform).ok()
     })?
+}
+
+/// Deletes an audio source and every clip that plays it as one undoable step, and returns the
+/// project as it is afterwards.
+pub fn remove_audio_source(ctx: &DawContext, source_id: u64) -> Result<UiApplicationState, String> {
+    let mut core = ctx.project_write();
+    audio_waveform_api::remove_audio_source(&mut core, AudioSourceId::from_u64(source_id))
+        .map_err(|e| e.to_string())?;
+    Ok(UiApplicationState::from(core.app_state.clone()))
 }
 
 /// Waveform envelopes of every audio source, keyed by source ID.

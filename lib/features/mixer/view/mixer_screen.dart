@@ -1435,8 +1435,6 @@ class _PanKnob extends ConsumerWidget {
                     .handleAddAutomationForTarget(
                       target: automationTarget,
                       label: spec.name,
-                      min: spec.min,
-                      max: spec.max,
                       initialValue: value,
                     );
               },
@@ -1523,8 +1521,6 @@ class _VolumeFader extends ConsumerWidget {
                   .handleAddAutomationForTarget(
                     target: automationTarget,
                     label: spec.name,
-                    min: spec.min,
-                    max: spec.max,
                     initialValue: value,
                   );
             },

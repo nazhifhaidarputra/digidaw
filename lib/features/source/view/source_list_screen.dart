@@ -96,6 +96,65 @@ class SourceListScreen extends ConsumerWidget {
         .renamePattern(patternId: patternId, newName: trimmedName);
   }
 
+  /// Number of timeline clips that play the audio source [sourceId].
+  static int audioSourceClipCount(Iterable<UiTrack> tracks, int sourceId) =>
+      tracks
+          .expand((track) => track.clips)
+          .where(
+            (clip) => switch (clip.source) {
+              UiClipSource_Audio(sourceId: final id) => id == sourceId,
+              _ => false,
+            },
+          )
+          .length;
+
+  /// Asks before deleting an audio source, naming how many clips go with it.
+  Future<void> _deleteAudioSource(
+    BuildContext context,
+    WidgetRef ref,
+    int sourceId,
+    String name,
+  ) async {
+    final tracks =
+        ref.read(projectProvider).value?.tracks.values ?? const <UiTrack>[];
+    final clipCount = audioSourceClipCount(tracks, sourceId);
+    final clipText = switch (clipCount) {
+      0 => 'No clip on the timeline uses it.',
+      1 => '1 clip that plays it will be removed from the timeline.',
+      _ => '$clipCount clips that play it will be removed from the timeline.',
+    };
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete audio source?'),
+        content: Text(
+          '“$name” will be removed from the project. $clipText\n\n'
+          'The audio file on disk is not deleted, and you can undo this.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    // A placement of this source would create a clip with nothing to play.
+    final placement = ref.read(clipPlacementProvider);
+    if (placement.sourceType == UiSourceType.audio &&
+        placement.sourceId == sourceId) {
+      ref.read(clipPlacementProvider.notifier).cancelPlacement();
+    }
+    await ref.read(projectProvider.notifier).removeAudioSource(sourceId);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
@@ -181,7 +240,6 @@ class SourceListScreen extends ConsumerWidget {
                   );
                 },
                 onPlace: null,
-                // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement
               );
             }, childCount: generators.length),
           ),
@@ -257,6 +315,8 @@ class SourceListScreen extends ConsumerWidget {
                             initialTrackId: firstTrackId,
                           );
                     },
+                    onDelete: () =>
+                        _deleteAudioSource(context, ref, id, source.name),
                   );
                 }, childCount: audioSources.length),
               );
@@ -360,6 +420,9 @@ class _SourceTile extends StatelessWidget {
   final VoidCallback? onPlace;
   final VoidCallback? onRename;
 
+  /// Deletes the item; the menu entry is hidden when it cannot be deleted.
+  final VoidCallback? onDelete;
+
   const _SourceTile({
     required this.title,
     required this.subtitle,
@@ -368,6 +431,7 @@ class _SourceTile extends StatelessWidget {
     required this.onTap,
     this.onPlace,
     this.onRename,
+    this.onDelete,
   });
 
   @override
@@ -380,47 +444,52 @@ class _SourceTile extends StatelessWidget {
         subtitle,
         style: TextStyle(color: colors.onSurfaceVariant),
       ),
-      trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
-        onSelected: (value) {
-          if (value == 'place') onPlace?.call();
-          if (value == 'rename') onRename?.call();
-        },
-        itemBuilder: (context) => [
-          if (onPlace != null)
-            const PopupMenuItem(
-              value: 'place',
-              child: Row(
-                children: [
-                  Icon(Icons.input),
-                  SizedBox(width: 8),
-                  Text("Put in timeline"),
-                ],
-              ),
-            ),
-          if (onRename != null)
-            const PopupMenuItem(
-              value: 'rename',
-              child: Row(
-                children: [
-                  Icon(Icons.edit),
-                  SizedBox(width: 8),
-                  Text("Rename"),
-                ],
-              ),
-            ),
-          const PopupMenuItem(
-            value: 'delete',
-            child: Row(
-              children: [
-                Icon(Icons.delete),
-                SizedBox(width: 8),
-                Text("Delete"),
+      // Items without any action get no menu button.
+      trailing: onPlace == null && onRename == null && onDelete == null
+          ? null
+          : PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
+              onSelected: (value) {
+                if (value == 'place') onPlace?.call();
+                if (value == 'rename') onRename?.call();
+                if (value == 'delete') onDelete?.call();
+              },
+              itemBuilder: (context) => [
+                if (onPlace != null)
+                  const PopupMenuItem(
+                    value: 'place',
+                    child: Row(
+                      children: [
+                        Icon(Icons.input),
+                        SizedBox(width: 8),
+                        Text("Put in timeline"),
+                      ],
+                    ),
+                  ),
+                if (onRename != null)
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit),
+                        SizedBox(width: 8),
+                        Text("Rename"),
+                      ],
+                    ),
+                  ),
+                if (onDelete != null)
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete),
+                        SizedBox(width: 8),
+                        Text("Delete"),
+                      ],
+                    ),
+                  ),
               ],
             ),
-          ),
-        ],
-      ),
       onTap: onTap,
     );
   }

@@ -11,7 +11,8 @@ use crate::audio::render_state::AudioGraphState;
 use crate::commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration};
 use crate::core::project::automation::{
     AutomationLane, AutomationPoint, AutomationTarget, EffectAutomationTarget,
-    MasterAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
+    MasterAutomationTarget, MixerChannelParamTarget, TEMPO_AUTOMATION_MAX_BPM,
+    TEMPO_AUTOMATION_MIN_BPM, TrackAutomationTarget,
 };
 use crate::core::project::modulation::{ModulationLink, ModulationSource};
 use crate::core::project::track::AudioTrack;
@@ -393,7 +394,7 @@ fn test_automation_lane_applied_to_mixer_volume() {
     };
 
     let automation_id = app_state.automation_pool.insert_with_key(|id| {
-        let mut lane = AutomationLane::new(id, "Volume", 0.0, 1.0, 0.5);
+        let mut lane = AutomationLane::new(id, "Volume", NormalizedF64::new(0.5));
         lane.add_point(AutomationPoint::new(0, NormalizedF64::new(0.75)));
         lane
     });
@@ -466,6 +467,48 @@ fn test_automation_lane_applied_to_mixer_volume() {
         ch.volume.get(),
         -20.5,
         "Volume should be automated to -20.5 dB"
+    );
+}
+
+#[test]
+fn tempo_automation_maps_the_normalized_lane_to_bpm() {
+    let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
+    let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(1024);
+    let mut engine = AudioEngine::new(
+        cmd_consumer,
+        pos_producer,
+        fb_producer,
+        44100,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_tx,
+    );
+
+    let mut app_state = ApplicationState::default();
+    app_state
+        .add_automation_lane(
+            AutomationTarget::Master(MasterAutomationTarget::TempoBpm),
+            "Tempo",
+            NormalizedF64::new(0.5),
+        )
+        .expect("tempo lane should be created");
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine.process_command(AudioCommand::SetPlayhead(0));
+
+    let mut output_buffer = vec![0.0; 512 * 2];
+    engine.process(&mut output_buffer);
+
+    let midpoint = (TEMPO_AUTOMATION_MIN_BPM + TEMPO_AUTOMATION_MAX_BPM) / 2.0;
+    assert!(
+        (engine.transport.bpm - midpoint).abs() < 1e-3,
+        "tempo was {}",
+        engine.transport.bpm
     );
 }
 
@@ -568,10 +611,10 @@ fn removing_an_effect_drops_its_automation_in_the_same_command() {
     ));
     let mut app_state = ApplicationState::default();
     let (effect_lane, effect_link) = app_state
-        .add_automation_lane(effect_target, "Gain", 0.0, 1.0, 0.5)
+        .add_automation_lane(effect_target, "Gain", NormalizedF64::new(0.5))
         .expect("effect lane should be created");
     let (volume_lane, volume_link) = app_state
-        .add_automation_lane(volume_target, "Volume", 0.0, 1.0, 0.5)
+        .add_automation_lane(volume_target, "Volume", NormalizedF64::new(0.5))
         .expect("volume lane should be created");
     let effect_source = app_state.modulation_links[effect_link].prop.source_id;
     let volume_source = app_state.modulation_links[volume_link].prop.source_id;

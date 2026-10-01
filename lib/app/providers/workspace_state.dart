@@ -80,6 +80,9 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(false) bool snapToGrid,
 
+    /// The timeline and piano roll scroll to keep the moving playhead in view.
+    @Default(false) bool followPlayhead,
+
     /// Resizing an audio clip in the timeline stretches its audio instead of trimming it.
     @Default(false) bool resizeStretches,
 
@@ -210,6 +213,11 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   /// Toggle snap-to-grid on or off.
   void toggleSnapToGrid() {
     state = state.copyWith(snapToGrid: !state.snapToGrid);
+  }
+
+  /// Toggle whether the views scroll to follow the playhead.
+  void toggleFollowPlayhead() {
+    state = state.copyWith(followPlayhead: !state.followPlayhead);
   }
 
   /// Toggle whether resizing audio clips stretches their audio.

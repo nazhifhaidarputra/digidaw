@@ -369,6 +369,16 @@ class DefaultControlPanel extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
+            name: "Follow Playhead",
+            icon: Icons.keyboard_double_arrow_right,
+            color: colors.secondary,
+            isActive: workspaceState.followPlayhead,
+            onTap: () => ref
+                .read(workspaceStateProvider.notifier)
+                .toggleFollowPlayhead(),
+          ),
+          const SizedBox(width: 8),
+          ControlPanelToolbarItem(
             name: "Metronome",
             icon: MdiIcons.metronome,
             color: colors.secondary,

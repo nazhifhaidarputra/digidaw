@@ -5,10 +5,14 @@
 
 import '../frb_generated.dart';
 import 'automation.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'pattern.dart';
+import 'plugin.dart';
 import 'plugins/opaque.dart';
 import 'project.dart';
+import 'timeline.dart';
 part 'audio.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `map_effect_target`, `map_plugin_target`
@@ -37,6 +41,16 @@ Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
   required DawContext ctx,
   required int id,
 }) => RustLib.instance.api.crateApiAudioGetAudioProperties(ctx: ctx, id: id);
+
+/// Deletes an audio source and every clip that plays it as one undoable step, and returns the
+/// project as it is afterwards.
+Future<UiApplicationState> removeAudioSource({
+  required DawContext ctx,
+  required int sourceId,
+}) => RustLib.instance.api.crateApiAudioRemoveAudioSource(
+  ctx: ctx,
+  sourceId: sourceId,
+);
 
 /// Waveform envelopes of every audio source, keyed by source ID.
 Future<Map<int, UiGainEnvelope>> getAudioSourceEnvelopes({

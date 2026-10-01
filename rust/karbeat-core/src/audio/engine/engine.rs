@@ -2194,7 +2194,12 @@ impl AudioEngine {
                     );
                 }
                 MasterAutomationTarget::TempoBpm => {
-                    self.transport.bpm = final_value;
+                    // Lanes are normalized; tempo owns the mapping to beats per minute.
+                    self.transport.bpm = karbeat_dsp::interpolation::lerp(
+                        final_value,
+                        TEMPO_AUTOMATION_MIN_BPM,
+                        TEMPO_AUTOMATION_MAX_BPM,
+                    );
                 }
             },
         }

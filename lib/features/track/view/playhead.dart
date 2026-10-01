@@ -4,6 +4,24 @@ import 'package:karbeat/src/rust/api/audio.dart';
 
 // 1. Swap the import to your decoupled transport provider
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
+
+/// Gap kept between the viewport's left edge and the playhead after a page flip.
+const double _followLeadIn = 40.0;
+
+/// The scroll offset that brings a playhead at [playheadX] back into view, or
+/// null while it is still inside the viewport.
+double? followPageScrollOffset({
+  required double playheadX,
+  required double scrollOffset,
+  required double viewportWidth,
+  required double maxScrollExtent,
+}) {
+  if (playheadX >= scrollOffset && playheadX <= scrollOffset + viewportWidth) {
+    return null;
+  }
+  return (playheadX - _followLeadIn).clamp(0.0, maxScrollExtent);
+}
 
 class _PlayheadHandlePainter extends CustomPainter {
   final Color color;
@@ -72,10 +90,58 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   int get _dragTarget =>
       widget.snapPosition?.call(_dragSamples) ?? _dragSamples;
 
+  /// Page-flips the view when the playhead moves out of it while following.
+  void _followPlayhead(
+    UiTransportFeedback? previous,
+    UiTransportFeedback next,
+  ) {
+    final samples = widget.sampleSelector(next);
+    if (previous != null && widget.sampleSelector(previous) == samples) return;
+    _scrollToPlayhead(samples);
+  }
+
+  /// Scrolls to the playhead at [samples] when it is out of view, or
+  /// regardless when [finishingFlip] continues a flip that fell short.
+  void _scrollToPlayhead(int samples, {bool finishingFlip = false}) {
+    if (!mounted || _isDragging || widget.zoomLevel <= 0) return;
+    if (!ref.read(workspaceStateProvider).followPlayhead) return;
+    if (!widget.scrollController.hasClients) return;
+
+    final position = widget.scrollController.position;
+    final playheadX = samples / widget.zoomLevel;
+    final maxScrollExtent = position.maxScrollExtent;
+    final target = followPageScrollOffset(
+      playheadX: playheadX,
+      // An offset the playhead is never inside, so the flip always resolves.
+      scrollOffset: finishingFlip ? double.infinity : position.pixels,
+      viewportWidth: position.viewportDimension,
+      maxScrollExtent: maxScrollExtent,
+    );
+    if (target == null) return;
+    if (target != position.pixels) widget.scrollController.jumpTo(target);
+
+    // The jump stopped at the end of the laid-out timeline. Scrolling there
+    // makes the timeline grow, so finish the flip once it has.
+    if (playheadX - _followLeadIn > maxScrollExtent) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !widget.scrollController.hasClients) return;
+        if (widget.scrollController.position.maxScrollExtent >
+            maxScrollExtent) {
+          _scrollToPlayhead(samples, finishingFlip: true);
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.tertiary;
     final positionAsync = ref.watch(transportPositionStreamProvider);
+    ref.listen(transportPositionStreamProvider, (previous, next) {
+      final position = next.value;
+      if (position == null) return;
+      _followPlayhead(previous?.value, position);
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {

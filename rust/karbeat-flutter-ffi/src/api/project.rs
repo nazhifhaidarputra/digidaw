@@ -10,8 +10,8 @@ use karbeat_core::audio::writer::{
 use karbeat_core::context::DawContext as CoreDawContext;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::{
-    ApplicationState, CoverArt, CoverImage, EnvelopePoint, Fade, GainEnvelope, PluginInstance,
-    audio_waveform::AudioSampleMode,
+    ApplicationState, CoverArt, CoverImage, EnvelopeCursor, EnvelopePoint, Fade, GainEnvelope,
+    PluginInstance, audio_waveform::AudioSampleMode,
 };
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
@@ -358,6 +358,45 @@ pub struct UiGainEnvelope {
     pub crossfade: u32,
     /// Gain points sorted by position.
     pub points: Vec<UiEnvelopePoint>,
+}
+
+/// Samples the gain of an envelope at `positions`, with the code the audio engine plays.
+///
+/// `positions` are in the envelope's own unit (see [`UiEnvelopePoint::position`]);
+/// `content_start` and `content_length` locate the content the fades are measured against.
+/// The crossfade is not part of the gain and is drawn separately.
+#[frb(sync)]
+pub fn sample_gain_envelope(
+    envelope: UiGainEnvelope,
+    content_start: u64,
+    content_length: u64,
+    positions: Vec<f64>,
+) -> Vec<f32> {
+    let envelope = GainEnvelope::from(envelope);
+    let mut cursor = EnvelopeCursor::default();
+    positions
+        .into_iter()
+        .map(|position| {
+            let position = envelope_position(position);
+            let elapsed = position.saturating_sub(content_start);
+            envelope.fade_gain(elapsed, content_length) * envelope.point_gain(position, &mut cursor)
+        })
+        .collect()
+}
+
+/// Gain of a fade at normalized position `t`, rising from silence (0.0) to unity (1.0).
+#[frb(sync)]
+pub fn fade_gain_at(fade: UiFade, t: f64) -> f32 {
+    Fade::from(fade).gain_at(t)
+}
+
+/// Rounds a drawing position to the envelope's whole-sample unit.
+#[allow(
+    clippy::as_conversions,
+    reason = "float-to-int `as` saturates, so off-content positions clamp to the edges"
+)]
+fn envelope_position(position: f64) -> u64 {
+    position.round() as u64
 }
 
 /// How a waveform's playback responds to tempo.

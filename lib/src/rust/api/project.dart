@@ -15,7 +15,7 @@ import 'timeline.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `export_project_blocking`
+// These functions are ignored because they are not marked as `pub`: `envelope_position`, `export_project_blocking`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
@@ -49,6 +49,27 @@ UiTransportState transportStateNewWithParam({
   bpm: bpm,
   timeSignature: timeSignature,
 );
+
+/// Samples the gain of an envelope at `positions`, with the code the audio engine plays.
+///
+/// `positions` are in the envelope's own unit (see [`UiEnvelopePoint::position`]);
+/// `content_start` and `content_length` locate the content the fades are measured against.
+/// The crossfade is not part of the gain and is drawn separately.
+Float32List sampleGainEnvelope({
+  required UiGainEnvelope envelope,
+  required int contentStart,
+  required int contentLength,
+  required List<double> positions,
+}) => RustLib.instance.api.crateApiProjectSampleGainEnvelope(
+  envelope: envelope,
+  contentStart: contentStart,
+  contentLength: contentLength,
+  positions: positions,
+);
+
+/// Gain of a fade at normalized position `t`, rising from silence (0.0) to unity (1.0).
+double fadeGainAt({required UiFade fade, required double t}) =>
+    RustLib.instance.api.crateApiProjectFadeGainAt(fade: fade, t: t);
 
 /// Get the current project metadata state from the backend
 Future<UiProjectMetadata> getProjectMetadata({required DawContext ctx}) =>

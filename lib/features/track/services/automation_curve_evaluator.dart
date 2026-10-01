@@ -1,72 +1,12 @@
-import 'dart:math' as math;
-
 import 'package:karbeat/src/rust/api/automation.dart';
 
-/// Dart mirror of the automation interpolation used by the audio engine.
+/// Point ordering helpers for optimistic automation edits.
 ///
-/// Keep in sync with `interpolate_points`, `interpolate_segment`,
-/// `apply_tension_to_t`, and the point ordering of `AutomationLane` in
-/// `rust/karbeat-core/src/core/project/automation.rs` so the drawn curve is
-/// exactly what the engine plays back.
-
-/// Smallest value used by exponential segments so the ratio stays finite.
-const double _exponentialFloor = 1e-4;
-
-double _lerp(double alpha, double from, double to) =>
-    from + (to - from) * alpha;
-
-/// Maps a linear `t` in 0..1 through the tension ease.
-/// Positive tension eases out (toward √t), negative eases in (toward t²).
-double applyAutomationTension(double t, double tension) {
-  if (tension == 0.0) return t;
-  if (tension < 0.0) return _lerp(-tension, t, t * t);
-  return _lerp(tension, t, math.sqrt(t));
-}
-
-/// Evaluates the segment starting at [from] and ending at [toValue] at the
-/// normalized segment position [t]. The first point's curve and tension
-/// select the shape.
-double evaluateAutomationSegment(
-  AutomationPointDto from,
-  double toValue,
-  double t,
-) {
-  return shapeAutomationSegment(
-    from.curveType,
-    from.tension,
-    from.value.clamp(0.0, 1.0),
-    toValue.clamp(0.0, 1.0),
-    t,
-  ).clamp(0.0, 1.0);
-}
-
-/// Shapes a segment from [v1] to [v2] at normalized position [t]; the mirror
-/// of `shape_segment`. Shared by automation lanes and gain envelopes, whose
-/// values may exceed 1.0.
-double shapeAutomationSegment(
-  AutomationCurveTypeDto curveType,
-  double tension,
-  double v1,
-  double v2,
-  double t,
-) {
-  final clampedT = t.clamp(0.0, 1.0);
-
-  return switch (curveType) {
-    AutomationCurveTypeDto.linear => _lerp(
-      applyAutomationTension(clampedT, tension),
-      v1,
-      v2,
-    ),
-    AutomationCurveTypeDto.exponential => () {
-      final start = math.max(v1, _exponentialFloor);
-      final end = math.max(v2, _exponentialFloor);
-      final shaped = applyAutomationTension(clampedT, -tension);
-      return start * math.pow(end / start, shaped);
-    }(),
-    AutomationCurveTypeDto.step => clampedT < 1.0 ? v1 : v2,
-  };
-}
+/// Curve shapes are not computed here: the lane painter and editor sample them
+/// from the audio engine's own code through `CurveSampler`. These helpers only
+/// mirror how `AutomationLane` in
+/// `rust/karbeat-core/src/core/project/automation.rs` orders points, so a
+/// dragged point previews where the engine will place it.
 
 /// Index after every point at or before [timeTicks] in time-ordered [points].
 int automationIndexAfterTick(List<AutomationPointDto> points, num timeTicks) {
@@ -102,41 +42,3 @@ List<AutomationPointDto> placeAutomationPoint(
       : automationIndexAfterTick(others, point.timeTicks);
   return [...others.take(index), point, ...others.skip(index)];
 }
-
-/// Evaluates time-ordered [points] at [timeTicks], holding the first value
-/// before the first point and the last value after the last point. Points
-/// sharing a tick form a vertical jump: the segment arriving at the tick ends
-/// on the first of them, and from that tick on the last one applies.
-/// Returns `null` when there are no points.
-double? evaluateAutomationPoints(
-  List<AutomationPointDto> points,
-  double timeTicks,
-) {
-  if (points.isEmpty) return null;
-
-  final first = points.first;
-  if (timeTicks < first.timeTicks) return first.value.clamp(0.0, 1.0);
-
-  final index = automationIndexAfterTick(points, timeTicks);
-  final start = points[index - 1];
-  if (index == points.length) return start.value.clamp(0.0, 1.0);
-
-  final end = points[index];
-  final duration = end.timeTicks - start.timeTicks;
-  if (duration <= 0) return start.value.clamp(0.0, 1.0);
-  final t = (timeTicks - start.timeTicks) / duration;
-  return evaluateAutomationSegment(start, end.value, t);
-}
-
-/// Direction in which increasing tension moves a segment's midpoint value:
-/// `1` raises it, `-1` lowers it. Flat segments report `1`.
-double automationTensionDirection(AutomationPointDto from, double toValue) {
-  final rising = toValue - from.value;
-  if (rising == 0) return 1;
-  final sign = rising.sign;
-  return from.curveType == AutomationCurveTypeDto.exponential ? -sign : sign;
-}
-
-/// Whether the segment starting at [from] has a user-adjustable tension.
-bool automationSegmentSupportsTension(AutomationPointDto from) =>
-    from.curveType != AutomationCurveTypeDto.step;

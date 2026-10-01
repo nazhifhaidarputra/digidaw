@@ -16,35 +16,17 @@ UiGainEnvelope _fades(int fadeIn, int fadeOut) => identityEnvelope.copyWith(
 );
 
 void main() {
-  // Expected values mirror the Rust tests in
+  // Gains and fade shapes are tested where they are computed, in
   // rust/karbeat-core/src/core/project/envelope.rs.
   test('the default envelope is the identity', () {
     expect(isIdentityEnvelope(identityEnvelope), isTrue);
-    expect(envelopeGainAt(identityEnvelope, 50, 100), 1.0);
-  });
-
-  test('linear fades ramp at both edges', () {
-    final envelope = _fades(10, 20);
-    expect(envelopeFadeGain(envelope, 0, 100), 0.0);
-    expect(envelopeFadeGain(envelope, 5, 100), closeTo(0.5, 1e-9));
-    expect(envelopeFadeGain(envelope, 50, 100), 1.0);
-    expect(envelopeFadeGain(envelope, 90, 100), closeTo(0.5, 1e-9));
-    expect(envelopeFadeGain(envelope, 100, 100), 0.0);
+    expect(isIdentityEnvelope(_fades(10, 0)), isFalse);
   });
 
   test('overlapping fades scale to fit', () {
     final envelope = _fades(300, 100);
     expect(envelopeFadeLengths(envelope, 200), (150, 50));
     expect(envelopeFadeLengths(envelope, 1000), (300, 100));
-  });
-
-  test('points interpolate like the engine', () {
-    final points = [_point(100, 1.0), _point(200, 0.0), _point(300, 2.0)];
-    expect(envelopePointGain(points, 0), 1.0);
-    expect(envelopePointGain(points, 150), closeTo(0.5, 1e-9));
-    expect(envelopePointGain(points, 250), closeTo(1.0, 1e-9));
-    expect(envelopePointGain(points, 400), 2.0);
-    expect(envelopePointGain(const [], 10), 1.0);
   });
 
   test('equal-power crossfade keeps constant power', () {

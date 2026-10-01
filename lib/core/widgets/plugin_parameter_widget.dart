@@ -74,8 +74,6 @@ class DawFloatParam extends ConsumerWidget {
               .handleAddAutomationForTarget(
                 target: target!,
                 label: name,
-                min: min,
-                max: max,
                 initialValue: value,
               );
         },

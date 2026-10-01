@@ -399,8 +399,6 @@ impl From<&AudioPluginState> for AudioPluginSnapshotState {
 pub struct AudioAutomationLane {
     pub points: Vec<AutomationPoint>,
     pub enabled: bool,
-    pub min: f64,
-    pub max: f64,
     pub default_value: NormalizedF64,
 }
 
@@ -409,8 +407,6 @@ impl From<AutomationLane> for AudioAutomationLane {
         Self {
             points: l.points,
             enabled: l.enabled,
-            min: l.min,
-            max: l.max,
             default_value: l.default_value,
         }
     }

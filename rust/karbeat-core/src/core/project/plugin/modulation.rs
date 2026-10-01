@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     audio::event::PluginTarget,
     core::project::{
-        ApplicationState, AutomationCurveType, AutomationLane, AutomationPoint,
+        ApplicationState, AutomationCurveType, AutomationLane, AutomationPoint, BezierHandles,
         automation::AutomationTarget,
     },
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
@@ -208,13 +208,14 @@ impl ApplicationState {
     // =========================================================================
 
     /// Add an automation lane to the pool and link it to a target.
+    ///
+    /// `initial_value` is the target parameter's normalized value; the lane starts with one
+    /// point holding it, so adding automation does not move the parameter.
     pub fn add_automation_lane(
         &mut self,
         target: AutomationTarget,
         label: impl Into<String>,
-        min: f64,
-        max: f64,
-        initial_value: f64,
+        initial_value: NormalizedF64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         // === PREVENT DUPLICATES ===
         // Check if this exact target already has an Automation source linked to it.
@@ -239,11 +240,8 @@ impl ApplicationState {
         // Create the Lane (Pure Data)
         let label = label.into();
         let lane_id = self.automation_pool.insert_with_key(|id| {
-            let mut lane = AutomationLane::new(id, label, min, max, initial_value);
-            lane.add_point(AutomationPoint::new(
-                0,
-                NormalizedF64::from_range(initial_value, min, max),
-            ));
+            let mut lane = AutomationLane::new(id, label, initial_value);
+            lane.add_point(AutomationPoint::new(0, initial_value));
             lane
         });
         let lane = self.automation_pool[lane_id].clone();
@@ -269,14 +267,12 @@ impl ApplicationState {
         track_id: TrackId,
         target: AutomationTarget,
         label: impl Into<String>,
-        min: f64,
-        max: f64,
-        initial_value: f64,
+        initial_value: NormalizedF64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_track(track_id) {
             return Err(anyhow!("Target does not reference the specified track"));
         }
-        self.add_automation_lane(target, label, min, max, initial_value)
+        self.add_automation_lane(target, label, initial_value)
     }
 
     /// Get all Modulations AND their associated Automation Lanes for a specific Track.
@@ -458,14 +454,12 @@ impl ApplicationState {
         bus_id: BusId,
         target: AutomationTarget,
         label: impl Into<String>,
-        min: f64,
-        max: f64,
-        initial_value: f64,
+        initial_value: NormalizedF64,
     ) -> anyhow::Result<(AutomationLane, ModulationLinkId)> {
         if !target.references_bus(bus_id) {
             return Err(anyhow!("Target does not reference the specified bus"));
         }
-        self.add_automation_lane(target, label, min, max, initial_value)
+        self.add_automation_lane(target, label, initial_value)
     }
 
     /// Get all Modulations AND their associated Automation Lanes for a specific Bus.
@@ -588,6 +582,10 @@ impl ApplicationState {
     }
 
     /// Applies supplied point fields, restores chronological ordering, and returns its new index.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "each optional field is one independently editable point property"
+    )]
     pub fn update_automation_point(
         &mut self,
         lane_id: AutomationId,
@@ -596,13 +594,14 @@ impl ApplicationState {
         value: Option<NormalizedF64>,
         tension: Option<BipolarF64>,
         curve_type: Option<AutomationCurveType>,
+        handles: Option<BezierHandles>,
     ) -> anyhow::Result<(AutomationLane, usize)> {
         let lane = self
             .automation_pool
             .get_mut(lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
-        match lane.update_point(point_id, time_ticks, value, tension, curve_type) {
+        match lane.update_point(point_id, time_ticks, value, tension, curve_type, handles) {
             Some(new_index) => Ok((lane.clone(), new_index)),
             None => Err(anyhow!(
                 "Point ID {} not found in lane {:?}",
@@ -610,6 +609,66 @@ impl ApplicationState {
                 lane_id
             )),
         }
+    }
+
+    /// Copies the curve of a lane between two ticks, with times relative to the range start.
+    pub fn copy_automation_range(
+        &self,
+        lane_id: AutomationId,
+        start_tick: u32,
+        end_tick: u32,
+    ) -> anyhow::Result<Vec<AutomationPoint>> {
+        self.automation_pool
+            .get(lane_id)
+            .map(|lane| lane.extract_range(start_tick, end_tick))
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))
+    }
+
+    /// Removes every point of a lane between two ticks and returns the updated lane.
+    pub fn delete_automation_range(
+        &mut self,
+        lane_id: AutomationId,
+        start_tick: u32,
+        end_tick: u32,
+    ) -> anyhow::Result<AutomationLane> {
+        let lane = self
+            .automation_pool
+            .get_mut(lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+        lane.delete_range(start_tick, end_tick);
+        Ok(lane.clone())
+    }
+
+    /// Pastes a copied curve into a lane and returns the updated lane.
+    ///
+    /// See [`AutomationLane::paste_points`] for how `length_ticks` and `target_length` are used.
+    pub fn paste_automation_points(
+        &mut self,
+        lane_id: AutomationId,
+        at_tick: u32,
+        points: &[AutomationPoint],
+        length_ticks: u32,
+        target_length: Option<u32>,
+    ) -> anyhow::Result<AutomationLane> {
+        let lane = self
+            .automation_pool
+            .get_mut(lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+        lane.paste_points(at_tick, points, length_ticks, target_length);
+        Ok(lane.clone())
+    }
+
+    /// Finds the parameter a lane automates through its modulation link.
+    pub fn automation_lane_target(&self, lane_id: AutomationId) -> Option<&AutomationTarget> {
+        self.modulation_links
+            .values()
+            .find(|link| {
+                matches!(
+                    self.modulation_sources.get(link.prop.source_id),
+                    Some(ModulationSource::Automation { lane_id: id }) if *id == lane_id
+                )
+            })
+            .map(|link| &link.prop.target)
     }
 
     /// ======================================
@@ -676,9 +735,7 @@ mod tests {
         let result = app.add_automation_lane(
             AutomationTarget::Master(MasterAutomationTarget::TempoBpm),
             "Tempo",
-            40.0,
-            240.0,
-            140.0,
+            NormalizedF64::new(0.5),
         );
         assert!(result.is_ok());
         if let Ok((lane, _)) = result {
@@ -701,7 +758,7 @@ mod tests {
 
         let mut links = Vec::new();
         for target in targets.clone() {
-            let result = app.add_automation_lane(target, "Parameter", 0.0, 1.0, 0.5);
+            let result = app.add_automation_lane(target, "Parameter", NormalizedF64::new(0.5));
             assert!(result.is_ok());
             if let Ok((_, link_id)) = result {
                 links.push(link_id);
@@ -728,7 +785,7 @@ mod tests {
     fn disabling_lane_preserves_its_points_source_and_link() {
         let mut app = ApplicationState::default();
         let target = AutomationTarget::Master(MasterAutomationTarget::TempoBpm);
-        let result = app.add_automation_lane(target, "Tempo", 40.0, 240.0, 120.0);
+        let result = app.add_automation_lane(target, "Tempo", NormalizedF64::new(0.4));
         assert!(result.is_ok());
         let Ok((lane, link_id)) = result else {
             return;
@@ -760,7 +817,7 @@ mod tests {
             generator_id,
             param_id: 10,
         };
-        let result = app.add_automation_lane(target, "Cutoff", 0.0, 1.0, 0.5);
+        let result = app.add_automation_lane(target, "Cutoff", NormalizedF64::new(0.5));
         assert!(result.is_ok());
 
         let removal = app.remove_track(track_id);

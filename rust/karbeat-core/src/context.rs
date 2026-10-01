@@ -308,8 +308,6 @@ impl DawContext {
         let lane_audio_graph = AudioAutomationLane {
             points: lane.points.clone(),
             enabled: lane.enabled,
-            min: lane.min,
-            max: lane.max,
             default_value: lane.default_value,
         };
         let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane {

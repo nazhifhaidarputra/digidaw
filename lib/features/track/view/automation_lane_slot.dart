@@ -8,9 +8,12 @@ import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/track/models/automation_lane_editor.dart';
 import 'package:karbeat/features/track/services/automation_curve_evaluator.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
+import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_point_context_menu.dart';
+import 'package:karbeat/features/track/view/automation_range_context_menu.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'automation_curve_painter.dart';
 import 'dart:math' as math;
@@ -54,6 +57,15 @@ typedef _TensionDrag = ({
   double direction,
 });
 
+/// In-progress drag of one Bezier handle of the segment starting at
+/// [pointId]; [startHandles] detects a drag that changed nothing.
+typedef _BezierDrag = ({
+  int pointId,
+  int nextPointId,
+  bool isFirst,
+  BezierHandlesDto startHandles,
+});
+
 class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   /// Minimum segment width in pixels before a tension handle is offered.
   static const double _minTensionSegmentWidth = 16.0;
@@ -63,12 +75,27 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   int? _draggedPointId;
   _PointDragOrigin? _pointDragOrigin;
   _TensionDrag? _tensionDrag;
+  _BezierDrag? _bezierDrag;
+
+  /// Whether a Select tool drag is painting a range on this lane.
+  bool _isSelectingRange = false;
+
+  /// Tick where the Select tool was pressed. The range only starts once the
+  /// pointer moves, so pressing inside an existing range keeps it.
+  int? _selectionPressTick;
   int? _hoveredTensionPointId;
   IMap<AutomationPointId, AutomationPointHitbox> _pointHitboxes =
       const IMapConst({});
   IList<AutomationTensionHitbox> _tensionHitboxes = const IListConst([]);
+  IList<AutomationBezierHitbox> _bezierHitboxes = const IListConst([]);
 
-  bool get _isInteracting => _draggedPointId != null || _tensionDrag != null;
+  bool get _isInteracting =>
+      _draggedPointId != null ||
+      _tensionDrag != null ||
+      _bezierDrag != null ||
+      _isSelectingRange;
+
+  CurveSampler get _sampler => ref.read(curveSamplerProvider);
 
   @override
   void didUpdateWidget(covariant AutomationLaneSlot oldWidget) {
@@ -92,12 +119,9 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     return normalized.clamp(0.0, 1.0);
   }
 
-  /// Optional: Use this if you ever need to draw a UI tooltip while dragging
-  /// to show the user the real-world parameter value (e.g., " -6.0 dB").
-  double _getDenormalizedValue(double normalizedValue) {
-    return widget.lane.min +
-        normalizedValue * (widget.lane.max - widget.lane.min);
-  }
+  /// Snapped tick under the horizontal pixel position [localX].
+  int _tickAt(double localX) =>
+      _snapTicks(_getTicksFromX(localX).toInt()).clamp(0, 999999999);
 
   int _snapTicks(int ticks) {
     final state = ref.read(workspaceStateProvider);
@@ -135,34 +159,76 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     return null;
   }
 
-  /// Builds one tension handle per shaped segment, placed on the curve at the
-  /// segment's time midpoint.
+  /// Builds one tension handle per segment whose curve bends with tension,
+  /// placed on the curve at the segment's time midpoint.
   IList<AutomationTensionHitbox> _buildTensionHitboxes({
-    required Iterable<AutomationPointDto> points,
+    required List<AutomationPointDto> points,
     required double zoom,
     required double height,
   }) {
     const hitRadius = 7.0;
-    final sorted = points.toList();
+    if (points.length < 2) return const IListConst([]);
+    final sampler = _sampler;
+    final midpoints = sampler.segmentMidpoints(points);
     final handles = <AutomationTensionHitbox>[];
 
-    for (var i = 0; i < sorted.length - 1; i++) {
-      final from = sorted[i];
-      final to = sorted[i + 1];
-      if (!automationSegmentSupportsTension(from)) continue;
+    for (var i = 0; i < points.length - 1 && i < midpoints.length; i++) {
+      final from = points[i];
+      final to = points[i + 1];
+      if (!sampler.traits(from.curveType).supportsTension) continue;
 
       final x1 = from.timeTicks / zoom;
       final x2 = to.timeTicks / zoom;
       if (x2 - x1 < _minTensionSegmentWidth) continue;
 
-      final value = evaluateAutomationSegment(from, to.value, 0.5);
-      final center = Offset((x1 + x2) / 2, height - value * height);
+      final center = Offset((x1 + x2) / 2, height - midpoints[i] * height);
       handles.add((
         pointId: from.id,
         nextPointId: to.id,
         center: center,
         rect: Rect.fromCircle(center: center, radius: hitRadius),
       ));
+    }
+    return handles.lock;
+  }
+
+  /// Builds the two handles of every Bezier segment. A handle's horizontal
+  /// position is a fraction of its segment and its height a lane value.
+  IList<AutomationBezierHitbox> _buildBezierHitboxes({
+    required List<AutomationPointDto> points,
+    required double zoom,
+    required double height,
+  }) {
+    const hitRadius = 8.0;
+    final sampler = _sampler;
+    final handles = <AutomationBezierHitbox>[];
+
+    for (var i = 0; i < points.length - 1; i++) {
+      final from = points[i];
+      final to = points[i + 1];
+      final bezier = from.handles;
+      if (bezier == null || !sampler.traits(from.curveType).usesHandles) {
+        continue;
+      }
+
+      final x1 = from.timeTicks / zoom;
+      final x2 = to.timeTicks / zoom;
+      if (x2 - x1 < _minTensionSegmentWidth) continue;
+
+      Offset at(double x, double y) =>
+          Offset(x1 + (x2 - x1) * x, height - y.clamp(0.0, 1.0) * height);
+      for (final (isFirst, center, anchor) in [
+        (true, at(bezier.x1, bezier.y1), at(0, from.value)),
+        (false, at(bezier.x2, bezier.y2), at(1, to.value)),
+      ]) {
+        handles.add((
+          pointId: from.id,
+          isFirst: isFirst,
+          center: center,
+          anchor: anchor,
+          rect: Rect.fromCircle(center: center, radius: hitRadius),
+        ));
+      }
     }
     return handles.lock;
   }
@@ -199,6 +265,22 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final pointId = _findPointIdAt(event.localPosition);
 
     if (isRightClick) {
+      // A paste from the lane menu lands where the lane was right-clicked.
+      ref
+          .read(automationEditorProvider.notifier)
+          .markPasteTarget(
+            laneId: widget.lane.id,
+            tick: _tickAt(event.localPosition.dx),
+          );
+      return;
+    }
+
+    // The Select tool paints a time range instead of editing points.
+    if (ref.read(workspaceStateProvider).selectedTool == ToolSelection.select) {
+      setState(() {
+        _isSelectingRange = true;
+        _selectionPressTick = _tickAt(event.localPosition.dx);
+      });
       return;
     }
 
@@ -218,14 +300,21 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       return;
     }
 
+    final bezierHandle = _bezierHitboxes
+        .where((hitbox) => hitbox.rect.contains(event.localPosition))
+        .firstOrNull;
+    if (bezierHandle != null) {
+      _startBezierDrag(bezierHandle);
+      return;
+    }
+
     final tensionHandle = _findTensionHandleAt(event.localPosition);
     if (tensionHandle != null) {
       _startTensionDrag(tensionHandle, event.localPosition.dy);
       return;
     }
 
-    final rawTicks = _getTicksFromX(event.localPosition.dx).toInt();
-    final snappedTicks = _snapTicks(rawTicks).clamp(0, 999999999);
+    final snappedTicks = _tickAt(event.localPosition.dx);
     final value = _getValueFromY(event.localPosition.dy);
 
     final tempId = -DateTime.now().microsecondsSinceEpoch;
@@ -257,9 +346,88 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
         pointId: from.id,
         startY: startY,
         startTension: from.tension,
-        direction: automationTensionDirection(from, to.value),
+        direction: _tensionDirection(from, to.value),
       );
       _localPoints = points.toIList();
+    });
+  }
+
+  /// Direction in which raising tension moves the handle, so dragging up
+  /// always raises the curve: `1` or `-1`. Count-driven curves simply get
+  /// more steps or cycles when dragged up.
+  double _tensionDirection(AutomationPointDto from, double toValue) {
+    final traits = _sampler.traits(from.curveType);
+    final rising = toValue - from.value;
+    if (traits.tensionIsCount || rising == 0) return 1;
+    return traits.tensionInverted ? -rising.sign : rising.sign;
+  }
+
+  void _startBezierDrag(AutomationBezierHitbox handle) {
+    final points = widget.lane.points;
+    final index = points.indexWhere((p) => p.id == handle.pointId);
+    if (index < 0 || index + 1 >= points.length) return;
+    final handles = points[index].handles;
+    if (handles == null) return;
+
+    setState(() {
+      _bezierDrag = (
+        pointId: handle.pointId,
+        nextPointId: points[index + 1].id,
+        isFirst: handle.isFirst,
+        startHandles: handles,
+      );
+      _localPoints = points.toIList();
+    });
+  }
+
+  void _updateBezierDrag(_BezierDrag drag, Offset local) {
+    final points = _localPoints;
+    if (points == null) return;
+    final index = points.indexWhere((p) => p.id == drag.pointId);
+    final nextIndex = points.indexWhere((p) => p.id == drag.nextPointId);
+    if (index == -1 || nextIndex == -1) return;
+    final from = points[index];
+    final handles = from.handles;
+    if (handles == null) return;
+
+    final zoom = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    final x1 = from.timeTicks / zoom;
+    final x2 = points[nextIndex].timeTicks / zoom;
+    if (x2 <= x1) return;
+    // Handles stay inside their segment so the curve never runs back in time.
+    final x = ((local.dx - x1) / (x2 - x1)).clamp(0.0, 1.0);
+    final y = _getValueFromY(local.dy);
+
+    setState(() {
+      _localPoints = points.replace(
+        index,
+        from.copyWith(
+          handles: drag.isFirst
+              ? handles.copyWith(x1: x, y1: y)
+              : handles.copyWith(x2: x, y2: y),
+        ),
+      );
+    });
+  }
+
+  void _finishBezierDrag(_BezierDrag drag) {
+    final handles = _localPoints
+        ?.where((p) => p.id == drag.pointId)
+        .firstOrNull
+        ?.handles;
+    if (handles != null && handles != drag.startHandles) {
+      ref
+          .read(automationEditorProvider.notifier)
+          .setPointHandles(
+            laneId: widget.lane.id,
+            pointId: drag.pointId,
+            handles: handles,
+          );
+    }
+
+    setState(() {
+      _bezierDrag = null;
+      _localPoints = null; // Yield control back to Rust
     });
   }
 
@@ -304,6 +472,25 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    if (_isSelectingRange) {
+      final editor = ref.read(automationEditorProvider.notifier);
+      final tick = _tickAt(event.localPosition.dx);
+      final pressTick = _selectionPressTick;
+      if (pressTick != null) {
+        if (tick == pressTick) return;
+        editor.startSelection(laneId: widget.lane.id, tick: pressTick);
+        _selectionPressTick = null;
+      }
+      editor.extendSelection(laneId: widget.lane.id, tick: tick);
+      return;
+    }
+
+    final bezierDrag = _bezierDrag;
+    if (bezierDrag != null) {
+      _updateBezierDrag(bezierDrag, event.localPosition);
+      return;
+    }
+
     final tensionDrag = _tensionDrag;
     if (tensionDrag != null) {
       _updateTensionDrag(tensionDrag, event.localPosition.dy);
@@ -317,8 +504,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
           .firstOrNull;
       if (point == null) return;
 
-      final rawTicks = _getTicksFromX(event.localPosition.dx).toInt();
-      final snappedTicks = _snapTicks(rawTicks).clamp(0, 999999999);
+      final snappedTicks = _tickAt(event.localPosition.dx);
       final value = _getValueFromY(event.localPosition.dy);
 
       setState(() {
@@ -333,6 +519,33 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    if (_isSelectingRange) {
+      // A click without a drag clears the range, unless it landed inside it.
+      final pressTick = _selectionPressTick;
+      final range = ref
+          .read(automationEditorProvider)
+          .selectionOf(widget.lane.id);
+      final pressedInside =
+          range != null &&
+          pressTick != null &&
+          pressTick >= range.$1 &&
+          pressTick <= range.$2;
+      if (pressTick != null && !pressedInside) {
+        ref.read(automationEditorProvider.notifier).clearSelection();
+      }
+      setState(() {
+        _isSelectingRange = false;
+        _selectionPressTick = null;
+      });
+      return;
+    }
+
+    final bezierDrag = _bezierDrag;
+    if (bezierDrag != null) {
+      _finishBezierDrag(bezierDrag);
+      return;
+    }
+
     final tensionDrag = _tensionDrag;
     if (tensionDrag != null) {
       _finishTensionDrag(tensionDrag);
@@ -448,8 +661,41 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       _draggedPointId = null;
       _pointDragOrigin = null;
       _tensionDrag = null;
+      _bezierDrag = null;
+      _isSelectingRange = false;
+      _selectionPressTick = null;
       _localPoints = null;
     });
+  }
+
+  /// The selected range; right-click or long-press it for the range actions.
+  Widget _buildSelection((int, int) range, double zoomLevel) {
+    final colors = Theme.of(context).colorScheme;
+    void openMenu() => showAutomationRangeContextMenu(
+      context: context,
+      ref: ref,
+      lane: widget.lane,
+    );
+
+    return Positioned(
+      left: range.$1 / zoomLevel,
+      top: 0,
+      bottom: 0,
+      width: math.max(2.0, (range.$2 - range.$1) / zoomLevel),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onSecondaryTap: openMenu,
+        onLongPress: openMenu,
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.primary.withValues(alpha: 0.2),
+            border: Border.symmetric(
+              vertical: BorderSide(color: colors.primary, width: 2),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Build Tooltip for edited automation point
@@ -471,8 +717,11 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final px = p.timeTicks / zoomLevel;
     final py = widget.height - (p.value * widget.height);
 
-    final realVal = _getDenormalizedValue(p.value);
-    return _positionedTooltip(Offset(px, py), realVal.toStringAsFixed(2));
+    // The automated parameter formats the value in its own unit.
+    return _positionedTooltip(
+      Offset(px, py),
+      _sampler.valueText(widget.lane.id, p.value),
+    );
   }
 
   Widget _buildTensionTooltip(_TensionDrag drag) {
@@ -483,9 +732,12 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     if (handle == null || point == null) {
       return const Positioned.fill(child: SizedBox.shrink());
     }
+    final sampler = _sampler;
     return _positionedTooltip(
       handle.center,
-      'Tension ${point.tension.toStringAsFixed(2)}',
+      sampler.traits(point.curveType).tensionIsCount
+          ? 'Count ${sampler.tensionCount(point.tension)}'
+          : 'Tension ${point.tension.toStringAsFixed(2)}',
     );
   }
 
@@ -554,6 +806,12 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       ),
     );
 
+    final selection = ref.watch(
+      automationEditorProvider.select((s) => s.selectionOf(laneId)),
+    );
+    final isSelectTool = state.selectedTool == ToolSelection.select;
+    final sampler = ref.watch(curveSamplerProvider);
+
     final displayLane = _localPoints != null
         ? widget.lane.copyWith(points: _localPoints!.toList())
         : widget.lane;
@@ -564,6 +822,11 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       height: widget.height,
     );
     _tensionHitboxes = _buildTensionHitboxes(
+      points: displayLane.points,
+      zoom: zoomLevel,
+      height: widget.height,
+    );
+    _bezierHitboxes = _buildBezierHitboxes(
       points: displayLane.points,
       zoom: zoomLevel,
       height: widget.height,
@@ -634,6 +897,8 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                       trackColor: widget.trackColor,
                       disabledColor: colors.outline,
                       pointColor: colors.onSurface,
+                      sampler: sampler,
+                      bezierHandles: _bezierHitboxes,
                       highlightedPointId:
                           _draggedPointId ?? contextPointId ?? hoveredPointId,
                       tensionHandles: _tensionHitboxes,
@@ -644,16 +909,32 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                 ),
               ),
 
-              // 3. Tension handles, below points so points win overlaps
-              for (final hitbox in _tensionHitboxes)
-                if (hitbox.pointId >= 0 && hitbox.nextPointId >= 0)
-                  _buildTensionHitArea(hitbox),
+              // 3. Range painted with the Select tool
+              if (selection != null && selection.$2 > selection.$1)
+                _buildSelection(selection, zoomLevel),
 
-              // 4. Point hit areas for hover and secondary click actions
-              for (final hitbox in _pointHitboxes.values)
-                if (hitbox.pointId >= 0) _buildPointHitArea(hitbox),
+              // While the Select tool is active the lane only paints ranges,
+              // so the point and handle hit areas are left out.
+              if (!isSelectTool) ...[
+                // 4. Tension handles, below points so points win overlaps
+                for (final hitbox in _tensionHitboxes)
+                  if (hitbox.pointId >= 0 && hitbox.nextPointId >= 0)
+                    _buildTensionHitArea(hitbox),
 
-              // 5. Tooltip
+                // 5. Bezier handles
+                for (final hitbox in _bezierHitboxes)
+                  Positioned.fromRect(
+                    key: ValueKey(('bezier', hitbox.pointId, hitbox.isFirst)),
+                    rect: hitbox.rect,
+                    child: const MouseRegion(cursor: SystemMouseCursors.move),
+                  ),
+
+                // 6. Point hit areas for hover and secondary click actions
+                for (final hitbox in _pointHitboxes.values)
+                  if (hitbox.pointId >= 0) _buildPointHitArea(hitbox),
+              ],
+
+              // 7. Tooltip
               _buildTooltip(hoveredPointId),
             ],
           ),

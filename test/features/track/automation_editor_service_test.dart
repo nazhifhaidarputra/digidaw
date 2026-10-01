@@ -72,14 +72,47 @@ class _ProjectNotifier extends ProjectNotifier {
           ),
         ],
         enabled: true,
-        min: 0,
-        max: 1,
         defaultValue: 0,
       ),
     }),
     modulationSources: const IMapConst<int, ModulationSourceDto>({}),
   );
 }
+
+const _point = AutomationPointDto(
+  id: 10,
+  timeTicks: 0,
+  value: 0.25,
+  curveType: AutomationCurveTypeDto.linear,
+  tension: 0,
+);
+
+AutomationLaneDto _laneWith(List<AutomationPointDto> points) =>
+    AutomationLaneDto(
+      id: 1,
+      label: 'Volume',
+      points: points,
+      enabled: true,
+      defaultValue: 0,
+    );
+
+/// What the backend returns for a copied range: times relative to its start.
+const _copied = [
+  AutomationPointDto(
+    id: 0,
+    timeTicks: 0,
+    value: 0.2,
+    curveType: AutomationCurveTypeDto.logarithmic,
+    tension: 0,
+  ),
+  AutomationPointDto(
+    id: 0,
+    timeTicks: 480,
+    value: 0.8,
+    curveType: AutomationCurveTypeDto.linear,
+    tension: 0,
+  ),
+];
 
 void main() {
   final api = _MockRustLibApi();
@@ -100,8 +133,34 @@ void main() {
         value: any(named: 'value'),
         tension: any(named: 'tension'),
         curveType: any(named: 'curveType'),
+        handles: any(named: 'handles'),
       ),
-    ).thenAnswer((_) async => 0);
+    ).thenAnswer(
+      // The backend answers with the lane as it is after the edit.
+      (invocation) async => _laneWith([
+        _point.copyWith(
+          value: invocation.namedArguments[#value] as double? ?? _point.value,
+        ),
+      ]),
+    );
+    when(
+      () => api.crateApiAutomationCopyAutomationRange(
+        ctx: any(named: 'ctx'),
+        automationId: any(named: 'automationId'),
+        startTick: any(named: 'startTick'),
+        endTick: any(named: 'endTick'),
+      ),
+    ).thenAnswer((_) async => _copied);
+    when(
+      () => api.crateApiAutomationPasteAutomationPoints(
+        ctx: any(named: 'ctx'),
+        automationId: any(named: 'automationId'),
+        atTick: any(named: 'atTick'),
+        points: any(named: 'points'),
+        lengthTicks: any(named: 'lengthTicks'),
+        targetLength: any(named: 'targetLength'),
+      ),
+    ).thenAnswer((_) async => _laneWith([_point, ..._copied]));
   });
 
   Future<ProviderContainer> createProjectContainer() async {
@@ -151,6 +210,85 @@ void main() {
         automationId: any(named: 'automationId'),
         id: any(named: 'id'),
         value: any(named: 'value'),
+      ),
+    );
+  });
+
+  test('a selected range is copied and pasted to fit another range', () async {
+    final container = await createProjectContainer();
+    final editor = container.read(automationEditorProvider.notifier);
+
+    // Dragging right to left still selects the range in tick order.
+    editor.startSelection(laneId: 1, tick: 960);
+    editor.extendSelection(laneId: 1, tick: 480);
+    expect(container.read(automationEditorProvider).selectionOf(1), (480, 960));
+    expect(container.read(automationEditorProvider).selectionOf(2), isNull);
+
+    expect(await editor.copySelection(1), isTrue);
+    expect(
+      container.read(automationEditorProvider).clipboard,
+      AutomationLanePointClipboard.curve(
+        points: _copied.lock,
+        lengthTicks: 480,
+      ),
+    );
+
+    editor.startSelection(laneId: 1, tick: 1920);
+    editor.extendSelection(laneId: 1, tick: 3840);
+    await editor.pasteCurve(laneId: 1, atTick: 0, fitSelection: true);
+
+    verify(
+      () => api.crateApiAutomationPasteAutomationPoints(
+        ctx: any(named: 'ctx'),
+        automationId: 1,
+        atTick: 1920,
+        points: _copied,
+        lengthTicks: 480,
+        targetLength: 1920,
+      ),
+    ).called(1);
+    expect(
+      container.read(projectProvider).requireValue.automationPool[1]!.points,
+      hasLength(3),
+    );
+  });
+
+  test('a paste lands on the range start, else the right-clicked tick', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final editor = container.read(automationEditorProvider.notifier);
+    int pasteTick(int laneId) =>
+        container.read(automationEditorProvider).pasteTickFor(laneId);
+
+    expect(pasteTick(1), 0);
+
+    editor.markPasteTarget(laneId: 1, tick: 720);
+    expect(pasteTick(1), 720);
+    expect(pasteTick(2), 0);
+
+    editor.startSelection(laneId: 1, tick: 2400);
+    editor.extendSelection(laneId: 1, tick: 1440);
+    expect(pasteTick(1), 1440);
+
+    editor.clearSelection();
+    expect(pasteTick(1), 720);
+  });
+
+  test('pasting a curve with a value clipboard is a no-op', () async {
+    final container = await createProjectContainer();
+    final editor = container.read(automationEditorProvider.notifier);
+
+    editor.copyPointValue(laneId: 1, pointId: 10);
+    await editor.pasteCurve(laneId: 1, atTick: 0);
+
+    verifyNever(
+      () => api.crateApiAutomationPasteAutomationPoints(
+        ctx: any(named: 'ctx'),
+        automationId: any(named: 'automationId'),
+        atTick: any(named: 'atTick'),
+        points: any(named: 'points'),
+        lengthTicks: any(named: 'lengthTicks'),
+        targetLength: any(named: 'targetLength'),
       ),
     );
   });

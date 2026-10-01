@@ -250,6 +250,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AutomationCurveTraitsDto dco_decode_automation_curve_traits_dto(dynamic raw);
+
+  @protected
   AutomationCurveTypeDto dco_decode_automation_curve_type_dto(dynamic raw);
 
   @protected
@@ -260,6 +263,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AutomationTargetDto dco_decode_automation_target_dto(dynamic raw);
+
+  @protected
+  BezierHandlesDto dco_decode_bezier_handles_dto(dynamic raw);
 
   @protected
   BitDepthDTO dco_decode_bit_depth_dto(dynamic raw);
@@ -300,6 +306,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AutomationTargetDto dco_decode_box_autoadd_automation_target_dto(dynamic raw);
+
+  @protected
+  BezierHandlesDto dco_decode_box_autoadd_bezier_handles_dto(dynamic raw);
 
   @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
@@ -378,6 +387,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   UiExternalPluginDescriptor
   dco_decode_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
+
+  @protected
+  UiFade dco_decode_box_autoadd_ui_fade(dynamic raw);
 
   @protected
   UiGainEnvelope dco_decode_box_autoadd_ui_gain_envelope(dynamic raw);
@@ -479,6 +491,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw);
+
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
@@ -714,6 +732,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AutomationLaneDto? dco_decode_opt_box_autoadd_automation_lane_dto(
     dynamic raw,
   );
+
+  @protected
+  BezierHandlesDto? dco_decode_opt_box_autoadd_bezier_handles_dto(dynamic raw);
 
   @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
@@ -1358,6 +1379,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AutomationCurveTraitsDto sse_decode_automation_curve_traits_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AutomationCurveTypeDto sse_decode_automation_curve_type_dto(
     SseDeserializer deserializer,
   );
@@ -1376,6 +1402,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AutomationTargetDto sse_decode_automation_target_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  BezierHandlesDto sse_decode_bezier_handles_dto(SseDeserializer deserializer);
 
   @protected
   BitDepthDTO sse_decode_bit_depth_dto(SseDeserializer deserializer);
@@ -1418,6 +1447,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AutomationTargetDto sse_decode_box_autoadd_automation_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BezierHandlesDto sse_decode_box_autoadd_bezier_handles_dto(
     SseDeserializer deserializer,
   );
 
@@ -1522,6 +1556,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_box_autoadd_ui_external_plugin_descriptor(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiFade sse_decode_box_autoadd_ui_fade(SseDeserializer deserializer);
 
   @protected
   UiGainEnvelope sse_decode_box_autoadd_ui_gain_envelope(
@@ -1653,6 +1690,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer);
+
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
   @protected
   List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
@@ -1930,6 +1973,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AutomationLaneDto? sse_decode_opt_box_autoadd_automation_lane_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BezierHandlesDto? sse_decode_opt_box_autoadd_bezier_handles_dto(
     SseDeserializer deserializer,
   );
 
@@ -2719,6 +2767,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_automation_curve_traits_dto(
+    AutomationCurveTraitsDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_automation_curve_type_dto(
     AutomationCurveTypeDto self,
     SseSerializer serializer,
@@ -2739,6 +2793,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_automation_target_dto(
     AutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_bezier_handles_dto(
+    BezierHandlesDto self,
     SseSerializer serializer,
   );
 
@@ -2790,6 +2850,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_automation_target_dto(
     AutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_bezier_handles_dto(
+    BezierHandlesDto self,
     SseSerializer serializer,
   );
 
@@ -2909,6 +2975,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UiExternalPluginDescriptor self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_ui_fade(UiFade self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_ui_gain_envelope(
@@ -3069,6 +3138,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_f_32_strict(
     Float32List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
     SseSerializer serializer,
   );
 
@@ -3402,6 +3483,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_automation_lane_dto(
     AutomationLaneDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_bezier_handles_dto(
+    BezierHandlesDto? self,
     SseSerializer serializer,
   );
 

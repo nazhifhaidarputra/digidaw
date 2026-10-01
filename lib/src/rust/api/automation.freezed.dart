@@ -12,9 +12,269 @@ part of 'automation.dart';
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
+mixin _$AutomationCurveTraitsDto {
+
+ bool get supportsTension; bool get tensionInverted; bool get tensionIsCount; bool get usesHandles;
+/// Create a copy of AutomationCurveTraitsDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AutomationCurveTraitsDtoCopyWith<AutomationCurveTraitsDto> get copyWith => _$AutomationCurveTraitsDtoCopyWithImpl<AutomationCurveTraitsDto>(this as AutomationCurveTraitsDto, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationCurveTraitsDto&&(identical(other.supportsTension, supportsTension) || other.supportsTension == supportsTension)&&(identical(other.tensionInverted, tensionInverted) || other.tensionInverted == tensionInverted)&&(identical(other.tensionIsCount, tensionIsCount) || other.tensionIsCount == tensionIsCount)&&(identical(other.usesHandles, usesHandles) || other.usesHandles == usesHandles));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,supportsTension,tensionInverted,tensionIsCount,usesHandles);
+
+@override
+String toString() {
+  return 'AutomationCurveTraitsDto(supportsTension: $supportsTension, tensionInverted: $tensionInverted, tensionIsCount: $tensionIsCount, usesHandles: $usesHandles)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AutomationCurveTraitsDtoCopyWith<$Res>  {
+  factory $AutomationCurveTraitsDtoCopyWith(AutomationCurveTraitsDto value, $Res Function(AutomationCurveTraitsDto) _then) = _$AutomationCurveTraitsDtoCopyWithImpl;
+@useResult
+$Res call({
+ bool supportsTension, bool tensionInverted, bool tensionIsCount, bool usesHandles
+});
+
+
+
+
+}
+/// @nodoc
+class _$AutomationCurveTraitsDtoCopyWithImpl<$Res>
+    implements $AutomationCurveTraitsDtoCopyWith<$Res> {
+  _$AutomationCurveTraitsDtoCopyWithImpl(this._self, this._then);
+
+  final AutomationCurveTraitsDto _self;
+  final $Res Function(AutomationCurveTraitsDto) _then;
+
+/// Create a copy of AutomationCurveTraitsDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? supportsTension = null,Object? tensionInverted = null,Object? tensionIsCount = null,Object? usesHandles = null,}) {
+  return _then(_self.copyWith(
+supportsTension: null == supportsTension ? _self.supportsTension : supportsTension // ignore: cast_nullable_to_non_nullable
+as bool,tensionInverted: null == tensionInverted ? _self.tensionInverted : tensionInverted // ignore: cast_nullable_to_non_nullable
+as bool,tensionIsCount: null == tensionIsCount ? _self.tensionIsCount : tensionIsCount // ignore: cast_nullable_to_non_nullable
+as bool,usesHandles: null == usesHandles ? _self.usesHandles : usesHandles // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [AutomationCurveTraitsDto].
+extension AutomationCurveTraitsDtoPatterns on AutomationCurveTraitsDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _AutomationCurveTraitsDto value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _AutomationCurveTraitsDto() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _AutomationCurveTraitsDto value)  $default,){
+final _that = this;
+switch (_that) {
+case _AutomationCurveTraitsDto():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _AutomationCurveTraitsDto value)?  $default,){
+final _that = this;
+switch (_that) {
+case _AutomationCurveTraitsDto() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool supportsTension,  bool tensionInverted,  bool tensionIsCount,  bool usesHandles)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _AutomationCurveTraitsDto() when $default != null:
+return $default(_that.supportsTension,_that.tensionInverted,_that.tensionIsCount,_that.usesHandles);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool supportsTension,  bool tensionInverted,  bool tensionIsCount,  bool usesHandles)  $default,) {final _that = this;
+switch (_that) {
+case _AutomationCurveTraitsDto():
+return $default(_that.supportsTension,_that.tensionInverted,_that.tensionIsCount,_that.usesHandles);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool supportsTension,  bool tensionInverted,  bool tensionIsCount,  bool usesHandles)?  $default,) {final _that = this;
+switch (_that) {
+case _AutomationCurveTraitsDto() when $default != null:
+return $default(_that.supportsTension,_that.tensionInverted,_that.tensionIsCount,_that.usesHandles);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _AutomationCurveTraitsDto implements AutomationCurveTraitsDto {
+  const _AutomationCurveTraitsDto({required this.supportsTension, required this.tensionInverted, required this.tensionIsCount, required this.usesHandles});
+  
+
+@override final  bool supportsTension;
+@override final  bool tensionInverted;
+@override final  bool tensionIsCount;
+@override final  bool usesHandles;
+
+/// Create a copy of AutomationCurveTraitsDto
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$AutomationCurveTraitsDtoCopyWith<_AutomationCurveTraitsDto> get copyWith => __$AutomationCurveTraitsDtoCopyWithImpl<_AutomationCurveTraitsDto>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationCurveTraitsDto&&(identical(other.supportsTension, supportsTension) || other.supportsTension == supportsTension)&&(identical(other.tensionInverted, tensionInverted) || other.tensionInverted == tensionInverted)&&(identical(other.tensionIsCount, tensionIsCount) || other.tensionIsCount == tensionIsCount)&&(identical(other.usesHandles, usesHandles) || other.usesHandles == usesHandles));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,supportsTension,tensionInverted,tensionIsCount,usesHandles);
+
+@override
+String toString() {
+  return 'AutomationCurveTraitsDto(supportsTension: $supportsTension, tensionInverted: $tensionInverted, tensionIsCount: $tensionIsCount, usesHandles: $usesHandles)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$AutomationCurveTraitsDtoCopyWith<$Res> implements $AutomationCurveTraitsDtoCopyWith<$Res> {
+  factory _$AutomationCurveTraitsDtoCopyWith(_AutomationCurveTraitsDto value, $Res Function(_AutomationCurveTraitsDto) _then) = __$AutomationCurveTraitsDtoCopyWithImpl;
+@override @useResult
+$Res call({
+ bool supportsTension, bool tensionInverted, bool tensionIsCount, bool usesHandles
+});
+
+
+
+
+}
+/// @nodoc
+class __$AutomationCurveTraitsDtoCopyWithImpl<$Res>
+    implements _$AutomationCurveTraitsDtoCopyWith<$Res> {
+  __$AutomationCurveTraitsDtoCopyWithImpl(this._self, this._then);
+
+  final _AutomationCurveTraitsDto _self;
+  final $Res Function(_AutomationCurveTraitsDto) _then;
+
+/// Create a copy of AutomationCurveTraitsDto
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? supportsTension = null,Object? tensionInverted = null,Object? tensionIsCount = null,Object? usesHandles = null,}) {
+  return _then(_AutomationCurveTraitsDto(
+supportsTension: null == supportsTension ? _self.supportsTension : supportsTension // ignore: cast_nullable_to_non_nullable
+as bool,tensionInverted: null == tensionInverted ? _self.tensionInverted : tensionInverted // ignore: cast_nullable_to_non_nullable
+as bool,tensionIsCount: null == tensionIsCount ? _self.tensionIsCount : tensionIsCount // ignore: cast_nullable_to_non_nullable
+as bool,usesHandles: null == usesHandles ? _self.usesHandles : usesHandles // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$AutomationLaneDto {
 
- int get id; String get label; List<AutomationPointDto> get points; bool get enabled; double get min; double get max; double get defaultValue;
+ int get id; String get label; List<AutomationPointDto> get points; bool get enabled; double get defaultValue;
 /// Create a copy of AutomationLaneDto
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +285,16 @@ $AutomationLaneDtoCopyWith<AutomationLaneDto> get copyWith => _$AutomationLaneDt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationLaneDto&&(identical(other.id, id) || other.id == id)&&(identical(other.label, label) || other.label == label)&&const DeepCollectionEquality().equals(other.points, points)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.min, min) || other.min == min)&&(identical(other.max, max) || other.max == max)&&(identical(other.defaultValue, defaultValue) || other.defaultValue == defaultValue));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationLaneDto&&(identical(other.id, id) || other.id == id)&&(identical(other.label, label) || other.label == label)&&const DeepCollectionEquality().equals(other.points, points)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.defaultValue, defaultValue) || other.defaultValue == defaultValue));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,label,const DeepCollectionEquality().hash(points),enabled,min,max,defaultValue);
+int get hashCode => Object.hash(runtimeType,id,label,const DeepCollectionEquality().hash(points),enabled,defaultValue);
 
 @override
 String toString() {
-  return 'AutomationLaneDto(id: $id, label: $label, points: $points, enabled: $enabled, min: $min, max: $max, defaultValue: $defaultValue)';
+  return 'AutomationLaneDto(id: $id, label: $label, points: $points, enabled: $enabled, defaultValue: $defaultValue)';
 }
 
 
@@ -45,7 +305,7 @@ abstract mixin class $AutomationLaneDtoCopyWith<$Res>  {
   factory $AutomationLaneDtoCopyWith(AutomationLaneDto value, $Res Function(AutomationLaneDto) _then) = _$AutomationLaneDtoCopyWithImpl;
 @useResult
 $Res call({
- int id, String label, List<AutomationPointDto> points, bool enabled, double min, double max, double defaultValue
+ int id, String label, List<AutomationPointDto> points, bool enabled, double defaultValue
 });
 
 
@@ -62,15 +322,13 @@ class _$AutomationLaneDtoCopyWithImpl<$Res>
 
 /// Create a copy of AutomationLaneDto
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? label = null,Object? points = null,Object? enabled = null,Object? min = null,Object? max = null,Object? defaultValue = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? label = null,Object? points = null,Object? enabled = null,Object? defaultValue = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String,points: null == points ? _self.points : points // ignore: cast_nullable_to_non_nullable
 as List<AutomationPointDto>,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,min: null == min ? _self.min : min // ignore: cast_nullable_to_non_nullable
-as double,max: null == max ? _self.max : max // ignore: cast_nullable_to_non_nullable
-as double,defaultValue: null == defaultValue ? _self.defaultValue : defaultValue // ignore: cast_nullable_to_non_nullable
+as bool,defaultValue: null == defaultValue ? _self.defaultValue : defaultValue // ignore: cast_nullable_to_non_nullable
 as double,
   ));
 }
@@ -153,10 +411,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double min,  double max,  double defaultValue)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double defaultValue)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AutomationLaneDto() when $default != null:
-return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.max,_that.defaultValue);case _:
+return $default(_that.id,_that.label,_that.points,_that.enabled,_that.defaultValue);case _:
   return orElse();
 
 }
@@ -174,10 +432,10 @@ return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double min,  double max,  double defaultValue)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double defaultValue)  $default,) {final _that = this;
 switch (_that) {
 case _AutomationLaneDto():
-return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.max,_that.defaultValue);}
+return $default(_that.id,_that.label,_that.points,_that.enabled,_that.defaultValue);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -191,10 +449,10 @@ return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double min,  double max,  double defaultValue)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String label,  List<AutomationPointDto> points,  bool enabled,  double defaultValue)?  $default,) {final _that = this;
 switch (_that) {
 case _AutomationLaneDto() when $default != null:
-return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.max,_that.defaultValue);case _:
+return $default(_that.id,_that.label,_that.points,_that.enabled,_that.defaultValue);case _:
   return null;
 
 }
@@ -206,7 +464,7 @@ return $default(_that.id,_that.label,_that.points,_that.enabled,_that.min,_that.
 
 
 class _AutomationLaneDto implements AutomationLaneDto {
-  const _AutomationLaneDto({required this.id, required this.label, required final  List<AutomationPointDto> points, required this.enabled, required this.min, required this.max, required this.defaultValue}): _points = points;
+  const _AutomationLaneDto({required this.id, required this.label, required final  List<AutomationPointDto> points, required this.enabled, required this.defaultValue}): _points = points;
   
 
 @override final  int id;
@@ -219,8 +477,6 @@ class _AutomationLaneDto implements AutomationLaneDto {
 }
 
 @override final  bool enabled;
-@override final  double min;
-@override final  double max;
 @override final  double defaultValue;
 
 /// Create a copy of AutomationLaneDto
@@ -233,16 +489,16 @@ _$AutomationLaneDtoCopyWith<_AutomationLaneDto> get copyWith => __$AutomationLan
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationLaneDto&&(identical(other.id, id) || other.id == id)&&(identical(other.label, label) || other.label == label)&&const DeepCollectionEquality().equals(other._points, _points)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.min, min) || other.min == min)&&(identical(other.max, max) || other.max == max)&&(identical(other.defaultValue, defaultValue) || other.defaultValue == defaultValue));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationLaneDto&&(identical(other.id, id) || other.id == id)&&(identical(other.label, label) || other.label == label)&&const DeepCollectionEquality().equals(other._points, _points)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.defaultValue, defaultValue) || other.defaultValue == defaultValue));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,label,const DeepCollectionEquality().hash(_points),enabled,min,max,defaultValue);
+int get hashCode => Object.hash(runtimeType,id,label,const DeepCollectionEquality().hash(_points),enabled,defaultValue);
 
 @override
 String toString() {
-  return 'AutomationLaneDto(id: $id, label: $label, points: $points, enabled: $enabled, min: $min, max: $max, defaultValue: $defaultValue)';
+  return 'AutomationLaneDto(id: $id, label: $label, points: $points, enabled: $enabled, defaultValue: $defaultValue)';
 }
 
 
@@ -253,7 +509,7 @@ abstract mixin class _$AutomationLaneDtoCopyWith<$Res> implements $AutomationLan
   factory _$AutomationLaneDtoCopyWith(_AutomationLaneDto value, $Res Function(_AutomationLaneDto) _then) = __$AutomationLaneDtoCopyWithImpl;
 @override @useResult
 $Res call({
- int id, String label, List<AutomationPointDto> points, bool enabled, double min, double max, double defaultValue
+ int id, String label, List<AutomationPointDto> points, bool enabled, double defaultValue
 });
 
 
@@ -270,15 +526,13 @@ class __$AutomationLaneDtoCopyWithImpl<$Res>
 
 /// Create a copy of AutomationLaneDto
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? label = null,Object? points = null,Object? enabled = null,Object? min = null,Object? max = null,Object? defaultValue = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? label = null,Object? points = null,Object? enabled = null,Object? defaultValue = null,}) {
   return _then(_AutomationLaneDto(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String,points: null == points ? _self._points : points // ignore: cast_nullable_to_non_nullable
 as List<AutomationPointDto>,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,min: null == min ? _self.min : min // ignore: cast_nullable_to_non_nullable
-as double,max: null == max ? _self.max : max // ignore: cast_nullable_to_non_nullable
-as double,defaultValue: null == defaultValue ? _self.defaultValue : defaultValue // ignore: cast_nullable_to_non_nullable
+as bool,defaultValue: null == defaultValue ? _self.defaultValue : defaultValue // ignore: cast_nullable_to_non_nullable
 as double,
   ));
 }
@@ -289,7 +543,7 @@ as double,
 /// @nodoc
 mixin _$AutomationPointDto {
 
- int get id; int get timeTicks; double get value; AutomationCurveTypeDto get curveType; double get tension;
+ int get id; int get timeTicks; double get value; AutomationCurveTypeDto get curveType; double get tension; BezierHandlesDto? get handles;
 /// Create a copy of AutomationPointDto
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -300,16 +554,16 @@ $AutomationPointDtoCopyWith<AutomationPointDto> get copyWith => _$AutomationPoin
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationPointDto&&(identical(other.id, id) || other.id == id)&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationPointDto&&(identical(other.id, id) || other.id == id)&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension)&&(identical(other.handles, handles) || other.handles == handles));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,timeTicks,value,curveType,tension);
+int get hashCode => Object.hash(runtimeType,id,timeTicks,value,curveType,tension,handles);
 
 @override
 String toString() {
-  return 'AutomationPointDto(id: $id, timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
+  return 'AutomationPointDto(id: $id, timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension, handles: $handles)';
 }
 
 
@@ -320,11 +574,11 @@ abstract mixin class $AutomationPointDtoCopyWith<$Res>  {
   factory $AutomationPointDtoCopyWith(AutomationPointDto value, $Res Function(AutomationPointDto) _then) = _$AutomationPointDtoCopyWithImpl;
 @useResult
 $Res call({
- int id, int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
+ int id, int timeTicks, double value, AutomationCurveTypeDto curveType, double tension, BezierHandlesDto? handles
 });
 
 
-
+$BezierHandlesDtoCopyWith<$Res>? get handles;
 
 }
 /// @nodoc
@@ -337,17 +591,30 @@ class _$AutomationPointDtoCopyWithImpl<$Res>
 
 /// Create a copy of AutomationPointDto
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,Object? handles = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
 as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
 as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
 as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable
-as double,
+as double,handles: freezed == handles ? _self.handles : handles // ignore: cast_nullable_to_non_nullable
+as BezierHandlesDto?,
   ));
 }
+/// Create a copy of AutomationPointDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$BezierHandlesDtoCopyWith<$Res>? get handles {
+    if (_self.handles == null) {
+    return null;
+  }
 
+  return $BezierHandlesDtoCopyWith<$Res>(_self.handles!, (value) {
+    return _then(_self.copyWith(handles: value));
+  });
+}
 }
 
 
@@ -426,10 +693,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension,  BezierHandlesDto? handles)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AutomationPointDto() when $default != null:
-return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
+return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension,_that.handles);case _:
   return orElse();
 
 }
@@ -447,10 +714,10 @@ return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tensi
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension,  BezierHandlesDto? handles)  $default,) {final _that = this;
 switch (_that) {
 case _AutomationPointDto():
-return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension);}
+return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension,_that.handles);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -464,10 +731,10 @@ return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tensi
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  int timeTicks,  double value,  AutomationCurveTypeDto curveType,  double tension,  BezierHandlesDto? handles)?  $default,) {final _that = this;
 switch (_that) {
 case _AutomationPointDto() when $default != null:
-return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension);case _:
+return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tension,_that.handles);case _:
   return null;
 
 }
@@ -479,7 +746,7 @@ return $default(_that.id,_that.timeTicks,_that.value,_that.curveType,_that.tensi
 
 
 class _AutomationPointDto implements AutomationPointDto {
-  const _AutomationPointDto({required this.id, required this.timeTicks, required this.value, required this.curveType, required this.tension});
+  const _AutomationPointDto({required this.id, required this.timeTicks, required this.value, required this.curveType, required this.tension, this.handles});
   
 
 @override final  int id;
@@ -487,6 +754,7 @@ class _AutomationPointDto implements AutomationPointDto {
 @override final  double value;
 @override final  AutomationCurveTypeDto curveType;
 @override final  double tension;
+@override final  BezierHandlesDto? handles;
 
 /// Create a copy of AutomationPointDto
 /// with the given fields replaced by the non-null parameter values.
@@ -498,16 +766,16 @@ _$AutomationPointDtoCopyWith<_AutomationPointDto> get copyWith => __$AutomationP
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationPointDto&&(identical(other.id, id) || other.id == id)&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationPointDto&&(identical(other.id, id) || other.id == id)&&(identical(other.timeTicks, timeTicks) || other.timeTicks == timeTicks)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension)&&(identical(other.handles, handles) || other.handles == handles));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,timeTicks,value,curveType,tension);
+int get hashCode => Object.hash(runtimeType,id,timeTicks,value,curveType,tension,handles);
 
 @override
 String toString() {
-  return 'AutomationPointDto(id: $id, timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension)';
+  return 'AutomationPointDto(id: $id, timeTicks: $timeTicks, value: $value, curveType: $curveType, tension: $tension, handles: $handles)';
 }
 
 
@@ -518,11 +786,11 @@ abstract mixin class _$AutomationPointDtoCopyWith<$Res> implements $AutomationPo
   factory _$AutomationPointDtoCopyWith(_AutomationPointDto value, $Res Function(_AutomationPointDto) _then) = __$AutomationPointDtoCopyWithImpl;
 @override @useResult
 $Res call({
- int id, int timeTicks, double value, AutomationCurveTypeDto curveType, double tension
+ int id, int timeTicks, double value, AutomationCurveTypeDto curveType, double tension, BezierHandlesDto? handles
 });
 
 
-
+@override $BezierHandlesDtoCopyWith<$Res>? get handles;
 
 }
 /// @nodoc
@@ -535,18 +803,31 @@ class __$AutomationPointDtoCopyWithImpl<$Res>
 
 /// Create a copy of AutomationPointDto
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? timeTicks = null,Object? value = null,Object? curveType = null,Object? tension = null,Object? handles = freezed,}) {
   return _then(_AutomationPointDto(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,timeTicks: null == timeTicks ? _self.timeTicks : timeTicks // ignore: cast_nullable_to_non_nullable
 as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
 as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
 as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable
-as double,
+as double,handles: freezed == handles ? _self.handles : handles // ignore: cast_nullable_to_non_nullable
+as BezierHandlesDto?,
   ));
 }
 
+/// Create a copy of AutomationPointDto
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$BezierHandlesDtoCopyWith<$Res>? get handles {
+    if (_self.handles == null) {
+    return null;
+  }
 
+  return $BezierHandlesDtoCopyWith<$Res>(_self.handles!, (value) {
+    return _then(_self.copyWith(handles: value));
+  });
+}
 }
 
 /// @nodoc
@@ -1016,6 +1297,266 @@ $MasterAutomationTargetDtoCopyWith<$Res> get field0 {
     return _then(_self.copyWith(field0: value));
   });
 }
+}
+
+/// @nodoc
+mixin _$BezierHandlesDto {
+
+ double get x1; double get y1; double get x2; double get y2;
+/// Create a copy of BezierHandlesDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$BezierHandlesDtoCopyWith<BezierHandlesDto> get copyWith => _$BezierHandlesDtoCopyWithImpl<BezierHandlesDto>(this as BezierHandlesDto, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BezierHandlesDto&&(identical(other.x1, x1) || other.x1 == x1)&&(identical(other.y1, y1) || other.y1 == y1)&&(identical(other.x2, x2) || other.x2 == x2)&&(identical(other.y2, y2) || other.y2 == y2));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,x1,y1,x2,y2);
+
+@override
+String toString() {
+  return 'BezierHandlesDto(x1: $x1, y1: $y1, x2: $x2, y2: $y2)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $BezierHandlesDtoCopyWith<$Res>  {
+  factory $BezierHandlesDtoCopyWith(BezierHandlesDto value, $Res Function(BezierHandlesDto) _then) = _$BezierHandlesDtoCopyWithImpl;
+@useResult
+$Res call({
+ double x1, double y1, double x2, double y2
+});
+
+
+
+
+}
+/// @nodoc
+class _$BezierHandlesDtoCopyWithImpl<$Res>
+    implements $BezierHandlesDtoCopyWith<$Res> {
+  _$BezierHandlesDtoCopyWithImpl(this._self, this._then);
+
+  final BezierHandlesDto _self;
+  final $Res Function(BezierHandlesDto) _then;
+
+/// Create a copy of BezierHandlesDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? x1 = null,Object? y1 = null,Object? x2 = null,Object? y2 = null,}) {
+  return _then(_self.copyWith(
+x1: null == x1 ? _self.x1 : x1 // ignore: cast_nullable_to_non_nullable
+as double,y1: null == y1 ? _self.y1 : y1 // ignore: cast_nullable_to_non_nullable
+as double,x2: null == x2 ? _self.x2 : x2 // ignore: cast_nullable_to_non_nullable
+as double,y2: null == y2 ? _self.y2 : y2 // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [BezierHandlesDto].
+extension BezierHandlesDtoPatterns on BezierHandlesDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _BezierHandlesDto value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _BezierHandlesDto() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _BezierHandlesDto value)  $default,){
+final _that = this;
+switch (_that) {
+case _BezierHandlesDto():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _BezierHandlesDto value)?  $default,){
+final _that = this;
+switch (_that) {
+case _BezierHandlesDto() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double x1,  double y1,  double x2,  double y2)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _BezierHandlesDto() when $default != null:
+return $default(_that.x1,_that.y1,_that.x2,_that.y2);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double x1,  double y1,  double x2,  double y2)  $default,) {final _that = this;
+switch (_that) {
+case _BezierHandlesDto():
+return $default(_that.x1,_that.y1,_that.x2,_that.y2);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double x1,  double y1,  double x2,  double y2)?  $default,) {final _that = this;
+switch (_that) {
+case _BezierHandlesDto() when $default != null:
+return $default(_that.x1,_that.y1,_that.x2,_that.y2);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _BezierHandlesDto implements BezierHandlesDto {
+  const _BezierHandlesDto({required this.x1, required this.y1, required this.x2, required this.y2});
+  
+
+@override final  double x1;
+@override final  double y1;
+@override final  double x2;
+@override final  double y2;
+
+/// Create a copy of BezierHandlesDto
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$BezierHandlesDtoCopyWith<_BezierHandlesDto> get copyWith => __$BezierHandlesDtoCopyWithImpl<_BezierHandlesDto>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BezierHandlesDto&&(identical(other.x1, x1) || other.x1 == x1)&&(identical(other.y1, y1) || other.y1 == y1)&&(identical(other.x2, x2) || other.x2 == x2)&&(identical(other.y2, y2) || other.y2 == y2));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,x1,y1,x2,y2);
+
+@override
+String toString() {
+  return 'BezierHandlesDto(x1: $x1, y1: $y1, x2: $x2, y2: $y2)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$BezierHandlesDtoCopyWith<$Res> implements $BezierHandlesDtoCopyWith<$Res> {
+  factory _$BezierHandlesDtoCopyWith(_BezierHandlesDto value, $Res Function(_BezierHandlesDto) _then) = __$BezierHandlesDtoCopyWithImpl;
+@override @useResult
+$Res call({
+ double x1, double y1, double x2, double y2
+});
+
+
+
+
+}
+/// @nodoc
+class __$BezierHandlesDtoCopyWithImpl<$Res>
+    implements _$BezierHandlesDtoCopyWith<$Res> {
+  __$BezierHandlesDtoCopyWithImpl(this._self, this._then);
+
+  final _BezierHandlesDto _self;
+  final $Res Function(_BezierHandlesDto) _then;
+
+/// Create a copy of BezierHandlesDto
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? x1 = null,Object? y1 = null,Object? x2 = null,Object? y2 = null,}) {
+  return _then(_BezierHandlesDto(
+x1: null == x1 ? _self.x1 : x1 // ignore: cast_nullable_to_non_nullable
+as double,y1: null == y1 ? _self.y1 : y1 // ignore: cast_nullable_to_non_nullable
+as double,x2: null == x2 ? _self.x2 : x2 // ignore: cast_nullable_to_non_nullable
+as double,y2: null == y2 ? _self.y2 : y2 // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
 }
 
 /// @nodoc

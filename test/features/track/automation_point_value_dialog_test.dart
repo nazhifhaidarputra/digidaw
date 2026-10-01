@@ -3,20 +3,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/features/track/view/automation_point_value_dialog.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
+import 'fake_curve_sampler.dart';
+
 const _lane = AutomationLaneDto(
   id: 1,
   label: 'Volume',
   points: [],
   enabled: true,
-  min: -60,
-  max: 6,
   defaultValue: 0,
 );
 
+// 0.5 of the fake parameter's -100 to 6 range is -47.
 const _point = AutomationPointDto(
   id: 10,
   timeTicks: 0,
-  value: 0.4375,
+  value: 0.5,
   curveType: AutomationCurveTypeDto.linear,
   tension: 0,
 );
@@ -33,6 +34,7 @@ Future<double? Function()> _openDialog(WidgetTester tester) async {
               context: context,
               lane: _lane,
               point: _point,
+              sampler: FakeCurveSampler(),
             );
             closed = true;
           },
@@ -50,45 +52,38 @@ Future<double? Function()> _openDialog(WidgetTester tester) async {
 }
 
 void main() {
-  test('formats normalized values without a tail of zeros', () {
-    expect(formatNormalizedValue(0.4375), '0.4375');
-    expect(formatNormalizedValue(1), '1.0');
-    expect(formatNormalizedValue(0), '0.0');
-    expect(formatNormalizedValue(1 / 3), '0.333333');
-  });
-
-  testWidgets('prefills the exact value and keeps it when confirmed', (
+  testWidgets('prefills the value in the parameter unit and keeps it', (
     tester,
   ) async {
     final result = await _openDialog(tester);
 
-    expect(find.text('0.4375'), findsOneWidget);
-    expect(find.text('Parameter value -31.13'), findsOneWidget);
+    expect(find.text('-47.00'), findsOneWidget);
+    expect(find.text('Value (-100.00 to 6.00)'), findsOneWidget);
 
     await tester.tap(find.text('Set'));
     await tester.pumpAndSettle();
     expect(result(), isNull);
   });
 
-  testWidgets('returns a typed value within range', (tester) async {
+  testWidgets('returns the typed parameter value normalized', (tester) async {
     final result = await _openDialog(tester);
 
-    await tester.enterText(find.byType(TextField), '0.75');
+    await tester.enterText(find.byType(TextField), '-20.5');
     await tester.pump();
-    expect(find.text('Parameter value -10.50'), findsOneWidget);
+    expect(find.text('Sets -20.50'), findsOneWidget);
 
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    expect(result(), 0.75);
+    expect(result(), closeTo(0.75, 1e-9));
   });
 
-  testWidgets('rejects values outside 0 to 1', (tester) async {
+  testWidgets('rejects text the parameter cannot parse', (tester) async {
     await _openDialog(tester);
 
-    await tester.enterText(find.byType(TextField), '1.5');
+    await tester.enterText(find.byType(TextField), 'loud');
     await tester.pump();
 
-    expect(find.text('Enter a number from 0 to 1'), findsOneWidget);
+    expect(find.text('Not a value of Volume'), findsOneWidget);
     final setButton = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(setButton.onPressed, isNull);
   });

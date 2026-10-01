@@ -6,8 +6,10 @@ use karbeat_core::{
     context::DawContext,
     core::{
         file_manager::audio_loader::{AudioLoader, load_audio_file},
-        history::actions::SourceEnvelopeChanged,
-        project::{AudioSourceId, AudioWaveform, DawSource, GainEnvelope, TrackId, TrackType},
+        history::actions::{AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged},
+        project::{
+            AudioSourceId, AudioWaveform, ClipId, DawSource, GainEnvelope, TrackId, TrackType,
+        },
     },
 };
 
@@ -236,6 +238,35 @@ pub fn commit_audio_import(ctx: &mut DawContext, completed: CompletedAudioImport
     ctx.mark_project_modified();
     ctx.broadcast_full_graph();
     source_id
+}
+
+/// Deletes an audio source and every clip that plays it as one undoable step.
+///
+/// Returns how many clips were deleted with it. Previews are stopped so the deleted audio does
+/// not keep sounding, and the engine receives a full graph because that is the only update that
+/// drops a source.
+pub fn remove_audio_source(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+) -> anyhow::Result<usize> {
+    let clips = ctx.app_state.audio_source_clips(source_id);
+    let tracks: Vec<TrackId> = clips.iter().map(|(track_id, _)| *track_id).collect();
+    let clip_ids: Vec<ClipId> = clips.iter().map(|(_, clip_id)| *clip_id).collect();
+
+    let recorder =
+        ClipEditRecorder::begin(&ctx.app_state, "Delete Audio Source", &tracks, &clip_ids);
+    let waveform = ctx.app_state.remove_audio_source(source_id)?;
+    let clip_changes = recorder.finish(&mut ctx.app_state);
+    ctx.push_history(AudioSourceRemoved::new(clip_changes, source_id, waveform));
+
+    crate::audio_api::stop_all_previews(ctx);
+    ctx.broadcast_full_graph();
+    log::info!(
+        "Removed audio source {} with {} clip(s)",
+        source_id.to_u64(),
+        clip_ids.len()
+    );
+    Ok(clip_ids.len())
 }
 
 /// Resolves an opaque source handle, validates it, and maps the corresponding waveform.

@@ -1,32 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
-/// Formats a normalized value with enough precision to round-trip what the
-/// user typed, without a trailing tail of zeros.
-String formatNormalizedValue(double value) {
-  final fixed = value.toStringAsFixed(6);
-  final trimmed = fixed.replaceFirst(RegExp(r'0+$'), '');
-  return trimmed.endsWith('.') ? '${trimmed}0' : trimmed;
-}
-
-/// Asks for an exact normalized value (0..1) for an automation point of
-/// [lane]. Resolves with the new value, or null when cancelled or unchanged.
+/// Asks for an exact value for an automation point of [lane], typed in the
+/// unit of the parameter the lane automates. Resolves with the new normalized
+/// value (0..1), or null when cancelled or unchanged.
 Future<double?> showAutomationPointValueDialog({
   required BuildContext context,
   required AutomationLaneDto lane,
   required AutomationPointDto point,
+  required CurveSampler sampler,
 }) {
   return showDialog<double>(
     context: context,
-    builder: (_) => _AutomationPointValueDialog(lane: lane, point: point),
+    builder: (_) =>
+        _AutomationPointValueDialog(lane: lane, point: point, sampler: sampler),
   );
 }
 
 class _AutomationPointValueDialog extends StatefulWidget {
-  const _AutomationPointValueDialog({required this.lane, required this.point});
+  const _AutomationPointValueDialog({
+    required this.lane,
+    required this.point,
+    required this.sampler,
+  });
 
   final AutomationLaneDto lane;
   final AutomationPointDto point;
+
+  /// Formats and parses values through the automated parameter.
+  final CurveSampler sampler;
 
   @override
   State<_AutomationPointValueDialog> createState() =>
@@ -35,7 +38,10 @@ class _AutomationPointValueDialog extends StatefulWidget {
 
 class _AutomationPointValueDialogState
     extends State<_AutomationPointValueDialog> {
-  late final String _initialText = formatNormalizedValue(widget.point.value);
+  late final String _initialText = widget.sampler.valueText(
+    widget.lane.id,
+    widget.point.value,
+  );
   late final TextEditingController _controller = TextEditingController(
     text: _initialText,
   );
@@ -55,12 +61,10 @@ class _AutomationPointValueDialogState
     super.dispose();
   }
 
-  /// The typed value when it is a number within 0..1, otherwise null.
-  double? get _parsed {
-    final value = double.tryParse(_controller.text.trim());
-    if (value == null || value < 0 || value > 1) return null;
-    return value;
-  }
+  /// The typed text as a normalized lane value, or null when the parameter
+  /// does not accept it.
+  double? get _parsed =>
+      widget.sampler.parseValue(widget.lane.id, _controller.text);
 
   void _submit() {
     final value = _parsed;
@@ -74,10 +78,8 @@ class _AutomationPointValueDialogState
   @override
   Widget build(BuildContext context) {
     final lane = widget.lane;
+    final sampler = widget.sampler;
     final value = _parsed;
-    final preview = value == null
-        ? null
-        : (lane.min + value * (lane.max - lane.min)).toStringAsFixed(2);
 
     return AlertDialog(
       title: Text('Set value: ${lane.label}'),
@@ -86,12 +88,16 @@ class _AutomationPointValueDialogState
         child: TextField(
           controller: _controller,
           autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
-            labelText: 'Normalized value (0 – 1)',
+            labelText:
+                'Value (${sampler.valueText(lane.id, 0)} to '
+                '${sampler.valueText(lane.id, 1)})',
             border: const OutlineInputBorder(),
-            helperText: preview == null ? null : 'Parameter value $preview',
-            errorText: value == null ? 'Enter a number from 0 to 1' : null,
+            // Out-of-range values are clamped by the parameter.
+            helperText: value == null
+                ? null
+                : 'Sets ${sampler.valueText(lane.id, value)}',
+            errorText: value == null ? 'Not a value of ${lane.label}' : null,
           ),
           onChanged: (_) => setState(() {}),
           onSubmitted: (_) => _submit(),

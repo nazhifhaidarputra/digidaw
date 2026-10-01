@@ -9,6 +9,7 @@ mod tests {
     use karbeat_core::core::project::automation::{
         AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
     };
+    use karbeat_utils::types::NormalizedF64;
 
     use crate::test::helpers::{
         make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
@@ -430,9 +431,7 @@ mod tests {
             .add_automation_lane(
                 effect_param_target(audio_id, effect_id),
                 "Gain",
-                0.0,
-                1.0,
-                0.5,
+                NormalizedF64::new(0.5),
             )
             .unwrap();
         let (volume_lane, _) = ctx
@@ -445,9 +444,7 @@ mod tests {
                     ),
                 },
                 "Volume",
-                0.0,
-                1.0,
-                0.5,
+                NormalizedF64::new(0.5),
             )
             .unwrap();
         (ctx, audio_id, effect_id, effect_lane.id, volume_lane.id)
