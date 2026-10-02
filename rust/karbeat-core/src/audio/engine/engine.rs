@@ -4,10 +4,12 @@ use crate::{
         engine::{
             buffer::AudioBuffer,
             helper::*,
+            kernels::apply_fader,
             metronome::MetronomeState,
             modulation::{LiveModulationSource, ModulationState},
             routing::{RouteTargets, RoutingState},
             runtime::*,
+            schedule::{ClipSchedule, clip_span_samples},
             telemetry::{AudioEngineTelemetry, PluginTelemetrySnapshot},
             transport::{PlaybackMode, TransportState},
             types::*,
@@ -68,6 +70,9 @@ pub struct AudioEngine {
 
     /// Offline bounces render what feeds the master bus, skipping its effects and fader.
     pub(super) bypass_master: bool,
+
+    /// Clip spans per track for the current graph and tempo.
+    pub(super) clip_schedule: ClipSchedule,
 }
 
 pub(super) enum RetiredGraphState {
@@ -290,6 +295,7 @@ impl AudioEngine {
             telemetry,
             graph_retirement: graph_retirement_queue(),
             bypass_master: false,
+            clip_schedule: ClipSchedule::default(),
         }
     }
 
@@ -430,6 +436,7 @@ impl AudioEngine {
             telemetry: AudioEngineTelemetry::new_for_export(),
             graph_retirement: graph_retirement_queue(),
             bypass_master,
+            clip_schedule: ClipSchedule::default(),
         };
         engine.recalculate_latencies();
         Ok(engine)
@@ -1430,13 +1437,13 @@ impl AudioEngine {
                         .track_channels
                         .entry(*track_id)
                         .or_default();
-                    apply_volume_and_pan_simd(
+                    let peak = apply_fader(
                         &mut self.workspace.mix_buffer,
                         channels,
                         &mut channel.volume,
                         &mut channel.pan,
                     );
-                    channel.observe_magnitude(&self.workspace.mix_buffer);
+                    channel.observe_peak(peak);
 
                     // Route the track signal to destinations based on routing matrix
                     let workspace = &mut self.workspace;
@@ -1455,18 +1462,9 @@ impl AudioEngine {
                     );
                 }
                 RoutingNode::Bus(bus_id) => {
-                    let bus_buf = match self.workspace.bus_buffers.get(bus_id) {
-                        Some(buf) => buf,
-                        None => {
-                            continue;
-                        }
-                    };
-
-                    // Resize temp buffer if needed and copy
-                    if self.workspace.bus_temp_buffer.len() != buf_len {
-                        self.workspace.bus_temp_buffer.resize(buf_len, 0.0);
+                    if !self.workspace.bus_buffers.contains_key(bus_id) {
+                        continue;
                     }
-                    self.workspace.bus_temp_buffer.copy_from_slice(bus_buf);
 
                     // Get bus channel settings from audio-thread-owned mixer state
                     let bus_settings_channel =
@@ -1535,13 +1533,14 @@ impl AudioEngine {
                         }
                     }
 
-                    // Copy to mix_buffer for processing
+                    // The bus sum becomes the working buffer. What the bus keeps instead is
+                    // scratch that the next block clears before anything is routed into it.
                     if self.workspace.mix_buffer.len() != buf_len {
                         self.workspace.mix_buffer.resize(buf_len, 0.0);
                     }
-                    self.workspace
-                        .mix_buffer
-                        .copy_from_slice(&self.workspace.bus_temp_buffer);
+                    if let Some(bus_buffer) = self.workspace.bus_buffers.get_mut(bus_id) {
+                        std::mem::swap(&mut self.workspace.mix_buffer, bus_buffer);
+                    }
 
                     // Apply bus effects
                     if let Some(effects) = self
@@ -1623,13 +1622,13 @@ impl AudioEngine {
 
                     let bus_settings_channel =
                         self.mixer_state.bus_channels.entry(*bus_id).or_default();
-                    apply_volume_and_pan_simd(
+                    let peak = apply_fader(
                         &mut self.workspace.mix_buffer,
                         channels,
                         &mut bus_settings_channel.volume,
                         &mut bus_settings_channel.pan,
                     );
-                    bus_settings_channel.observe_magnitude(&self.workspace.mix_buffer);
+                    bus_settings_channel.observe_peak(peak);
 
                     // Route bus output to destinations
                     let workspace = &mut self.workspace;
@@ -1711,7 +1710,6 @@ impl AudioEngine {
                             &mut self.workspace.aux_channel_buffers,
                             &self.modulation.block_param_changes,
                         );
-                        master_bus_mut.observe_magnitude(output);
                     } else {
                         // output silent buffer
                         output.fill(0.0);
@@ -1870,12 +1868,13 @@ impl AudioEngine {
         }
 
         // ==== SIMD Apply Gain and Pan ====
-        apply_volume_and_pan_simd(
+        let peak = apply_fader(
             buffer,
             channels,
             &mut master_bus.volume,
             &mut master_bus.pan,
         );
+        master_bus.observe_peak(peak);
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
@@ -1883,15 +1882,28 @@ impl AudioEngine {
         let end_time = start_time + (buffer_size as u32);
 
         let tracks = std::mem::take(&mut self.current_state.graph.tracks);
+        let samples_per_beat =
+            ((60.0 / self.transport.bpm) * (self.config.sample_rate as f32)) as f64;
+        self.clip_schedule.ensure(
+            &tracks,
+            &self.current_state.graph.clips,
+            samples_per_beat / PPQ,
+        );
 
-        for track in &tracks {
-            self.process_track(track, start_time, end_time);
+        for (track_index, track) in tracks.iter().enumerate() {
+            self.process_track(track_index, track, start_time, end_time);
         }
 
         self.current_state.graph.tracks = tracks;
     }
 
-    fn process_track(&mut self, track: &AudioTrack, start_time: u32, end_time: u32) {
+    fn process_track(
+        &mut self,
+        track_index: usize,
+        track: &AudioTrack,
+        start_time: u32,
+        end_time: u32,
+    ) {
         let track_id = track.id;
 
         let mut gen_voice_idx = None;
@@ -1909,7 +1921,14 @@ impl AudioEngine {
         let samples_per_tick = samples_per_beat / PPQ;
 
         let clip_ids = track.clips();
-        for (index, clip_id) in clip_ids.iter().enumerate() {
+        // Only the clips that can overlap this block; the checks below still decide.
+        for index in self
+            .clip_schedule
+            .candidates(track_index, start_time, end_time)
+        {
+            let Some(clip_id) = clip_ids.get(index) else {
+                break;
+            };
             let Some(clip_data) = self.current_state.graph.clips.get(clip_id) else {
                 continue;
             };
@@ -2482,40 +2501,6 @@ impl AudioEngine {
             producer.publish();
         }
         self.telemetry.param_telemetry_producers = producers;
-    }
-}
-
-/// Timeline start, length, and source offset of a clip in project samples.
-fn clip_span_samples(time: &ClipTimeUnit, samples_per_tick: f64) -> (u32, u32, u32) {
-    match time {
-        ClipTimeUnit::Samples {
-            start_time,
-            loop_length,
-            offset_start,
-        } => (
-            *start_time as u32,
-            *loop_length as u32,
-            *offset_start as u32,
-        ),
-        ClipTimeUnit::Ticks {
-            start_time,
-            loop_length,
-            offset_start,
-        } => {
-            let st = ((*start_time as f64) * samples_per_tick) as u32;
-            let ll = ((*loop_length as f64) * samples_per_tick) as u32;
-            let os = ((*offset_start as f64) * samples_per_tick) as u32;
-            (st, ll, os)
-        }
-        ClipTimeUnit::Audio {
-            start_tick,
-            loop_length,
-            offset_start,
-        } => (
-            ((*start_tick as f64) * samples_per_tick).round() as u32,
-            *loop_length as u32,
-            *offset_start as u32,
-        ),
     }
 }
 

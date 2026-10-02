@@ -127,14 +127,12 @@ impl AudioMixerChannelValues {
     /// is decayed once per audio block by the engine, producing a fast peak
     /// response with a readable release rather than a flickering raw value.
     pub fn observe_magnitude(&mut self, buffer: &[f32]) {
-        let block_peak = buffer.iter().fold(0.0_f32, |peak, sample| {
-            if sample.is_finite() {
-                peak.max(sample.abs())
-            } else {
-                peak
-            }
-        });
-        self.magnitude = self.magnitude.max(block_peak);
+        self.observe_peak(crate::audio::engine::kernels::finite_peak(buffer));
+    }
+
+    /// Raises the meter to `peak`, the loudest finite sample of a processed block.
+    pub fn observe_peak(&mut self, peak: f32) {
+        self.magnitude = self.magnitude.max(peak);
     }
 
     /// Applies a clamped per-block release factor to the stored peak meter value.
