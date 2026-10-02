@@ -6,7 +6,7 @@ use karbeat_utils::math::hermite_interp;
 use wide::{f32x8, f32x16};
 
 use crate::{
-    audio::engine::runtime::consts::MAX_ENGINE_CHANNELS,
+    audio::engine::{kernels::mix_gain, runtime::consts::MAX_ENGINE_CHANNELS},
     commands::MixerChannelTarget,
     core::project::{
         AudioTrack, AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
@@ -288,7 +288,7 @@ impl StereoRuns<'_> {
                 let out = &mut self.output[frame as usize * 2..(frame as usize + count) * 2];
                 if self.src_channels == 2 {
                     let source = &self.source[source_frame * 2..(source_frame + count) * 2];
-                    mix_scaled(out, source, self.base_volume);
+                    mix_gain(out, source, self.base_volume);
                 } else {
                     let source = &self.source[source_frame..source_frame + count];
                     mix_scaled_mono_to_stereo(out, source, self.base_volume);
@@ -435,20 +435,6 @@ fn hermite_x8(frac: f32x8, p0: f32x8, p1: f32x8, p2: f32x8, p3: f32x8) -> f32x8 
     let c2 = p0 - f32x8::splat(2.5) * p1 + f32x8::splat(2.0) * p2 - half * p3;
     let c3 = half * (p3 - p0) + f32x8::splat(1.5) * (p1 - p2);
     ((c3 * frac + c2) * frac + c1) * frac + p1
-}
-
-/// Adds `source * gain` to `out`, sample by sample.
-#[inline(always)]
-fn mix_scaled(out: &mut [f32], source: &[f32], gain: f32) {
-    let gain_v = f32x16::splat(gain);
-    let (out_chunks, out_rest) = out.as_chunks_mut::<16>();
-    let (source_chunks, source_rest) = source.as_chunks::<16>();
-    for (out, source) in out_chunks.iter_mut().zip(source_chunks) {
-        *out = (f32x16::new(*out) + f32x16::new(*source) * gain_v).to_array();
-    }
-    for (out, source) in out_rest.iter_mut().zip(source_rest) {
-        *out += source * gain;
-    }
 }
 
 /// Adds each mono `source` sample, scaled by `gain`, to both channels of interleaved `out`.

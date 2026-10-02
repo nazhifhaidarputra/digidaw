@@ -198,6 +198,11 @@ What to run depends on what you touched:
 | FFI shape | Regenerate the bridge, then run Dart analysis and the relevant Rust tests |
 | Plugin manifest | Regenerate plugin manifests and check that the Flutter registry still maps every custom plugin screen |
 
+Changes to the engine's block pipeline (`rust/karbeat-core/src/audio/engine`) are pinned by reference renders:
+
+* `cargo test -p karbeat-core --lib engine::golden` compares each scenario with the render stored in `rust/karbeat-core/tests/fixtures/engine_golden`. When a change is meant to alter the sound, regenerate the stored renders with `UPDATE_ENGINE_GOLDEN=1` and say so in the pull request.
+* `cargo bench -p karbeat-core --bench engine_block --features bench-support` reports the time per block. Include before and after numbers for performance changes.
+
 If a command can't run because a tool, platform library, or network access is unavailable, say so in your pull request, including the command and the reason.
 
 ---
