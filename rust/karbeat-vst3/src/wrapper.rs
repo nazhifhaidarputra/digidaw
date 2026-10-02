@@ -27,6 +27,9 @@ use vst3::{
     },
 };
 
+/// Frames rendered to deliver parameter edits while no audio block is running.
+const FLUSH_FRAMES: usize = 32;
+
 pub(crate) struct Dsp {
     pub processor: ComPtr<IAudioProcessor>,
     pub config: ProcessingConfig,
@@ -126,7 +129,13 @@ impl Dsp {
         Ok(())
     }
 
+    /// Delivers pending parameter edits through a short silent block whose audio is discarded.
+    ///
+    /// VST3 also lets a host flush parameters with a zero-sample `process` call, but processors
+    /// such as LSP's read their parameter queues only while rendering frames and would drop the
+    /// edits. The block reports a stopped transport and leaves the processing state as it was.
     pub fn flush(&mut self, exchange: &ParameterExchange) -> Result<(), HostError> {
+        let frames = FLUSH_FRAMES.min(self.config.max_block_size);
         self.events.clear();
         self.output_events.clear();
         self.changes.clear();
@@ -136,11 +145,60 @@ impl Dsp {
                 self.changes.push(parameter.id, 0, parameter.get());
             }
         }
-        let mut data = self.process_data(0, ptr::null_mut());
-        // SAFETY: All parameter storage is preallocated and lives through this zero-sample call.
-        check_optional("processor.flush", unsafe {
-            self.processor.process(&raw mut data)
-        })
+        for plane in self.input32.iter_mut().chain(&mut self.output32) {
+            if let Some(block) = plane.get_mut(..frames) {
+                block.fill(0.0);
+            }
+        }
+        for plane in self.input64.iter_mut().chain(&mut self.output64) {
+            if let Some(block) = plane.get_mut(..frames) {
+                block.fill(0.0);
+            }
+        }
+        self.bind_buses();
+        let was_processing = self.processing;
+        self.start()?;
+        // SAFETY: This ABI record contains only integer/float/plain-record fields.
+        let mut transport: Vst::ProcessContext = unsafe { std::mem::zeroed() };
+        transport.sampleRate = self.config.sample_rate;
+        let mut data = self.process_data(i32::try_from(frames).unwrap_or(0), &raw mut transport);
+        // SAFETY: The caller holds exclusive suspended DSP access; all pointers refer to
+        // preallocated storage or this stack context for the synchronous call.
+        let code = unsafe { self.processor.process(&raw mut data) };
+        if !was_processing {
+            self.stop()?;
+        }
+        check_optional("processor.flush", code)
+    }
+
+    /// Points the VST3 bus records at the preallocated sample planes.
+    fn bind_buses(&mut self) {
+        for (plane, pointer) in self.input32.iter_mut().zip(&mut self.input_ptrs32) {
+            *pointer = plane.as_mut_ptr();
+        }
+        for (plane, pointer) in self.output32.iter_mut().zip(&mut self.output_ptrs32) {
+            *pointer = plane.as_mut_ptr();
+        }
+        for (plane, pointer) in self.input64.iter_mut().zip(&mut self.input_ptrs64) {
+            *pointer = plane.as_mut_ptr();
+        }
+        for (plane, pointer) in self.output64.iter_mut().zip(&mut self.output_ptrs64) {
+            *pointer = plane.as_mut_ptr();
+        }
+        fill_buses(
+            &mut self.input_buses,
+            &self.input_channels,
+            &mut self.input_ptrs32,
+            &mut self.input_ptrs64,
+            self.use_f64,
+        );
+        fill_buses(
+            &mut self.output_buses,
+            &self.output_channels,
+            &mut self.output_ptrs32,
+            &mut self.output_ptrs64,
+            self.use_f64,
+        );
     }
 
     fn process_data(&mut self, frames: i32, context: *mut Vst::ProcessContext) -> Vst::ProcessData {
@@ -148,26 +206,10 @@ impl Dsp {
             processMode: if self.config.offline { 2 } else { 0 },
             symbolicSampleSize: i32::from(self.use_f64),
             numSamples: frames,
-            numInputs: if frames == 0 {
-                0
-            } else {
-                i32::try_from(self.input_buses.len()).unwrap_or(0)
-            },
-            numOutputs: if frames == 0 {
-                0
-            } else {
-                i32::try_from(self.output_buses.len()).unwrap_or(0)
-            },
-            inputs: if frames == 0 {
-                ptr::null_mut()
-            } else {
-                self.input_buses.as_mut_ptr()
-            },
-            outputs: if frames == 0 {
-                ptr::null_mut()
-            } else {
-                self.output_buses.as_mut_ptr()
-            },
+            numInputs: i32::try_from(self.input_buses.len()).unwrap_or(0),
+            numOutputs: i32::try_from(self.output_buses.len()).unwrap_or(0),
+            inputs: self.input_buses.as_mut_ptr(),
+            outputs: self.output_buses.as_mut_ptr(),
             inputParameterChanges: self
                 .changes
                 .as_com_ref::<IParameterChanges>()
@@ -233,32 +275,7 @@ impl Dsp {
                 plane[..frames].fill(0.0);
             }
         }
-        for (plane, pointer) in self.input32.iter_mut().zip(&mut self.input_ptrs32) {
-            *pointer = plane.as_mut_ptr();
-        }
-        for (plane, pointer) in self.output32.iter_mut().zip(&mut self.output_ptrs32) {
-            *pointer = plane.as_mut_ptr();
-        }
-        for (plane, pointer) in self.input64.iter_mut().zip(&mut self.input_ptrs64) {
-            *pointer = plane.as_mut_ptr();
-        }
-        for (plane, pointer) in self.output64.iter_mut().zip(&mut self.output_ptrs64) {
-            *pointer = plane.as_mut_ptr();
-        }
-        fill_buses(
-            &mut self.input_buses,
-            &self.input_channels,
-            &mut self.input_ptrs32,
-            &mut self.input_ptrs64,
-            self.use_f64,
-        );
-        fill_buses(
-            &mut self.output_buses,
-            &self.output_channels,
-            &mut self.output_ptrs32,
-            &mut self.output_ptrs64,
-            self.use_f64,
-        );
+        self.bind_buses();
         self.events.clear();
         self.output_events.clear();
         self.changes.clear();
@@ -994,7 +1011,7 @@ mod tests {
     }
 
     #[test]
-    fn zero_sample_state_flush_delivers_edits_without_consuming_audio_errors() {
+    fn state_flush_delivers_edits_in_a_short_silent_block_without_consuming_audio_errors() {
         let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
         let config = ProcessingConfig {
             sample_rate: 48_000.0,
@@ -1015,19 +1032,21 @@ mod tests {
         let exchange = ParameterExchange::new(&[(77, 0.0)]);
         exchange.parameter(77).unwrap().set(0.75, 0);
         dsp.flush(&exchange).unwrap();
+        // Rendered frames, because processors such as LSP's ignore edits in a zero-sample call.
         assert_eq!(
             processor.0.get(),
             Some(FlushRecord {
-                samples: 0,
-                input_count: 0,
-                output_count: 0,
-                null_buses: true,
+                samples: 32,
+                input_count: 1,
+                output_count: 1,
+                null_buses: false,
                 parameter: 77,
                 offset: 0,
                 value: 0.75,
                 notes: [(u16::MAX, -1, -1); 4],
             })
         );
+        assert!(!dsp.processing);
         assert!(
             !exchange
                 .parameter(77)

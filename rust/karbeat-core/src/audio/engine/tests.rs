@@ -924,6 +924,127 @@ fn unlinked_track_does_not_reach_master() {
     assert_eq!(render_tone_track(false), 0.0);
 }
 
+/// Effect that counts its process calls and emits a constant level for its first `ringing`
+/// calls without reporting a tail, optionally asking for continuous processing the way hosted
+/// plugins do.
+pub(crate) struct IdleProbe {
+    pub calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pub ringing: usize,
+    pub continuous: bool,
+}
+
+impl karbeat_plugin_api::traits::AudioPlugin for IdleProbe {
+    test_effect_boilerplate!();
+    fn needs_continuous_processing(&self) -> bool {
+        self.continuous
+    }
+    fn process(
+        &mut self,
+        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
+        _: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        let call = self
+            .calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let level = if call < self.ringing { 0.25 } else { 0.0 };
+        for output in buffers.main_outputs.iter_mut() {
+            for channel in output.channel_data.iter_mut() {
+                channel.fill(level);
+            }
+        }
+    }
+}
+
+/// Renders four blocks of a stopped, clipless project with an [`IdleProbe`] on `target`, and
+/// returns the probe's process calls and the energy that reached the master output.
+fn render_idle_probe(
+    target: fn(crate::shared::TrackId, crate::shared::BusId) -> EffectTarget,
+    continuous: bool,
+    bypass: bool,
+) -> (usize, f32) {
+    use crate::core::project::{RoutingConnection, RoutingNode};
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app_state = ApplicationState::default();
+    let track = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Idle", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    let bus = crate::shared::BusId::from(1);
+    engine.process_command(AudioCommand::AddBus {
+        bus_id: bus,
+        name: "Idle".into(),
+    });
+    engine.process_command(AudioCommand::UpdateRouting {
+        routing: vec![
+            RoutingConnection::new(RoutingNode::Track(track), RoutingNode::Master),
+            RoutingConnection::new(RoutingNode::Bus(bus), RoutingNode::Master),
+        ]
+        .into_boxed_slice(),
+    });
+    let target = target(track, bus);
+    let effect_id = crate::shared::EffectId::from(1);
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    engine.process_command(AudioCommand::InstallEffect {
+        target,
+        effect_id,
+        registry_id: 0,
+        plugin: Box::new(IdleProbe {
+            calls: calls.clone(),
+            ringing: usize::MAX,
+            continuous,
+        }),
+        telemetry: None,
+    });
+    engine.process_command(AudioCommand::SetEffectBypass {
+        target,
+        effect_id,
+        bypass,
+    });
+
+    let mut block = vec![0.0_f32; 128];
+    let mut energy = 0.0;
+    for _ in 0..4 {
+        engine.process(&mut block);
+        energy += block.iter().map(|sample| sample.abs()).sum::<f32>();
+    }
+    (calls.load(std::sync::atomic::Ordering::Relaxed), energy)
+}
+
+#[test]
+fn silent_channels_keep_processing_effects_that_need_it() {
+    let targets: [fn(crate::shared::TrackId, crate::shared::BusId) -> EffectTarget; 3] = [
+        |track, _| EffectTarget::Track(track),
+        |_, bus| EffectTarget::Bus(bus),
+        |_, _| EffectTarget::Master,
+    ];
+    for target in targets {
+        // Nothing plays and the transport is stopped, yet the effect runs and is heard.
+        let (calls, energy) = render_idle_probe(target, true, false);
+        assert_eq!(calls, 4);
+        assert!(energy > 1.0);
+        // Ordinary effects stay parked on a silent channel, and so does a bypassed slot.
+        assert_eq!(render_idle_probe(target, false, false), (0, 0.0));
+        assert_eq!(render_idle_probe(target, true, true), (0, 0.0));
+    }
+}
+
 #[test]
 fn pattern_transport_pauses_seeks_and_loops_a_region() {
     use crate::core::project::track::midi::Pattern;

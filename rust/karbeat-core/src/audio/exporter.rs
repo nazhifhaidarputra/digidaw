@@ -10,6 +10,17 @@ use crate::{
 };
 use karbeat_plugins::registry::PluginRegistry;
 
+/// Wall-clock time hosted plugins get to finish restoring their state before the timeline
+/// renders.
+const HOSTED_SETTLE_TIME: std::time::Duration = std::time::Duration::from_millis(400);
+/// Pause between settling blocks, which leaves plugin worker threads time to run.
+const HOSTED_SETTLE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+/// Peak below which a block counts as silent while hosted plugins ring out (-80 dBFS).
+const RING_OUT_SILENCE: f32 = 1.0e-4;
+/// Longest ring-out rendered after the reported tail, matching the engine's cap on reported
+/// tails.
+const RING_OUT_LIMIT_SECONDS: u32 = 20;
+
 #[derive(Debug, Clone, Error)]
 #[error("Audio export failed ({error_source}): {message}")]
 pub struct AudioExportError {
@@ -310,6 +321,15 @@ where
     offline_engine.process(&mut []);
     validate_rendered_block(&offline_engine, &[])?;
 
+    let mut mix_buffer = vec![0.0; block_size * channels];
+    settle_hosted_plugins(
+        &mut offline_engine,
+        &mut mix_buffer,
+        HOSTED_SETTLE_TIME,
+        &mut pos_consumer,
+        &mut feedback_consumer,
+    )?;
+
     let tail_samples = offline_engine.get_project_tail_length();
     let (start_sample, song_length_samples) = match range {
         ExportRange::Song => (
@@ -332,7 +352,6 @@ where
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
     offline_engine.process(&mut []);
     validate_rendered_block(&offline_engine, &[])?;
-    let mut mix_buffer = vec![0.0; block_size * channels];
     let throttle_limit = (sample_rate / block_size as u32 / 30).max(1);
     let mut loop_counter = 0;
 
@@ -414,6 +433,24 @@ where
                 return finalize_cancelled(writer);
             }
         }
+
+        // Hosted plugins often report no tail at all (LSP's convolution reverbs do), so keep
+        // rendering while they are still audible.
+        if offline_engine.has_continuous_effects() {
+            let limit = RING_OUT_LIMIT_SECONDS.saturating_mul(sample_rate);
+            while tail_processed < limit
+                && render_ring_out_block(&mut offline_engine, &mut mix_buffer)?
+            {
+                writer
+                    .write(&mix_buffer)
+                    .map_err(|e| AudioExportError::new("Writer", format!("Write error: {e}")))?;
+                drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
+                tail_processed += block_size as u32;
+                if !progress_callback(1.0) {
+                    return finalize_cancelled(writer);
+                }
+            }
+        }
     }
 
     let _ = progress_callback(1.0);
@@ -451,6 +488,42 @@ fn drain_engine_feedback(
 ) {
     while position.pop().is_ok() {}
     while feedback.pop().is_ok() {}
+}
+
+/// Runs the stopped engine at a real-time pace so hosted plugins finish restoring their state.
+///
+/// Native plugins apply restored state from their process callback, often after a worker
+/// thread has loaded files; LSP's convolution reverbs load their impulse responses this way.
+/// An offline render outruns that work, so the timeline would otherwise start on plugins that
+/// are still loading. Renders without hosted effects skip the wait.
+fn settle_hosted_plugins(
+    engine: &mut AudioEngine,
+    buffer: &mut [f32],
+    settle: std::time::Duration,
+    position: &mut rtrb::Consumer<crate::audio::event::TransportFeedback>,
+    feedback: &mut rtrb::Consumer<crate::commands::AudioFeedback>,
+) -> Result<(), AudioExportError> {
+    if !engine.has_continuous_effects() {
+        return Ok(());
+    }
+    let deadline = std::time::Instant::now() + settle;
+    while std::time::Instant::now() < deadline {
+        engine.process(buffer);
+        validate_rendered_block(engine, buffer)?;
+        drain_engine_feedback(position, feedback);
+        std::thread::sleep(HOSTED_SETTLE_INTERVAL);
+    }
+    Ok(())
+}
+
+/// Renders the next block after the reported tail; `false` once the engine has gone silent.
+fn render_ring_out_block(
+    engine: &mut AudioEngine,
+    buffer: &mut [f32],
+) -> Result<bool, AudioExportError> {
+    engine.process(buffer);
+    validate_rendered_block(engine, buffer)?;
+    Ok(buffer.iter().any(|sample| sample.abs() >= RING_OUT_SILENCE))
 }
 
 fn validate_rendered_block(engine: &AudioEngine, samples: &[f32]) -> Result<(), AudioExportError> {
@@ -596,6 +669,100 @@ mod tests {
         );
         assert_eq!(result.unwrap_err().error_source, "HostedPlugin");
         assert_eq!(std::fs::read(path).unwrap(), b"previous export");
+        drop(engine);
+        assert!(retirement.take().is_some());
+    }
+
+    /// Installs a hosted effect on the master that rings for `ringing` blocks and counts its
+    /// process calls.
+    fn engine_with_hosted_ringing_effect(
+        ringing: usize,
+    ) -> (
+        AudioEngine,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        karbeat_host::ProcessorRetirement,
+    ) {
+        let mut engine = engine();
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (processor, retirement) = Box::new(HostedProcessor::new(
+            Box::new(crate::audio::engine::tests::IdleProbe {
+                calls: calls.clone(),
+                ringing,
+                continuous: false,
+            }),
+            HostInstanceId(7),
+        ))
+        .prepare_transfer()
+        .unwrap();
+        let (command, _) = HostedPluginInstall::new(
+            PluginTarget::MasterEffect(EffectId::from(1)),
+            None,
+            123,
+            ProcessingConfig {
+                sample_rate: 48_000.0,
+                max_block_size: 4096,
+                main_input_channels: 2,
+                main_output_channels: 2,
+                sidechain_channels: 0,
+                offline: false,
+            },
+            processor,
+        );
+        let (command, mut control) = karbeat_host::ControlTransfer::new(command);
+        engine.process_command(AudioCommand::InstallHostedPlugin(command));
+        assert!(control.collect());
+        // Publishing the routing schedules the master node, as loading any project does.
+        engine.process_command(AudioCommand::UpdateRouting {
+            routing: Box::default(),
+        });
+        (engine, calls, retirement)
+    }
+
+    #[test]
+    fn settling_gives_hosted_effects_blocks_without_moving_the_timeline() {
+        let (_, mut position) = RingBuffer::new(1);
+        let (_, mut feedback) = RingBuffer::new(1);
+        let mut buffer = vec![0.0; 512];
+
+        // Without hosted effects there is nothing to wait for.
+        let started = std::time::Instant::now();
+        settle_hosted_plugins(
+            &mut engine(),
+            &mut buffer,
+            std::time::Duration::from_secs(30),
+            &mut position,
+            &mut feedback,
+        )
+        .unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+
+        let (mut engine, calls, mut retirement) = engine_with_hosted_ringing_effect(0);
+        settle_hosted_plugins(
+            &mut engine,
+            &mut buffer,
+            std::time::Duration::from_millis(50),
+            &mut position,
+            &mut feedback,
+        )
+        .unwrap();
+        assert!(calls.load(std::sync::atomic::Ordering::Relaxed) > 0);
+        assert_eq!(engine.get_export_length(), 0);
+        drop(engine);
+        assert!(retirement.take().is_some());
+    }
+
+    #[test]
+    fn ring_out_lasts_until_hosted_effects_fall_silent() {
+        let (mut engine, _, mut retirement) = engine_with_hosted_ringing_effect(5);
+        // The effect reports no tail, so only listening reveals that it still rings.
+        assert_eq!(engine.get_project_tail_length(), 0);
+        let mut buffer = vec![0.0; 512];
+        let mut audible_blocks = 0;
+        while render_ring_out_block(&mut engine, &mut buffer).unwrap() {
+            audible_blocks += 1;
+            assert!(audible_blocks <= 5);
+        }
+        assert_eq!(audible_blocks, 5);
         drop(engine);
         assert!(retirement.take().is_some());
     }

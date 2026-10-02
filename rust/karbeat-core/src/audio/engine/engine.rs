@@ -1329,18 +1329,20 @@ impl AudioEngine {
                     }
 
                     // A silent channel still runs its effects while a sidechain feeds them,
-                    // so gates and duckers keep reacting to their key signal.
+                    // so gates and duckers keep reacting to their key signal, and while a
+                    // hosted plugin needs its process callback.
                     if !has_signal
                         && self
                             .plugin_state
                             .get_track_effects(track_id.to_u32() as usize)
                             .is_some_and(|effects| {
                                 effects.iter().any(|effect| {
-                                    self.routing.node_has_signal.contains_key(
-                                        &RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(
-                                            *track_id, effect.id,
-                                        )),
-                                    )
+                                    effect.keeps_processing()
+                                        || self.routing.node_has_signal.contains_key(
+                                            &RoutingNode::PluginSidechain(
+                                                SidechainRoute::TrackEffect(*track_id, effect.id),
+                                            ),
+                                        )
                                 })
                             })
                     {
@@ -1477,7 +1479,8 @@ impl AudioEngine {
                     }
 
                     // ================= Bus Tail Handling ===================
-                    // Sidechain input counts as signal so keyed effects keep processing.
+                    // Sidechain input counts as signal so keyed effects keep processing, and
+                    // so does a hosted plugin that needs its process callback.
                     let mut bus_has_signal = self
                         .routing
                         .node_has_signal
@@ -1489,11 +1492,12 @@ impl AudioEngine {
                             .get_bus_effects(bus_id.to_u32() as usize)
                             .is_some_and(|effects| {
                                 effects.iter().any(|effect| {
-                                    self.routing.node_has_signal.contains_key(
-                                        &RoutingNode::PluginSidechain(SidechainRoute::BusEffect(
-                                            *bus_id, effect.id,
-                                        )),
-                                    )
+                                    effect.keeps_processing()
+                                        || self.routing.node_has_signal.contains_key(
+                                            &RoutingNode::PluginSidechain(
+                                                SidechainRoute::BusEffect(*bus_id, effect.id),
+                                            ),
+                                        )
                                 })
                             });
                     let bus_effects_tail = self
@@ -1660,11 +1664,12 @@ impl AudioEngine {
                         .copied()
                         .unwrap_or(false)
                         || self.plugin_state.master_effects.iter().any(|effect| {
-                            self.routing.node_has_signal.contains_key(
-                                &RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(
-                                    effect.id,
-                                )),
-                            )
+                            effect.keeps_processing()
+                                || self.routing.node_has_signal.contains_key(
+                                    &RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(
+                                        effect.id,
+                                    )),
+                                )
                         });
                     let master_effects_tail = self
                         .plugin_state
@@ -2288,6 +2293,16 @@ impl AudioEngine {
                 MasterAutomationTarget::TempoBpm => {}
             },
         }
+    }
+
+    /// Whether any effect keeps processing on a silent channel, as hosted plugins do.
+    pub fn has_continuous_effects(&self) -> bool {
+        itertools::chain!(
+            self.plugin_state.track_effects.iter().flatten(),
+            self.plugin_state.bus_effects.iter().flatten(),
+            self.plugin_state.master_effects.iter(),
+        )
+        .any(AudioEffectInstance::keeps_processing)
     }
 
     /// Returns the exact number of samples needed to fully clear all plugin delays and reverb tails.

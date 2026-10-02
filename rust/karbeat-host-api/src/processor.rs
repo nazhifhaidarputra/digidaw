@@ -189,6 +189,9 @@ impl AudioPlugin for HostedProcessor {
     fn has_latency_changed(&mut self) -> bool {
         self.inner.has_latency_changed()
     }
+    fn needs_continuous_processing(&self) -> bool {
+        true
+    }
     fn set_parameter(&mut self, id: u32, value: f32) {
         self.inner.set_parameter(id, value);
     }

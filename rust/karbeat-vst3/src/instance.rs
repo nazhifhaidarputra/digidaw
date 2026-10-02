@@ -557,17 +557,9 @@ impl Vst3Instance {
     }
 
     /// Applies the parts of a `restartComponent` request the host handles in place.
-    ///
-    /// A latency change is re-read on this UI owner and published to the audio endpoint, whose
-    /// `has_latency_changed` edge then triggers delay-compensation recalculation.
     pub fn apply_restart_flags(&self, flags: i32) {
-        if flags & RestartFlags_::kLatencyChanged != 0
-            && self.active
-            && let (Some(processor), Some(slot)) = (&self.processor, &self.slot)
-        {
-            // SAFETY: Latency is queried on the owning UI thread of an active processor.
-            let latency = unsafe { processor.getLatencySamples() };
-            slot.latency.store(latency, Ordering::Release);
+        if flags & RestartFlags_::kLatencyChanged != 0 {
+            self.publish_latency();
         }
         if flags & RestartFlags_::kIoChanged != 0 {
             log::warn!(
@@ -606,8 +598,26 @@ impl Vst3Instance {
             // SAFETY: Exclusive suspended DSP access; flush cached UI edits before querying state.
             let dsp = unsafe { &mut *slot.dsp.get() };
             dsp.flush(&self.exchange)?;
+            // Processors such as LSP's work out their latency while rendering, so the value
+            // read at activation can be stale until a block has run.
+            self.publish_latency();
         }
         Ok(())
+    }
+
+    /// Re-reads latency and tail on this UI owner and publishes them to the audio endpoint,
+    /// whose `has_latency_changed` edge then triggers delay-compensation recalculation.
+    fn publish_latency(&self) {
+        if self.active
+            && let (Some(processor), Some(slot)) = (&self.processor, &self.slot)
+        {
+            // SAFETY: Latency is queried on the owning UI thread of an active processor.
+            let latency = unsafe { processor.getLatencySamples() };
+            // SAFETY: Tail is queried on the owning UI thread of an active processor.
+            let tail = unsafe { processor.getTailSamples() };
+            slot.latency.store(latency, Ordering::Release);
+            slot.tail.store(tail, Ordering::Release);
+        }
     }
     pub fn save_state(&mut self) -> Result<PluginState, HostError> {
         self.flush_parameters()?;

@@ -105,6 +105,15 @@ pub trait AudioPlugin: Any + Send {
         0
     }
 
+    /// Whether the engine must keep calling `process` while the plugin's input is silent.
+    ///
+    /// Hosted native plugins take parameter edits, finish background work such as file loading
+    /// and ring out tails they do not report from inside their process callback, so they
+    /// cannot be parked on a silent channel the way built-in plugins are.
+    fn needs_continuous_processing(&self) -> bool {
+        false
+    }
+
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
 
