@@ -4,7 +4,21 @@ part 'appearance_settings_state.freezed.dart';
 
 enum AppThemeMode { system, light, dark }
 
-enum AppColorPalette { purple, blue, teal, orange, red }
+enum AppColorPalette {
+  purple,
+  blue,
+  teal,
+  orange,
+  red,
+  green,
+  pink,
+  cyan,
+  indigo,
+  amber,
+  lime,
+  magenta,
+  graphite,
+}
 
 enum AppBackgroundFit { cover, contain, fill }
 

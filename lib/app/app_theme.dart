@@ -22,6 +22,14 @@ abstract final class AppTheme {
     AppColorPalette.teal => Colors.teal,
     AppColorPalette.orange => Colors.orange,
     AppColorPalette.red => Colors.red,
+    AppColorPalette.green => Colors.green,
+    AppColorPalette.pink => Colors.pink,
+    AppColorPalette.cyan => Colors.cyan,
+    AppColorPalette.indigo => Colors.indigo,
+    AppColorPalette.amber => Colors.amber,
+    AppColorPalette.lime => Colors.lime,
+    AppColorPalette.magenta => const Color(0xFFD500F9),
+    AppColorPalette.graphite => Colors.blueGrey,
   };
 
   static ThemeData _build(

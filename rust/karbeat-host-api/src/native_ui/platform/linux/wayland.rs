@@ -540,6 +540,7 @@ mod tests {
                 constraints: NativeWindowConstraints::resizable(),
                 initially_visible: false,
                 preferred_surface: NativeSurfacePreference::Require(NativeSurfaceKind::Wayland),
+                stay_on_top: false,
             },
         )?;
         assert!(matches!(

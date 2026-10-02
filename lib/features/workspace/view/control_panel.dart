@@ -428,10 +428,10 @@ class DefaultControlPanel extends ConsumerWidget {
             ref.read(workspaceStateProvider.notifier).selectTool(tool),
         items: [
           PopupMenuItem(
-            value: ToolSelection.pointer,
+            value: ToolSelection.panSelect,
             child: ListTile(
-              leading: Icon(Icons.near_me, color: colors.secondary),
-              title: const Text("Pointer"),
+              leading: Icon(Icons.pan_tool_alt, color: colors.secondary),
+              title: const Text("Pan/Select"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -521,8 +521,8 @@ class DefaultControlPanel extends ConsumerWidget {
   // Helpers to dynamically display the currently selected Tool
   String _getToolName(ToolSelection tool) {
     switch (tool) {
-      case ToolSelection.pointer:
-        return "Pointer";
+      case ToolSelection.panSelect:
+        return "Pan/Select";
       case ToolSelection.slice:
         return "Cut";
       case ToolSelection.draw:
@@ -536,14 +536,14 @@ class DefaultControlPanel extends ConsumerWidget {
       case ToolSelection.resize:
         return "Resize";
       default:
-        return "Pointer";
+        return "Pan/Select";
     }
   }
 
   IconData _getToolIcon(ToolSelection tool) {
     switch (tool) {
-      case ToolSelection.pointer:
-        return Icons.near_me;
+      case ToolSelection.panSelect:
+        return Icons.pan_tool_alt;
       case ToolSelection.slice:
         return Icons.content_cut;
       case ToolSelection.draw:
@@ -557,7 +557,7 @@ class DefaultControlPanel extends ConsumerWidget {
       case ToolSelection.resize:
         return MdiIcons.arrowLeftRight;
       default:
-        return Icons.near_me;
+        return Icons.pan_tool_alt;
     }
   }
 

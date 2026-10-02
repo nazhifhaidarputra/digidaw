@@ -2100,6 +2100,12 @@ impl AudioEngine {
             self.config.num_channels as usize,
         );
 
+        // Offline renders compensate their own graph and leave the monitor reading alone.
+        if matches!(self.processing_mode, ProcessingMode::Realtime) {
+            super::telemetry::PDC_LATENCY_SAMPLES
+                .store(max_system_latency, std::sync::atomic::Ordering::Relaxed);
+        }
+
         log::info!(
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency

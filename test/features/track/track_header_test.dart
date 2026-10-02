@@ -191,6 +191,24 @@ void main() {
     expect(find.byType(ChannelToggleButton), findsNothing);
     expect(find.byTooltip('Expand lane'), findsOneWidget);
   });
+
+  testWidgets('tapping the header body selects the track', (tester) async {
+    var selectCount = 0;
+    await _pumpTrackHeader(
+      tester,
+      service: _ExternalPluginService(isExternal: false),
+      launcher: _FlutterPluginLauncher(),
+      onSelect: () => selectCount += 1,
+    );
+
+    await tester.tap(find.text('MIDI Track'));
+    expect(selectCount, 1);
+
+    // The header's own controls keep their taps
+    await tester.tap(find.byTooltip('Shrink lane'));
+    await tester.pumpAndSettle();
+    expect(selectCount, 1);
+  });
 }
 
 Future<void> _pumpTrackHeader(
@@ -198,6 +216,7 @@ Future<void> _pumpTrackHeader(
   required ExternalPluginService service,
   required PluginFlutterUiLauncher launcher,
   UiMixerChannel? channel,
+  VoidCallback? onSelect,
 }) async {
   final project = _projectData(channel: channel);
   await tester.pumpWidget(
@@ -216,6 +235,7 @@ Future<void> _pumpTrackHeader(
               itemHeight: 90,
               onDragStarted: () {},
               onDragEnded: (_) {},
+              onSelect: onSelect,
             ),
           ),
         ),

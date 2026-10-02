@@ -2,19 +2,30 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/input/intents/piano_roll/piano_roll_intent.dart';
+import 'package:karbeat/core/input/intents/track_list/track_list_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/intent.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/input/shortcut_preferences_service.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/shared/enums/global.dart';
 
 final shortcutPreferencesServiceProvider = Provider<ShortcutPreferencesService>(
   (ref) => ShortcutPreferencesService(),
 );
 
 final shortcutCatalogProvider = Provider<IList<DawShortcut>>(
-  (ref) => workspaceShortcuts.addAll(pianoRollShortcuts),
+  (ref) =>
+      workspaceShortcuts.addAll(trackListShortcuts).addAll(pianoRollShortcuts),
 );
+
+/// The view-specific scope whose shortcuts are active in [view], if any.
+ShortcutScope? shortcutScopeOf(WorkspaceView view) => switch (view) {
+  WorkspaceView.trackList => ShortcutScope.trackList,
+  WorkspaceView.pianoRoll => ShortcutScope.pianoRoll,
+  WorkspaceView.mixer || WorkspaceView.source => null,
+};
 
 class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
   bool _initializationStarted = false;
@@ -77,8 +88,16 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
       return Result.error(ShortcutValidationException('Unknown shortcut: $id'));
     }
 
+    // Shortcuts of different views are never active together, so they may
+    // share a key.
     final conflict = activeChords().entries
-        .where((entry) => entry.key != id && entry.value == chord)
+        .where(
+          (entry) =>
+              entry.key != id &&
+              entry.value == chord &&
+              (shortcutById(entry.key)?.scope.overlaps(shortcut.scope) ??
+                  false),
+        )
         .firstOrNull;
     if (conflict != null) {
       return Result.error(
@@ -125,12 +144,14 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
       .firstOrNull;
 
   bool _hasConflict(IMap<String, ShortcutChord> overrides) {
-    final seen = <ShortcutChord>{};
+    final seen = <ShortcutChord, List<ShortcutScope>>{};
     for (final shortcut in ref.read(shortcutCatalogProvider)) {
       final chord =
           overrides[shortcut.id] ??
           ShortcutChord.fromActivator(shortcut.defaultKey);
-      if (!seen.add(chord)) return true;
+      final scopes = seen.putIfAbsent(chord, () => []);
+      if (scopes.any(shortcut.scope.overlaps)) return true;
+      scopes.add(shortcut.scope);
     }
     return false;
   }
@@ -160,8 +181,12 @@ final activeShortcutMapProvider = Provider<Map<ShortcutActivator, Intent>>((
   ref.watch(shortcutManagerProvider);
   final manager = ref.read(shortcutManagerProvider.notifier);
   final active = manager.activeChords();
+  final viewScope = shortcutScopeOf(
+    ref.watch(workspaceStateProvider.select((state) => state.currentView)),
+  );
   return {
     for (final shortcut in ref.watch(shortcutCatalogProvider))
-      active[shortcut.id]!.toActivator(): shortcut.intent,
+      if (shortcut.scope == ShortcutScope.global || shortcut.scope == viewScope)
+        active[shortcut.id]!.toActivator(): shortcut.intent,
   };
 });

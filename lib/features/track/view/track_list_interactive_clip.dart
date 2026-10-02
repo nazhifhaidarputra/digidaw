@@ -55,6 +55,9 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   /// Track dynamic cursor override
   MouseCursor? _cursorOverride;
 
+  /// Runs while a second click would count as a double-click.
+  Timer? _doubleClickWindow;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +66,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
   @override
   void dispose() {
+    _doubleClickWindow?.cancel();
     super.dispose();
   }
 
@@ -98,6 +102,51 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
         .read(pianoRollProvider.notifier)
         .openPattern(patternId, previewGeneratorId: generatorId);
     ref.read(workspaceStateProvider.notifier).openPattern(patternId);
+  }
+
+  void _openAudioProperties(int sourceId) {
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
+    final sourceName =
+        ref.read(audioSourcesProvider).value?[sourceId]?.name ??
+        widget.clip.name;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            AudioPropertiesScreen(sourceId: sourceId, sourceName: sourceName),
+      ),
+    );
+  }
+
+  /// Opens the editor of what this clip plays: the piano roll for a pattern,
+  /// the audio properties for an audio source.
+  void _openClipEditor() {
+    switch (widget.clip.source) {
+      case UiClipSource_Midi(:final patternId):
+        _openInPianoRoll(patternId);
+      case UiClipSource_Audio(:final sourceId):
+        _openAudioProperties(sourceId);
+      case UiClipSource_None():
+        break;
+    }
+  }
+
+  /// Records a click and reports whether it completes a double-click. The
+  /// first click still acts as a normal click, so single clicks stay instant.
+  bool _completesDoubleClick() {
+    if (widget.selectedTool == ToolSelection.delete ||
+        widget.selectedTool == ToolSelection.slice) {
+      return false;
+    }
+    final window = _doubleClickWindow;
+    if (window != null && window.isActive) {
+      window.cancel();
+      _doubleClickWindow = null;
+      return true;
+    }
+    _doubleClickWindow = Timer(kDoubleTapTimeout, () {});
+    return false;
   }
 
   /// Gives the selection (or just this clip) its own copies of the content it
@@ -277,7 +326,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       compact: widget.compact,
       trackId: widget.trackId,
       envelopeInteractive: switch (widget.selectedTool) {
-        ToolSelection.pointer ||
+        ToolSelection.panSelect ||
         ToolSelection.draw ||
         ToolSelection.select => true,
         _ => false,
@@ -287,6 +336,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final gestureDetector = GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapUp: (details) async {
+        if (_completesDoubleClick()) {
+          _openClipEditor();
+          return;
+        }
         if (widget.selectedTool == ToolSelection.delete) {
           final state = ref.read(trackListStateProvider.notifier);
           if (widget.isSelected && widget.selectedClipIds.length > 1) {
@@ -325,7 +378,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   ),
                 );
           }
-        } else if (widget.selectedTool == ToolSelection.pointer) {
+        } else if (widget.selectedTool == ToolSelection.panSelect) {
           ref
               .read(trackListStateProvider.notifier)
               .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
@@ -549,6 +602,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             title: "Open in Piano Roll",
             icon: Icons.piano,
             onTap: () => _openInPianoRoll(patternId),
+          ),
+        if (widget.clip.source case UiClipSource_Audio(:final sourceId))
+          DawContextAction(
+            title: "Open Audio Properties",
+            icon: Icons.audio_file,
+            onTap: () => _openAudioProperties(sourceId),
           ),
         DawContextAction(
           title: widget.isSelected && widget.selectedClipIds.length > 1

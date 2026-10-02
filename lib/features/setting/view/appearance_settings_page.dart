@@ -224,6 +224,14 @@ String _paletteLabel(AppColorPalette palette) => switch (palette) {
   AppColorPalette.teal => 'Teal',
   AppColorPalette.orange => 'Orange',
   AppColorPalette.red => 'Red',
+  AppColorPalette.green => 'Green',
+  AppColorPalette.pink => 'Pink',
+  AppColorPalette.cyan => 'Cyan',
+  AppColorPalette.indigo => 'Indigo',
+  AppColorPalette.amber => 'Amber',
+  AppColorPalette.lime => 'Lime',
+  AppColorPalette.magenta => 'Magenta',
+  AppColorPalette.graphite => 'Graphite',
 };
 
 String _backgroundFitLabel(AppBackgroundFit fit) => switch (fit) {

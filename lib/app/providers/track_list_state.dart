@@ -12,7 +12,11 @@ import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/features/track/models/mixer_channel_sidepanel.dart';
+import 'package:karbeat/shared/models/grid.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' show UiMixerChannelTarget;
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -54,8 +58,28 @@ abstract class TrackListState with _$TrackListState {
     /// Tracks shrunk to a title-only row. Their stored height is kept so
     /// expanding restores it.
     @Default(ISetConst<int>({})) ISet<int> collapsedTrackIds,
+
+    /// Mixer channel panel beside the track headers.
+    @Default(MixerChannelPanelState()) MixerChannelPanelState mixerChannelPanel,
   }) = _TrackListState;
 }
+
+/// The channel shown in the track list's mixer panel; null while the panel is
+/// closed or once its track or bus no longer exists.
+final mixerChannelPanelTargetProvider = Provider<UiMixerChannelTarget?>((ref) {
+  final panel = ref.watch(
+    trackListStateProvider.select((s) => s.mixerChannelPanel),
+  );
+  final target = panel.target;
+  if (!panel.isOpen || target == null) return null;
+  final exists = ref.watch(
+    projectProvider.select((s) {
+      final mixer = s.value?.mixer;
+      return mixer != null && target.channelIn(mixer) != null;
+    }),
+  );
+  return exists ? target : null;
+});
 
 // ============================================================
 // Notifier
@@ -116,6 +140,24 @@ class TrackListNotifier extends Notifier<TrackListState> {
       collapsedTrackIds: collapsed.contains(trackId)
           ? collapsed.remove(trackId)
           : collapsed.add(trackId),
+    );
+  }
+
+  /// Shows [target] in the mixer channel panel; selecting the channel that
+  /// is already shown closes the panel.
+  void selectMixerChannel(UiMixerChannelTarget target) {
+    final panel = state.mixerChannelPanel;
+    state = state.copyWith(
+      mixerChannelPanel: panel.isOpen && panel.target == target
+          ? panel.copyWith(isOpen: false)
+          : MixerChannelPanelState(isOpen: true, target: target),
+    );
+  }
+
+  void closeMixerChannelPanel() {
+    if (!state.mixerChannelPanel.isOpen) return;
+    state = state.copyWith(
+      mixerChannelPanel: state.mixerChannelPanel.copyWith(isOpen: false),
     );
   }
 
@@ -629,6 +671,37 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // ------------------------------------------------------------------
   // Batch clip operations
   // ------------------------------------------------------------------
+
+  /// Moves the selected clips [steps] move steps along the timeline, where
+  /// one step is [step] (a single tick when it is none). Stops at the start
+  /// of the timeline.
+  Future<Result<void>> nudgeSelectedClips({
+    required int steps,
+    required MusicalBeatSize step,
+  }) async {
+    final trackId = state.selectedTrackId;
+    final clipIds = state.selectedClipIds;
+    final track = trackId == null
+        ? null
+        : ref.read(projectProvider).value?.tracks[trackId];
+    if (trackId == null || track == null || clipIds.isEmpty) {
+      return Result.ok(null);
+    }
+    final starts = track.clips
+        .where((clip) => clipIds.contains(clip.id))
+        .map((clip) => clip.startTimeInTicks);
+    if (starts.isEmpty) return Result.ok(null);
+    final earliestStart = starts.reduce((a, b) => a < b ? a : b);
+
+    final ticksPerStep = step == MusicalBeatSize.none
+        ? 1
+        : (step.value * 960).round();
+    var deltaTicks = steps * ticksPerStep;
+    if (deltaTicks < -earliestStart) deltaTicks = -earliestStart;
+    if (deltaTicks == 0) return Result.ok(null);
+
+    return moveClipBatch(trackId, clipIds.toList(), deltaTicks);
+  }
 
   /// Move multiple clips by [deltaTicks], with an optimistic update.
   Future<Result<void>> moveClipBatch(

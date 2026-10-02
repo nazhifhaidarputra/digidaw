@@ -35,6 +35,8 @@ struct X11Atoms {
     wm_delete_window: Atom,
     utf8_string: Atom,
     net_wm_name: Atom,
+    net_wm_state: Atom,
+    net_wm_state_above: Atom,
     resource_manager: Atom,
 }
 
@@ -83,6 +85,8 @@ impl X11Backend {
             wm_delete_window: intern_atom(&connection, b"WM_DELETE_WINDOW")?,
             utf8_string: intern_atom(&connection, b"UTF8_STRING")?,
             net_wm_name: intern_atom(&connection, b"_NET_WM_NAME")?,
+            net_wm_state: intern_atom(&connection, b"_NET_WM_STATE")?,
+            net_wm_state_above: intern_atom(&connection, b"_NET_WM_STATE_ABOVE")?,
             resource_manager: intern_atom(&connection, b"RESOURCE_MANAGER")?,
         };
         let scale_factor = read_xft_scale(&connection);
@@ -457,6 +461,19 @@ impl X11Window {
             .map_err(native_error)?;
         self.set_title(spec.title)?;
         self.set_constraints(spec.constraints)?;
+        if spec.stay_on_top {
+            // Read by the window manager when the window is mapped.
+            self.shared
+                .connection
+                .change_property32(
+                    PropMode::REPLACE,
+                    self.state.xid,
+                    self.shared.atoms.net_wm_state,
+                    AtomEnum::ATOM,
+                    &[self.shared.atoms.net_wm_state_above],
+                )
+                .map_err(native_error)?;
+        }
         if spec.initially_visible {
             self.show()?;
         }
@@ -540,6 +557,7 @@ mod tests {
                 constraints: NativeWindowConstraints::resizable(),
                 initially_visible: false,
                 preferred_surface: NativeSurfacePreference::Require(NativeSurfaceKind::X11),
+                stay_on_top: false,
             },
         )?;
         assert!(matches!(

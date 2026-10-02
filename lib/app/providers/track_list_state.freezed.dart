@@ -20,7 +20,8 @@ mixin _$TrackListState {
  int? get focusClipId;/// Per-track pixel heights for the arranger rows, keyed by track ID.
  IMap<int, int> get trackIdHeightMap;/// Tracks shrunk to a title-only row. Their stored height is kept so
 /// expanding restores it.
- ISet<int> get collapsedTrackIds;
+ ISet<int> get collapsedTrackIds;/// Mixer channel panel beside the track headers.
+ MixerChannelPanelState get mixerChannelPanel;
 /// Create a copy of TrackListState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -31,16 +32,16 @@ $TrackListStateCopyWith<TrackListState> get copyWith => _$TrackListStateCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is TrackListState&&(identical(other.selectedTrackId, selectedTrackId) || other.selectedTrackId == selectedTrackId)&&const DeepCollectionEquality().equals(other.selectedClipIds, selectedClipIds)&&(identical(other.focusClipId, focusClipId) || other.focusClipId == focusClipId)&&(identical(other.trackIdHeightMap, trackIdHeightMap) || other.trackIdHeightMap == trackIdHeightMap)&&const DeepCollectionEquality().equals(other.collapsedTrackIds, collapsedTrackIds));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is TrackListState&&(identical(other.selectedTrackId, selectedTrackId) || other.selectedTrackId == selectedTrackId)&&const DeepCollectionEquality().equals(other.selectedClipIds, selectedClipIds)&&(identical(other.focusClipId, focusClipId) || other.focusClipId == focusClipId)&&(identical(other.trackIdHeightMap, trackIdHeightMap) || other.trackIdHeightMap == trackIdHeightMap)&&const DeepCollectionEquality().equals(other.collapsedTrackIds, collapsedTrackIds)&&(identical(other.mixerChannelPanel, mixerChannelPanel) || other.mixerChannelPanel == mixerChannelPanel));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,selectedTrackId,const DeepCollectionEquality().hash(selectedClipIds),focusClipId,trackIdHeightMap,const DeepCollectionEquality().hash(collapsedTrackIds));
+int get hashCode => Object.hash(runtimeType,selectedTrackId,const DeepCollectionEquality().hash(selectedClipIds),focusClipId,trackIdHeightMap,const DeepCollectionEquality().hash(collapsedTrackIds),mixerChannelPanel);
 
 @override
 String toString() {
-  return 'TrackListState(selectedTrackId: $selectedTrackId, selectedClipIds: $selectedClipIds, focusClipId: $focusClipId, trackIdHeightMap: $trackIdHeightMap, collapsedTrackIds: $collapsedTrackIds)';
+  return 'TrackListState(selectedTrackId: $selectedTrackId, selectedClipIds: $selectedClipIds, focusClipId: $focusClipId, trackIdHeightMap: $trackIdHeightMap, collapsedTrackIds: $collapsedTrackIds, mixerChannelPanel: $mixerChannelPanel)';
 }
 
 
@@ -51,11 +52,11 @@ abstract mixin class $TrackListStateCopyWith<$Res>  {
   factory $TrackListStateCopyWith(TrackListState value, $Res Function(TrackListState) _then) = _$TrackListStateCopyWithImpl;
 @useResult
 $Res call({
- int? selectedTrackId, IList<int> selectedClipIds, int? focusClipId, IMap<int, int> trackIdHeightMap, ISet<int> collapsedTrackIds
+ int? selectedTrackId, IList<int> selectedClipIds, int? focusClipId, IMap<int, int> trackIdHeightMap, ISet<int> collapsedTrackIds, MixerChannelPanelState mixerChannelPanel
 });
 
 
-
+$MixerChannelPanelStateCopyWith<$Res> get mixerChannelPanel;
 
 }
 /// @nodoc
@@ -68,17 +69,27 @@ class _$TrackListStateCopyWithImpl<$Res>
 
 /// Create a copy of TrackListState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? selectedTrackId = freezed,Object? selectedClipIds = null,Object? focusClipId = freezed,Object? trackIdHeightMap = null,Object? collapsedTrackIds = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? selectedTrackId = freezed,Object? selectedClipIds = null,Object? focusClipId = freezed,Object? trackIdHeightMap = null,Object? collapsedTrackIds = null,Object? mixerChannelPanel = null,}) {
   return _then(_self.copyWith(
 selectedTrackId: freezed == selectedTrackId ? _self.selectedTrackId : selectedTrackId // ignore: cast_nullable_to_non_nullable
 as int?,selectedClipIds: null == selectedClipIds ? _self.selectedClipIds : selectedClipIds // ignore: cast_nullable_to_non_nullable
 as IList<int>,focusClipId: freezed == focusClipId ? _self.focusClipId : focusClipId // ignore: cast_nullable_to_non_nullable
 as int?,trackIdHeightMap: null == trackIdHeightMap ? _self.trackIdHeightMap : trackIdHeightMap // ignore: cast_nullable_to_non_nullable
 as IMap<int, int>,collapsedTrackIds: null == collapsedTrackIds ? _self.collapsedTrackIds : collapsedTrackIds // ignore: cast_nullable_to_non_nullable
-as ISet<int>,
+as ISet<int>,mixerChannelPanel: null == mixerChannelPanel ? _self.mixerChannelPanel : mixerChannelPanel // ignore: cast_nullable_to_non_nullable
+as MixerChannelPanelState,
   ));
 }
-
+/// Create a copy of TrackListState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$MixerChannelPanelStateCopyWith<$Res> get mixerChannelPanel {
+  
+  return $MixerChannelPanelStateCopyWith<$Res>(_self.mixerChannelPanel, (value) {
+    return _then(_self.copyWith(mixerChannelPanel: value));
+  });
+}
 }
 
 
@@ -160,10 +171,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? selectedTrackId,  IList<int> selectedClipIds,  int? focusClipId,  IMap<int, int> trackIdHeightMap,  ISet<int> collapsedTrackIds)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? selectedTrackId,  IList<int> selectedClipIds,  int? focusClipId,  IMap<int, int> trackIdHeightMap,  ISet<int> collapsedTrackIds,  MixerChannelPanelState mixerChannelPanel)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _TrackListState() when $default != null:
-return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_that.trackIdHeightMap,_that.collapsedTrackIds);case _:
+return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_that.trackIdHeightMap,_that.collapsedTrackIds,_that.mixerChannelPanel);case _:
   return orElse();
 
 }
@@ -181,10 +192,10 @@ return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? selectedTrackId,  IList<int> selectedClipIds,  int? focusClipId,  IMap<int, int> trackIdHeightMap,  ISet<int> collapsedTrackIds)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? selectedTrackId,  IList<int> selectedClipIds,  int? focusClipId,  IMap<int, int> trackIdHeightMap,  ISet<int> collapsedTrackIds,  MixerChannelPanelState mixerChannelPanel)  $default,) {final _that = this;
 switch (_that) {
 case _TrackListState():
-return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_that.trackIdHeightMap,_that.collapsedTrackIds);case _:
+return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_that.trackIdHeightMap,_that.collapsedTrackIds,_that.mixerChannelPanel);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -201,10 +212,10 @@ return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? selectedTrackId,  IList<int> selectedClipIds,  int? focusClipId,  IMap<int, int> trackIdHeightMap,  ISet<int> collapsedTrackIds)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? selectedTrackId,  IList<int> selectedClipIds,  int? focusClipId,  IMap<int, int> trackIdHeightMap,  ISet<int> collapsedTrackIds,  MixerChannelPanelState mixerChannelPanel)?  $default,) {final _that = this;
 switch (_that) {
 case _TrackListState() when $default != null:
-return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_that.trackIdHeightMap,_that.collapsedTrackIds);case _:
+return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_that.trackIdHeightMap,_that.collapsedTrackIds,_that.mixerChannelPanel);case _:
   return null;
 
 }
@@ -216,7 +227,7 @@ return $default(_that.selectedTrackId,_that.selectedClipIds,_that.focusClipId,_t
 
 
 class _TrackListState implements TrackListState {
-  const _TrackListState({this.selectedTrackId, this.selectedClipIds = const IListConst<int>([]), this.focusClipId, this.trackIdHeightMap = const IMapConst<int, int>({}), this.collapsedTrackIds = const ISetConst<int>({})});
+  const _TrackListState({this.selectedTrackId, this.selectedClipIds = const IListConst<int>([]), this.focusClipId, this.trackIdHeightMap = const IMapConst<int, int>({}), this.collapsedTrackIds = const ISetConst<int>({}), this.mixerChannelPanel = const MixerChannelPanelState()});
   
 
 /// The track that currently "owns" the clip selection.
@@ -230,6 +241,8 @@ class _TrackListState implements TrackListState {
 /// Tracks shrunk to a title-only row. Their stored height is kept so
 /// expanding restores it.
 @override@JsonKey() final  ISet<int> collapsedTrackIds;
+/// Mixer channel panel beside the track headers.
+@override@JsonKey() final  MixerChannelPanelState mixerChannelPanel;
 
 /// Create a copy of TrackListState
 /// with the given fields replaced by the non-null parameter values.
@@ -241,16 +254,16 @@ _$TrackListStateCopyWith<_TrackListState> get copyWith => __$TrackListStateCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TrackListState&&(identical(other.selectedTrackId, selectedTrackId) || other.selectedTrackId == selectedTrackId)&&const DeepCollectionEquality().equals(other.selectedClipIds, selectedClipIds)&&(identical(other.focusClipId, focusClipId) || other.focusClipId == focusClipId)&&(identical(other.trackIdHeightMap, trackIdHeightMap) || other.trackIdHeightMap == trackIdHeightMap)&&const DeepCollectionEquality().equals(other.collapsedTrackIds, collapsedTrackIds));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TrackListState&&(identical(other.selectedTrackId, selectedTrackId) || other.selectedTrackId == selectedTrackId)&&const DeepCollectionEquality().equals(other.selectedClipIds, selectedClipIds)&&(identical(other.focusClipId, focusClipId) || other.focusClipId == focusClipId)&&(identical(other.trackIdHeightMap, trackIdHeightMap) || other.trackIdHeightMap == trackIdHeightMap)&&const DeepCollectionEquality().equals(other.collapsedTrackIds, collapsedTrackIds)&&(identical(other.mixerChannelPanel, mixerChannelPanel) || other.mixerChannelPanel == mixerChannelPanel));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,selectedTrackId,const DeepCollectionEquality().hash(selectedClipIds),focusClipId,trackIdHeightMap,const DeepCollectionEquality().hash(collapsedTrackIds));
+int get hashCode => Object.hash(runtimeType,selectedTrackId,const DeepCollectionEquality().hash(selectedClipIds),focusClipId,trackIdHeightMap,const DeepCollectionEquality().hash(collapsedTrackIds),mixerChannelPanel);
 
 @override
 String toString() {
-  return 'TrackListState(selectedTrackId: $selectedTrackId, selectedClipIds: $selectedClipIds, focusClipId: $focusClipId, trackIdHeightMap: $trackIdHeightMap, collapsedTrackIds: $collapsedTrackIds)';
+  return 'TrackListState(selectedTrackId: $selectedTrackId, selectedClipIds: $selectedClipIds, focusClipId: $focusClipId, trackIdHeightMap: $trackIdHeightMap, collapsedTrackIds: $collapsedTrackIds, mixerChannelPanel: $mixerChannelPanel)';
 }
 
 
@@ -261,11 +274,11 @@ abstract mixin class _$TrackListStateCopyWith<$Res> implements $TrackListStateCo
   factory _$TrackListStateCopyWith(_TrackListState value, $Res Function(_TrackListState) _then) = __$TrackListStateCopyWithImpl;
 @override @useResult
 $Res call({
- int? selectedTrackId, IList<int> selectedClipIds, int? focusClipId, IMap<int, int> trackIdHeightMap, ISet<int> collapsedTrackIds
+ int? selectedTrackId, IList<int> selectedClipIds, int? focusClipId, IMap<int, int> trackIdHeightMap, ISet<int> collapsedTrackIds, MixerChannelPanelState mixerChannelPanel
 });
 
 
-
+@override $MixerChannelPanelStateCopyWith<$Res> get mixerChannelPanel;
 
 }
 /// @nodoc
@@ -278,18 +291,28 @@ class __$TrackListStateCopyWithImpl<$Res>
 
 /// Create a copy of TrackListState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? selectedTrackId = freezed,Object? selectedClipIds = null,Object? focusClipId = freezed,Object? trackIdHeightMap = null,Object? collapsedTrackIds = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? selectedTrackId = freezed,Object? selectedClipIds = null,Object? focusClipId = freezed,Object? trackIdHeightMap = null,Object? collapsedTrackIds = null,Object? mixerChannelPanel = null,}) {
   return _then(_TrackListState(
 selectedTrackId: freezed == selectedTrackId ? _self.selectedTrackId : selectedTrackId // ignore: cast_nullable_to_non_nullable
 as int?,selectedClipIds: null == selectedClipIds ? _self.selectedClipIds : selectedClipIds // ignore: cast_nullable_to_non_nullable
 as IList<int>,focusClipId: freezed == focusClipId ? _self.focusClipId : focusClipId // ignore: cast_nullable_to_non_nullable
 as int?,trackIdHeightMap: null == trackIdHeightMap ? _self.trackIdHeightMap : trackIdHeightMap // ignore: cast_nullable_to_non_nullable
 as IMap<int, int>,collapsedTrackIds: null == collapsedTrackIds ? _self.collapsedTrackIds : collapsedTrackIds // ignore: cast_nullable_to_non_nullable
-as ISet<int>,
+as ISet<int>,mixerChannelPanel: null == mixerChannelPanel ? _self.mixerChannelPanel : mixerChannelPanel // ignore: cast_nullable_to_non_nullable
+as MixerChannelPanelState,
   ));
 }
 
-
+/// Create a copy of TrackListState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$MixerChannelPanelStateCopyWith<$Res> get mixerChannelPanel {
+  
+  return $MixerChannelPanelStateCopyWith<$Res>(_self.mixerChannelPanel, (value) {
+    return _then(_self.copyWith(mixerChannelPanel: value));
+  });
+}
 }
 
 // dart format on

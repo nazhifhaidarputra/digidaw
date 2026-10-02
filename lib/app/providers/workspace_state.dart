@@ -63,7 +63,7 @@ abstract class WorkspaceState with _$WorkspaceState {
   const factory WorkspaceState({
     @Default(WorkspaceView.trackList) WorkspaceView currentView,
 
-    @Default(ToolSelection.pointer) ToolSelection selectedTool,
+    @Default(ToolSelection.panSelect) ToolSelection selectedTool,
 
     @Default(ToolbarMenuContextGroup.none)
     ToolbarMenuContextGroup currentToolbarContext,

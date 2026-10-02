@@ -245,13 +245,20 @@ void main() {
 
   test('piano-roll shortcuts do not collide with any default shortcut', () {
     final container = ProviderContainer.test();
-    final chords = <ShortcutChord>{};
+    // Only shortcuts that can be active together must differ: a track-list
+    // key may repeat in the piano roll, but neither may repeat a global one
+    final chords = <ShortcutChord, List<ShortcutScope>>{};
     for (final shortcut in container.read(shortcutCatalogProvider)) {
+      final scopes = chords.putIfAbsent(
+        ShortcutChord.fromActivator(shortcut.defaultKey),
+        () => [],
+      );
       expect(
-        chords.add(ShortcutChord.fromActivator(shortcut.defaultKey)),
-        isTrue,
+        scopes.any(shortcut.scope.overlaps),
+        isFalse,
         reason: '${shortcut.id} reuses another default key',
       );
+      scopes.add(shortcut.scope);
       expect(shortcut.intent, isA<Intent>());
     }
   });

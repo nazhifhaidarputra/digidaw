@@ -35,7 +35,7 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     title: 'Toggle Metronome',
     category: 'Transport',
     intent: ToggleMetronomeIntent(),
-    defaultKey: SingleActivator(LogicalKeyboardKey.keyM),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyM, control: true),
   ),
   DawShortcut(
     id: "workspace.save",

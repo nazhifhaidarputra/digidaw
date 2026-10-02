@@ -10,7 +10,9 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/constants/toolbar.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/input/intents/song_timeline/playback_intent.dart';
+import 'package:karbeat/core/input/intents/track_list/track_list_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/action_history_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/export_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/open_midi_keyboard_intent.dart';
@@ -121,6 +123,30 @@ class MainScreen extends ConsumerWidget {
               ToggleMetronomeIntent: CallbackAction<ToggleMetronomeIntent>(
                 onInvoke: (_) {
                   ref.read(transportProvider.notifier).toggleMetronomeActive();
+                  return null;
+                },
+              ),
+              SelectTrackListToolIntent:
+                  CallbackAction<SelectTrackListToolIntent>(
+                    onInvoke: (intent) {
+                      ref
+                          .read(workspaceStateProvider.notifier)
+                          .selectTool(intent.tool);
+                      return null;
+                    },
+                  ),
+              NudgeClipsIntent: CallbackAction<NudgeClipsIntent>(
+                onInvoke: (intent) {
+                  unawaited(
+                    ref
+                        .read(trackListStateProvider.notifier)
+                        .nudgeSelectedClips(
+                          steps: intent.steps,
+                          step: ref
+                              .read(workspaceStateProvider)
+                              .horizontalClipShiftSizeDenom,
+                        ),
+                  );
                   return null;
                 },
               ),

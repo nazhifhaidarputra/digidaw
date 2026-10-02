@@ -137,6 +137,74 @@ void main() {
     expect(AppTheme.themeMode(AppThemeMode.system), ThemeMode.system);
   });
 
+  test('every palette has its own accent colour', () {
+    final seeds = AppColorPalette.values.map(AppTheme.seedColor).toSet();
+
+    expect(AppColorPalette.values, hasLength(13));
+    expect(seeds, hasLength(AppColorPalette.values.length));
+  });
+
+  group('background decode size', () {
+    const display = Size(1920, 1080);
+
+    test('a wide image covering the display keeps the display height', () {
+      // Cover scales by height here, so decoding to the display width alone
+      // would leave too few rows
+      expect(
+        backgroundDecodeSize(
+          imageSize: const Size(6000, 2000),
+          displaySize: display,
+          fit: AppBackgroundFit.cover,
+        ),
+        (width: 3240, height: 1080),
+      );
+    });
+
+    test('a tall image covering the display keeps the display width', () {
+      expect(
+        backgroundDecodeSize(
+          imageSize: const Size(3840, 4320),
+          displaySize: display,
+          fit: AppBackgroundFit.cover,
+        ),
+        (width: 1920, height: 2160),
+      );
+    });
+
+    test('a contained image fits inside the display', () {
+      expect(
+        backgroundDecodeSize(
+          imageSize: const Size(6000, 2000),
+          displaySize: display,
+          fit: AppBackgroundFit.contain,
+        ),
+        (width: 1920, height: 640),
+      );
+    });
+
+    test('a small image is never enlarged', () {
+      expect(
+        backgroundDecodeSize(
+          imageSize: const Size(800, 600),
+          displaySize: display,
+          fit: AppBackgroundFit.cover,
+        ),
+        (width: 800, height: 600),
+      );
+    });
+
+    test('an unknown display size keeps the full image', () {
+      expect(
+        backgroundDecodeSize(
+          imageSize: const Size(6000, 2000),
+          displaySize: Size.zero,
+          fit: AppBackgroundFit.cover,
+        ),
+        (width: 6000, height: 2000),
+      );
+    });
+  });
+
   test('picks, configures, and clears appearance assets', () async {
     final preferences = _FakeAppearanceService();
     final assets = _FakeAssetService()

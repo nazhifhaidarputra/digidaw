@@ -30,6 +30,7 @@ pub fn exercise_editor(host: &mut Vst3PluginHost, instance: HostInstanceId) {
                     constraints,
                     initially_visible: false,
                     preferred_surface,
+                    stay_on_top: false,
                 },
             )
             .unwrap();

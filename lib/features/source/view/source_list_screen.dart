@@ -6,6 +6,7 @@ import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
@@ -382,6 +383,7 @@ class SourceListScreen extends ConsumerWidget {
                 color: colors.secondary,
                 onTap: () {
                   ref.read(pianoRollProvider.notifier).openPattern(id);
+                  ref.read(workspaceStateProvider.notifier).openPattern(id);
                 },
                 onPlace: () {
                   final firstTrackId = ref

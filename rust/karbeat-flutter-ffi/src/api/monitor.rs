@@ -12,6 +12,7 @@ pub struct PerformanceMetricsDTO {
     pub ram_usage_mb: f32,
     pub total_ram_mb: f32,
     pub dsp_headroom: f32,
+    pub pdc_latency_samples: u32,
 }
 
 impl From<PerformanceMetrics> for PerformanceMetricsDTO {
@@ -21,6 +22,7 @@ impl From<PerformanceMetrics> for PerformanceMetricsDTO {
             ram_usage_mb: value.ram_usage_mb,
             total_ram_mb: value.total_ram_mb,
             dsp_headroom: value.dsp_headroom,
+            pdc_latency_samples: value.pdc_latency_samples,
         }
     }
 }

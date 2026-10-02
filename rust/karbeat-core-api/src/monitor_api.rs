@@ -1,6 +1,6 @@
 pub use sysinfo::{CpuRefreshKind, MemoryRefreshKind, System};
 
-use karbeat_core::audio::engine::get_current_dsp_load;
+use karbeat_core::audio::engine::{get_current_dsp_load, get_current_pdc_latency_samples};
 #[derive(Clone, Debug)]
 /// Point-in-time operating-system and audio callback load reported to the UI monitor.
 pub struct PerformanceMetrics {
@@ -12,6 +12,8 @@ pub struct PerformanceMetrics {
     pub total_ram_mb: f32,
     /// Audio callback load percentage maintained by the engine.
     pub dsp_headroom: f32, // The "FL Studio" meter (0.0 to 100.0)
+    /// Plugin delay compensation applied by the engine, in samples.
+    pub pdc_latency_samples: u32,
 }
 
 /// Creates a `sysinfo` monitor configured to refresh CPU and physical-memory counters.
@@ -32,5 +34,6 @@ pub fn fetch_metrics(sys: &mut System) -> PerformanceMetrics {
         ram_usage_mb: (sys.used_memory() as f32) / 1_048_576.0,
         total_ram_mb: (sys.total_memory() as f32) / 1_048_576.0,
         dsp_headroom: get_current_dsp_load(),
+        pdc_latency_samples: get_current_pdc_latency_samples(),
     }
 }

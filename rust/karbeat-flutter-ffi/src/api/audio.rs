@@ -512,3 +512,10 @@ pub fn play_preview_note_generator(
 pub fn set_metronome_active(ctx: &DawContext, active: bool) {
     audio_api::set_metronome_active(&mut ctx.runtime_write(), active);
 }
+
+/// Uses the audio file at `file_path` as the metronome sound, or the built-in click when it
+/// is `None`. Offbeats play the file as recorded and downbeats an octave higher.
+pub fn set_metronome_sound(ctx: &DawContext, file_path: Option<String>) -> Result<(), String> {
+    audio_api::set_metronome_sound(&mut ctx.runtime_write(), file_path.as_deref())
+        .map_err(|error| error.to_string())
+}

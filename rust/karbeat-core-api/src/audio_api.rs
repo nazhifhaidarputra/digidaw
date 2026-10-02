@@ -1,5 +1,5 @@
 use karbeat_core::{
-    audio::event::TransportFeedback,
+    audio::{engine::MetronomeClick, event::TransportFeedback},
     commands::AudioCommand,
     context::DawContext,
     core::{
@@ -55,6 +55,47 @@ pub fn stop_all_previews(ctx: &mut DawContext) {
 /// The truth state. Since the state lives on audio thread
 pub fn set_metronome_active(ctx: &mut DawContext, active: bool) {
     let _ = ctx.send_audio_command(AudioCommand::SetMetronomeActive(active));
+}
+
+/// Longest custom metronome click that is kept, in seconds.
+const METRONOME_CLICK_MAX_SECONDS: u64 = 10;
+
+/// Replaces the metronome's sound with the audio file at `file_path`, or restores the built-in
+/// click with `None`. Offbeats play the file as recorded and downbeats an octave higher.
+pub fn set_metronome_sound(ctx: &mut DawContext, file_path: Option<&str>) -> anyhow::Result<()> {
+    let click = match file_path {
+        Some(path) => {
+            let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
+            Some(load_metronome_click(path, sample_rate)?)
+        }
+        None => None,
+    };
+    ctx.send_audio_command(AudioCommand::SetMetronomeClick(click))
+}
+
+/// Decodes an audio file into a mono click of bounded length.
+fn load_metronome_click(file_path: &str, sample_rate: u32) -> anyhow::Result<MetronomeClick> {
+    let waveform = load_audio_file(file_path, None, sample_rate)?;
+    let channels = usize::from(waveform.channels);
+    let interleaved = waveform
+        .get_playable_buffer()
+        .filter(|_| channels > 0)
+        .ok_or_else(|| anyhow::anyhow!("The metronome sound has no audio"))?;
+    let max_frames = usize::try_from(u64::from(waveform.sample_rate) * METRONOME_CLICK_MAX_SECONDS)
+        .unwrap_or(usize::MAX);
+    let channel_count = f32::from(waveform.channels);
+    let samples: Vec<f32> = interleaved
+        .chunks_exact(channels)
+        .take(max_frames)
+        .map(|frame| frame.iter().sum::<f32>() / channel_count)
+        .collect();
+    if samples.is_empty() {
+        anyhow::bail!("The metronome sound has no audio");
+    }
+    Ok(MetronomeClick {
+        samples,
+        sample_rate: waveform.sample_rate,
+    })
 }
 
 /// Maps the project's serialized audio hardware configuration without cloning it first.

@@ -834,6 +834,11 @@ impl AudioEngine {
                 self.metronome_state.set_active(active);
                 log::info!("[AudioEngine] Metronome Active: {}", active);
             }
+            AudioCommand::SetMetronomeClick(click) => {
+                if let Some(previous) = self.metronome_state.set_custom_click(click) {
+                    self.retire_graph_state(RetiredGraphState::AudioBuffer(previous.samples));
+                }
+            }
             AudioCommand::TogglePlayingWithPlaybackMode(playback_mode) => {
                 if self.transport.mode == playback_mode {
                     let is_playing = match self.transport.mode {

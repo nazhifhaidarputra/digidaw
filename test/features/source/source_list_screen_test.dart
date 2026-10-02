@@ -2,10 +2,13 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/source_list_screen.dart';
+import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
@@ -63,6 +66,9 @@ const _channel = UiMixerChannel(
 );
 
 class _ProjectNotifier extends ProjectNotifier {
+  _ProjectNotifier({this.patterns = const IMapConst<int, UiPattern>({})});
+
+  final IMap<int, UiPattern> patterns;
   final List<int> removedSources = [];
 
   @override
@@ -85,7 +91,7 @@ class _ProjectNotifier extends ProjectNotifier {
     ),
     tracks: _tracks.lock,
     generators: const IMapConst({}),
-    patterns: const IMapConst<int, UiPattern>({}),
+    patterns: patterns,
     mixer: UiMixerState.raw(
       channels: {},
       masterBus: _channel,
@@ -156,5 +162,39 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
     expect(project.removedSources, [_sourceId]);
+  });
+
+  testWidgets('tapping a pattern opens it in the piano roll', (tester) async {
+    final project = _ProjectNotifier(
+      patterns: IMap({
+        3: const UiPattern(id: 3, name: 'Lead', lengthTicks: 3840, notes: []),
+      }),
+    );
+    late WidgetRef ref;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectProvider.overrideWith(() => project),
+          audioSourcesProvider.overrideWith((ref) async => const {}),
+        ],
+        child: MaterialApp(
+          home: Consumer(
+            builder: (context, widgetRef, _) {
+              ref = widgetRef;
+              return const SourceListScreen();
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lead'));
+    await tester.pump();
+
+    expect(ref.read(pianoRollProvider).editingPatternId, 3);
+    final workspace = ref.read(workspaceStateProvider);
+    expect(workspace.currentView, WorkspaceView.pianoRoll);
+    expect(workspace.editingPatternId, 3);
   });
 }

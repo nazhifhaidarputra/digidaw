@@ -26,6 +26,7 @@ import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/features/setting/services/log_provider.dart';
+import 'package:karbeat/features/setting/services/metronome_sound_provider.dart';
 import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -169,6 +170,8 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
           .initialize(dawContext);
       if (!mounted) return;
       await ref.read(audioSettingsProvider.notifier).initialize(dawContext);
+      if (!mounted) return;
+      await ref.read(metronomeSoundProvider.notifier).initialize(dawContext);
       if (!mounted) return;
       await ref.read(logProvider.notifier).initialize();
       if (!mounted) return;

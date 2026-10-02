@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
+import 'package:karbeat/features/setting/services/metronome_sound_provider.dart';
 
 class AudioSettingsPage extends ConsumerWidget {
   const AudioSettingsPage({super.key});
@@ -13,6 +14,8 @@ class AudioSettingsPage extends ConsumerWidget {
     final notifier = ref.read(audioSettingsProvider.notifier);
     final latencyMs = state.draftBlockSize / state.draftSampleRate * 1000;
     final actual = state.runtimeSettings?.actualStream;
+    final metronomeSound = ref.watch(metronomeSoundProvider);
+    final metronomeNotifier = ref.read(metronomeSoundProvider.notifier);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -111,6 +114,44 @@ class AudioSettingsPage extends ConsumerWidget {
               ],
               const SizedBox(height: 28),
               Text(
+                'Metronome sound',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                metronomeSound == null
+                    ? 'Default click'
+                    : _fileName(metronomeSound),
+                key: const ValueKey('metronome-sound-name'),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('choose-metronome-sound'),
+                    onPressed: () => unawaited(metronomeNotifier.chooseSound()),
+                    icon: const Icon(Icons.audio_file_outlined),
+                    label: const Text('Choose sound'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('clear-metronome-sound'),
+                    onPressed: metronomeSound == null
+                        ? null
+                        : () => unawaited(metronomeNotifier.useDefaultSound()),
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Use default'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your sound plays as recorded on offbeats and one octave higher on the downbeat. Each beat cuts off what is left of the previous one.',
+              ),
+              const SizedBox(height: 28),
+              Text(
                 'Device stream (read-only)',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -131,4 +172,12 @@ class AudioSettingsPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _fileName(String path) {
+  final segments = path.replaceAll('\\', '/').split('/');
+  return segments.lastWhere(
+    (segment) => segment.isNotEmpty,
+    orElse: () => path,
+  );
 }

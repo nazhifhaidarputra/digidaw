@@ -1,16 +1,26 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/src/rust/api/monitor.dart'; // Your generated FFI
 
-class DawPerformanceMonitor extends StatefulWidget {
+class DawPerformanceMonitor extends ConsumerStatefulWidget {
   const DawPerformanceMonitor({super.key});
 
   @override
-  State<DawPerformanceMonitor> createState() => _DawPerformanceMonitorState();
+  ConsumerState<DawPerformanceMonitor> createState() =>
+      _DawPerformanceMonitorState();
 }
 
-class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
+/// Plugin delay compensation as "128 smp (2.7 ms)".
+String formatPdcLatency(int samples, int sampleRate) {
+  if (sampleRate <= 0) return '$samples smp';
+  final milliseconds = samples / sampleRate * 1000;
+  return '$samples smp (${milliseconds.toStringAsFixed(1)} ms)';
+}
+
+class _DawPerformanceMonitorState extends ConsumerState<DawPerformanceMonitor> {
   static const int maxDataPoints = 100;
 
   // Rolling queues for the line graph
@@ -20,6 +30,7 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
   double _currentRamMb = 0.0;
   double _totalRamMb = 0.0;
   double _currentDsp = 0.0;
+  int _pdcLatencySamples = 0;
 
   StreamSubscription? _monitorSub;
 
@@ -37,6 +48,7 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
         _currentRamMb = metrics.ramUsageMb;
         _totalRamMb = metrics.totalRamMb;
         _currentDsp = metrics.dspHeadroom;
+        _pdcLatencySamples = metrics.pdcLatencySamples;
 
         // Advance the rolling graph
         _dspHistory.removeFirst();
@@ -57,6 +69,9 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final sampleRate = ref.watch(
+      transportProvider.select((s) => s.value?.sampleRate ?? 48000),
+    );
     return AspectRatio(
       aspectRatio: 3.5, // Width will always be 3.5x the height
       child: Container(
@@ -86,6 +101,17 @@ class _DawPerformanceMonitorState extends State<DawPerformanceMonitor> {
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Tooltip(
+                    message: 'Plugin delay compensation',
+                    child: Text(
+                      "PDC: ${formatPdcLatency(_pdcLatencySamples, sampleRate)}",
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ],

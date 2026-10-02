@@ -507,7 +507,7 @@ return $default(_that.currentView,_that.selectedTool,_that.currentToolbarContext
 
 
 class _WorkspaceState extends WorkspaceState {
-  const _WorkspaceState({this.currentView = WorkspaceView.trackList, this.selectedTool = ToolSelection.pointer, this.currentToolbarContext = ToolbarMenuContextGroup.none, this.interactionTarget, this.editingPatternId, this.horizontalZoomLevel = 100.0, this.horizontalClipShiftSizeDenom = MusicalBeatSize.none, this.gridSize = GridSize.quarter, this.snapToGrid = false, this.followPlayhead = false, this.resizeStretches = false, this.clipEnvelopeView = ClipEnvelopeView.none, this.showExportPanel = false, this.browserPanelState = const BrowserPanelState(), this.floatingMidiKeyboardState = const FloatingMidiKeyboardFieldState()}): super._();
+  const _WorkspaceState({this.currentView = WorkspaceView.trackList, this.selectedTool = ToolSelection.panSelect, this.currentToolbarContext = ToolbarMenuContextGroup.none, this.interactionTarget, this.editingPatternId, this.horizontalZoomLevel = 100.0, this.horizontalClipShiftSizeDenom = MusicalBeatSize.none, this.gridSize = GridSize.quarter, this.snapToGrid = false, this.followPlayhead = false, this.resizeStretches = false, this.clipEnvelopeView = ClipEnvelopeView.none, this.showExportPanel = false, this.browserPanelState = const BrowserPanelState(), this.floatingMidiKeyboardState = const FloatingMidiKeyboardFieldState()}): super._();
   
 
 @override@JsonKey() final  WorkspaceView currentView;

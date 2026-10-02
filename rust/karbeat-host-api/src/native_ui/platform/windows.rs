@@ -16,7 +16,7 @@ use windows_sys::Win32::{
             SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
             WM_CLOSE, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KILLFOCUS, WM_NCCREATE, WM_NCDESTROY,
             WM_SETFOCUS, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-            WS_MAXIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME,
+            WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME,
         },
     },
 };
@@ -275,11 +275,12 @@ impl NativeUiPlatform for WindowsNativeUi {
             constraints: spec.constraints,
         });
         let context_pointer = ptr::from_mut(context.as_mut()).cast::<c_void>();
-        let outer = outer_rect_for_style(spec.initial_size, style, 0, 96)?;
+        let extended_style = if spec.stay_on_top { WS_EX_TOPMOST } else { 0 };
+        let outer = outer_rect_for_style(spec.initial_size, style, extended_style, 96)?;
         // SAFETY: class is registered; context is boxed and remains stable until after destruction.
         let hwnd = unsafe {
             CreateWindowExW(
-                0,
+                extended_style,
                 WINDOW_CLASS.as_ptr(),
                 title.as_ptr(),
                 style,

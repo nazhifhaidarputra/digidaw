@@ -249,6 +249,10 @@ pub struct NativeWindowSpec<'a> {
     pub initially_visible: bool,
     /// Surface ABI required or preferred by the plugin editor.
     pub preferred_surface: NativeSurfacePreference,
+    /// Whether the window manager should keep the window above other windows, so an editor
+    /// stays visible while the host window is used. Minimizing and closing still work.
+    /// Ignored where the platform has no such request, as on Wayland.
+    pub stay_on_top: bool,
 }
 
 impl NativeWindowSpec<'_> {

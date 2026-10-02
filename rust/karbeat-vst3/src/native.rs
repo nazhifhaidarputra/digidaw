@@ -179,6 +179,7 @@ impl NativeHost {
                 constraints,
                 initially_visible: false,
                 preferred_surface,
+                stay_on_top: true,
             },
         )?;
         let binding = Rc::new(RefCell::new(NativeEditorBinding::new(window)?));
