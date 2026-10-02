@@ -1064,6 +1064,7 @@ impl AudioEngine {
             } => {
                 // Update only the track/pattern/sample-index portion of the local graph.
                 // Routing and automation lanes are untouched by this command.
+                self.clip_schedule.invalidate();
                 let old_tracks = std::mem::replace(&mut self.current_state.graph.tracks, tracks);
                 let old_clips = std::mem::replace(&mut self.current_state.graph.clips, clips);
                 let old_patterns =
@@ -1243,6 +1244,7 @@ impl AudioEngine {
                     compute_routing_order(&graph.tracks, bus_ids, &graph.routing);
                 self.routing.set_routes(&graph.routing);
 
+                self.clip_schedule.invalidate();
                 let previous = std::mem::replace(&mut self.current_state.graph, graph);
                 let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
                 self.voices.release_changed_notes(

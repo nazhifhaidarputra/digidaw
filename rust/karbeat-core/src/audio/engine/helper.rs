@@ -2,10 +2,8 @@ use dasp::slice;
 use hashbrown::HashMap;
 use itertools::{Itertools, izip};
 use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext};
-use karbeat_plugin_types::{Param, SmoothableParam};
 use karbeat_utils::math::hermite_interp;
-use rodio::math::db_to_linear;
-use wide::f32x16;
+use wide::{f32x8, f32x16};
 
 use crate::{
     audio::engine::runtime::consts::MAX_ENGINE_CHANNELS,
@@ -17,14 +15,39 @@ use crate::{
     shared::BusId,
 };
 
+/// Gain of each frame a waveform render produces.
+pub trait FrameGain {
+    /// Gain of the `frame`-th frame rendered by this call, read from source frame `read_pos`.
+    /// Called once per frame in rising frame order, except for frames a
+    /// [`unity_run`](Self::unity_run) covers.
+    fn at(&mut self, frame: u32, read_pos: f64) -> f32;
+
+    /// Number of frames, starting at `frame`, whose gain is exactly 1.0. The renderer mixes
+    /// those without calling [`at`](Self::at). Zero when the gain has to be evaluated.
+    fn unity_run(&self, _frame: u32) -> u32 {
+        0
+    }
+}
+
+impl<F: FnMut(u32, f64) -> f32> FrameGain for F {
+    #[inline(always)]
+    fn at(&mut self, frame: u32, read_pos: f64) -> f32 {
+        self(frame, read_pos)
+    }
+}
+
 /// Renders an audio waveform slice by reading the source directly at `step` source frames per
 /// output frame, with Hermite interpolation. Pitch follows the speed; pitch-preserving stretch
 /// runs through a realtime stretcher before this point.
 ///
-/// `gain(frame, read_pos)` is the gain of the `frame`-th frame rendered by this call, read from
-/// source frame `read_pos`. When looping with a `loop_crossfade` of X frames, the last X frames of
-/// the loop are equal-power blended into its first X frames and every repeat after the first
-/// starts X frames in, so the loop plays with no jump at the wrap.
+/// `gain` gives the gain of each rendered frame. When looping with a `loop_crossfade` of X
+/// frames, the last X frames of the loop are equal-power blended into its first X frames and
+/// every repeat after the first starts X frames in, so the loop plays with no jump at the wrap.
+///
+/// Stereo output is rendered in runs: stretches of frames that stay inside the source, cross no
+/// loop wrap and touch no loop crossfade are mixed without per-frame bounds or wrap handling,
+/// and as a plain copy when the source is read at its own rate. Frames at those edges go
+/// through the per-frame sampler.
 #[inline(always)]
 #[allow(
     clippy::too_many_arguments,
@@ -41,89 +64,400 @@ pub fn render_audio_waveform(
     loop_len: f64,
     loop_crossfade: f64,
     base_volume: f32,
-    mut gain: impl FnMut(u32, f64) -> f32,
+    mut gain: impl FrameGain,
 ) {
-    {
+    let bounds = LoopBounds::new(is_looping, loop_len, loop_crossfade);
+    let base = *source_read_index;
+    let frames_written = if target_channels == 2 {
+        let frames = (target_slice.len() / 2) as u32;
+        let mut renderer = StereoRuns {
+            source: source_buffer,
+            src_channels,
+            output: target_slice,
+            bounds,
+            base,
+            step,
+            base_volume,
+        };
+        renderer.render(frames, &mut gain);
+        frames
+    } else {
+        // Non-stereo output is a fallback path and stays per frame.
         let mut frames_written: u32 = 0;
-        let bounds = LoopBounds::new(is_looping, loop_len, loop_crossfade);
+        for sample in target_slice.iter_mut() {
+            let rp = bounds.read_pos(base, f64::from(frames_written) * step);
+            let s0 = bounds.sample(source_buffer, rp, src_channels);
+            let gain0 = gain.at(frames_written, rp) * base_volume;
+            *sample += s0[0] * gain0;
+            frames_written += 1;
+        }
+        frames_written
+    };
 
-        if target_channels == 2 {
-            let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
+    // Advance the read pointer safely
+    *source_read_index = bounds.read_pos(base, f64::from(frames_written) * step);
+}
 
-            for chunk in simd_chunks {
-                let mut s = [0.0; 16];
-                let mut f = [0.0; 16];
+/// Shortest run worth setting up; shorter stretches go through the per-frame sampler.
+const MIN_RUN_FRAMES: u32 = 4;
+/// Frames whose gains are evaluated together before being applied.
+const GAIN_CHUNK: usize = 32;
 
-                // Let LLVM pipeline the scalar interpolations
-                for i in 0..8 {
-                    let rp =
-                        bounds.read_pos(*source_read_index, f64::from(frames_written + i) * step);
-                    let s_frame = bounds.sample(source_buffer, rp, src_channels);
-                    let frame_gain = gain(frames_written + i, rp) * base_volume;
+/// One stereo waveform render, split into runs.
+struct StereoRuns<'a> {
+    source: &'a [f32],
+    src_channels: usize,
+    /// Interleaved stereo destination the waveform is mixed into.
+    output: &'a mut [f32],
+    bounds: LoopBounds,
+    base: f64,
+    step: f64,
+    base_volume: f32,
+}
 
-                    s[i as usize * 2] = s_frame[0];
-                    s[i as usize * 2 + 1] = s_frame[1];
-                    f[i as usize * 2] = frame_gain;
-                    f[i as usize * 2 + 1] = frame_gain;
-                }
+/// Where the frames of one run read the source: `(base + frame * step) - shift`.
+#[derive(Clone, Copy)]
+struct RunPosition {
+    /// Zero before the first loop wrap; afterwards the distance wrapped back so far.
+    shift: f64,
+    wrapped: bool,
+}
 
-                let samples = f32x16::new(s);
-                let fades = f32x16::new(f);
-                let mut out_v = f32x16::new(*chunk);
-
-                out_v += samples * fades;
-                *chunk = out_v.to_array();
-
-                frames_written += 8;
-            }
-
-            for (left, right) in remaining_samples.iter_mut().tuples::<(_, _)>() {
-                let rp0 = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
-                let s0 = bounds.sample(source_buffer, rp0, src_channels);
-                let gain0 = gain(frames_written, rp0) * base_volume;
-
-                *left += s0[0] * gain0;
-                *right += s0[1] * gain0;
-                frames_written += 1;
+impl StereoRuns<'_> {
+    fn render(&mut self, frames: u32, gain: &mut impl FrameGain) {
+        let source_frames = if self.src_channels == 1 || self.src_channels == 2 {
+            // A buffer that is not a whole number of frames plays as silence per frame.
+            if self.source.len() % self.src_channels == 0 {
+                self.source.len() / self.src_channels
+            } else {
+                0
             }
         } else {
-            // Non-stereo fallback processing 16 mono frames at a time
-            let (simd_chunks, remaining_samples) = target_slice.as_chunks_mut::<16>();
-            for chunk in simd_chunks {
-                let mut s = [0.0; 16];
-                let mut f = [0.0; 16];
-
-                for i in 0..16 {
-                    let rp =
-                        bounds.read_pos(*source_read_index, f64::from(frames_written + i) * step);
-
-                    s[i as usize] = bounds.sample(source_buffer, rp, src_channels)[0];
-                    f[i as usize] = gain(frames_written + i, rp) * base_volume;
-                }
-
-                let samples = f32x16::new(s);
-                let fades = f32x16::new(f);
-                let mut out_v = f32x16::new(*chunk);
-
-                out_v += samples * fades;
-                *chunk = out_v.to_array();
-
-                frames_written += 16;
-            }
-
-            for sample in remaining_samples {
-                let rp = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
-
-                let s0 = bounds.sample(source_buffer, rp, src_channels);
-                let gain0 = gain(frames_written, rp) * base_volume;
-
-                *sample += s0[0] * gain0;
-                frames_written += 1;
-            }
+            0
+        };
+        let loop_end = self.bounds.loop_end;
+        let crossfade = self.bounds.crossfade;
+        // Wrapped positions are rebuilt from whole-frame loop points, which keeps them equal
+        // to the per-frame remainder.
+        let runs_allowed = self.step > 0.0
+            && self.step.is_finite()
+            && self.base >= 0.0
+            && self.base.is_finite()
+            && source_frames > 0
+            && (!self.bounds.is_looping
+                || (loop_end.fract() == 0.0 && crossfade.fract() == 0.0 && loop_end > crossfade));
+        // Reading the source at its own rate from a whole frame needs no interpolation.
+        let copies = self.step == 1.0 && self.base.fract() == 0.0;
+        let (low, mut high) = if copies {
+            (0.0, source_frames as f64)
+        } else {
+            // Hermite reads one frame behind and two ahead.
+            (1.0, source_frames as f64 - 2.0)
+        };
+        if self.bounds.is_looping {
+            high = high.min(loop_end - crossfade);
         }
 
-        // Advance the read pointer safely
-        *source_read_index = bounds.read_pos(*source_read_index, f64::from(frames_written) * step);
+        let mut frame = 0;
+        while frame < frames {
+            let run = if runs_allowed {
+                self.run_at(frame, frames, low, high)
+            } else {
+                None
+            };
+            match run {
+                Some((position, length)) => {
+                    if copies {
+                        self.copy_run(frame, length, position, gain);
+                    } else {
+                        self.interpolated_run(frame, length, position, gain);
+                    }
+                    frame += length;
+                }
+                None => {
+                    self.single_frame(frame, gain);
+                    frame += 1;
+                }
+            }
+        }
+    }
+
+    /// Source position of `frame` before any loop wrap.
+    #[inline(always)]
+    fn raw(&self, frame: u32) -> f64 {
+        self.base + f64::from(frame) * self.step
+    }
+
+    /// The run position `frame` belongs to and its source position.
+    #[inline(always)]
+    fn locate(&self, frame: u32) -> (RunPosition, f64) {
+        let raw = self.raw(frame);
+        if !self.bounds.is_looping || raw < self.bounds.loop_end {
+            return (
+                RunPosition {
+                    shift: 0.0,
+                    wrapped: false,
+                },
+                raw,
+            );
+        }
+        // Matches `get_read_pos`: the remainder is exact, so removing the whole periods
+        // from the raw position reproduces it.
+        let period = self.bounds.loop_end - self.bounds.crossfade;
+        let past = raw - self.bounds.loop_end;
+        let remainder = past % period;
+        (
+            RunPosition {
+                shift: past - remainder,
+                wrapped: true,
+            },
+            self.bounds.crossfade + remainder,
+        )
+    }
+
+    /// Source position of `frame` inside a run located by [`Self::locate`].
+    #[inline(always)]
+    fn position_in(&self, position: RunPosition, frame: u32) -> f64 {
+        let raw = self.raw(frame);
+        if position.wrapped {
+            self.bounds.crossfade + ((raw - self.bounds.loop_end) - position.shift)
+        } else {
+            raw
+        }
+    }
+
+    /// The longest run starting at `frame` whose source positions all lie in `low..high`
+    /// without crossing a loop wrap, or `None` when it would be shorter than
+    /// [`MIN_RUN_FRAMES`].
+    fn run_at(&self, frame: u32, frames: u32, low: f64, high: f64) -> Option<(RunPosition, u32)> {
+        let (position, first) = self.locate(frame);
+        if !(first >= low && first < high) {
+            return None;
+        }
+        let estimate = ((high - first) / self.step).ceil();
+        let mut length = if estimate >= f64::from(frames - frame) {
+            frames - frame
+        } else {
+            estimate as u32
+        };
+        // Positions rise with the frame, so checking the last frame covers the whole run.
+        while length >= MIN_RUN_FRAMES {
+            let last = frame + length - 1;
+            let (last_position, last_source) = self.locate(last);
+            if last_position.wrapped == position.wrapped
+                && last_position.shift == position.shift
+                && last_source < high
+            {
+                return Some((position, length));
+            }
+            length -= 1;
+        }
+        None
+    }
+
+    /// Mixes one frame through the bounds-checked sampler, loop wrap and crossfade included.
+    #[inline(always)]
+    fn single_frame(&mut self, frame: u32, gain: &mut impl FrameGain) {
+        let rp = self
+            .bounds
+            .read_pos(self.base, f64::from(frame) * self.step);
+        let sample = self.bounds.sample(self.source, rp, self.src_channels);
+        let frame_gain = gain.at(frame, rp) * self.base_volume;
+        let at = frame as usize * 2;
+        if let Some([left, right]) = self.output.get_mut(at..at + 2) {
+            *left += sample[0] * frame_gain;
+            *right += sample[1] * frame_gain;
+        }
+    }
+
+    /// Mixes `length` frames read at whole source frames: a copy scaled by the gain.
+    fn copy_run(
+        &mut self,
+        first_frame: u32,
+        length: u32,
+        position: RunPosition,
+        gain: &mut impl FrameGain,
+    ) {
+        let mut frame = first_frame;
+        let end = first_frame + length;
+        while frame < end {
+            let source_frame = self.position_in(position, frame) as usize;
+            let unity = gain.unity_run(frame).min(end - frame);
+            if unity > 0 {
+                let count = unity as usize;
+                let out = &mut self.output[frame as usize * 2..(frame as usize + count) * 2];
+                if self.src_channels == 2 {
+                    let source = &self.source[source_frame * 2..(source_frame + count) * 2];
+                    mix_scaled(out, source, self.base_volume);
+                } else {
+                    let source = &self.source[source_frame..source_frame + count];
+                    mix_scaled_mono_to_stereo(out, source, self.base_volume);
+                }
+                frame += unity;
+                continue;
+            }
+
+            let count = ((end - frame) as usize).min(GAIN_CHUNK);
+            let mut gains = [0.0_f32; GAIN_CHUNK];
+            for (offset, slot) in gains[..count].iter_mut().enumerate() {
+                let chunk_frame = frame + offset as u32;
+                // A unity run may start part-way through a chunk; evaluating it is equivalent.
+                *slot = gain.at(chunk_frame, self.position_in(position, chunk_frame))
+                    * self.base_volume;
+            }
+            let out = &mut self.output[frame as usize * 2..(frame as usize + count) * 2];
+            if self.src_channels == 2 {
+                let source = &self.source[source_frame * 2..(source_frame + count) * 2];
+                for ((out, source), gain) in out
+                    .chunks_exact_mut(2)
+                    .zip(source.chunks_exact(2))
+                    .zip(&gains[..count])
+                {
+                    out[0] += source[0] * gain;
+                    out[1] += source[1] * gain;
+                }
+            } else {
+                let source = &self.source[source_frame..source_frame + count];
+                for ((out, source), gain) in
+                    out.chunks_exact_mut(2).zip(source).zip(&gains[..count])
+                {
+                    out[0] += source * gain;
+                    out[1] += source * gain;
+                }
+            }
+            frame += count as u32;
+        }
+    }
+
+    /// Mixes `length` frames whose four Hermite taps all lie inside the source.
+    fn interpolated_run(
+        &mut self,
+        first_frame: u32,
+        length: u32,
+        position: RunPosition,
+        gain: &mut impl FrameGain,
+    ) {
+        let mut frame = first_frame;
+        let end = first_frame + length;
+        while frame < end {
+            let count = ((end - frame) as usize).min(GAIN_CHUNK);
+            let unity = gain.unity_run(frame) as usize >= count;
+            let mut gains = [self.base_volume; GAIN_CHUNK];
+            let mut indices = [0_usize; GAIN_CHUNK];
+            let mut alphas = [0.0_f32; GAIN_CHUNK];
+            for offset in 0..count {
+                let chunk_frame = frame + offset as u32;
+                let rp = self.position_in(position, chunk_frame);
+                let index = rp as usize;
+                indices[offset] = index;
+                alphas[offset] = (rp - (index as f64)) as f32;
+                if !unity {
+                    gains[offset] = gain.at(chunk_frame, rp) * self.base_volume;
+                }
+            }
+            let out = &mut self.output[frame as usize * 2..(frame as usize + count) * 2];
+            // Whole groups of eight frames evaluate the interpolation across lanes.
+            let wide_frames = count - count % 8;
+            for start in (0..wide_frames).step_by(8) {
+                let alpha = f32x8::new(lanes(&alphas, start));
+                let lane_gains = f32x8::new(lanes(&gains, start));
+                let (left, right) = if self.src_channels == 2 {
+                    let mut taps = [[0.0_f32; 8]; 8];
+                    for lane in 0..8 {
+                        let index = indices[start + lane];
+                        let window = &self.source[(index - 1) * 2..(index + 3) * 2];
+                        for (tap, value) in taps.iter_mut().zip(window) {
+                            tap[lane] = *value;
+                        }
+                    }
+                    let tap = |index: usize| f32x8::new(taps[index]);
+                    (
+                        hermite_x8(alpha, tap(0), tap(2), tap(4), tap(6)) * lane_gains,
+                        hermite_x8(alpha, tap(1), tap(3), tap(5), tap(7)) * lane_gains,
+                    )
+                } else {
+                    let mut taps = [[0.0_f32; 8]; 4];
+                    for lane in 0..8 {
+                        let index = indices[start + lane];
+                        let window = &self.source[index - 1..index + 3];
+                        for (tap, value) in taps.iter_mut().zip(window) {
+                            tap[lane] = *value;
+                        }
+                    }
+                    let tap = |index: usize| f32x8::new(taps[index]);
+                    let value = hermite_x8(alpha, tap(0), tap(1), tap(2), tap(3)) * lane_gains;
+                    (value, value)
+                };
+                let (left, right) = (left.to_array(), right.to_array());
+                for (lane, out) in out[start * 2..(start + 8) * 2]
+                    .chunks_exact_mut(2)
+                    .enumerate()
+                {
+                    out[0] += left[lane];
+                    out[1] += right[lane];
+                }
+            }
+            if self.src_channels == 2 {
+                for (offset, out) in out.chunks_exact_mut(2).enumerate().skip(wide_frames) {
+                    let taps = &self.source[(indices[offset] - 1) * 2..(indices[offset] + 3) * 2];
+                    let alpha = alphas[offset];
+                    let left = hermite_interp(alpha, taps[0], taps[2], taps[4], taps[6]);
+                    let right = hermite_interp(alpha, taps[1], taps[3], taps[5], taps[7]);
+                    out[0] += left * gains[offset];
+                    out[1] += right * gains[offset];
+                }
+            } else {
+                for (offset, out) in out.chunks_exact_mut(2).enumerate().skip(wide_frames) {
+                    let taps = &self.source[indices[offset] - 1..indices[offset] + 3];
+                    let value = hermite_interp(alphas[offset], taps[0], taps[1], taps[2], taps[3]);
+                    out[0] += value * gains[offset];
+                    out[1] += value * gains[offset];
+                }
+            }
+            frame += count as u32;
+        }
+    }
+}
+
+/// Eight consecutive values of `values` starting at `start`.
+#[inline(always)]
+fn lanes(values: &[f32; GAIN_CHUNK], start: usize) -> [f32; 8] {
+    let mut lanes = [0.0; 8];
+    lanes.copy_from_slice(&values[start..start + 8]);
+    lanes
+}
+
+/// [`hermite_interp`] across eight lanes, with the same operations in the same order.
+#[inline(always)]
+fn hermite_x8(frac: f32x8, p0: f32x8, p1: f32x8, p2: f32x8, p3: f32x8) -> f32x8 {
+    let half = f32x8::splat(0.5);
+    let c1 = half * (p2 - p0);
+    let c2 = p0 - f32x8::splat(2.5) * p1 + f32x8::splat(2.0) * p2 - half * p3;
+    let c3 = half * (p3 - p0) + f32x8::splat(1.5) * (p1 - p2);
+    ((c3 * frac + c2) * frac + c1) * frac + p1
+}
+
+/// Adds `source * gain` to `out`, sample by sample.
+#[inline(always)]
+fn mix_scaled(out: &mut [f32], source: &[f32], gain: f32) {
+    let gain_v = f32x16::splat(gain);
+    let (out_chunks, out_rest) = out.as_chunks_mut::<16>();
+    let (source_chunks, source_rest) = source.as_chunks::<16>();
+    for (out, source) in out_chunks.iter_mut().zip(source_chunks) {
+        *out = (f32x16::new(*out) + f32x16::new(*source) * gain_v).to_array();
+    }
+    for (out, source) in out_rest.iter_mut().zip(source_rest) {
+        *out += source * gain;
+    }
+}
+
+/// Adds each mono `source` sample, scaled by `gain`, to both channels of interleaved `out`.
+#[inline(always)]
+fn mix_scaled_mono_to_stereo(out: &mut [f32], source: &[f32], gain: f32) {
+    for (out, source) in out.chunks_exact_mut(2).zip(source) {
+        let value = source * gain;
+        out[0] += value;
+        out[1] += value;
     }
 }
 
@@ -299,64 +633,6 @@ pub fn apply_phase_inversion_simd(buffer: &mut [f32]) {
 
     for sample in remaining_samples {
         *sample = -*sample;
-    }
-}
-
-#[inline(always)]
-pub fn apply_volume_and_pan_simd(
-    buffer: &mut [f32],
-    channels: usize,
-    vol_param: &mut Param<f32>,
-    pan_param: &mut Param<f32>,
-) {
-    if channels == 2 {
-        if vol_param.smoother.is_settled() && pan_param.smoother.is_settled() {
-            let vol_db = vol_param.smoother.current();
-            let vol = if vol_db <= -100.0 {
-                0.0
-            } else {
-                db_to_linear(vol_db as f32)
-            };
-            let p = (pan_param.smoother.current() as f32 + 1.0) * 0.5;
-            let left_gain = (1.0 - p).sqrt() * vol;
-            let right_gain = p.sqrt() * vol;
-            for (left, right) in buffer.iter_mut().tuples::<(_, _)>() {
-                *left *= left_gain;
-                *right *= right_gain;
-            }
-            return;
-        }
-
-        for (left, right) in buffer.iter_mut().tuples::<(_, _)>() {
-            let vol_db = vol_param.next_smoothed();
-            let pan = pan_param.next_smoothed();
-
-            // Handle the true silence threshold natively per-sample
-            let vol = if vol_db <= -100.0 {
-                0.0
-            } else {
-                db_to_linear(vol_db as f32)
-            };
-
-            let p = (pan as f32 + 1.0) * 0.5;
-            let left_gain = (1.0 - p).sqrt() * vol;
-            let right_gain = p.sqrt() * vol;
-
-            *left *= left_gain;
-            *right *= right_gain;
-        }
-    } else {
-        // Mono fallback
-        let frames = buffer.len() / channels;
-        for sample in buffer.iter_mut().step_by(channels).take(frames) {
-            let vol_db = vol_param.next_smoothed();
-            let vol = if vol_db <= -100.0 {
-                0.0
-            } else {
-                db_to_linear(vol_db as f32)
-            };
-            *sample *= vol;
-        }
     }
 }
 
@@ -848,5 +1124,194 @@ mod loop_crossfade_tests {
 
         let capped = LoopBounds::new(true, 100.0, 80.0);
         assert_eq!(capped.read_pos(0.0, 100.0), 50.0);
+    }
+}
+
+#[cfg(test)]
+mod waveform_run_tests {
+    use super::{FrameGain, LoopBounds, render_audio_waveform};
+
+    /// The per-frame renderer the run-based one replaced, kept as the reference.
+    #[allow(clippy::too_many_arguments, reason = "mirrors the renderer under test")]
+    fn reference(
+        source: &[f32],
+        src_channels: usize,
+        target: &mut [f32],
+        read_index: &mut f64,
+        step: f64,
+        is_looping: bool,
+        loop_len: f64,
+        loop_crossfade: f64,
+        base_volume: f32,
+        mut gain: impl FnMut(u32, f64) -> f32,
+    ) {
+        let bounds = LoopBounds::new(is_looping, loop_len, loop_crossfade);
+        let mut frames = 0_u32;
+        for frame in target.chunks_exact_mut(2) {
+            let rp = bounds.read_pos(*read_index, f64::from(frames) * step);
+            let sample = bounds.sample(source, rp, src_channels);
+            let frame_gain = gain(frames, rp) * base_volume;
+            frame[0] += sample[0] * frame_gain;
+            frame[1] += sample[1] * frame_gain;
+            frames += 1;
+        }
+        *read_index = bounds.read_pos(*read_index, f64::from(frames) * step);
+    }
+
+    /// Gain that ramps over its first and last `edge` frames and is unity in between, the
+    /// shape of a clip without envelopes.
+    struct EdgeRamp {
+        frames: u32,
+        edge: u32,
+    }
+
+    impl EdgeRamp {
+        fn value(&self, frame: u32) -> f32 {
+            if frame < self.edge {
+                frame as f32 / self.edge as f32
+            } else if frame + self.edge > self.frames {
+                (self.frames - frame) as f32 / self.edge as f32
+            } else {
+                1.0
+            }
+        }
+    }
+
+    impl FrameGain for EdgeRamp {
+        fn at(&mut self, frame: u32, _: f64) -> f32 {
+            self.value(frame)
+        }
+
+        fn unity_run(&self, frame: u32) -> u32 {
+            if frame < self.edge || frame + self.edge > self.frames {
+                0
+            } else {
+                self.frames - self.edge - frame + 1
+            }
+        }
+    }
+
+    struct Lcg(u64);
+
+    impl Lcg {
+        fn next(&mut self) -> f32 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            ((self.0 >> 40) as f32 / (1_u64 << 24) as f32) * 2.0 - 1.0
+        }
+    }
+
+    #[test]
+    fn runs_render_exactly_what_the_per_frame_sampler_renders() {
+        let mut random = Lcg(7);
+        let mut cases = 0;
+        for src_channels in [1_usize, 2] {
+            for source_frames in [37_usize, 160, 401] {
+                let source: Vec<f32> = (0..source_frames * src_channels)
+                    .map(|_| random.next())
+                    .collect();
+                for step in [1.0, 0.5, 0.918_75, 1.37, 2.0] {
+                    for base in [0.0, 3.0, 2.5, source_frames as f64 - 20.0] {
+                        for (is_looping, crossfade) in
+                            [(false, 0.0), (true, 0.0), (true, 9.0), (true, 400.0)]
+                        {
+                            for frames in [1_usize, 7, 64, 333] {
+                                for edge in [0_u32, 5] {
+                                    let mut expected: Vec<f32> =
+                                        (0..frames * 2).map(|_| random.next()).collect();
+                                    let mut rendered = expected.clone();
+                                    let ramp = EdgeRamp {
+                                        frames: frames as u32,
+                                        edge,
+                                    };
+                                    let (mut expected_index, mut rendered_index) = (base, base);
+                                    reference(
+                                        &source,
+                                        src_channels,
+                                        &mut expected,
+                                        &mut expected_index,
+                                        step,
+                                        is_looping,
+                                        source_frames as f64,
+                                        crossfade,
+                                        0.8,
+                                        |frame, _| ramp.value(frame),
+                                    );
+                                    render_audio_waveform(
+                                        &source,
+                                        src_channels,
+                                        &mut rendered,
+                                        2,
+                                        &mut rendered_index,
+                                        step,
+                                        is_looping,
+                                        source_frames as f64,
+                                        crossfade,
+                                        0.8,
+                                        EdgeRamp {
+                                            frames: frames as u32,
+                                            edge,
+                                        },
+                                    );
+                                    assert_eq!(
+                                        rendered, expected,
+                                        "channels {src_channels}, source {source_frames}, step \
+                                         {step}, base {base}, looping {is_looping}, crossfade \
+                                         {crossfade}, frames {frames}, edge {edge}"
+                                    );
+                                    assert_eq!(rendered_index, expected_index);
+                                    cases += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(cases, 2 * 3 * 5 * 4 * 4 * 4 * 2);
+    }
+
+    #[test]
+    fn position_dependent_gains_see_the_same_read_positions() {
+        let mut random = Lcg(11);
+        let source: Vec<f32> = (0..300 * 2).map(|_| random.next()).collect();
+        for (step, is_looping, crossfade) in
+            [(1.0, true, 30.0), (0.75, true, 0.0), (1.5, false, 0.0)]
+        {
+            let mut expected = vec![0.0_f32; 500 * 2];
+            let mut rendered = expected.clone();
+            let (mut expected_index, mut rendered_index) = (4.0, 4.0);
+            let gain =
+                |frame: u32, read_pos: f64| (read_pos as f32).sin() * 0.5 + frame as f32 * 1e-3;
+            reference(
+                &source,
+                2,
+                &mut expected,
+                &mut expected_index,
+                step,
+                is_looping,
+                300.0,
+                crossfade,
+                1.0,
+                gain,
+            );
+            render_audio_waveform(
+                &source,
+                2,
+                &mut rendered,
+                2,
+                &mut rendered_index,
+                step,
+                is_looping,
+                300.0,
+                crossfade,
+                1.0,
+                gain,
+            );
+            assert_eq!(rendered, expected, "step {step}, looping {is_looping}");
+            assert_eq!(rendered_index, expected_index);
+        }
     }
 }

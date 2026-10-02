@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     audio::{
         engine::{
-            helper::{LoopBounds, calc_fade, render_audio_waveform},
+            helper::{FrameGain, LoopBounds, calc_fade, render_audio_waveform},
             stretch_pool::{StretchPool, StretchRate, StretchSource},
         },
         render_state::AudioPluginState,
@@ -535,7 +535,7 @@ struct ClipGain<'a> {
     crossfade: NeighbourCrossfade,
 }
 
-impl ClipGain<'_> {
+impl FrameGain for ClipGain<'_> {
     #[inline(always)]
     fn at(&mut self, frame: u32, read_pos: f64) -> f32 {
         let elapsed = self.start_elapsed + frame;
@@ -554,6 +554,28 @@ impl ClipGain<'_> {
             gain *= self.crossfade.gain(elapsed);
         }
         gain
+    }
+
+    /// Without envelopes or a crossfade only the anti-click ramps at the clip edges shape the
+    /// gain, so everything between them is unity.
+    #[inline(always)]
+    fn unity_run(&self, frame: u32) -> u32 {
+        if self.clip_envelope.is_some()
+            || self.waveform_envelope.is_some()
+            || !self.crossfade.is_none()
+        {
+            return 0;
+        }
+        if self.declick_samples == 0 {
+            return u32::MAX;
+        }
+        let elapsed = self.start_elapsed.saturating_add(frame);
+        // Mirrors `calc_fade`: unity from the end of the fade-in until the fade-out starts.
+        let fade_out_start = self.clip_length.saturating_sub(self.declick_samples);
+        if elapsed < self.declick_samples || elapsed > fade_out_start {
+            return 0;
+        }
+        fade_out_start - elapsed + 1
     }
 }
 
@@ -850,7 +872,7 @@ impl VoiceState {
                     source_frames,
                     loop_crossfade,
                     level,
-                    |frame, read_pos| gain.at(frame, read_pos),
+                    gain,
                 );
             }
             voice.clip_elapsed_samples += frames_to_process as u32;

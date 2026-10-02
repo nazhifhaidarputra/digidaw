@@ -1,10 +1,10 @@
 use hashbrown::HashMap;
 
 use crate::{
+    audio::engine::kernels::mix_gain,
     audio::render_state::{AudioEffectInstance, AudioGraphState, AudioPluginState},
     core::project::{RoutingConnection, RoutingNode, RoutingTap, SidechainRoute},
     shared::{BusId, EffectId, TrackId},
-    utils::apply_simd_mix_gain,
 };
 
 /// Ring buffer used to align paths for plugin delay compensation.
@@ -319,7 +319,7 @@ impl RoutingState {
             RoutingNode::Track(_) => None,
         };
         if let Some(buffer) = buffer {
-            apply_simd_mix_gain(buffer, signal, gain);
+            mix_gain(buffer, signal, gain);
             self.node_has_signal.insert(destination, true);
         }
     }
