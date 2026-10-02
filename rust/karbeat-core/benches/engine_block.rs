@@ -39,6 +39,7 @@ fn engine_blocks(criterion: &mut Criterion) {
         buses: 0,
         effects_per_track: 0,
         resampled: false,
+        passthrough_effects: 0,
     };
     let mut engine = looped(small, (1_920, 28_800));
     group.bench_function("tracks_8", |bench| {
@@ -63,6 +64,7 @@ fn engine_blocks(criterion: &mut Criterion) {
         buses: 4,
         effects_per_track: 2,
         resampled: false,
+        passthrough_effects: 0,
     };
     let mut engine = looped(large, (1_920, 13_440));
     group.bench_function("tracks_64_buses_4_effects", |bench| {
@@ -82,6 +84,20 @@ fn engine_blocks(criterion: &mut Criterion) {
         bench.iter(|| engine.process(black_box(block.as_mut_slice())));
     });
 
+    // Two copy-only effects per track: the cost of running effect chains, without plugins.
+    let mut engine = looped(
+        BenchProject {
+            effects_per_track: 0,
+            passthrough_effects: 2,
+            buses: 0,
+            ..large
+        },
+        (1_920, 13_440),
+    );
+    group.bench_function("tracks_64_passthrough_chains", |bench| {
+        bench.iter(|| engine.process(black_box(block.as_mut_slice())));
+    });
+
     // The transport is stopped: only meters, routing bookkeeping and silence handling run.
     let (mut engine, _) = bench_engine(large, BLOCK);
     group.bench_function("tracks_64_idle", |bench| {
@@ -97,6 +113,7 @@ fn engine_blocks(criterion: &mut Criterion) {
             buses: 0,
             effects_per_track: 0,
             resampled: false,
+            passthrough_effects: 0,
         },
         (96 * 450, 96 * 490),
     );

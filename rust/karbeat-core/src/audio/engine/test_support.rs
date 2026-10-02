@@ -272,6 +272,9 @@ pub struct BenchProject {
     pub effects_per_track: usize,
     /// Whether the clips play a 44.1 kHz source, which takes the resampling path.
     pub resampled: bool,
+    /// Effects per track that only copy their input, which isolates the cost of running a
+    /// chain from the cost of the plugins in it.
+    pub passthrough_effects: usize,
 }
 
 /// Builds an engine for `shape` and returns it with its tracks. Call [`play`] to start it.
@@ -347,6 +350,15 @@ pub fn bench_engine(shape: BenchProject, block: usize) -> (AudioEngine, Vec<Trac
         });
     }
     for track in &tracks {
+        for index in 0..shape.passthrough_effects {
+            engine.process_command(AudioCommand::InstallEffect {
+                target: EffectTarget::Track(*track),
+                effect_id: EffectId::from(100 + index as u32),
+                registry_id: 0,
+                plugin: crate::audio::missing_plugin::MissingPlugin::effect(),
+                telemetry: None,
+            });
+        }
         if shape.effects_per_track >= 1 {
             add_effect(
                 &mut engine,

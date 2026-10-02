@@ -1,6 +1,6 @@
 use dasp::slice;
 use hashbrown::HashMap;
-use itertools::{Itertools, izip};
+use itertools::Itertools;
 use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext};
 use karbeat_utils::math::hermite_interp;
 use wide::{f32x8, f32x16};
@@ -799,17 +799,18 @@ fn deinterleave_buffer(
     channels: usize,
     frames: usize,
 ) {
-    if channels == 2 {
-        let (left, right) = channel_buffers.split_at_mut(1);
-        izip!(
-            left[0][..frames].iter_mut(),
-            right[0][..frames].iter_mut(),
-            interleaved.iter().copied().tuples::<(_, _)>()
-        )
-        .for_each(|(left, right, (source_left, source_right))| {
-            *left = source_left;
-            *right = source_right;
-        });
+    if let ([left, right], 2) = (&mut *channel_buffers, channels)
+        && let (Some(left), Some(right)) = (left.get_mut(..frames), right.get_mut(..frames))
+    {
+        // Plain element copies over fixed-size frames, which the compiler vectorizes.
+        for ((left, right), [source_left, source_right]) in left
+            .iter_mut()
+            .zip(right)
+            .zip(interleaved.as_chunks::<2>().0)
+        {
+            *left = *source_left;
+            *right = *source_right;
+        }
         return;
     }
 
@@ -831,13 +832,18 @@ fn interleave_buffer(
     channels: usize,
     frames: usize,
 ) {
-    if channels == 2 {
-        interleaved.iter_mut().set_from(
-            channel_buffers[0][..frames]
-                .iter()
-                .copied()
-                .interleave(channel_buffers[1][..frames].iter().copied()),
-        );
+    if let ([left, right], 2) = (channel_buffers, channels)
+        && let (Some(left), Some(right)) = (left.get(..frames), right.get(..frames))
+    {
+        for ([out_left, out_right], (left, right)) in interleaved
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(left.iter().zip(right))
+        {
+            *out_left = *left;
+            *out_right = *right;
+        }
         return;
     }
 

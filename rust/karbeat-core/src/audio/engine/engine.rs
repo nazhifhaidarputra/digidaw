@@ -1462,18 +1462,9 @@ impl AudioEngine {
                     );
                 }
                 RoutingNode::Bus(bus_id) => {
-                    let bus_buf = match self.workspace.bus_buffers.get(bus_id) {
-                        Some(buf) => buf,
-                        None => {
-                            continue;
-                        }
-                    };
-
-                    // Resize temp buffer if needed and copy
-                    if self.workspace.bus_temp_buffer.len() != buf_len {
-                        self.workspace.bus_temp_buffer.resize(buf_len, 0.0);
+                    if !self.workspace.bus_buffers.contains_key(bus_id) {
+                        continue;
                     }
-                    self.workspace.bus_temp_buffer.copy_from_slice(bus_buf);
 
                     // Get bus channel settings from audio-thread-owned mixer state
                     let bus_settings_channel =
@@ -1542,13 +1533,14 @@ impl AudioEngine {
                         }
                     }
 
-                    // Copy to mix_buffer for processing
+                    // The bus sum becomes the working buffer. What the bus keeps instead is
+                    // scratch that the next block clears before anything is routed into it.
                     if self.workspace.mix_buffer.len() != buf_len {
                         self.workspace.mix_buffer.resize(buf_len, 0.0);
                     }
-                    self.workspace
-                        .mix_buffer
-                        .copy_from_slice(&self.workspace.bus_temp_buffer);
+                    if let Some(bus_buffer) = self.workspace.bus_buffers.get_mut(bus_id) {
+                        std::mem::swap(&mut self.workspace.mix_buffer, bus_buffer);
+                    }
 
                     // Apply bus effects
                     if let Some(effects) = self

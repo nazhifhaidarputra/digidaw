@@ -57,17 +57,20 @@ fn write_output_data<T>(
 {
     debug_assert!(device_channels >= OUTPUT_CHANNELS);
     let mut output_frames = data.chunks_exact_mut(device_channels);
-    for output_frame in &mut output_frames {
-        let engine_frame = consumer.pop().unwrap_or_else(|_| {
-            OUTPUT_UNDERRUN_SAMPLES.fetch_add(OUTPUT_CHANNELS_U64, Ordering::Relaxed);
-            [0.0; OUTPUT_CHANNELS]
-        });
-
-        for output in output_frame.iter_mut() {
-            *output = T::from_sample(0.0);
+    let wanted = output_frames.len();
+    // One bulk read instead of a queue operation per frame.
+    let available = consumer.slots().min(wanted);
+    if let Ok(chunk) = consumer.read_chunk(available) {
+        let (first, second) = chunk.as_slices();
+        for (output_frame, engine_frame) in (&mut output_frames).zip(first.iter().chain(second)) {
+            write_output_frame(output_frame, *engine_frame);
         }
-        output_frame[0] = T::from_sample(sanitize_output_sample(engine_frame[0]));
-        output_frame[1] = T::from_sample(sanitize_output_sample(engine_frame[1]));
+        chunk.commit_all();
+    }
+    // Whatever the engine has not rendered yet plays as silence.
+    for output_frame in &mut output_frames {
+        OUTPUT_UNDERRUN_SAMPLES.fetch_add(OUTPUT_CHANNELS_U64, Ordering::Relaxed);
+        write_output_frame(output_frame, [0.0; OUTPUT_CHANNELS]);
     }
 
     // A valid stereo CPAL callback is frame-aligned. Keep any malformed tail
@@ -77,19 +80,34 @@ fn write_output_data<T>(
     }
 }
 
+/// Writes one engine frame to the first two channels of a device frame and silences the rest.
+#[inline(always)]
+fn write_output_frame<T>(output_frame: &mut [T], engine_frame: OutputFrame)
+where
+    T: SizedSample + FromSample<f32>,
+{
+    for output in output_frame.iter_mut() {
+        *output = T::from_sample(0.0);
+    }
+    if let [left, right, ..] = output_frame {
+        *left = T::from_sample(sanitize_output_sample(engine_frame[0]));
+        *right = T::from_sample(sanitize_output_sample(engine_frame[1]));
+    }
+}
+
+/// Queues interleaved stereo `samples` as whole frames with one bulk write. Returns `false`
+/// when `samples` is not frame-aligned or the queue could not take every frame; the frames
+/// that fit are still queued.
 #[inline]
 fn push_output_frames(producer: &mut Producer<OutputFrame>, samples: &[f32]) -> bool {
-    if !samples.len().is_multiple_of(OUTPUT_CHANNELS) {
+    let (frames, incomplete) = samples.as_chunks::<OUTPUT_CHANNELS>();
+    if !incomplete.is_empty() {
         return false;
     }
-
-    for frame in samples.chunks_exact(OUTPUT_CHANNELS) {
-        if producer.push([frame[0], frame[1]]).is_err() {
-            return false;
-        }
-    }
-
-    true
+    let Ok(chunk) = producer.write_chunk_uninit(producer.slots().min(frames.len())) else {
+        return false;
+    };
+    chunk.fill_from_iter(frames.iter().copied()) == frames.len()
 }
 
 enum RestartReason {

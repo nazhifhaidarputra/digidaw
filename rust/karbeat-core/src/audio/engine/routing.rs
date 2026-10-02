@@ -33,12 +33,28 @@ impl DelayLine {
         }
 
         let buffer_len = self.buffer.len();
-        for frame in buffer.chunks_mut(channels) {
-            let delayed_frame = &mut self.buffer[self.write_pos..self.write_pos + frame.len()];
-            for (sample, delayed_sample) in frame.iter_mut().zip(delayed_frame) {
-                std::mem::swap(sample, delayed_sample);
+        if channels == 0 || !buffer.len().is_multiple_of(channels) {
+            // A ragged block keeps the frame-by-frame exchange.
+            for frame in buffer.chunks_mut(channels.max(1)) {
+                let delayed_frame = &mut self.buffer[self.write_pos..self.write_pos + frame.len()];
+                for (sample, delayed_sample) in frame.iter_mut().zip(delayed_frame) {
+                    std::mem::swap(sample, delayed_sample);
+                }
+                self.write_pos = (self.write_pos + channels) % buffer_len;
             }
-            self.write_pos = (self.write_pos + channels) % buffer_len;
+            return;
+        }
+
+        // Exchange the block with the ring in stretches that end at the ring's wrap. Each
+        // stretch is at most one ring long, so a block longer than the delay reads back the
+        // samples it wrote earlier, exactly as frame-by-frame exchange does.
+        let mut remaining = buffer;
+        while !remaining.is_empty() {
+            let stretch = remaining.len().min(buffer_len - self.write_pos);
+            let (head, tail) = remaining.split_at_mut(stretch);
+            head.swap_with_slice(&mut self.buffer[self.write_pos..self.write_pos + stretch]);
+            self.write_pos = (self.write_pos + stretch) % buffer_len;
+            remaining = tail;
         }
     }
 }
@@ -442,5 +458,28 @@ mod tests {
         let mut second_block = [5.0, 6.0, 7.0, 8.0];
         delay.process_block(&mut second_block, 2);
         assert_eq!(second_block, [1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn process_block_matches_a_plain_delay_at_any_block_size() {
+        let signal: Vec<f32> = (1..=600).map(|sample| sample as f32).collect();
+        for delay_frames in [1, 3, 64, 100] {
+            for block_frames in [1, 7, 64, 150] {
+                let mut delay = DelayLine::default();
+                delay.set_delay(delay_frames, 2);
+                let mut rendered = signal.clone();
+                for block in rendered.chunks_mut(block_frames * 2) {
+                    delay.process_block(block, 2);
+                }
+                let expected: Vec<f32> = std::iter::repeat_n(0.0, delay_frames * 2)
+                    .chain(signal.iter().copied())
+                    .take(signal.len())
+                    .collect();
+                assert_eq!(
+                    rendered, expected,
+                    "delay {delay_frames}, block {block_frames}"
+                );
+            }
+        }
     }
 }

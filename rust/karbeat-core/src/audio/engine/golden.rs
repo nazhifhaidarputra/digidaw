@@ -10,7 +10,16 @@
     reason = "reference renders fail immediately when a fixture cannot be built or read"
 )]
 
-use std::{any::Any, path::PathBuf, sync::Arc};
+use std::{
+    alloc::{GlobalAlloc, Layout, System},
+    any::Any,
+    cell::Cell,
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use karbeat_plugins::registry::PluginRegistry;
 use rtrb::RingBuffer;
@@ -42,6 +51,45 @@ const FRAMES: usize = 4_096;
 
 type Event = (usize, Box<dyn FnMut(&mut AudioEngine)>);
 
+/// Counts heap allocations made on a thread while it has [`WATCH`] set.
+struct CountingAllocator;
+
+thread_local! {
+    static WATCH: Cell<bool> = const { Cell::new(false) };
+}
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+
+// SAFETY: Every operation forwards unchanged to the system allocator; counting does not
+// allocate.
+unsafe impl GlobalAlloc for CountingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        if WATCH.try_with(Cell::get).unwrap_or(false) {
+            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        }
+        // SAFETY: The caller's layout is forwarded unchanged.
+        unsafe { System.alloc(layout) }
+    }
+
+    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+        // SAFETY: The pointer and layout come from this allocator's `alloc` or `realloc`.
+        unsafe { System.dealloc(pointer, layout) }
+    }
+
+    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
+        if WATCH.try_with(Cell::get).unwrap_or(false) {
+            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        }
+        // SAFETY: The caller's pointer, layout and size are forwarded unchanged.
+        unsafe { System.realloc(pointer, layout, size) }
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: CountingAllocator = CountingAllocator;
+
+/// Serializes the tests that read [`ALLOCATIONS`].
+static ALLOCATION_TESTS: Mutex<()> = Mutex::new(());
+
 struct Scenario {
     engine: AudioEngine,
     /// Commands applied when the render reaches their frame; blocks are split there, so they
@@ -65,7 +113,13 @@ impl Scenario {
         self
     }
 
-    fn render(mut self, block: usize) -> Vec<f32> {
+    fn render(self, block: usize) -> Vec<f32> {
+        self.render_watched(block, usize::MAX)
+    }
+
+    /// Renders like [`Self::render`], counting the allocations `process` makes on this thread
+    /// from frame `watch_from` on.
+    fn render_watched(mut self, block: usize, watch_from: usize) -> Vec<f32> {
         self.events.sort_by_key(|(frame, _)| *frame);
         let mut output = vec![0.0_f32; FRAMES * 2];
         let mut frame = 0;
@@ -80,8 +134,10 @@ impl Scenario {
                 .get(next)
                 .map_or(FRAMES, |(at, _)| (*at).min(FRAMES));
             let frames = block.min(until - frame);
+            WATCH.set(frame >= watch_from);
             self.engine
                 .process(&mut output[frame * 2..(frame + frames) * 2]);
+            WATCH.set(false);
             frame += frames;
         }
         output
@@ -613,6 +669,70 @@ fn bounce() -> Scenario {
         events: Vec::new(),
         _keep: vec![Box::new(commands)],
     }
+}
+
+/// Once a project is playing, rendering a block must not touch the heap. Scenarios with
+/// plugins are left out: what a plugin allocates is the plugin's business.
+#[test]
+fn playing_projects_render_without_allocating() {
+    let _serial = ALLOCATION_TESTS.lock().unwrap();
+    // The counter itself must see an allocation, or a zero below would prove nothing.
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    WATCH.set(true);
+    let probe = std::hint::black_box(vec![0_u8; 64]);
+    WATCH.set(false);
+    drop(probe);
+    assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 1);
+
+    let scenarios: [(&str, fn() -> Scenario); 4] = [
+        ("clip_static", clip_static),
+        ("clip_resampled_loop", clip_resampled_loop),
+        ("fader_moves", fader_moves),
+        ("channel_switches", channel_switches_without_effects),
+    ];
+    for (name, build) in scenarios {
+        for block in BLOCKS {
+            let scenario = build();
+            ALLOCATIONS.store(0, Ordering::Relaxed);
+            // The first blocks size the working buffers for this block size.
+            scenario.render_watched(block, 1_024);
+            assert_eq!(
+                ALLOCATIONS.load(Ordering::Relaxed),
+                0,
+                "{name} allocated while rendering blocks of {block}"
+            );
+        }
+    }
+}
+
+/// Mute, solo and phase switches on two clip tracks, with no plugin in the project.
+fn channel_switches_without_effects() -> Scenario {
+    let mut app = project();
+    let first = tone_track(&mut app, 220.0, 330.0);
+    let second = tone_track(&mut app, 550.0, 770.0);
+    let mut engine = engine(512);
+    publish(&mut engine, &app);
+    play(&mut engine, 0);
+    let switch = |target: MixerChannelTarget, param: MixerChannelParams| {
+        move |engine: &mut AudioEngine| set_mixer(engine, target.clone(), param)
+    };
+    Scenario::new(engine)
+        .at(
+            1_200,
+            switch(track_target(first), MixerChannelParams::Mute(true)),
+        )
+        .at(
+            1_800,
+            switch(track_target(first), MixerChannelParams::Mute(false)),
+        )
+        .at(
+            2_400,
+            switch(track_target(second), MixerChannelParams::Solo(true)),
+        )
+        .at(
+            3_000,
+            switch(track_target(first), MixerChannelParams::InvertedPhase(true)),
+        )
 }
 
 macro_rules! golden {
