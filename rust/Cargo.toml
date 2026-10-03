@@ -27,7 +27,6 @@ karbeat-core-api = { path = "karbeat-core-api" }
 karbeat-analysis = { path = "karbeat-analysis" }
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat-rb = { path = "karbeat-rb" }
-karbeat_flutter_ffi = { path = "karbeat-flutter-ffi" }
 karbeat-host = { path = "karbeat-host" }
 karbeat-host-api = { path = "karbeat-host-api" }
 karbeat-vst3 = { path = "karbeat-vst3" }
