@@ -10,6 +10,7 @@ use std::path::PathBuf;
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
     let mut header_path: Option<PathBuf> = None;
+    println!("cargo:rerun-if-env-changed=RUBBERBAND_STATIC");
 
     if target_os == "windows" {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();

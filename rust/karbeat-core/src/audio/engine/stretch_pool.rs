@@ -1,13 +1,13 @@
 //! Realtime pitch-preserving stretch for Stretch-mode audio clips.
 //!
-//! Each playing clip that needs stretching borrows one Rubber Band realtime stretcher from a
+//! Each playing clip that needs stretching borrows one realtime stretcher from a
 //! fixed pool, keyed by track and clip. Voices are rebuilt every block, so a slot remembers
 //! the clip content position it expects next: a matching voice continues seamlessly, anything
 //! else (a new clip, a seek, a loop jump) resets and primes the stretcher so its output lines
 //! up with the timeline. Stretchers run at the engine's DSP sample rate; a source recorded at
 //! another rate is converted while feeding them, so their time ratio is the tempo ratio alone.
 
-use karbeat_dsp::stretcher::RealtimeStretcher;
+use karbeat_dsp::stretcher::{DefaultRealtimeStretcher, REALTIME_CHANNELS, RealtimeTimeStretcher};
 
 use crate::{
     audio::engine::helper::LoopBounds,
@@ -55,7 +55,7 @@ pub struct StretchRate {
 }
 
 struct StretchSlot {
-    stretcher: RealtimeStretcher,
+    stretcher: DefaultRealtimeStretcher,
     owner: Option<(TrackId, ClipId)>,
     used: bool,
     /// Clip content frame of the next output frame.
@@ -81,10 +81,10 @@ impl StretchSlot {
             }
         }
         self.source_position += frames as f64 * pitch_step;
-        self.stretcher.process(
+        self.stretcher.process(&[
             left.get(..frames).unwrap_or_default(),
             right.get(..frames).unwrap_or_default(),
-        );
+        ]);
     }
 
     /// Restarts the stretcher so its next output frame is clip content frame `content`.
@@ -127,7 +127,9 @@ impl StretchPool {
         }
         self.sample_rate = sample_rate;
         self.slots = (0..STRETCH_SLOTS)
-            .filter_map(|_| RealtimeStretcher::new(sample_rate, CHUNK).ok())
+            .filter_map(|_| {
+                DefaultRealtimeStretcher::new(sample_rate, REALTIME_CHANNELS, CHUNK).ok()
+            })
             .map(|stretcher| StretchSlot {
                 stretcher,
                 owner: None,
@@ -178,7 +180,7 @@ impl StretchPool {
         }
 
         let mut written = 0;
-        // Bounds the loop should Rubber Band stop producing output.
+        // Bounds the loop should the stretcher stop producing output.
         let mut feeds_left = 64 + frames / 64;
         while written < frames {
             let available = slot.stretcher.available();
@@ -198,10 +200,10 @@ impl StretchPool {
             };
             let take = available.min(wanted).min(CHUNK);
             let [left, right] = &mut slot.output;
-            let got = slot.stretcher.retrieve(
+            let got = slot.stretcher.retrieve(&mut [
                 left.get_mut(..take).unwrap_or_default(),
                 right.get_mut(..take).unwrap_or_default(),
-            );
+            ]);
             if got == 0 {
                 break;
             }

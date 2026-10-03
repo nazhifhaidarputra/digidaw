@@ -1,3 +1,4 @@
+mod identity;
 mod wayland;
 mod x11;
 

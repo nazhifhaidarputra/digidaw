@@ -79,7 +79,7 @@ static ANDROID_CONTEXT: OnceCell<Global<JObject<'static>>> = OnceCell::new();
 
 #[cfg(target_os = "android")]
 #[no_mangle]
-pub unsafe extern "C" fn Java_com_example_karbeat_MainActivity_initRust(
+pub unsafe extern "C" fn Java_app_digidaw_Digidaw_MainActivity_initRust(
     mut unowned_env: jni::EnvUnowned,
     _class: jni::objects::JClass,
     context: jni::objects::JObject,

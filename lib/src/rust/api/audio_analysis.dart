@@ -60,6 +60,21 @@ Future<void> setAudioSourceSampleMode({
   mode: mode,
 );
 
+/// Sets an audio source's pitch shift in semitones (clamped to two octaves either way) and
+/// whether to preserve formants (undoable), then renders it in the background. The original
+/// audio plays until the render is ready.
+Future<void> setWaveformPitch({
+  required DawContext ctx,
+  required int sourceId,
+  required double pitchSemitones,
+  required bool preserveFormants,
+}) => RustLib.instance.api.crateApiAudioAnalysisSetWaveformPitch(
+  ctx: ctx,
+  sourceId: sourceId,
+  pitchSemitones: pitchSemitones,
+  preserveFormants: preserveFormants,
+);
+
 /// Sets an audio source's normalize, invert and reverse edits (undoable), then renders them
 /// in the background. The original audio plays until the render is ready.
 Future<void> setWaveformEdits({

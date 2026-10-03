@@ -1,5 +1,6 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <shobjidl.h>
 #include <windows.h>
 
 #include "flutter_window.h"
@@ -16,6 +17,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
     CreateAndAttachConsole();
   }
+
+  // Groups native plugin windows with the main window on the taskbar.
+  ::SetCurrentProcessExplicitAppUserModelID(L"app.digidaw.Digidaw");
 
   if (digidaw_initialize_windows_main_thread() != 0) {
     return EXIT_FAILURE;

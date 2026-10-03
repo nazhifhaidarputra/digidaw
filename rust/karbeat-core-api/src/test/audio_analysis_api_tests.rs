@@ -16,7 +16,8 @@ mod tests {
 
     use crate::audio_analysis_api::{
         begin_fit_to_tempo, begin_refresh_render, cancel_stale_renders, commit_beat_grid,
-        commit_render, execute_render, set_sample_mode, set_waveform_edits, sources_needing_render,
+        commit_render, execute_render, set_sample_mode, set_waveform_edits, set_waveform_pitch,
+        sources_needing_render,
     };
     use crate::clip_api::{batch_resize_clips, resize_clip};
     use crate::test::helpers::{add_dc_audio_source, make_ctx};
@@ -375,6 +376,71 @@ mod tests {
         crate::undo(&mut ctx).unwrap();
         assert!(source(&ctx, id).edited.is_none());
         assert!(!set_waveform_edits(&mut ctx, id, false, false, false).unwrap());
+    }
+
+    /// A one-second stereo 440 Hz sine source.
+    fn sine_source(ctx: &mut DawContext) -> AudioSourceId {
+        let samples: Vec<f32> = (0..48_000)
+            .flat_map(|frame| {
+                let value = (frame as f32 * 440.0 * std::f32::consts::TAU / 48_000.0).sin() * 0.5;
+                [value, value]
+            })
+            .collect();
+        let bytes: &[u8] = bytemuck::cast_slice(&samples);
+        let mut map = memmap2::MmapOptions::new()
+            .len(bytes.len())
+            .map_anon()
+            .unwrap();
+        map.copy_from_slice(bytes);
+        let buffer = Arc::new(map.make_read_only().unwrap());
+        ctx.app_state
+            .asset_library
+            .source_map
+            .insert_with_key(|id| {
+                Arc::new(AudioWaveform {
+                    id: Some(id),
+                    buffer: Some(buffer),
+                    sample_rate: 48_000,
+                    channels: 2,
+                    ..AudioWaveform::default()
+                })
+            })
+    }
+
+    /// Rising zero crossings of the left channel in the middle half second.
+    fn middle_crossings(interleaved: &[f32]) -> usize {
+        let left: Vec<f32> = interleaved.iter().step_by(2).copied().collect();
+        left[12_000..36_000]
+            .windows(2)
+            .filter(|pair| pair[0] < 0.0 && pair[1] >= 0.0)
+            .count()
+    }
+
+    #[test]
+    fn pitch_edit_renders_and_is_undoable() {
+        let mut ctx = make_ctx();
+        let id = sine_source(&mut ctx);
+        assert!(set_waveform_pitch(&mut ctx, id, 12.0, false).unwrap());
+        refresh(&mut ctx, id);
+
+        let output = rendered(&ctx, id);
+        let frames = output.len() / 2;
+        assert!(frames.abs_diff(48_000) <= 480, "{frames} frames");
+        // An octave up doubles the 220 crossings of 440 Hz over half a second.
+        let crossings = middle_crossings(&output);
+        assert!((400..=480).contains(&crossings), "{crossings} crossings");
+
+        assert!(set_waveform_pitch(&mut ctx, id, 100.0, true).unwrap());
+        let edits = &source(&ctx, id).edited.as_ref().unwrap().edits;
+        assert_eq!(edits.pitch_semitones, 24.0);
+        assert!(edits.preserve_formants);
+        assert!(set_waveform_pitch(&mut ctx, id, f32::NAN, false).is_err());
+
+        crate::undo(&mut ctx).unwrap();
+        let edits = &source(&ctx, id).edited.as_ref().unwrap().edits;
+        assert_eq!(edits.pitch_semitones, 12.0);
+        crate::undo(&mut ctx).unwrap();
+        assert!(source(&ctx, id).edited.is_none());
     }
 
     #[test]

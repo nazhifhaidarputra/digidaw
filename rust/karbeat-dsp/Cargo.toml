@@ -17,11 +17,8 @@ wide.workspace = true
 smallvec.workspace = true
 rayon.workspace = true
 crossfire.workspace = true
-
-[build-dependencies]
-vcpkg.workspace = true
-bindgen.workspace = true
-pkg-config.workspace = true
+karbeat-rb.workspace = true
+log.workspace = true
 
 [lints]
 workspace = true

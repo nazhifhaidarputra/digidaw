@@ -274,8 +274,6 @@ class _OfflineEditControls extends ConsumerWidget {
   final int sourceId;
   final AudioWaveformUiForAudioProperties props;
 
-  static const _comingSoon = 'Coming soon';
-
   String _modeLabel(UiAudioSampleMode mode) => switch (mode) {
     UiAudioSampleMode.default_ => 'Default',
     UiAudioSampleMode.resampled => 'Resampled',
@@ -318,9 +316,24 @@ class _OfflineEditControls extends ConsumerWidget {
     ),
   );
 
+  Future<void> _setPitch(
+    WidgetRef ref, {
+    double? semitones,
+    bool? preserveFormants,
+  }) => _apply(
+    ref,
+    (ctx) => setWaveformPitch(
+      ctx: ctx,
+      sourceId: sourceId,
+      pitchSemitones: semitones ?? props.pitchSemitones,
+      preserveFormants: preserveFormants ?? props.preserveFormants,
+    ),
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).colorScheme;
+    final semitones = props.pitchSemitones.roundToDouble();
+    final cents = ((props.pitchSemitones - semitones) * 100).roundToDouble();
     Widget toggle(
       String label,
       IconData icon,
@@ -379,38 +392,95 @@ class _OfflineEditControls extends ConsumerWidget {
               ],
             ),
           ),
+          _CommitKnob(
+            label: 'Pitch',
+            unit: 'st',
+            value: semitones,
+            min: -24,
+            max: 24,
+            onCommit: (value) => _setPitch(ref, semitones: value + cents / 100),
+          ),
+          _CommitKnob(
+            label: 'Fine',
+            unit: 'ct',
+            value: cents,
+            min: -50,
+            max: 50,
+            onCommit: (value) =>
+                _setPitch(ref, semitones: semitones + value / 100),
+          ),
           Tooltip(
-            message: _comingSoon,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.4,
-                    child: DigidawParameterKnob(
-                      value: 0,
-                      min: -24,
-                      max: 24,
-                      defaultValue: 0,
-                      step: 1,
-                      diameter: 32,
-                      onChanged: (_) {},
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Pitch',
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+            message: 'Keep the voice character when shifting pitch',
+            child: toggle(
+              'Formants',
+              Icons.record_voice_over,
+              props.preserveFormants,
+              (value) => _setPitch(ref, preserveFormants: value),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A whole-step knob that previews its value while dragging and commits once on
+/// release, so a drag starts one render instead of one per step.
+class _CommitKnob extends StatefulWidget {
+  const _CommitKnob({
+    required this.label,
+    required this.unit,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onCommit,
+  });
+
+  final String label;
+  final String unit;
+  final double value;
+  final double min;
+  final double max;
+  final Future<void> Function(double value) onCommit;
+
+  @override
+  State<_CommitKnob> createState() => _CommitKnobState();
+}
+
+class _CommitKnobState extends State<_CommitKnob> {
+  double? _draft;
+
+  Future<void> _commit(double value) async {
+    if (value != widget.value) await widget.onCommit(value);
+    if (mounted) setState(() => _draft = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _draft ?? widget.value;
+    final sign = value > 0 ? '+' : '';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DigidawParameterKnob(
+          value: value,
+          min: widget.min,
+          max: widget.max,
+          defaultValue: 0,
+          step: 1,
+          diameter: 32,
+          onChanged: (next) => setState(() => _draft = next),
+          onChangeEnd: _commit,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '${widget.label} $sign${value.toStringAsFixed(0)} ${widget.unit}',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 12,
+          ),
+        ),
+      ],
     );
   }
 }

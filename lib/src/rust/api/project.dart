@@ -176,6 +176,10 @@ abstract class AudioWaveformUiForAudioProperties
 
   double? get originalBpm;
 
+  double get pitchSemitones;
+
+  bool get preserveFormants;
+
   bool get renderReady;
 
   bool get reverse;
@@ -219,6 +223,10 @@ abstract class AudioWaveformUiForAudioProperties
   set normalized(bool normalized);
 
   set originalBpm(double? originalBpm);
+
+  set pitchSemitones(double pitchSemitones);
+
+  set preserveFormants(bool preserveFormants);
 
   set renderReady(bool renderReady);
 

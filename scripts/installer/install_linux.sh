@@ -3,7 +3,7 @@
 #
 # Installs the shared libraries the app links against through the system package manager
 # (GTK 3, ALSA, FFTW, libsamplerate), copies the app to ~/.local/share/digidaw, and adds a
-# `digidaw` launcher and a desktop menu entry. Rubber Band is linked into the app, so it is
+# `digidaw` launcher and a desktop menu entry with its icon. Rubber Band is linked into the app, so it is
 # not installed here. build_linux.sh ships this script in the archive as install.sh, next to
 # uninstall.sh, which stays in the install folder to remove the app later.
 set -euo pipefail
@@ -12,6 +12,8 @@ APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 INSTALL_DIR="$DATA_HOME/digidaw"
 BIN_DIR="$HOME/.local/bin"
+APP_ID="app.digidaw.Digidaw"
+ICON_DIR="$DATA_HOME/icons/hicolor/256x256/apps"
 
 if [ ! -x "$APP_DIR/karbeat" ]; then
     echo -e "\033[1;31m==> ERROR: Run this script from the extracted DigiDAW release folder.\033[0m"
@@ -39,17 +41,24 @@ fi
 
 echo -e "\033[1;36m==> [DigiDAW Install] Copying app to $INSTALL_DIR...\033[0m"
 rm -rf "$INSTALL_DIR"
-mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$DATA_HOME/applications"
+mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$DATA_HOME/applications" "$ICON_DIR"
 cp -r "$APP_DIR/." "$INSTALL_DIR/"
 rm -f "$INSTALL_DIR/install.sh"
 ln -sf "$INSTALL_DIR/karbeat" "$BIN_DIR/digidaw"
 
-cat > "$DATA_HOME/applications/digidaw.desktop" <<EOF
+cp "$INSTALL_DIR/data/app_icon.png" "$ICON_DIR/$APP_ID.png"
+
+# Named after the application ID, which the main window and plugin windows report, so
+# desktops match them to this entry and its icon.
+rm -f "$DATA_HOME/applications/digidaw.desktop"
+cat > "$DATA_HOME/applications/$APP_ID.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=DigiDAW
 Comment=Digital audio workstation
 Exec=$INSTALL_DIR/karbeat
+Icon=$APP_ID
+StartupWMClass=$APP_ID
 Categories=AudioVideo;Audio;
 Terminal=false
 EOF

@@ -33,6 +33,7 @@ use wayland_client::{
     protocol::{wl_output, wl_surface},
 };
 
+use super::identity;
 use crate::native_ui::{
     NativeParentHandle, NativeSurfaceKind, NativeUiControlFlow, NativeUiError, NativeWindow,
     NativeWindowConstraints, NativeWindowEvent, NativeWindowId, NativeWindowMetrics,
@@ -139,7 +140,7 @@ impl WaylandBackend {
             WindowDecorations::RequestServer,
             &self.shared.queue_handle,
         );
-        window.set_app_id("com.digidaw.DigiDAW");
+        window.set_app_id(identity::APP_ID);
         window.set_title(spec.title);
         apply_constraints(&window, spec.constraints);
         window.xdg_surface().set_window_geometry(
@@ -293,7 +294,7 @@ impl NativeWindow for WaylandWindow {
             RequestData {
                 seat_and_serial: None,
                 surface: Some(self.window.wl_surface().clone()),
-                app_id: Some("com.digidaw.DigiDAW".into()),
+                app_id: Some(identity::APP_ID.into()),
                 udata: self.state.id,
             },
         );

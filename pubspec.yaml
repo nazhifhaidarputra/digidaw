@@ -70,6 +70,7 @@ dev_dependencies:
   freezed: ^3.2.3
   build_runner: ^2.10.4
   mocktail: ^1.0.5
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -114,3 +115,39 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Application ID on every platform: `dart run package_rename`.
+# Display and executable names are left alone, so binaries stay `karbeat`.
+package_rename_config:
+  android:
+    package_name: app.digidaw.Digidaw
+    override_old_package: com.example.karbeat
+    lang: kotlin
+  ios:
+    package_name: app.digidaw.Digidaw
+  linux:
+    package_name: app.digidaw.Digidaw
+  macos:
+    package_name: app.digidaw.Digidaw
+    copyright_notice: Copyright © 2025 DigiDAW. All rights reserved.
+  windows:
+    organization: app.digidaw
+    copyright_notice: Copyright (C) 2025 DigiDAW. All rights reserved.
+
+# Platform launcher icons, from the SVG sources in assets/icon/.
+# Run scripts/generate_icons.sh rather than `dart run flutter_launcher_icons`
+# directly: it also renders the PNG sources and the Linux and plugin-window icons.
+flutter_launcher_icons:
+  image_path: assets/icon/app_icon.png
+  android: true
+  adaptive_icon_background: "#14161c"
+  adaptive_icon_foreground: assets/icon/app_icon_foreground.png
+  adaptive_icon_foreground_inset: 0
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#14161c"
+  macos:
+    generate: true
+  windows:
+    generate: true
+    icon_size: 256

@@ -812,6 +812,7 @@ mod test {
                 edits: WaveformEdits {
                     reverse: true,
                     pitch_semitones: 3.0,
+                    preserve_formants: true,
                     warp: true,
                     ..WaveformEdits::default()
                 },
@@ -854,6 +855,7 @@ mod test {
         let edits = &original.edited.as_ref().unwrap().edits;
         assert!(edits.reverse);
         assert_eq!(edits.pitch_semitones, 3.0);
+        assert!(edits.preserve_formants);
         assert!(edits.warp);
         let grid = original.beat_grid.as_ref().unwrap();
         assert_eq!(grid.bpm, 124.0);

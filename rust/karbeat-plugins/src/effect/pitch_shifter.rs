@@ -1,13 +1,13 @@
-use karbeat_dsp::pitch_shift::{PitchShiftAlgorithm, PitchShiftEngine};
+use karbeat_dsp::pitch_shift::PitchShiftEngine;
 use karbeat_macros::{auto_param, karbeat_plugin};
 use karbeat_plugin_api::prelude::*;
 use karbeat_utils::hash::hash_str;
 
-/// The audio FX Plugin for real-time, low-latency Pitch Shifting.
+/// The audio FX Plugin for real-time, low-latency Pitch Shifting, from two octaves down to
+/// two octaves up.
 ///
-/// Uses Rubberband via FFI bindings under the hood. To be able to run
-/// this, you must install rubberband system-wide.
-/// For further information, see https://breakfastquay.com/rubberband/
+/// The shifter is `karbeat_dsp`'s default live pitch shifter, currently the Rubber Band
+/// Library (https://breakfastquay.com/rubberband/) linked through `karbeat-rb`.
 #[karbeat_plugin]
 #[derive(Clone, Debug)]
 pub struct PitchShifter {

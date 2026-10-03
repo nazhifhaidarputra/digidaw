@@ -558,6 +558,10 @@ pub struct AudioWaveformUiForAudioProperties {
     pub invert: bool,
     /// Whether the audio plays backwards.
     pub reverse: bool,
+    /// Pitch shift in semitones, fractional for cents.
+    pub pitch_semitones: f32,
+    /// Whether the pitch shift preserves formants.
+    pub preserve_formants: bool,
     /// Whether the stretched audio is rendered; playback uses the original until it is.
     pub render_ready: bool,
 }
@@ -623,6 +627,14 @@ impl AudioWaveformUiForAudioProperties {
                 .edited
                 .as_ref()
                 .is_some_and(|edited| edited.edits.reverse),
+            pitch_semitones: value
+                .edited
+                .as_ref()
+                .map_or(0.0, |edited| edited.edits.pitch_semitones),
+            preserve_formants: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.preserve_formants),
             render_ready: value
                 .edited
                 .as_ref()

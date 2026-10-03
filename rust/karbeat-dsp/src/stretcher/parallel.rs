@@ -27,7 +27,7 @@ use std::{
 use crossfire::{RecvTimeoutError, mpsc};
 use rayon::ThreadPool;
 
-use super::{OfflineStretch, StretchError, stretch_offline, validate};
+use super::{OfflineStretch, OfflineTimeStretcher, StretchError, validate};
 
 /// Shortest input, in seconds, that is split into parallel chunks; shorter input renders
 /// in one pass.
@@ -276,6 +276,7 @@ pub(crate) fn chunk_key_frames(
 
 /// Stretches one chunk into interleaved samples, adding rendered input frames to `done`.
 fn render_chunk(
+    stretcher: &impl OfflineTimeStretcher,
     request: &OfflineStretch<'_>,
     chunk: &Chunk,
     map: &OutputMap,
@@ -300,7 +301,7 @@ fn render_chunk(
     };
     let mut output = Vec::with_capacity((output_span.max(0.0) as usize + 1) * channels);
     let mut reported = 0_u64;
-    stretch_offline(
+    stretcher.stretch(
         &local,
         &|| stop.load(Ordering::Acquire) || cancelled(),
         &mut |fraction| {
@@ -489,7 +490,7 @@ impl Splicer<'_> {
     }
 }
 
-/// Stretches `request.input` like [`stretch_offline`], rendering chunks of long input on
+/// Stretches `request.input` with `stretcher`, rendering chunks of long input on
 /// `pool` in parallel and streaming the joined result to `sink` in order.
 ///
 /// Input shorter than [`PARALLEL_MIN_SECONDS`], or a single-thread pool, renders in one
@@ -498,7 +499,8 @@ impl Splicer<'_> {
 ///
 /// `cancelled` is polled by every worker between blocks. `progress` receives values from
 /// `0.0` to `1.0`. Returns the number of output frames written.
-pub fn stretch_offline_parallel(
+pub fn stretch_offline_parallel<S: OfflineTimeStretcher>(
+    stretcher: &S,
     request: &OfflineStretch<'_>,
     pool: &ThreadPool,
     cancelled: &(dyn Fn() -> bool + Sync),
@@ -509,12 +511,12 @@ pub fn stretch_offline_parallel(
     let threads = pool.current_num_threads();
     let long = input_frames as f64 >= PARALLEL_MIN_SECONDS * f64::from(request.sample_rate);
     if !long || threads < 2 {
-        return stretch_offline(request, &|| cancelled(), progress, sink);
+        return stretcher.stretch(request, &|| cancelled(), progress, sink);
     }
     let map = OutputMap::new(input_frames, request.time_ratio, request.key_frames);
     let chunks = plan_chunks(request, &map, input_frames, threads);
     if chunks.len() < 2 {
-        return stretch_offline(request, &|| cancelled(), progress, sink);
+        return stretcher.stretch(request, &|| cancelled(), progress, sink);
     }
 
     let channels = request.channels;
@@ -568,7 +570,8 @@ pub fn stretch_offline_parallel(
                         }
                         std::thread::sleep(WINDOW_WAIT);
                     }
-                    let rendered = render_chunk(request, chunk, map, stop, cancelled, done);
+                    let rendered =
+                        render_chunk(stretcher, request, chunk, map, stop, cancelled, done);
                     let failed = rendered.is_err();
                     if sender.send((index, rendered)).is_err() || failed {
                         return;
@@ -649,7 +652,9 @@ mod tests {
         Chunk, OutputMap, PAD_SECONDS, Placed, best_lag, chunk_key_frames, frames, plan_chunks,
         stretch_offline_parallel,
     };
-    use crate::stretcher::{OfflineStretch, StretchError, stretch_offline};
+    use crate::stretcher::{
+        DefaultOfflineStretcher, OfflineStretch, StretchError, stretch_offline,
+    };
 
     const RATE: u32 = 48_000;
 
@@ -686,6 +691,7 @@ mod tests {
     fn run(request: &OfflineStretch<'_>, threads: usize) -> Result<Vec<f32>, StretchError> {
         let mut output = Vec::new();
         stretch_offline_parallel(
+            &DefaultOfflineStretcher::default(),
             request,
             &pool(threads),
             &|| false,
@@ -907,6 +913,7 @@ mod tests {
     fn cancellation_stops_every_chunk() {
         let input = sine(70.0, 440.0, 2);
         let result = stretch_offline_parallel(
+            &DefaultOfflineStretcher::default(),
             &request(&input, 2, 1.1),
             &pool(4),
             &|| true,
@@ -943,4 +950,3 @@ mod tests {
         }
     }
 }
-

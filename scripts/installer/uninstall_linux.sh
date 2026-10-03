@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Removes a DigiDAW installation made by install.sh.
 #
-# Removes the app, the `digidaw` launcher, and the desktop menu entry. Settings and crash
+# Removes the app, the `digidaw` launcher, and the desktop menu entry and icon. Settings and crash
 # recovery data are kept unless --purge is given. The system libraries install.sh installed
 # (GTK 3, ALSA, FFTW, libsamplerate) are left in place because other software may use them.
 # build_linux.sh ships this script in the archive as uninstall.sh, and install.sh keeps a
@@ -11,9 +11,13 @@ set -euo pipefail
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 INSTALL_DIR="$DATA_HOME/digidaw"
 LAUNCHER="$HOME/.local/bin/digidaw"
-DESKTOP_ENTRY="$DATA_HOME/applications/digidaw.desktop"
-# path_provider names the data folder after the application ID, or the binary for older installs.
-APP_DATA_DIRS=("$DATA_HOME/com.example.karbeat" "$DATA_HOME/karbeat")
+APP_ID="app.digidaw.Digidaw"
+# The entry is named after the application ID; older installs used digidaw.desktop.
+DESKTOP_ENTRIES=("$DATA_HOME/applications/$APP_ID.desktop" "$DATA_HOME/applications/digidaw.desktop")
+ICON="$DATA_HOME/icons/hicolor/256x256/apps/$APP_ID.png"
+# path_provider names the data folder after the application ID; older installs used the
+# template ID or the binary name.
+APP_DATA_DIRS=("$DATA_HOME/$APP_ID" "$DATA_HOME/com.example.karbeat" "$DATA_HOME/karbeat")
 
 PURGE=false
 case "${1:-}" in
@@ -30,7 +34,7 @@ echo -e "\033[1;36m==> [DigiDAW Uninstall] Removing app...\033[0m"
 if [ -L "$LAUNCHER" ] && [ "$(readlink "$LAUNCHER")" = "$INSTALL_DIR/karbeat" ]; then
     rm -f "$LAUNCHER"
 fi
-rm -f "$DESKTOP_ENTRY"
+rm -f "${DESKTOP_ENTRIES[@]}" "$ICON"
 rm -rf "$INSTALL_DIR"
 
 if [ "$PURGE" = true ]; then

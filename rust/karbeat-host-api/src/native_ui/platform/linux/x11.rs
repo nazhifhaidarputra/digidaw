@@ -24,6 +24,7 @@ use x11rb::{
     wrapper::ConnectionExt as _,
 };
 
+use super::identity;
 use crate::native_ui::{
     NativeParentHandle, NativeSurfaceKind, NativeUiControlFlow, NativeUiError, NativeWindow,
     NativeWindowConstraints, NativeWindowEvent, NativeWindowId, NativeWindowMetrics,
@@ -35,6 +36,7 @@ struct X11Atoms {
     wm_delete_window: Atom,
     utf8_string: Atom,
     net_wm_name: Atom,
+    net_wm_icon: Atom,
     net_wm_state: Atom,
     net_wm_state_above: Atom,
     resource_manager: Atom,
@@ -85,6 +87,7 @@ impl X11Backend {
             wm_delete_window: intern_atom(&connection, b"WM_DELETE_WINDOW")?,
             utf8_string: intern_atom(&connection, b"UTF8_STRING")?,
             net_wm_name: intern_atom(&connection, b"_NET_WM_NAME")?,
+            net_wm_icon: intern_atom(&connection, b"_NET_WM_ICON")?,
             net_wm_state: intern_atom(&connection, b"_NET_WM_STATE")?,
             net_wm_state_above: intern_atom(&connection, b"_NET_WM_STATE_ABOVE")?,
             resource_manager: intern_atom(&connection, b"RESOURCE_MANAGER")?,
@@ -456,7 +459,17 @@ impl X11Window {
                 self.state.xid,
                 AtomEnum::WM_CLASS,
                 AtomEnum::STRING,
-                b"digidaw\0DigiDAW\0",
+                identity::WM_CLASS,
+            )
+            .map_err(native_error)?;
+        self.shared
+            .connection
+            .change_property32(
+                PropMode::REPLACE,
+                self.state.xid,
+                self.shared.atoms.net_wm_icon,
+                AtomEnum::CARDINAL,
+                identity::net_wm_icon(),
             )
             .map_err(native_error)?;
         self.set_title(spec.title)?;

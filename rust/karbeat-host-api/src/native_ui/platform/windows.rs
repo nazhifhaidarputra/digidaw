@@ -11,8 +11,8 @@ use windows_sys::Win32::{
         Input::KeyboardAndMouse::SetFocus,
         WindowsAndMessaging::{
             CREATESTRUCTW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-            GWL_EXSTYLE, GWL_STYLE, GWLP_USERDATA, GetClientRect, GetWindowLongPtrW, MINMAXINFO,
-            RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
+            GWL_EXSTYLE, GWL_STYLE, GWLP_USERDATA, GetClientRect, GetWindowLongPtrW, LoadIconW,
+            MINMAXINFO, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
             SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
             WM_CLOSE, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KILLFOCUS, WM_NCCREATE, WM_NCDESTROY,
             WM_SETFOCUS, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
@@ -333,10 +333,17 @@ impl NativeUiPlatform for WindowsNativeUi {
     }
 }
 
+/// `IDI_APP_ICON`, the application icon the Flutter runner embeds in the executable.
+const APP_ICON_RESOURCE: usize = 101;
+
 fn register_window_class(instance: *mut c_void) -> Result<(), NativeUiError> {
+    // SAFETY: `instance` is the current module and the name is an integer resource ID
+    // (MAKEINTRESOURCEW). A module without that resource yields null: the default icon.
+    let icon = unsafe { LoadIconW(instance, ptr::without_provenance(APP_ICON_RESOURCE)) };
     let class = WNDCLASSW {
         lpfnWndProc: Some(editor_window_proc),
         hInstance: instance,
+        hIcon: icon,
         lpszClassName: WINDOW_CLASS.as_ptr(),
         ..WNDCLASSW::default()
     };

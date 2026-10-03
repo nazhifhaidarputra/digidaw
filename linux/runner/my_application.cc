@@ -14,6 +14,22 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// Sets the window icon from the bundle's data/app_icon.png, next to the
+// executable. Installed builds also find it by name in the icon theme.
+static void set_window_icon(GtkWindow* window) {
+  gtk_window_set_default_icon_name(APPLICATION_ID);
+  g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe == nullptr) {
+    return;
+  }
+  g_autofree gchar* dir = g_path_get_dirname(exe);
+  g_autofree gchar* icon =
+      g_build_filename(dir, "data", "app_icon.png", nullptr);
+  if (g_file_test(icon, G_FILE_TEST_EXISTS)) {
+    gtk_window_set_icon_from_file(window, icon, nullptr);
+  }
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -53,6 +69,7 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  set_window_icon(window);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -141,6 +158,9 @@ MyApplication* my_application_new() {
   // corresponding .desktop file. This ensures better integration by allowing
   // the application to be recognized beyond its binary name.
   g_set_prgname(APPLICATION_ID);
+  // Match the WM_CLASS of the native plugin windows, so desktops group them
+  // with this window and give them its icon.
+  gdk_set_program_class(APPLICATION_ID);
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",

@@ -47,6 +47,9 @@ class DigidawParameterKnob extends StatefulWidget {
 class _DigidawParameterKnobState extends State<DigidawParameterKnob> {
   bool _dragging = false;
 
+  /// Unquantized drag position, so small moves accumulate across steps.
+  double _dragValue = 0;
+
   double get _range => widget.max - widget.min;
 
   double _quantize(double v) {
@@ -59,9 +62,8 @@ class _DigidawParameterKnobState extends State<DigidawParameterKnob> {
     // Hold Shift for fine control — standard DAW knob behavior.
     final fine = HardwareKeyboard.instance.isShiftPressed ? 0.2 : 1.0;
     final deltaValue = -(dyDelta / widget.sensitivity) * _range * fine;
-    final next = _quantize(
-      (widget.value + deltaValue).clamp(widget.min, widget.max),
-    );
+    _dragValue = (_dragValue + deltaValue).clamp(widget.min, widget.max);
+    final next = _quantize(_dragValue);
     if (next != widget.value) widget.onChanged(next);
   }
 
@@ -90,6 +92,7 @@ class _DigidawParameterKnobState extends State<DigidawParameterKnob> {
         behavior: HitTestBehavior.opaque,
         onVerticalDragStart: (_) {
           _dragging = true;
+          _dragValue = widget.value;
           widget.onChangeStart?.call(widget.value);
           setState(() {});
         },

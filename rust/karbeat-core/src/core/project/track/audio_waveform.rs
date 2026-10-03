@@ -39,6 +39,8 @@ pub struct WaveformEdits {
     pub reverse: bool,
     /// Pitch shift in semitones.
     pub pitch_semitones: f32,
+    /// Preserve the spectral envelope when shifting pitch, for voices and instruments.
+    pub preserve_formants: bool,
     /// Time-stretch ratio; 1.0 keeps the original length.
     pub time_ratio: f32,
     /// Stretch beat by beat so every detected beat lands on the grid, instead of by one
@@ -53,6 +55,7 @@ impl Default for WaveformEdits {
             invert: false,
             reverse: false,
             pitch_semitones: 0.0,
+            preserve_formants: false,
             time_ratio: 1.0,
             warp: false,
         }
@@ -480,7 +483,19 @@ mod tests {
     #[test]
     fn identity_recipe_is_recognized() {
         assert!(!WaveformEdits::default().needs_render());
+        // Formant preservation only matters once the pitch moves.
+        assert!(
+            !WaveformEdits {
+                preserve_formants: true,
+                ..WaveformEdits::default()
+            }
+            .needs_render()
+        );
         for edits in [
+            WaveformEdits {
+                pitch_semitones: -0.5,
+                ..WaveformEdits::default()
+            },
             WaveformEdits {
                 warp: true,
                 ..WaveformEdits::default()

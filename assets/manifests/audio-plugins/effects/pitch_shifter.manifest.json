@@ -11,12 +11,13 @@
       "name": "Pitch Ratio",
       "group": "Pitcher",
       "value": 1.0,
-      "min": 0.5,
-      "max": 2.0,
+      "min": 0.25,
+      "max": 4.0,
       "default_value": 1.0,
       "step": 0.001,
       "value_type": "Float",
-      "choices": []
+      "choices": [],
+      "automatable": true
     },
     {
       "id": 158460893,
@@ -29,7 +30,8 @@
       "default_value": 0.0,
       "step": 1.0,
       "value_type": "Bool",
-      "choices": []
+      "choices": [],
+      "automatable": true
     }
   ]
 }

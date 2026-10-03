@@ -33,7 +33,9 @@ use karbeat_core::{
     },
     shared::id::{ClipId, TrackId},
 };
-use karbeat_dsp::stretcher::{OfflineStretch, stretch_offline, stretch_offline_parallel};
+use karbeat_dsp::stretcher::{
+    DefaultOfflineStretcher, OfflineStretch, OfflineTimeStretcher, stretch_offline_parallel,
+};
 use memmap2::Mmap;
 use parking_lot::Mutex;
 
@@ -452,6 +454,45 @@ pub fn set_waveform_edits(
     invert: bool,
     reverse: bool,
 ) -> anyhow::Result<bool> {
+    change_edits(ctx, source_id, "Edit Waveform", |current| WaveformEdits {
+        normalize,
+        invert,
+        reverse,
+        ..current
+    })
+}
+
+/// Highest pitch shift, in semitones either way, that a source edit accepts.
+pub const MAX_PITCH_SEMITONES: f32 = 24.0;
+
+/// Sets a source's pitch shift, clamped to [`MAX_PITCH_SEMITONES`] either way, and whether
+/// to preserve formants, as one undoable step. Returns whether it needs a render.
+///
+/// The duration is kept. As with the other edits, playback uses the original audio until the
+/// new render arrives.
+pub fn set_waveform_pitch(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    pitch_semitones: f32,
+    preserve_formants: bool,
+) -> anyhow::Result<bool> {
+    anyhow::ensure!(pitch_semitones.is_finite(), "Pitch shift must be a number");
+    let pitch_semitones = pitch_semitones.clamp(-MAX_PITCH_SEMITONES, MAX_PITCH_SEMITONES);
+    change_edits(ctx, source_id, "Pitch Shift", |current| WaveformEdits {
+        pitch_semitones,
+        preserve_formants,
+        ..current
+    })
+}
+
+/// Replaces a source's edit recipe with `change(current)` as one undoable step named `label`.
+/// Returns whether it needs a render.
+fn change_edits(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    label: &'static str,
+    change: impl FnOnce(WaveformEdits) -> WaveformEdits,
+) -> anyhow::Result<bool> {
     let entry = ctx
         .app_state
         .asset_library
@@ -463,27 +504,18 @@ pub fn set_waveform_edits(
         .as_ref()
         .map(|edited| edited.edits.clone())
         .unwrap_or_default();
-    let edits = WaveformEdits {
-        normalize,
-        invert,
-        reverse,
-        ..current.clone()
-    };
+    let edits = change(current.clone());
     if edits == current {
         return Ok(false);
     }
     let waveform = Arc::make_mut(entry);
     let previous = tempo_state(waveform);
-    waveform.normalized = normalize;
+    waveform.normalized = edits.normalize;
     waveform.edited = (edits != WaveformEdits::default()).then(|| EditedWaveform {
         edits,
         ..EditedWaveform::default()
     });
-    ctx.push_history(SourceTempoChanged::new(
-        source_id,
-        previous,
-        "Edit Waveform",
-    ));
+    ctx.push_history(SourceTempoChanged::new(source_id, previous, label));
     ctx.broadcast_audio_source(source_id);
     Ok(begin_refresh_render(ctx, source_id)?.is_some())
 }
@@ -824,14 +856,17 @@ pub fn execute_render(
                 input,
                 time_ratio: f64::from(pending.edits.time_ratio),
                 pitch_scale,
-                preserve_formants: false,
+                preserve_formants: pending.edits.preserve_formants,
                 key_frames: &key_frames,
             };
             let stop = || stopped() || write_failed.load(Ordering::Acquire);
             let mut write = |block: &[f32]| sink.write(block);
+            let stretcher = DefaultOfflineStretcher::default();
             let stretched = match jobs::compute_pool() {
-                Some(pool) => stretch_offline_parallel(&request, pool, &stop, progress, &mut write),
-                None => stretch_offline(&request, &stop, progress, &mut write),
+                Some(pool) => stretch_offline_parallel(
+                    &stretcher, &request, pool, &stop, progress, &mut write,
+                ),
+                None => stretcher.stretch(&request, &stop, progress, &mut write),
             };
             // A failed write stops the stretch as cancelled; report the write failure instead.
             if let Some(error) = sink.error.take() {
