@@ -112,7 +112,10 @@ fn describe_buses(
             Ok(BusDescription {
                 role,
                 native: bus_arrangement(processor, direction, index, info)?,
-                default_active: info.flags & BusInfo_::BusFlags_::kDefaultActive != 0,
+                // The SDK's flag constants are `u32` or `i32` depending on the target ABI.
+                default_active: i64::from(info.flags)
+                    & i64::from(BusInfo_::BusFlags_::kDefaultActive)
+                    != 0,
             })
         })
         .collect()

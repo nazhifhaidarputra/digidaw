@@ -7,6 +7,9 @@ description = "LV2 executor slot for DigiDAW external plugin hosting"
 
 [dependencies]
 karbeat-host-api.workspace = true
+
+# lilv is resolved through pkg-config, which only the Linux build environment provides.
+[target.'cfg(target_os = "linux")'.dependencies]
 livi = "0.7.5"
 
 [lints]

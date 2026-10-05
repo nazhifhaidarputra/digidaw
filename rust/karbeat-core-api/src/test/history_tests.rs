@@ -674,6 +674,11 @@ mod tests {
             },
             structure,
         );
+        let param_id = ctx
+            .plugin_registry
+            .get_plugin_parameter_specs_by_id(param_eq_registry_id())
+            .and_then(|specs| specs.first().map(|spec| spec.id))
+            .expect("eq parameter");
         automation_api::add_automation_lane(
             &mut ctx,
             AutomationTarget::Track {
@@ -681,7 +686,7 @@ mod tests {
                 track_target: TrackAutomationTarget::MixerChannel(
                     MixerChannelParamTarget::Plugin {
                         effect_id: effects[0],
-                        target: EffectAutomationTarget::PluginParam { param_id: 0 },
+                        target: EffectAutomationTarget::PluginParam { param_id },
                     },
                 ),
             },

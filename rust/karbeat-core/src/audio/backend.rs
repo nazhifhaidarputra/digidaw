@@ -366,13 +366,20 @@ impl Default for AudioDeviceConfig {
     }
 }
 
+/// Finds an available CPAL host by name.
+///
+/// CPAL names its hosts after their identifiers (`Asio`, `Jack`, `Wasapi`), so matching ignores
+/// case to keep the conventional spellings and previously saved selections resolving.
+fn find_host_id(host_name: &str) -> Option<cpal::HostId> {
+    cpal::available_hosts()
+        .into_iter()
+        .find(|host_id| host_id.name().eq_ignore_ascii_case(host_name))
+}
+
 /// Resolve the host based on user preference or OS defaults
 fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
     if let Some(host_name) = preferred_host {
-        if let Some(host_id) = cpal::available_hosts()
-            .into_iter()
-            .find(|h| h.name() == host_name)
-        {
+        if let Some(host_id) = find_host_id(host_name) {
             if let Ok(host) = cpal::host_from_id(host_id) {
                 log::info!("Connected to user-selected Host: {}", host_name);
                 return host;
@@ -391,10 +398,7 @@ fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
 pub fn get_available_hosts() -> Vec<String> {
     cpal::available_hosts()
         .into_iter()
-        .filter(|h| match h.name() {
-            "ASIO" => cfg!(feature = "asio"),
-            _ => true,
-        })
+        .filter(|h| !h.name().eq_ignore_ascii_case("ASIO") || cfg!(feature = "asio"))
         .map(|h| h.name().to_string())
         .collect()
 }
@@ -404,10 +408,8 @@ pub fn get_output_devices(host_name: Option<&str>) -> Result<Vec<AudioDeviceInfo
     let host = match host_name {
         None => cpal::default_host(),
         Some(name) => {
-            let host_id = cpal::available_hosts()
-                .into_iter()
-                .find(|host_id| host_id.name() == name)
-                .ok_or_else(|| anyhow!("Audio host '{name}' is unavailable"))?;
+            let host_id =
+                find_host_id(name).ok_or_else(|| anyhow!("Audio host '{name}' is unavailable"))?;
             cpal::host_from_id(host_id)?
         }
     };
@@ -436,10 +438,7 @@ pub fn get_device_sample_rates(
     host_name: String,
     device_id: String,
 ) -> Result<Vec<u32>, anyhow::Error> {
-    let host_id = cpal::available_hosts()
-        .into_iter()
-        .find(|h| h.name() == host_name)
-        .unwrap_or_else(|| cpal::default_host().id());
+    let host_id = find_host_id(&host_name).unwrap_or_else(|| cpal::default_host().id());
 
     let host = cpal::host_from_id(host_id)?;
     let device = host
@@ -483,7 +482,7 @@ fn get_device_and_config(
                 false
             })
             .ok_or_else(|| anyhow!("Requested device '{}' not found", dev_id))?
-    } else if host.id().name() == "ASIO" {
+    } else if host.id().name().eq_ignore_ascii_case("ASIO") {
         if let Some(default) = host.default_output_device() {
             default
         } else {
@@ -534,7 +533,7 @@ fn get_device_and_config(
     }
 
     // Yield to the Server's globally locked buffer size if using JACK to prevent crash loop
-    let buffer_size = if host.id().name() == "JACK" {
+    let buffer_size = if host.id().name().eq_ignore_ascii_case("JACK") {
         cpal::BufferSize::Default
     } else {
         match supported_config.buffer_size() {
@@ -1073,8 +1072,8 @@ fn actual_stream_config(
 )]
 mod tests {
     use super::{
-        INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, next_retry_delay, push_output_frames,
-        select_output_config, write_output_data,
+        INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, find_host_id, get_available_hosts,
+        next_retry_delay, push_output_frames, select_output_config, write_output_data,
     };
     use cpal::{SampleFormat, SupportedBufferSize, SupportedStreamConfigRange};
     use rtrb::RingBuffer;
@@ -1082,6 +1081,16 @@ mod tests {
     #[test]
     fn automatic_host_is_the_cpal_platform_default() {
         assert_eq!(automatic_host().id(), cpal::default_host().id());
+    }
+
+    #[test]
+    fn listed_hosts_resolve_by_name_in_any_case() {
+        for name in get_available_hosts() {
+            let host_id = find_host_id(&name).unwrap();
+            assert_eq!(find_host_id(&name.to_uppercase()), Some(host_id));
+            assert_eq!(find_host_id(&name.to_lowercase()), Some(host_id));
+        }
+        assert_eq!(find_host_id("not-a-real-host"), None);
     }
 
     #[test]

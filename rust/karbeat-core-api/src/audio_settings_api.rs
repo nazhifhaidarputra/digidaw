@@ -94,13 +94,23 @@ pub fn select_output(
     if let Some(host_name) = host_name.as_deref()
         && !available_output_hosts()
             .iter()
-            .any(|name| name == host_name)
+            .any(|name| name.eq_ignore_ascii_case(host_name))
     {
         anyhow::bail!("Audio host '{host_name}' is unavailable");
     }
 
     let selected_device = match device_id {
-        None => OutputDeviceSelection::SystemDefault,
+        None => {
+            // A named host without drivers or a running server would otherwise be accepted and
+            // then retried forever by the stream supervisor.
+            if let Some(host_name) = host_name.as_deref() {
+                anyhow::ensure!(
+                    !available_output_devices(Some(host_name))?.is_empty(),
+                    "Audio host '{host_name}' has no output devices. Install or start its driver first."
+                );
+            }
+            OutputDeviceSelection::SystemDefault
+        }
         Some(id) => {
             let devices = available_output_devices(host_name.as_deref())?;
             let device = devices

@@ -802,13 +802,13 @@ mod tests {
     #[test]
     fn multiple_classes_deduplicate_by_identity_and_keep_a_valid_selected_location() {
         let root = tempfile::tempdir().unwrap();
-        let paths = [
-            root.path().join("First.vst3"),
-            root.path().join("Second.vst3"),
-        ];
+        let paths = ["First.vst3", "Second.vst3"].map(|name| {
+            let path = root.path().join(name);
+            fs::write(&path, b"module").unwrap();
+            fs::canonicalize(path).unwrap()
+        });
         let mut cache = ScanCache::default();
         for path in &paths {
-            fs::write(path, b"module").unwrap();
             cache.modules.insert(
                 path.clone(),
                 CachedModule {
