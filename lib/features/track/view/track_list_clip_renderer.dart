@@ -21,6 +21,10 @@ class _ClipRenderer extends ConsumerWidget {
   /// Whether the shown gain envelope reacts to pointer input.
   final bool envelopeInteractive;
 
+  /// Length scale of the audio content, for previewing a stretching resize
+  /// before the source is stretched.
+  final double contentStretch;
+
   const _ClipRenderer({
     required this.clip,
     required this.trackType,
@@ -35,6 +39,7 @@ class _ClipRenderer extends ConsumerWidget {
     this.compact = false,
     this.trackId,
     this.envelopeInteractive = false,
+    this.contentStretch = 1.0,
   });
 
   static const double _headerHeight = 16;
@@ -209,7 +214,8 @@ class _ClipRenderer extends ConsumerWidget {
         final sourceSamplesPerTick =
             (60.0 / tempo) *
             (handle.getSampleRate() / 960.0) *
-            handle.tempoRate(projectBpm: tempo);
+            handle.tempoRate(projectBpm: tempo) /
+            contentStretch;
 
         final waveformColor = color.computeLuminance() > 0.5
             ? Colors.black.withAlpha(180) // Dark waveform for light tracks

@@ -236,14 +236,14 @@ mod tests {
 
         voice.release_key(channel.sustain);
         assert!(voice.key_released);
-        assert_ne!(voice.adsr.state, crate::envelope::EnvelopeState::Release);
+        assert_ne!(voice.adsr.state(), crate::envelope::EnvelopeState::Release);
 
         assert_eq!(
             channel.apply_control_change(64, 0),
             MidiChannelAction::ReleaseSustained
         );
         voice.release();
-        assert_eq!(voice.adsr.state, crate::envelope::EnvelopeState::Release);
+        assert_eq!(voice.adsr.state(), crate::envelope::EnvelopeState::Release);
     }
 
     #[test]

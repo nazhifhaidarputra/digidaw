@@ -6,15 +6,15 @@
   "is_synth": false,
   "parameters": [
     {
-      "id": 1749825986,
-      "path": "engine/pitch_ratio",
-      "name": "Pitch Ratio",
+      "id": 3127562262,
+      "path": "engine/pitch_cents",
+      "name": "Pitch Cents",
       "group": "Pitcher",
-      "value": 1.0,
-      "min": 0.25,
-      "max": 4.0,
-      "default_value": 1.0,
-      "step": 0.001,
+      "value": 0.0,
+      "min": -2400.0,
+      "max": 2400.0,
+      "default_value": 0.0,
+      "step": 1.0,
       "value_type": "Float",
       "choices": [],
       "automatable": true

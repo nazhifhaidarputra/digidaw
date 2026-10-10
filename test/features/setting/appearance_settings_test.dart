@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +9,7 @@ import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_preferences_service.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
+import 'package:karbeat/features/setting/services/color_theme_parser.dart';
 import 'package:karbeat/features/setting/view/appearance_settings_page.dart';
 
 class _FakeAppearanceService extends AppearancePreferencesService {
@@ -18,6 +21,8 @@ class _FakeAppearanceService extends AppearancePreferencesService {
     backgroundOverlayOpacity: 0.35,
     customFontPath: null,
     customFontFamily: null,
+    colorThemeSource: null,
+    customColorThemePath: null,
   );
   AppearancePreferences? saved;
 
@@ -34,6 +39,11 @@ class _FakeAppearanceService extends AppearancePreferencesService {
 class _FakeAssetService extends AppearanceAssetService {
   String? backgroundSelection;
   String? fontSelection;
+  String? colorThemeSelection;
+  final Map<String, String> colorThemeFiles = {
+    for (final asset in AppearanceAssetService.bundledColorThemes)
+      asset: _themeJson(asset),
+  };
   bool exists = true;
   bool fontLoads = true;
 
@@ -48,9 +58,36 @@ class _FakeAssetService extends AppearanceAssetService {
   Future<Result<bool>> fileExists(String path) async => Result.ok(exists);
 
   @override
+  Future<Result<String?>> pickColorThemeFile() async =>
+      Result.ok(colorThemeSelection);
+
+  @override
+  Future<Result<String>> readColorTheme(String source) async {
+    final text = colorThemeFiles[source];
+    return text == null
+        ? Result.error(Exception('theme missing'))
+        : Result.ok(text);
+  }
+
+  @override
   Future<Result<void>> loadFont(String path, String family) async =>
       fontLoads ? Result.ok(null) : Result.error(Exception('font missing'));
 }
+
+String _themeJson(String name, {String primary = '#cba6f7'}) => jsonEncode({
+  'name': name,
+  'brightness': 'dark',
+  'colors': {
+    'primary': primary,
+    'onPrimary': '#11111b',
+    'secondary': '#89b4fa',
+    'onSecondary': '#11111b',
+    'error': '#f38ba8',
+    'onError': '#11111b',
+    'surface': '#1e1e2e',
+    'onSurface': '#cdd6f4',
+  },
+});
 
 void main() {
   test('restores and persists appearance preferences', () async {
@@ -267,6 +304,8 @@ void main() {
         backgroundOverlayOpacity: 0.5,
         customFontPath: '/gone/font.ttf',
         customFontFamily: 'DigiDAWCustomFont1',
+        colorThemeSource: null,
+        customColorThemePath: null,
       );
     final assets = _FakeAssetService()
       ..exists = false
@@ -291,5 +330,169 @@ void main() {
     expect(container.read(appearanceSettingsProvider).customFontPath, isNull);
     expect(preferences.saved?.backgroundImagePath, isNull);
     expect(preferences.saved?.customFontPath, isNull);
+  });
+
+  group('color themes', () {
+    ProviderContainer containerWith(
+      _FakeAppearanceService preferences,
+      _FakeAssetService assets,
+    ) {
+      final container = ProviderContainer(
+        overrides: [
+          appearancePreferencesServiceProvider.overrideWithValue(preferences),
+          appearanceAssetServiceProvider.overrideWithValue(assets),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('bundled themes are listed and can be applied and cleared', () async {
+      final preferences = _FakeAppearanceService();
+      final container = containerWith(preferences, _FakeAssetService());
+      final notifier = container.read(appearanceSettingsProvider.notifier);
+      await notifier.initialize();
+      final mocha = AppearanceAssetService.bundledColorThemes.first;
+
+      expect(
+        container.read(appearanceSettingsProvider).colorThemes.keys,
+        containsAll(AppearanceAssetService.bundledColorThemes),
+      );
+      expect(container.read(appearanceSettingsProvider).colorTheme, isNull);
+
+      expect((await notifier.setColorTheme(mocha)).isOk(), isTrue);
+      expect(
+        container.read(appearanceSettingsProvider).colorTheme?.primary,
+        const Color(0xFFCBA6F7),
+      );
+      expect(preferences.saved?.colorThemeSource, mocha);
+
+      expect(
+        (await notifier.setColorTheme('/not/loaded.json')).isErr(),
+        isTrue,
+      );
+      expect(
+        container.read(appearanceSettingsProvider).colorThemeSource,
+        mocha,
+      );
+
+      await notifier.setColorTheme(null);
+      expect(container.read(appearanceSettingsProvider).colorTheme, isNull);
+      expect(preferences.saved?.colorThemeSource, isNull);
+    });
+
+    test('a picked theme file is loaded, applied, and replaced', () async {
+      final preferences = _FakeAppearanceService();
+      final assets = _FakeAssetService()
+        ..colorThemeFiles['/themes/one.json'] = _themeJson('One')
+        ..colorThemeFiles['/themes/two.json'] = _themeJson('Two')
+        ..colorThemeSelection = '/themes/one.json';
+      final container = containerWith(preferences, assets);
+      final notifier = container.read(appearanceSettingsProvider.notifier);
+      await notifier.initialize();
+
+      expect((await notifier.chooseColorThemeFile()).isOk(), isTrue);
+      expect(
+        container.read(appearanceSettingsProvider).colorTheme?.name,
+        'One',
+      );
+      expect(preferences.saved?.customColorThemePath, '/themes/one.json');
+
+      assets.colorThemeSelection = '/themes/two.json';
+      await notifier.chooseColorThemeFile();
+      final state = container.read(appearanceSettingsProvider);
+      expect(state.colorTheme?.name, 'Two');
+      expect(state.colorThemes.containsKey('/themes/one.json'), isFalse);
+    });
+
+    test(
+      'an invalid theme file is rejected and keeps the current theme',
+      () async {
+        final preferences = _FakeAppearanceService();
+        final assets = _FakeAssetService()
+          ..colorThemeFiles['/themes/bad.json'] = '{"name": "Bad"}'
+          ..colorThemeSelection = '/themes/bad.json';
+        final container = containerWith(preferences, assets);
+        final notifier = container.read(appearanceSettingsProvider.notifier);
+        await notifier.initialize();
+
+        final result = await notifier.chooseColorThemeFile();
+
+        expect(result.err(), isA<ColorThemeFormatException>());
+        final state = container.read(appearanceSettingsProvider);
+        expect(state.colorThemeSource, isNull);
+        expect(state.customColorThemePath, isNull);
+      },
+    );
+
+    test('a saved theme file is restored, or dropped when missing', () async {
+      final preferences = _FakeAppearanceService()
+        ..loaded = (
+          themeMode: AppThemeMode.dark,
+          colorPalette: AppColorPalette.purple,
+          backgroundImagePath: null,
+          backgroundFit: AppBackgroundFit.cover,
+          backgroundOverlayOpacity: 0.35,
+          customFontPath: null,
+          customFontFamily: null,
+          colorThemeSource: '/themes/mine.json',
+          customColorThemePath: '/themes/mine.json',
+        );
+      final restored = containerWith(
+        preferences,
+        _FakeAssetService()
+          ..colorThemeFiles['/themes/mine.json'] = _themeJson('Mine'),
+      );
+      await restored.read(appearanceSettingsProvider.notifier).initialize();
+      expect(
+        restored.read(appearanceSettingsProvider).colorTheme?.name,
+        'Mine',
+      );
+
+      final missing = containerWith(preferences, _FakeAssetService());
+      await missing.read(appearanceSettingsProvider.notifier).initialize();
+      expect(missing.read(appearanceSettingsProvider).colorTheme, isNull);
+      expect(preferences.saved?.colorThemeSource, isNull);
+      expect(preferences.saved?.customColorThemePath, isNull);
+    });
+
+    testWidgets('the theme menu applies a theme and locks the palette', (
+      tester,
+    ) async {
+      final container = containerWith(
+        _FakeAppearanceService(),
+        _FakeAssetService(),
+      );
+      await container.read(appearanceSettingsProvider.notifier).initialize();
+      final mocha = AppearanceAssetService.bundledColorThemes.first;
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: AppearanceSettingsPage()),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(ValueKey('color-theme-$mocha')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('palette-red')));
+      await tester.pump();
+
+      final state = container.read(appearanceSettingsProvider);
+      expect(state.colorThemeSource, mocha);
+      expect(state.colorPalette, AppColorPalette.teal);
+    });
+
+    test('a loaded theme maps onto the Material colour scheme', () {
+      final theme = parseColorTheme(_themeJson('Mine')).ok();
+      final data = AppTheme.custom(theme, fontFamily: 'StudioFont');
+
+      expect(data.brightness, Brightness.dark);
+      expect(data.colorScheme.primary, const Color(0xFFCBA6F7));
+      expect(data.colorScheme.surface, const Color(0xFF1E1E2E));
+      expect(data.scaffoldBackgroundColor, const Color(0xFF1E1E2E));
+      expect(data.textTheme.bodyMedium?.fontFamily, 'StudioFont');
+    });
   });
 }

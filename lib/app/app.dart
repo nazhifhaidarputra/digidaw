@@ -204,17 +204,22 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
           themeMode: state.themeMode,
           palette: state.colorPalette,
           fontFamily: state.customFontFamily,
+          colorTheme: state.colorTheme,
         ),
       ),
     );
-    final lightTheme = AppTheme.light(
-      appearance.palette,
-      fontFamily: appearance.fontFamily,
-    );
-    final darkTheme = AppTheme.dark(
-      appearance.palette,
-      fontFamily: appearance.fontFamily,
-    );
+    // A loaded colour theme sets its own brightness, so it replaces both the
+    // light and the dark theme.
+    final colorTheme = appearance.colorTheme;
+    final customTheme = colorTheme == null
+        ? null
+        : AppTheme.custom(colorTheme, fontFamily: appearance.fontFamily);
+    final lightTheme =
+        customTheme ??
+        AppTheme.light(appearance.palette, fontFamily: appearance.fontFamily);
+    final darkTheme =
+        customTheme ??
+        AppTheme.dark(appearance.palette, fontFamily: appearance.fontFamily);
     final themeMode = AppTheme.themeMode(appearance.themeMode);
 
     // Handle Rust Initialization Errors

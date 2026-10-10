@@ -337,6 +337,132 @@ pub struct AudioRuntimeSettings {
     pub stream_status: DeviceStreamStatus,
 }
 
+karbeat_utils::typestate! {
+    /// Output stream lifecycle; [`DeviceStreamStatus`] is its stored snapshot.
+    machine OutputStream {
+        shared: (),
+        erased: AnyOutputStream,
+        states {
+            Starting as StartingStream {}
+            Running as RunningStream {}
+            Retrying as RetryingStream { reason: String }
+            Unavailable as UnavailableStream { reason: String }
+        }
+        transitions {
+            // The monitor rebuilds the stream after every outcome and settings changes can
+            // arrive at any time, so each state is reachable from all of them.
+            Starting | Running | Retrying | Unavailable => Starting: fn restart(shared, state) {
+                Starting {}
+            }
+
+            Starting | Running | Retrying | Unavailable => Running: fn started(shared, state) {
+                Running {}
+            }
+
+            Starting | Running | Retrying | Unavailable => Retrying: fn retry(
+                shared,
+                state,
+                reason: String,
+            ) {
+                Retrying { reason }
+            }
+
+            Starting | Running | Retrying | Unavailable => Unavailable: fn unavailable(
+                shared,
+                state,
+                reason: String,
+            ) {
+                Unavailable { reason }
+            }
+        }
+    }
+}
+
+impl From<DeviceStreamStatus> for AnyOutputStream {
+    fn from(status: DeviceStreamStatus) -> Self {
+        let shared = ();
+        match status {
+            DeviceStreamStatus::Starting => OutputStream {
+                shared,
+                state: Starting {},
+            }
+            .into(),
+            DeviceStreamStatus::Running => OutputStream {
+                shared,
+                state: Running {},
+            }
+            .into(),
+            DeviceStreamStatus::Retrying { reason } => OutputStream {
+                shared,
+                state: Retrying { reason },
+            }
+            .into(),
+            DeviceStreamStatus::Unavailable { reason } => OutputStream {
+                shared,
+                state: Unavailable { reason },
+            }
+            .into(),
+        }
+    }
+}
+
+impl From<AnyOutputStream> for DeviceStreamStatus {
+    fn from(stream: AnyOutputStream) -> Self {
+        match stream {
+            AnyOutputStream::Starting(_) => Self::Starting,
+            AnyOutputStream::Running(_) => Self::Running,
+            AnyOutputStream::Retrying(stream) => Self::Retrying {
+                reason: stream.state.reason,
+            },
+            AnyOutputStream::Unavailable(stream) => Self::Unavailable {
+                reason: stream.state.reason,
+            },
+        }
+    }
+}
+
+impl AudioRuntimeSettings {
+    /// Runs a stream lifecycle transition on the stored status.
+    fn advance_stream(
+        &mut self,
+        transition: impl FnOnce(
+            AnyOutputStream,
+        ) -> Result<
+            AnyOutputStream,
+            (AnyOutputStream, karbeat_utils::typestate::InvalidState),
+        >,
+    ) {
+        let current = std::mem::replace(&mut self.stream_status, DeviceStreamStatus::Starting);
+        self.stream_status = match transition(current.into()) {
+            Ok(next) => next.into(),
+            Err((unchanged, invalid)) => {
+                log::warn!("Output stream status: {invalid}");
+                unchanged.into()
+            }
+        };
+    }
+
+    /// Records that the stream is being built or rebuilt.
+    pub fn stream_restarting(&mut self) {
+        self.advance_stream(AnyOutputStream::restart);
+    }
+
+    /// Records that the stream is consuming rendered frames.
+    pub fn stream_started(&mut self) {
+        self.advance_stream(AnyOutputStream::started);
+    }
+
+    /// Records a recoverable failure that triggers delayed stream recreation.
+    pub fn stream_retrying(&mut self, reason: String) {
+        self.advance_stream(|stream| stream.retry(reason));
+    }
+
+    /// Records that no usable stream could be established.
+    pub fn stream_unavailable(&mut self, reason: String) {
+        self.advance_stream(|stream| stream.unavailable(reason));
+    }
+}
+
 impl Default for AudioRuntimeSettings {
     fn default() -> Self {
         Self {
@@ -606,7 +732,7 @@ pub fn start_audio_stream(
             config_pref.host_name.as_deref(),
             device_buffer_size as u32,
         ));
-        runtime.stream_status = DeviceStreamStatus::Starting;
+        runtime.stream_restarting();
     }
 
     {
@@ -778,9 +904,7 @@ pub fn start_audio_stream(
             {
                 Ok(res) => res,
                 Err(e) => {
-                    runtime_settings_arc.write().stream_status = DeviceStreamStatus::Retrying {
-                        reason: e.to_string(),
-                    };
+                    runtime_settings_arc.write().stream_retrying(e.to_string());
                     log::error!(
                         "Monitor: Failed to resolve audio device: {}. Retrying in {:?}...",
                         e,
@@ -836,9 +960,9 @@ pub fn start_audio_stream(
             let consumer = match ready_rx.recv() {
                 Ok(Ok(consumer)) => consumer,
                 Ok(Err(error)) => {
-                    runtime_settings_arc.write().stream_status = DeviceStreamStatus::Unavailable {
-                        reason: error.clone(),
-                    };
+                    runtime_settings_arc
+                        .write()
+                        .stream_unavailable(error.clone());
                     log::error!("Could not configure DSP output path: {error}");
                     std::thread::sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
@@ -949,9 +1073,7 @@ pub fn start_audio_stream(
                 drop(stream);
                 let _ = dsp_control_tx.send(DspControl::Detach);
 
-                runtime_settings_arc.write().stream_status = DeviceStreamStatus::Retrying {
-                    reason: e.to_string(),
-                };
+                runtime_settings_arc.write().stream_retrying(e.to_string());
                 log::error!(
                     "Monitor: Failed to play stream: {}. Retrying in {:?}...",
                     e,
@@ -965,7 +1087,7 @@ pub fn start_audio_stream(
             {
                 let mut runtime = runtime_settings_arc.write();
                 runtime.actual_stream = Some(actual_config);
-                runtime.stream_status = DeviceStreamStatus::Running;
+                runtime.stream_started();
             }
 
             log::info!("Monitor: Audio stream is successfully running.");

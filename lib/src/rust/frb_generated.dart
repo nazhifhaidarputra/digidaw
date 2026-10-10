@@ -88,7 +88,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 906976264;
+  int get rustContentHash => 1761991900;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -164,7 +164,7 @@ abstract class RustLibApi extends BaseApi {
   });
 
   double
-  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchSemitones({
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchCents({
     required AudioWaveformUiForAudioProperties that,
   });
 
@@ -283,9 +283,9 @@ abstract class RustLibApi extends BaseApi {
   });
 
   void
-  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchSemitones({
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchCents({
     required AudioWaveformUiForAudioProperties that,
-    required double pitchSemitones,
+    required double pitchCents,
   });
 
   void
@@ -1503,7 +1503,7 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiAudioAnalysisSetWaveformPitch({
     required DawContext ctx,
     required int sourceId,
-    required double pitchSemitones,
+    required double pitchCents,
     required bool preserveFormants,
   });
 
@@ -1556,6 +1556,10 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiTransportStopSongPlayback({required DawContext ctx});
 
   Stream<UiJobEvent> crateApiJobsSubscribeJobEvents();
+
+  Stream<bool> crateApiSerializationSubscribeProjectSaved({
+    required DawContext ctx,
+  });
 
   Stream<List<RustLogEntryDto>> crateApiLoggingSubscribeRustLogs();
 
@@ -2174,7 +2178,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   double
-  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchSemitones({
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchCents({
     required AudioWaveformUiForAudioProperties that,
   }) {
     return handler.executeSync(
@@ -2192,7 +2196,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta:
-            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchSemitonesConstMeta,
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchCentsConstMeta,
         argValues: [that],
         apiImpl: this,
       ),
@@ -2200,10 +2204,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   TaskConstMeta
-  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchSemitonesConstMeta =>
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchCentsConstMeta =>
       const TaskConstMeta(
         debugName:
-            "AudioWaveformUiForAudioProperties_auto_accessor_get_pitch_semitones",
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_pitch_cents",
         argNames: ["that"],
       );
 
@@ -3024,9 +3028,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void
-  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchSemitones({
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchCents({
     required AudioWaveformUiForAudioProperties that,
-    required double pitchSemitones,
+    required double pitchCents,
   }) {
     return handler.executeSync(
       SyncTask(
@@ -3036,7 +3040,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          sse_encode_f_32(pitchSemitones, serializer);
+          sse_encode_f_32(pitchCents, serializer);
           return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
@@ -3044,19 +3048,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta:
-            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchSemitonesConstMeta,
-        argValues: [that, pitchSemitones],
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchCentsConstMeta,
+        argValues: [that, pitchCents],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta
-  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchSemitonesConstMeta =>
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchCentsConstMeta =>
       const TaskConstMeta(
         debugName:
-            "AudioWaveformUiForAudioProperties_auto_accessor_set_pitch_semitones",
-        argNames: ["that", "pitchSemitones"],
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_pitch_cents",
+        argNames: ["that", "pitchCents"],
       );
 
   @override
@@ -11734,7 +11738,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<void> crateApiAudioAnalysisSetWaveformPitch({
     required DawContext ctx,
     required int sourceId,
-    required double pitchSemitones,
+    required double pitchCents,
     required bool preserveFormants,
   }) {
     return handler.executeNormal(
@@ -11746,7 +11750,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_CastedPrimitive_u_64(sourceId, serializer);
-          sse_encode_f_32(pitchSemitones, serializer);
+          sse_encode_f_32(pitchCents, serializer);
           sse_encode_bool(preserveFormants, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -11760,7 +11764,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiAudioAnalysisSetWaveformPitchConstMeta,
-        argValues: [ctx, sourceId, pitchSemitones, preserveFormants],
+        argValues: [ctx, sourceId, pitchCents, preserveFormants],
         apiImpl: this,
       ),
     );
@@ -11769,7 +11773,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAudioAnalysisSetWaveformPitchConstMeta =>
       const TaskConstMeta(
         debugName: "set_waveform_pitch",
-        argNames: ["ctx", "sourceId", "pitchSemitones", "preserveFormants"],
+        argNames: ["ctx", "sourceId", "pitchCents", "preserveFormants"],
       );
 
   @override
@@ -12208,6 +12212,47 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Stream<bool> crateApiSerializationSubscribeProjectSaved({
+    required DawContext ctx,
+  }) {
+    final sink = RustStreamSink<bool>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDawContext(
+              ctx,
+              serializer,
+            );
+            sse_encode_StreamSink_bool_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 282,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: null,
+          ),
+          constMeta: kCrateApiSerializationSubscribeProjectSavedConstMeta,
+          argValues: [ctx, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiSerializationSubscribeProjectSavedConstMeta =>
+      const TaskConstMeta(
+        debugName: "subscribe_project_saved",
+        argNames: ["ctx", "sink"],
+      );
+
+  @override
   Stream<List<RustLogEntryDto>> crateApiLoggingSubscribeRustLogs() {
     final sink = RustStreamSink<List<RustLogEntryDto>>();
     unawaited(
@@ -12219,7 +12264,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 282,
+              funcId: 283,
               port: port_,
             );
           },
@@ -12248,7 +12293,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 283,
+            funcId: 284,
             port: port_,
           );
         },
@@ -12275,7 +12320,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 284,
+            funcId: 285,
             port: port_,
           );
         },
@@ -12313,7 +12358,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 285,
+            funcId: 286,
             port: port_,
           );
         },
@@ -12353,7 +12398,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 286,
+            funcId: 287,
             port: port_,
           );
         },
@@ -12391,7 +12436,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 287,
+            funcId: 288,
             port: port_,
           );
         },
@@ -12421,7 +12466,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 288,
+            funcId: 289,
           )!;
         },
         codec: SseCodec(
@@ -12452,7 +12497,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 289,
+            funcId: 290,
           )!;
         },
         codec: SseCodec(
@@ -12493,7 +12538,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 290,
+            funcId: 291,
             port: port_,
           );
         },
@@ -12523,7 +12568,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 291,
+            funcId: 292,
             port: port_,
           );
         },
@@ -12553,7 +12598,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 292,
+            funcId: 293,
           )!;
         },
         codec: SseCodec(
@@ -12591,7 +12636,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 293,
+            funcId: 294,
           )!;
         },
         codec: SseCodec(
@@ -12621,7 +12666,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 294,
+            funcId: 295,
             port: port_,
           );
         },
@@ -12648,7 +12693,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 295,
+            funcId: 296,
             port: port_,
           );
         },
@@ -12678,7 +12723,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 296,
+            funcId: 297,
             port: port_,
           );
         },
@@ -12705,7 +12750,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 297,
+            funcId: 298,
             port: port_,
           );
         },
@@ -12739,7 +12784,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 298,
+            funcId: 299,
             port: port_,
           );
         },
@@ -12789,7 +12834,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 299,
+            funcId: 300,
             port: port_,
           );
         },
@@ -12851,7 +12896,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 300,
+            funcId: 301,
             port: port_,
           );
         },
@@ -12889,7 +12934,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 301,
+            funcId: 302,
             port: port_,
           );
         },
@@ -12927,7 +12972,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 302,
+            funcId: 303,
             port: port_,
           );
         },
@@ -12966,7 +13011,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 303,
+            funcId: 304,
             port: port_,
           );
         },
@@ -13324,6 +13369,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return ZeroCopyHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  RustStreamSink<bool> dco_decode_StreamSink_bool_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
   }
 
   @protected
@@ -16601,6 +16652,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
+  }
+
+  @protected
+  RustStreamSink<bool> sse_decode_StreamSink_bool_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
   }
 
   @protected
@@ -20631,6 +20690,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_StreamSink_bool_Sse(
+    RustStreamSink<bool> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_StreamSink_f_32_Sse(
     RustStreamSink<double> self,
     SseSerializer serializer,
@@ -24000,8 +24076,8 @@ class AudioWaveformUiForAudioPropertiesImpl extends RustOpaque
         that: this,
       );
 
-  double get pitchSemitones => RustLib.instance.api
-      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchSemitones(
+  double get pitchCents => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetPitchCents(
         that: this,
       );
 
@@ -24134,10 +24210,10 @@ class AudioWaveformUiForAudioPropertiesImpl extends RustOpaque
         originalBpm: originalBpm,
       );
 
-  set pitchSemitones(double pitchSemitones) => RustLib.instance.api
-      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchSemitones(
+  set pitchCents(double pitchCents) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetPitchCents(
         that: this,
-        pitchSemitones: pitchSemitones,
+        pitchCents: pitchCents,
       );
 
   set preserveFormants(bool preserveFormants) => RustLib.instance.api

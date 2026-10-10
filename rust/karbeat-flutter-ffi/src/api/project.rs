@@ -21,7 +21,7 @@ use karbeat_core::core::project::{
     transport::TransportState,
 };
 use karbeat_core_api::{
-    audio_waveform_api, bounce_api,
+    audio_analysis_api, audio_waveform_api, bounce_api,
     jobs::{JobClass, JobContext, JobKind, JobSpec, JobTarget},
     project_api, track_api,
 };
@@ -558,8 +558,8 @@ pub struct AudioWaveformUiForAudioProperties {
     pub invert: bool,
     /// Whether the audio plays backwards.
     pub reverse: bool,
-    /// Pitch shift in semitones, fractional for cents.
-    pub pitch_semitones: f32,
+    /// Pitch shift in cents: 100 per semitone, 1200 per octave.
+    pub pitch_cents: f32,
     /// Whether the pitch shift preserves formants.
     pub preserve_formants: bool,
     /// Whether the stretched audio is rendered; playback uses the original until it is.
@@ -627,10 +627,9 @@ impl AudioWaveformUiForAudioProperties {
                 .edited
                 .as_ref()
                 .is_some_and(|edited| edited.edits.reverse),
-            pitch_semitones: value
-                .edited
-                .as_ref()
-                .map_or(0.0, |edited| edited.edits.pitch_semitones),
+            pitch_cents: value.edited.as_ref().map_or(0.0, |edited| {
+                edited.edits.pitch_semitones * audio_analysis_api::CENTS_PER_SEMITONE
+            }),
             preserve_formants: value
                 .edited
                 .as_ref()

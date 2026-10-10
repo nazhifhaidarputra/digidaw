@@ -90,10 +90,11 @@ pub fn begin_export(ctx: &DawContext) -> PendingAudioExport {
             .hosted_targets
             .values()
             .filter_map(|state| match state {
-                crate::context::HostedTargetState::Active(instance) => {
+                crate::context::HostedTargetState::Active(target) => {
+                    let instance = target.state().instance;
                     Some((instance.id, instance.format))
                 }
-                crate::context::HostedTargetState::Transitioning
+                crate::context::HostedTargetState::Transitioning(_)
                 | crate::context::HostedTargetState::Failed(_) => None,
             })
             .collect(),

@@ -37,3 +37,8 @@ Future<UiApplicationState> newBlankProject({required DawContext ctx}) =>
 /// as before closing the window or replacing the project; it is not meant for polling.
 bool isProjectSaved({required DawContext ctx}) =>
     RustLib.instance.api.crateApiSerializationIsProjectSaved(ctx: ctx);
+
+/// Streams whether the current project has no unsaved changes: the status right now, then
+/// every change. A new subscription replaces the old one.
+Stream<bool> subscribeProjectSaved({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiSerializationSubscribeProjectSaved(ctx: ctx);

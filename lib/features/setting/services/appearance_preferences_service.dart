@@ -10,6 +10,8 @@ typedef AppearancePreferences = ({
   double backgroundOverlayOpacity,
   String? customFontPath,
   String? customFontFamily,
+  String? colorThemeSource,
+  String? customColorThemePath,
 });
 
 class AppearancePreferencesService {
@@ -21,6 +23,10 @@ class AppearancePreferencesService {
       'settings.appearance.background_overlay.v1';
   static const fontPathKey = 'settings.appearance.font_path.v1';
   static const fontFamilyKey = 'settings.appearance.font_family.v1';
+  static const colorThemeSourceKey =
+      'settings.appearance.color_theme_source.v1';
+  static const customColorThemePathKey =
+      'settings.appearance.custom_color_theme_path.v1';
 
   Future<Result<AppearancePreferences>> load() {
     return attemptAsync(() async {
@@ -32,6 +38,10 @@ class AppearancePreferencesService {
       final storedOverlay = await preferences.getDouble(backgroundOverlayKey);
       final fontPath = await preferences.getString(fontPathKey);
       final fontFamily = await preferences.getString(fontFamilyKey);
+      final colorThemeSource = await preferences.getString(colorThemeSourceKey);
+      final customColorThemePath = await preferences.getString(
+        customColorThemePathKey,
+      );
       final theme = AppThemeMode.values
           .where((value) => value.name == themeName)
           .firstOrNull;
@@ -67,6 +77,8 @@ class AppearancePreferencesService {
         backgroundOverlayOpacity: overlay,
         customFontPath: fontPath,
         customFontFamily: fontFamily,
+        colorThemeSource: colorThemeSource,
+        customColorThemePath: customColorThemePath,
       );
     });
   }
@@ -95,6 +107,16 @@ class AppearancePreferencesService {
         preferences,
         fontFamilyKey,
         value.customFontFamily,
+      );
+      await _writeOptionalString(
+        preferences,
+        colorThemeSourceKey,
+        value.colorThemeSource,
+      );
+      await _writeOptionalString(
+        preferences,
+        customColorThemePathKey,
+        value.customColorThemePath,
       );
     });
   }

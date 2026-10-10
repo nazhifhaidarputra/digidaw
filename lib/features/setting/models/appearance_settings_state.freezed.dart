@@ -14,7 +14,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppearanceSettingsState {
 
- AppThemeMode get themeMode; AppColorPalette get colorPalette; bool get isInitialized; String? get backgroundImagePath; AppBackgroundFit get backgroundFit; double get backgroundOverlayOpacity; String? get customFontPath; String? get customFontFamily;
+ AppThemeMode get themeMode; AppColorPalette get colorPalette; bool get isInitialized; String? get backgroundImagePath; AppBackgroundFit get backgroundFit; double get backgroundOverlayOpacity; String? get customFontPath; String? get customFontFamily;/// Loaded colour themes by source: a bundled asset key or a file path.
+ IMap<String, AppColorTheme> get colorThemes;/// Source of the active colour theme. Without one, the colours come from
+/// [themeMode] and [colorPalette].
+ String? get colorThemeSource; String? get customColorThemePath;
 /// Create a copy of AppearanceSettingsState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +28,16 @@ $AppearanceSettingsStateCopyWith<AppearanceSettingsState> get copyWith => _$Appe
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppearanceSettingsState&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized)&&(identical(other.backgroundImagePath, backgroundImagePath) || other.backgroundImagePath == backgroundImagePath)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlayOpacity, backgroundOverlayOpacity) || other.backgroundOverlayOpacity == backgroundOverlayOpacity)&&(identical(other.customFontPath, customFontPath) || other.customFontPath == customFontPath)&&(identical(other.customFontFamily, customFontFamily) || other.customFontFamily == customFontFamily));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppearanceSettingsState&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized)&&(identical(other.backgroundImagePath, backgroundImagePath) || other.backgroundImagePath == backgroundImagePath)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlayOpacity, backgroundOverlayOpacity) || other.backgroundOverlayOpacity == backgroundOverlayOpacity)&&(identical(other.customFontPath, customFontPath) || other.customFontPath == customFontPath)&&(identical(other.customFontFamily, customFontFamily) || other.customFontFamily == customFontFamily)&&(identical(other.colorThemes, colorThemes) || other.colorThemes == colorThemes)&&(identical(other.colorThemeSource, colorThemeSource) || other.colorThemeSource == colorThemeSource)&&(identical(other.customColorThemePath, customColorThemePath) || other.customColorThemePath == customColorThemePath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,isInitialized,backgroundImagePath,backgroundFit,backgroundOverlayOpacity,customFontPath,customFontFamily);
+int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,isInitialized,backgroundImagePath,backgroundFit,backgroundOverlayOpacity,customFontPath,customFontFamily,colorThemes,colorThemeSource,customColorThemePath);
 
 @override
 String toString() {
-  return 'AppearanceSettingsState(themeMode: $themeMode, colorPalette: $colorPalette, isInitialized: $isInitialized, backgroundImagePath: $backgroundImagePath, backgroundFit: $backgroundFit, backgroundOverlayOpacity: $backgroundOverlayOpacity, customFontPath: $customFontPath, customFontFamily: $customFontFamily)';
+  return 'AppearanceSettingsState(themeMode: $themeMode, colorPalette: $colorPalette, isInitialized: $isInitialized, backgroundImagePath: $backgroundImagePath, backgroundFit: $backgroundFit, backgroundOverlayOpacity: $backgroundOverlayOpacity, customFontPath: $customFontPath, customFontFamily: $customFontFamily, colorThemes: $colorThemes, colorThemeSource: $colorThemeSource, customColorThemePath: $customColorThemePath)';
 }
 
 
@@ -45,7 +48,7 @@ abstract mixin class $AppearanceSettingsStateCopyWith<$Res>  {
   factory $AppearanceSettingsStateCopyWith(AppearanceSettingsState value, $Res Function(AppearanceSettingsState) _then) = _$AppearanceSettingsStateCopyWithImpl;
 @useResult
 $Res call({
- AppThemeMode themeMode, AppColorPalette colorPalette, bool isInitialized, String? backgroundImagePath, AppBackgroundFit backgroundFit, double backgroundOverlayOpacity, String? customFontPath, String? customFontFamily
+ AppThemeMode themeMode, AppColorPalette colorPalette, bool isInitialized, String? backgroundImagePath, AppBackgroundFit backgroundFit, double backgroundOverlayOpacity, String? customFontPath, String? customFontFamily, IMap<String, AppColorTheme> colorThemes, String? colorThemeSource, String? customColorThemePath
 });
 
 
@@ -62,7 +65,7 @@ class _$AppearanceSettingsStateCopyWithImpl<$Res>
 
 /// Create a copy of AppearanceSettingsState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? themeMode = null,Object? colorPalette = null,Object? isInitialized = null,Object? backgroundImagePath = freezed,Object? backgroundFit = null,Object? backgroundOverlayOpacity = null,Object? customFontPath = freezed,Object? customFontFamily = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? themeMode = null,Object? colorPalette = null,Object? isInitialized = null,Object? backgroundImagePath = freezed,Object? backgroundFit = null,Object? backgroundOverlayOpacity = null,Object? customFontPath = freezed,Object? customFontFamily = freezed,Object? colorThemes = null,Object? colorThemeSource = freezed,Object? customColorThemePath = freezed,}) {
   return _then(_self.copyWith(
 themeMode: null == themeMode ? _self.themeMode : themeMode // ignore: cast_nullable_to_non_nullable
 as AppThemeMode,colorPalette: null == colorPalette ? _self.colorPalette : colorPalette // ignore: cast_nullable_to_non_nullable
@@ -72,6 +75,9 @@ as String?,backgroundFit: null == backgroundFit ? _self.backgroundFit : backgrou
 as AppBackgroundFit,backgroundOverlayOpacity: null == backgroundOverlayOpacity ? _self.backgroundOverlayOpacity : backgroundOverlayOpacity // ignore: cast_nullable_to_non_nullable
 as double,customFontPath: freezed == customFontPath ? _self.customFontPath : customFontPath // ignore: cast_nullable_to_non_nullable
 as String?,customFontFamily: freezed == customFontFamily ? _self.customFontFamily : customFontFamily // ignore: cast_nullable_to_non_nullable
+as String?,colorThemes: null == colorThemes ? _self.colorThemes : colorThemes // ignore: cast_nullable_to_non_nullable
+as IMap<String, AppColorTheme>,colorThemeSource: freezed == colorThemeSource ? _self.colorThemeSource : colorThemeSource // ignore: cast_nullable_to_non_nullable
+as String?,customColorThemePath: freezed == customColorThemePath ? _self.customColorThemePath : customColorThemePath // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -157,10 +163,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( AppThemeMode themeMode,  AppColorPalette colorPalette,  bool isInitialized,  String? backgroundImagePath,  AppBackgroundFit backgroundFit,  double backgroundOverlayOpacity,  String? customFontPath,  String? customFontFamily)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( AppThemeMode themeMode,  AppColorPalette colorPalette,  bool isInitialized,  String? backgroundImagePath,  AppBackgroundFit backgroundFit,  double backgroundOverlayOpacity,  String? customFontPath,  String? customFontFamily,  IMap<String, AppColorTheme> colorThemes,  String? colorThemeSource,  String? customColorThemePath)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppearanceSettingsState() when $default != null:
-return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.backgroundImagePath,_that.backgroundFit,_that.backgroundOverlayOpacity,_that.customFontPath,_that.customFontFamily);case _:
+return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.backgroundImagePath,_that.backgroundFit,_that.backgroundOverlayOpacity,_that.customFontPath,_that.customFontFamily,_that.colorThemes,_that.colorThemeSource,_that.customColorThemePath);case _:
   return orElse();
 
 }
@@ -178,10 +184,10 @@ return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.bac
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( AppThemeMode themeMode,  AppColorPalette colorPalette,  bool isInitialized,  String? backgroundImagePath,  AppBackgroundFit backgroundFit,  double backgroundOverlayOpacity,  String? customFontPath,  String? customFontFamily)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( AppThemeMode themeMode,  AppColorPalette colorPalette,  bool isInitialized,  String? backgroundImagePath,  AppBackgroundFit backgroundFit,  double backgroundOverlayOpacity,  String? customFontPath,  String? customFontFamily,  IMap<String, AppColorTheme> colorThemes,  String? colorThemeSource,  String? customColorThemePath)  $default,) {final _that = this;
 switch (_that) {
 case _AppearanceSettingsState():
-return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.backgroundImagePath,_that.backgroundFit,_that.backgroundOverlayOpacity,_that.customFontPath,_that.customFontFamily);case _:
+return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.backgroundImagePath,_that.backgroundFit,_that.backgroundOverlayOpacity,_that.customFontPath,_that.customFontFamily,_that.colorThemes,_that.colorThemeSource,_that.customColorThemePath);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -198,10 +204,10 @@ return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.bac
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( AppThemeMode themeMode,  AppColorPalette colorPalette,  bool isInitialized,  String? backgroundImagePath,  AppBackgroundFit backgroundFit,  double backgroundOverlayOpacity,  String? customFontPath,  String? customFontFamily)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( AppThemeMode themeMode,  AppColorPalette colorPalette,  bool isInitialized,  String? backgroundImagePath,  AppBackgroundFit backgroundFit,  double backgroundOverlayOpacity,  String? customFontPath,  String? customFontFamily,  IMap<String, AppColorTheme> colorThemes,  String? colorThemeSource,  String? customColorThemePath)?  $default,) {final _that = this;
 switch (_that) {
 case _AppearanceSettingsState() when $default != null:
-return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.backgroundImagePath,_that.backgroundFit,_that.backgroundOverlayOpacity,_that.customFontPath,_that.customFontFamily);case _:
+return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.backgroundImagePath,_that.backgroundFit,_that.backgroundOverlayOpacity,_that.customFontPath,_that.customFontFamily,_that.colorThemes,_that.colorThemeSource,_that.customColorThemePath);case _:
   return null;
 
 }
@@ -212,8 +218,8 @@ return $default(_that.themeMode,_that.colorPalette,_that.isInitialized,_that.bac
 /// @nodoc
 
 
-class _AppearanceSettingsState implements AppearanceSettingsState {
-  const _AppearanceSettingsState({this.themeMode = AppThemeMode.dark, this.colorPalette = AppColorPalette.purple, this.isInitialized = false, this.backgroundImagePath, this.backgroundFit = AppBackgroundFit.cover, this.backgroundOverlayOpacity = 0.35, this.customFontPath, this.customFontFamily});
+class _AppearanceSettingsState extends AppearanceSettingsState {
+  const _AppearanceSettingsState({this.themeMode = AppThemeMode.dark, this.colorPalette = AppColorPalette.purple, this.isInitialized = false, this.backgroundImagePath, this.backgroundFit = AppBackgroundFit.cover, this.backgroundOverlayOpacity = 0.35, this.customFontPath, this.customFontFamily, this.colorThemes = const IMapConst({}), this.colorThemeSource, this.customColorThemePath}): super._();
   
 
 @override@JsonKey() final  AppThemeMode themeMode;
@@ -224,6 +230,12 @@ class _AppearanceSettingsState implements AppearanceSettingsState {
 @override@JsonKey() final  double backgroundOverlayOpacity;
 @override final  String? customFontPath;
 @override final  String? customFontFamily;
+/// Loaded colour themes by source: a bundled asset key or a file path.
+@override@JsonKey() final  IMap<String, AppColorTheme> colorThemes;
+/// Source of the active colour theme. Without one, the colours come from
+/// [themeMode] and [colorPalette].
+@override final  String? colorThemeSource;
+@override final  String? customColorThemePath;
 
 /// Create a copy of AppearanceSettingsState
 /// with the given fields replaced by the non-null parameter values.
@@ -235,16 +247,16 @@ _$AppearanceSettingsStateCopyWith<_AppearanceSettingsState> get copyWith => __$A
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppearanceSettingsState&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized)&&(identical(other.backgroundImagePath, backgroundImagePath) || other.backgroundImagePath == backgroundImagePath)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlayOpacity, backgroundOverlayOpacity) || other.backgroundOverlayOpacity == backgroundOverlayOpacity)&&(identical(other.customFontPath, customFontPath) || other.customFontPath == customFontPath)&&(identical(other.customFontFamily, customFontFamily) || other.customFontFamily == customFontFamily));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppearanceSettingsState&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized)&&(identical(other.backgroundImagePath, backgroundImagePath) || other.backgroundImagePath == backgroundImagePath)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlayOpacity, backgroundOverlayOpacity) || other.backgroundOverlayOpacity == backgroundOverlayOpacity)&&(identical(other.customFontPath, customFontPath) || other.customFontPath == customFontPath)&&(identical(other.customFontFamily, customFontFamily) || other.customFontFamily == customFontFamily)&&(identical(other.colorThemes, colorThemes) || other.colorThemes == colorThemes)&&(identical(other.colorThemeSource, colorThemeSource) || other.colorThemeSource == colorThemeSource)&&(identical(other.customColorThemePath, customColorThemePath) || other.customColorThemePath == customColorThemePath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,isInitialized,backgroundImagePath,backgroundFit,backgroundOverlayOpacity,customFontPath,customFontFamily);
+int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,isInitialized,backgroundImagePath,backgroundFit,backgroundOverlayOpacity,customFontPath,customFontFamily,colorThemes,colorThemeSource,customColorThemePath);
 
 @override
 String toString() {
-  return 'AppearanceSettingsState(themeMode: $themeMode, colorPalette: $colorPalette, isInitialized: $isInitialized, backgroundImagePath: $backgroundImagePath, backgroundFit: $backgroundFit, backgroundOverlayOpacity: $backgroundOverlayOpacity, customFontPath: $customFontPath, customFontFamily: $customFontFamily)';
+  return 'AppearanceSettingsState(themeMode: $themeMode, colorPalette: $colorPalette, isInitialized: $isInitialized, backgroundImagePath: $backgroundImagePath, backgroundFit: $backgroundFit, backgroundOverlayOpacity: $backgroundOverlayOpacity, customFontPath: $customFontPath, customFontFamily: $customFontFamily, colorThemes: $colorThemes, colorThemeSource: $colorThemeSource, customColorThemePath: $customColorThemePath)';
 }
 
 
@@ -255,7 +267,7 @@ abstract mixin class _$AppearanceSettingsStateCopyWith<$Res> implements $Appeara
   factory _$AppearanceSettingsStateCopyWith(_AppearanceSettingsState value, $Res Function(_AppearanceSettingsState) _then) = __$AppearanceSettingsStateCopyWithImpl;
 @override @useResult
 $Res call({
- AppThemeMode themeMode, AppColorPalette colorPalette, bool isInitialized, String? backgroundImagePath, AppBackgroundFit backgroundFit, double backgroundOverlayOpacity, String? customFontPath, String? customFontFamily
+ AppThemeMode themeMode, AppColorPalette colorPalette, bool isInitialized, String? backgroundImagePath, AppBackgroundFit backgroundFit, double backgroundOverlayOpacity, String? customFontPath, String? customFontFamily, IMap<String, AppColorTheme> colorThemes, String? colorThemeSource, String? customColorThemePath
 });
 
 
@@ -272,7 +284,7 @@ class __$AppearanceSettingsStateCopyWithImpl<$Res>
 
 /// Create a copy of AppearanceSettingsState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? themeMode = null,Object? colorPalette = null,Object? isInitialized = null,Object? backgroundImagePath = freezed,Object? backgroundFit = null,Object? backgroundOverlayOpacity = null,Object? customFontPath = freezed,Object? customFontFamily = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? themeMode = null,Object? colorPalette = null,Object? isInitialized = null,Object? backgroundImagePath = freezed,Object? backgroundFit = null,Object? backgroundOverlayOpacity = null,Object? customFontPath = freezed,Object? customFontFamily = freezed,Object? colorThemes = null,Object? colorThemeSource = freezed,Object? customColorThemePath = freezed,}) {
   return _then(_AppearanceSettingsState(
 themeMode: null == themeMode ? _self.themeMode : themeMode // ignore: cast_nullable_to_non_nullable
 as AppThemeMode,colorPalette: null == colorPalette ? _self.colorPalette : colorPalette // ignore: cast_nullable_to_non_nullable
@@ -282,6 +294,9 @@ as String?,backgroundFit: null == backgroundFit ? _self.backgroundFit : backgrou
 as AppBackgroundFit,backgroundOverlayOpacity: null == backgroundOverlayOpacity ? _self.backgroundOverlayOpacity : backgroundOverlayOpacity // ignore: cast_nullable_to_non_nullable
 as double,customFontPath: freezed == customFontPath ? _self.customFontPath : customFontPath // ignore: cast_nullable_to_non_nullable
 as String?,customFontFamily: freezed == customFontFamily ? _self.customFontFamily : customFontFamily // ignore: cast_nullable_to_non_nullable
+as String?,colorThemes: null == colorThemes ? _self.colorThemes : colorThemes // ignore: cast_nullable_to_non_nullable
+as IMap<String, AppColorTheme>,colorThemeSource: freezed == colorThemeSource ? _self.colorThemeSource : colorThemeSource // ignore: cast_nullable_to_non_nullable
+as String?,customColorThemePath: freezed == customColorThemePath ? _self.customColorThemePath : customColorThemePath // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

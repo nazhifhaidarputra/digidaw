@@ -1346,62 +1346,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
     final updatedClips = track.clips.map((clip) {
       if (!clipIdSet.contains(clip.id)) return clip;
-      int newStart = clip.startTime.toInt();
-      int newLength = clip.loopLength.toInt();
-      int newOffset = clip.offsetStart.toInt();
-
-      if (clip.isSampleBased) {
-        final oldLengthTicks = samplesToTicks(clip.loopLength, bpm, sampleRate);
-        final oldEndTick = clip.startTime + oldLengthTicks;
-        if (edge == UiResizeEdge.right) {
-          final newEndTick = (oldEndTick + deltaTicks).clamp(
-            clip.startTime + 10,
-            1 << 62,
-          );
-          newLength = ticksToSamples(
-            newEndTick - clip.startTime,
-            bpm,
-            sampleRate,
-          );
-        } else {
-          final newStartTick = (clip.startTime + deltaTicks)
-              .clamp(0, oldEndTick - 10)
-              .toInt();
-          final deltaSamples = ticksToSamples(
-            newStartTick - clip.startTime,
-            bpm,
-            sampleRate,
-          );
-          newStart = newStartTick;
-          newLength = (clip.loopLength - deltaSamples)
-              .clamp(1, 1 << 62)
-              .toInt();
-          newOffset = (clip.offsetStart + deltaSamples)
-              .clamp(0, 1 << 62)
-              .toInt();
-        }
-      } else if (edge == UiResizeEdge.right) {
-        final newEnd = (clip.startTime + clip.loopLength + deltaTicks).clamp(
-          clip.startTime + 10,
-          1 << 62,
-        );
-        newLength = newEnd.toInt() - clip.startTime.toInt();
-      } else {
-        final oldEnd = clip.startTime + clip.loopLength;
-        int newStartProposed = (clip.startTime + deltaTicks)
-            .clamp(0, oldEnd - 10)
-            .toInt();
-        final delta = newStartProposed - clip.startTime;
-        final newOffsetProposed = (clip.offsetStart + delta).clamp(0, 1 << 62);
-        newStart = newStartProposed;
-        newLength = (oldEnd - newStartProposed).toInt();
-        newOffset = newOffsetProposed.toInt();
-      }
-      return clip.copyWith(
-        startTime: newStart,
-        loopLength: newLength,
-        offsetStart: newOffset,
-      );
+      return resizedClip(clip, edge, deltaTicks, bpm, sampleRate);
     }).toList();
 
     ref

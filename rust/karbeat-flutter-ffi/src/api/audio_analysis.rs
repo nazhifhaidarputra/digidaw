@@ -207,20 +207,20 @@ pub fn set_audio_source_sample_mode(
     Ok(())
 }
 
-/// Sets an audio source's pitch shift in semitones (clamped to two octaves either way) and
+/// Sets an audio source's pitch shift in cents (clamped to ±2400, two octaves either way) and
 /// whether to preserve formants (undoable), then renders it in the background. The original
 /// audio plays until the render is ready.
 pub fn set_waveform_pitch(
     ctx: &DawContext,
     source_id: u64,
-    pitch_semitones: f32,
+    pitch_cents: f32,
     preserve_formants: bool,
 ) -> Result<(), String> {
     let source = AudioSourceId::from_u64(source_id);
     let needs_render = audio_analysis_api::set_waveform_pitch(
         &mut ctx.project_write(),
         source,
-        pitch_semitones,
+        pitch_cents,
         preserve_formants,
     )
     .map_err(|error| error.to_string())?;

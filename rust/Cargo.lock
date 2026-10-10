@@ -2261,6 +2261,7 @@ dependencies = [
  "glib",
  "karbeat-host-api",
  "karbeat-plugin-api",
+ "karbeat-utils",
  "libloading 0.8.9",
  "log",
  "raw-window-handle",

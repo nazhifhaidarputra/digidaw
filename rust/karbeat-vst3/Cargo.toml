@@ -10,6 +10,7 @@ license = "GPL 3.0"
 vst3 = "0.3.0"
 karbeat-plugin-api.workspace = true
 karbeat-host-api.workspace = true
+karbeat-utils.workspace = true
 libloading.workspace = true
 serde_json.workspace = true
 log.workspace = true

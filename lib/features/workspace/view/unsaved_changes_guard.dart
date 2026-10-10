@@ -116,6 +116,13 @@ class _UnsavedChangesGuardState extends ConsumerState<UnsavedChangesGuard>
       return;
     }
     windowManager.addListener(this);
+    // The title follows the project name and its saved status for as long as
+    // a project is shown.
+    ref.listenManual(
+      projectWindowTitleProvider,
+      (_, title) => unawaited(_setWindowTitle(title)),
+      fireImmediately: true,
+    );
     // Only intercept closing while this guard can answer it; loading and
     // error screens keep the default close behavior.
     unawaited(_setPreventClose(true));
@@ -153,6 +160,13 @@ class _UnsavedChangesGuardState extends ConsumerState<UnsavedChangesGuard>
     );
     if (updated case Error<void>(error: final error)) {
       AppLogger.warn('Could not update the session marker: $error');
+    }
+  }
+
+  static Future<void> _setWindowTitle(String title) async {
+    final updated = await attemptAsync(() => windowManager.setTitle(title));
+    if (updated case Error<void>(error: final error)) {
+      AppLogger.warn('Failed to set window title: $error');
     }
   }
 

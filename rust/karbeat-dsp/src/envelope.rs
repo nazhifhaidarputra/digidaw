@@ -243,6 +243,7 @@ impl Envelope for AdvancedEnvelopeSettings {
     }
 }
 
+/// Phase of an [`AdsrProcessor`], as reported to callers and stored in saved state.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub enum EnvelopeState {
     Idle,
@@ -252,90 +253,249 @@ pub enum EnvelopeState {
     Release,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct AdsrProcessor {
-    pub state: EnvelopeState,
-    pub current_level: f32,
+/// Level and timing data every envelope phase shares.
+#[derive(Debug, Clone, Copy)]
+struct AdsrLevels {
+    current_level: f32,
     phase_time: f32,          // Time spent in the CURRENT phase
     release_start_level: f32, // Captures amplitude when note is released
     sample_rate: f32,
 }
 
-impl AdsrProcessor {
-    pub fn new(sample_rate: f32) -> Self {
-        Self {
-            state: EnvelopeState::Idle,
-            current_level: 0.0,
-            phase_time: 0.0,
-            release_start_level: 0.0,
-            sample_rate,
+karbeat_utils::typestate! {
+    /// Envelope phases and the moves between them.
+    #[derive(Debug, Clone, Copy)]
+    machine Adsr {
+        shared: AdsrLevels,
+        erased: #[derive(Debug, Clone, Copy)] AnyAdsr,
+        states {
+            #[derive(Debug, Clone, Copy)]
+            Idle as IdleAdsr {}
+            #[derive(Debug, Clone, Copy)]
+            Attack as AttackAdsr {}
+            #[derive(Debug, Clone, Copy)]
+            Decay as DecayAdsr {}
+            #[derive(Debug, Clone, Copy)]
+            Sustain as SustainAdsr {}
+            #[derive(Debug, Clone, Copy)]
+            Release as ReleaseAdsr {}
+        }
+        transitions {
+            Idle | Attack | Decay | Sustain | Release => Attack:
+            fn note_on(levels, state) {
+                levels.phase_time = 0.0;
+                Attack {}
+            }
+
+            Idle | Attack | Decay | Sustain | Release => Release:
+            fn note_off(levels, state) {
+                levels.phase_time = 0.0;
+                levels.release_start_level = levels.current_level;
+                Release {}
+            }
+
+            Attack => Decay: fn attack_done(levels, state, peak: f32) {
+                levels.current_level = peak;
+                levels.phase_time = 0.0;
+                Decay {}
+            }
+
+            Decay => Sustain: fn decay_done(levels, state, sustain: f32) {
+                levels.current_level = sustain;
+                levels.phase_time = 0.0;
+                Sustain {}
+            }
+
+            Release => Idle: fn release_done(levels, state) {
+                levels.current_level = 0.0;
+                levels.phase_time = 0.0;
+                Idle {}
+            }
+        }
+    }
+}
+
+impl AnyAdsr {
+    fn new(state: EnvelopeState, shared: AdsrLevels) -> Self {
+        match state {
+            EnvelopeState::Idle => Adsr {
+                shared,
+                state: Idle {},
+            }
+            .into(),
+            EnvelopeState::Attack => Adsr {
+                shared,
+                state: Attack {},
+            }
+            .into(),
+            EnvelopeState::Decay => Adsr {
+                shared,
+                state: Decay {},
+            }
+            .into(),
+            EnvelopeState::Sustain => Adsr {
+                shared,
+                state: Sustain {},
+            }
+            .into(),
+            EnvelopeState::Release => Adsr {
+                shared,
+                state: Release {},
+            }
+            .into(),
         }
     }
 
+    const fn envelope_state(&self) -> EnvelopeState {
+        match self {
+            Self::Idle(_) => EnvelopeState::Idle,
+            Self::Attack(_) => EnvelopeState::Attack,
+            Self::Decay(_) => EnvelopeState::Decay,
+            Self::Sustain(_) => EnvelopeState::Sustain,
+            Self::Release(_) => EnvelopeState::Release,
+        }
+    }
+}
+
+/// Serialized form of an [`AdsrProcessor`].
+#[derive(Deserialize, Serialize)]
+struct AdsrSnapshot {
+    state: EnvelopeState,
+    current_level: f32,
+    phase_time: f32,
+    release_start_level: f32,
+    sample_rate: f32,
+}
+
+impl From<AdsrSnapshot> for AdsrProcessor {
+    fn from(snapshot: AdsrSnapshot) -> Self {
+        Self {
+            adsr: AnyAdsr::new(
+                snapshot.state,
+                AdsrLevels {
+                    current_level: snapshot.current_level,
+                    phase_time: snapshot.phase_time,
+                    release_start_level: snapshot.release_start_level,
+                    sample_rate: snapshot.sample_rate,
+                },
+            ),
+        }
+    }
+}
+
+impl From<AdsrProcessor> for AdsrSnapshot {
+    fn from(processor: AdsrProcessor) -> Self {
+        let levels = processor.adsr.shared();
+        Self {
+            state: processor.state(),
+            current_level: levels.current_level,
+            phase_time: levels.phase_time,
+            release_start_level: levels.release_start_level,
+            sample_rate: levels.sample_rate,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(from = "AdsrSnapshot", into = "AdsrSnapshot")]
+pub struct AdsrProcessor {
+    adsr: AnyAdsr,
+}
+
+impl AdsrProcessor {
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            adsr: AnyAdsr::new(
+                EnvelopeState::Idle,
+                AdsrLevels {
+                    current_level: 0.0,
+                    phase_time: 0.0,
+                    release_start_level: 0.0,
+                    sample_rate,
+                },
+            ),
+        }
+    }
+
+    /// Phase the envelope is in.
+    pub const fn state(&self) -> EnvelopeState {
+        self.adsr.envelope_state()
+    }
+
+    /// Level produced by the latest [`Self::process`] call.
+    pub fn current_level(&self) -> f32 {
+        self.adsr.shared().current_level
+    }
+
     pub fn note_on(&mut self) {
-        self.state = EnvelopeState::Attack;
-        self.phase_time = 0.0;
+        // Every phase can restart, so the machine comes back either way.
+        self.adsr = match self.adsr.note_on() {
+            Ok(adsr) | Err((adsr, _)) => adsr,
+        };
     }
 
     pub fn note_off(&mut self) {
-        self.state = EnvelopeState::Release;
-        self.phase_time = 0.0;
-        self.release_start_level = self.current_level;
+        // Every phase can release, so the machine comes back either way.
+        self.adsr = match self.adsr.note_off() {
+            Ok(adsr) | Err((adsr, _)) => adsr,
+        };
     }
 
     pub fn process<T: Envelope>(&mut self, settings: &T) -> f32 {
-        let dt = 1.0 / self.sample_rate;
-        self.phase_time += dt;
+        let levels = self.adsr.shared_mut();
+        levels.phase_time += 1.0 / levels.sample_rate;
 
-        match self.state {
-            EnvelopeState::Idle => {
-                self.current_level = 0.0;
+        self.adsr = match self.adsr {
+            AnyAdsr::Idle(mut adsr) => {
+                adsr.shared.current_level = 0.0;
+                adsr.into()
             }
-            EnvelopeState::Attack => {
+            AnyAdsr::Attack(mut adsr) => {
                 let attack_sec = settings.attack_ms() / 1000.0;
                 let peak = settings.peak_level();
 
-                self.current_level = (self.phase_time / attack_sec) * peak;
+                adsr.shared.current_level = (adsr.shared.phase_time / attack_sec) * peak;
 
-                if self.phase_time >= attack_sec {
-                    self.current_level = peak;
-                    self.state = EnvelopeState::Decay;
-                    self.phase_time = 0.0;
+                if adsr.shared.phase_time >= attack_sec {
+                    adsr.attack_done(peak).into()
+                } else {
+                    adsr.into()
                 }
             }
-            EnvelopeState::Decay => {
+            AnyAdsr::Decay(mut adsr) => {
                 let decay_sec = settings.decay_ms() / 1000.0;
                 let sustain = settings.sustain_level();
                 let peak = settings.peak_level();
 
                 // Interpolate from peak down to sustain_level
-                let progress = self.phase_time / decay_sec;
-                self.current_level = peak - (peak - sustain) * progress;
+                let progress = adsr.shared.phase_time / decay_sec;
+                adsr.shared.current_level = peak - (peak - sustain) * progress;
 
-                if self.phase_time >= decay_sec {
-                    self.current_level = sustain;
-                    self.state = EnvelopeState::Sustain;
-                    self.phase_time = 0.0;
+                if adsr.shared.phase_time >= decay_sec {
+                    adsr.decay_done(sustain).into()
+                } else {
+                    adsr.into()
                 }
             }
-            EnvelopeState::Sustain => {
-                self.current_level = settings.sustain_level();
+            AnyAdsr::Sustain(mut adsr) => {
+                adsr.shared.current_level = settings.sustain_level();
+                adsr.into()
             }
-            EnvelopeState::Release => {
+            AnyAdsr::Release(mut adsr) => {
                 let release_sec = settings.release_ms() / 1000.0;
-                let progress = self.phase_time / release_sec;
+                let progress = adsr.shared.phase_time / release_sec;
 
                 // Fade from the captured note_off level down to 0
-                self.current_level = self.release_start_level * (1.0 - progress);
+                adsr.shared.current_level = adsr.shared.release_start_level * (1.0 - progress);
 
-                if self.phase_time >= release_sec {
-                    self.current_level = 0.0;
-                    self.state = EnvelopeState::Idle;
-                    self.phase_time = 0.0;
+                if adsr.shared.phase_time >= release_sec {
+                    adsr.release_done().into()
+                } else {
+                    adsr.into()
                 }
             }
-        }
+        };
 
-        self.current_level
+        self.adsr.shared().current_level
     }
 }

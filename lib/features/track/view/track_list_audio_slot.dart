@@ -585,6 +585,19 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                 trackId: widget.trackId,
                 trackHeight: widget.height,
                 zoomLevel: zoomLevel,
+                clipBuilder: (clip, left, contentStretch) => _ClipRenderer(
+                  clip: clip,
+                  trackType: track.trackType,
+                  color: track.color.fromRGBorRGBAtoColor(),
+                  zoomLevel: zoomLevel,
+                  projectSampleRate: safeSampleRate,
+                  isSelected: true,
+                  scrollController: widget.horizontalScrollController,
+                  clipLeftOffset: left,
+                  waveformMap: waveformMap,
+                  compact: widget.collapsed,
+                  contentStretch: contentStretch,
+                ),
               ),
 
               // Range selection bounding box (per-track, in local coordinate space)

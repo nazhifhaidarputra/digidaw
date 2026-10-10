@@ -27,6 +27,25 @@ use vst3::{
     },
 };
 
+karbeat_utils::typestate! {
+    /// Whether `setProcessing(true)` is in effect on the plugin's processor.
+    #[derive(Clone, Copy)]
+    machine Processing {
+        shared: (),
+        erased: #[derive(Clone, Copy)] AnyProcessing,
+        states {
+            #[derive(Clone, Copy)]
+            Stopped as StoppedProcessing {}
+            #[derive(Clone, Copy)]
+            Started as StartedProcessing {}
+        }
+        transitions {
+            Stopped => Started: fn start(shared, state) { Started {} }
+            Started => Stopped: fn stop(shared, state) { Stopped {} }
+        }
+    }
+}
+
 /// Frames rendered to deliver parameter edits while no audio block is running.
 const FLUSH_FRAMES: usize = 32;
 
@@ -52,7 +71,7 @@ pub(crate) struct Dsp {
     changes: ComWrapper<ParameterChanges>,
     output_changes: ComWrapper<ParameterChanges>,
     pub use_f64: bool,
-    pub processing: bool,
+    processing: AnyProcessing,
     pub midi_mapping: [[Option<u32>; 130]; 16],
     note_ids: [Option<u64>; 2048],
     active_keys: [bool; 2048],
@@ -99,7 +118,11 @@ impl Dsp {
             changes: ComWrapper::new(ParameterChanges::new(ids)),
             output_changes: ComWrapper::new(ParameterChanges::new(ids)),
             use_f64,
-            processing: false,
+            processing: Processing {
+                shared: (),
+                state: Stopped {},
+            }
+            .into(),
             midi_mapping: [[None; 130]; 16],
             note_ids: [None; 2048],
             active_keys: [false; 2048],
@@ -107,24 +130,29 @@ impl Dsp {
         }
     }
 
+    /// Whether the processor has been told to process.
+    pub const fn is_processing(&self) -> bool {
+        matches!(self.processing, AnyProcessing::Started(_))
+    }
+
     pub fn stop(&mut self) -> Result<(), HostError> {
-        if self.processing {
+        if let AnyProcessing::Started(started) = self.processing {
             // SAFETY: Called only after the processing gate is suspended.
             check_optional("setProcessing(false)", unsafe {
                 self.processor.setProcessing(0)
             })?;
-            self.processing = false;
+            self.processing = started.stop().into();
         }
         Ok(())
     }
 
     pub fn start(&mut self) -> Result<(), HostError> {
-        if !self.processing {
+        if let AnyProcessing::Stopped(stopped) = self.processing {
             // SAFETY: Component was prepared/activated by the UI owner, with DSP suspended.
             check_optional("setProcessing(true)", unsafe {
                 self.processor.setProcessing(1)
             })?;
-            self.processing = true;
+            self.processing = stopped.start().into();
         }
         Ok(())
     }
@@ -156,7 +184,7 @@ impl Dsp {
             }
         }
         self.bind_buses();
-        let was_processing = self.processing;
+        let was_processing = self.is_processing();
         self.start()?;
         // SAFETY: This ABI record contains only integer/float/plain-record fields.
         let mut transport: Vst::ProcessContext = unsafe { std::mem::zeroed() };
@@ -241,7 +269,7 @@ impl Dsp {
             .first()
             .and_then(|b| b.channel_data.first())
             .map_or(0, |c| c.len());
-        if frames == 0 || frames > self.config.max_block_size || !self.processing {
+        if frames == 0 || frames > self.config.max_block_size || !self.is_processing() {
             silence(buffers);
             return;
         }
@@ -1046,7 +1074,7 @@ mod tests {
                 notes: [(u16::MAX, -1, -1); 4],
             })
         );
-        assert!(!dsp.processing);
+        assert!(!dsp.is_processing());
         assert!(
             !exchange
                 .parameter(77)
@@ -1121,7 +1149,11 @@ mod tests {
                 &[77],
                 false,
             );
-            dsp.processing = true;
+            dsp.processing = Processing {
+                shared: (),
+                state: Started {},
+            }
+            .into();
             let slot = Arc::new(ProcessorSlot {
                 gate: ProcessingGate::default(),
                 dsp: UnsafeCell::new(dsp),

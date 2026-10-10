@@ -54,7 +54,6 @@ class DawToolbarMenuGroupFactory {
         callback: (context, ref) async {
           if (!await confirmDiscardUnsavedChanges(context, ref)) return;
           await ref.read(projectProvider.notifier).newBlankProject();
-          await updateProjectWindowTitle(null);
         },
       ),
       DawToolbarMenuAction(
@@ -68,10 +67,9 @@ class DawToolbarMenuGroupFactory {
             final project = ref.read(projectProvider.notifier);
 
             // Await the Rust Shadow Load & Swap behind the global blocking overlay.
-            final loaded = await ref
+            await ref
                 .read(blockingTaskProvider.notifier)
                 .run(label: 'Loading project...', task: () => project.loadProject(path));
-            if (loaded.isOk()) await updateProjectWindowTitle(path);
           }
         },
       ),

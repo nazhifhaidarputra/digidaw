@@ -22,6 +22,7 @@ String formatPdcLatency(int samples, int sampleRate) {
 
 class _DawPerformanceMonitorState extends ConsumerState<DawPerformanceMonitor> {
   static const int maxDataPoints = 100;
+  static const double _graphWidth = 80;
 
   // Rolling queues for the line graph
   final Queue<double> _dspHistory = Queue<double>();
@@ -72,67 +73,63 @@ class _DawPerformanceMonitorState extends ConsumerState<DawPerformanceMonitor> {
     final sampleRate = ref.watch(
       transportProvider.select((s) => s.value?.sampleRate ?? 48000),
     );
-    return AspectRatio(
-      aspectRatio: 3.5, // Width will always be 3.5x the height
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: colors.outlineVariant),
-        ),
-        child: Column(
-          children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                children: [
-                  Text(
-                    "DSP: ${_currentDsp.toStringAsFixed(1)}%",
-                    style: TextStyle(
-                      color: _currentDsp > 85 ? colors.error : colors.primary,
-                      fontSize: 10,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    "RAM: ${(_currentRamMb / 1024).toStringAsFixed(1)} GB / ${(_totalRamMb / 1024).toStringAsFixed(1)} GB",
-                    style: TextStyle(
-                      color: colors.onSurfaceVariant,
-                      fontSize: 10,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Tooltip(
-                    message: 'Plugin delay compensation',
-                    child: Text(
-                      "PDC: ${formatPdcLatency(_pdcLatencySamples, sampleRate)}",
-                      style: TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: ClipRect(
-                child: CustomPaint(
-                  size: const Size(double.infinity, double.infinity),
-                  painter: _RollingGraphPainter(
-                    dspData: _dspHistory.toList(),
-                    cpuData: _cpuHistory.toList(),
-                    dspColor: colors.primary,
-                    cpuColor: colors.onSurface.withValues(alpha: 0.2),
-                  ),
+    final labelStyle = TextStyle(
+      color: colors.onSurfaceVariant,
+      fontSize: 10,
+      height: 1.2,
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: _graphWidth,
+            child: ClipRect(
+              child: CustomPaint(
+                size: const Size(double.infinity, double.infinity),
+                painter: _RollingGraphPainter(
+                  dspData: _dspHistory.toList(),
+                  cpuData: _cpuHistory.toList(),
+                  dspColor: colors.primary,
+                  cpuColor: colors.onSurface.withValues(alpha: 0.2),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          // Labels stack top to bottom and spill into a new column on the
+          // right once the panel height is used up.
+          Wrap(
+            direction: Axis.vertical,
+            spacing: 2,
+            runSpacing: 12,
+            children: [
+              Text(
+                "DSP: ${_currentDsp.toStringAsFixed(1)}%",
+                style: labelStyle.copyWith(
+                  color: _currentDsp > 85 ? colors.error : colors.primary,
+                ),
+              ),
+              Text(
+                "RAM: ${(_currentRamMb / 1024).toStringAsFixed(1)} GB / ${(_totalRamMb / 1024).toStringAsFixed(1)} GB",
+                style: labelStyle,
+              ),
+              Tooltip(
+                message: 'Plugin delay compensation',
+                child: Text(
+                  "PDC: ${formatPdcLatency(_pdcLatencySamples, sampleRate)}",
+                  style: labelStyle,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

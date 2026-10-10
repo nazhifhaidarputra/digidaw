@@ -462,22 +462,26 @@ pub fn set_waveform_edits(
     })
 }
 
-/// Highest pitch shift, in semitones either way, that a source edit accepts.
-pub const MAX_PITCH_SEMITONES: f32 = 24.0;
+/// Cents in one semitone, the scale pitch shifts are set in.
+pub const CENTS_PER_SEMITONE: f32 = 100.0;
 
-/// Sets a source's pitch shift, clamped to [`MAX_PITCH_SEMITONES`] either way, and whether
-/// to preserve formants, as one undoable step. Returns whether it needs a render.
+/// Highest pitch shift, in cents either way, that a source edit accepts: two octaves.
+pub const MAX_PITCH_CENTS: f32 = 2400.0;
+
+/// Sets a source's pitch shift in cents, clamped to [`MAX_PITCH_CENTS`] either way, and
+/// whether to preserve formants, as one undoable step. Returns whether it needs a render.
 ///
 /// The duration is kept. As with the other edits, playback uses the original audio until the
 /// new render arrives.
 pub fn set_waveform_pitch(
     ctx: &mut DawContext,
     source_id: AudioSourceId,
-    pitch_semitones: f32,
+    pitch_cents: f32,
     preserve_formants: bool,
 ) -> anyhow::Result<bool> {
-    anyhow::ensure!(pitch_semitones.is_finite(), "Pitch shift must be a number");
-    let pitch_semitones = pitch_semitones.clamp(-MAX_PITCH_SEMITONES, MAX_PITCH_SEMITONES);
+    anyhow::ensure!(pitch_cents.is_finite(), "Pitch shift must be a number");
+    // The recipe stores semitones, which saved projects already hold.
+    let pitch_semitones = pitch_cents.clamp(-MAX_PITCH_CENTS, MAX_PITCH_CENTS) / CENTS_PER_SEMITONE;
     change_edits(ctx, source_id, "Pitch Shift", |current| WaveformEdits {
         pitch_semitones,
         preserve_formants,

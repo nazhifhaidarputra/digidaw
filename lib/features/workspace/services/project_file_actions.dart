@@ -1,12 +1,8 @@
-import 'dart:io' show Platform;
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
-import 'package:karbeat/core/utils/logger.dart';
-import 'package:karbeat/core/utils/result_type.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 
 const projectFileExtensions = ['karbeat', 'dgdaw'];
 
@@ -34,9 +30,7 @@ Future<bool> saveCurrentProject(WidgetRef ref, {bool saveAs = false}) async {
         label: 'Saving project...',
         task: () => project.saveProject(savePath),
       );
-  if (saved.isErr()) return false;
-  await updateProjectWindowTitle(savePath);
-  return true;
+  return saved.isOk();
 }
 
 /// Name shown for a project in the window title and prompts: the file name
@@ -45,15 +39,23 @@ String projectDisplayName(String? filePath) {
   return filePath?.split(RegExp(r'[/\\]')).last ?? 'Untitled';
 }
 
-/// Shows the project file name in the window title on desktop platforms.
-/// A `null` path shows the untitled project.
-Future<void> updateProjectWindowTitle(String? filePath) async {
-  if (!(Platform.isWindows || Platform.isMacOS || Platform.isLinux)) return;
+/// Whether the current project has no unsaved changes, reported by the engine
+/// whenever it changes.
+final projectSavedProvider = StreamProvider<bool>((ref) {
+  final dawContext = ref.read(projectProvider.notifier).dawContext;
+  return serialization_api.subscribeProjectSaved(ctx: dawContext);
+});
 
-  final updated = await attemptAsync(
-    () => windowManager.setTitle('DigiDAW — ${projectDisplayName(filePath)}'),
-  );
-  if (updated case Error<void>(error: final error)) {
-    AppLogger.warn('Failed to set window title: $error');
-  }
+/// Window title for a project: its name, followed by an asterisk while it has
+/// unsaved changes.
+String projectWindowTitle(String? filePath, {required bool saved}) {
+  return 'DigiDAW — ${projectDisplayName(filePath)}${saved ? '' : '*'}';
 }
+
+final projectWindowTitleProvider = Provider<String>((ref) {
+  final filePath = ref.watch(
+    projectProvider.select((s) => s.value?.currentFilePath),
+  );
+  final saved = ref.watch(projectSavedProvider).value ?? true;
+  return projectWindowTitle(filePath, saved: saved);
+});

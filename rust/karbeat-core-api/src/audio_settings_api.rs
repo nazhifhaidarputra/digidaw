@@ -1,7 +1,7 @@
 use karbeat_core::{
     audio::backend::{
-        self, AudioDeviceInfo, AudioRuntimeSettings, DeviceStreamStatus, OutputDeviceSelection,
-        OutputHostSelection, RequestedOutputConfig,
+        self, AudioDeviceInfo, AudioRuntimeSettings, OutputDeviceSelection, OutputHostSelection,
+        RequestedOutputConfig,
     },
     context::DawContext,
 };
@@ -75,7 +75,7 @@ pub fn commit_dsp_config(
         let mut runtime = ctx.audio_runtime_settings.write();
         runtime.requested_dsp.sample_rate = sample_rate;
         runtime.requested_dsp.block_size = block_size;
-        runtime.stream_status = DeviceStreamStatus::Starting;
+        runtime.stream_restarting();
     }
     ctx.app_state.audio_config.sample_rate = sample_rate;
     ctx.app_state.audio_config.buffer_size = block_size;
@@ -148,7 +148,7 @@ pub fn select_output(
         host: selected_host,
         device: selected_device,
     };
-    runtime.stream_status = DeviceStreamStatus::Starting;
+    runtime.stream_restarting();
     Ok(runtime.clone())
 }
 

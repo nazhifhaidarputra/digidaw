@@ -52,17 +52,17 @@ pub fn prepare_hosted_target(
         "External plugin is unavailable; retry loading it first"
     );
     match ctx.hosted_targets.get(&target) {
-        Some(karbeat_core::context::HostedTargetState::Active(instance)) => {
+        Some(karbeat_core::context::HostedTargetState::Active(active)) => {
             Ok(HostedTargetLookup::Resolved {
                 client: ctx.external_plugins.clone(),
-                instance: *instance,
+                instance: active.state().instance,
             })
         }
-        Some(karbeat_core::context::HostedTargetState::Transitioning) => {
+        Some(karbeat_core::context::HostedTargetState::Transitioning(_)) => {
             anyhow::bail!("External plugin lifecycle operation is in progress")
         }
-        Some(karbeat_core::context::HostedTargetState::Failed(reason)) => {
-            anyhow::bail!("External plugin is unavailable: {reason}")
+        Some(karbeat_core::context::HostedTargetState::Failed(failed)) => {
+            anyhow::bail!("External plugin is unavailable: {}", failed.state().reason)
         }
         None => Ok(HostedTargetLookup::Query {
             handles: ctx.control_handles(),
@@ -417,10 +417,7 @@ pub fn commit_install(ctx: &mut DawContext, completed: CompletedPluginInstall) -
     // Hosted native instances cannot be rebuilt from history, so this edit is not undoable
     // and earlier entries may no longer match the project.
     ctx.clear_history();
-    ctx.hosted_targets.insert(
-        completed.target,
-        karbeat_core::context::HostedTargetState::Active(completed.instance),
-    );
+    ctx.activate_hosted_target(completed.target, completed.instance);
     completed.installed
 }
 
@@ -1005,10 +1002,7 @@ pub fn commit_retry(ctx: &mut DawContext, completed: CompletedPluginRetry) {
         registry.insert_plugin_consumer(completed.target, output);
     }
     ctx.external_plugin_failures.remove(&completed.target);
-    ctx.hosted_targets.insert(
-        completed.target,
-        karbeat_core::context::HostedTargetState::Active(completed.instance),
-    );
+    ctx.activate_hosted_target(completed.target, completed.instance);
 }
 
 /// Recreates and reinstalls an external plugin previously marked as failed.
@@ -1187,10 +1181,7 @@ pub fn commit_reconfiguration(ctx: &mut DawContext, completed: CompletedPluginRe
         {
             external.state = Some(state);
         }
-        ctx.hosted_targets.insert(
-            target,
-            karbeat_core::context::HostedTargetState::Active(instance),
-        );
+        ctx.activate_hosted_target(target, instance);
     }
 }
 

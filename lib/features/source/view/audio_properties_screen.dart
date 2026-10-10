@@ -318,22 +318,23 @@ class _OfflineEditControls extends ConsumerWidget {
 
   Future<void> _setPitch(
     WidgetRef ref, {
-    double? semitones,
+    double? cents,
     bool? preserveFormants,
   }) => _apply(
     ref,
     (ctx) => setWaveformPitch(
       ctx: ctx,
       sourceId: sourceId,
-      pitchSemitones: semitones ?? props.pitchSemitones,
+      pitchCents: cents ?? props.pitchCents,
       preserveFormants: preserveFormants ?? props.preserveFormants,
     ),
   );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final semitones = props.pitchSemitones.roundToDouble();
-    final cents = ((props.pitchSemitones - semitones) * 100).roundToDouble();
+    // Coarse moves in whole semitones (100 cents); fine covers the cents between.
+    final coarse = (props.pitchCents / 100).roundToDouble() * 100;
+    final fine = (props.pitchCents - coarse).roundToDouble();
     Widget toggle(
       String label,
       IconData icon,
@@ -394,20 +395,20 @@ class _OfflineEditControls extends ConsumerWidget {
           ),
           _CommitKnob(
             label: 'Pitch',
-            unit: 'st',
-            value: semitones,
-            min: -24,
-            max: 24,
-            onCommit: (value) => _setPitch(ref, semitones: value + cents / 100),
+            unit: 'ct',
+            value: coarse,
+            min: -2400,
+            max: 2400,
+            step: 100,
+            onCommit: (value) => _setPitch(ref, cents: value + fine),
           ),
           _CommitKnob(
             label: 'Fine',
             unit: 'ct',
-            value: cents,
+            value: fine,
             min: -50,
             max: 50,
-            onCommit: (value) =>
-                _setPitch(ref, semitones: semitones + value / 100),
+            onCommit: (value) => _setPitch(ref, cents: coarse + value),
           ),
           Tooltip(
             message: 'Keep the voice character when shifting pitch',
@@ -424,7 +425,7 @@ class _OfflineEditControls extends ConsumerWidget {
   }
 }
 
-/// A whole-step knob that previews its value while dragging and commits once on
+/// A stepped knob that previews its value while dragging and commits once on
 /// release, so a drag starts one render instead of one per step.
 class _CommitKnob extends StatefulWidget {
   const _CommitKnob({
@@ -433,6 +434,7 @@ class _CommitKnob extends StatefulWidget {
     required this.value,
     required this.min,
     required this.max,
+    this.step = 1,
     required this.onCommit,
   });
 
@@ -441,6 +443,7 @@ class _CommitKnob extends StatefulWidget {
   final double value;
   final double min;
   final double max;
+  final double step;
   final Future<void> Function(double value) onCommit;
 
   @override
@@ -467,7 +470,7 @@ class _CommitKnobState extends State<_CommitKnob> {
           min: widget.min,
           max: widget.max,
           defaultValue: 0,
-          step: 1,
+          step: widget.step,
           diameter: 32,
           onChanged: (next) => setState(() => _draft = next),
           onChangeEnd: _commit,

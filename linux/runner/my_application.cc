@@ -1,6 +1,12 @@
 #include "my_application.h"
 
+#include <errno.h>
+#include <string.h>
+
 #include <flutter_linux/flutter_linux.h>
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -14,21 +20,116 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
-// Sets the window icon from the bundle's data/app_icon.png, next to the
-// executable. Installed builds also find it by name in the icon theme.
+// Path of the running executable, or nullptr when it cannot be resolved.
+static gchar* executable_path() {
+  return g_file_read_link("/proc/self/exe", nullptr);
+}
+
+// Path of the bundle's data/app_icon.png, next to the executable, or nullptr
+// when the bundle has none.
+static gchar* bundle_icon_path(const gchar* exe) {
+  g_autofree gchar* dir = g_path_get_dirname(exe);
+  gchar* icon = g_build_filename(dir, "data", "app_icon.png", nullptr);
+  if (!g_file_test(icon, G_FILE_TEST_EXISTS)) {
+    g_free(icon);
+    return nullptr;
+  }
+  return icon;
+}
+
+// Sets the window icon from the bundle's icon. Installed builds also find it
+// by name in the icon theme.
 static void set_window_icon(GtkWindow* window) {
   gtk_window_set_default_icon_name(APPLICATION_ID);
-  g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+  g_autofree gchar* exe = executable_path();
   if (exe == nullptr) {
     return;
   }
-  g_autofree gchar* dir = g_path_get_dirname(exe);
-  g_autofree gchar* icon =
-      g_build_filename(dir, "data", "app_icon.png", nullptr);
-  if (g_file_test(icon, G_FILE_TEST_EXISTS)) {
+  g_autofree gchar* icon = bundle_icon_path(exe);
+  if (icon != nullptr) {
     gtk_window_set_icon_from_file(window, icon, nullptr);
   }
 }
+
+#ifdef GDK_WINDOWING_WAYLAND
+static const gchar kDesktopEntryGroup[] = "Desktop Entry";
+static const gchar kGeneratedEntryKey[] = "X-DigiDAW-Generated";
+
+// Wayland windows carry no icon of their own: the compositor shows the icon
+// of the desktop entry named after the application ID, and a generic one when
+// there is none. A bundle that runs without being installed has no entry, so
+// this writes one to the user's data directory, hidden from application
+// menus, and keeps it pointing at the running bundle. An entry installed by a
+// package or written by the user is left alone.
+static void ensure_wayland_desktop_entry() {
+  if (!GDK_IS_WAYLAND_DISPLAY(gdk_display_get_default())) {
+    return;
+  }
+  g_autofree gchar* exe = executable_path();
+  if (exe == nullptr) {
+    return;
+  }
+  g_autofree gchar* icon = bundle_icon_path(exe);
+  if (icon == nullptr) {
+    return;
+  }
+
+  for (const gchar* const* dir = g_get_system_data_dirs(); *dir != nullptr;
+       dir++) {
+    g_autofree gchar* installed = g_build_filename(
+        *dir, "applications", APPLICATION_ID ".desktop", nullptr);
+    if (g_file_test(installed, G_FILE_TEST_EXISTS)) {
+      return;
+    }
+  }
+
+  g_autofree gchar* applications =
+      g_build_filename(g_get_user_data_dir(), "applications", nullptr);
+  g_autofree gchar* path =
+      g_build_filename(applications, APPLICATION_ID ".desktop", nullptr);
+  g_autoptr(GKeyFile) existing = g_key_file_new();
+  if (g_file_test(path, G_FILE_TEST_EXISTS)) {
+    if (!g_key_file_load_from_file(existing, path, G_KEY_FILE_NONE, nullptr) ||
+        !g_key_file_get_boolean(existing, kDesktopEntryGroup,
+                                kGeneratedEntryKey, nullptr)) {
+      return;
+    }
+  }
+
+  // Exec takes a quoted argument, in which these characters are escaped.
+  g_autoptr(GString) exec = g_string_new("\"");
+  for (const gchar* c = exe; *c != '\0'; c++) {
+    if (strchr("\"`$\\", *c) != nullptr) {
+      g_string_append_c(exec, '\\');
+    }
+    g_string_append_c(exec, *c);
+  }
+  g_string_append_c(exec, '"');
+
+  g_autoptr(GKeyFile) entry = g_key_file_new();
+  g_key_file_set_string(entry, kDesktopEntryGroup, "Type", "Application");
+  g_key_file_set_string(entry, kDesktopEntryGroup, "Name", "DigiDAW");
+  g_key_file_set_string(entry, kDesktopEntryGroup, "Exec", exec->str);
+  g_key_file_set_string(entry, kDesktopEntryGroup, "Icon", icon);
+  g_key_file_set_string(entry, kDesktopEntryGroup, "StartupWMClass",
+                        APPLICATION_ID);
+  g_key_file_set_boolean(entry, kDesktopEntryGroup, "NoDisplay", TRUE);
+  g_key_file_set_boolean(entry, kDesktopEntryGroup, kGeneratedEntryKey, TRUE);
+
+  g_autofree gchar* current = g_key_file_to_data(existing, nullptr, nullptr);
+  g_autofree gchar* wanted = g_key_file_to_data(entry, nullptr, nullptr);
+  if (g_strcmp0(current, wanted) == 0) {
+    return;
+  }
+
+  g_autoptr(GError) error = nullptr;
+  if (g_mkdir_with_parents(applications, 0755) != 0 ||
+      !g_file_set_contents(path, wanted, -1, &error)) {
+    g_warning("Could not write the desktop entry %s: %s", path,
+              error != nullptr ? error->message : g_strerror(errno));
+  }
+}
+#endif
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -38,6 +139,10 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+#ifdef GDK_WINDOWING_WAYLAND
+  // Before the window exists, so the compositor finds the entry when it maps.
+  ensure_wayland_desktop_entry();
+#endif
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 

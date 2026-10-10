@@ -2,12 +2,16 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/setting/models/app_color_theme.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_preferences_service.dart';
+import 'package:karbeat/features/setting/services/color_theme_parser.dart';
 
 /// Pixel size to decode a background image at so it stays sharp when the
 /// window fills [displaySize], without decoding more than is ever shown.
@@ -146,6 +150,36 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       fontFamily = null;
     }
 
+    var colorThemes = const IMap<String, AppColorTheme>.empty();
+    for (final asset in AppearanceAssetService.bundledColorThemes) {
+      switch (await _loadColorTheme(asset)) {
+        case Ok<AppColorTheme>(value: final theme):
+          colorThemes = colorThemes.add(asset, theme);
+        case Error<AppColorTheme>(:final error):
+          AppLogger.warn('Bundled color theme $asset is unavailable: $error');
+      }
+    }
+    var customThemePath = appearance.customColorThemePath;
+    if (customThemePath != null) {
+      switch (await _loadColorTheme(customThemePath)) {
+        case Ok<AppColorTheme>(value: final theme):
+          colorThemes = colorThemes.add(customThemePath, theme);
+        case Error<AppColorTheme>(:final error):
+          AppLogger.warn('Color theme $customThemePath is unavailable: $error');
+          ref
+              .read(notificationProvider.notifier)
+              .warn(
+                'The saved color theme file is unavailable or no longer valid. It was removed from the theme menu.',
+                title: 'Color theme unavailable',
+              );
+          customThemePath = null;
+      }
+    }
+    var themeSource = appearance.colorThemeSource;
+    if (themeSource != null && !colorThemes.containsKey(themeSource)) {
+      themeSource = null;
+    }
+
     state = AppearanceSettingsState(
       themeMode: appearance.themeMode,
       colorPalette: appearance.colorPalette,
@@ -154,10 +188,15 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       backgroundOverlayOpacity: appearance.backgroundOverlayOpacity,
       customFontPath: fontPath,
       customFontFamily: fontFamily,
+      colorThemes: colorThemes,
+      colorThemeSource: themeSource,
+      customColorThemePath: customThemePath,
       isInitialized: true,
     );
     if (backgroundPath != appearance.backgroundImagePath ||
-        fontPath != appearance.customFontPath) {
+        fontPath != appearance.customFontPath ||
+        themeSource != appearance.colorThemeSource ||
+        customThemePath != appearance.customColorThemePath) {
       await _persist(state);
     }
     return Result.ok(null);
@@ -169,6 +208,56 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
 
   Future<Result<void>> setColorPalette(AppColorPalette palette) {
     return _persist(state.copyWith(colorPalette: palette));
+  }
+
+  /// Activates a loaded colour theme, or the accent palette when [source] is
+  /// null.
+  Future<Result<void>> setColorTheme(String? source) async {
+    if (source != null && !state.colorThemes.containsKey(source)) {
+      return ref.notifyErrorResult(
+        Exception('The color theme is not loaded.'),
+        title: 'Could not apply color theme',
+      );
+    }
+    return _persist(state.copyWith(colorThemeSource: source));
+  }
+
+  /// Loads a JSON theme file picked by the user, replacing the previously
+  /// loaded file, and activates it.
+  Future<Result<void>> chooseColorThemeFile() async {
+    final picked = await ref
+        .read(appearanceAssetServiceProvider)
+        .pickColorThemeFile();
+    if (picked case Error<String?>(error: final error)) {
+      return ref.notifyErrorResult(
+        error,
+        title: 'Could not choose color theme',
+      );
+    }
+    final path = picked.ok();
+    if (path == null) return Result.ok(null);
+    final loaded = await _loadColorTheme(path);
+    if (loaded case Error<AppColorTheme>(error: final error)) {
+      return ref.notifyErrorResult(error, title: 'Could not load color theme');
+    }
+
+    var colorThemes = state.colorThemes;
+    final previousPath = state.customColorThemePath;
+    if (previousPath != null) colorThemes = colorThemes.remove(previousPath);
+    return _persist(
+      state.copyWith(
+        colorThemes: colorThemes.add(path, loaded.ok()),
+        colorThemeSource: path,
+        customColorThemePath: path,
+      ),
+    );
+  }
+
+  Future<Result<AppColorTheme>> _loadColorTheme(String source) async {
+    final text = await ref
+        .read(appearanceAssetServiceProvider)
+        .readColorTheme(source);
+    return text.andThen(parseColorTheme);
   }
 
   Future<Result<void>> setBackgroundFit(AppBackgroundFit fit) {
@@ -234,6 +323,8 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       backgroundOverlayOpacity: state.backgroundOverlayOpacity,
       customFontPath: state.customFontPath,
       customFontFamily: state.customFontFamily,
+      colorThemeSource: state.colorThemeSource,
+      customColorThemePath: state.customColorThemePath,
     ));
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(

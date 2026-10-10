@@ -65,10 +65,30 @@ impl IPlugFrameTrait for PlugFrame {
 #[cfg(target_os = "linux")]
 crate::run_loop::delegate_run_loop!(PlugFrame);
 
+karbeat_utils::typestate! {
+    /// Whether the plugin view is attached to a host parent window. Every `attached` call is
+    /// followed by exactly one `removed` call.
+    #[derive(Clone, Copy)]
+    machine ViewAttachment {
+        shared: (),
+        erased: #[derive(Clone, Copy)] AnyViewAttachment,
+        states {
+            #[derive(Clone, Copy)]
+            Detached as DetachedView {}
+            #[derive(Clone, Copy)]
+            Attached as AttachedView {}
+        }
+        transitions {
+            Detached => Attached: fn attach(shared, state) { Attached {} }
+            Attached => Detached: fn detach(shared, state) { Detached {} }
+        }
+    }
+}
+
 pub(crate) struct Vst3Editor {
     view: ComPtr<IPlugView>,
     frame: ComWrapper<PlugFrame>,
-    attached: bool,
+    attachment: AnyViewAttachment,
 }
 impl Vst3Editor {
     pub fn create(
@@ -102,7 +122,11 @@ impl Vst3Editor {
         Ok(Self {
             view,
             frame,
-            attached: false,
+            attachment: ViewAttachment {
+                shared: (),
+                state: Detached {},
+            }
+            .into(),
         })
     }
     pub fn size(&self) -> Result<(u32, u32), HostError> {
@@ -133,9 +157,9 @@ impl Vst3Editor {
         }
     }
     pub fn open(&mut self, parent_handle: &NativeParentHandle) -> Result<(), HostError> {
-        if self.attached {
+        let AnyViewAttachment::Detached(detached) = self.attachment else {
             return Ok(());
-        }
+        };
         let (parent, platform): (*mut c_void, &std::ffi::CStr) =
             match (parent_handle.kind, parent_handle.window) {
                 (NativeSurfaceKind::X11, RawWindowHandle::Xcb(handle)) => (
@@ -171,7 +195,7 @@ impl Vst3Editor {
         check("editor.attached", unsafe {
             self.view.attached(parent, platform.as_ptr())
         })?;
-        self.attached = true;
+        self.attachment = detached.attach().into();
         Ok(())
     }
     pub fn resize(&self, width: u32, height: u32) -> Result<(), HostError> {
@@ -207,10 +231,10 @@ impl Vst3Editor {
         check("editor.onSize", unsafe { self.view.onSize(&raw mut rect) })
     }
     pub fn close(&mut self) -> Result<(), HostError> {
-        if self.attached {
+        if let AnyViewAttachment::Attached(attached) = self.attachment {
             // SAFETY: Exactly one removed call follows each successful attachment.
             let code = unsafe { self.view.removed() };
-            self.attached = false;
+            self.attachment = attached.detach().into();
             check("editor.removed", code)?;
         }
         Ok(())

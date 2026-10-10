@@ -420,7 +420,7 @@ mod tests {
     fn pitch_edit_renders_and_is_undoable() {
         let mut ctx = make_ctx();
         let id = sine_source(&mut ctx);
-        assert!(set_waveform_pitch(&mut ctx, id, 12.0, false).unwrap());
+        assert!(set_waveform_pitch(&mut ctx, id, 1200.0, false).unwrap());
         refresh(&mut ctx, id);
 
         let output = rendered(&ctx, id);
@@ -430,7 +430,7 @@ mod tests {
         let crossings = middle_crossings(&output);
         assert!((400..=480).contains(&crossings), "{crossings} crossings");
 
-        assert!(set_waveform_pitch(&mut ctx, id, 100.0, true).unwrap());
+        assert!(set_waveform_pitch(&mut ctx, id, 10_000.0, true).unwrap());
         let edits = &source(&ctx, id).edited.as_ref().unwrap().edits;
         assert_eq!(edits.pitch_semitones, 24.0);
         assert!(edits.preserve_formants);

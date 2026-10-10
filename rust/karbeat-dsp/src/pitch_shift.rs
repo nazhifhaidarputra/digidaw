@@ -21,20 +21,28 @@ pub const GRAIN_SIZE: usize = 512;
 /// Highest channel count the engine stages.
 const MAX_CHANNELS: usize = 8;
 
+/// Cents in one octave: 100 per semitone.
+pub const CENTS_PER_OCTAVE: f64 = 1200.0;
+
+/// Frequency ratio of a pitch shift in cents.
+pub fn cents_to_ratio(cents: f32) -> f64 {
+    2_f64.powf(f64::from(cents) / CENTS_PER_OCTAVE)
+}
+
 /// Pitch-shifting engine with staging for arbitrary callback sizes.
 #[derive(Debug)]
 #[karbeat_plugin]
 pub struct PitchShiftEngine {
     #[param(
-        id = "pitch_ratio",
-        name = "Pitch Ratio",
+        id = "pitch_cents",
+        name = "Pitch Cents",
         group = "Pitcher",
-        min = 0.25,
-        max = 4.0,
-        default = 1.0,
-        step = 0.001
+        min = -2400.0,
+        max = 2400.0,
+        default = 0.0,
+        step = 1.0
     )]
-    pub pitch_ratio: f32,
+    pub pitch_cents: f32,
 
     #[param(
         id = "preserve_formants",
@@ -61,7 +69,7 @@ pub struct PitchShiftEngine {
     /// How many valid samples are sitting in `input_staging`.
     staging_fill: usize,
 
-    last_pitch_ratio: f64,
+    last_pitch_cents: f32,
     last_preserve_formants: bool,
 }
 
@@ -69,7 +77,7 @@ impl Clone for PitchShiftEngine {
     fn clone(&self) -> Self {
         // The shifter owns native state and is not Clone; the clone builds its own on prepare.
         let mut e = Self::base_default();
-        e.pitch_ratio = self.pitch_ratio.clone();
+        e.pitch_cents = self.pitch_cents.clone();
         e.sample_rate = self.sample_rate;
         e.preserve_formants = self.preserve_formants.clone();
         e.channels = self.channels;
@@ -86,7 +94,7 @@ impl Default for PitchShiftEngine {
         def.input_staging = Vec::new();
         def.output_staging = Vec::new();
         def.staging_fill = 0;
-        def.last_pitch_ratio = -1.0;
+        def.last_pitch_cents = f32::NAN;
         def.last_preserve_formants = false;
         def
     }
@@ -119,7 +127,7 @@ impl PitchShiftEngine {
                     None
                 }
             };
-            self.last_pitch_ratio = -1.0;
+            self.last_pitch_cents = f32::NAN;
 
             let block = self.shifter_block_size();
             self.input_staging = vec![vec![0.0_f32; block]; channels];
@@ -132,10 +140,10 @@ impl PitchShiftEngine {
 
     fn update_parameters(&mut self) {
         if let Some(shifter) = &mut self.shifter {
-            let ratio = f64::from(self.pitch_ratio.get());
-            if ratio != self.last_pitch_ratio {
-                shifter.set_pitch_scale(ratio);
-                self.last_pitch_ratio = ratio;
+            let cents = self.pitch_cents.get();
+            if cents != self.last_pitch_cents {
+                shifter.set_pitch_scale(cents_to_ratio(cents));
+                self.last_pitch_cents = cents;
             }
             let preserve = self.preserve_formants.get();
             if preserve != self.last_preserve_formants {
@@ -227,9 +235,9 @@ mod tests {
     use super::*;
     use karbeat_plugin_types::parameter::AutoParams;
 
-    fn render(input: &[f32], sizes: &[usize], ratio: f32) -> Vec<f32> {
+    fn render(input: &[f32], sizes: &[usize], cents: f32) -> Vec<f32> {
         let mut engine = PitchShiftEngine::default();
-        engine.pitch_ratio.set_base(ratio);
+        engine.pitch_cents.set_base(cents);
         engine.prepare(48000.0, 1);
         assert!(engine.shifter.is_some());
         let mut output = input.to_vec();
@@ -250,10 +258,10 @@ mod tests {
         let input: Vec<f32> = (0..24000)
             .map(|i| (i as f32 * 0.057).sin() * 0.25)
             .collect();
-        for ratio in [0.25, 0.75, 1.0, 1.005, 1.5, 4.0] {
-            let expected = render(&input, &[512], ratio);
+        for cents in [-2400.0, -500.0, 0.0, 9.0, 700.0, 2400.0] {
+            let expected = render(&input, &[512], cents);
             for sizes in [&[128][..], &[700][..], &[1, 63, 511, 1024, 37][..]] {
-                let actual = render(&input, sizes, ratio);
+                let actual = render(&input, sizes, cents);
                 let error = actual
                     .iter()
                     .zip(&expected)
@@ -261,33 +269,45 @@ mod tests {
                     .fold(0.0_f32, f32::max);
                 assert!(
                     error < 1e-6,
-                    "ratio {ratio}, sizes {sizes:?}: error {error}"
+                    "{cents} cents, sizes {sizes:?}: error {error}"
                 );
             }
         }
     }
 
     #[test]
-    fn pitch_ratio_spans_two_octaves_each_way() {
+    fn cents_map_to_frequency_ratios() {
+        for (cents, ratio) in [(-2400.0, 0.25), (-1200.0, 0.5), (0.0, 1.0), (1200.0, 2.0)] {
+            assert!(
+                (cents_to_ratio(cents) - ratio).abs() < 1e-9,
+                "{cents} cents"
+            );
+        }
+        // One semitone is 100 cents.
+        assert!((cents_to_ratio(100.0) - 2_f64.powf(1.0 / 12.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pitch_cents_span_two_octaves_each_way() {
         let engine = PitchShiftEngine::default();
         let spec = engine
             .auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
-            .find(|spec| spec.path.ends_with("pitch_ratio"))
+            .find(|spec| spec.path.ends_with("pitch_cents"))
             .unwrap();
-        for (actual, expected) in [(spec.min, 0.25), (spec.max, 4.0), (spec.step, 0.001)] {
+        for (actual, expected) in [(spec.min, -2400.0), (spec.max, 2400.0), (spec.step, 1.0)] {
             assert!((actual - expected).abs() < 1e-6, "{actual} != {expected}");
         }
-        assert_eq!(engine.pitch_ratio.get(), 1.0);
+        assert_eq!(engine.pitch_cents.get(), 0.0);
     }
 
     #[test]
     fn staged_stereo_matches_direct_shifter_through_silence() {
         let mut engine = PitchShiftEngine::default();
-        engine.pitch_ratio.set_base(0.75);
+        engine.pitch_cents.set_base(-500.0);
         engine.prepare(48000.0, 2);
         let mut direct = DefaultLivePitchShifter::new(48000, 2, false).unwrap();
-        direct.set_pitch_scale(0.75);
+        direct.set_pitch_scale(cents_to_ratio(-500.0));
         let block = direct.block_size();
         assert_eq!(engine.latency_samples() as usize, direct.latency() + block);
         let frames = block * 48;
@@ -359,13 +379,13 @@ mod tests {
         engine.prepare(48000.0, 1);
         let input = engine.input_staging[0].as_ptr();
         let output = engine.output_staging[0].as_ptr();
-        engine.pitch_ratio.set_base(1.005);
+        engine.pitch_cents.set_base(9.0);
         engine.preserve_formants.set_base(true);
         engine.process_block(&mut [&mut [0.25; 128]]);
         assert!(engine.shifter.is_some());
         assert_eq!(engine.input_staging[0].as_ptr(), input);
         assert_eq!(engine.output_staging[0].as_ptr(), output);
-        assert_eq!(engine.last_pitch_ratio, f64::from(engine.pitch_ratio.get()));
+        assert_eq!(engine.last_pitch_cents, engine.pitch_cents.get());
         assert!(engine.last_preserve_formants);
         assert_eq!(engine.staging_fill, 128);
     }

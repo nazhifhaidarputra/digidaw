@@ -406,7 +406,7 @@ class DefaultControlPanel extends ConsumerWidget {
 
     builder.addDivider();
 
-    // AspectRatio bounds constraint injection!
+    // The fixed height decides how many label rows fit per column.
     builder.addWidget(
       SizedBox(height: itemHeight, child: const DawPerformanceMonitor()),
     );

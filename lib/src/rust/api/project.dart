@@ -176,7 +176,7 @@ abstract class AudioWaveformUiForAudioProperties
 
   double? get originalBpm;
 
-  double get pitchSemitones;
+  double get pitchCents;
 
   bool get preserveFormants;
 
@@ -224,7 +224,7 @@ abstract class AudioWaveformUiForAudioProperties
 
   set originalBpm(double? originalBpm);
 
-  set pitchSemitones(double pitchSemitones);
+  set pitchCents(double pitchCents);
 
   set preserveFormants(bool preserveFormants);
 

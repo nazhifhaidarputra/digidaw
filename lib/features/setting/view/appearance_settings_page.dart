@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
+import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
@@ -20,10 +21,18 @@ class AppearanceSettingsPage extends ConsumerWidget {
           backgroundFit: state.backgroundFit,
           overlay: state.backgroundOverlayOpacity,
           fontPath: state.customFontPath,
+          colorThemes: state.colorThemes,
+          colorThemeSource: state.colorThemeSource,
+          customColorThemePath: state.customColorThemePath,
         ),
       ),
     );
     final notifier = ref.read(appearanceSettingsProvider.notifier);
+    final colorThemeSources = [
+      ...AppearanceAssetService.bundledColorThemes,
+      ?appearance.customColorThemePath,
+    ];
+    final usesColorTheme = appearance.colorThemeSource != null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -40,6 +49,47 @@ class AppearanceSettingsPage extends ConsumerWidget {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 24),
+              Text(
+                'Color theme',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  ChoiceChip(
+                    key: const ValueKey('color-theme-default'),
+                    selected: !usesColorTheme,
+                    label: const Text('Default'),
+                    onSelected: (_) => unawaited(notifier.setColorTheme(null)),
+                  ),
+                  for (final source in colorThemeSources)
+                    if (appearance.colorThemes[source] case final theme?)
+                      ChoiceChip(
+                        key: ValueKey('color-theme-$source'),
+                        selected: source == appearance.colorThemeSource,
+                        avatar: CircleAvatar(backgroundColor: theme.primary),
+                        label: Text(theme.name),
+                        onSelected: (_) =>
+                            unawaited(notifier.setColorTheme(source)),
+                      ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              FilledButton.tonalIcon(
+                key: const ValueKey('choose-color-theme'),
+                onPressed: () => unawaited(notifier.chooseColorThemeFile()),
+                icon: const Icon(Icons.palette_outlined),
+                label: const Text('Load JSON theme'),
+              ),
+              if (usesColorTheme) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'The selected color theme sets its own brightness and colors. Choose Default to use the theme mode and accent palette.',
+                ),
+              ],
+              const SizedBox(height: 28),
               Text(
                 'Theme mode',
                 style: Theme.of(context).textTheme.titleMedium,
@@ -64,13 +114,11 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   ),
                 ],
                 selected: {appearance.themeMode},
-                onSelectionChanged: (selection) {
-                  unawaited(
-                    ref
-                        .read(appearanceSettingsProvider.notifier)
-                        .setThemeMode(selection.single),
-                  );
-                },
+                onSelectionChanged: usesColorTheme
+                    ? null
+                    : (selection) {
+                        unawaited(notifier.setThemeMode(selection.single));
+                      },
               ),
               const SizedBox(height: 28),
               Text(
@@ -91,13 +139,11 @@ class AppearanceSettingsPage extends ConsumerWidget {
                           backgroundColor: AppTheme.seedColor(palette),
                         ),
                         label: Text(_paletteLabel(palette)),
-                        onSelected: (_) {
-                          unawaited(
-                            ref
-                                .read(appearanceSettingsProvider.notifier)
-                                .setColorPalette(palette),
-                          );
-                        },
+                        onSelected: usesColorTheme
+                            ? null
+                            : (_) {
+                                unawaited(notifier.setColorPalette(palette));
+                              },
                       );
                     })
                     .toList(growable: false),

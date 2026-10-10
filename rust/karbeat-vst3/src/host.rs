@@ -146,8 +146,7 @@ impl Vst3PluginHost {
     /// in addition to wrong-thread and unknown-instance errors.
     pub fn processing_config(&self, id: HostInstanceId) -> Result<&ProcessingConfig, HostError> {
         self.instance(id)?
-            .config
-            .as_ref()
+            .config()
             .ok_or(HostError::InvalidTransition)
     }
     fn ensure_editor(&mut self, id: HostInstanceId) -> Result<(), HostError> {
@@ -174,7 +173,7 @@ impl PluginScanner for Vst3PluginHost {
 }
 impl PluginInstanceManager for Vst3PluginHost {
     fn is_processing(&self, id: HostInstanceId) -> Result<bool, HostError> {
-        Ok(self.instance(id)?.running)
+        Ok(self.instance(id)?.is_running())
     }
     fn create(&mut self, descriptor: &PluginDescriptor) -> Result<HostInstanceId, HostError> {
         self.check_thread()?;
