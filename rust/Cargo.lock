@@ -2087,10 +2087,12 @@ dependencies = [
  "indexmap",
  "jiff",
  "karbeat-analysis",
+ "karbeat-clap",
  "karbeat-core",
  "karbeat-dsp",
  "karbeat-host",
  "karbeat-host-api",
+ "karbeat-lv2",
  "karbeat-plugin-api",
  "karbeat-plugin-types",
  "karbeat-plugins",
@@ -2170,8 +2172,21 @@ dependencies = [
 name = "karbeat-lv2"
 version = "0.6.0"
 dependencies = [
+ "futures-lite",
+ "glib",
  "karbeat-host-api",
- "livi",
+ "karbeat-plugin-api",
+ "karbeat-utils",
+ "libloading 0.8.9",
+ "lilv",
+ "lilv-sys",
+ "log",
+ "lv2-sys",
+ "raw-window-handle",
+ "rtrb",
+ "tempfile",
+ "tokio",
+ "x11rb",
 ]
 
 [[package]]
@@ -2380,19 +2395,6 @@ name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
-
-[[package]]
-name = "livi"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29ea5b22748e1759210a4f78b4bc4b6a1cf02d6916c08c137bf704dd9f246306"
-dependencies = [
- "lilv",
- "log",
- "lv2-sys",
- "lv2_raw",
- "ringbuf",
-]
 
 [[package]]
 name = "lock_api"
@@ -3172,15 +3174,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "ringbuf"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79abed428d1fd2a128201cec72c5f6938e2da607c6f3745f769fabea399d950a"
-dependencies = [
- "crossbeam-utils",
-]
 
 [[package]]
 name = "rmp"

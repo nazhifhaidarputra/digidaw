@@ -6,10 +6,7 @@ use std::{
     collections::HashMap,
     ffi::{CStr, CString, c_void},
     ptr,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU64, Ordering},
-    },
+    sync::{Arc, atomic::Ordering},
     thread::ThreadId,
 };
 use vst3::{
@@ -17,53 +14,7 @@ use vst3::{
     Steinberg::{Vst::*, *},
 };
 
-pub struct ParameterValue {
-    pub id: u32,
-    pub value: AtomicU64,
-    pub pending: AtomicBool,
-    pub edits: AtomicU8,
-}
-impl ParameterValue {
-    pub fn get(&self) -> f64 {
-        f64::from_bits(self.value.load(Ordering::Acquire))
-    }
-    pub fn set(&self, value: f64, edit: u8) {
-        self.value.store(value.to_bits(), Ordering::Release);
-        self.pending.store(true, Ordering::Release);
-        self.edits.fetch_or(edit, Ordering::Relaxed);
-    }
-}
-
-pub struct ParameterExchange {
-    pub parameters: Vec<ParameterValue>,
-    pub restart: AtomicI32,
-    pub overflow: AtomicBool,
-    pub process_error: Arc<AtomicI32>,
-}
-impl ParameterExchange {
-    pub fn new(values: &[(u32, f64)]) -> Arc<Self> {
-        Arc::new(Self {
-            parameters: values
-                .iter()
-                .map(|&(id, value)| ParameterValue {
-                    id,
-                    value: AtomicU64::new(value.to_bits()),
-                    pending: AtomicBool::new(false),
-                    edits: AtomicU8::new(0),
-                })
-                .collect(),
-            restart: AtomicI32::new(0),
-            overflow: AtomicBool::new(false),
-            process_error: Arc::new(AtomicI32::new(0)),
-        })
-    }
-    pub fn parameter(&self, id: u32) -> Option<&ParameterValue> {
-        self.parameters
-            .binary_search_by_key(&id, |p| p.id)
-            .ok()
-            .map(|i| &self.parameters[i])
-    }
-}
+pub use karbeat_host_api::ParameterExchange;
 
 pub struct ComponentHandler {
     pub exchange: Arc<ParameterExchange>,

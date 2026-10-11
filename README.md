@@ -57,7 +57,7 @@ These are features which have been or have not been implemented. All unimplement
 - [x] VST3 Host (Done for Linux and Windows)
 - [ ] AU Host support
 - [ ] CLAP Host support
-- [ ] LV2 Host support
+- [x] LV2 Host (Done for Linux)
 - [ ] MacOS version
 - [ ] iOS version
 - [x] Export audio to FLAC and OGG

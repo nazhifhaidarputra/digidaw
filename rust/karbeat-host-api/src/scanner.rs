@@ -42,6 +42,31 @@ const PARALLEL_FINGERPRINT_MIN_MODULES: usize = 64;
 /// Upper bound on concurrent probe helpers, since each one loads a native plugin binary.
 const MAX_PARALLEL_SCAN_WORKERS: usize = 4;
 
+/// Probes one canonical module path within a timeout, honouring cooperative cancellation.
+pub type ModuleProbe<'a> =
+    dyn Fn(&Path, Duration, &AtomicBool) -> Result<Vec<PluginDescriptor>, HostError> + Sync + 'a;
+
+/// Format-specific half of a scan: which paths are modules, and how one is probed.
+///
+/// Discovery, fingerprinting, the cache, quarantine, and progress reporting are shared by all
+/// formats.
+#[derive(Clone, Copy)]
+pub struct ModuleScanner<'a> {
+    /// Format every descriptor returned by `probe` must carry.
+    pub format: PluginFormat,
+    /// File or directory extension that marks one module, without its dot.
+    pub extension: &'a str,
+    /// Reads the plugin classes of one module.
+    pub probe: &'a ModuleProbe<'a>,
+}
+
+/// Builds the probe that runs the isolated scanner helper for each module.
+pub fn helper_probe(
+    helper: &Path,
+) -> impl Fn(&Path, Duration, &AtomicBool) -> Result<Vec<PluginDescriptor>, HostError> + Sync + '_ {
+    move |module, timeout, cancelled| probe_module(helper, module, timeout, cancelled)
+}
+
 /// Result file written by one isolated helper process after probing a module.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProbeResponse {
@@ -56,7 +81,7 @@ pub struct ProbeResponse {
 /// Roots and per-module timeout used by a discovery scan.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanSettings {
-    /// Directory trees searched recursively for `.vst3` modules.
+    /// Directory trees searched recursively for plugin modules.
     pub directories: Vec<PathBuf>,
     /// Maximum seconds allowed for each isolated helper process.
     pub timeout_seconds: u64,
@@ -207,21 +232,27 @@ pub fn scanner_executable() -> Result<PathBuf, HostError> {
     Ok(path)
 }
 
-/// Recursively discovers canonical `.vst3` modules beneath the supplied roots.
+/// Recursively discovers canonical modules with `extension` beneath the supplied roots.
 ///
 /// Directory entries are sorted for deterministic traversal, canonical paths prevent cycles and
 /// duplicates, missing roots are ignored, and cancellation stops traversal without an error.
 /// Large trees are walked in parallel; the returned order is the same either way.
 pub fn discover_modules(
     directories: &[PathBuf],
+    extension: &str,
     cancelled: &AtomicBool,
 ) -> Result<Vec<PathBuf>, HostError> {
     if available_workers() > 1
-        && discovery_workload_reaches(directories, PARALLEL_DISCOVERY_MIN_ENTRIES, cancelled)
+        && discovery_workload_reaches(
+            directories,
+            extension,
+            PARALLEL_DISCOVERY_MIN_ENTRIES,
+            cancelled,
+        )
     {
-        discover_modules_parallel(directories, cancelled)
+        discover_modules_parallel(directories, extension, cancelled)
     } else {
-        discover_modules_sequential(directories, cancelled)
+        discover_modules_sequential(directories, extension, cancelled)
     }
 }
 
@@ -229,15 +260,16 @@ fn available_workers() -> usize {
     std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
 }
 
-fn is_vst3_bundle(path: &Path) -> bool {
+fn is_module(path: &Path, extension: &str) -> bool {
     path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("vst3"))
+        .is_some_and(|e| e.eq_ignore_ascii_case(extension))
 }
 
 /// Breadth-first samples the top of each root and stops as soon as `threshold` entries are seen,
 /// so the estimate never costs more than `threshold` directory entries of I/O.
 fn discovery_workload_reaches(
     directories: &[PathBuf],
+    extension: &str,
     threshold: usize,
     cancelled: &AtomicBool,
 ) -> bool {
@@ -248,7 +280,7 @@ fn discovery_workload_reaches(
         if cancelled.load(Ordering::Relaxed) {
             return false;
         }
-        if is_vst3_bundle(&path) {
+        if is_module(&path, extension) {
             continue;
         }
         let Ok(entries) = fs::read_dir(&path) else {
@@ -271,10 +303,12 @@ fn discovery_workload_reaches(
 
 fn discover_modules_sequential(
     directories: &[PathBuf],
+    extension: &str,
     cancelled: &AtomicBool,
 ) -> Result<Vec<PathBuf>, HostError> {
     fn visit(
         path: &Path,
+        extension: &str,
         seen: &mut HashSet<PathBuf>,
         modules: &mut Vec<PathBuf>,
         cancelled: &AtomicBool,
@@ -286,7 +320,7 @@ fn discover_modules_sequential(
         if !seen.insert(canonical.clone()) {
             return Ok(());
         }
-        if is_vst3_bundle(path) {
+        if is_module(path, extension) {
             modules.push(canonical);
         } else if path.is_dir() {
             let mut entries = fs::read_dir(path)?
@@ -294,7 +328,7 @@ fn discover_modules_sequential(
                 .collect::<Result<Vec<_>, _>>()?;
             entries.sort();
             for entry in entries {
-                visit(&entry, seen, modules, cancelled)?;
+                visit(&entry, extension, seen, modules, cancelled)?;
             }
         }
         Ok(())
@@ -302,7 +336,7 @@ fn discover_modules_sequential(
     let mut modules = Vec::new();
     let mut seen = HashSet::new();
     for path in directories {
-        visit(path, &mut seen, &mut modules, cancelled)?;
+        visit(path, extension, &mut seen, &mut modules, cancelled)?;
     }
     Ok(modules)
 }
@@ -312,10 +346,12 @@ fn discover_modules_sequential(
 /// which yields the same first-seen order as the sequential walk.
 fn discover_modules_parallel(
     directories: &[PathBuf],
+    extension: &str,
     cancelled: &AtomicBool,
 ) -> Result<Vec<PathBuf>, HostError> {
     fn visit(
         path: &Path,
+        extension: &str,
         ancestors: &[PathBuf],
         cancelled: &AtomicBool,
     ) -> Result<Vec<PathBuf>, HostError> {
@@ -326,7 +362,7 @@ fn discover_modules_parallel(
         if ancestors.contains(&canonical) {
             return Ok(Vec::new());
         }
-        if is_vst3_bundle(path) {
+        if is_module(path, extension) {
             return Ok(vec![canonical]);
         }
         if !path.is_dir() {
@@ -341,19 +377,19 @@ fn discover_modules_parallel(
         let nested = if entries.len() >= PARALLEL_DISCOVERY_FORK_MIN_ENTRIES {
             entries
                 .par_iter()
-                .map(|entry| visit(entry, &chain, cancelled))
+                .map(|entry| visit(entry, extension, &chain, cancelled))
                 .collect::<Result<Vec<_>, _>>()?
         } else {
             entries
                 .iter()
-                .map(|entry| visit(entry, &chain, cancelled))
+                .map(|entry| visit(entry, extension, &chain, cancelled))
                 .collect::<Result<Vec<_>, _>>()?
         };
         Ok(nested.concat())
     }
     let per_root = directories
         .par_iter()
-        .map(|root| visit(root, &[], cancelled))
+        .map(|root| visit(root, extension, &[], cancelled))
         .collect::<Result<Vec<_>, _>>()?;
     let mut seen = HashSet::new();
     Ok(per_root
@@ -403,6 +439,8 @@ pub fn module_fingerprint(path: &Path) -> Result<u64, HostError> {
     Ok(hash.finish())
 }
 
+/// Probes one VST3 module in an isolated helper process.
+///
 /// Cancelling or timing out always kills and reaps the child before returning.
 pub fn probe_module(
     helper: &Path,
@@ -517,7 +555,7 @@ enum ModuleOutcome {
 }
 
 fn evaluate_module(
-    helper: &Path,
+    scanner: &ModuleScanner<'_>,
     path: &Path,
     cached_fingerprint: Option<u64>,
     retry: bool,
@@ -529,11 +567,34 @@ fn evaluate_module(
         Ok(fingerprint) if retry || cached_fingerprint != Some(fingerprint) => {
             ModuleOutcome::Probed {
                 fingerprint,
-                probe: probe_module(helper, path, timeout, cancelled),
+                probe: probe_checked(scanner, path, timeout, cancelled),
             }
         }
         Ok(_) => ModuleOutcome::Unchanged,
     }
+}
+
+/// Runs the format's probe and rejects descriptors that belong to another format or module.
+fn probe_checked(
+    scanner: &ModuleScanner<'_>,
+    path: &Path,
+    timeout: Duration,
+    cancelled: &AtomicBool,
+) -> Result<Vec<PluginDescriptor>, HostError> {
+    if cancelled.load(Ordering::Relaxed) {
+        return Err(HostError::Cancelled);
+    }
+    let plugins = (scanner.probe)(path, timeout, cancelled)?;
+    if plugins.iter().any(|plugin| {
+        plugin.identity.format != scanner.format
+            || plugin.identity.native_id.is_empty()
+            || plugin.path != path
+    }) {
+        return Err(HostError::Scanner(
+            "probe returned an invalid descriptor".into(),
+        ));
+    }
+    Ok(plugins)
 }
 
 /// Mutable scan state that must be updated in module order to keep de-duplication deterministic.
@@ -652,14 +713,14 @@ impl ScanMerge<'_> {
 /// [`scan_strategy`]); otherwise it runs on the calling thread. Both paths merge results in
 /// discovery order, so the returned catalog, cache, and progress sequence are identical.
 pub fn scan(
-    helper: &Path,
+    scanner: &ModuleScanner<'_>,
     settings: &ScanSettings,
     cache: &mut ScanCache,
     retry: bool,
     cancelled: &AtomicBool,
     progress: &mut dyn FnMut(ScanProgress),
 ) -> Result<ScanResult, HostError> {
-    let modules = discover_modules(&settings.directories, cancelled)?;
+    let modules = discover_modules(&settings.directories, scanner.extension, cancelled)?;
     let expected_probes = if retry {
         modules.len()
     } else {
@@ -670,7 +731,7 @@ pub fn scan(
     };
     let strategy = scan_strategy(modules.len(), expected_probes, available_workers());
     Ok(scan_modules(
-        helper, settings, cache, retry, cancelled, progress, &modules, strategy,
+        scanner, settings, cache, retry, cancelled, progress, &modules, strategy,
     ))
 }
 
@@ -679,7 +740,7 @@ pub fn scan(
     reason = "internal split of scan() that also takes the chosen strategy"
 )]
 fn scan_modules(
-    helper: &Path,
+    scanner: &ModuleScanner<'_>,
     settings: &ScanSettings,
     cache: &mut ScanCache,
     retry: bool,
@@ -719,7 +780,7 @@ fn scan_modules(
                 break;
             }
             let cached = merge.cache.modules.get(path).map(|c| c.fingerprint);
-            let outcome = evaluate_module(helper, path, cached, retry, timeout, cancelled);
+            let outcome = evaluate_module(scanner, path, cached, retry, timeout, cancelled);
             if merge.apply(index, path, outcome).is_break() {
                 break;
             }
@@ -745,7 +806,8 @@ fn scan_modules(
                     if cancelled.load(Ordering::Relaxed) {
                         return;
                     }
-                    let outcome = evaluate_module(helper, path, *cached, retry, timeout, cancelled);
+                    let outcome =
+                        evaluate_module(scanner, path, *cached, retry, timeout, cancelled);
                     // The merge stops receiving only after cancellation, when results are unused.
                     drop(sender.send((index, outcome)));
                 });
@@ -784,6 +846,14 @@ fn scan_modules(
 )]
 mod tests {
     use super::*;
+
+    fn vst3_scanner<'a>(probe: &'a ModuleProbe<'a>) -> ModuleScanner<'a> {
+        ModuleScanner {
+            format: PluginFormat::Vst3,
+            extension: "vst3",
+            probe,
+        }
+    }
 
     fn descriptor(path: &Path, number: u32) -> PluginDescriptor {
         PluginDescriptor {
@@ -829,7 +899,7 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let mut progress = Vec::new();
         let result = scan(
-            Path::new("unused-helper"),
+            &vst3_scanner(&helper_probe(Path::new("unused-helper"))),
             &settings,
             &mut cache,
             false,
@@ -844,7 +914,7 @@ mod tests {
         assert_eq!(progress[1].completed, progress[1].total);
         cache.modules.get_mut(&paths[1]).unwrap().quarantine = Some("crashed".into());
         let result = scan(
-            Path::new("unused-helper"),
+            &vst3_scanner(&helper_probe(Path::new("unused-helper"))),
             &settings,
             &mut cache,
             false,
@@ -862,7 +932,7 @@ mod tests {
     fn cancelled_discovery_reports_cancellation_without_spawning_a_helper() {
         let cancel = AtomicBool::new(true);
         let result = scan(
-            Path::new("missing-helper"),
+            &vst3_scanner(&helper_probe(Path::new("missing-helper"))),
             &ScanSettings::default(),
             &mut ScanCache::default(),
             false,
@@ -922,18 +992,50 @@ mod tests {
         };
         let mut cache = ScanCache::default();
         let cancel = AtomicBool::new(false);
-        let result = scan(&helper, &settings, &mut cache, false, &cancel, &mut |_| {}).unwrap();
+        let result = scan(
+            &vst3_scanner(&helper_probe(&helper)),
+            &settings,
+            &mut cache,
+            false,
+            &cancel,
+            &mut |_| {},
+        )
+        .unwrap();
         assert_eq!(result.plugins.len(), 2);
         fs::write(&module, b"changed module").unwrap();
         fs::write(&response_path, b"malformed response").unwrap();
-        let result = scan(&helper, &settings, &mut cache, false, &cancel, &mut |_| {}).unwrap();
+        let result = scan(
+            &vst3_scanner(&helper_probe(&helper)),
+            &settings,
+            &mut cache,
+            false,
+            &cancel,
+            &mut |_| {},
+        )
+        .unwrap();
         assert_eq!(result.failures.len(), 1);
         assert!(cache.modules[&module].quarantine.is_some());
         assert_eq!(cache.modules[&module].plugins.len(), 2);
         fs::write(&response_path, serde_json::to_vec(&response).unwrap()).unwrap();
-        let result = scan(&helper, &settings, &mut cache, false, &cancel, &mut |_| {}).unwrap();
+        let result = scan(
+            &vst3_scanner(&helper_probe(&helper)),
+            &settings,
+            &mut cache,
+            false,
+            &cancel,
+            &mut |_| {},
+        )
+        .unwrap();
         assert_eq!(result.failures.len(), 1);
-        let result = scan(&helper, &settings, &mut cache, true, &cancel, &mut |_| {}).unwrap();
+        let result = scan(
+            &vst3_scanner(&helper_probe(&helper)),
+            &settings,
+            &mut cache,
+            true,
+            &cancel,
+            &mut |_| {},
+        )
+        .unwrap();
         assert_eq!(result.plugins.len(), 2);
         assert!(result.failures.is_empty());
         assert!(cache.modules[&module].quarantine.is_none());
@@ -951,6 +1053,7 @@ mod tests {
         fs::write(bundle.join("Contents/plugin.so"), b"first").unwrap();
         let modules = discover_modules(
             &[root.path().to_path_buf(), bundle.clone()],
+            "vst3",
             &AtomicBool::new(false),
         )
         .unwrap();
@@ -986,16 +1089,17 @@ mod tests {
         }
         let cancel = AtomicBool::new(false);
         let roots = [root.path().to_path_buf()];
-        assert!(!discovery_workload_reaches(&roots, 16, &cancel));
+        assert!(!discovery_workload_reaches(&roots, "vst3", 16, &cancel));
 
         let vendor = root.path().join("Vendor");
         fs::create_dir(&vendor).unwrap();
         for index in 0..16 {
             fs::create_dir(vendor.join(format!("Dir{index}"))).unwrap();
         }
-        assert!(discovery_workload_reaches(&roots, 16, &cancel));
+        assert!(discovery_workload_reaches(&roots, "vst3", 16, &cancel));
         assert!(!discovery_workload_reaches(
             &roots,
+            "vst3",
             16,
             &AtomicBool::new(true)
         ));
@@ -1023,14 +1127,17 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(root.path(), root.path().join("Vendor0/cycle")).unwrap();
         let cancel = AtomicBool::new(false);
-        let sequential = discover_modules_sequential(&roots, &cancel).unwrap();
-        let parallel = discover_modules_parallel(&roots, &cancel).unwrap();
+        let sequential = discover_modules_sequential(&roots, "vst3", &cancel).unwrap();
+        let parallel = discover_modules_parallel(&roots, "vst3", &cancel).unwrap();
         assert_eq!(
             sequential.len(),
             6 * (PARALLEL_DISCOVERY_FORK_MIN_ENTRIES + 2)
         );
         assert_eq!(parallel, sequential);
-        assert_eq!(discover_modules(&roots, &cancel).unwrap(), sequential);
+        assert_eq!(
+            discover_modules(&roots, "vst3", &cancel).unwrap(),
+            sequential
+        );
     }
 
     type ProgressRecord = (usize, usize, usize, PathBuf, Option<String>);
@@ -1048,7 +1155,7 @@ mod tests {
         };
         let mut progress = Vec::new();
         let result = scan_modules(
-            helper,
+            &vst3_scanner(&helper_probe(helper)),
             &settings,
             cache,
             retry,
@@ -1202,7 +1309,7 @@ mod tests {
                 cancel.store(true, Ordering::Relaxed);
             });
             scan_modules(
-                &helper,
+                &vst3_scanner(&helper_probe(&helper)),
                 &settings,
                 &mut cache,
                 false,
@@ -1273,5 +1380,129 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    fn lv2_descriptor(path: &Path, uri: &str) -> PluginDescriptor {
+        PluginDescriptor {
+            identity: PluginIdentity {
+                format: PluginFormat::Lv2,
+                native_id: uri.into(),
+            },
+            path: path.to_path_buf(),
+            name: uri.into(),
+            vendor: "Fixture".into(),
+            version: "1".into(),
+            kind: crate::PluginKind::Effect,
+        }
+    }
+
+    #[test]
+    fn formats_discover_their_own_modules_and_share_one_cache() {
+        let root = tempfile::tempdir().unwrap();
+        let vst3 = root.path().join("Synth.vst3");
+        let lv2 = root.path().join("effects.lv2");
+        fs::write(&vst3, b"module").unwrap();
+        fs::create_dir(&lv2).unwrap();
+        fs::write(lv2.join("manifest.ttl"), b"").unwrap();
+        let (vst3, lv2) = (
+            fs::canonicalize(vst3).unwrap(),
+            fs::canonicalize(lv2).unwrap(),
+        );
+        let roots = [root.path().to_path_buf()];
+        let cancel = AtomicBool::new(false);
+        assert_eq!(
+            discover_modules(&roots, "lv2", &cancel).unwrap(),
+            vec![lv2.clone()]
+        );
+        assert_eq!(
+            discover_modules(&roots, "vst3", &cancel).unwrap(),
+            vec![vst3.clone()]
+        );
+
+        let settings = ScanSettings {
+            directories: roots.to_vec(),
+            ..Default::default()
+        };
+        let mut cache = ScanCache::default();
+        let vst3_probe =
+            |module: &Path, _: Duration, _: &AtomicBool| Ok(vec![descriptor(module, 1)]);
+        let lv2_probe = |module: &Path, _: Duration, _: &AtomicBool| {
+            Ok(vec![
+                lv2_descriptor(module, "urn:fixture:a"),
+                lv2_descriptor(module, "urn:fixture:b"),
+            ])
+        };
+        let first = scan(
+            &vst3_scanner(&vst3_probe),
+            &settings,
+            &mut cache,
+            false,
+            &cancel,
+            &mut |_| {},
+        )
+        .unwrap();
+        assert_eq!(first.plugins.len(), 1);
+        let second = scan(
+            &ModuleScanner {
+                format: PluginFormat::Lv2,
+                extension: "lv2",
+                probe: &lv2_probe,
+            },
+            &settings,
+            &mut cache,
+            false,
+            &cancel,
+            &mut |_| {},
+        )
+        .unwrap();
+        assert_eq!(second.plugins.len(), 2);
+        assert!(
+            second
+                .plugins
+                .iter()
+                .all(|plugin| plugin.identity.format == PluginFormat::Lv2 && plugin.path == lv2)
+        );
+        // Each scan only walks its own modules, and the shared cache keeps both formats.
+        assert_eq!(cache.modules.len(), 2);
+        assert_eq!(cache.catalog().len(), 3);
+    }
+
+    #[test]
+    fn descriptors_for_another_format_or_module_quarantine_the_module() {
+        let root = tempfile::tempdir().unwrap();
+        let bundle = root.path().join("wrong.lv2");
+        fs::create_dir(&bundle).unwrap();
+        let bundle = fs::canonicalize(bundle).unwrap();
+        let settings = ScanSettings {
+            directories: vec![bundle.clone()],
+            ..Default::default()
+        };
+        let cancel = AtomicBool::new(false);
+        let elsewhere = root.path().to_path_buf();
+        let probes: [&ModuleProbe<'_>; 2] = [
+            &|module: &Path, _: Duration, _: &AtomicBool| Ok(vec![descriptor(module, 1)]),
+            &|_: &Path, _: Duration, _: &AtomicBool| {
+                Ok(vec![lv2_descriptor(&elsewhere, "urn:fixture:a")])
+            },
+        ];
+        for probe in probes {
+            let mut cache = ScanCache::default();
+            let result = scan(
+                &ModuleScanner {
+                    format: PluginFormat::Lv2,
+                    extension: "lv2",
+                    probe,
+                },
+                &settings,
+                &mut cache,
+                false,
+                &cancel,
+                &mut |_| {},
+            )
+            .unwrap();
+            assert!(result.plugins.is_empty());
+            assert_eq!(result.failures.len(), 1);
+            assert!(cache.modules[&bundle].quarantine.is_some());
+        }
     }
 }

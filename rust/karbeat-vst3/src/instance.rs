@@ -34,7 +34,8 @@ fn mapping_batch_end(next: usize, limit: usize) -> usize {
     next.saturating_add(limit).min(MIDI_MAPPING_QUERY_COUNT)
 }
 
-pub(crate) struct Vst3PrepareJob {
+/// Preparation carried between native-loop iterations while MIDI mappings are queried.
+pub struct Vst3PrepareJob {
     dsp: Option<Dsp>,
     mapping: Option<ComPtr<IMidiMapping>>,
     next_mapping: usize,

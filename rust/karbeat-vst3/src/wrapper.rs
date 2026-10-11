@@ -6,7 +6,10 @@ use crate::{
     context::ParameterExchange,
     instance::check_optional,
 };
-use karbeat_host_api::{HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate};
+use karbeat_host_api::{
+    HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate,
+    channels::{adapt_channels, silence},
+};
 use karbeat_plugin_api::prelude::{
     AudioBuffers, AudioPlugin, BusConfig, MidiMessage, NoteExpressionType, ParameterSpec,
     ProcessContext,
@@ -517,46 +520,6 @@ fn narrow_sample(value: f64) -> f32 {
     if value.is_finite() { value as f32 } else { 0.0 }
 }
 
-/// Maps `sources` onto `destinations` for the first `frames` samples.
-///
-/// Equal layouts copy channel by channel. A stereo source feeding a mono destination is averaged,
-/// and a mono source feeding a wider destination is duplicated into its first two channels.
-/// Otherwise the first shared channels are copied. Destination channels without a source keep
-/// their existing contents, which callers clear beforehand.
-fn adapt_channels<S: AsRef<[f32]>, D: AsMut<[f32]>>(
-    sources: &[S],
-    destinations: &mut [D],
-    frames: usize,
-) {
-    match (sources, &mut *destinations) {
-        ([left, right, ..], [mono]) => {
-            let (left, right, mono) = (left.as_ref(), right.as_ref(), mono.as_mut());
-            let count = frames.min(left.len()).min(right.len()).min(mono.len());
-            for ((destination, left), right) in mono[..count]
-                .iter_mut()
-                .zip(&left[..count])
-                .zip(&right[..count])
-            {
-                *destination = (left + right) * 0.5;
-            }
-        }
-        ([mono], [first, second, ..]) => {
-            let mono = mono.as_ref();
-            for destination in [first.as_mut(), second.as_mut()] {
-                let count = frames.min(mono.len()).min(destination.len());
-                destination[..count].copy_from_slice(&mono[..count]);
-            }
-        }
-        _ => {
-            for (source, destination) in sources.iter().zip(destinations.iter_mut()) {
-                let (source, destination) = (source.as_ref(), destination.as_mut());
-                let count = frames.min(source.len()).min(destination.len());
-                destination[..count].copy_from_slice(&source[..count]);
-            }
-        }
-    }
-}
-
 fn empty_bus() -> Vst::AudioBusBuffers {
     Vst::AudioBusBuffers {
         numChannels: 0,
@@ -653,18 +616,6 @@ fn transport_context(context: &ProcessContext, sample_rate: f64) -> Vst::Process
     result.cycleEndMusic = context.loop_end_beat.unwrap_or(0.0);
     result
 }
-pub(crate) fn silence(buffers: &mut AudioBuffers) {
-    for bus in buffers
-        .main_outputs
-        .iter_mut()
-        .chain(buffers.aux_outputs.iter_mut())
-    {
-        for channel in bus.channel_data.iter_mut() {
-            channel.fill(0.0);
-        }
-    }
-}
-
 pub(crate) struct ProcessorSlot {
     pub gate: ProcessingGate,
     pub dsp: UnsafeCell<Dsp>,
@@ -1026,16 +977,6 @@ mod tests {
         let up_two = vst3_expression_value(NoteExpressionType::Tuning, 1.0);
         assert!((up_two - (0.5 + 2.0 / 240.0)).abs() < 1e-9);
         assert!((vst3_expression_value(NoteExpressionType::Pan, 0.25) - 0.25).abs() < 1e-9);
-    }
-
-    #[test]
-    fn channel_adaptation_covers_equal_widening_and_truncating_layouts() {
-        let mut stereo = [vec![0.0_f32; 2], vec![0.0; 2]];
-        adapt_channels(&[[2.0_f32, 4.0]], &mut stereo, 2);
-        assert_eq!(stereo, [vec![2.0, 4.0], vec![2.0, 4.0]]);
-        let mut three = [vec![9.0_f32; 2], vec![9.0; 2], vec![0.0; 2]];
-        adapt_channels(&[[1.0_f32, 1.0], [2.0, 2.0]], &mut three, 1);
-        assert_eq!(three, [vec![1.0, 9.0], vec![2.0, 9.0], vec![0.0, 0.0]]);
     }
 
     #[test]
