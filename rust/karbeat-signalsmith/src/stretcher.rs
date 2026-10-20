@@ -1,6 +1,6 @@
 //! Safe owner of a `SignalsmithStretch<float>`.
 //!
-//! It runs the library's cheaper preset (a 100 ms block every 40 ms) with split computation,
+//! It runs the library's default preset (a 120 ms block every 30 ms) with split computation,
 //! which spreads each block's spectral work evenly over the samples of the next interval at
 //! the cost of one interval of extra output latency, so no callback carries a whole block.
 //!
@@ -208,11 +208,11 @@ mod tests {
     }
 
     #[test]
-    fn configuration_follows_the_cheaper_preset() {
+    fn configuration_follows_the_default_preset() {
         let stretcher = Stretcher::new(RATE, 2).unwrap();
         assert_eq!(stretcher.channels(), 2);
-        // A 100 ms block every 40 ms: seeking takes a block plus an interval.
-        assert_eq!(stretcher.seek_length(), 4_800 + 1_920);
+        // A 120 ms block every 30 ms: seeking takes a block plus an interval.
+        assert_eq!(stretcher.seek_length(), 5_760 + 1_440);
         assert!(stretcher.input_latency() > 0);
         assert!(stretcher.output_latency() > stretcher.input_latency());
     }

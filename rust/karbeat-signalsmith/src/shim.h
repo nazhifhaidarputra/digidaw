@@ -17,7 +17,7 @@ extern "C" {
 /** Opaque stretcher owner. */
 typedef struct KarbeatStretch KarbeatStretch;
 
-/** Creates a stretcher with the cheaper preset and split computation; null on failure. */
+/** Creates a stretcher with the default preset and split computation; null on failure. */
 KarbeatStretch *karbeat_stretch_new(int channels, float sample_rate) KARBEAT_NOEXCEPT;
 
 void karbeat_stretch_delete(KarbeatStretch *instance) KARBEAT_NOEXCEPT;

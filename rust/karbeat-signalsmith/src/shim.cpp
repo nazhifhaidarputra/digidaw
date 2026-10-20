@@ -26,7 +26,7 @@ extern "C" {
 KarbeatStretch *karbeat_stretch_new(int channels, float sample_rate) noexcept {
     try {
         auto *instance = new KarbeatStretch();
-        instance->stretch.presetCheaper(channels, sample_rate, true);
+        instance->stretch.presetDefault(channels, sample_rate, true);
         return instance;
     } catch (...) {
         return nullptr;

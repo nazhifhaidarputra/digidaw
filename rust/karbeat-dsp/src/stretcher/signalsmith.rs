@@ -1,7 +1,7 @@
 //! Signalsmith Stretch implementations of the real-time stretch and pitch traits, on top of
 //! `karbeat_signalsmith`.
 //!
-//! Both run the library's cheaper preset with split computation, so each block's spectral work
+//! Both run the library's default preset with split computation, so each block's spectral work
 //! is spread evenly over the following callbacks instead of landing in one of them.
 //!
 //! - [`SignalsmithRealtimeStretcher`] stretches and shifts audio for the engine.
