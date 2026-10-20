@@ -6,8 +6,8 @@ use karbeat_utils::hash::hash_str;
 /// The audio FX Plugin for real-time, low-latency Pitch Shifting, from two octaves down to
 /// two octaves up.
 ///
-/// The shifter is `karbeat_dsp`'s default live pitch shifter, currently the Rubber Band
-/// Library (https://breakfastquay.com/rubberband/) linked through `karbeat-rb`.
+/// The shifter is `karbeat_dsp`'s default live pitch shifter, currently Signalsmith Stretch
+/// (https://signalsmith-audio.co.uk/code/stretch/) compiled through `karbeat-signalsmith`.
 #[karbeat_plugin]
 #[derive(Clone, Debug)]
 pub struct PitchShifter {
@@ -58,14 +58,14 @@ impl AudioPlugin for PitchShifter {
 
         if self.channels != new_channels {
             self.channels = new_channels;
-            // Rebuild the rubberband instance with the new channel count.
+            // Rebuild the shifter with the new channel count.
             self.pitch_shift_engine
                 .prepare(self.sample_rate, self.channels);
         }
     }
 
     /// Report the latency of the plugin to the audio engine in samples.
-    /// Delegates to the rubberband engine which queries the library directly.
+    /// Delegates to the shifter engine, which queries the library directly.
     fn latency_samples(&self) -> u32 {
         self.pitch_shift_engine.latency_samples()
     }
@@ -159,7 +159,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reports_pitch_dependent_latency_changes() {
+    fn reports_latency_changes_after_pitch_changes() {
         let mut plugin = PitchShifter::default();
         plugin.prepare(48000.0, 512);
         let initial_latency = plugin.latency_samples();
@@ -168,8 +168,10 @@ mod tests {
         plugin
             .pitch_shift_engine
             .process_block(&mut [&mut [0.0; 512], &mut [0.0; 512]]);
-        assert_ne!(plugin.latency_samples(), initial_latency);
-        assert!(plugin.has_latency_changed());
+        // Whether the latency follows the pitch depends on the shifter; a change is reported
+        // exactly once.
+        let changed = plugin.latency_samples() != initial_latency;
+        assert_eq!(plugin.has_latency_changed(), changed);
         assert!(!plugin.has_latency_changed());
         assert_eq!(plugin.tail_samples(), plugin.latency_samples());
     }

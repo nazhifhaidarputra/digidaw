@@ -814,6 +814,7 @@ mod test {
                     pitch_semitones: 3.0,
                     preserve_formants: true,
                     warp: true,
+                    realtime: true,
                     ..WaveformEdits::default()
                 },
                 ..EditedWaveform::default()

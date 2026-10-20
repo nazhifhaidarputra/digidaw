@@ -2124,6 +2124,7 @@ dependencies = [
  "karbeat-macros",
  "karbeat-plugin-types",
  "karbeat-rb",
+ "karbeat-signalsmith",
  "karbeat-utils",
  "log",
  "num-traits",
@@ -2250,6 +2251,15 @@ version = "0.6.0"
 dependencies = [
  "bindgen",
  "pkg-config",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "karbeat-signalsmith"
+version = "0.6.0"
+dependencies = [
+ "bindgen",
+ "cc",
  "thiserror 2.0.18",
 ]
 

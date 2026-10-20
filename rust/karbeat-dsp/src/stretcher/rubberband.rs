@@ -1,23 +1,17 @@
-//! Rubber Band implementations of the stretch and pitch traits, on top of `karbeat_rb`.
+//! Rubber Band implementation of the offline stretch trait, on top of `karbeat_rb`.
 //!
-//! - [`RubberBandOfflineStretcher`] runs `RubberBandStretcher` in offline mode: the whole input
-//!   is studied first, then processed, which gives the best quality and allows a key-frame map
-//!   that pins chosen input frames (such as detected beats) to exact output frames.
-//! - [`RubberBandRealtimeStretcher`] runs it in real-time mode for the audio engine.
-//! - [`RubberBandLiveShifter`] wraps `RubberBandLiveShifter`, the fixed-block pitch shifter.
+//! [`RubberBandOfflineStretcher`] runs `RubberBandStretcher` in offline mode: the whole input
+//! is studied first, then processed, which gives the best quality and allows a key-frame map
+//! that pins chosen input frames (such as detected beats) to exact output frames.
 
 #![allow(
     clippy::as_conversions,
     reason = "progress fractions are computed from block counts"
 )]
 
-use karbeat_rb::{LiveOptions, LiveShifter, MAX_CHANNELS, RbError, Stretcher, StretcherOptions};
+use karbeat_rb::{MAX_CHANNELS, RbError, Stretcher, StretcherOptions};
 
-use super::{
-    OfflineStretch, StretchError,
-    backend::{LivePitchShifter, OfflineTimeStretcher, RealtimeTimeStretcher},
-    validate,
-};
+use super::{OfflineStretch, StretchError, backend::OfflineTimeStretcher, validate};
 
 /// Frames handed to Rubber Band per call when rendering offline.
 const BLOCK_FRAMES: usize = 4096;
@@ -40,144 +34,6 @@ impl From<RbError> for StretchError {
 /// The first `count` entries, or all of them if `count` is out of range.
 fn active<T>(items: &[T], count: usize) -> &[T] {
     items.get(..count).unwrap_or(items)
-}
-
-/// Pitch-shift-only real-time shifter backed by `RubberBandLiveShifter`.
-#[derive(Debug)]
-pub struct RubberBandLiveShifter {
-    shifter: LiveShifter,
-}
-
-impl LivePitchShifter for RubberBandLiveShifter {
-    fn new(
-        sample_rate: u32,
-        channels: usize,
-        preserve_formants: bool,
-    ) -> Result<Self, StretchError> {
-        let options = LiveOptions {
-            formant_preserved: preserve_formants,
-        };
-        Ok(Self {
-            shifter: LiveShifter::new(sample_rate, channels, options)?,
-        })
-    }
-
-    fn block_size(&self) -> usize {
-        self.shifter.block_size()
-    }
-
-    fn latency(&self) -> usize {
-        self.shifter.start_delay()
-    }
-
-    fn set_pitch_scale(&mut self, scale: f64) {
-        self.shifter.set_pitch_scale(scale);
-    }
-
-    fn set_preserve_formants(&mut self, preserve: bool) {
-        self.shifter.set_formant_preserved(preserve);
-    }
-
-    fn shift<I: AsRef<[f32]>, O: AsMut<[f32]>>(
-        &mut self,
-        input: &[I],
-        output: &mut [O],
-    ) -> Result<(), StretchError> {
-        Ok(self.shifter.shift(input, output)?)
-    }
-
-    fn reset(&mut self) {
-        self.shifter.reset();
-    }
-}
-
-/// Real-time time stretcher and pitch shifter backed by `RubberBandStretcher` (R3 engine).
-///
-/// A call with the wrong channel count feeds or retrieves nothing.
-#[derive(Debug)]
-pub struct RubberBandRealtimeStretcher {
-    stretcher: Stretcher,
-    time_ratio: f64,
-    pitch_scale: f64,
-    max_process_frames: usize,
-}
-
-impl RealtimeTimeStretcher for RubberBandRealtimeStretcher {
-    fn new(
-        sample_rate: u32,
-        channels: usize,
-        max_process_frames: usize,
-    ) -> Result<Self, StretchError> {
-        let options = StretcherOptions {
-            realtime: true,
-            engine_finer: true,
-            channels_together: true,
-            ..StretcherOptions::default()
-        };
-        let mut stretcher = Stretcher::new(sample_rate, channels, options, 1.0, 1.0)?;
-        let max_process_frames = max_process_frames.max(1);
-        stretcher.set_max_process_size(max_process_frames)?;
-        Ok(Self {
-            stretcher,
-            time_ratio: 1.0,
-            pitch_scale: 1.0,
-            max_process_frames,
-        })
-    }
-
-    fn max_process_frames(&self) -> usize {
-        self.max_process_frames
-    }
-
-    fn set_time_ratio(&mut self, ratio: f64) {
-        if ratio.is_finite() && ratio > 0.0 && (ratio - self.time_ratio).abs() > 1e-9 {
-            self.time_ratio = ratio;
-            self.stretcher.set_time_ratio(ratio);
-        }
-    }
-
-    fn set_pitch_scale(&mut self, scale: f64) {
-        if scale.is_finite() && scale > 0.0 && (scale - self.pitch_scale).abs() > 1e-9 {
-            self.pitch_scale = scale;
-            self.stretcher.set_pitch_scale(scale);
-        }
-    }
-
-    fn reset(&mut self) {
-        self.stretcher.reset();
-    }
-
-    fn start_pad(&self) -> usize {
-        self.stretcher.start_pad()
-    }
-
-    fn start_delay(&self) -> usize {
-        self.stretcher.start_delay()
-    }
-
-    fn samples_required(&self) -> usize {
-        self.stretcher.samples_required()
-    }
-
-    fn process<C: AsRef<[f32]>>(&mut self, input: &[C]) {
-        let mut heads: [&[f32]; MAX_CHANNELS] = [&[]; MAX_CHANNELS];
-        for (head, channel) in heads.iter_mut().zip(input) {
-            let channel = channel.as_ref();
-            *head = channel.get(..self.max_process_frames).unwrap_or(channel);
-        }
-        // Only a wrong channel count fails, and then nothing is fed (see the type docs).
-        self.stretcher
-            .process(active(&heads, input.len()), false)
-            .ok();
-    }
-
-    fn available(&self) -> usize {
-        self.stretcher.available().unwrap_or(0)
-    }
-
-    fn retrieve<C: AsMut<[f32]>>(&mut self, output: &mut [C]) -> usize {
-        self.stretcher.retrieve(output).unwrap_or(0)
-    }
 }
 
 /// Offline, whole-input stretcher backed by `RubberBandStretcher` (R3 engine). Not real-time

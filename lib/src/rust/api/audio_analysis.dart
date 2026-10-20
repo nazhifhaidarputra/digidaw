@@ -61,8 +61,8 @@ Future<void> setAudioSourceSampleMode({
 );
 
 /// Sets an audio source's pitch shift in cents (clamped to ±2400, two octaves either way) and
-/// whether to preserve formants (undoable), then renders it in the background. The original
-/// audio plays until the render is ready.
+/// whether to preserve formants (undoable). In realtime mode it plays at once; offline it
+/// renders in the background and the original audio plays until the render is ready.
 Future<void> setWaveformPitch({
   required DawContext ctx,
   required int sourceId,
@@ -73,6 +73,18 @@ Future<void> setWaveformPitch({
   sourceId: sourceId,
   pitchCents: pitchCents,
   preserveFormants: preserveFormants,
+);
+
+/// Sets whether an audio source shifts its pitch and follows the tempo through a realtime
+/// stretcher, or renders them offline (undoable), then renders what is left in the background.
+Future<void> setWaveformRealtime({
+  required DawContext ctx,
+  required int sourceId,
+  required bool realtime,
+}) => RustLib.instance.api.crateApiAudioAnalysisSetWaveformRealtime(
+  ctx: ctx,
+  sourceId: sourceId,
+  realtime: realtime,
 );
 
 /// Sets an audio source's normalize, invert and reverse edits (undoable), then renders them

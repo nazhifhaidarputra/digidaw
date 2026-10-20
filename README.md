@@ -37,7 +37,7 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Parametric EQ
 - [x] Mixer Routing
 - [x] Bus Automation lanes rack
-- [x] Real-time pitch shifting (Via Rubberband FFI binding). There is a plan to rewrite the pitch shifting entirely in Rust to remove reliability to an C++ library via FFI boundary
+- [x] Real-time pitch shifting and time stretching (via a Signalsmith Stretch FFI binding), with offline renders via Rubber Band. There is a plan to rewrite the pitch shifting entirely in Rust to remove reliability to an C++ library via FFI boundary
 - [x] Finishing and optimizing Bus Mixer Routing
 - [x] Action history (Undo/Redo).
 - [x] Time-stretched audio waveform processing

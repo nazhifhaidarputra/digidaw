@@ -180,6 +180,8 @@ abstract class AudioWaveformUiForAudioProperties
 
   bool get preserveFormants;
 
+  bool get realtime;
+
   bool get renderReady;
 
   bool get reverse;
@@ -227,6 +229,8 @@ abstract class AudioWaveformUiForAudioProperties
   set pitchCents(double pitchCents);
 
   set preserveFormants(bool preserveFormants);
+
+  set realtime(bool realtime);
 
   set renderReady(bool renderReady);
 

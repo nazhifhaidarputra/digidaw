@@ -6,7 +6,7 @@ use crate::{
     audio::{
         engine::{
             helper::{FrameGain, LoopBounds, calc_fade, render_audio_waveform},
-            stretch_pool::{StretchPool, StretchRate, StretchSource},
+            stretch_pool::{StretchKey, StretchPool, StretchRate, StretchSource},
         },
         render_state::AudioPluginState,
     },
@@ -826,14 +826,23 @@ impl VoiceState {
             let end = start + frames_to_process * channels;
             let level = waveform.playback_gain();
             let bounds = LoopBounds::new(is_looping, source_frames, loop_crossfade);
-            // Stretch mode off its own tempo keeps the pitch through a realtime stretcher;
-            // when every stretcher is busy it falls back to resampling below.
-            let stretched = waveform.sample_mode == AudioSampleMode::Stretch
-                && (playback_rate - 1.0).abs() > 1e-9
+            // Stretch mode off its own tempo keeps the pitch, and a realtime pitch shift moves
+            // it, through a realtime stretcher; when every stretcher is busy it falls back to
+            // resampling below.
+            let keeps_pitch = waveform.sample_mode == AudioSampleMode::Stretch;
+            let (pitch_scale, preserve_formants) =
+                waveform.realtime_pitch().unwrap_or((1.0, false));
+            let stretched = ((keeps_pitch && (playback_rate - 1.0).abs() > 1e-9)
+                || (pitch_scale - 1.0).abs() > 1e-9)
                 && stretch_pool.render(
-                    (voice.track_id, voice.clip_id),
+                    StretchKey::Clip(voice.track_id, voice.clip_id),
                     content_start,
-                    StretchRate { step, pitch_step },
+                    StretchRate {
+                        step,
+                        feed_step: if keeps_pitch { pitch_step } else { step },
+                        pitch_scale,
+                        preserve_formants,
+                    },
                     &StretchSource {
                         buffer: source,
                         channels: source_channels,
@@ -884,8 +893,13 @@ impl VoiceState {
 
     pub fn render_previews(&mut self, output: &mut [f32], channels: usize, sample_rate: u32) {
         let buffer_frames = output.len() / channels;
+        let Self {
+            preview_voices,
+            stretch_pool,
+            ..
+        } = self;
 
-        for voice in &mut self.preview_voices {
+        for (index, voice) in preview_voices.iter_mut().enumerate() {
             if voice.is_finished {
                 continue;
             }
@@ -927,25 +941,73 @@ impl VoiceState {
             let shapes_gain = envelope.shapes_gain();
             let waveform_frames = source_frames as u64;
             let mut cursor = EnvelopeCursor::seek(envelope, voice.current_frame as u64);
-            render_audio_waveform(
-                source,
-                source_channels,
-                &mut output[..frames_to_process * channels],
-                channels,
-                &mut voice.current_frame,
-                step,
-                is_looping,
-                source_frames,
-                loop_crossfade,
-                voice.volume * voice.waveform.playback_gain(),
-                |_, read_pos| {
-                    if !shapes_gain {
-                        return 1.0;
-                    }
-                    let pos = read_pos as u64;
-                    envelope.fade_gain(pos, waveform_frames) * envelope.point_gain(pos, &mut cursor)
-                },
-            );
+            let mut envelope_gain = |read_pos: f64| {
+                if !shapes_gain {
+                    return 1.0;
+                }
+                let pos = read_pos as u64;
+                envelope.fade_gain(pos, waveform_frames) * envelope.point_gain(pos, &mut cursor)
+            };
+            let level = voice.volume * voice.waveform.playback_gain();
+            // A realtime pitch shift plays through a stretcher; when every stretcher is busy it
+            // falls back to plain playback below.
+            let bounds = LoopBounds::new(is_looping, source_frames, loop_crossfade);
+            let start_frame = voice.current_frame;
+            let stretched =
+                voice
+                    .waveform
+                    .realtime_pitch()
+                    .is_some_and(|(pitch_scale, preserve_formants)| {
+                        stretch_pool.render(
+                            StretchKey::Preview(index),
+                            voice.rendered_frames,
+                            StretchRate {
+                                step,
+                                feed_step: step,
+                                pitch_scale,
+                                preserve_formants,
+                            },
+                            &StretchSource {
+                                buffer: source,
+                                channels: source_channels,
+                                bounds,
+                                frames: source_frames,
+                                is_looping,
+                            },
+                            frames_to_process,
+                            |frame_index, frame| {
+                                let read_pos =
+                                    bounds.read_pos(start_frame, frame_index as f64 * step);
+                                let gain = envelope_gain(read_pos) * level;
+                                let at = frame_index * channels;
+                                match output.get_mut(at..at + channels) {
+                                    Some([left, right, ..]) => {
+                                        *left += frame[0] * gain;
+                                        *right += frame[1] * gain;
+                                    }
+                                    Some([mono]) => *mono += frame[0] * gain,
+                                    _ => {}
+                                }
+                            },
+                        )
+                    });
+            if stretched {
+                voice.current_frame = bounds.read_pos(start_frame, frames_to_process as f64 * step);
+            } else {
+                render_audio_waveform(
+                    source,
+                    source_channels,
+                    &mut output[..frames_to_process * channels],
+                    channels,
+                    &mut voice.current_frame,
+                    step,
+                    is_looping,
+                    source_frames,
+                    loop_crossfade,
+                    level,
+                    |_, read_pos| envelope_gain(read_pos),
+                );
+            }
             voice.rendered_frames = voice
                 .rendered_frames
                 .saturating_add(frames_to_process as u64);
@@ -960,7 +1022,7 @@ impl VoiceState {
             }
         }
 
-        self.preview_voices.retain(|voice| !voice.is_finished);
+        preview_voices.retain(|voice| !voice.is_finished);
     }
 
     #[allow(
@@ -1348,7 +1410,10 @@ mod tempo_playback_tests {
     use memmap2::MmapOptions;
 
     use super::{NeighbourCrossfade, VoiceState};
-    use crate::core::project::{AudioWaveform, audio_waveform::AudioSampleMode};
+    use crate::core::project::{
+        AudioWaveform,
+        audio_waveform::{AudioSampleMode, EditedWaveform, WaveformEdits},
+    };
     use crate::shared::{ClipId, TrackId};
 
     const ENGINE_RATE: u32 = 48_000;
@@ -1484,9 +1549,58 @@ mod tempo_playback_tests {
         // Half a second at 48 kHz, in both modes at the source's own tempo.
         assert_eq!(default, Some(24_000));
         assert_eq!(at_own_tempo, default);
-        // At 1.5x the tempo the click comes 1.5x sooner, within Rubber Band's transient
+        // At 1.5x the tempo the click comes 1.5x sooner, within the stretcher's transient
         // smearing.
         let faster = faster.expect("stretched click");
         assert!(faster.abs_diff(16_000) < 256, "click at {faster}");
+    }
+
+    /// `waveform` with a realtime pitch shift of `semitones`.
+    fn pitched(waveform: &Arc<AudioWaveform>, semitones: f32) -> Arc<AudioWaveform> {
+        Arc::new(AudioWaveform {
+            edited: Some(EditedWaveform {
+                edits: WaveformEdits {
+                    pitch_semitones: semitones,
+                    realtime: true,
+                    ..WaveformEdits::default()
+                },
+                ..EditedWaveform::default()
+            }),
+            ..(**waveform).clone()
+        })
+    }
+
+    #[test]
+    fn realtime_pitch_shift_moves_the_pitch_and_keeps_the_level() {
+        for mode in [AudioSampleMode::Default, AudioSampleMode::Stretch] {
+            let output = play(&pitched(&sine(mode, 440.0), 7.0), 100.0, &[4_096; 6]);
+            let body = &output[2_048..];
+            // A fifth up is 659 Hz, a period of about 73 frames instead of 109.
+            let period = period(body);
+            assert!(period.abs_diff(73) <= 1, "{mode:?}: period {period}");
+            assert!(rms(body) > 0.3, "{mode:?}: rms {}", rms(body));
+        }
+    }
+
+    #[test]
+    fn realtime_pitch_shift_keeps_the_timing_across_blocks() {
+        let click = waveform(AudioSampleMode::Default, ENGINE_RATE, 48_000, |frame| {
+            if (24_000..24_100).contains(&frame) {
+                0.9
+            } else {
+                0.0
+            }
+        });
+        let onset = |blocks: &[u32]| onset(&play(&pitched(&click, -5.0), 100.0, blocks));
+        // Uneven blocks continue the same stretcher, so the click stays in place. The
+        // stretcher restarts its analysis grid where sound returns after silence, so the
+        // transient's smearing, not its timing, follows the block boundaries.
+        for blocks in [
+            &[2_048; 16][..],
+            &[1_000, 37, 4_096, 511, 2_048, 8_192, 3_000, 9_000, 9_000][..],
+        ] {
+            let click = onset(blocks).expect("shifted click");
+            assert!(click.abs_diff(24_000) < 256, "{blocks:?}: click at {click}");
+        }
     }
 }

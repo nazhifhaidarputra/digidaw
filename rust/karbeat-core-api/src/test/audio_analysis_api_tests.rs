@@ -17,7 +17,7 @@ mod tests {
     use crate::audio_analysis_api::{
         begin_fit_to_tempo, begin_refresh_render, cancel_stale_renders, commit_beat_grid,
         commit_render, execute_render, set_sample_mode, set_waveform_edits, set_waveform_pitch,
-        sources_needing_render,
+        set_waveform_realtime, sources_needing_render,
     };
     use crate::clip_api::{batch_resize_clips, resize_clip};
     use crate::test::helpers::{add_dc_audio_source, make_ctx};
@@ -441,6 +441,52 @@ mod tests {
         assert_eq!(edits.pitch_semitones, 12.0);
         crate::undo(&mut ctx).unwrap();
         assert!(source(&ctx, id).edited.is_none());
+    }
+
+    #[test]
+    fn realtime_pitch_plays_live_and_keeps_the_other_edits_rendered() {
+        let mut ctx = make_ctx();
+        let id = sine_source(&mut ctx);
+        assert!(!set_waveform_realtime(&mut ctx, id, true).unwrap());
+        assert!(set_waveform_edits(&mut ctx, id, false, false, true).unwrap());
+        refresh(&mut ctx, id);
+        let reversed = rendered(&ctx, id);
+
+        // The pitch plays live: nothing renders, and the reverse render stays loaded.
+        assert!(!set_waveform_pitch(&mut ctx, id, 700.0, true).unwrap());
+        assert_eq!(rendered(&ctx, id), reversed);
+        assert!(sources_needing_render(&ctx).is_empty());
+        let (scale, formants) = source(&ctx, id).realtime_pitch().unwrap();
+        assert!((scale - 2_f64.powf(7.0 / 12.0)).abs() < 1e-9);
+        assert!(formants);
+
+        // Offline, the pitch joins the render; the original plays until it arrives.
+        assert!(set_waveform_realtime(&mut ctx, id, false).unwrap());
+        assert!(source(&ctx, id).edited.as_ref().unwrap().buffer.is_none());
+        assert_eq!(source(&ctx, id).realtime_pitch(), None);
+        refresh(&mut ctx, id);
+        assert_ne!(rendered(&ctx, id), reversed);
+
+        crate::undo(&mut ctx).unwrap();
+        assert!(source(&ctx, id).edited.as_ref().unwrap().edits.realtime);
+        assert!(!set_waveform_realtime(&mut ctx, id, true).unwrap());
+    }
+
+    #[test]
+    fn realtime_fit_sets_the_tempo_without_rendering() {
+        let (mut ctx, id) = setup();
+        assert!(!set_waveform_realtime(&mut ctx, id, true).unwrap());
+        assert!(begin_fit_to_tempo(&ctx, id, true).is_err());
+        fit(&mut ctx, id, false);
+        let waveform = source(&ctx, id);
+        assert_eq!(waveform.sample_mode, AudioSampleMode::Stretch);
+        assert!(waveform.edited.as_ref().unwrap().buffer.is_none());
+        // Playback stretches 120 BPM audio to the 100 BPM project live.
+        assert!((waveform.tempo_rate(100.0) - 100.0 / 120.0).abs() < 1e-6);
+
+        // Tempo changes need no render either.
+        ctx.app_state.transport.bpm = 150.0;
+        assert!(sources_needing_render(&ctx).is_empty());
     }
 
     #[test]

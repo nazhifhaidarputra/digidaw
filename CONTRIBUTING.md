@@ -42,7 +42,8 @@ DigiDAW follows a feature-driven modular structure. Keep domain logic, UI screen
 | `karbeat-core` | Project model, commands, file management, and audio engine ownership. |
 | `karbeat-core-api` | UI-independent API layer between the core modules and UI bridges: modules → core API → FFI. |
 | `karbeat-dsp` | DSP primitives. Keep this crate generic and reusable. Time stretching and pitch shifting go through the traits in `stretcher/backend.rs`; the `Default*` aliases in `stretcher/mod.rs` pick the algorithm. |
-| `karbeat-rb` | Rubber Band bindings and safe wrappers. The only crate that links native Rubber Band or calls its C API. |
+| `karbeat-rb` | Rubber Band bindings and safe wrappers. The only crate that links native Rubber Band or calls its C API. Used for offline renders. |
+| `karbeat-signalsmith` | Signalsmith Stretch bindings and safe wrappers. Compiles the vendored, header-only library behind a small C shim, and is the only crate that calls it. Used for real-time stretching and pitch shifting. |
 | `karbeat-flutter-ffi` | Flutter-facing DTOs and bridge functions. |
 | `karbeat-plugins` | First-party plugin implementations and manifest export. |
 | `karbeat-host-api` | Low-level contracts for hosting external plugins. |
@@ -56,7 +57,7 @@ Within the Rust workspace, respect crate boundaries:
 * Project domain state goes in `karbeat-core/src/core/project`.
 * Audio callback logic goes in `karbeat-core/src/audio`.
 * Generic DSP goes in `karbeat-dsp`.
-* Rubber Band FFI goes in `karbeat-rb`. Everything else reaches it through the `karbeat-dsp` stretch and pitch traits.
+* Rubber Band FFI goes in `karbeat-rb`, and Signalsmith Stretch FFI in `karbeat-signalsmith`. Everything else reaches them through the `karbeat-dsp` stretch and pitch traits.
 * Bridge DTOs and functions go in `karbeat-flutter-ffi`.
 * Plugin implementations go in `karbeat-plugins`.
 

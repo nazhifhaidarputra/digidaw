@@ -550,7 +550,7 @@ pub struct AudioWaveformUiForAudioProperties {
     pub original_bpm: Option<f32>,
     /// Beats found by tempo detection, if it ran.
     pub beat_grid: Option<crate::api::audio_analysis::UiBeatGrid>,
-    /// Whether the source is stretched to the project tempo.
+    /// Whether an offline render stretches the source to the project tempo.
     pub fitted: bool,
     /// Whether the stretch follows each detected beat.
     pub warp: bool,
@@ -562,7 +562,9 @@ pub struct AudioWaveformUiForAudioProperties {
     pub pitch_cents: f32,
     /// Whether the pitch shift preserves formants.
     pub preserve_formants: bool,
-    /// Whether the stretched audio is rendered; playback uses the original until it is.
+    /// Whether pitch and tempo play through a realtime stretcher instead of an offline render.
+    pub realtime: bool,
+    /// Whether the edited audio is rendered; playback uses the original until it is.
     pub render_ready: bool,
 }
 
@@ -614,7 +616,7 @@ impl AudioWaveformUiForAudioProperties {
             fitted: value
                 .edited
                 .as_ref()
-                .is_some_and(|edited| edited.edits.stretches()),
+                .is_some_and(|edited| !edited.edits.realtime && edited.edits.stretches()),
             warp: value
                 .edited
                 .as_ref()
@@ -634,6 +636,10 @@ impl AudioWaveformUiForAudioProperties {
                 .edited
                 .as_ref()
                 .is_some_and(|edited| edited.edits.preserve_formants),
+            realtime: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.realtime),
             render_ready: value
                 .edited
                 .as_ref()

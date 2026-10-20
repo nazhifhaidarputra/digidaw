@@ -1,0 +1,17 @@
+[package]
+name = "karbeat-signalsmith"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-only"
+description = "Signalsmith Stretch bindings and safe wrappers for Karbeat"
+links = "karbeat_signalsmith"
+
+[dependencies]
+thiserror.workspace = true
+
+[build-dependencies]
+bindgen.workspace = true
+cc.workspace = true
+
+[lints]
+workspace = true

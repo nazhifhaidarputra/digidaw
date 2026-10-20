@@ -18,6 +18,7 @@ smallvec.workspace = true
 rayon.workspace = true
 crossfire.workspace = true
 karbeat-rb.workspace = true
+karbeat-signalsmith.workspace = true
 log.workspace = true
 
 [lints]

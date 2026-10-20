@@ -47,6 +47,7 @@ use crate::{
 const TOLERANCE: f32 = 1.0e-5;
 /// Block sizes every scenario is rendered at: small, odd, and the default device block.
 const BLOCKS: [usize; 3] = [64, 441, 512];
+/// Frames every scenario renders unless it asks for more.
 const FRAMES: usize = 4_096;
 
 type Event = (usize, Box<dyn FnMut(&mut AudioEngine)>);
@@ -95,6 +96,8 @@ struct Scenario {
     /// Commands applied when the render reaches their frame; blocks are split there, so they
     /// land on the same sample at every block size.
     events: Vec<Event>,
+    /// Frames rendered.
+    frames: usize,
     /// Queue ends and retirement handles that must outlive the engine.
     _keep: Vec<Box<dyn Any>>,
 }
@@ -104,8 +107,14 @@ impl Scenario {
         Self {
             engine,
             events: Vec::new(),
+            frames: FRAMES,
             _keep: Vec::new(),
         }
+    }
+
+    /// Renders `frames` frames instead of [`FRAMES`].
+    fn lasting(self, frames: usize) -> Self {
+        Self { frames, ..self }
     }
 
     fn at(mut self, frame: usize, event: impl FnMut(&mut AudioEngine) + 'static) -> Self {
@@ -121,10 +130,10 @@ impl Scenario {
     /// from frame `watch_from` on.
     fn render_watched(mut self, block: usize, watch_from: usize) -> Vec<f32> {
         self.events.sort_by_key(|(frame, _)| *frame);
-        let mut output = vec![0.0_f32; FRAMES * 2];
+        let mut output = vec![0.0_f32; self.frames * 2];
         let mut frame = 0;
         let mut next = 0;
-        while frame < FRAMES {
+        while frame < self.frames {
             while next < self.events.len() && self.events[next].0 <= frame {
                 (self.events[next].1)(&mut self.engine);
                 next += 1;
@@ -132,7 +141,7 @@ impl Scenario {
             let until = self
                 .events
                 .get(next)
-                .map_or(FRAMES, |(at, _)| (*at).min(FRAMES));
+                .map_or(self.frames, |(at, _)| (*at).min(self.frames));
             let frames = block.min(until - frame);
             WATCH.set(frame >= watch_from);
             self.engine
@@ -425,7 +434,8 @@ fn routing_pdc() -> Scenario {
         MixerChannelParams::Pan(-0.5),
     );
     play(&mut engine, 0);
-    Scenario::new(engine)
+    // The pitch shifter's latency delays every path, so render well past it.
+    Scenario::new(engine).lasting(12_288)
 }
 
 fn fader_moves() -> Scenario {
@@ -615,9 +625,8 @@ fn hosted_idle() -> Scenario {
     }
     // The transport never starts: hosted effects run on the silent channels all the same.
     Scenario {
-        engine,
-        events: Vec::new(),
         _keep: keep,
+        ..Scenario::new(engine)
     }
 }
 
@@ -665,9 +674,8 @@ fn bounce() -> Scenario {
     }
     offline.process(&mut []);
     Scenario {
-        engine: offline,
-        events: Vec::new(),
         _keep: vec![Box::new(commands)],
+        ..Scenario::new(offline)
     }
 }
 

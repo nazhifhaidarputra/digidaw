@@ -42,46 +42,41 @@ pub trait LivePitchShifter: Send + Sync + Sized {
 
 /// Real-time stretcher whose time ratio and pitch can change at any time.
 ///
-/// Create it off the real-time path. Afterwards, processing at most
-/// [`Self::max_process_frames`] frames per call, retrieving, the setters and [`Self::reset`]
-/// must not allocate.
+/// Processing is synchronous: [`Self::process`] consumes every input frame it is given and
+/// fills every output frame, so the ratio of the two lengths is the time stretch of that call.
+/// The processing point trails the newest input by [`Self::input_latency`] input frames, and
+/// the output trails the processing point by [`Self::output_latency`] output frames.
+///
+/// Create it off the real-time path. Afterwards every method must be real-time safe: no
+/// allocation, locking or blocking.
 pub trait RealtimeTimeStretcher: Send + Sized {
-    fn new(
-        sample_rate: u32,
-        channels: usize,
-        max_process_frames: usize,
-    ) -> Result<Self, StretchError>;
-
-    /// Largest frame count one [`Self::process`] call accepts.
-    fn max_process_frames(&self) -> usize;
-
-    /// Output duration per input duration; `2.0` plays twice as long.
-    fn set_time_ratio(&mut self, ratio: f64);
+    fn new(sample_rate: u32, channels: usize) -> Result<Self, StretchError>;
 
     /// Frequency multiplier; `2.0` is an octave up.
     fn set_pitch_scale(&mut self, scale: f64);
 
-    /// Clears all buffered audio, as before the first `process` call.
+    fn set_preserve_formants(&mut self, preserve: bool);
+
+    /// Clears all buffered audio.
     fn reset(&mut self);
 
-    /// Input frames to feed before the audio that should start the output.
-    fn start_pad(&self) -> usize;
+    /// Input frames the processing point trails the newest input by.
+    fn input_latency(&self) -> usize;
 
-    /// Output frames to drop after feeding [`Self::start_pad`] frames of lead-in.
-    fn start_delay(&self) -> usize;
+    /// Output frames the output trails the processing point by.
+    fn output_latency(&self) -> usize;
 
-    /// Input frames wanted before more output can be produced.
-    fn samples_required(&self) -> usize;
+    /// Input frames [`Self::seek`] uses at most.
+    fn seek_frames(&self) -> usize;
 
-    /// Feeds the shortest channel's length of `input`, at most [`Self::max_process_frames`].
-    fn process<C: AsRef<[f32]>>(&mut self, input: &[C]);
+    /// Replaces the input history with `input` without producing output, so the processing
+    /// point moves to [`Self::input_latency`] frames before its end. `rate` is the input frames
+    /// per output frame expected next. Only the last [`Self::seek_frames`] frames are used.
+    fn seek<C: AsRef<[f32]>>(&mut self, input: &[C], rate: f64);
 
-    /// Output frames ready to retrieve.
-    fn available(&self) -> usize;
-
-    /// Moves up to the shortest channel's length of ready frames into `output`; returns how
-    /// many.
-    fn retrieve<C: AsMut<[f32]>>(&mut self, output: &mut [C]) -> usize;
+    /// Consumes the shortest input channel's length of frames and fills the shortest output
+    /// channel's length of frames. A call with the wrong channel count does nothing.
+    fn process<I: AsRef<[f32]>, O: AsMut<[f32]>>(&mut self, input: &[I], output: &mut [O]);
 }
 
 /// Whole-input stretcher for background renders; not real-time safe.
