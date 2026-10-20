@@ -159,21 +159,27 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
           AppLogger.warn('Bundled color theme $asset is unavailable: $error');
       }
     }
-    var customThemePath = appearance.customColorThemePath;
-    if (customThemePath != null) {
-      switch (await _loadColorTheme(customThemePath)) {
+    var customThemePaths = const IList<String>.empty();
+    var unavailableThemes = 0;
+    for (final path in appearance.customColorThemePaths) {
+      switch (await _loadColorTheme(path)) {
         case Ok<AppColorTheme>(value: final theme):
-          colorThemes = colorThemes.add(customThemePath, theme);
+          colorThemes = colorThemes.add(path, theme);
+          customThemePaths = customThemePaths.add(path);
         case Error<AppColorTheme>(:final error):
-          AppLogger.warn('Color theme $customThemePath is unavailable: $error');
-          ref
-              .read(notificationProvider.notifier)
-              .warn(
-                'The saved color theme file is unavailable or no longer valid. It was removed from the theme menu.',
-                title: 'Color theme unavailable',
-              );
-          customThemePath = null;
+          AppLogger.warn('Color theme $path is unavailable: $error');
+          unavailableThemes++;
       }
+    }
+    if (unavailableThemes > 0) {
+      ref
+          .read(notificationProvider.notifier)
+          .warn(
+            unavailableThemes == 1
+                ? 'A saved color theme file is unavailable or no longer valid. It was removed from the theme menu.'
+                : '$unavailableThemes saved color theme files are unavailable or no longer valid. They were removed from the theme menu.',
+            title: 'Color theme unavailable',
+          );
     }
     var themeSource = appearance.colorThemeSource;
     if (themeSource != null && !colorThemes.containsKey(themeSource)) {
@@ -190,13 +196,13 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       customFontFamily: fontFamily,
       colorThemes: colorThemes,
       colorThemeSource: themeSource,
-      customColorThemePath: customThemePath,
+      customColorThemePaths: customThemePaths,
       isInitialized: true,
     );
     if (backgroundPath != appearance.backgroundImagePath ||
         fontPath != appearance.customFontPath ||
         themeSource != appearance.colorThemeSource ||
-        customThemePath != appearance.customColorThemePath) {
+        unavailableThemes > 0) {
       await _persist(state);
     }
     return Result.ok(null);
@@ -222,8 +228,8 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     return _persist(state.copyWith(colorThemeSource: source));
   }
 
-  /// Loads a JSON theme file picked by the user, replacing the previously
-  /// loaded file, and activates it.
+  /// Loads a JSON theme file picked by the user into the theme menu and
+  /// activates it. Picking a file that is already in the menu reloads it.
   Future<Result<void>> chooseColorThemeFile() async {
     final picked = await ref
         .read(appearanceAssetServiceProvider)
@@ -241,14 +247,33 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       return ref.notifyErrorResult(error, title: 'Could not load color theme');
     }
 
-    var colorThemes = state.colorThemes;
-    final previousPath = state.customColorThemePath;
-    if (previousPath != null) colorThemes = colorThemes.remove(previousPath);
+    final paths = state.customColorThemePaths;
     return _persist(
       state.copyWith(
-        colorThemes: colorThemes.add(path, loaded.ok()),
+        colorThemes: state.colorThemes.add(path, loaded.ok()),
         colorThemeSource: path,
-        customColorThemePath: path,
+        customColorThemePaths: paths.contains(path) ? paths : paths.add(path),
+      ),
+    );
+  }
+
+  /// Removes a loaded theme file from the theme menu; the file itself is not
+  /// touched. Removing the active theme returns to the accent palette.
+  ///
+  /// Bundled themes cannot be removed.
+  Future<Result<void>> removeColorTheme(String source) async {
+    if (!state.customColorThemePaths.contains(source)) {
+      return ref.notifyErrorResult(
+        Exception('Only color themes loaded from a file can be removed.'),
+        title: 'Could not remove color theme',
+      );
+    }
+    final active = state.colorThemeSource;
+    return _persist(
+      state.copyWith(
+        colorThemes: state.colorThemes.remove(source),
+        colorThemeSource: active == source ? null : active,
+        customColorThemePaths: state.customColorThemePaths.remove(source),
       ),
     );
   }
@@ -324,7 +349,7 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       customFontPath: state.customFontPath,
       customFontFamily: state.customFontFamily,
       colorThemeSource: state.colorThemeSource,
-      customColorThemePath: state.customColorThemePath,
+      customColorThemePaths: state.customColorThemePaths.unlock,
     ));
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(

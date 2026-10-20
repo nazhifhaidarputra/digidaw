@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/app_theme.dart';
+import 'package:karbeat/features/setting/models/app_color_theme.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
@@ -23,14 +24,14 @@ class AppearanceSettingsPage extends ConsumerWidget {
           fontPath: state.customFontPath,
           colorThemes: state.colorThemes,
           colorThemeSource: state.colorThemeSource,
-          customColorThemePath: state.customColorThemePath,
+          customColorThemePaths: state.customColorThemePaths,
         ),
       ),
     );
     final notifier = ref.read(appearanceSettingsProvider.notifier);
     final colorThemeSources = [
       ...AppearanceAssetService.bundledColorThemes,
-      ?appearance.customColorThemePath,
+      ...appearance.customColorThemePaths,
     ];
     final usesColorTheme = appearance.colorThemeSource != null;
 
@@ -54,34 +55,35 @@ class AppearanceSettingsPage extends ConsumerWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
+              Row(
                 children: [
-                  ChoiceChip(
-                    key: const ValueKey('color-theme-default'),
-                    selected: !usesColorTheme,
-                    label: const Text('Default'),
-                    onSelected: (_) => unawaited(notifier.setColorTheme(null)),
+                  Expanded(
+                    child: _ColorThemeMenu(
+                      themes: [
+                        for (final source in colorThemeSources)
+                          if (appearance.colorThemes[source] case final theme?)
+                            (
+                              source: source,
+                              theme: theme,
+                              removable: appearance.customColorThemePaths
+                                  .contains(source),
+                            ),
+                      ],
+                      selected: appearance.colorThemeSource,
+                      onSelected: (source) =>
+                          unawaited(notifier.setColorTheme(source)),
+                      onRemove: (source) =>
+                          unawaited(_removeColorTheme(context, ref, source)),
+                    ),
                   ),
-                  for (final source in colorThemeSources)
-                    if (appearance.colorThemes[source] case final theme?)
-                      ChoiceChip(
-                        key: ValueKey('color-theme-$source'),
-                        selected: source == appearance.colorThemeSource,
-                        avatar: CircleAvatar(backgroundColor: theme.primary),
-                        label: Text(theme.name),
-                        onSelected: (_) =>
-                            unawaited(notifier.setColorTheme(source)),
-                      ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('choose-color-theme'),
+                    onPressed: () => unawaited(notifier.chooseColorThemeFile()),
+                    icon: const Icon(Icons.palette_outlined),
+                    label: const Text('Load JSON theme'),
+                  ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              FilledButton.tonalIcon(
-                key: const ValueKey('choose-color-theme'),
-                onPressed: () => unawaited(notifier.chooseColorThemeFile()),
-                icon: const Icon(Icons.palette_outlined),
-                label: const Text('Load JSON theme'),
               ),
               if (usesColorTheme) ...[
                 const SizedBox(height: 12),
@@ -262,6 +264,153 @@ class AppearanceSettingsPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+typedef _ColorThemeEntry = ({
+  String source,
+  AppColorTheme theme,
+  bool removable,
+});
+
+/// Picks the colour theme. Themes loaded from a file have a remove button in
+/// the open menu.
+class _ColorThemeMenu extends StatelessWidget {
+  const _ColorThemeMenu({
+    required this.themes,
+    required this.selected,
+    required this.onSelected,
+    required this.onRemove,
+  });
+
+  final List<_ColorThemeEntry> themes;
+
+  /// Source of the active theme; null is Default.
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String?>(
+      key: const ValueKey('color-theme-menu'),
+      initialValue: selected,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Theme'),
+      items: [
+        const DropdownMenuItem(
+          key: ValueKey('color-theme-default'),
+          value: null,
+          child: _ColorThemeLabel(name: 'Default'),
+        ),
+        for (final entry in themes)
+          DropdownMenuItem(
+            key: ValueKey('color-theme-${entry.source}'),
+            value: entry.source,
+            child: _ColorThemeLabel(
+              name: entry.theme.name,
+              color: entry.theme.primary,
+              tooltip: entry.removable ? entry.source : null,
+              trailing: entry.removable
+                  ? Builder(
+                      builder: (menuContext) => IconButton(
+                        key: ValueKey('remove-color-theme-${entry.source}'),
+                        tooltip: 'Remove theme',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          // Close the menu first so the warning is not
+                          // shown behind it.
+                          Navigator.of(menuContext).pop();
+                          onRemove(entry.source);
+                        },
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+      ],
+      // The closed menu shows the active theme without its remove button.
+      selectedItemBuilder: (context) => [
+        const _ColorThemeLabel(name: 'Default'),
+        for (final entry in themes)
+          _ColorThemeLabel(name: entry.theme.name, color: entry.theme.primary),
+      ],
+      onChanged: onSelected,
+    );
+  }
+}
+
+class _ColorThemeLabel extends StatelessWidget {
+  const _ColorThemeLabel({
+    required this.name,
+    this.color,
+    this.tooltip,
+    this.trailing,
+  });
+
+  final String name;
+
+  /// Swatch of the theme's primary colour; Default has none.
+  final Color? color;
+  final String? tooltip;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final swatch = color;
+    final label = Text(name, overflow: TextOverflow.ellipsis);
+    return Row(
+      children: [
+        if (swatch == null)
+          const Icon(Icons.palette_outlined, size: 18)
+        else
+          CircleAvatar(radius: 9, backgroundColor: swatch),
+        const SizedBox(width: 12),
+        Expanded(
+          child: tooltip == null
+              ? label
+              : Tooltip(message: tooltip, child: label),
+        ),
+        ?trailing,
+      ],
+    );
+  }
+}
+
+/// Asks before removing a loaded theme file from the theme menu.
+Future<void> _removeColorTheme(
+  BuildContext context,
+  WidgetRef ref,
+  String source,
+) async {
+  final appearance = ref.read(appearanceSettingsProvider);
+  final name = appearance.colorThemes[source]?.name ?? _fileName(source);
+  final active = appearance.colorThemeSource == source;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      key: const ValueKey('remove-color-theme-dialog'),
+      title: const Text('Remove color theme?'),
+      content: Text(
+        '“$name” will be removed from the theme menu.'
+        '${active ? ' It is the active theme, so DigiDAW switches back to the Default theme.' : ''}\n\n'
+        'The file ${_fileName(source)} is not deleted. You can load it again with Load JSON theme.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-remove-color-theme'),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Remove'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  await ref.read(appearanceSettingsProvider.notifier).removeColorTheme(source);
 }
 
 String _paletteLabel(AppColorPalette palette) => switch (palette) {

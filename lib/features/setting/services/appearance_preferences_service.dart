@@ -11,7 +11,7 @@ typedef AppearancePreferences = ({
   String? customFontPath,
   String? customFontFamily,
   String? colorThemeSource,
-  String? customColorThemePath,
+  List<String> customColorThemePaths,
 });
 
 class AppearancePreferencesService {
@@ -25,7 +25,11 @@ class AppearancePreferencesService {
   static const fontFamilyKey = 'settings.appearance.font_family.v1';
   static const colorThemeSourceKey =
       'settings.appearance.color_theme_source.v1';
-  static const customColorThemePathKey =
+  static const customColorThemePathsKey =
+      'settings.appearance.custom_color_theme_paths.v1';
+
+  /// Held the single loaded theme file before several could be kept.
+  static const legacyCustomColorThemePathKey =
       'settings.appearance.custom_color_theme_path.v1';
 
   Future<Result<AppearancePreferences>> load() {
@@ -39,9 +43,9 @@ class AppearancePreferencesService {
       final fontPath = await preferences.getString(fontPathKey);
       final fontFamily = await preferences.getString(fontFamilyKey);
       final colorThemeSource = await preferences.getString(colorThemeSourceKey);
-      final customColorThemePath = await preferences.getString(
-        customColorThemePathKey,
-      );
+      final customColorThemePaths =
+          await preferences.getStringList(customColorThemePathsKey) ??
+          [?await preferences.getString(legacyCustomColorThemePathKey)];
       final theme = AppThemeMode.values
           .where((value) => value.name == themeName)
           .firstOrNull;
@@ -78,7 +82,7 @@ class AppearancePreferencesService {
         customFontPath: fontPath,
         customFontFamily: fontFamily,
         colorThemeSource: colorThemeSource,
-        customColorThemePath: customColorThemePath,
+        customColorThemePaths: customColorThemePaths,
       );
     });
   }
@@ -113,11 +117,15 @@ class AppearancePreferencesService {
         colorThemeSourceKey,
         value.colorThemeSource,
       );
-      await _writeOptionalString(
-        preferences,
-        customColorThemePathKey,
-        value.customColorThemePath,
-      );
+      if (value.customColorThemePaths.isEmpty) {
+        await preferences.remove(customColorThemePathsKey);
+      } else {
+        await preferences.setStringList(
+          customColorThemePathsKey,
+          value.customColorThemePaths,
+        );
+      }
+      await preferences.remove(legacyCustomColorThemePathKey);
     });
   }
 

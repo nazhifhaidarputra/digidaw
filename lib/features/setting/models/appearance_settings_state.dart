@@ -44,7 +44,9 @@ abstract class AppearanceSettingsState with _$AppearanceSettingsState {
     /// Source of the active colour theme. Without one, the colours come from
     /// [themeMode] and [colorPalette].
     String? colorThemeSource,
-    String? customColorThemePath,
+
+    /// Theme files the user loaded, in the order they were loaded.
+    @Default(IListConst([])) IList<String> customColorThemePaths,
   }) = _AppearanceSettingsState;
 
   AppColorTheme? get colorTheme {

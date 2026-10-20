@@ -1,6 +1,6 @@
 # Color themes
 
-A color theme is a JSON file that sets every color of the app. The themes in this folder are bundled with DigiDAW; any other theme file can be loaded from **Settings → Appearance → Color theme**.
+A color theme is a JSON file that sets every color of the app. The themes in this folder are bundled with DigiDAW; any other theme file can be loaded from **Settings → Appearance → Color theme**. Loaded files stay in the theme menu until they are removed with the × button beside them; removing one leaves the file on disk.
 
 ```json
 {
